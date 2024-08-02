@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import { Connection, login } from './connection';
 
+// A generalized method to prompt for any user input
 async function promptForInput(
     prompt: string,
     canBeEmpty: boolean = false,
     password: boolean = false,
     validate?: (value: string) => string | null
 ): Promise<string | undefined> {
+    // Loop until a valid input is provided, or the user cancels the input
     while (true) {
         const input = await vscode.window.showInputBox({
             prompt,
@@ -23,6 +25,7 @@ async function promptForInput(
             },
         });
 
+        // User can type quit to cancel the login process
         if (input === undefined || input.toLowerCase() === "quit") {
             vscode.window.showInformationMessage("Login process aborted");
             return undefined;
@@ -37,12 +40,15 @@ async function promptForInput(
 }
 
 export async function performLogin(context: vscode.ExtensionContext, promptForNewCredentials: boolean = false): Promise<Connection | null> {
+    // Loop until the user successfully logs in or cancels the login process
     while (true) {
+        // Retrieve the stored credentials if they exist
         let server: string | undefined = context.globalState.get("server");
         let port: number | undefined = context.globalState.get("port");
         let loginName: string | undefined = context.globalState.get("loginName");
         let password: string | undefined = context.globalState.get("password");
 
+        // Check if the user wants to use the stored credentials
         let useStoredCredentials = false;
         if (server && loginName && password && !promptForNewCredentials) {
             const choice = await vscode.window.showInformationMessage(
@@ -57,6 +63,7 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
 
         if (!useStoredCredentials) {
             server = await promptForInput("Enter the server name (or type 'quit' to cancel)");
+            // Server name cannot be empty
             if (!server) {
                 return null;
             }
@@ -65,6 +72,7 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
                 "Enter the port number (default 9443, or type 'quit' to cancel)",
                 true,
                 false,
+                // Port number must be a number
                 (value) => {
                     if (value && !/^\d+$/.test(value)) {
                         return "Port number must be a number";
@@ -78,11 +86,13 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
             port = portInput ? parseInt(portInput, 10) : 9443;
 
             loginName = await promptForInput("Enter your login name (or type 'quit' to cancel)");
+            // Login name cannot be empty
             if (!loginName) {
                 return null;
             }
 
             password = await promptForInput("Enter your password (or type 'quit' to cancel)", false, true);
+            // Password cannot be empty
             if (!password) {
                 return null;
             }
@@ -98,6 +108,7 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
 
         const connection = await login(serverUrl, loginName, password);
         if (connection) {
+            // If login is successful, store the credentials in VS Code storage
             context.globalState.update("server", server);
             context.globalState.update("port", port);
             context.globalState.update("loginName", loginName);

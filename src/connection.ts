@@ -5,7 +5,7 @@ import * as process from "process";
 // Ignore SSL certificate validation in node requests to disable certificate validation, otherwise the connection will always fail
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-// Connection to save a session
+// Handle the connection to the TestBench server
 export class Connection {
     serverUrl: string;
     loginName: string;
@@ -32,7 +32,7 @@ export class Connection {
         });
     }
 
-    // Sends a GET request to the projects endpoint to verify if the connection is working (Status 200).
+    // Sends a GET request to the projects endpoint to verify if the connection is working.
     async checkIsWorking(): Promise<boolean> {
         try {
             console.log(`Checking connection to ${this.serverUrl}`);

@@ -7,6 +7,7 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
     readonly onDidChangeTreeData: vscode.Event<TreeItem | undefined> = this._onDidChangeTreeData.event;
 
     private connection: Connection | null = null;
+    private rootItem: TreeItem | null = null; // Track the current root item
 
     constructor(connection: Connection | null) {
         this.connection = connection;
@@ -23,6 +24,11 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
         }
 
         if (!element) {
+            if (this.rootItem) {
+                // If a root item is set, return its children
+                return this.getChildren(this.rootItem);
+            }
+
             // Get projects
             const projects = await this.connection.getAllProjects();
             return projects.map(project => new TreeItem(project.name, 'project', vscode.TreeItemCollapsibleState.Collapsed, project));
@@ -41,22 +47,37 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
     getTreeItem(element: TreeItem): vscode.TreeItem {
         return element;
     }
+    
+    // Set the selected item as the root and refresh the tree view
+    makeRoot(treeItem: TreeItem): void {
+        this.rootItem = treeItem; 
+        this.refresh();
+    }
+
+    // To handle item expansion and collapse events
+    handleExpansion(element: TreeItem, expanded: boolean) {
+        element.collapsibleState = expanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
+        element.updateIcon(element.collapsibleState);  // Update the icon based on the new state
+        this._onDidChangeTreeData.fire(element);  // Trigger a refresh for this specific element
+    }
+    
 }
 
+// Represents a tree item (Project, TOV, Cycle) in the tree view
 export class TreeItem extends vscode.TreeItem {
     constructor(
         public readonly label: string,
         public readonly contextValue: string,  // The type of the tree item (Project, TOV, Cycle)
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+        public collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly item: any,
     ) {
         super(label, collapsibleState);        
         this.contextValue = contextValue;
         
-        // Assign custom icons based on the context
+        // Assign custom icons based on type of item and if it is expanded or collapsed
         this.iconPath = this.getIconPath(contextValue, collapsibleState);
     
-        // Clicking on test cycles executes command
+        // Clicking on Generate button for test cycles executes generate command
         if (contextValue === 'cycle') {
             this.command = {
                 command: 'testbenchExtension.generate', // Command to execute
@@ -68,20 +89,20 @@ export class TreeItem extends vscode.TreeItem {
         }
     }
 
+    // Get the path to the icon based on the context value and collapsible state
+    // TODO: Replace icons with own icons
     private getIconPath(contextValue: string, collapsibleState: vscode.TreeItemCollapsibleState): { light: string | vscode.Uri; dark: string | vscode.Uri } {
-        const lightIconFolderPath = path.join(__dirname, '..', 'resources', 'icons', 'light'); // Path to light theme icons
-        const darkIconFolderPath = path.join(__dirname, '..', 'resources', 'icons', 'dark'); // Path to dark theme icons
+        // Path to light theme and dark theme icons
+        const lightIconFolderPath = path.join(__dirname, '..', 'resources', 'icons', 'light'); 
+        const darkIconFolderPath = path.join(__dirname, '..', 'resources', 'icons', 'dark');
         
-        let iconName = 'testbench-icon.svg';  // Default icon if no match
+        let iconName = 'testbench-icon.svg';
         switch (contextValue) {
             case 'project':
-                // TODO : fix
-                // iconName = 'project-closed.svg';
                 iconName = collapsibleState === vscode.TreeItemCollapsibleState.Collapsed ? 'project-closed.svg' : 'project-opened.svg';
                 break;
             case 'tov':
-                iconName = collapsibleState === vscode.TreeItemCollapsibleState.Collapsed ? 'project-closed.svg' : 'project-opened.svg';
-                // iconName = 'project-closed.svg';
+                iconName = collapsibleState === vscode.TreeItemCollapsibleState.Collapsed ? 'project-closed.svg' : 'project-opened.svg';                
                 break;
             case 'cycle':
                 iconName = 'cycle.svg';
@@ -92,5 +113,9 @@ export class TreeItem extends vscode.TreeItem {
             light: path.join(lightIconFolderPath, iconName), 
             dark: path.join(darkIconFolderPath, iconName)   
         };
+    }
+
+    updateIcon(collapsibleState: vscode.TreeItemCollapsibleState): void {
+        this.iconPath = this.getIconPath(this.contextValue, collapsibleState);
     }
 }

@@ -30,6 +30,10 @@
         "title": "Generate"
       },
       {
+        "command": "testbenchExtension.makeRoot",
+        "title": "Make root"
+      },
+      {
         "command": "testbenchExtension.refreshTreeView",
         "title": "Refresh",
         "icon": {
@@ -58,6 +62,11 @@
           "command": "testbenchExtension.generate",
           "when": "view == testBenchProjects && viewItem == cycle",
           "group": "inline"
+        },
+        {
+          "command": "testbenchExtension.makeRoot",
+          "when": "view == testBenchProjects && viewItem == project || viewItem == tov",
+          "group": "navigation"
         }
       ]
     }
