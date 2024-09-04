@@ -68,7 +68,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Register the "Refresh tree" command
     context.subscriptions.push(
         vscode.commands.registerCommand('testbenchExtension.refreshTreeView', () => {
-            browseProjects(context, connection);
+            browseProjects(context, connection);            
         })
     );
 

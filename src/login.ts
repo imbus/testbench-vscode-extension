@@ -43,10 +43,10 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
     // Loop until the user successfully logs in or cancels the login process
     while (true) {
         // Retrieve the stored credentials if they exist
-        let server: string | undefined = context.globalState.get("server");
-        let port: number | undefined = context.globalState.get("port");
-        let loginName: string | undefined = context.globalState.get("loginName");
-        let password: string | undefined = context.globalState.get("password");
+        let server: string | undefined = await context.secrets.get("server");
+        let port: number | undefined = Number(await context.secrets.get("port"));
+        let loginName: string | undefined = await context.secrets.get("loginName");
+        let password: string | undefined = await context.secrets.get("password");
 
         // Check if the user wants to use the stored credentials
         let useStoredCredentials = false;
@@ -109,10 +109,10 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
         const connection = await login(serverUrl, loginName, password);
         if (connection) {
             // If login is successful, store the credentials in VS Code storage
-            context.globalState.update("server", server);
-            context.globalState.update("port", port);
-            context.globalState.update("loginName", loginName);
-            context.globalState.update("password", password);
+            context.secrets.store("server", server);
+            context.secrets.store("port", port.toString());
+            context.secrets.store("loginName", loginName);
+            context.secrets.store("password", password);
             vscode.window.showInformationMessage("Login successful!");
 
             return connection;     
@@ -126,10 +126,10 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
                 vscode.window.showInformationMessage("Login process aborted");
                 return null;
             } else {
-                context.globalState.update("server", undefined);
-                context.globalState.update("port", undefined);
-                context.globalState.update("loginName", undefined);
-                context.globalState.update("password", undefined);
+                context.secrets.delete("server");
+                context.secrets.delete("port");
+                context.secrets.delete("loginName");
+                context.secrets.delete("password");
             }
         }
     }

@@ -11,8 +11,17 @@ export async function browseProjects(context: vscode.ExtensionContext, connectio
 
     // Create the tree view with the connection
     const treeDataProvider = new TestBenchTreeDataProvider(connection);
-    vscode.window.createTreeView('testBenchProjects', { treeDataProvider });
+    // Create the tree view
+    const treeView =vscode.window.createTreeView('testBenchProjects', { treeDataProvider });
 
     // Refresh the tree view when necessary
     treeDataProvider.refresh();
+
+    // Handle expansion and collapse events for dynamic icon change of tree view items
+    treeView.onDidExpandElement(e => {
+        treeDataProvider.handleExpansion(e.element, true);
+    });
+    treeView.onDidCollapseElement(e => {
+        treeDataProvider.handleExpansion(e.element, false);
+    });
 }
