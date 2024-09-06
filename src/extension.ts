@@ -4,6 +4,7 @@ import { performLogin } from './login';
 import { Connection } from './connection';
 import { browseProjects } from './browseProjects';
 import { TestBenchTreeDataProvider } from './explorer';
+import * as jsonReportHandler from './jsonReportHandler';
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -32,7 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
             });
 
             const nextAction = await vscode.window.showQuickPick(
-                ["Browse Projects", "Change connection", "Quit"],
+                ["Browse Projects", "Change connection", "Cancel"],
                 { placeHolder: "What do you want to do?" }
             );
 
@@ -46,7 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
                         treeDataProvider.refresh();  // Refresh the tree view with the new connection
                     }
                     break;
-                case "Quit":
+                case "Cancel":
                     return;
             }
         }
@@ -60,8 +61,29 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Generate" command
     context.subscriptions.push(
-        vscode.commands.registerCommand('testbenchExtension.generate', (item: TreeItem) => {
-            vscode.window.showInformationMessage(`Generate action triggered for ${item.label}`);
+        vscode.commands.registerCommand('testbenchExtension.generate', (item: TreeItem) => {         
+            vscode.window.showInformationMessage(`Generating Test Suites for ${item.label}`);
+
+            // Example usage
+            const config: jsonReportHandler.Configuration = {
+                generationDirectory: './GeneratedSuites',
+                clearGenerationDirectory: true,
+                createOutputZip: true,
+                logSuiteNumbering: false,
+            };
+            
+            // Example URL
+            const testBenchReportUrl = connection?.serverUrl + 'projects/' + item.item.id + '/report';
+            
+            // Generate the test suites from the TestBench JSON report
+            jsonReportHandler.testBenchToRobotFramework(testBenchReportUrl, config, connection)
+                .then(() => console.log('Test suites successfully generated and written!'))
+                .catch(error => console.error('An error occurred:', error));
+            
+            // Run the tests and create the results
+            jsonReportHandler.executeTests(config)
+                .then(() => console.log('Process completed successfully.'))
+                .catch(error => console.error('Process failed:', error));  
         })
     );
 
