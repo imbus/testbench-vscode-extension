@@ -41,7 +41,7 @@
           "dark": "resources/icons/dark/refresh.svg"
         }
       }
-    ],    
+    ],
     "views": {
       "explorer": [
         {
@@ -53,7 +53,7 @@
     "menus": {
       "view/title": [
         {
-          "command": "testbenchExtension.refreshTreeView",          
+          "command": "testbenchExtension.refreshTreeView",
           "group": "navigation"
         }
       ],
@@ -70,7 +70,7 @@
         }
       ]
     }
-  },  
+  },
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack",
@@ -85,6 +85,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.7",
     "@types/node": "20.x",
+    "@types/unzipper": "^0.10.10",
     "@types/vscode": "^1.91.0",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
@@ -97,6 +98,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "unzipper": "^0.12.3"
   }
 }

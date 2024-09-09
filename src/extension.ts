@@ -63,28 +63,33 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('testbenchExtension.generate', (item: TreeItem) => {         
             vscode.window.showInformationMessage(`Generating Test Suites for ${item.label}`);
-
-            // Example usage
-            const config: jsonReportHandler.Configuration = {
-                generationDirectory: './GeneratedSuites',
-                clearGenerationDirectory: true,
-                createOutputZip: true,
-                logSuiteNumbering: false,
-            };
             
+            // TODO: Update the URL
             // Example URL
-            const testBenchReportUrl = connection?.serverUrl + 'projects/' + item.item.id + '/report';
+            const testBenchReportUrl = connection?.serverUrl + 'projects/' + item.item.id + '/report';   
+            const projectKey = item.item.id;       
+            const cycleKey = item.item.id;      
+            // jsonReportHandler.fetchZipFile(testBenchReportUrl, projectKey, cycleKey);
+           
+            const testSuitesOutputDirectory: string = 'C:/VSCodeTestBench/GeneratedSuites';
+            const zipFileDirectory: string = 'C:/RobotCode/RobotCodeLiveDemo/report-from-tb.zip';  // For now assume the zip file is already downloaded
+
+            // Example configuration
+            const config: jsonReportHandler.Configuration = {
+                generationDirectory: testSuitesOutputDirectory,
+                clearGenerationDirectory: true,
+                createOutputZip: false
+            };
+
+            vscode.window.showInformationMessage(`Config created`);
             
-            // Generate the test suites from the TestBench JSON report
-            jsonReportHandler.testBenchToRobotFramework(testBenchReportUrl, config, connection)
-                .then(() => console.log('Test suites successfully generated and written!'))
-                .catch(error => console.error('An error occurred:', error));
-            
-            // Run the tests and create the results
-            jsonReportHandler.executeTests(config)
-                .then(() => console.log('Process completed successfully.'))
-                .catch(error => console.error('Process failed:', error));  
-        })
+            // Run the main function with the ZIP file path
+            jsonReportHandler.testBenchToRobotFramework(zipFileDirectory, config)
+                .then(() => console.log('Test suites successfully generated'))
+                .catch(err => console.error('Error during the process:', err));
+
+            vscode.window.showInformationMessage(`Conversion done`);
+           })           
     );
 
     // Register the "Refresh tree" command

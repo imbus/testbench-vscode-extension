@@ -1,209 +1,320 @@
-// Requirement: robotframework is installed globally in your system
-
 import * as vscode from 'vscode';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';  // Run shell commands from within the application.
 import { Connection } from './connection';
+import * as unzipper from 'unzipper'; // npm install unzipper
 
-// Configuration interface for the settings
+// Configuration interface
 export interface Configuration {
   generationDirectory: string;
   clearGenerationDirectory: boolean;
   createOutputZip: boolean;
-  logSuiteNumbering: boolean;
 }
 
-// Placeholder interface for TestBench JSON structure (simplified)
-interface TestBenchReport {
-  testCases: TestCase[];
-}
-
-interface TestCase {
-  id: string;
+// Interface for Test Case
+export interface TestCase {
+  uniqueID: string;
   name: string;
   steps: string[];
 }
 
-// Path resolver to organize the directory structure for Robot Framework.
-// Determines where each test suite file should be written based on the configuration.
-class PathResolver {
-  private config: Configuration;
-  
-  constructor(config: Configuration) {
-    this.config = config;
-  }
+// Interface for Test Suite containing Test Cases
+export interface TestSuite {
+  themeID: string;
+  testCases: TestCase[];
+}
 
-  resolveTestSuitePath(testCaseId: string): string {
-    return path.join(this.config.generationDirectory, `suite_${testCaseId}`);
-  }
+// Optional Cycle Options request body parameter for the TestBench API
+interface CycleOptions {
+  treeRootUID?: string;
+  basedOnExecution?: boolean;
+  suppressFilteredData?: boolean;
+  suppressNotExecutable?: boolean;
+  suppressEmptyTestThemes?: boolean;
+  filters?: {
+      name: string;
+      filterType: 'TestTheme';
+      testThemeUID: string;
+  }[];
 }
 
 // Fetch the TestBench JSON report from the server
-export async function fetchTestBenchReport(url: string, connection: Connection | null): Promise<TestBenchReport | undefined> {
-    if (!connection) {
-        vscode.window.showInformationMessage('No connection available. Please login first.');
-        return;
-    }
-    console.log(`Checking connection to: ${connection.serverUrl}`); 
-    try {        
-        /*
-        const response: AxiosResponse = await this.session.get("projects", {
-                params: {
-                    includeTOVs: "false",
-                    includeCycles: "false",
-                },
-            });
-        */
-        const response = await axios.get<TestBenchReport>(url);
-        console.log(`Response status: ${response.status}`);
-        vscode.window.showInformationMessage(`TestBench JSON report is fetched.`);
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching TestBench report:', error);
-        vscode.window.showInformationMessage(`Failed to fetch TestBench report.`);
-        throw error;
-    }
-}
+export async function fetchZipFile(baseURL: string, projectKey: number, cycleKey: number, options?: CycleOptions): Promise<Blob> {
+  try {
+      console.debug(`Fetching zip file for projectKey: ${projectKey}, cycleKey: ${cycleKey}, options: ${JSON.stringify(options)}`);
 
-// Create Robot Framework test suites from the TestBench JSON report
-export function createTestSuites(report: TestBenchReport, pathResolver: PathResolver): Map<string, string> {
-  vscode.window.showInformationMessage('Creating Robot Framework test suites.');
-
-  // Map key is the file path and the value is the test suite content.
-  const testSuites: Map<string, string> = new Map();
-
-  report.testCases.forEach(testCase => {
-    // Constructing Robot Framework format
-    const testSuiteContent = `*** Test Cases ***\n${testCase.name}\n` +
-      testCase.steps.map(step => `    ${step}`).join('\n');
-
-    // Resolve path for this test suite
-    const testSuitePath = pathResolver.resolveTestSuitePath(testCase.id);
-    
-    testSuites.set(testSuitePath, testSuiteContent);
-  });
-
-  vscode.window.showInformationMessage('Test suites created.');
-
-  return testSuites;
-}
-
-// Write the generated test suites to the file system
-export function writeTestSuites(testSuites: Map<string, string>, config: Configuration): void {
-  vscode.window.showInformationMessage('Writing test suites to the file system.');
-
-  // Check if the output directory exists
-  if (!fs.existsSync(config.generationDirectory)) {
-    fs.mkdirSync(config.generationDirectory, { recursive: true });
-  }
-
-  // Optionally clear the directory
-  if (config.clearGenerationDirectory) {
-    fs.readdirSync(config.generationDirectory).forEach(file => {
-      fs.unlinkSync(path.join(config.generationDirectory, file));
-    });
-  }
-
-  // Write each test suite to the file system
-  testSuites.forEach((content, filePath) => {
-    fs.writeFileSync(`${filePath}.robot`, content);
-    console.log(`Test suite written to: ${filePath}.robot`);
-  });
-
-  // Optionally create a ZIP file
-  if (config.createOutputZip) {
-    const outputZip = `${config.generationDirectory}.zip`;
-    const archiver = require('archiver');
-    const output = fs.createWriteStream(outputZip);
-    const archive = archiver('zip');
-
-    archive.pipe(output);
-    archive.directory(config.generationDirectory, false);
-    archive.finalize();
-
-    console.log(`ZIP file created at: ${outputZip}`);
-  }
-  vscode.window.showInformationMessage('Test suites written to the file system.');
-}
-
-// Main function for fetching, processing, and writing test suites
-export async function testBenchToRobotFramework(url: string, config: Configuration, connection: Connection | null): Promise<void> {
-  // Fetch the TestBench JSON report
-  const report = await fetchTestBenchReport(url, connection);
-  if (!report) {
-    console.error('TestBench JSON report does not exist.');
-    return;
-  }
-
-  // Create a path resolver
-  const pathResolver = new PathResolver(config);
-
-  // Generate Robot Framework test suites
-  const testSuites = createTestSuites(report, pathResolver);
-
-  // Write the test suites to the file system
-  writeTestSuites(testSuites, config);
-}
-
-// Function to execute the Robot Framework test suites
-export function executeRobotFrameworkTests(suiteDirectory: string, outputDirectory: string): Promise<void> {
-    vscode.window.showInformationMessage('Executing Robot Framework tests.');
-
-    return new Promise((resolve, reject) => {
-      // Ensure the output directory exists
-      if (!fs.existsSync(outputDirectory)) {
-        fs.mkdirSync(outputDirectory, { recursive: true });
-      }
-  
-      // Construct the command to run Robot Framework
-      const command = `robot --outputdir ${outputDirectory} ${suiteDirectory}`;
-  
-      // Execute the Robot Framework test suites using a child process
-      exec(command, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Error executing Robot Framework tests: ${error.message}`);
-          reject(error);
-          return;
-        }
-  
-        console.log('Robot Framework test execution output:');
-        console.log(stdout);
-  
-        if (stderr) {
-          vscode.window.showInformationMessage(`Robot Framework test execution errors: ${stderr}`);	
-          console.error('Robot Framework test execution errors:');
-          console.error(stderr);
-        }
-  
-        resolve();
+      const url = `${baseURL}/api/projects/${projectKey}/${cycleKey}`;  // TODO: Update the URL
+      const response = await axios.get(url, {
+          responseType: 'blob', // We expect a binary response
+          params: options, // Pass cycle options as query parameters
       });
-    });
+
+      console.debug(`Zip file fetched successfully for projectKey: ${projectKey}, cycleKey: ${cycleKey}`);
+      return response.data;
+  } catch (error) {
+      console.error(`Error fetching zip file for projectKey: ${projectKey}, cycleKey: ${cycleKey}`, error);
+      throw error; // Re-throw error for higher-level handling if needed
+  }
 }
-  
-// Main function to generate test suites and execute them
-export async function executeTests(config: Configuration): Promise<void> {
-    // Assume test suites have been generated and are located in the config.generationDirectory
-    const suiteDirectory = path.resolve(config.generationDirectory);
-    const outputDirectory = path.resolve(config.generationDirectory, 'test-results');
-  
-    try {
-      // Execute the Robot Framework test suites
-      await executeRobotFrameworkTests(suiteDirectory, outputDirectory);
-      console.log('Robot Framework test execution completed.');
-  
-      const outputXML = path.join(outputDirectory, 'output.xml');
-      const logHTML = path.join(outputDirectory, 'log.html');
-      const reportHTML = path.join(outputDirectory, 'report.html');
-  
-      vscode.window.showInformationMessage(`Test results generated.`);	
-      console.log(`Test results generated:`);
-      console.log(`Output XML: ${outputXML}`);
-      console.log(`Log HTML: ${logHTML}`);
-      console.log(`Report HTML: ${reportHTML}`);
-  
-    } catch (error) {
-      console.error('Error during test execution:', error);
+
+export async function extractZip(
+  zipFilePath: string,
+  outputDir: string,
+  extractOnlyJson = true // Optional parameter, defaults to false
+): Promise<void> {
+  try {
+    console.debug(`Starting extraction of ${zipFilePath} to ${outputDir}`);
+
+    // 1. Check if the ZIP file exists
+    if (!fs.existsSync(zipFilePath)) {
+      throw new Error(`ZIP file not found: ${zipFilePath}`);
     }
+    console.debug(`ZIP file exists`);
+
+    // 2. Create the output directory if it doesn't exist
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+      console.debug(`Created output directory: ${outputDir}`);
+    } else {
+      console.debug(`Output directory already exists: ${outputDir}`);
+    }
+
+    // 3. Open the ZIP file as a read stream
+    const readStream = fs.createReadStream(zipFilePath);
+    console.debug(`Opened ZIP file stream`);
+
+    // 4. Parse the ZIP stream and handle entries
+    await new Promise<void>((resolve, reject) => {
+      readStream
+        .pipe(unzipper.Parse())
+        .on('entry', (entry: unzipper.Entry) => {
+          const extractedPath = path.join(outputDir, entry.path);
+          const directoryPath = path.dirname(extractedPath);
+
+          // 5. Check if the entry is a JSON file (if extractOnlyJson is true)
+          if (extractOnlyJson && !entry.path.toLowerCase().endsWith('.json')) {
+            console.debug(`Skipping non-JSON file: ${entry.path}`);
+            entry.autodrain();
+            return; // Skip this entry
+          }
+
+          if (entry.type === 'Directory') {
+            // 6. Create directories if encountered
+            fs.mkdirSync(extractedPath, { recursive: true });
+            console.debug(`Created directory: ${extractedPath}`);
+            entry.autodrain();
+          } else {
+            // 7. Ensure the directory for the file exists before extracting
+            if (!fs.existsSync(directoryPath)) {
+              fs.mkdirSync(directoryPath, { recursive: true });
+              console.debug(`Created directory for file: ${directoryPath}`);
+            }
+
+            // 8. Extract files
+            entry.pipe(fs.createWriteStream(extractedPath))
+              .on('finish', () => console.debug(`Extracted file: ${extractedPath}`))
+              .on('error', (err) => {
+                console.error(`Error extracting file ${extractedPath}: ${err}`);
+                reject(err);
+              });
+          }
+        })
+        .on('close', () => {
+          console.debug(`Finished processing all entries`);
+          resolve();
+        })
+        .on('error', (err) => {
+          console.error(`Error parsing ZIP: ${err}`);
+          reject(err);
+        });
+    });
+
+    console.debug(`Extraction completed successfully`);
+  } catch (err) {
+    console.error(`Extraction failed: ${err}`);
+    throw err;
+  }
+}
+
+// Function to load JSON files from extracted directory
+export function loadJsonFilesFromDirectory(dir: string): string[] {
+  try {
+    console.debug(`Attempting to read JSON files from directory: ${dir}`);
+
+    const files = fs.readdirSync(dir);
+    const jsonFiles = files
+      .filter(file => file.endsWith('.json'))
+      .map(file => path.join(dir, file));
+
+    console.debug(`Found ${jsonFiles.length} JSON files in the directory.`);
+    return jsonFiles;
+  } catch (error) {
+    console.error(`Error loading JSON files from directory: ${error}`);
+    // Re-throwing the error or returning an empty array
+    throw error; 
+  }
+}
+
+// Function to parse JSON content
+export function parseJsonFile(filePath: string): any {
+  try {
+    console.debug(`Attempting to parse JSON file: ${filePath}`);
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const parsedData = JSON.parse(content);
+
+    console.debug(`Successfully parsed JSON file: ${filePath}`);
+    return parsedData;
+  } catch (error) {
+    console.error(`Error parsing JSON file ${filePath}: ${error}`);
+    // Re-throwing the error or returning null
+    throw error; 
+  }
+}
+
+// Function to process the Test Case files
+export function processTestCaseFile(filePath: string): TestCase | null {
+  try {
+    console.debug(`Processing test case file: ${filePath}`);
+
+    const data = parseJsonFile(filePath);
+
+      // Check if interactions exist and if any of them have 'sequencePhase' = 'TestStep'
+    if (data.interactions && Array.isArray(data.interactions)) {
+      console.debug(`Found test case with steps in file: ${filePath}`);
+      const testSteps = data.interactions
+        .filter((interaction: any) => interaction.spec?.sequencePhase === "TestStep")
+        .map((interaction: any) => interaction.name);
+
+      if (testSteps.length > 0) {
+        return {
+          uniqueID: data.uniqueID || "UnnamedTest",
+          name: data.uniqueID || "UnnamedTest",
+          steps: testSteps.map((step: string) => `    ${step}`) // Format steps for Robot Framework
+        };
+      }
+    }
+
+    console.debug(`No test case found in file: ${filePath}`);
+    return null;
+  } catch (error) {
+    console.error(`Error processing test case file ${filePath}: ${error}`);
+    // Re-throwing or returning null
+    throw error;
+  }
+}
+
+// Function to extract the theme ID or grouping identifier from a Test Case JSON file
+function extractThemeIDFromTestCaseFile(filePath: string): string {
+  try {
+    console.debug(`Extracting theme ID from test case file: ${filePath}`);
+
+    const data = parseJsonFile(filePath);
+
+    if (data.numbering) {
+      console.debug(`Using 'numbering' field as theme ID: ${data.numbering}`);
+      return data.numbering;
+    }
+
+    if (data.spec && data.spec.key) {
+      console.debug(`Using 'spec.key' field as theme ID: Spec-${data.spec.key}`);
+      return `Spec-${data.spec.key}`;
+    }
+
+    if (data.uniqueID) {
+      console.debug(`Using 'uniqueID' field as theme ID: UniqueID-${data.uniqueID}`);
+      return `UniqueID-${data.uniqueID}`;
+    }
+
+    console.debug(`No suitable theme ID found, using default: UnknownTheme`);
+    return 'UnknownTheme';
+  } catch (error) {
+    console.error(`Error extracting theme ID from ${filePath}: ${error}`);
+    // Consider re-throwing or returning a default value
+    throw error;
+  }
+}
+
+// Function to create Test Suites based on themes and test cases
+export function createTestSuitesFromFiles(files: string[]): TestSuite[] {
+  try {
+    console.debug(`Creating test suites from ${files.length} files`);
+
+    const testSuites: TestSuite[] = [];
+
+    files.forEach(filePath => {
+      if (filePath.includes('iTB-TC-')) {  // TODO: Check if this is needed
+        // Process the Test Case file
+        const testCase = processTestCaseFile(filePath);
+        if (testCase) {
+          const themeID = extractThemeIDFromTestCaseFile(filePath);
+          let testSuite = testSuites.find(suite => suite.themeID === themeID);
+
+          if (!testSuite) {
+            testSuite = { themeID, testCases: [] };
+            testSuites.push(testSuite);
+          }
+          testSuite.testCases.push(testCase);
+        }
+      }
+    });
+
+    console.debug(`Created ${testSuites.length} test suites`);
+    return testSuites;
+
+  } catch (error) {
+    console.error(`Error creating test suites: ${error}`);
+    // Re-throwing or return an empty array
+    throw error;
+  }
+}
+
+// Function to write Robot Framework Test Suites to files
+export function writeRobotFrameworkTestSuites(testSuites: TestSuite[], config: Configuration): void {
+  testSuites.forEach(suite => {
+    const suiteDir = path.join(config.generationDirectory, suite.themeID);
+    if (!fs.existsSync(suiteDir)) {
+      fs.mkdirSync(suiteDir, { recursive: true });
+    }
+
+    const filePath = path.join(suiteDir, `${suite.themeID}.robot`);
+    const fileContent = `*** Test Cases ***\n`;
+
+    suite.testCases.forEach(testCase => {
+      const caseContent = `${testCase.name}\n${testCase.steps.join('\n')}\n`;
+      fs.appendFileSync(filePath, fileContent + caseContent);
+    });
+
+    console.log(`Test suite written to ${filePath}`);
+  });
+}
+
+// Main function to handle the process
+export async function testBenchToRobotFramework(zipFilePath: string, config: Configuration): Promise<void> {
+  const extractDir = path.join(config.generationDirectory, 'extracted');
+  // vscode.window.showInformationMessage(`Extracted directory: ${extractDir}`);
+  console.log(`Extracted directory: ${extractDir}`);
+  
+  // vscode.window.showInformationMessage(`Before extractZip`);
+  // Step 1: Extract ZIP file
+  await extractZip(zipFilePath, extractDir);
+  // vscode.window.showInformationMessage(`ZIP file extracted to: ${extractDir}`);
+  console.log(`ZIP file extracted to: ${extractDir}`);
+
+  // Step 2: Load JSON files from extracted directory
+  const jsonFiles = loadJsonFilesFromDirectory(extractDir);
+  // vscode.window.showInformationMessage(`JSON files loaded: ${jsonFiles.length}`);
+  console.log(`JSON files loaded: ${jsonFiles.length}`);
+
+  // Step 3: Create Test Suites from Test Case files
+  const testSuites = createTestSuitesFromFiles(jsonFiles);
+  // vscode.window.showInformationMessage(`Test suites created: ${testSuites.length}`);
+  console.log(`Test suites created: ${testSuites.length}`);
+
+  // Step 4: Write the test suites to Robot Framework files
+  writeRobotFrameworkTestSuites(testSuites, config);
+  // vscode.window.showInformationMessage(`Test suites written to the file system.`);
+  console.log(`Test suites written to the file system.`);
 }
