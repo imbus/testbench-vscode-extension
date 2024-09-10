@@ -1,50 +1,49 @@
-import * as vscode from 'vscode';
-import { TreeItem } from './explorer';  // changed from vscode
-import { performLogin } from './login';
-import { Connection } from './connection';
-import { browseProjects } from './browseProjects';
-import { TestBenchTreeDataProvider } from './explorer';
-import * as jsonReportHandler from './jsonReportHandler';
+import * as vscode from "vscode";
+import * as utils from "./utils";
+import * as jsonReportHandler from "./jsonReportHandler";
+import { TreeItem } from "./explorer";
+import { performLogin } from "./login";
+import { Connection } from "./connection";
+import { browseProjects } from "./browseProjects";
+import { TestBenchTreeDataProvider } from "./explorer";
 
 export function activate(context: vscode.ExtensionContext) {
-
     // TODO: When initializing the tree view, set the root from VS Code storage.
 
     // Store the connection to server
-    let connection: Connection | null = null;    
-        
-    let loginDisposable = vscode.commands.registerCommand('testbenchExtension.login', async () => {
+    let connection: Connection | null = null;
+
+    let loginDisposable = vscode.commands.registerCommand("testbenchExtension.login", async () => {
         connection = await performLogin(context);
         if (connection) {
             // Delay the Tree View Initialization to initialize the tree view only after a successful connection is established
             const treeDataProvider = new TestBenchTreeDataProvider(connection);
             // Create the tree view
-            const treeView = vscode.window.createTreeView('testBenchProjects', {
-                treeDataProvider
+            const treeView = vscode.window.createTreeView("testBenchProjects", {
+                treeDataProvider,
             });
             context.subscriptions.push(treeView);
 
             // Handle expansion and collapse events for dynamic icon change of tree view items
-            treeView.onDidExpandElement(e => {
+            treeView.onDidExpandElement((e) => {
                 treeDataProvider.handleExpansion(e.element, true);
             });
-            treeView.onDidCollapseElement(e => {
+            treeView.onDidCollapseElement((e) => {
                 treeDataProvider.handleExpansion(e.element, false);
             });
 
-            const nextAction = await vscode.window.showQuickPick(
-                ["Browse Projects", "Change connection", "Cancel"],
-                { placeHolder: "What do you want to do?" }
-            );
+            const nextAction = await vscode.window.showQuickPick(["Browse Projects", "Change connection", "Cancel"], {
+                placeHolder: "What do you want to do?",
+            });
 
             switch (nextAction) {
                 case "Browse Projects":
-                    browseProjects(context, connection);                    
+                    browseProjects(context, connection);
                     break;
                 case "Change connection":
-                    connection = await performLogin(context, true);  // Refresh the connection
+                    connection = await performLogin(context, true); // Refresh the connection
                     if (connection) {
-                        treeDataProvider.refresh();  // Refresh the tree view with the new connection
+                        treeDataProvider.refresh(); // Refresh the tree view with the new connection
                     }
                     break;
                 case "Cancel":
@@ -54,61 +53,39 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(loginDisposable);
 
-    // Register the "Browse Projects" command	
+    // Register the "Browse Projects" command
     context.subscriptions.push(
-        vscode.commands.registerCommand('testbenchExtension.browseProjects', () => browseProjects(context, connection))
+        vscode.commands.registerCommand("testbenchExtension.browseProjects", () => browseProjects(context, connection))
     );
 
     // Register the "Generate" command
     context.subscriptions.push(
-        vscode.commands.registerCommand('testbenchExtension.generate', (item: TreeItem) => {         
-            vscode.window.showInformationMessage(`Generating Test Suites for ${item.label}`);
-            
-            // TODO: Update the URL
-            // Example URL
-            const testBenchReportUrl = connection?.serverUrl + 'projects/' + item.item.id + '/report';   
-            const projectKey = item.item.id;       
-            const cycleKey = item.item.id;      
-            // jsonReportHandler.fetchZipFile(testBenchReportUrl, projectKey, cycleKey);
-           
-            const testSuitesOutputDirectory: string = 'C:/VSCodeTestBench/GeneratedSuites';
-            const zipFileDirectory: string = 'C:/RobotCode/RobotCodeLiveDemo/report-from-tb.zip';  // For now assume the zip file is already downloaded
-
-            // Example configuration
-            const config: jsonReportHandler.Configuration = {
-                generationDirectory: testSuitesOutputDirectory,
-                clearGenerationDirectory: true,
-                createOutputZip: false
-            };
-
-            vscode.window.showInformationMessage(`Config created`);
-            
-            // Run the main function with the ZIP file path
-            jsonReportHandler.testBenchToRobotFramework(zipFileDirectory, config)
-                .then(() => console.log('Test suites successfully generated'))
-                .catch(err => console.error('Error during the process:', err));
-
-            vscode.window.showInformationMessage(`Conversion done`);
-           })           
+        vscode.commands.registerCommand("testbenchExtension.generate", async (item: TreeItem) => {
+            if (connection) {
+                jsonReportHandler.startTestGenerationProcess(item, connection);
+            } else {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
+            }
+        })
     );
 
     // Register the "Refresh tree" command
     context.subscriptions.push(
-        vscode.commands.registerCommand('testbenchExtension.refreshTreeView', () => {
-            browseProjects(context, connection);            
+        vscode.commands.registerCommand("testbenchExtension.refreshTreeView", () => {
+            browseProjects(context, connection);
         })
     );
 
     // Register the "Make Root" command
     context.subscriptions.push(
-        vscode.commands.registerCommand('testbenchExtension.makeRoot', (treeItem: TreeItem) => {
+        vscode.commands.registerCommand("testbenchExtension.makeRoot", (treeItem: TreeItem) => {
             if (connection) {
                 const treeDataProvider = new TestBenchTreeDataProvider(connection);
                 treeDataProvider.makeRoot(treeItem);
                 vscode.window.showInformationMessage(`"${treeItem.label}" is now the root.`);
-                vscode.window.registerTreeDataProvider('testBenchProjects', treeDataProvider);
+                vscode.window.registerTreeDataProvider("testBenchProjects", treeDataProvider);
             } else {
-                vscode.window.showErrorMessage('No connection available. Please log in first.');
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
             }
         })
     );

@@ -1,9 +1,45 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import * as https from 'https';
+import axios, { AxiosInstance, AxiosResponse } from "axios";
+import * as https from "https";
 import * as process from "process";
 
 // Ignore SSL certificate validation in node requests to disable certificate validation, otherwise the connection will always fail
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+/* TODO: Rewrite this class to receive a sessionToken after the user logs in. The sessionToken is then used in all subsequent requests.
+Example subsequent request for getting a Job ID:
+curl -X 'GET' \
+  'https://localhost:9445/api/projects/26/report/cycle-168-report-46fd45bc-890e-41b6-84e6-da99ca79100d.zip/v1' \
+  -H 'accept: application/vnd.testbench+json' \
+  -H 'Authorization: eQ7uJHBqXJWRLf4q'
+
+POST ​/api​/login​/session​/v1 Logs on a TestBench user.
+
+curl -X 'POST' \
+  'https://localhost:9445/api/login/session/v1' \
+  -H 'accept: application/vnd.testbench+json' \
+  -H 'Content-Type: application/vnd.testbench+json' \
+  -d '{
+  "login": "tt-admin",
+  "password": "admin",
+  "force": true
+}'
+
+Request URL https://localhost:9445/api/login/session/v1
+
+Code 201	
+Response body:
+{
+  "userKey": "0",
+  "login": "tt-admin",
+  "sessionToken": "eQ7uJHBqXJWRLf4q",
+  "globalRoles": [
+    "Administrator"
+  ],
+  "internalUserManagement": true,
+  "serverVersion": "4.0.19",
+  "licenseWarning": null
+}
+*/
 
 // Handle the connection to the TestBench server
 export class Connection {
@@ -20,10 +56,10 @@ export class Connection {
             baseURL: serverUrl,
             auth: {
                 username: loginName,
-                password: password
+                password: password,
             },
             headers: {
-                'Content-Type': 'application/vnd.testbench+json; charset=utf-8'
+                "Content-Type": "application/vnd.testbench+json; charset=utf-8",
             },
             // Ignore self-signed certificates
             httpsAgent: new https.Agent({
@@ -42,7 +78,7 @@ export class Connection {
                     includeCycles: "false",
                 },
             });
-            console.log(`Response status: ${response.status}`);
+            console.log(`Response status for checking connection: ${response.status}`);
             return response.status === 200;
         } catch (error: any) {
             console.error("Error checking connection:", error.message);
@@ -58,14 +94,14 @@ export class Connection {
 
     async getAllProjects(): Promise<any[]> {
         try {
-            const response = await this.session.get('projects', {
-                params: { includeTOVs: 'true', includeCycles: 'true' }
+            const response = await this.session.get("projects", {
+                params: { includeTOVs: "true", includeCycles: "true" },
             });
-            console.log('Response from getAllProjects:', response.data);
+            console.log("Response from getAllProjects:", response.data);
 
             return response.data.projects || [];
         } catch (error) {
-            console.error('Error getting all projects:', error);
+            console.error("Error getting all projects:", error);
             return [];
         }
     }
@@ -75,7 +111,7 @@ export class Connection {
             const response = await this.session.get(`tovs/${tovKey}/structure`);
             return response.data;
         } catch (error) {
-            console.error('Error getting TOV structure:', error);
+            console.error("Error getting TOV structure:", error);
             return [];
         }
     }
@@ -85,7 +121,7 @@ export class Connection {
             const response = await this.session.get(`cycle/${cycleKey}/structure`);
             return response.data;
         } catch (error) {
-            console.error('Error getting test cycle structure:', error);
+            console.error("Error getting test cycle structure:", error);
             return [];
         }
     }
@@ -97,14 +133,14 @@ export class Connection {
             );
             return response.data;
         } catch (error) {
-            console.error('Error getting test cases:', error);
+            console.error("Error getting test cases:", error);
             return [];
         }
     }
 }
 
-export async function login(server: string, loginName: string, password: string): Promise<Connection | null> {
-    const connection = new Connection(server, loginName, password);
+export async function login(serverUrl: string, loginName: string, password: string): Promise<Connection | null> {
+    const connection = new Connection(serverUrl, loginName, password);
     if (await connection.checkIsWorking()) {
         return connection;
     }

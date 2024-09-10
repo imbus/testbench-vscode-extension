@@ -1,5 +1,5 @@
-import * as vscode from 'vscode';
-import { Connection, login } from './connection';
+import * as vscode from "vscode";
+import { Connection, login } from "./connection";
 
 // A generalized method to prompt for any user input
 async function promptForInput(
@@ -39,7 +39,10 @@ async function promptForInput(
     }
 }
 
-export async function performLogin(context: vscode.ExtensionContext, promptForNewCredentials: boolean = false): Promise<Connection | null> {
+export async function performLogin(
+    context: vscode.ExtensionContext,
+    promptForNewCredentials: boolean = false
+): Promise<Connection | null> {
     // Loop until the user successfully logs in or cancels the login process
     while (true) {
         // Retrieve the stored credentials if they exist
@@ -99,12 +102,14 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
         }
 
         // Ensuring server, loginName, and password are strings
-        if (typeof server === 'undefined' || typeof loginName === 'undefined' || typeof password === 'undefined') {
+        if (typeof server === "undefined" || typeof loginName === "undefined" || typeof password === "undefined") {
             vscode.window.showErrorMessage("Unexpected error: missing login credentials.");
             return null;
         }
 
         const serverUrl = `https://${server}:${port}/api/1/`;
+
+        // const serverUrl = `https://${server}:${port}/api/1/`;
 
         const connection = await login(serverUrl, loginName, password);
         if (connection) {
@@ -115,7 +120,7 @@ export async function performLogin(context: vscode.ExtensionContext, promptForNe
             context.secrets.store("password", password);
             vscode.window.showInformationMessage("Login successful!");
 
-            return connection;     
+            return connection;
         } else {
             const retry = await vscode.window.showInformationMessage(
                 "Login failed! Do you want to retry?",
