@@ -2,8 +2,7 @@ import * as vscode from "vscode";
 import * as utils from "./utils";
 import * as jsonReportHandler from "./jsonReportHandler";
 import { TreeItem } from "./explorer";
-import { performLogin } from "./login";
-import { Connection } from "./connection";
+import { OldPlayServerConnection, performLogin } from "./testbenchConnection";
 import { browseProjects } from "./browseProjects";
 import { TestBenchTreeDataProvider } from "./explorer";
 
@@ -11,7 +10,7 @@ export function activate(context: vscode.ExtensionContext) {
     // TODO: When initializing the tree view, set the root from VS Code storage.
 
     // Store the connection to server
-    let connection: Connection | null = null;
+    let connection: OldPlayServerConnection | null = null;
 
     let loginDisposable = vscode.commands.registerCommand("testbenchExtension.login", async () => {
         connection = await performLogin(context);
@@ -40,6 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
                 case "Browse Projects":
                     browseProjects(context, connection);
                     break;
+                // TODO: Remove "Change connection" command from package.json and implement a logout command               
                 case "Change connection":
                     connection = await performLogin(context, true); // Refresh the connection
                     if (connection) {
@@ -49,6 +49,8 @@ export function activate(context: vscode.ExtensionContext) {
                 case "Cancel":
                     return;
             }
+        } else {
+            vscode.window.showErrorMessage("Login failed!.");
         }
     });
     context.subscriptions.push(loginDisposable);

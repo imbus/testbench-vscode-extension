@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { Connection } from "./connection";
+import { OldPlayServerConnection } from "./testbenchConnection";
 
 export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<TreeItem | undefined> = new vscode.EventEmitter<
@@ -8,10 +8,10 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
     >();
     readonly onDidChangeTreeData: vscode.Event<TreeItem | undefined> = this._onDidChangeTreeData.event;
 
-    private connection: Connection | null = null;
+    private connection: OldPlayServerConnection | null = null;
     private rootItem: TreeItem | null = null; // Track the current root item
 
-    constructor(connection: Connection | null) {
+    constructor(connection: OldPlayServerConnection | null) {
         this.connection = connection;
     }
 
