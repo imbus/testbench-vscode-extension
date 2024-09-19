@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import { OldPlayServerConnection } from "./testbenchConnection";
+import { PlayServerConnection } from "./testbenchConnection";
 import { TestBenchTreeDataProvider } from "./explorer";
 
 // Creates a fresh tree view to browse projects
-export async function browseProjects(context: vscode.ExtensionContext, connection: OldPlayServerConnection | null) {
+export async function browseProjects(context: vscode.ExtensionContext, connection: PlayServerConnection | null) {
     if (!connection) {
         vscode.window.showInformationMessage("No connection available. Please login first.");
         return;

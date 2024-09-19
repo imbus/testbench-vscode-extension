@@ -6,7 +6,6 @@ import * as base64 from "base-64"; // npm i --save-dev @types/base-64
 // Ignore SSL certificate validation in node requests
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-// Get all projects using the old API with encoded username and password as auth
 // Interface for the response structure of the projects
 // TODO: Use these interfaces to type the response data
 interface ProjectResponse {
@@ -51,8 +50,8 @@ interface TestCycle {
     creationTime: string;
 }
 
-// Define the Connection class to handle the TestBench server connection that uses the old Play Server that runs on port 9443
-export class OldPlayServerConnection {
+// TestBench server connection
+export class PlayServerConnection {
     serverName: string;
     oldPlayServerPortNumber = 9443;
     newPlayServerPortNumber = 9445;
@@ -99,10 +98,7 @@ export class OldPlayServerConnection {
 
     // Method to fetch all projects from the server
     // TODO: Change the return type to Project[] instead of any[]
-    async getAllProjects(
-        includeTOVs: boolean = true,
-        includeCycles: boolean = true
-    ): Promise<any[]> {
+    async getAllProjects(includeTOVs: boolean = true, includeCycles: boolean = true): Promise<any[]> {
         try {
             console.log(`Getting all projects from server.`);
 
@@ -187,7 +183,7 @@ async function promptForInput(
 export async function performLogin(
     context: vscode.ExtensionContext,
     promptForNewCredentials: boolean = false
-): Promise<OldPlayServerConnection | null> {
+): Promise<PlayServerConnection | null> {
     // Loop until the user successfully logs in or cancels the login process
     while (true) {
         // Retrieve the stored credentials if they exist
@@ -269,12 +265,7 @@ export async function performLogin(
         if (sessionToken) {
             console.log("Session token retrieved successfully: ", sessionToken);
 
-            const connection = await createConnectionToOldPlayServer(
-                serverName,
-                loginName,
-                password,
-                sessionToken
-            );
+            const connection = await createConnectionToOldPlayServer(serverName, loginName, password, sessionToken);
             if (connection) {
                 // If login is successful, store the credentials in VS Code storage
                 context.secrets.store("server", serverName);
@@ -313,8 +304,8 @@ async function createConnectionToOldPlayServer(
     loginName: string,
     password: string,
     sessionToken: string
-): Promise<OldPlayServerConnection | null> {
-    const connection = new OldPlayServerConnection(serverName, loginName, password, sessionToken);
+): Promise<PlayServerConnection | null> {
+    const connection = new PlayServerConnection(serverName, loginName, password, sessionToken);
     if (await connection.checkIsWorking()) {
         return connection;
     }

@@ -4,8 +4,9 @@ import * as path from "path";
 import * as utils from "./utils";
 import * as unzipper from "unzipper"; // npm install unzipper
 import axios, { AxiosResponse } from "axios";
-import { OldPlayServerConnection } from "./testbenchConnection";
+import { PlayServerConnection } from "./testbenchConnection";
 import { TreeItem } from "./explorer";
+import * as cheerio from "cheerio"; // Using cheerio to parse HTML  npm install --save-dev @types/cheerio
 
 // Configuration interface
 export interface Configuration {
@@ -77,13 +78,61 @@ interface JobStatusResponse {
     };
 }
 
+// Prompt the user to select the export report method (Execution based or Specification based)
+async function selectExecutionOrSpecificationBased(): Promise<boolean> {
+    let executionBased = true; // Default value is "Execution based"
+
+    // We return a new Promise here, which will resolve with the result after user interaction
+    return new Promise((resolve) => {
+        // Create the quick pick input
+        const quickPick = vscode.window.createQuickPick();
+        quickPick.items = [{ label: "Execution based" }, { label: "Specification based" }];
+        quickPick.title = "Select the testing method";
+        quickPick.placeholder = "Select the to export option for the reports (Execution based by default).";
+
+        // Handle the user selection
+        quickPick.onDidChangeSelection((selection) => {
+            if (selection[0]) {
+                executionBased = selection[0].label === "Execution based";
+                quickPick.hide(); // Close the quick pick after selection
+            }
+        });
+
+        // Handle case when the quick pick is hidden without user selection (e.g., if canceled)
+        quickPick.onDidHide(() => {
+            // If the user cancels or does not select an option, we resolve with the default value
+            resolve(executionBased);
+            quickPick.dispose(); // Clean up resources after closing
+        });
+
+        quickPick.show(); // Show the quick pick to the user
+    });
+}
+
+// Function to extract text content from HTML
+function extractTextFromHtml(htmlContent: string): string {
+    if (!htmlContent || typeof htmlContent !== "string") {
+        return "";
+    }
+
+    try {
+        const $ = cheerio.load(htmlContent);
+        const text = $("body").text(); // Select the body element and extract text content
+        // Replace newlines and extra spaces with a single space
+        return text.replace(/\s+/g, " ").trim();
+    } catch (error) {
+        console.error("Error parsing HTML content:", error);
+        return "";
+    }
+}
+
 // Fetch the TestBench JSON report from the server (ZIP Archive).
 // 3 Calls are needed to download the zip report:
 // 1. Get the job ID
 // 2. Get the job status
 // 3. Download the report zip file.
 export async function fetchZipFile(
-    connection: OldPlayServerConnection,
+    connection: PlayServerConnection,
     projectKey: string,
     cycleKey: string,
     requestParams?: ReportRequestParams
@@ -120,7 +169,7 @@ export async function fetchZipFile(
 
 // Function to get the Job ID
 async function getJobId(
-    connection: OldPlayServerConnection,
+    connection: PlayServerConnection,
     projectKey: string,
     cycleKey: string,
     requestParams?: ReportRequestParams
@@ -148,7 +197,7 @@ async function getJobId(
 
 // Function to get the Job Status
 async function getJobStatus(
-    connection: OldPlayServerConnection,
+    connection: PlayServerConnection,
     projectKey: string,
     jobId: string
 ): Promise<JobStatusResponse> {
@@ -172,7 +221,7 @@ async function getJobStatus(
 
 // Function to download the report zip file
 async function downloadReport(
-    connection: OldPlayServerConnection,
+    connection: PlayServerConnection,
     projectKey: string,
     fileName: string
 ): Promise<string | undefined> {
@@ -223,7 +272,7 @@ function handleError(error: unknown, projectKey: string, cycleKey: string): void
     }
 }
 
-// Extract the ZIP file to a directory
+// Extract the ZIP file to an output directory
 export async function extractZip(
     zipFilePath: string,
     outputDir: string,
@@ -409,8 +458,8 @@ export function createTestSuitesFromFiles(files: string[]): TestSuite[] {
         const testSuites: TestSuite[] = [];
 
         files.forEach((filePath) => {
+            // Process the files that begins with iTB-TC-
             if (filePath.includes("iTB-TC-")) {
-                // TODO: Check if this is needed
                 // Process the Test Case file
                 const testCase = processTestCaseFile(filePath);
                 if (testCase) {
@@ -430,7 +479,6 @@ export function createTestSuitesFromFiles(files: string[]): TestSuite[] {
         return testSuites;
     } catch (error) {
         console.error(`Error creating test suites: ${error}`);
-        // Re-throwing or return an empty array
         throw error;
     }
 }
@@ -523,7 +571,7 @@ async function selectOutputFolder(): Promise<string | undefined> {
         canSelectFiles: false, // Only allow folder selection
         canSelectFolders: true, // Allow selecting folders
         canSelectMany: false, // Only allow one folder to be selected
-        openLabel: "Select Output Folder", // Custom label for the open button
+        openLabel: "Select Output Folder For Test Suites", // Custom label for the open button
     });
 
     if (folderUri && folderUri.length > 0) {
@@ -540,11 +588,18 @@ export async function testBenchToRobotFramework(
     itemLabel: string,
     projectKey: string,
     cycleKey: string,
-    connection: OldPlayServerConnection
+    connection: PlayServerConnection
 ): Promise<void> {
+    // Execution based or specification based request parameter
+    // TODO: Add a cancel button and dont continue if user clicks away?
+    const executionBased = await selectExecutionOrSpecificationBased();
+    console.log("executionBased value set to:", executionBased);
+    const cycleStructureOptionsRequestParameter: ReportRequestParams = {
+        basedOnExecution: executionBased, // true as default
+    };
+
     // Show a progress bar while the process is running, since this process takes time
-    // TODO: result variable is not used. Check if it is needed.
-    const result = vscode.window.withProgress(
+    vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification, // You can also use ProgressLocation.Window or ProgressLocation.SourceControl
             title: `Generating Test Suites for ${itemLabel}`,
@@ -564,37 +619,45 @@ export async function testBenchToRobotFramework(
             }
 
             // Fetch the ZIP file from the server
-            const outputPathOfZip = await fetchZipFile(connection, projectKey, cycleKey, {});
+            // "C:/RobotCode/RobotCodeLiveDemo/report-from-tb.zip";
+            const downloadedZipFilePath = await fetchZipFile(
+                connection,
+                projectKey,
+                cycleKey,
+                cycleStructureOptionsRequestParameter
+            );
 
-            if (outputPathOfZip) {
-                const zipFileDirectory: string = outputPathOfZip; // "C:/RobotCode/RobotCodeLiveDemo/report-from-tb.zip";
+            if (downloadedZipFilePath) {
                 // Select the output folder to generate the test suites
-                const testSuitesOutputDirectory = await selectOutputFolder(); // "C:/VSCodeTestBench/GeneratedSuites";
+                const chosenOutputFolderForTestSuites = await selectOutputFolder(); // "C:/VSCodeTestBench/GeneratedSuites";
 
-                if (testSuitesOutputDirectory) {
-                    vscode.window.showInformationMessage(`Selected output folder: ${testSuitesOutputDirectory}`);
+                if (chosenOutputFolderForTestSuites) {
+                    vscode.window.showInformationMessage(
+                        `Selected output folder for test suites: ${chosenOutputFolderForTestSuites}`
+                    );
 
                     // Configuration for the test suite generation
                     const config: Configuration = {
-                        generationDirectory: testSuitesOutputDirectory,
+                        generationDirectory: chosenOutputFolderForTestSuites,
                         clearGenerationDirectory: true,
                         createOutputZip: false,
                         removeExtractedFiles: false, // Enable the removal of extracted files after processing
                     };
 
                     // TODO: This creates a new directory inside the selected directory. Check if it is needed.
-                    const extractDir = path.join(config.generationDirectory, "extracted");
+                    const folderNameOfExtractedZip = `extracted`;
+                    const zipExtractionFolderPath = path.join(config.generationDirectory, folderNameOfExtractedZip);
 
                     if (progress) {
                         progress.report({
                             increment: 15,
-                            message: `Extracting ZIP file to: ${extractDir}.`,
+                            message: `Extracting ZIP file to: ${zipExtractionFolderPath}.`,
                         });
                     }
 
-                    // Step 1: Extract ZIP file
-                    await extractZip(zipFileDirectory, extractDir);
-                    console.log(`ZIP file extracted to: ${extractDir}`);
+                    // Extract ZIP file
+                    await extractZip(downloadedZipFilePath, zipExtractionFolderPath);
+                    console.log(`ZIP file extracted to: ${zipExtractionFolderPath}`);
 
                     if (progress) {
                         progress.report({
@@ -603,39 +666,10 @@ export async function testBenchToRobotFramework(
                         });
                     }
 
-                    /* Commented out to try out the new RF Code generation implementation
-
-                    // Step 2: Load JSON files from extracted directory
-                    const jsonFiles = loadJsonFilesFromDirectory(extractDir);
-                    console.log(`JSON files loaded: ${jsonFiles.length}.`);
-
-                    if (progress) {
-                        progress.report({
-                            increment: 15,
-                            message: `Creating test suites.`,
-                        });
-                    }
-
-                    // Step 3: Create Test Suites from Test Case files
-                    const testSuites = createTestSuitesFromFiles(jsonFiles);
-                    // vscode.window.showInformationMessage(`Test suites created: ${testSuites.length}`);
-                    console.log(`Test suites created: ${testSuites.length}`);
-
-                    // Step 4: Write the test suites to Robot Framework files
-                    // Use await to not to cancel progress bar
-                    await writeRobotFrameworkTestSuites(testSuites, config);
-                    // vscode.window.showInformationMessage(`Test suites written to the file system.`);
-                    console.log(`Test suites written to the file system.`);
-                    */
-
-                    // New Implementation
-                    const folderPath = extractDir; // "C:/VSCodeTestBench/ExportJSONReport"; // Folder containing JSON files
-                    const outputFolder = "C:/VSCodeTestBench/ExportJSONReport";
-                    console.log(`Starting processTestCasesFromFolder with path: ${folderPath}`);
-                    processTestCasesFromFolder(folderPath, outputFolder);
+                    console.log(`Starting convertJSONsIntoTestCases with path: ${zipExtractionFolderPath}`); // Folder containing JSON files
+                    await convertJSONsIntoTestCases(zipExtractionFolderPath, chosenOutputFolderForTestSuites);
 
                     // Optional Step: Remove extracted files if configured
-                    // TODO: This is somehow called before the extraction is completed, which causes issues?
                     if (config.removeExtractedFiles) {
                         if (progress) {
                             progress.report({
@@ -643,7 +677,7 @@ export async function testBenchToRobotFramework(
                                 message: `Removing extracted files.`,
                             });
                         }
-                        removeExtractedFiles(extractDir);
+                        removeExtractedFiles(zipExtractionFolderPath);
                     }
 
                     vscode.window.showInformationMessage(`Test suite generation done.`);
@@ -664,8 +698,10 @@ export async function testBenchToRobotFramework(
     );
 }
 
+// TODO: Extracting zip overwrites the existing files. Prompt the user to overwrite or skip.
+// TODO: Creating test cases overwrites the existing files. Prompt the user to overwrite or skip.
 // Entry point for the test generation process
-export async function startTestGenerationProcess(item: TreeItem, connection: OldPlayServerConnection) {
+export async function startTestGenerationProcess(item: TreeItem, connection: PlayServerConnection) {
     // Check if the cycle key is available
     if (item?.item?.key?.serial) {
         const cycleKey = item.item.key.serial;
@@ -752,119 +788,152 @@ interface Parameter {
 }
 
 // Function to read and parse a JSON file asynchronously
-async function readJSONFileAsync(filePath: string): Promise<any> {
+async function readJSONFile(filePath: string): Promise<any> {
     try {
         const data = await fs.promises.readFile(filePath, "utf8");
         return JSON.parse(data);
-    } catch (err) {
-        throw err; // Re-throw the error to be handled by the caller
+    } catch (error: any) {
+        throw new Error(`Error reading JSON file at ${filePath}: ${error.message}`);
     }
 }
 
-// Function to write a Robot Framework test case asynchronously
-function writeRobotTestCaseAsync(outputFilePath: string, content: string): Promise<void> {
-    console.log(`writeRobotTestCaseAsync Writing to file: ${outputFilePath}`);
-    return new Promise((resolve, reject) => {
-        fs.writeFile(outputFilePath, content, "utf8", (err) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve();
-            }
-        });
-    });
+// Writes content to a file asynchronously
+async function writeContentToFile(filePath: string, content: string): Promise<void> {
+    console.log(`Writing content to file: ${filePath}`);
+    try {
+        await fs.promises.writeFile(filePath, content, "utf8");
+    } catch (error: any) {
+        throw new Error(`Error writing to file at ${filePath}: ${error.message}`);
+    }
 }
-// Function to generate Robot Framework test case from JSON interactions
-function generateRobotTestCase(interactions: Interaction[]): string {
-    let testCase = "";
 
-    interactions.forEach((interaction) => {
-        // Check if sequencePhase is TestStep and generate test step
+// Generates Robot Framework test case steps from interactions
+function generateTestCaseSection(interactions: Interaction[]): string {
+    return interactions.reduce((testCase, interaction) => {
         if (interaction.spec.sequencePhase === "TestStep") {
-            testCase += `    ${interaction.name}`;
-            if (interaction.parameters && interaction.parameters.length > 0) {
-                interaction.parameters.forEach((parameter) => {
-                    testCase += `    ${parameter.name}: ${parameter.value}`;
-                });
-            }
-            testCase += "\n";
+            testCase += processTestStepInteraction(interaction);
         }
 
-        // Recursively process nested interactions if they exist
         if (interaction.interactions && interaction.interactions.length > 0) {
-            testCase += generateRobotTestCase(interaction.interactions);
+            testCase += generateTestCaseSection(interaction.interactions);
         }
-    });
 
-    return testCase;
+        return testCase;
+    }, "");
+}
+
+// Generates the Settings section for the Robot Framework test case
+function generateSettingsSection(jsonData: string): string {
+    let settings = "*** Settings ***\n";
+
+    /*
+    // Add Metadata (uniqueID, version, status)
+    settings += `Metadata    UniqueID    ${testCase.uniqueID}\n`;
+    if (testCase.spec.version) {
+        settings += `Metadata    Version    ${testCase.spec.version}\n`;
+    }
+    settings += `Metadata    Status    ${testCase.exec.status}\n`;
+
+    // Add Resources (if applicable, this can be extended later)
+    // settings += 'Resource    path/to/resource.file\n';
+    */
+
+    settings += "\n";
+    return settings;
+}
+
+// Processes an individual test step interaction
+function processTestStepInteraction(interaction: Interaction): string {
+    if (interaction.interactionType === "Textual") {
+        return processTextualInteraction(interaction);
+    } else if (interaction.interactionType === "Atomic") {
+        return processAtomicInteraction(interaction);
+    }
+    return "";
+}
+
+// Processes textual test step interactions
+function processTextualInteraction(interaction: Interaction): string {
+    const descriptionText = extractTextFromHtml(interaction.spec.description);
+    const commentsText = extractTextFromHtml(interaction.spec.comments);
+    return descriptionText ? `    ${descriptionText}    # ${commentsText || ""}\n` : "";
+}
+
+// Processes atomic test step interactions
+function processAtomicInteraction(interaction: Interaction): string {
+    let step = `    ${interaction.name}`;
+    if (interaction.parameters && interaction.parameters.length > 0) {
+        interaction.parameters.forEach((parameter) => {
+            step += `    ${parameter.name}: ${parameter.value}`;
+        });
+    }
+    return `${step}\n`;
 }
 
 // Function to validate JSON structure for the required fields to generate Robot Framework test case
 function isValidTestJSON(jsonData: any): boolean {
     return jsonData && Array.isArray(jsonData.interactions);
 }
-// Process a single JSON file asynchronously
-async function processTestCase(filePath: string, outputFolder: string): Promise<void> {
-    try {
-        const testData = await readJSONFileAsync(filePath);
-        if (!isValidTestJSON(testData)) {
-            console.warn(`Skipping file due to invalid test structure: ${filePath}`);
-            return;
-        }
-        else{
-            console.log(`Not skipped file: ${filePath}`);
-        }
 
-        const testCaseName = testData.uniqueID || path.basename(filePath, ".json");
-        let robotTestCase = `*** Test Cases ***\n${testCaseName}\n`;
+// Converts JSON files in a directory to Robot Framework test cases
+async function convertJSONsIntoTestCases(
+    folderPathOfJSONFiles: string,
+    outputFolderOfTestSuites: string
+): Promise<void> {
+    createOutputFolderIfNotExists(outputFolderOfTestSuites);
 
-        // Generate Robot Framework test case steps
-        robotTestCase += generateRobotTestCase(testData.interactions);
-
-        const outputFilePath = path.join(`${outputFolder}`, `${testCaseName}.robot`);
-        console.log(`Calling writeRobotTestCaseAsync with outputFilePath: ${outputFilePath}`);
-        await writeRobotTestCaseAsync(outputFilePath, robotTestCase);
-        console.log(`Generated Robot Framework test case: ${outputFilePath}`);
-    } catch (error) {
-        console.error(`Error processing file: ${filePath}`, error);
+    const allJSONFilePaths = await getAllJSONFilePathsFromFolder(folderPathOfJSONFiles);
+    if (allJSONFilePaths.length === 0) {
+        console.log("No JSON files found.");
+        return;
     }
-}
-// Function to process all JSON files in a directory asynchronously
-async function processTestCasesFromFolder(folderPath: string, outputFolder: string): Promise<void> {
-    console.log(`Inside processTestCasesFromFolder with folderPath: ${folderPath}`);
 
-    // Create the output folder if it doesn't exist
+    await Promise.all(allJSONFilePaths.map((jsonFile) => processSingleJSONFile(jsonFile, outputFolderOfTestSuites)));
+}
+
+// Ensures the output folder exists
+function createOutputFolderIfNotExists(outputFolder: string): void {
     if (!fs.existsSync(outputFolder)) {
         fs.mkdirSync(outputFolder);
         console.log(`Created output folder: ${outputFolder}`);
     }
+}
 
-    console.log(`processTestCasesFromFolder Reading all files in the folder: ${folderPath}`);
-
-    // Read all files in the folder asynchronously
+// Retrieves a list of JSON files from the folder
+async function getAllJSONFilePathsFromFolder(folderPathOfJSONFiles: string): Promise<string[]> {
     try {
-        const files = await fs.promises.readdir(folderPath);
-        console.log(`processTestCasesFromFolder Found ${files.length} files in the folder ${folderPath}.`);
+        const files = await fs.promises.readdir(folderPathOfJSONFiles);
+        // Filter non JSON files and return the full path for each file as a string array
+        return files.filter((file) => file.endsWith(".json")).map((file) => path.join(folderPathOfJSONFiles, file));
+    } catch (error: any) {
+        throw new Error(`Error reading folder ${folderPathOfJSONFiles}: ${error.message}`);
+    }
+}
 
-        // Process each JSON file asynchronously, wait for all to complete
-        const jsonFiles = files.filter((file) => file.endsWith(".json"));
-        console.log(`processTestCasesFromFolder Found ${jsonFiles.length} JSON files in the folder.`);
-        if (jsonFiles.length === 0) { 
-            console.log(`No JSON files found in the folder.`);
+// Processes a single JSON file and generates a Robot Framework test case
+async function processSingleJSONFile(jsonFilePath: string, outputFolder: string): Promise<void> {
+    try {
+        const jsonData = await readJSONFile(jsonFilePath);
+        if (!isValidTestJSON(jsonData)) {
+            console.warn(`Invalid test structure in file: ${jsonFilePath}`);
             return;
         }
-        const processPromises = jsonFiles.map((file) => {
-            const filePath = path.join(folderPath, file);
-            console.log(`processTestCasesFromFolder Processing file: ${filePath}`);
-            return processTestCase(filePath, outputFolder); // Return the promise
-        });
 
-        try {
-            await Promise.all(processPromises); // Wait for all promises to resolve
-        } catch (error) {
-            console.error(`Error processing files:`, error);
-        }
-    } catch (err) {
-        console.error(`Error reading folder: ${folderPath}`, err);
+        const testCaseName = jsonData.uniqueID || path.basename(jsonFilePath, ".json");
+
+        let robotFileContent = "";
+        // Generate Settings Section
+        robotFileContent += generateSettingsSection(jsonData); // TODO: Read the properties numbering, uniqueID, and name of the JSON files without the PC in it.
+        // Generate Test Cases Section
+        robotFileContent += `*** Test Cases ***\n${testCaseName}\n`;
+        robotFileContent += generateTestCaseSection(jsonData.interactions);
+        // robotFile = generateTestSuite(jsonData);
+
+        const generatedRobotFilePath = path.join(outputFolder, `${testCaseName}.robot`);
+        // await writeContentToFile(outputFilePath, `*** Test Cases ***\n${testCaseName}\n${robotFile}`);
+        await writeContentToFile(generatedRobotFilePath, `${robotFileContent}`);
+        console.log(`Generated Robot Framework test case: ${generatedRobotFilePath}`);
+    } catch (error: any) {
+        console.error(`Error processing file ${jsonFilePath}: ${error.message}`);
     }
 }

@@ -41,8 +41,7 @@ interface Project {
     variantsManagementEnabled: boolean;
 }
 
-// TODO: Project[] was any[] before. Change it back to any[] if it causes issues.
-export function findProjectKeyOfCycle(data: Project[], testCycleKeySerial: string): string | null {    
+export function findProjectKeyOfCycle(data: Project[], testCycleKeySerial: string): string | null {
     for (const project of data) {
         for (const testObjectVersion of project.testObjectVersions) {
             for (const testCycle of testObjectVersion.testCycles) {

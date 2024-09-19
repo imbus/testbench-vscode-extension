@@ -1,16 +1,16 @@
 import * as vscode from "vscode";
-import * as utils from "./utils";
 import * as jsonReportHandler from "./jsonReportHandler";
 import { TreeItem } from "./explorer";
-import { OldPlayServerConnection, performLogin } from "./testbenchConnection";
+import { PlayServerConnection, performLogin } from "./testbenchConnection";
 import { browseProjects } from "./browseProjects";
 import { TestBenchTreeDataProvider } from "./explorer";
+import { startTestExecution } from "./executeRobotFrameworkTests";
 
 export function activate(context: vscode.ExtensionContext) {
     // TODO: When initializing the tree view, set the root from VS Code storage.
 
     // Store the connection to server
-    let connection: OldPlayServerConnection | null = null;
+    let connection: PlayServerConnection | null = null;
 
     let loginDisposable = vscode.commands.registerCommand("testbenchExtension.login", async () => {
         connection = await performLogin(context);
@@ -39,7 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
                 case "Browse Projects":
                     browseProjects(context, connection);
                     break;
-                // TODO: Remove "Change connection" command from package.json and implement a logout command               
+                // TODO: Remove "Change connection" command from package.json and implement a logout command
                 case "Change connection":
                     connection = await performLogin(context, true); // Refresh the connection
                     if (connection) {
@@ -74,6 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Register the "Refresh tree" command
     context.subscriptions.push(
         vscode.commands.registerCommand("testbenchExtension.refreshTreeView", () => {
+            // FIXME: Resfresh command changes the folder icons to collapsed state although they are expanded.
             browseProjects(context, connection);
         })
     );
@@ -89,6 +90,13 @@ export function activate(context: vscode.ExtensionContext) {
             } else {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
             }
+        })
+    );
+
+    // Register the "Run Robot Tests" command
+    context.subscriptions.push(
+        vscode.commands.registerCommand("extension.runRobotTests", async () => {
+            startTestExecution();
         })
     );
 
