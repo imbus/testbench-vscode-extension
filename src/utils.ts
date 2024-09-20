@@ -1,3 +1,4 @@
+// TODO: Move these interfaces to a separate file and import them in the necessary files? testbenchConnection.ts has also these interfaces.
 interface Key {
     serial: string;
 }

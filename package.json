@@ -1,106 +1,120 @@
 {
-  "name": "testbench-visual-studio-code-extension",
-  "displayName": "TestBench Visual Studio Code Extension",
-  "description": "A Visual Studio Code extension for TestBench.",
-  "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.91.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "testbenchExtension.login",
-        "title": "Testbench: Login"
-      },
-      {
-        "command": "testbenchExtension.changeConnection",
-        "title": "TestBench: Change Connection"
-      },
-      {
-        "command": "testbenchExtension.browseProjects",
-        "title": "TestBench: Browse Projects"
-      },
-      {
-        "command": "testbenchExtension.generate",
-        "title": "Generate"
-      },
-      {
-        "command": "testbenchExtension.makeRoot",
-        "title": "Make root"
-      },
-      {
-        "command": "testbenchExtension.refreshTreeView",
-        "title": "Refresh",
-        "icon": {
-          "light": "resources/icons/light/refresh.svg",
-          "dark": "resources/icons/dark/refresh.svg"
-        }
-      }
-    ],
-    "views": {
-      "explorer": [
-        {
-          "id": "testBenchProjects",
-          "name": "TestBench Test Theme Tree"
-        }
-      ]
+    "name": "testbench-visual-studio-code-extension",
+    "displayName": "TestBench Visual Studio Code Extension",
+    "description": "A Visual Studio Code extension for TestBench.",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.91.0"
     },
-    "menus": {
-      "view/title": [
-        {
-          "command": "testbenchExtension.refreshTreeView",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "testbenchExtension.generate",
-          "when": "view == testBenchProjects && viewItem == cycle",
-          "group": "inline"
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "testbenchExtension.login",
+                "title": "Testbench: Login"
+            },
+            {
+                "command": "testbenchExtension.logout",
+                "title": "Testbench: Logout"
+            },
+            {
+                "command": "testbenchExtension.changeConnection",
+                "title": "TestBench: Change Connection"
+            },
+            {
+                "command": "testbenchExtension.browseProjects",
+                "title": "TestBench: Browse Projects"
+            },
+            {
+                "command": "testbenchExtension.generate",
+                "title": "Generate"
+            },
+            {
+                "command": "testbenchExtension.makeRoot",
+                "title": "Make root"
+            },
+            {
+                "command": "testbenchExtension.refreshTreeView",
+                "title": "Refresh Tree and Reset Root",
+                "icon": {
+                    "light": "resources/icons/light/refresh.svg",
+                    "dark": "resources/icons/dark/refresh.svg"
+                }
+            },
+            {
+                "command": "extension.runRobotTests",
+                "title": "TestBench: Run Robot Framework Tests"
+            },
+            {
+                "command": "extension.getCycleStructure",
+                "title": "TestBench: Get Cycle Structure"
+            }
+        ],
+        "views": {
+            "explorer": [
+                {
+                    "id": "testBenchProjects",
+                    "name": "TestBench Test Theme Tree"
+                }
+            ]
         },
-        {
-          "command": "testbenchExtension.makeRoot",
-          "when": "view == testBenchProjects && viewItem == project || viewItem == tov",
-          "group": "navigation"
+        "menus": {
+            "view/title": [
+                {
+                    "command": "testbenchExtension.refreshTreeView",
+                    "group": "navigation"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "testbenchExtension.generate",
+                    "when": "view == testBenchProjects && viewItem == cycle",
+                    "group": "inline"
+                },
+                {
+                    "command": "testbenchExtension.makeRoot",
+                    "when": "view == testBenchProjects && viewItem == project || viewItem == tov",
+                    "group": "navigation"
+                }
+            ]
         }
-      ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run package",
+        "compile": "webpack",
+        "watch": "webpack --watch",
+        "package": "webpack --mode production --devtool hidden-source-map",
+        "compile-tests": "tsc -p . --outDir out",
+        "watch-tests": "tsc -p . -w --outDir out",
+        "pretest": "npm run compile-tests && npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "test": "vscode-test"
+    },
+    "devDependencies": {
+        "@types/base-64": "^1.0.2",
+        "@types/cheerio": "^0.22.35",
+        "@types/mocha": "^10.0.7",
+        "@types/node": "20.x",
+        "@types/unzipper": "^0.10.10",
+        "@types/vscode": "^1.91.0",
+        "@typescript-eslint/eslint-plugin": "^7.14.1",
+        "@typescript-eslint/parser": "^7.11.0",
+        "@vscode/test-cli": "^0.0.9",
+        "@vscode/test-electron": "^2.4.0",
+        "base-64": "^1.0.0",
+        "eslint": "^8.57.0",
+        "ts-loader": "^9.5.1",
+        "typescript": "^5.4.5",
+        "webpack": "^5.92.1",
+        "webpack-cli": "^5.1.4"
+    },
+    "dependencies": {
+        "axios": "^1.7.2",
+        "cheerio": "^1.0.0",
+        "unzipper": "^0.12.3"
     }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "vscode-test"
-  },
-  "devDependencies": {
-    "@types/base-64": "^1.0.2",
-    "@types/mocha": "^10.0.7",
-    "@types/node": "20.x",
-    "@types/unzipper": "^0.10.10",
-    "@types/vscode": "^1.91.0",
-    "@typescript-eslint/eslint-plugin": "^7.14.1",
-    "@typescript-eslint/parser": "^7.11.0",
-    "@vscode/test-cli": "^0.0.9",
-    "@vscode/test-electron": "^2.4.0",
-    "base-64": "^1.0.0",
-    "eslint": "^8.57.0",
-    "ts-loader": "^9.5.1",
-    "typescript": "^5.4.5",
-    "webpack": "^5.92.1",
-    "webpack-cli": "^5.1.4"
-  },
-  "dependencies": {
-    "axios": "^1.7.2",
-    "unzipper": "^0.12.3"
-  }
 }

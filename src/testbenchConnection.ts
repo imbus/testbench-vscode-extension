@@ -1,7 +1,10 @@
-import axios, { AxiosInstance, AxiosResponse } from "axios";
 import * as https from "https";
 import * as vscode from "vscode";
 import * as base64 from "base-64"; // npm i --save-dev @types/base-64
+import * as fs from "fs";
+import axios, { AxiosInstance, AxiosResponse } from "axios";
+import { initializeTreeView } from "./browseProjects";
+import { TestBenchTreeDataProvider } from "./treeView";
 
 // Ignore SSL certificate validation in node requests
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -58,7 +61,7 @@ export class PlayServerConnection {
 
     loginName: string;
     password: string;
-    session: AxiosInstance;
+    session: AxiosInstance | null;
     sessionToken: string;
 
     oldPlayServerBaseUrl: string;
@@ -103,6 +106,10 @@ export class PlayServerConnection {
             console.log(`Getting all projects from server.`);
 
             // Make the GET request to fetch all projects
+            if (!this.session) {
+                vscode.window.showErrorMessage("Session is not initialized.");
+                throw new Error("Session is not initialized.");
+            }
             const response = await this.session.get("/projects", {
                 params: { includeTOVs: includeTOVs, includeCycles: includeCycles }, // Query parameters for the request
             });
@@ -116,10 +123,72 @@ export class PlayServerConnection {
         }
     }
 
+    // Fetch the structure of a cycle
+    async fetchCycleStructure(projectKey: string, cycleKey: string) {
+        function saveJsonToFile(filePath: string, data: any) {
+            try {
+                fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+                vscode.window.showInformationMessage(`Test structure saved to ${filePath}`);
+            } catch (error: any) {
+                vscode.window.showErrorMessage(`Error saving file: ${error.message}`);
+            }
+        }
+
+        const url = `${this.newPlayServerBaseUrl}/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
+
+        const requestBody = {
+            basedOnExecution: true,
+            suppressFilteredData: false,
+            suppressNotExecutable: false,
+            suppressEmptyTestThemes: false,
+            filters: [],
+        };
+
+        try {
+            const response = await axios.post(url, requestBody, {
+                headers: {
+                    accept: "application/json",
+                    Authorization: this.sessionToken,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (response.status === 200) {
+                console.log("Cycle Structure", response.data);
+
+                // Now prompt the user to select a file path for saving the JSON
+                const savePath = await vscode.window.showSaveDialog({
+                    saveLabel: "Save Test Structure",
+                    filters: {
+                        "JSON Files": ["json"],
+                        "All Files": ["*"],
+                    },
+                });
+
+                if (savePath) {
+                    const filePath = savePath.fsPath;
+                    saveJsonToFile(filePath, response.data);
+                } else {
+                    vscode.window.showErrorMessage("No file path selected.");
+                }
+
+                return response.data;
+            } else {
+                console.error(`Unexpected response code: ${response.status}`);
+            }
+        } catch (error) {
+            console.error("Error fetching cycle structure:", error);
+        }
+    }
+
     // Sends a GET request to the projects endpoint to verify if the connection is working.
     async checkIsWorking(): Promise<boolean> {
         try {
             console.log(`Checking connection...`);
+            if (!this.session) {
+                vscode.window.showErrorMessage("Session is not initialized.");
+                throw new Error("Session is not initialized.");
+            }
             const response: AxiosResponse = await this.session.get("/projects", {
                 params: {
                     includeTOVs: "false",
@@ -137,6 +206,39 @@ export class PlayServerConnection {
                 console.error("Error response headers:", error.response.headers);
             }
             return false;
+        }
+    }
+
+    // Define the logout function
+    async logoutUser(context: vscode.ExtensionContext, treeDataProvider: TestBenchTreeDataProvider): Promise<void> {
+        try {
+            const response: AxiosResponse = await axios.delete(`${this.newPlayServerBaseUrl}/login/session/v1`, {
+                headers: {
+                    Authorization: this.sessionToken,
+                    accept: "application/vnd.testbench+json",
+                },
+            });
+
+            if (response.status === 204) {
+                clearStoredCredentials(context); // Clear the stored credentials
+                removeSessionData(this); // Clear the session data
+                if (treeDataProvider) {
+                    treeDataProvider.clearTree();
+                } else {
+                    vscode.window.showErrorMessage("treeDataProvider is null.");
+                }
+
+                console.log("Logout successful");
+                vscode.window.showInformationMessage("Logout successful.");
+            } else {
+                console.log(`Unexpected response status: ${response.status}`);
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                console.error(`Error during logout: ${error.response?.status} - ${error.response?.statusText}`);
+            } else {
+                console.error(`An unexpected error occurred: ${error}`);
+            }
         }
     }
 }
@@ -179,6 +281,7 @@ async function promptForInput(
     }
 }
 
+// TODO: Split this function into 2 separate functions: One for the login data input and validation, and one for the actual login request.
 // Entry point for the login process
 export async function performLogin(
     context: vscode.ExtensionContext,
@@ -372,4 +475,39 @@ async function loginToNewPlayServerAndGetSessionToken(
         console.error("Error during login:", error);
         return null;
     }
+}
+
+function clearStoredCredentials(context: vscode.ExtensionContext) {
+    context.secrets.delete("server");
+    context.secrets.delete("port");
+    context.secrets.delete("loginName");
+    context.secrets.delete("password");
+}
+
+function removeSessionData(connection: PlayServerConnection | null) {
+    if (connection) {
+        connection.loginName = "";
+        connection.password = "";
+        connection.session = null;
+        connection.sessionToken = "";
+    }
+}
+
+export async function changeConnection(
+    context: vscode.ExtensionContext,
+    oldConnection: PlayServerConnection
+): Promise<PlayServerConnection | null> {
+    if (oldConnection) {
+        removeSessionData(oldConnection);
+        clearStoredCredentials(context);
+        let newConnection = await performLogin(context, true);
+
+        if (newConnection) {
+            initializeTreeView(context, newConnection);
+            return newConnection;
+        }
+    } else {
+        vscode.window.showErrorMessage("No connection available. Please log in first.");
+    }
+    return null;
 }

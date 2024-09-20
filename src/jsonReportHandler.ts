@@ -3,10 +3,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as utils from "./utils";
 import * as unzipper from "unzipper"; // npm install unzipper
+import * as cheerio from "cheerio"; // To parse HTML  npm install --save-dev @types/cheerio
 import axios, { AxiosResponse } from "axios";
 import { PlayServerConnection } from "./testbenchConnection";
-import { TreeItem } from "./explorer";
-import * as cheerio from "cheerio"; // Using cheerio to parse HTML  npm install --save-dev @types/cheerio
+import { TreeItem } from "./treeView";
 
 // Configuration interface
 export interface Configuration {
@@ -248,6 +248,29 @@ async function downloadReport(
     });
 
     if (uri) {
+        try {
+            // Check if the file already exists
+            await vscode.workspace.fs.stat(uri);
+
+            // If file exists, ask user if they want to overwrite or skip
+            const overwriteOption = await vscode.window.showWarningMessage(
+                `The file "${fileName}" already exists. Do you want to overwrite it?`,
+                { modal: true },
+                "Overwrite",
+                "Skip"
+            );
+
+            if (overwriteOption === "Skip") {
+                vscode.window.showInformationMessage("File download skipped.");
+                return undefined; // Return if the user chooses to skip
+            }
+        } catch (error) {
+            // If the error is because the file does not exist, we proceed with writing
+            if ((error as vscode.FileSystemError).code !== "FileNotFound") {
+                throw error; // Re-throw any other errors
+            }
+        }
+
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadZipResponse.data));
         vscode.window.showInformationMessage(`Report downloaded successfully to ${uri.fsPath}`);
         return uri.fsPath; // Return the path of the saved file
@@ -271,12 +294,11 @@ function handleError(error: unknown, projectKey: string, cycleKey: string): void
         throw error;
     }
 }
-
 // Extract the ZIP file to an output directory
 export async function extractZip(
     zipFilePath: string,
     outputDir: string,
-    extractOnlyJson = true // Optional parameter to extract only JSON files (The zip file may contain other files like images)
+    extractOnlyJson = true // Optional parameter to extract only JSON files
 ): Promise<void> {
     try {
         console.debug(`Starting extraction of ${zipFilePath} to ${outputDir}`);
@@ -295,6 +317,10 @@ export async function extractZip(
             console.debug(`Output directory already exists: ${outputDir}`);
         }
 
+        // Flags to track user decisions for overwriting or skipping
+        let overwriteAll = false;
+        let skipAll = false;
+
         // 3. Open the ZIP file as a read stream
         const readStream = fs.createReadStream(zipFilePath);
         console.debug(`Opened ZIP file stream`);
@@ -303,7 +329,7 @@ export async function extractZip(
         await new Promise<void>((resolve, reject) => {
             readStream
                 .pipe(unzipper.Parse())
-                .on("entry", (entry: unzipper.Entry) => {
+                .on("entry", async (entry: unzipper.Entry) => {
                     const extractedPath = path.join(outputDir, entry.path);
                     const directoryPath = path.dirname(extractedPath);
 
@@ -326,14 +352,51 @@ export async function extractZip(
                             console.debug(`Created directory for file: ${directoryPath}`);
                         }
 
-                        // 8. Extract files
-                        entry
-                            .pipe(fs.createWriteStream(extractedPath))
-                            .on("finish", () => console.debug(`Extracted file: ${extractedPath}`))
-                            .on("error", (err) => {
-                                console.error(`Error extracting file ${extractedPath}: ${err}`);
-                                reject(err);
-                            });
+                        // Check if the file already exists
+                        if (fs.existsSync(extractedPath)) {
+                            if (!overwriteAll && !skipAll) {
+                                // Prompt the user for overwrite or skip options
+                                // FIXME: Overwrite All and Skip All options are not working, prompt is shown for each file.
+                                const options = ["Overwrite", "Skip", "Overwrite All", "Skip All"];
+                                const result = await vscode.window.showWarningMessage(
+                                    `The file "${entry.path}" already exists. What would you like to do?`,
+                                    { modal: true }, // Modal dialog
+                                    ...options
+                                );
+
+                                // Handle the user's response and update flags accordingly
+                                switch (result) {
+                                    case "Overwrite":
+                                        await writeFile(entry, extractedPath);
+                                        break;
+                                    case "Skip":
+                                        console.debug(`Skipped file: ${extractedPath}`);
+                                        entry.autodrain();
+                                        break;
+                                    case "Overwrite All":
+                                        overwriteAll = true;
+                                        await writeFile(entry, extractedPath);
+                                        break;
+                                    case "Skip All":
+                                        skipAll = true;
+                                        console.debug(`Skipped file: ${extractedPath}`);
+                                        entry.autodrain();
+                                        break;
+                                    default: // Handle undefined result (e.g., if dialog is closed)
+                                        entry.autodrain();
+                                }
+                            } else if (overwriteAll) {
+                                // If user chose to overwrite all, directly overwrite
+                                await writeFile(entry, extractedPath);
+                            } else if (skipAll) {
+                                // If user chose to skip all, directly skip
+                                console.debug(`Skipped file: ${extractedPath}`);
+                                entry.autodrain();
+                            }
+                        } else {
+                            // Extract file if it doesn't exist
+                            await writeFile(entry, extractedPath);
+                        }
                     }
                 })
                 .on("close", () => {
@@ -351,6 +414,22 @@ export async function extractZip(
         console.error(`Extraction failed: ${err}`);
         throw err;
     }
+}
+
+// Helper function to write a file
+async function writeFile(entry: unzipper.Entry, extractedPath: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        entry
+            .pipe(fs.createWriteStream(extractedPath))
+            .on("finish", () => {
+                console.debug(`Extracted file: ${extractedPath}`);
+                resolve();
+            })
+            .on("error", (err) => {
+                console.error(`Error extracting file ${extractedPath}: ${err}`);
+                reject(err);
+            });
+    });
 }
 
 // Function to load JSON files from extracted directory
@@ -619,7 +698,6 @@ export async function testBenchToRobotFramework(
             }
 
             // Fetch the ZIP file from the server
-            // "C:/RobotCode/RobotCodeLiveDemo/report-from-tb.zip";
             const downloadedZipFilePath = await fetchZipFile(
                 connection,
                 projectKey,
@@ -698,8 +776,6 @@ export async function testBenchToRobotFramework(
     );
 }
 
-// TODO: Extracting zip overwrites the existing files. Prompt the user to overwrite or skip.
-// TODO: Creating test cases overwrites the existing files. Prompt the user to overwrite or skip.
 // Entry point for the test generation process
 export async function startTestGenerationProcess(item: TreeItem, connection: PlayServerConnection) {
     // Check if the cycle key is available
@@ -827,6 +903,7 @@ function generateSettingsSection(jsonData: string): string {
     let settings = "*** Settings ***\n";
 
     /*
+    TODO: Current JSON file structre does not contain the (all the) required fields for the creation of settings section.
     // Add Metadata (uniqueID, version, status)
     settings += `Metadata    UniqueID    ${testCase.uniqueID}\n`;
     if (testCase.spec.version) {
@@ -888,6 +965,7 @@ async function convertJSONsIntoTestCases(
         return;
     }
 
+    // TODO: Prompt the user to either overwrite or skip existing files if files already exists.
     await Promise.all(allJSONFilePaths.map((jsonFile) => processSingleJSONFile(jsonFile, outputFolderOfTestSuites)));
 }
 
@@ -923,7 +1001,7 @@ async function processSingleJSONFile(jsonFilePath: string, outputFolder: string)
 
         let robotFileContent = "";
         // Generate Settings Section
-        robotFileContent += generateSettingsSection(jsonData); // TODO: Read the properties numbering, uniqueID, and name of the JSON files without the PC in it.
+        robotFileContent += generateSettingsSection(jsonData);
         // Generate Test Cases Section
         robotFileContent += `*** Test Cases ***\n${testCaseName}\n`;
         robotFileContent += generateTestCaseSection(jsonData.interactions);
