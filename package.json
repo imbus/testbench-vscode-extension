@@ -26,7 +26,7 @@
                 "title": "TestBench: Change Connection"
             },
             {
-                "command": "testbenchExtension.browseProjects",
+                "command": "testbenchExtension.initTestThemeTree",
                 "title": "TestBench: Browse Projects"
             },
             {
@@ -46,12 +46,16 @@
                 }
             },
             {
-                "command": "extension.runRobotTests",
+                "command": "testbenchExtension.runRobotTests",
                 "title": "TestBench: Run Robot Framework Tests"
             },
             {
-                "command": "extension.getCycleStructure",
+                "command": "testbenchExtension.getCycleStructure",
                 "title": "TestBench: Get Cycle Structure"
+            },
+            {
+                "command": "testbenchExtension.displayCommands",
+                "title": "TestBench: Display Commands"
             }
         ],
         "views": {

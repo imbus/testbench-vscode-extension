@@ -2,12 +2,12 @@ import * as vscode from "vscode";
 import * as jsonReportHandler from "./jsonReportHandler";
 import { TreeItem, makeRoot } from "./treeView";
 import { PlayServerConnection, performLogin, changeConnection } from "./testbenchConnection";
-import { initializeTreeView } from "./browseProjects";
-import { TestBenchTreeDataProvider } from "./treeView";
+import { TestBenchTreeDataProvider, initializeTreeView } from "./treeView";
 import { startTestExecution } from "./executeRobotFrameworkTests";
 
 export function activate(context: vscode.ExtensionContext) {
     // TODO: Remember the set root tree item after logging in, store it in VS Code storage and fetch it on login, check if it's still valid.
+    // TODO: A new command to clear stored login data? (logout doesnt do that)
 
     // Store the connection to server
     let connection: PlayServerConnection | null = null;
@@ -21,36 +21,64 @@ export function activate(context: vscode.ExtensionContext) {
         }
         treeDataProvider = await initializeTreeView(context, connection);
 
-        const nextAction = await vscode.window.showQuickPick(
-            ["Browse Projects", "Change connection", "Logout", "Cancel"],
-            {
-                placeHolder: "What do you want to do?",
-            }
-        );
-
-        switch (nextAction) {
-            case "Browse Projects":
-                treeDataProvider = await initializeTreeView(context, connection);
-                break;
-            case "Change connection":
-                changeConnection(context, connection!);
-                break;
-            case "Logout":
-                if (connection) {
-                    connection.logoutUser(context, treeDataProvider!);
-                } else {
-                    vscode.window.showInformationMessage("No connection available. Please log in first.");
-                }
-                break;
-            case "Cancel":
-                return;
-        }
+        // Display the commands after logging in
+        vscode.commands.executeCommand("testbenchExtension.displayCommands");
+        
     });
     context.subscriptions.push(loginDisposable);
 
+    // Register the "Display Commands" command
+    context.subscriptions.push(
+        vscode.commands.registerCommand("testbenchExtension.displayCommands", async () => {
+
+            // Display the commands based on the connection status. (Logout etc. is only available if connection is active)
+            let commands = [];
+            if (connection){
+                commands = [
+                    "Login",
+                    "Change connection",
+                    "Logout",
+                    "Display Test Theme Tree",
+                    "Execute Robotframework Test Cases",
+                    "Cancel"
+                ];
+            } else {
+                commands = [
+                    "Login",
+                    "Execute Robotframework Test Cases",
+                    "Cancel"];
+            }
+
+            const nextAction = await vscode.window.showQuickPick(commands, {
+                placeHolder: "What do you want to do?",
+            });
+   
+            // TODO: Pack the command strings into a string list to avoid typos?
+            switch (nextAction) {
+                case "Login":                
+                    vscode.commands.executeCommand("testbenchExtension.login");
+                    break;
+                case "Change connection":
+                    vscode.commands.executeCommand("testbenchExtension.changeConnection");
+                    break;
+                case "Logout":
+                    vscode.commands.executeCommand("testbenchExtension.logout");
+                    break;
+                case "Display Test Theme Tree":                
+                    vscode.commands.executeCommand("testbenchExtension.initTestThemeTree");
+                    break;                
+                case "Execute Robotframework Test Cases":
+                    vscode.commands.executeCommand("testbenchExtension.runRobotTests");
+                    break;
+                case "Cancel":
+                    return;
+            }
+        })
+    );
+
     // Register the "Browse Projects" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.browseProjects", async () => {
+        vscode.commands.registerCommand("testbenchExtension.initTestThemeTree", async () => {
             treeDataProvider = await initializeTreeView(context, connection);
         })
     );
@@ -60,6 +88,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand("testbenchExtension.logout", async () => {
             if (connection) {
                 await connection.logoutUser(context, treeDataProvider!);
+                connection = null;  // Clear the connection
             } else {
                 vscode.window.showInformationMessage("No connection available. Please log in first.");
             }
@@ -70,8 +99,9 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand("testbenchExtension.changeConnection", async () => {
             let conn = await changeConnection(context, connection!);
+            connection = conn;  // Update the connection
             if (conn) {
-                initializeTreeView(context, conn);
+                treeDataProvider = await initializeTreeView(context, conn); // TODO: changeConnection already calls initializeTreeView, also return a treeDataProvider?
             }
         })
     );
@@ -104,14 +134,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Run Robot Tests" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("extension.runRobotTests", async () => {
+        vscode.commands.registerCommand("testbenchExtension.runRobotTests", async () => {
             startTestExecution();
         })
     );
 
     // Register the "getCycleStructure" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("extension.getCycleStructure", async () => {
+        vscode.commands.registerCommand("testbenchExtension.getCycleStructure", async () => {
             let cycleStructureResponse2 = await connection!.fetchCycleStructure("26", "168");
         })
     );

@@ -3,8 +3,7 @@ import * as vscode from "vscode";
 import * as base64 from "base-64"; // npm i --save-dev @types/base-64
 import * as fs from "fs";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
-import { initializeTreeView } from "./browseProjects";
-import { TestBenchTreeDataProvider } from "./treeView";
+import { TestBenchTreeDataProvider, initializeTreeView } from "./treeView";
 
 // Ignore SSL certificate validation in node requests
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -61,7 +60,8 @@ export class PlayServerConnection {
 
     loginName: string;
     password: string;
-    session: AxiosInstance | null;
+    oldPlayServerSession: AxiosInstance | null;
+    newPlayServerSession: AxiosInstance | null;
     sessionToken: string;
 
     oldPlayServerBaseUrl: string;
@@ -79,8 +79,8 @@ export class PlayServerConnection {
         // Manually encode the credentials to Base64
         const encodedCredentials = base64.encode(`${loginName}:${password}`);
 
-        // Create an Axios instance with the necessary configuration
-        this.session = axios.create({
+        // Create session for API calls to the old play server
+        this.oldPlayServerSession = axios.create({
             baseURL: this.oldPlayServerBaseUrl,
             // Old play server, which runs on port 9443, uses BasicAuth.
             // Use loginName as username, and use sessionToken as the password.
@@ -97,6 +97,19 @@ export class PlayServerConnection {
                 rejectUnauthorized: false, // This should only be used in a development environment
             }),
         });
+
+        // TODO: Test new play server session instance.
+        // Create session for API calls to the new play server
+        this.newPlayServerSession = axios.create({
+            baseURL: this.newPlayServerBaseUrl,
+            headers: {
+                Authorization: this.sessionToken,
+            },
+            // Ignore self-signed certificates
+            httpsAgent: new https.Agent({
+                rejectUnauthorized: false, // This should only be used in a development environment
+            }),
+        });
     }
 
     // Method to fetch all projects from the server
@@ -106,11 +119,11 @@ export class PlayServerConnection {
             console.log(`Getting all projects from server.`);
 
             // Make the GET request to fetch all projects
-            if (!this.session) {
+            if (!this.oldPlayServerSession) {
                 vscode.window.showErrorMessage("Session is not initialized.");
                 throw new Error("Session is not initialized.");
             }
-            const response = await this.session.get("/projects", {
+            const response = await this.oldPlayServerSession.get("/projects", {
                 params: { includeTOVs: includeTOVs, includeCycles: includeCycles }, // Query parameters for the request
             });
             console.log("Response from getAllProjects:", response.data);
@@ -185,11 +198,11 @@ export class PlayServerConnection {
     async checkIsWorking(): Promise<boolean> {
         try {
             console.log(`Checking connection...`);
-            if (!this.session) {
+            if (!this.oldPlayServerSession) {
                 vscode.window.showErrorMessage("Session is not initialized.");
                 throw new Error("Session is not initialized.");
             }
-            const response: AxiosResponse = await this.session.get("/projects", {
+            const response: AxiosResponse = await this.oldPlayServerSession.get("/projects", {
                 params: {
                     includeTOVs: "false",
                     includeCycles: "false",
@@ -210,6 +223,7 @@ export class PlayServerConnection {
     }
 
     // Define the logout function
+    // FIXME: Logout returned 401 Unauthorized after waiting for a while (timeout?). Used change connection to logout instead, but Generate did not work, used log in again instead.
     async logoutUser(context: vscode.ExtensionContext, treeDataProvider: TestBenchTreeDataProvider): Promise<void> {
         try {
             const response: AxiosResponse = await axios.delete(`${this.newPlayServerBaseUrl}/login/session/v1`, {
@@ -220,7 +234,7 @@ export class PlayServerConnection {
             });
 
             if (response.status === 204) {
-                clearStoredCredentials(context); // Clear the stored credentials
+                // clearStoredCredentials(context); // Clear the stored credentials
                 removeSessionData(this); // Clear the session data
                 if (treeDataProvider) {
                     treeDataProvider.clearTree();
@@ -232,10 +246,14 @@ export class PlayServerConnection {
                 vscode.window.showInformationMessage("Logout successful.");
             } else {
                 console.log(`Unexpected response status: ${response.status}`);
+                vscode.window.showInformationMessage(`Unexpected response status: ${response.status}`);
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error(`Error during logout: ${error.response?.status} - ${error.response?.statusText}`);
+                vscode.window.showInformationMessage(
+                    `Error during logout: ${error.response?.status} - ${error.response?.statusText}`
+                );
             } else {
                 console.error(`An unexpected error occurred: ${error}`);
             }
@@ -364,12 +382,15 @@ export async function performLogin(
         );
 
         // Login to the new play server that runs on port 9445 and return the session token.
-        const sessionToken = await loginToNewPlayServerAndGetSessionToken(newPlayServerBaseUrl, loginName, password);
-        if (sessionToken) {
-            console.log("Session token retrieved successfully: ", sessionToken);
-
-            const connection = await createConnectionToOldPlayServer(serverName, loginName, password, sessionToken);
-            if (connection) {
+        const connection = await loginToNewPlayServerAndInitSessionToken(
+            serverName,
+            newPlayServerBaseUrl,
+            loginName,
+            password
+        );
+        if (connection) {
+            if (connection.sessionToken) {
+                console.log("Session token retrieved successfully: ", connection.sessionToken);
                 // If login is successful, store the credentials in VS Code storage
                 context.secrets.store("server", serverName);
                 context.secrets.store("port", portNumber.toString());
@@ -402,19 +423,6 @@ export async function performLogin(
     }
 }
 
-async function createConnectionToOldPlayServer(
-    serverName: string,
-    loginName: string,
-    password: string,
-    sessionToken: string
-): Promise<PlayServerConnection | null> {
-    const connection = new PlayServerConnection(serverName, loginName, password, sessionToken);
-    if (await connection.checkIsWorking()) {
-        return connection;
-    }
-    return null;
-}
-
 // Request body structure for the login request
 interface LoginRequest {
     login: string;
@@ -435,11 +443,12 @@ interface LoginResponse {
 
 // Login to the new play server that runs on port 9445 and return the session token.
 // The old play server that runs on port 9443 has the URL /api/1, while the new play server has the URL /api/login/session/v1 .
-async function loginToNewPlayServerAndGetSessionToken(
+async function loginToNewPlayServerAndInitSessionToken(
+    serverName: string,
     baseUrl: string,
     username: string,
     password: string
-): Promise<string | null> {
+): Promise<PlayServerConnection | null> {
     // Define the request payload
     const requestBody: LoginRequest = {
         login: username,
@@ -448,13 +457,13 @@ async function loginToNewPlayServerAndGetSessionToken(
     };
 
     try {
-        let url = `${baseUrl}/login/session/v1`;
+        let loginURLOfNewPlayServer = `${baseUrl}/login/session/v1`;
 
         // Log to console before sending request
-        console.log("Sending Login POST request to:", url);
+        console.log("Sending Login POST request to:", loginURLOfNewPlayServer);
 
         // Send POST request to the server
-        const response: AxiosResponse<LoginResponse> = await axios.post(url, requestBody, {
+        const response: AxiosResponse<LoginResponse> = await axios.post(loginURLOfNewPlayServer, requestBody, {
             headers: {
                 accept: "application/vnd.testbench+json",
                 "Content-Type": "application/vnd.testbench+json",
@@ -466,7 +475,12 @@ async function loginToNewPlayServerAndGetSessionToken(
 
         if (response.status === 201) {
             console.log("Login successful. Received session token:", response.data.sessionToken);
-            return response.data.sessionToken;
+
+            const connection = new PlayServerConnection(serverName, username, password, response.data.sessionToken);
+            if (await connection.checkIsWorking()) {
+                return connection;
+            }
+            return null;
         } else {
             console.log("Login failed. Unexpected status code:", response.status);
             return null;
@@ -488,7 +502,7 @@ function removeSessionData(connection: PlayServerConnection | null) {
     if (connection) {
         connection.loginName = "";
         connection.password = "";
-        connection.session = null;
+        connection.oldPlayServerSession = null;
         connection.sessionToken = "";
     }
 }
