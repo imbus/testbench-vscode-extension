@@ -27,10 +27,10 @@
             },
             {
                 "command": "testbenchExtension.initTestThemeTree",
-                "title": "TestBench: Browse Projects"
+                "title": "TestBench: Display Test Theme Tree"
             },
             {
-                "command": "testbenchExtension.generate",
+                "command": "testbenchExtension.generateTestCases",
                 "title": "Generate"
             },
             {
@@ -38,7 +38,7 @@
                 "title": "Make root"
             },
             {
-                "command": "testbenchExtension.refreshTreeView",
+                "command": "testbenchExtension.initTestThemeTree",
                 "title": "Refresh Tree and Reset Root",
                 "icon": {
                     "light": "resources/icons/light/refresh.svg",
@@ -69,13 +69,13 @@
         "menus": {
             "view/title": [
                 {
-                    "command": "testbenchExtension.refreshTreeView",
+                    "command": "testbenchExtension.initTestThemeTree",
                     "group": "navigation"
                 }
             ],
             "view/item/context": [
                 {
-                    "command": "testbenchExtension.generate",
+                    "command": "testbenchExtension.generateTestCases",
                     "when": "view == testBenchProjects && viewItem == cycle",
                     "group": "inline"
                 },

@@ -52,6 +52,15 @@ interface TestCycle {
     creationTime: string;
 }
 
+function saveJsonToFile(filePath: string, data: any) {
+    try {
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+        vscode.window.showInformationMessage(`Cycle structure saved to ${filePath}`);
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`Error saving file: ${error.message}`);
+    }
+}
+
 // TestBench server connection
 export class PlayServerConnection {
     serverName: string;
@@ -116,7 +125,7 @@ export class PlayServerConnection {
     // TODO: Change the return type to Project[] instead of any[]
     async getAllProjects(includeTOVs: boolean = true, includeCycles: boolean = true): Promise<any[]> {
         try {
-            console.log(`Getting all projects from server.`);
+            // console.log(`Getting all projects from server.`);
 
             // Make the GET request to fetch all projects
             if (!this.oldPlayServerSession) {
@@ -128,6 +137,22 @@ export class PlayServerConnection {
             });
             console.log("Response from getAllProjects:", response.data);
 
+            // Save the JSON to a file for analyzing the structure
+            /*
+            const savePath = await vscode.window.showSaveDialog({
+                saveLabel: "Save Project Tree",
+                filters: {
+                    "JSON Files": ["json"],
+                    "All Files": ["*"],
+                },
+            });
+            if (savePath) {
+                const filePath = savePath.fsPath;
+                saveJsonToFile(filePath, response.data);
+            } else {
+                vscode.window.showErrorMessage("No file path selected.");
+            }*/
+
             // Return the list of projects, or an empty array if no projects are found
             return response.data.projects || [];
         } catch (error) {
@@ -138,16 +163,7 @@ export class PlayServerConnection {
 
     // Fetch the structure of a cycle
     async fetchCycleStructure(projectKey: string, cycleKey: string) {
-        function saveJsonToFile(filePath: string, data: any) {
-            try {
-                fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-                vscode.window.showInformationMessage(`Test structure saved to ${filePath}`);
-            } catch (error: any) {
-                vscode.window.showErrorMessage(`Error saving file: ${error.message}`);
-            }
-        }
-
-        const url = `${this.newPlayServerBaseUrl}/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
+        const cycleStructureUrl = `${this.newPlayServerBaseUrl}/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
 
         const requestBody = {
             basedOnExecution: true,
@@ -158,20 +174,24 @@ export class PlayServerConnection {
         };
 
         try {
-            const response = await axios.post(url, requestBody, {
+            if (!this.newPlayServerSession) {
+                vscode.window.showErrorMessage("Session is not initialized.");
+                throw new Error("Session is not initialized.");
+            }
+            const response = await this.newPlayServerSession.post(cycleStructureUrl, requestBody, {
                 headers: {
                     accept: "application/json",
-                    Authorization: this.sessionToken,
                     "Content-Type": "application/json",
                 },
             });
 
             if (response.status === 200) {
-                console.log("Cycle Structure", response.data);
+                console.log("Cycle Structure received:", response.data);
 
-                // Now prompt the user to select a file path for saving the JSON
+                // User selects a file path for saving the JSON
+                /*
                 const savePath = await vscode.window.showSaveDialog({
-                    saveLabel: "Save Test Structure",
+                    saveLabel: "Save Cycle Structure",
                     filters: {
                         "JSON Files": ["json"],
                         "All Files": ["*"],
@@ -183,7 +203,7 @@ export class PlayServerConnection {
                     saveJsonToFile(filePath, response.data);
                 } else {
                     vscode.window.showErrorMessage("No file path selected.");
-                }
+                }*/
 
                 return response.data;
             } else {
@@ -197,7 +217,7 @@ export class PlayServerConnection {
     // Sends a GET request to the projects endpoint to verify if the connection is working.
     async checkIsWorking(): Promise<boolean> {
         try {
-            console.log(`Checking connection...`);
+            // console.log(`Checking connection...`);
             if (!this.oldPlayServerSession) {
                 vscode.window.showErrorMessage("Session is not initialized.");
                 throw new Error("Session is not initialized.");
@@ -208,7 +228,7 @@ export class PlayServerConnection {
                     includeCycles: "false",
                 },
             });
-            console.log(`Response status for checking connection: ${response.status}`);
+            // console.log(`Response status for checking connection: ${response.status}`);
             return response.status === 200;
         } catch (error: any) {
             console.error("Error checking connection:", error.message);
@@ -223,7 +243,7 @@ export class PlayServerConnection {
     }
 
     // Define the logout function
-    // FIXME: Logout returned 401 Unauthorized after waiting for a while (timeout?). Used change connection to logout instead, but Generate did not work, used log in again instead.
+    // FIXME: Logout returned 401 Unauthorized after waiting for a while (timeout?).
     async logoutUser(context: vscode.ExtensionContext, treeDataProvider: TestBenchTreeDataProvider): Promise<void> {
         try {
             const response: AxiosResponse = await axios.delete(`${this.newPlayServerBaseUrl}/login/session/v1`, {
@@ -236,6 +256,7 @@ export class PlayServerConnection {
             if (response.status === 204) {
                 // clearStoredCredentials(context); // Clear the stored credentials
                 removeSessionData(this); // Clear the session data
+                // FIXME: Logout wont clear tree view if a folder is made root.
                 if (treeDataProvider) {
                     treeDataProvider.clearTree();
                 } else {
@@ -377,9 +398,7 @@ export async function performLogin(
         const oldPlayServerBaseUrl = `https://${serverName}:${oldPlayServerPortNumber}/api/1`;
         const newPlayServerBaseUrl = `https://${serverName}:${newPlayServerPortNumber}/api`; // /api/login/session/v1`;
 
-        console.log(
-            `Starting login process with URL: ${newPlayServerBaseUrl}, username: ${loginName}, and password: ${password}.`
-        );
+        // console.log(`Starting login process with URL: ${newPlayServerBaseUrl}, username: ${loginName}, and password: ${password}.`);
 
         // Login to the new play server that runs on port 9445 and return the session token.
         const connection = await loginToNewPlayServerAndInitSessionToken(
@@ -390,7 +409,7 @@ export async function performLogin(
         );
         if (connection) {
             if (connection.sessionToken) {
-                console.log("Session token retrieved successfully: ", connection.sessionToken);
+                // console.log("Session token retrieved successfully: ", connection.sessionToken);
                 // If login is successful, store the credentials in VS Code storage
                 context.secrets.store("server", serverName);
                 context.secrets.store("port", portNumber.toString());
@@ -510,18 +529,19 @@ function removeSessionData(connection: PlayServerConnection | null) {
 export async function changeConnection(
     context: vscode.ExtensionContext,
     oldConnection: PlayServerConnection
-): Promise<PlayServerConnection | null> {
+): Promise<{ newConnection: PlayServerConnection | null; newTreeDataProvider: TestBenchTreeDataProvider | null }> {
     if (oldConnection) {
         removeSessionData(oldConnection);
         clearStoredCredentials(context);
         let newConnection = await performLogin(context, true);
 
+        let newTreeDataProvider: TestBenchTreeDataProvider | null = null;
         if (newConnection) {
-            initializeTreeView(context, newConnection);
-            return newConnection;
+            newTreeDataProvider = await initializeTreeView(context, newConnection);
         }
+        return { newConnection, newTreeDataProvider };
     } else {
         vscode.window.showErrorMessage("No connection available. Please log in first.");
     }
-    return null;
+    return { newConnection: null, newTreeDataProvider: null };
 }

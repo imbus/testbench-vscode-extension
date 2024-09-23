@@ -9,12 +9,24 @@ export function activate(context: vscode.ExtensionContext) {
     // TODO: Remember the set root tree item after logging in, store it in VS Code storage and fetch it on login, check if it's still valid.
     // TODO: A new command to clear stored login data? (logout doesnt do that)
 
+    const commands = {
+        displayCommands: "testbenchExtension.displayCommands",
+        login: "testbenchExtension.login",
+        changeConnection: "testbenchExtension.changeConnection",
+        logout: "testbenchExtension.logout",
+        displayTestThemeTree: "testbenchExtension.initTestThemeTree",
+        executeRobotTests: "testbenchExtension.runRobotTests",
+        generateTestCases: "testbenchExtension.generateTestCases",
+        makeRoot: "testbenchExtension.makeRoot",
+        getCycleStructure: "testbenchExtension.getCycleStructure",
+    };
+
     // Store the connection to server
     let connection: PlayServerConnection | null = null;
     // Store the tree data provider to be able to clear it on logout
     let treeDataProvider: TestBenchTreeDataProvider | null = null;
 
-    let loginDisposable = vscode.commands.registerCommand("testbenchExtension.login", async () => {
+    let loginDisposable = vscode.commands.registerCommand(commands.login, async () => {
         connection = await performLogin(context);
         if (!connection) {
             return;
@@ -22,53 +34,47 @@ export function activate(context: vscode.ExtensionContext) {
         treeDataProvider = await initializeTreeView(context, connection);
 
         // Display the commands after logging in
-        vscode.commands.executeCommand("testbenchExtension.displayCommands");
-        
+        vscode.commands.executeCommand(commands.displayCommands);
     });
     context.subscriptions.push(loginDisposable);
 
     // Register the "Display Commands" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.displayCommands", async () => {
-
+        vscode.commands.registerCommand(commands.displayCommands, async () => {
             // Display the commands based on the connection status. (Logout etc. is only available if connection is active)
-            let commands = [];
-            if (connection){
-                commands = [
-                    "Login",
-                    "Change connection",
+            let commandMenuOptions = [];
+            if (connection) {
+                commandMenuOptions = [
+                    // "Login", (Not needed as the user is already logged in)
                     "Logout",
+                    "Change connection",
                     "Display Test Theme Tree",
                     "Execute Robotframework Test Cases",
-                    "Cancel"
+                    "Cancel",
                 ];
             } else {
-                commands = [
-                    "Login",
-                    "Execute Robotframework Test Cases",
-                    "Cancel"];
+                commandMenuOptions = ["Login", "Execute Robotframework Test Cases", "Cancel"];
             }
 
-            const nextAction = await vscode.window.showQuickPick(commands, {
+            const nextAction = await vscode.window.showQuickPick(commandMenuOptions, {
                 placeHolder: "What do you want to do?",
             });
-   
-            // TODO: Pack the command strings into a string list to avoid typos?
+
             switch (nextAction) {
-                case "Login":                
-                    vscode.commands.executeCommand("testbenchExtension.login");
-                    break;
-                case "Change connection":
-                    vscode.commands.executeCommand("testbenchExtension.changeConnection");
+                case "Login":
+                    vscode.commands.executeCommand(commands.login);
                     break;
                 case "Logout":
-                    vscode.commands.executeCommand("testbenchExtension.logout");
+                    vscode.commands.executeCommand(commands.logout);
                     break;
-                case "Display Test Theme Tree":                
-                    vscode.commands.executeCommand("testbenchExtension.initTestThemeTree");
-                    break;                
+                case "Change connection":
+                    vscode.commands.executeCommand(commands.changeConnection);
+                    break;
+                case "Display Test Theme Tree":
+                    vscode.commands.executeCommand(commands.displayTestThemeTree);
+                    break;
                 case "Execute Robotframework Test Cases":
-                    vscode.commands.executeCommand("testbenchExtension.runRobotTests");
+                    vscode.commands.executeCommand(commands.executeRobotTests);
                     break;
                 case "Cancel":
                     return;
@@ -76,19 +82,20 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Browse Projects" command
+    // Register the "Display Test Theme Tree" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.initTestThemeTree", async () => {
+        vscode.commands.registerCommand(commands.displayTestThemeTree, async () => {
+            // FIXME: This command changes the folder icons to collapsed state although they are expanded, probably bcs getChildren() sets it to collapsed.
             treeDataProvider = await initializeTreeView(context, connection);
         })
     );
 
     // Register the "Logout" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.logout", async () => {
+        vscode.commands.registerCommand(commands.logout, async () => {
             if (connection) {
                 await connection.logoutUser(context, treeDataProvider!);
-                connection = null;  // Clear the connection
+                connection = null; // Clear the connection
             } else {
                 vscode.window.showInformationMessage("No connection available. Please log in first.");
             }
@@ -97,18 +104,24 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Change Connection" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.changeConnection", async () => {
-            let conn = await changeConnection(context, connection!);
-            connection = conn;  // Update the connection
-            if (conn) {
-                treeDataProvider = await initializeTreeView(context, conn); // TODO: changeConnection already calls initializeTreeView, also return a treeDataProvider?
+        vscode.commands.registerCommand(commands.changeConnection, async () => {
+            let { newConnection, newTreeDataProvider } = await changeConnection(context, connection!);
+            if (newConnection) {
+                connection = newConnection; // Update the connection
+                if (treeDataProvider) {
+                    treeDataProvider = newTreeDataProvider; // Update the tree data provider
+                } else {
+                    vscode.window.showErrorMessage("Error: TreeDataProvider is null.");
+                }
+            } else {
+                vscode.window.showInformationMessage("Connection change cancelled.");
             }
         })
     );
 
-    // Register the "Generate" command
+    // Register the "Generate Test Cases" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.generate", async (item: TreeItem) => {
+        vscode.commands.registerCommand(commands.generateTestCases, async (item: TreeItem) => {
             if (connection) {
                 jsonReportHandler.startTestGenerationProcess(item, connection);
             } else {
@@ -117,32 +130,19 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Refresh tree" command
-    context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.refreshTreeView", () => {
-            // FIXME: Refresh command changes the folder icons to collapsed state although they are expanded, probably bcs getChildren() sets it to collapsed.
-            initializeTreeView(context, connection);
-        })
-    );
-
     // Register the "Make Root" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.makeRoot", (treeItem: TreeItem) => {
-            makeRoot(connection!, treeItem);
+        vscode.commands.registerCommand(commands.makeRoot, (treeItem: TreeItem) => {
+            if (treeDataProvider) {
+                makeRoot(treeItem, treeDataProvider);
+            }
         })
     );
 
     // Register the "Run Robot Tests" command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.runRobotTests", async () => {
+        vscode.commands.registerCommand(commands.executeRobotTests, async () => {
             startTestExecution();
-        })
-    );
-
-    // Register the "getCycleStructure" command
-    context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.getCycleStructure", async () => {
-            let cycleStructureResponse2 = await connection!.fetchCycleStructure("26", "168");
         })
     );
 

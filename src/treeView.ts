@@ -25,6 +25,7 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
     }
 
     async getChildren(element?: TreeItem): Promise<TreeItem[]> {
+        console.log(`getChildren called with element: ${element?.label}`);
         if (!this.connection) {
             vscode.window.showInformationMessage("No connection available for tree view.");
             return [];
@@ -63,46 +64,52 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
             const cycleItems = element.item.testCycles || [];
             // Create tree items for each cycle
             return cycleItems.map((cycle: { name: string }) => {
-                const treeItem = new TreeItem(cycle.name, "cycle", vscode.TreeItemCollapsibleState.None, cycle);
+                const treeItem = new TreeItem(cycle.name, "cycle", vscode.TreeItemCollapsibleState.Collapsed, cycle);
                 treeItem.parent = element; // Set parent for each cycle item
                 return treeItem;
             });
         } else if (element.contextValue === "cycle") {
             // If the element is a cycle, load its sub-elements
-            return this.getCycleSubElements(element);
+            console.log(`getChildren cycle element: ${element.label}`);
+            return await this.getCycleSubElements(element);
         }
         return [];
     }
 
-    // TODO: Implement fetching of cycle structure and display its sub-elements in the tree view
     // Implement fetching of cycle structure
     private async getCycleSubElements(element: TreeItem): Promise<Thenable<TreeItem[]>> {
+        console.log("Cycle element: ", element);
+        console.log("Cycle element Parent Project: ", element.parent?.parent); 
+
         // Get the key of the cycle
-        const cycleKey = element.item.item.key.serial;
+        const cycleKey = element.item.key.serial;
+        // TODO: parent.parent is used to find the project of a cycle, which could be problematic if more test object versios are in the hierarchy in between
+        const projectKeyOfCycle = element.parent?.parent?.item?.key?.serial;
         // Get all projects from the server to find the project key of the cycle
-        const allProjects = await this.connection?.getAllProjects();
-        if (allProjects) {
-            // Find the project key of the cycle
-            const projectKeyOfCycle = utils.findProjectKeyOfCycle(allProjects, cycleKey);
-            if (projectKeyOfCycle) {
-                const cycleData = await this.connection?.fetchCycleStructure(projectKeyOfCycle, cycleKey);
-                if (cycleData) {
-                    return Promise.resolve(
-                        cycleData.map((data: any) => {
-                            const treeItem = new TreeItem(
-                                // TODO: Modify label and contextValue based on the cycleData
-                                "label",
-                                "contextValue",
-                                vscode.TreeItemCollapsibleState.Collapsed,
-                                data
-                            );
-                            treeItem.parent = element; // Set parent for each item
-                            return treeItem;
-                        })
-                    );
-                }
+        console.log("Cycle element Project key: ", element.parent?.parent?.item?.key?.serial);
+
+        // Find the project key of the cycle
+        // const projectKeyOfCycle = utils.findProjectKeyOfCycle(allProjects, cycleKey);  // Not needed anymore because of the parent relationship
+        if (projectKeyOfCycle) {
+            const cycleData = await this.connection?.fetchCycleStructure(projectKeyOfCycle, cycleKey);
+            if (cycleData) {
+                return Promise.resolve(
+                    //cycleData.map((data: any) => {
+                    cycleData.nodes?.map((data: any) => {
+                        const treeItem = new TreeItem(
+                            // TODO: Modify label and contextValue based on the cycleData
+                            `${data.base.numbering} (${data.elementType}) ${data.base.name} ${data.base.uniqueID}`, 
+                            `${data.elementType}`, 
+                            vscode.TreeItemCollapsibleState.None,
+                            data
+                        );
+                        treeItem.parent = element; // Set parent for each item
+                        return treeItem;
+                    })
+                );
             }
         }
+
         return Promise.resolve([]); // Return an empty array if no data is found
     }
 
@@ -148,7 +155,7 @@ export class TreeItem extends vscode.TreeItem {
         this.contextValue = contextValue;
 
         // Assign custom icons based on type of item and if it is expanded or collapsed
-        this.iconPath = this.getIconPath(contextValue, collapsibleState);
+        this.iconPath = this.getIconPath(this, collapsibleState);
 
         // Clicking on Generate button for test cycles executes generate command
         if (contextValue === "cycle") {
@@ -161,10 +168,11 @@ export class TreeItem extends vscode.TreeItem {
         }
     }
 
-    // TODO: The icons used are placeholder icons. Replace icons with own icons.
+    // TODO: Replace icons with hight quality icons.
+    // TODO: Its now possible to create separate icons to also display the status of the element just like in test bench.
     // Get the path to the icon based on the context value and collapsible state
     private getIconPath(
-        contextValue: string,
+        treeItem: TreeItem,
         collapsibleState: vscode.TreeItemCollapsibleState
     ): { light: string | vscode.Uri; dark: string | vscode.Uri } {
         // Path to light theme and dark theme icons
@@ -172,22 +180,62 @@ export class TreeItem extends vscode.TreeItem {
         const darkIconFolderPath = path.join(__dirname, "..", "resources", "icons", "dark");
 
         let iconName = "testbench-icon.svg";
-        switch (contextValue) {
+        switch (treeItem.contextValue) {
             case "project":
-                iconName =
-                    collapsibleState === vscode.TreeItemCollapsibleState.Collapsed
-                        ? "project-closed.svg"
-                        : "project-opened.svg";
+                // TODO: collapsibleState === vscode.TreeItemCollapsibleState.Collapsed can be used to change the icon based on the state
+                switch (treeItem.item.status){
+                    case "active":
+                        iconName = "ProjectActive.png";
+                        break;
+                    case "planned":
+                        iconName = "ProjectPlanned.png";
+                        break;
+                    default:
+                        iconName = "Project.png";
+                }
                 break;
             case "tov":
+                switch (treeItem.item.status){
+                    case "active":
+                        iconName = "TOVActive.png";
+                        break;
+                    case "planned":
+                        iconName = "TOVPlanned.png";
+                        break;
+                    default:
+                        iconName = "TOV.png";
+                }
+                break;            
+            case "cycle":
+                switch (treeItem.item.status){
+                    case "active":
+                        iconName = "CycleActive.png";
+                        break;
+                    case "planned":
+                        iconName = "CyclePlanned.png";
+                        break;
+                    default:
+                        iconName = "Cycle.png";
+                }
+                break; 
+            case "TestTheme":
                 iconName =
                     collapsibleState === vscode.TreeItemCollapsibleState.Collapsed
-                        ? "project-closed.svg"
-                        : "project-opened.svg";
+                        ? "TestTheme.png"
+                        : "TestTheme.png";
                 break;
-            case "cycle":
-                iconName = "cycle.svg";
+            case "TestCaseSet":
+                iconName =
+                    collapsibleState === vscode.TreeItemCollapsibleState.Collapsed
+                        ? "TestCaseSet.png"
+                        : "TestCaseSet.png";
                 break;
+            case "TestCase":
+                iconName = "TestCase.png";
+                break;
+            // TODO: More types such as test case set etc?
+            default:
+                iconName = "file.svg";
         }
 
         return {
@@ -197,20 +245,16 @@ export class TreeItem extends vscode.TreeItem {
     }
 
     updateIcon(collapsibleState: vscode.TreeItemCollapsibleState): void {
-        this.iconPath = this.getIconPath(this.contextValue, collapsibleState);
+        this.iconPath = this.getIconPath(this, collapsibleState);
     }
 }
 
 // Command to set the selected item as the root of the tree view
-export function makeRoot(connection: PlayServerConnection, treeItem: TreeItem) {
-    if (connection) {
-        const treeDataProvider = new TestBenchTreeDataProvider(connection);
-        treeDataProvider.makeRoot(treeItem);
-        vscode.window.showInformationMessage(`"${treeItem.label}" is now the root.`);
-        vscode.window.registerTreeDataProvider("testBenchProjects", treeDataProvider);
-    } else {
-        vscode.window.showErrorMessage("No connection available. Please log in first.");
-    }
+export function makeRoot(treeItem: TreeItem, treeDataProvider: TestBenchTreeDataProvider): void {
+    // const treeDataProvider = new TestBenchTreeDataProvider(connection);
+    treeDataProvider.makeRoot(treeItem);
+    vscode.window.showInformationMessage(`"${treeItem.label}" is now the root.`);
+    vscode.window.registerTreeDataProvider("testBenchProjects", treeDataProvider);
 }
 
 // Creates a tree view to browse projects
