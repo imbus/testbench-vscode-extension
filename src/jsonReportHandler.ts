@@ -78,29 +78,37 @@ interface JobStatusResponse {
 }
 
 // Prompt the user to select the export report method (Execution based or Specification based)
-async function selectExecutionOrSpecificationBased(): Promise<boolean> {
+async function selectExecutionOrSpecificationBased(): Promise<boolean | null> {
     let executionBased = true; // Default value is "Execution based"
 
     // We return a new Promise here, which will resolve with the result after user interaction
     return new Promise((resolve) => {
         // Create the quick pick input
         const quickPick = vscode.window.createQuickPick();
-        quickPick.items = [{ label: "Execution based" }, { label: "Specification based" }];
-        quickPick.title = "Select the testing method";
-        quickPick.placeholder = "Select the to export option for the reports (Execution based by default).";
+        quickPick.items = [
+            { label: "Execution based" },
+            { label: "Specification based" },
+            { label: "Cancel" }
+        ];
+        quickPick.title = "Select Export Option";
+        quickPick.placeholder = "Select the export option for the reports.";
 
         // Handle the user selection
         quickPick.onDidChangeSelection((selection) => {
             if (selection[0]) {
-                executionBased = selection[0].label === "Execution based";
+                if (selection[0].label === "Cancel") {
+                    resolve(null); // Resolve with null if the user selects "Cancel"
+                } else {
+                    executionBased = selection[0].label === "Execution based";
+                    resolve(executionBased); // Resolve with the selected option
+                }
                 quickPick.hide(); // Close the quick pick after selection
             }
         });
 
-        // Handle case when the quick pick is hidden without user selection (e.g., if canceled)
+        // Handle case when the quick pick is hidden without user selection (e.g., if user clicks away)
         quickPick.onDidHide(() => {
-            // If the user cancels or does not select an option, we resolve with the default value
-            resolve(executionBased);
+            resolve(null);
             quickPick.dispose(); // Clean up resources after closing
         });
 
@@ -825,8 +833,14 @@ export async function testBenchToRobotFramework(
     // TODO: Add a cancel button and dont continue if user clicks away?
     const executionBased = await selectExecutionOrSpecificationBased();
     console.log("executionBased value set to:", executionBased);
+    if (executionBased === null) {
+        console.log(`Test generation aborted.`);
+        vscode.window.showInformationMessage(`Test generation aborted.`);
+        return;
+    }
+
     const cycleStructureOptionsRequestParameter: ReportRequestParams = {
-        basedOnExecution: executionBased, // true as default
+        basedOnExecution: executionBased,
     };
 
     console.log(`Started Test generation for Cycle key: ${cycleKey}`);

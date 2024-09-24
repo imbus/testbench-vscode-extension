@@ -49,6 +49,10 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
                 treeItem.parent = null; // Root elements have no parent
                 return treeItem;
             });
+        } else if (element && element.children) {
+            // TODO : Test for test cycle sub hierarchy
+            // If the element has children, return them directly
+            return element.children;
         } else if (element.contextValue === "project") {
             // Get TOVs for the selected project
             const tovItems = element.item.testObjectVersions || [];
@@ -75,41 +79,79 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
         return [];
     }
 
-    // Implement fetching of cycle structure
+    // Fetch cycle structure and build the element tree hierarchy using the numbering field of the elements
     private async getCycleSubElements(element: TreeItem): Promise<Thenable<TreeItem[]>> {
-        console.log("Cycle element: ", element);
-        console.log("Cycle element Parent Project: ", element.parent?.parent); 
-
         // Get the key of the cycle
         const cycleKey = element.item.key.serial;
         // TODO: parent.parent is used to find the project of a cycle, which could be problematic if more test object versios are in the hierarchy in between
         const projectKeyOfCycle = element.parent?.parent?.item?.key?.serial;
-        // Get all projects from the server to find the project key of the cycle
-        console.log("Cycle element Project key: ", element.parent?.parent?.item?.key?.serial);
 
-        // Find the project key of the cycle
-        // const projectKeyOfCycle = utils.findProjectKeyOfCycle(allProjects, cycleKey);  // Not needed anymore because of the parent relationship
+        console.log("Cycle element: ", element);
+        console.log("Cycle element Parent Project: ", element.parent?.parent);
+        console.log("Cycle element Project key: ", projectKeyOfCycle);
+
         if (projectKeyOfCycle) {
             const cycleData = await this.connection?.fetchCycleStructure(projectKeyOfCycle, cycleKey);
             if (cycleData) {
-                return Promise.resolve(
-                    //cycleData.map((data: any) => {
-                    cycleData.nodes?.map((data: any) => {
-                        const treeItem = new TreeItem(
-                            // TODO: Modify label and contextValue based on the cycleData
-                            `${data.base.numbering} (${data.elementType}) ${data.base.name} ${data.base.uniqueID}`, 
-                            `${data.elementType}`, 
-                            vscode.TreeItemCollapsibleState.None,
-                            data
-                        );
-                        treeItem.parent = element; // Set parent for each item
-                        return treeItem;
-                    })
-                );
+
+                if (cycleData.nodes?.length === 0){
+                    console.log("Cycle has 0 sub elements.");
+                    return Promise.resolve([]);
+                }
+
+                // Create a map to store elements by their numbering
+                const elementsByNumbering: { [numbering: string]: any } = {};
+                cycleData.nodes?.forEach((data: any) => {
+                    // Store elements by their numbering, where numbering is the key
+                    elementsByNumbering[data.base.numbering] = data;
+                });
+
+                // Recursively build tree structure by constructing a hierarchical tree structure from a flat collection of elements
+                // Track elements already added to avoid duplicates in the tree with addedElements variable
+                function buildTree(numberingPrefix: string, addedElements: Set<string> = new Set()): TreeItem[] {
+                    const children: TreeItem[] = []; // Current level's child elements
+
+                    for (const numbering in elementsByNumbering) {
+                        if (
+                            numbering.startsWith(numberingPrefix) && // Ensure the element is in the current hierarchy level
+                            numbering.length > numberingPrefix.length && // Ensure the element is not the same as the parent
+                            !addedElements.has(numbering) // Check if the element has not already been added
+                        ) {
+                            addedElements.add(numbering); // Mark the element as added to skip it and avoid duplicates
+
+                            const data = elementsByNumbering[numbering];
+                            const nextLevelPrefix = numbering + "."; // Prefix for the next level of hierarchy
+                            // Check if any element's numbering starts with nextLevelPrefix, so see the current element has childs
+                            const hasChildren = Object.keys(elementsByNumbering).some((num) =>
+                                num.startsWith(nextLevelPrefix)
+                            );
+
+                            const treeItem = new TreeItem(
+                                `${data.base.numbering} (${data.elementType}) ${data.base.name} ${data.base.uniqueID}`, // Label
+                                `${data.elementType}`, // Context value
+                                hasChildren
+                                    ? vscode.TreeItemCollapsibleState.Collapsed
+                                    : vscode.TreeItemCollapsibleState.None,
+                                data
+                            );
+
+                            // Process the child elements recursively
+                            if (hasChildren) {
+                                treeItem.children = buildTree(nextLevelPrefix, addedElements);
+                            }
+
+                            children.push(treeItem);
+                        }
+                    }
+
+                    return children;
+                }
+
+                return Promise.resolve(buildTree("")); // Start building the tree from the root
             }
         }
 
-        return Promise.resolve([]); // Return an empty array if no data is found
+        return Promise.resolve([]); // Return an empty array if no data is found       
     }
 
     getTreeItem(element: TreeItem): vscode.TreeItem {
@@ -143,10 +185,11 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
 // Represents a tree item (Project, TOV, Cycle, etc) in the tree view
 export class TreeItem extends vscode.TreeItem {
     parent?: TreeItem | null; // Track the parent of each tree item
+    children?: TreeItem[] | null; // Add a children property to store child elements
 
     constructor(
         public readonly label: string,
-        public readonly contextValue: string, // The type of the tree item (Project, TOV, Cycle)
+        public readonly contextValue: string, // The type of the tree item (Project, TOV, Cycle etc.)
         public collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly item: any
     ) {
@@ -156,19 +199,21 @@ export class TreeItem extends vscode.TreeItem {
         // Assign custom icons based on type of item and if it is expanded or collapsed
         this.iconPath = this.getIconPath(this, collapsibleState);
 
-        // Clicking on Generate button for test cycles executes generate command
+        // Executing a command on single click on the tree item
+        /*
         if (contextValue === "cycle") {
             this.command = {
                 command: "testbenchExtension.generate", // Command to execute
                 title: "Generate",
-                arguments: [this], // Pass the tree item as an argument
+                arguments: [this], // Pass the tree item as an argument. Error: Circular reference
             };
             this.tooltip = "Generate"; // Tooltip when hovering over the item
         }
+        */
     }
 
     // TODO: Replace icons with hight quality icons.
-    // TODO: Its now possible to create separate icons to also display the status of the element just like in test bench.
+    // TODO: Display the status of the element just like in test bench. Add missing icons for each status.
     // Get the path to the icon based on the context value and collapsible state
     private getIconPath(
         treeItem: TreeItem,
@@ -182,46 +227,62 @@ export class TreeItem extends vscode.TreeItem {
         switch (treeItem.contextValue) {
             case "project":
                 // TODO: collapsibleState === vscode.TreeItemCollapsibleState.Collapsed can be used to change the icon based on the state
-                switch (treeItem.item.status){
+                switch (treeItem.item.status) {
                     case "active":
                         iconName = "ProjectActive.png";
                         break;
                     case "planned":
                         iconName = "ProjectPlanned.png";
                         break;
+                    case "finished":
+                        iconName = "ProjectBeendet.png";
+                        break;
+                    case "closed":
+                        iconName = "ProjectGeschlossen.png";
+                        break;
                     default:
                         iconName = "Project.png";
                 }
                 break;
             case "tov":
-                switch (treeItem.item.status){
+                switch (treeItem.item.status) {
                     case "active":
                         iconName = "TOVActive.png";
                         break;
                     case "planned":
                         iconName = "TOVPlanned.png";
                         break;
+                    case "finished":
+                        iconName = "TOVBeendet.png";
+                        break;
+                    case "closed":
+                        iconName = "TOVGeschlossen.png";
+                        break;
                     default:
                         iconName = "TOV.png";
                 }
-                break;            
+                break;
             case "cycle":
-                switch (treeItem.item.status){
+                switch (treeItem.item.status) {
                     case "active":
                         iconName = "CycleActive.png";
                         break;
                     case "planned":
                         iconName = "CyclePlanned.png";
                         break;
+                    case "finished":
+                        iconName = "CycleBeendet.png";
+                        break;
+                    case "closed":
+                        iconName = "CycleGeschlossen.png";
+                        break;
                     default:
                         iconName = "Cycle.png";
                 }
-                break; 
+                break;
             case "TestTheme":
                 iconName =
-                    collapsibleState === vscode.TreeItemCollapsibleState.Collapsed
-                        ? "TestTheme.png"
-                        : "TestTheme.png";
+                    collapsibleState === vscode.TreeItemCollapsibleState.Collapsed ? "TestTheme.png" : "TestTheme.png";
                 break;
             case "TestCaseSet":
                 iconName =
@@ -232,7 +293,6 @@ export class TreeItem extends vscode.TreeItem {
             case "TestCase":
                 iconName = "TestCase.png";
                 break;
-            // TODO: More types such as test case set etc?
             default:
                 iconName = "file.svg";
         }

@@ -151,7 +151,8 @@ export class PlayServerConnection {
                 saveJsonToFile(filePath, response.data);
             } else {
                 vscode.window.showErrorMessage("No file path selected.");
-            }*/
+            }
+            */
 
             // Return the list of projects, or an empty array if no projects are found
             return response.data.projects || [];
@@ -436,7 +437,8 @@ export async function performLogin(
                 }
             }
         } else {
-            console.log("Failed to retrieve session token.");
+            console.log("Login failed.");
+            vscode.window.showErrorMessage("Login failed.");
             return null;
         }
     }
