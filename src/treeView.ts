@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import * as utils from "./utils";
 import { PlayServerConnection } from "./testbenchConnection";
 
 export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeItem> {
@@ -27,7 +26,7 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
     async getChildren(element?: TreeItem): Promise<TreeItem[]> {
         console.log(`getChildren called with element: ${element?.label}`);
         if (!this.connection) {
-            vscode.window.showInformationMessage("No connection available for tree view.");
+            // vscode.window.showInformationMessage("No connection available for tree view.");
             return [];
         }
 
@@ -137,7 +136,7 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
         this.rootItem = null;
         this.connection = null;
         this.refresh(); // Refresh the tree view to reflect the cleared data
-        vscode.window.showInformationMessage("Tree view cleared.");
+        // vscode.window.showInformationMessage("Tree view cleared.");
     }
 }
 
@@ -306,6 +305,6 @@ export async function initializeTreeView(
     treeDataProvider.refresh();
     context.subscriptions.push(treeView);
 
-    vscode.window.showInformationMessage("Tree view created successfully.");
+    vscode.window.showInformationMessage("Test Theme Tree initialized.");
     return treeDataProvider;
 }

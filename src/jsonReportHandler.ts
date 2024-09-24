@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import * as utils from "./utils";
 import * as unzipper from "unzipper"; // npm install unzipper
 import * as cheerio from "cheerio"; // To parse HTML  npm install --save-dev @types/cheerio
 import axios, { AxiosResponse } from "axios";
@@ -126,6 +125,11 @@ function extractTextFromHtml(htmlContent: string): string {
     }
 }
 
+// Helper function to check if the job has completed successfully.
+function isJobCompletedSuccessfully(jobStatus: JobStatusResponse): boolean {
+    return !!jobStatus?.completion?.result?.Success?.reportName;
+}
+
 // Fetch the TestBench JSON report from the server (ZIP Archive).
 // 3 Calls are needed to download the zip report:
 // 1. Get the job ID
@@ -135,6 +139,7 @@ export async function fetchZipFile(
     connection: PlayServerConnection,
     projectKey: string,
     cycleKey: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
     requestParams?: ReportRequestParams
 ): Promise<string | undefined> {
     try {
@@ -143,24 +148,58 @@ export async function fetchZipFile(
         const jobId = await getJobId(connection, projectKey, cycleKey, requestParams);
         console.log(`Job ID (${jobId}) fetched successfully.`);
 
+        // Default constants for maximum retries and delay between retries (in milliseconds).
+        const maxRetries = 10;
+        const retryDelayMs = 3000;
+
+        let jobStatus: JobStatusResponse | null = null;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            if (progress) {
+                progress.report({
+                    increment: 10,
+                    message: `Fetching Job status. Attempt ${attempt} of ${maxRetries}.`,
+                });
+            }
+            try {
+                jobStatus = await getJobStatus(connection, projectKey, jobId);
+                console.log(`Attempt ${attempt}: Job Status fetched successfully.`);
+
+                if (isJobCompletedSuccessfully(jobStatus)) {
+                    console.log("Job completed successfully.");
+                    break; // Exit the loop if the job is completed successfully.
+                } else {
+                    console.log(`Job not yet completed. Waiting ${retryDelayMs} ms before retrying...`);
+                    await delay(retryDelayMs);
+                }
+            } catch (error) {
+                console.error(`Attempt ${attempt}: Failed to get job status. Error: ${error}`);
+                await delay(retryDelayMs);
+            }
+        }
+
+        if (!jobStatus || !isJobCompletedSuccessfully(jobStatus)) {
+            console.warn("Report generation not completed or failed after maximum retries.");
+            vscode.window.showErrorMessage("Report generation not completed or failed after maximum retries.");
+            return undefined;
+        }
+
+        /*
         await delay(15000); // Give the server time to process the job
 
         const jobStatus = await getJobStatus(connection, projectKey, jobId);
         console.log("Job Status fetched successfully:", jobStatus);
+        */
 
-        if (jobStatus.completion.result.Success && jobStatus.completion.result.Success.reportName) {
-            const fileName = jobStatus.completion.result.Success.reportName;
-            console.log(`Report name: ${fileName}`);
+        const fileName = jobStatus.completion.result.Success!.reportName;
+        console.log(`Report name: ${fileName}`);
 
-            const outputPath = await downloadReport(connection, projectKey, fileName);
-            if (outputPath) {
-                console.log(`Report downloaded and saved to: ${outputPath}`);
-                return outputPath;
-            } else {
-                console.log("Download canceled or failed.");
-            }
+        const outputPath = await downloadReport(connection, projectKey, fileName);
+        if (outputPath) {
+            console.log(`Report downloaded and saved to: ${outputPath}`);
+            return outputPath;
         } else {
-            console.warn("Report generation not completed or failed. Check job status later.");
+            console.log("Download canceled or failed.");
         }
     } catch (error) {
         handleError(error, projectKey, cycleKey);
@@ -763,7 +802,7 @@ async function selectOutputFolder(): Promise<string | undefined> {
         canSelectFiles: false, // Only allow folder selection
         canSelectFolders: true, // Allow selecting folders
         canSelectMany: false, // Only allow one folder to be selected
-        openLabel: "Select Output Folder For Test Suites", // Custom label for the open button
+        openLabel: "Select Output Folder zip extraction", // Custom label for the open button
     });
 
     if (folderUri && folderUri.length > 0) {
@@ -790,11 +829,14 @@ export async function testBenchToRobotFramework(
         basedOnExecution: executionBased, // true as default
     };
 
+    console.log(`Started Test generation for Cycle key: ${cycleKey}`);
+    vscode.window.showInformationMessage(`Started Test generation for Cycle key: ${cycleKey}`);
+
     // Show a progress bar while the process is running, since this process takes time
     vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification, // You can also use ProgressLocation.Window or ProgressLocation.SourceControl
-            title: `Generating Test Suites for ${itemLabel}`,
+            title: `Generating Tests for ${itemLabel} (Cycle key ${cycleKey})`,
             cancellable: true, // Make it cancellable
         },
         async (progress, token) => {
@@ -805,7 +847,7 @@ export async function testBenchToRobotFramework(
             // TODO: Adjust progress increments and messages
             if (progress) {
                 progress.report({
-                    increment: 30,
+                    increment: 10,
                     message: `Fetching JSON Report from the server.`,
                 });
             }
@@ -815,36 +857,42 @@ export async function testBenchToRobotFramework(
                 connection,
                 projectKey,
                 cycleKey,
+                progress,
                 cycleStructureOptionsRequestParameter
             );
 
+            if (progress) {
+                progress.report({
+                    increment: 10,
+                    message: `Extracting ZIP file.`,
+                });
+            }
+
             if (downloadedZipFilePath) {
                 // Select the output folder to generate the test suites
-                const chosenOutputFolderForTestSuites = await selectOutputFolder(); // "C:/VSCodeTestBench/GeneratedSuites";
+                const chosenOutputFolderForZipExtraction = await selectOutputFolder(); // "C:/VSCodeTestBench/GeneratedSuites";
 
-                if (chosenOutputFolderForTestSuites) {
+                if (chosenOutputFolderForZipExtraction) {
                     vscode.window.showInformationMessage(
-                        `Selected output folder for test suites: ${chosenOutputFolderForTestSuites}`
+                        `Selected output folder for zip extraction: ${chosenOutputFolderForZipExtraction}`
                     );
 
                     // Configuration for the test suite generation
                     const config: Configuration = {
-                        generationDirectory: chosenOutputFolderForTestSuites,
+                        generationDirectory: chosenOutputFolderForZipExtraction,
                         clearGenerationDirectory: true,
                         createOutputZip: false,
                         removeExtractedFiles: false, // Enable the removal of extracted files after processing
                     };
 
                     // TODO: This creates a new directory inside the selected directory. Check if it is needed.
-                    const folderNameOfExtractedZip = `extracted`;
-                    const zipExtractionFolderPath = path.join(config.generationDirectory, folderNameOfExtractedZip);
-
-                    if (progress) {
-                        progress.report({
-                            increment: 15,
-                            message: `Extracting ZIP file to: ${zipExtractionFolderPath}.`,
-                        });
-                    }
+                    const folderNameOfExtractedZip = `Extracted Files`;
+                    const zipExtractionFolderPath = path.join(
+                        chosenOutputFolderForZipExtraction,
+                        folderNameOfExtractedZip
+                    ); // This folder will contain the .json files
+                    const folderNameOfRobotFiles = `Generated Test Cases`;
+                    const robotFilesFolderPath = path.join(chosenOutputFolderForZipExtraction, folderNameOfRobotFiles); // This folder will contain the .robot files
 
                     // Extract ZIP file
                     await extractZip(downloadedZipFilePath, zipExtractionFolderPath);
@@ -852,19 +900,19 @@ export async function testBenchToRobotFramework(
 
                     if (progress) {
                         progress.report({
-                            increment: 15,
-                            message: `Loading JSON files.`,
+                            increment: 10,
+                            message: `Processing JSON files to create test cases.`,
                         });
                     }
 
                     console.log(`Starting convertJSONsIntoTestCases with path: ${zipExtractionFolderPath}`); // Folder containing JSON files
-                    await convertJSONsIntoTestCases(zipExtractionFolderPath, chosenOutputFolderForTestSuites);
+                    await convertJSONsIntoTestCases(zipExtractionFolderPath, robotFilesFolderPath);
 
                     // Optional Step: Remove extracted files if configured
                     if (config.removeExtractedFiles) {
                         if (progress) {
                             progress.report({
-                                increment: 15,
+                                increment: 10,
                                 message: `Removing extracted files.`,
                             });
                         }
@@ -894,30 +942,20 @@ export async function startTestGenerationProcess(item: TreeItem, connection: Pla
     // Check if the cycle key is available
     if (item?.item?.key?.serial) {
         const cycleKey = item.item.key.serial;
-        console.log(`Started Test generation for Cycle key: ${cycleKey}`);
-        vscode.window.showInformationMessage(`Started Test generation for Cycle key: ${cycleKey}`);
 
-        // Get all projects from the server
-        const allProjects = await connection?.getAllProjects();
-        if (allProjects) {
-            // Find the project key of the cycle
-            const projectKeyOfCycle = utils.findProjectKeyOfCycle(allProjects, cycleKey);
-            if (projectKeyOfCycle) {
-                // Check if the user is logged in
-                if (connection) {
-                    // Start the generation process
-                    testBenchToRobotFramework(item.label, projectKeyOfCycle, cycleKey, connection);
-                } else {
-                    vscode.window.showErrorMessage("No connection available. Please log in first.");
-                }
+        // TODO: parent.parent is used to find the project of a cycle, which could be problematic if more test object versios are in the hierarchy in between
+        const projectKeyOfCycle = item.parent?.parent?.item?.key?.serial;
+        if (projectKeyOfCycle) {
+            // Check if the user is logged in
+            if (connection) {
+                // Start the generation process
+                testBenchToRobotFramework(item.label, projectKeyOfCycle, cycleKey, connection);
             } else {
-                console.error("Project key of cycle is unidentified!");
-                vscode.window.showErrorMessage("Project key of cycle is unidentified!");
-                return;
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
             }
         } else {
-            console.error("No projects found!");
-            vscode.window.showErrorMessage("No projects found!");
+            console.error("Project key of cycle is unidentified!");
+            vscode.window.showErrorMessage("Project key of cycle is unidentified!");
             return;
         }
     } else {

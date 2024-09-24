@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import { exec, spawn } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
+import { exec, spawn } from "child_process";
 
 // Check if Robot Framework is installed
 function isRobotFrameworkInstalled(): Promise<boolean> {
@@ -81,19 +82,21 @@ export async function startTestExecution() {
     }
 
     const outputFolder = outputFolderUri[0].fsPath;
+    const outputFolderName = "Test Results";
+    const outputFolderPath = path.join(outputFolder, outputFolderName);  // This folder will contain the robotframework test results 
 
     try {
-        // Ensure the output directory exists
-        if (!fs.existsSync(outputFolder)) {
-            fs.mkdirSync(outputFolder, { recursive: true });
+        // Create the output folder if it doesn't exist
+        if (!fs.existsSync(outputFolderPath)) {
+            fs.mkdirSync(outputFolderPath, { recursive: true });
         }
 
         // Run Robot Framework tests and save the results
         vscode.window.showInformationMessage("Running Robot Framework tests...");
 
-        await runRobotTests(robotFilePaths, outputFolder);
+        await runRobotTests(robotFilePaths, outputFolderPath);
 
-        vscode.window.showInformationMessage("Tests completed successfully. Results saved in: " + outputFolder);
+        vscode.window.showInformationMessage("Tests completed successfully. Results saved in: " + outputFolderPath);
     } catch (error) {
         vscode.window.showErrorMessage("Error running Robot Framework tests: " + error);
     }
