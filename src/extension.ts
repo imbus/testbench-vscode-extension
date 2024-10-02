@@ -3,23 +3,81 @@ import * as jsonReportHandler from "./jsonReportHandler";
 import { TreeItem, makeRoot } from "./treeView";
 import { PlayServerConnection, performLogin, changeConnection } from "./testbenchConnection";
 import { TestBenchTreeDataProvider, initializeTreeView } from "./treeView";
-import { startTestExecution } from "./executeRobotFrameworkTests";
 
 export function activate(context: vscode.ExtensionContext) {
-    // TODO: Remember the set root tree item after logging in, store it in VS Code storage and fetch it on login, check if it's still valid.
-    // TODO: A new command to clear stored login data? (logout doesnt do that)
+    // TODO: Add a new command to clear stored login data? (logout doesnt do that)
 
+    const baseKey = "testbenchExtension";
     const commands = {
-        displayCommands: "testbenchExtension.displayCommands",
-        login: "testbenchExtension.login",
-        changeConnection: "testbenchExtension.changeConnection",
-        logout: "testbenchExtension.logout",
-        displayTestThemeTree: "testbenchExtension.initTestThemeTree",
-        executeRobotTests: "testbenchExtension.runRobotTests",
-        generateTestCases: "testbenchExtension.generateTestCases",
-        makeRoot: "testbenchExtension.makeRoot",
-        getCycleStructure: "testbenchExtension.getCycleStructure",
+        displayCommands: `${baseKey}.displayCommands`,
+        login: `${baseKey}.login`,
+        changeConnection: `${baseKey}.changeConnection`,
+        logout: `${baseKey}.logout`,
+        displayTestThemeTree: `${baseKey}.initTestThemeTree`,
+        executeRobotTests: `${baseKey}.runRobotTests`,
+        generateTestCases: `${baseKey}.generateTestCases`,
+        makeRoot: `${baseKey}.makeRoot`,
+        getCycleStructure: `${baseKey}.getCycleStructure`,
+        getServerVersions: `${baseKey}.getServerVersions`,
+        showExtensionSettings: `${baseKey}.showExtensionSettings`,
     };
+
+    interface ReportGenerationConfiguration {
+        generationDirectory: string;
+        clearGenerationDirectory: boolean;
+        createOutputZip: boolean;
+        removeExtractedFiles: boolean;
+    }
+
+    // Variables to hold configuration settings
+    let serverName: string;
+    let portNumber: number;
+    let username: string;
+    let password: string;
+    let downloadReportLocation: string;
+    let reportGenerationConfig: ReportGenerationConfiguration;
+
+    // Initialize or update configuration settings
+    function loadConfiguration() {
+        const config = vscode.workspace.getConfiguration(baseKey);
+
+        serverName = config.get<string>("serverName", "testbench");
+        portNumber = config.get<number>("portNumber", 9445);
+        username = config.get<string>("username", "");
+        password = config.get<string>("password", "");
+        downloadReportLocation = config.get<string>("downloadReportLocation", "");
+        reportGenerationConfig = config.get<ReportGenerationConfiguration>("reportGenerationConfig", {
+            generationDirectory: "",
+            clearGenerationDirectory: true,
+            createOutputZip: false,
+            removeExtractedFiles: false,
+        });
+    }
+
+    // Load initial configuration
+    loadConfiguration();
+
+    // Handle configuration changes
+    const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration(baseKey)) {
+            // Reload and apply configuration settings
+            loadConfiguration();
+        }
+    });
+    context.subscriptions.push(configChangeDisposable);
+
+    // Register Show Extension Settings command
+    const showExtensionSettingsDisposable = vscode.commands.registerCommand(commands.showExtensionSettings, () => {
+        // Open the settings UI of the extension inside the settings editor
+        vscode.commands.executeCommand("workbench.action.openSettings2", {
+            query: "@ext:imbus.testbench-visual-studio-code-extension",
+            revealSetting: {
+                key: `${baseKey}`, // Add the setting key with.settingsName if you want to open a specific setting
+                edit: true, // Set to true to focus on the edit control
+            },
+        });
+    });
+    context.subscriptions.push(showExtensionSettingsDisposable);
 
     // Store the connection to server
     let connection: PlayServerConnection | null = null;
@@ -45,15 +103,18 @@ export function activate(context: vscode.ExtensionContext) {
             let commandMenuOptions = [];
             if (connection) {
                 commandMenuOptions = [
-                    // "Login", (Not needed as the user is already logged in)
                     "Logout",
                     "Change connection",
+                    "Show Extension Settings",
                     "Display Test Theme Tree",
-                    "Execute Robotframework Test Cases",
                     "Cancel",
                 ];
             } else {
-                commandMenuOptions = ["Login", "Execute Robotframework Test Cases", "Cancel"];
+                commandMenuOptions = [
+                    "Login",
+                    "Show Extension Settings",
+                    "Cancel",
+                ];
             }
 
             const nextAction = await vscode.window.showQuickPick(commandMenuOptions, {
@@ -67,14 +128,14 @@ export function activate(context: vscode.ExtensionContext) {
                 case "Logout":
                     vscode.commands.executeCommand(commands.logout);
                     break;
+                case "Show Extension Settings":
+                    vscode.commands.executeCommand(commands.showExtensionSettings);
+                    break;
                 case "Change connection":
                     vscode.commands.executeCommand(commands.changeConnection);
                     break;
                 case "Display Test Theme Tree":
                     vscode.commands.executeCommand(commands.displayTestThemeTree);
-                    break;
-                case "Execute Robotframework Test Cases":
-                    vscode.commands.executeCommand(commands.executeRobotTests);
                     break;
                 case "Cancel":
                     return;
@@ -85,7 +146,6 @@ export function activate(context: vscode.ExtensionContext) {
     // Register the "Display Test Theme Tree" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.displayTestThemeTree, async () => {
-            // FIXME: This command changes the folder icons to collapsed state although they are expanded, probably bcs getChildren() sets it to collapsed.
             treeDataProvider = await initializeTreeView(context, connection);
         })
     );
@@ -139,15 +199,8 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Run Robot Tests" command
-    context.subscriptions.push(
-        vscode.commands.registerCommand(commands.executeRobotTests, async () => {
-            startTestExecution();
-        })
-    );
-
     // Uncomment this if you want to prompt the user to log in when the extension activates
-    // vscode.commands.executeCommand('testbenchExtension.login');
+    // vscode.commands.executeCommand(`${baseKey}.login`);
 }
 
 export function deactivate() {}

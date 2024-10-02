@@ -1,5 +1,6 @@
 {
     "name": "testbench-visual-studio-code-extension",
+    "publisher": "imbus",
     "displayName": "TestBench Visual Studio Code Extension",
     "description": "A Visual Studio Code extension for TestBench.",
     "version": "0.0.1",
@@ -12,6 +13,75 @@
     "activationEvents": [],
     "main": "./dist/extension.js",
     "contributes": {
+        "configuration": {
+            "title": "TestBench Extension Settings",
+            "properties": {
+                "testbenchExtension.serverName": {
+                    "type": "string",
+                    "default": "testbench",
+                    "description": "The server name that is used to connect to the TestBench server.",
+                    "order": 1
+                },
+                "testbenchExtension.portNumber": {
+                    "type": "number",
+                    "default": 9445,
+                    "description": "Port Number for the TestBench server.",
+                    "order": 2
+                },
+                "testbenchExtension.username": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Username of the user for the TestBench server.",
+                    "order": 3
+                },
+                "testbenchExtension.password": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Password of the user for the TestBench server.",
+                    "format": "password",
+                    "order": 4
+                },
+                "testbenchExtension.downloadReportLocation": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Download location for the report file.",
+                    "order": 5
+                },
+                "testbenchExtension.reportGenerationConfig": {
+                    "type": "object",
+                    "default": {
+                        "generationDirectory": "",
+                        "clearGenerationDirectory": true,
+                        "createOutputZip": false,
+                        "removeExtractedFiles": false
+                    },
+                    "description": "Configuration settings for the test generation.",
+                    "properties": {
+                        "generationDirectory": {
+                            "type": "string",
+                            "default": "",
+                            "description": "Directory where files will be generated."
+                        },
+                        "clearGenerationDirectory": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Clear the generation directory after generating new files."
+                        },
+                        "createOutputZip": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Create a zip file of the output."
+                        },
+                        "removeExtractedFiles": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Remove extracted files after processing."
+                        },
+                        "order": 6
+                    }
+                }
+            }
+        },
         "commands": [
             {
                 "command": "testbenchExtension.login",
@@ -31,7 +101,7 @@
             },
             {
                 "command": "testbenchExtension.generateTestCases",
-                "title": "Generate"
+                "title": "Generate Test Cases"
             },
             {
                 "command": "testbenchExtension.makeRoot",
@@ -41,8 +111,8 @@
                 "command": "testbenchExtension.initTestThemeTree",
                 "title": "Refresh Tree and Reset Root",
                 "icon": {
-                    "light": "resources/icons/light/refresh.svg",
-                    "dark": "resources/icons/dark/refresh.svg"
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
                 }
             },
             {
@@ -56,10 +126,14 @@
             {
                 "command": "testbenchExtension.displayCommands",
                 "title": "TestBench: Display Commands"
+            },
+            {
+                "command": "testbenchExtension.showExtensionSettings",
+                "title": "TestBench: Show Extension Settings"
             }
         ],
         "views": {
-            "explorer": [
+            "testBenchExplorer": [
                 {
                     "id": "testBenchProjects",
                     "name": "TestBench Test Theme Tree"
@@ -81,8 +155,17 @@
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "view == testBenchProjects && viewItem == project || viewItem == tov",
+                    "when": "view == testBenchProjects && viewItem == project || viewItem == tov || viewItem == cycle || viewItem == TestTheme || viewItem == TestCaseSet",
                     "group": "navigation"
+                }
+            ]
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "testBenchExplorer",
+                    "title": "TestBench",
+                    "icon": "resources/icons/iTB-EE-Logo-22x20.png"
                 }
             ]
         }

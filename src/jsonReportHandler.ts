@@ -85,11 +85,7 @@ async function selectExecutionOrSpecificationBased(): Promise<boolean | null> {
     return new Promise((resolve) => {
         // Create the quick pick input
         const quickPick = vscode.window.createQuickPick();
-        quickPick.items = [
-            { label: "Execution based" },
-            { label: "Specification based" },
-            { label: "Cancel" }
-        ];
+        quickPick.items = [{ label: "Execution based" }, { label: "Specification based" }, { label: "Cancel" }];
         quickPick.title = "Select Export Option";
         quickPick.placeholder = "Select the export option for the reports.";
 
@@ -148,7 +144,8 @@ export async function fetchZipFile(
     projectKey: string,
     cycleKey: string,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
-    requestParams?: ReportRequestParams
+    requestParams?: ReportRequestParams,
+    cancellationToken?: vscode.CancellationToken
 ): Promise<string | undefined> {
     try {
         console.log(`Fetching zip file for projectKey: ${projectKey}, cycleKey: ${cycleKey}.`);
@@ -156,48 +153,13 @@ export async function fetchZipFile(
         const jobId = await getJobId(connection, projectKey, cycleKey, requestParams);
         console.log(`Job ID (${jobId}) fetched successfully.`);
 
-        // Default constants for maximum retries and delay between retries (in milliseconds).
-        const maxRetries = 10;
-        const retryDelayMs = 3000;
-
-        let jobStatus: JobStatusResponse | null = null;
-
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            if (progress) {
-                progress.report({
-                    increment: 10,
-                    message: `Fetching Job status. Attempt ${attempt} of ${maxRetries}.`,
-                });
-            }
-            try {
-                jobStatus = await getJobStatus(connection, projectKey, jobId);
-                console.log(`Attempt ${attempt}: Job Status fetched successfully.`);
-
-                if (isJobCompletedSuccessfully(jobStatus)) {
-                    console.log("Job completed successfully.");
-                    break; // Exit the loop if the job is completed successfully.
-                } else {
-                    console.log(`Job not yet completed. Waiting ${retryDelayMs} ms before retrying...`);
-                    await delay(retryDelayMs);
-                }
-            } catch (error) {
-                console.error(`Attempt ${attempt}: Failed to get job status. Error: ${error}`);
-                await delay(retryDelayMs);
-            }
-        }
+        const jobStatus = await pollJobStatus(connection, projectKey, jobId, progress, cancellationToken);
 
         if (!jobStatus || !isJobCompletedSuccessfully(jobStatus)) {
-            console.warn("Report generation not completed or failed after maximum retries.");
-            vscode.window.showErrorMessage("Report generation not completed or failed after maximum retries.");
+            console.warn("Report generation not completed or failed.");
+            vscode.window.showErrorMessage("Report generation not completed or failed.");
             return undefined;
         }
-
-        /*
-        await delay(15000); // Give the server time to process the job
-
-        const jobStatus = await getJobStatus(connection, projectKey, jobId);
-        console.log("Job Status fetched successfully:", jobStatus);
-        */
 
         const fileName = jobStatus.completion.result.Success!.reportName;
         console.log(`Report name: ${fileName}`);
@@ -210,8 +172,75 @@ export async function fetchZipFile(
             console.log("Download canceled or failed.");
         }
     } catch (error) {
-        handleError(error, projectKey, cycleKey);
+        if (error instanceof vscode.CancellationError) {
+            console.log("Operation cancelled by the user.");
+            vscode.window.showInformationMessage("Operation cancelled by the user.");
+            return undefined;
+        } else {
+            console.error(`Error in fetchZipFile: ${error}`);
+            handleError(error, projectKey, cycleKey);
+        }
     }
+}
+
+async function pollJobStatus(
+    connection: PlayServerConnection,
+    projectKey: string,
+    jobId: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    cancellationToken?: vscode.CancellationToken,
+    maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
+): Promise<JobStatusResponse | null> {
+    const startTime = Date.now();
+    let attempt = 0;
+    let jobStatus: JobStatusResponse | null = null;
+
+    while (true) {
+        if (cancellationToken?.isCancellationRequested) {
+            console.log("Operation cancelled by the user.");
+            vscode.window.showInformationMessage("Operation cancelled by the user.");
+            throw new vscode.CancellationError();
+        }
+
+        attempt++;
+
+        try {
+            jobStatus = await getJobStatus(connection, projectKey, jobId);
+            console.log(`Attempt ${attempt}: Job Status fetched successfully.`);
+
+            if (isJobCompletedSuccessfully(jobStatus)) {
+                console.log("Job completed successfully.");
+                return jobStatus;
+            } else {
+                console.log("Job not yet completed.");
+            }
+        } catch (error) {
+            console.error(`Attempt ${attempt}: Failed to get job status. Error: ${error}`);
+        }
+
+        if (progress) {
+            progress.report({
+                message: `Fetching Job status. Attempt ${attempt}.`,
+            });
+        }
+
+        if (maxPollingTimeMs !== undefined) {
+            const elapsedTime = Date.now() - startTime;
+            if (elapsedTime >= maxPollingTimeMs) {
+                console.warn("Maximum polling time exceeded.");
+                break;
+            }
+        }
+
+        // Adjust polling interval based on elapsed time.
+        // For the first 10 seconds, poll every 200 ms, then poll every 1 second.
+        const elapsedTime = Date.now() - startTime;
+        const delayMs = elapsedTime < 10000 ? 200 : 1000;
+        console.log(`Waiting ${delayMs} ms before next attempt...`);
+        await delay(delayMs);
+    }
+
+    return jobStatus;
 }
 
 // Function to get the Job ID
@@ -341,128 +370,6 @@ function handleError(error: unknown, projectKey: string, cycleKey: string): void
         throw error;
     }
 }
-/*
-// Extract the ZIP file to an output directory
-export async function extractZip(
-    zipFilePath: string,
-    outputDir: string,
-    extractOnlyJson = true // Optional parameter to extract only JSON files
-): Promise<void> {
-    try {
-        console.debug(`Starting extraction of ${zipFilePath} to ${outputDir}`);
-
-        // 1. Check if the ZIP file exists
-        if (!fs.existsSync(zipFilePath)) {
-            throw new Error(`ZIP file not found: ${zipFilePath}`);
-        }
-        console.debug(`ZIP file exists`);
-
-        // 2. Create the output directory if it doesn't exist
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-            console.debug(`Created output directory: ${outputDir}`);
-        } else {
-            console.debug(`Output directory already exists: ${outputDir}`);
-        }
-
-        // Flags to track user decisions for overwriting or skipping
-        let overwriteAll = false;
-        let skipAll = false;
-
-        // 3. Open the ZIP file as a read stream
-        const readStream = fs.createReadStream(zipFilePath);
-        console.debug(`Opened ZIP file stream`);
-
-        // 4. Parse the ZIP stream and handle entries
-        await new Promise<void>((resolve, reject) => {
-            readStream
-                .pipe(unzipper.Parse())
-                .on("entry", async (entry: unzipper.Entry) => {
-                    const extractedPath = path.join(outputDir, entry.path);
-                    const directoryPath = path.dirname(extractedPath);
-
-                    // 5. Check if the entry is a JSON file (if extractOnlyJson is true)
-                    if (extractOnlyJson && !entry.path.toLowerCase().endsWith(".json")) {
-                        console.debug(`Skipping non-JSON file: ${entry.path}`);
-                        entry.autodrain();
-                        return; // Skip this entry
-                    }
-
-                    if (entry.type === "Directory") {
-                        // 6. Create directories if encountered
-                        fs.mkdirSync(extractedPath, { recursive: true });
-                        console.debug(`Created directory: ${extractedPath}`);
-                        entry.autodrain();
-                    } else {
-                        // 7. Ensure the directory for the file exists before extracting
-                        if (!fs.existsSync(directoryPath)) {
-                            fs.mkdirSync(directoryPath, { recursive: true });
-                            console.debug(`Created directory for file: ${directoryPath}`);
-                        }
-
-                        // Check if the file already exists
-                        if (fs.existsSync(extractedPath)) {
-                            if (!overwriteAll && !skipAll) {
-                                // Prompt the user for overwrite or skip options
-                                // FIXME: Overwrite All and Skip All options are not working, prompt is shown for each file.
-                                const options = ["Overwrite", "Skip", "Overwrite All", "Skip All"];
-                                const result = await vscode.window.showWarningMessage(
-                                    `The file "${entry.path}" already exists. What would you like to do?`,
-                                    { modal: true }, // Modal dialog
-                                    ...options
-                                );
-
-                                // Handle the user's response and update flags accordingly
-                                switch (result) {
-                                    case "Overwrite":
-                                        await writeFile(entry, extractedPath);
-                                        break;
-                                    case "Skip":
-                                        console.debug(`Skipped file: ${extractedPath}`);
-                                        entry.autodrain();
-                                        break;
-                                    case "Overwrite All":
-                                        overwriteAll = true;
-                                        await writeFile(entry, extractedPath);
-                                        break;
-                                    case "Skip All":
-                                        skipAll = true;
-                                        console.debug(`Skipped file: ${extractedPath}`);
-                                        entry.autodrain();
-                                        break;
-                                    default: // Handle undefined result (e.g., if dialog is closed)
-                                        entry.autodrain();
-                                }
-                            } else if (overwriteAll) {
-                                // If user chose to overwrite all, directly overwrite
-                                await writeFile(entry, extractedPath);
-                            } else if (skipAll) {
-                                // If user chose to skip all, directly skip
-                                console.debug(`Skipped file: ${extractedPath}`);
-                                entry.autodrain();
-                            }
-                        } else {
-                            // Extract file if it doesn't exist
-                            await writeFile(entry, extractedPath);
-                        }
-                    }
-                })
-                .on("close", () => {
-                    console.debug(`Finished processing all entries`);
-                    resolve();
-                })
-                .on("error", (err) => {
-                    console.error(`Error parsing ZIP: ${err}`);
-                    reject(err);
-                });
-        });
-
-        console.debug(`Extraction completed successfully`);
-    } catch (err) {
-        console.error(`Extraction failed: ${err}`);
-        throw err;
-    }
-}*/
 
 // Extract the ZIP file to an output directory
 export async function extractZip(
@@ -830,7 +737,6 @@ export async function testBenchToRobotFramework(
     connection: PlayServerConnection
 ): Promise<void> {
     // Execution based or specification based request parameter
-    // TODO: Add a cancel button and dont continue if user clicks away?
     const executionBased = await selectExecutionOrSpecificationBased();
     console.log("executionBased value set to:", executionBased);
     if (executionBased === null) {
@@ -847,105 +753,103 @@ export async function testBenchToRobotFramework(
     vscode.window.showInformationMessage(`Started Test generation for Cycle key: ${cycleKey}`);
 
     // Show a progress bar while the process is running, since this process takes time
-    vscode.window.withProgress(
+    await vscode.window.withProgress(
         {
-            location: vscode.ProgressLocation.Notification, // You can also use ProgressLocation.Window or ProgressLocation.SourceControl
+            location: vscode.ProgressLocation.Notification,
             title: `Generating Tests for ${itemLabel} (Cycle key ${cycleKey})`,
-            cancellable: true, // Make it cancellable
+            cancellable: true,
         },
-        async (progress, token) => {
-            token.onCancellationRequested(() => {
-                console.log("Process cancelled.");
-            });
+        async (progress, cancellationToken) => {
+            try {
+                if (progress) {
+                    progress.report({
+                        increment: 10,
+                        message: `Fetching JSON Report from the server.`,
+                    });
+                }
 
-            // TODO: Adjust progress increments and messages
-            if (progress) {
-                progress.report({
-                    increment: 10,
-                    message: `Fetching JSON Report from the server.`,
-                });
-            }
+                // Fetch the ZIP file from the server, passing the cancellationToken
+                const downloadedZipFilePath = await fetchZipFile(
+                    connection,
+                    projectKey,
+                    cycleKey,
+                    progress,
+                    cycleStructureOptionsRequestParameter,
+                    cancellationToken // Pass the cancellationToken here
+                );
 
-            // Fetch the ZIP file from the server
-            const downloadedZipFilePath = await fetchZipFile(
-                connection,
-                projectKey,
-                cycleKey,
-                progress,
-                cycleStructureOptionsRequestParameter
-            );
+                if (!downloadedZipFilePath) {
+                    console.log("Download canceled or failed.");
+                    return; // Exit if the download was canceled or failed
+                }
 
-            if (progress) {
-                progress.report({
-                    increment: 10,
-                    message: `Extracting ZIP file.`,
-                });
-            }
+                if (progress) {
+                    progress.report({
+                        increment: 10,
+                        message: `Extracting ZIP file.`,
+                    });
+                }
 
-            if (downloadedZipFilePath) {
                 // Select the output folder to generate the test suites
-                const chosenOutputFolderForZipExtraction = await selectOutputFolder(); // "C:/VSCodeTestBench/GeneratedSuites";
+                const chosenOutputFolderForZipExtraction = await selectOutputFolder();
+                if (!chosenOutputFolderForZipExtraction) {
+                    vscode.window.showErrorMessage("No folder selected.");
+                    return;
+                }
 
-                if (chosenOutputFolderForZipExtraction) {
-                    vscode.window.showInformationMessage(
-                        `Selected output folder for zip extraction: ${chosenOutputFolderForZipExtraction}`
-                    );
+                vscode.window.showInformationMessage(
+                    `Selected output folder for zip extraction: ${chosenOutputFolderForZipExtraction}`
+                );
 
-                    // Configuration for the test suite generation
-                    const config: Configuration = {
-                        generationDirectory: chosenOutputFolderForZipExtraction,
-                        clearGenerationDirectory: true,
-                        createOutputZip: false,
-                        removeExtractedFiles: false, // Enable the removal of extracted files after processing
-                    };
+                // Configuration for the test suite generation
+                const config: Configuration = {
+                    generationDirectory: chosenOutputFolderForZipExtraction,
+                    clearGenerationDirectory: true,
+                    createOutputZip: false,
+                    removeExtractedFiles: false,
+                };
 
-                    // TODO: This creates a new directory inside the selected directory. Check if it is needed.
-                    const folderNameOfExtractedZip = `Extracted Files`;
-                    const zipExtractionFolderPath = path.join(
-                        chosenOutputFolderForZipExtraction,
-                        folderNameOfExtractedZip
-                    ); // This folder will contain the .json files
-                    const folderNameOfRobotFiles = `Generated Test Cases`;
-                    const robotFilesFolderPath = path.join(chosenOutputFolderForZipExtraction, folderNameOfRobotFiles); // This folder will contain the .robot files
+                // Paths for extracted files and generated test cases
+                const folderNameOfExtractedZip = `Extracted Files`;
+                const zipExtractionFolderPath = path.join(chosenOutputFolderForZipExtraction, folderNameOfExtractedZip);
+                const folderNameOfRobotFiles = `Generated Test Cases`;
+                const robotFilesFolderPath = path.join(chosenOutputFolderForZipExtraction, folderNameOfRobotFiles);
 
-                    // Extract ZIP file
-                    await extractZip(downloadedZipFilePath, zipExtractionFolderPath);
-                    console.log(`ZIP file extracted to: ${zipExtractionFolderPath}`);
+                // Extract ZIP file
+                await extractZip(downloadedZipFilePath, zipExtractionFolderPath);
+                console.log(`ZIP file extracted to: ${zipExtractionFolderPath}`);
 
+                if (progress) {
+                    progress.report({
+                        increment: 10,
+                        message: `Processing JSON files to create test cases.`,
+                    });
+                }
+
+                console.log(`Starting convertJSONsIntoTestCases with path: ${zipExtractionFolderPath}`);
+                await convertJSONsIntoTestCases(zipExtractionFolderPath, robotFilesFolderPath);
+
+                // Optional Step: Remove extracted files if configured
+                if (config.removeExtractedFiles) {
                     if (progress) {
                         progress.report({
                             increment: 10,
-                            message: `Processing JSON files to create test cases.`,
+                            message: `Removing extracted files.`,
                         });
                     }
-
-                    console.log(`Starting convertJSONsIntoTestCases with path: ${zipExtractionFolderPath}`); // Folder containing JSON files
-                    await convertJSONsIntoTestCases(zipExtractionFolderPath, robotFilesFolderPath);
-
-                    // Optional Step: Remove extracted files if configured
-                    if (config.removeExtractedFiles) {
-                        if (progress) {
-                            progress.report({
-                                increment: 10,
-                                message: `Removing extracted files.`,
-                            });
-                        }
-                        removeExtractedFiles(zipExtractionFolderPath);
-                    }
-
-                    vscode.window.showInformationMessage(`Test suite generation done.`);
-
-                    // You can check if the user canceled the task
-                    if (token.isCancellationRequested) {
-                        return "Canceled";
-                    }
-
-                    return "Completed!";
-                } else {
-                    vscode.window.showErrorMessage("No folder selected.");
+                    removeExtractedFiles(zipExtractionFolderPath);
                 }
-            } else {
-                console.log("Download canceled or failed.");
+
+                vscode.window.showInformationMessage(`Test suite generation done.`);
+            } catch (error: any) {
+                if (error instanceof vscode.CancellationError) {
+                    console.log("Process cancelled by the user.");
+                    vscode.window.showInformationMessage("Process cancelled by the user.");
+                } else {
+                    console.error("An error occurred:", error);
+                    vscode.window.showErrorMessage(`An error occurred: ${error.message || error}`);
+                }
+                return; // Exit the progress function
             }
         }
     );
@@ -1116,6 +1020,10 @@ function isValidTestJSON(jsonData: any): boolean {
 }
 
 // Converts JSON files in a directory to Robot Framework test cases
+// TODO: Rewrite this function after testbench2robotframework library is updated.
+// tb2robot --version
+// TestBench2RobotFramework 0.7.0 with [Robot Framework 7.1 (Python 3.12.6 on win32)]
+// tb2robot write -c .\Konfigurationsdatei.json E:\TestBench\report.zip
 async function convertJSONsIntoTestCases(
     folderPathOfJSONFiles: string,
     outputFolderOfTestSuites: string

@@ -93,8 +93,7 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
         if (projectKeyOfCycle) {
             const cycleData = await this.connection?.fetchCycleStructure(projectKeyOfCycle, cycleKey);
             if (cycleData) {
-
-                if (cycleData.nodes?.length === 0){
+                if (cycleData.nodes?.length === 0) {
                     console.log("Cycle has 0 sub elements.");
                     return Promise.resolve([]);
                 }
@@ -151,7 +150,7 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
             }
         }
 
-        return Promise.resolve([]); // Return an empty array if no data is found       
+        return Promise.resolve([]); // Return an empty array if no data is found
     }
 
     getTreeItem(element: TreeItem): vscode.TreeItem {
@@ -203,42 +202,35 @@ export class TreeItem extends vscode.TreeItem {
         /*
         if (contextValue === "cycle") {
             this.command = {
-                command: "testbenchExtension.generate", // Command to execute
-                title: "Generate",
-                arguments: [this], // Pass the tree item as an argument. Error: Circular reference
+                command: "testbenchExtension.generateTestCases", // Command to execute
+                title: "Generate Test Cases",
+                // arguments: [this], // Pass the tree item as an argument. Error: Circular reference
             };
-            this.tooltip = "Generate"; // Tooltip when hovering over the item
+            this.tooltip = "Generate Test Cases"; // Tooltip when hovering over the item
         }
         */
     }
 
-    // TODO: Replace icons with hight quality icons.
-    // TODO: Display the status of the element just like in test bench. Add missing icons for each status.
     // Get the path to the icon based on the context value and collapsible state
-    private getIconPath(
-        treeItem: TreeItem,
-        collapsibleState: vscode.TreeItemCollapsibleState
-    ): { light: string | vscode.Uri; dark: string | vscode.Uri } {
-        // Path to light theme and dark theme icons
-        const lightIconFolderPath = path.join(__dirname, "..", "resources", "icons", "light");
-        const darkIconFolderPath = path.join(__dirname, "..", "resources", "icons", "dark");
+    private getIconPath(treeItem: TreeItem, collapsibleState: vscode.TreeItemCollapsibleState): string | vscode.Uri {
+        const iconFolderPath = path.join(__dirname, "..", "resources", "icons");
 
         let iconName = "testbench-icon.svg";
         switch (treeItem.contextValue) {
             case "project":
-                // TODO: collapsibleState === vscode.TreeItemCollapsibleState.Collapsed can be used to change the icon based on the state
+                // TODO: Add the remaining icons for different statuses
                 switch (treeItem.item.status) {
                     case "active":
-                        iconName = "ProjectActive.png";
+                        iconName = "Project_B_Active.png";
                         break;
                     case "planned":
-                        iconName = "ProjectPlanned.png";
+                        iconName = "Project_B_Planned.png";
                         break;
                     case "finished":
-                        iconName = "ProjectBeendet.png";
+                        iconName = "Project_B_Finished.png";
                         break;
                     case "closed":
-                        iconName = "ProjectGeschlossen.png";
+                        iconName = "Project_B_Closed.png";
                         break;
                     default:
                         iconName = "Project.png";
@@ -247,60 +239,53 @@ export class TreeItem extends vscode.TreeItem {
             case "tov":
                 switch (treeItem.item.status) {
                     case "active":
-                        iconName = "TOVActive.png";
+                        iconName = "Testobject_B_Active.png";
                         break;
                     case "planned":
-                        iconName = "TOVPlanned.png";
+                        iconName = "Testobject_B_Planned.png";
                         break;
                     case "finished":
-                        iconName = "TOVBeendet.png";
+                        iconName = "Testobject_B_Finished.png";
                         break;
                     case "closed":
-                        iconName = "TOVGeschlossen.png";
+                        iconName = "Testobject_B_Closed.png";
                         break;
                     default:
-                        iconName = "TOV.png";
+                        iconName = "Testobject.png";
                 }
                 break;
             case "cycle":
                 switch (treeItem.item.status) {
                     case "active":
-                        iconName = "CycleActive.png";
+                        iconName = "TestCycle_Active.png";
                         break;
                     case "planned":
-                        iconName = "CyclePlanned.png";
+                        iconName = "TestCycle_Planned.png";
                         break;
                     case "finished":
-                        iconName = "CycleBeendet.png";
+                        iconName = "TestCycle_Finished.png";
                         break;
                     case "closed":
-                        iconName = "CycleGeschlossen.png";
+                        iconName = "TestCycle_Closed.png";
                         break;
                     default:
-                        iconName = "Cycle.png";
+                        iconName = "TestCycle.png";
                 }
                 break;
             case "TestTheme":
-                iconName =
-                    collapsibleState === vscode.TreeItemCollapsibleState.Collapsed ? "TestTheme.png" : "TestTheme.png";
+                iconName = "Testtheme_B.png";
                 break;
             case "TestCaseSet":
-                iconName =
-                    collapsibleState === vscode.TreeItemCollapsibleState.Collapsed
-                        ? "TestCaseSet.png"
-                        : "TestCaseSet.png";
+                iconName = "TestCaseSet_B.png";
                 break;
             case "TestCase":
                 iconName = "TestCase.png";
                 break;
             default:
-                iconName = "file.svg";
+                iconName = "iTB-EE-Logo-22x20.png";
         }
 
-        return {
-            light: path.join(lightIconFolderPath, iconName),
-            dark: path.join(darkIconFolderPath, iconName),
-        };
+        return path.join(iconFolderPath, iconName);
     }
 
     updateIcon(collapsibleState: vscode.TreeItemCollapsibleState): void {
