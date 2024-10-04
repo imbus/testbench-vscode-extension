@@ -10,9 +10,12 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
 
     private connection: PlayServerConnection | null = null;
     private rootItem: TreeItem | null = null;
+    projectKey: string | null = null; // TODO: Temporary solution for new play server, delete later?
+    useNewPlayServer: boolean = false; // Temporary flag to switch between old and new play server
 
-    constructor(connection: PlayServerConnection | null) {
+    constructor(connection: PlayServerConnection | null, projectKey?: string) {
         this.connection = connection;
+        this.projectKey = projectKey ?? null;
     }
 
     refresh(): void {
@@ -23,6 +26,55 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
         return element.parent ?? null;
     }
 
+    // getChildren for the new play server
+    async getChildrenOfNewPlayServer(element?: TreeItem): Promise<TreeItem[]> {
+        // console.log("getChildren called with element:", element);
+
+        const projectTreeOfNewPlayServer = await this.connection!.getProjectTreeOfProject(`${this.projectKey}`);
+
+        if (!element) {
+            // No parent element provided, return the root project (single selected project)
+            return Promise.resolve([this.createTreeItemForNewPlayServer(true, projectTreeOfNewPlayServer, null)]);
+        }
+
+        if (element.contextValue === "project") {
+            // Return Test Object Versions (children of the project)
+            return Promise.resolve(
+                projectTreeOfNewPlayServer!.children!.map((tov: any) =>
+                    this.createTreeItemForNewPlayServer(false, tov, element)
+                )
+            );
+        }
+
+        if (element.contextValue === "version") {
+            // Return Test Cycles (children of a version)
+            return Promise.resolve(
+                element.item.children!.map((cycle: any) => this.createTreeItemForNewPlayServer(false, cycle, element))
+            );
+        }
+
+        if (element.contextValue === "cycle") {
+            // If the element is a cycle, load its sub-elements
+            console.log(`getChildren cycle element: ${element.label}`);
+            return await this.getCycleSubElements(element);
+        }
+
+        return Promise.resolve([]);
+    }
+
+    createTreeItemForNewPlayServer(isRoot: boolean, data: any, element: TreeItem | null): TreeItem {
+        let collapsibleState = vscode.TreeItemCollapsibleState.None;
+        if (data.children && data.children.length > 0) {
+            collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        }
+        const treeItem = new TreeItem(data.name, data.nodeType.toLowerCase(), collapsibleState, data);
+        treeItem.contextValue = data.nodeType.toLowerCase(); // project, version, cycle
+        treeItem.item = data;
+        treeItem.parent = isRoot ? null : element ?? null; // Set parent for each non-root item
+        return treeItem;
+    }
+
+    // TODO: Replace the getChildren for the old play server with new play server implementation
     async getChildren(element?: TreeItem): Promise<TreeItem[]> {
         console.log(`getChildren called with element: ${element?.label}`);
         if (!this.connection) {
@@ -30,65 +82,90 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
             return [];
         }
 
-        if (!element) {
-            if (this.rootItem) {
-                // If a root item is set, return its children
-                return this.getChildren(this.rootItem);
-            }
+        if (this.useNewPlayServer) {
+            return this.getChildrenOfNewPlayServer(element);
+        } else {
+            // If no element is passed, return the root elements which are projects
+            if (!element) {
+                if (this.rootItem) {
+                    // If a root item is set, return its children
+                    return this.getChildren(this.rootItem);
+                }
 
-            // Get projects, which are the top level elements
-            const projects = await this.connection.getAllProjects();
-            // Create tree items for each project
-            return projects.map((project) => {
-                const treeItem = new TreeItem(
-                    project.name,
-                    "project",
-                    vscode.TreeItemCollapsibleState.Collapsed,
-                    project
-                );
-                treeItem.parent = null; // Root elements have no parent
-                return treeItem;
-            });
-        } else if (element && element.children) {
-            // TODO : Test for test cycle sub hierarchy
-            // If the element has children, return them directly
-            return element.children;
-        } else if (element.contextValue === "project") {
-            // Get TOVs for the selected project
-            const tovItems = element.item.testObjectVersions || [];
-            // Create tree items for each TOV
-            return tovItems.map((tov: { name: string }) => {
-                const treeItem = new TreeItem(tov.name, "tov", vscode.TreeItemCollapsibleState.Collapsed, tov);
-                treeItem.parent = element; // Set parent for each TOV item
-                return treeItem;
-            });
-        } else if (element.contextValue === "tov") {
-            // Get test cycles for the selected TOV
-            const cycleItems = element.item.testCycles || [];
-            // Create tree items for each cycle
-            return cycleItems.map((cycle: { name: string }) => {
-                const treeItem = new TreeItem(cycle.name, "cycle", vscode.TreeItemCollapsibleState.Collapsed, cycle);
-                treeItem.parent = element; // Set parent for each cycle item
-                return treeItem;
-            });
-        } else if (element.contextValue === "cycle") {
-            // If the element is a cycle, load its sub-elements
-            console.log(`getChildren cycle element: ${element.label}`);
-            return await this.getCycleSubElements(element);
+                const projectsOldPlayServer = await this.connection.getAllProjectsFromOldPlayServer(); // Original old play server code
+                // Create tree items for each project
+                return projectsOldPlayServer.map((project) => {
+                    const treeItem = new TreeItem(
+                        project.name,
+                        "project",
+                        vscode.TreeItemCollapsibleState.Collapsed,
+                        project
+                    );
+                    treeItem.parent = null; // Root elements have no parent
+                    return treeItem;
+                });
+            } else if (element && element.children) {
+                // If the element has children, return them directly
+                return element.children;
+            } else if (element.contextValue === "project") {
+                // Get TOVs for the selected project
+                const tovItems = element.item.testObjectVersions || [];
+                // Create tree items for each TOV
+                return tovItems.map((tov: { name: string }) => {
+                    const treeItem = new TreeItem(tov.name, "tov", vscode.TreeItemCollapsibleState.Collapsed, tov);
+                    treeItem.parent = element; // Set parent for each TOV item
+                    return treeItem;
+                });
+            } else if (element.contextValue === "tov") {
+                // Get test cycles for the selected TOV
+                const cycleItems = element.item.testCycles || [];
+                // Create tree items for each cycle
+                return cycleItems.map((cycle: { name: string }) => {
+                    const treeItem = new TreeItem(
+                        cycle.name,
+                        "cycle",
+                        vscode.TreeItemCollapsibleState.Collapsed,
+                        cycle
+                    );
+                    treeItem.parent = element; // Set parent for each cycle item
+                    return treeItem;
+                });
+            } else if (element.contextValue === "cycle") {
+                // If the element is a cycle, load its sub-elements
+                console.log(`getChildren cycle element: ${element.label}`);
+                return await this.getCycleSubElements(element);
+            }
+            return [];
         }
-        return [];
     }
 
     // Fetch cycle structure and build the element tree hierarchy using the numbering field of the elements
     private async getCycleSubElements(element: TreeItem): Promise<Thenable<TreeItem[]>> {
         // Get the key of the cycle
-        const cycleKey = element.item.key.serial;
-        // TODO: parent.parent is used to find the project of a cycle, which could be problematic if more test object versios are in the hierarchy in between
-        const projectKeyOfCycle = element.parent?.parent?.item?.key?.serial;
+        const cycleKey = element.item.key.serial ?? element.item.key; // TODO: Workaround to have both old and new play servers, delete key.serial later
 
-        console.log("Cycle element: ", element);
-        console.log("Cycle element Parent Project: ", element.parent?.parent);
-        console.log("Cycle element Project key: ", projectKeyOfCycle);
+        // Function to find the serial key of the project of a cycle element in the tree hierarchy
+        function findProjectKeyOfCycle(element: TreeItem): string | undefined {
+            console.log("findProjectKeyOfCycle called with element:", element);
+            let currentElement: TreeItem | null = element;
+            while (currentElement) {
+                // Check if the current element is a project, if yes, return its key
+                if (currentElement.contextValue === "project") {
+                    return currentElement.item.key.serial ?? currentElement.item.key; // TODO: Workaround to have both old and new play servers, delete key.serial later
+                }
+                currentElement = currentElement.parent ?? null; // Move to the parent element
+                console.log("currentElement after going upwards to parent:", currentElement);
+            }
+            return undefined;
+        }
+        const projectKeyOfCycle = findProjectKeyOfCycle(element);
+        if (!projectKeyOfCycle) {
+            console.error("Project key of cycle not found.");
+            return Promise.resolve([]);
+        }
+
+        // console.log("Cycle element: ", element);
+        // console.log("Cycle element Project key: ", projectKeyOfCycle);
 
         if (projectKeyOfCycle) {
             const cycleData = await this.connection?.fetchCycleStructure(projectKeyOfCycle, cycleKey);
@@ -105,26 +182,20 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
                     elementsByNumbering[data.base.numbering] = data;
                 });
 
-                // Recursively build tree structure by constructing a hierarchical tree structure from a flat collection of elements
-                // Track elements already added to avoid duplicates in the tree with addedElements variable
-                function buildTree(numberingPrefix: string, addedElements: Set<string> = new Set()): TreeItem[] {
-                    const children: TreeItem[] = []; // Current level's child elements
-
-                    for (const numbering in elementsByNumbering) {
-                        if (
-                            numbering.startsWith(numberingPrefix) && // Ensure the element is in the current hierarchy level
-                            numbering.length > numberingPrefix.length && // Ensure the element is not the same as the parent
-                            !addedElements.has(numbering) // Check if the element has not already been added
-                        ) {
-                            addedElements.add(numbering); // Mark the element as added to skip it and avoid duplicates
-
-                            const data = elementsByNumbering[numbering];
-                            const nextLevelPrefix = numbering + "."; // Prefix for the next level of hierarchy
-                            // Check if any element's numbering starts with nextLevelPrefix, so see the current element has childs
-                            const hasChildren = Object.keys(elementsByNumbering).some((num) =>
-                                num.startsWith(nextLevelPrefix)
+                // Recursively build tree structure using the parentKey property
+                function buildTree(parentKey: string): TreeItem[] {
+                    // Store the child elements of the current parent element being processed.
+                    const children: TreeItem[] = [];
+                    for (const key in elementsByNumbering) {
+                        const data = elementsByNumbering[key];
+                        // Check if the current element's parentKey matches the given parentKey
+                        if (data.base.parentKey === parentKey) {
+                            // Check if the current element has any children
+                            const hasChildren = Object.keys(elementsByNumbering).some(
+                                (num) => data.base.key === elementsByNumbering[num].base.parentKey
                             );
 
+                            // Create a new TreeItem for the current element
                             const treeItem = new TreeItem(
                                 `${data.base.numbering} (${data.elementType}) ${data.base.name} ${data.base.uniqueID}`, // Label
                                 `${data.elementType}`, // Context value
@@ -136,17 +207,19 @@ export class TestBenchTreeDataProvider implements vscode.TreeDataProvider<TreeIt
 
                             // Process the child elements recursively
                             if (hasChildren) {
-                                treeItem.children = buildTree(nextLevelPrefix, addedElements);
+                                treeItem.children = buildTree(data.base.key);
                             }
 
+                            // Add the TreeItem to the children array
                             children.push(treeItem);
                         }
                     }
-
                     return children;
                 }
 
-                return Promise.resolve(buildTree("")); // Start building the tree from the root
+                // Get the root element
+                const rootKey = cycleData.root.base.key;
+                return Promise.resolve(buildTree(rootKey));
             }
         }
 
@@ -188,9 +261,9 @@ export class TreeItem extends vscode.TreeItem {
 
     constructor(
         public readonly label: string,
-        public readonly contextValue: string, // The type of the tree item (Project, TOV, Cycle etc.)
+        public contextValue: string, // The type of the tree item (Project, TOV, Cycle etc.)
         public collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly item: any
+        public item: any
     ) {
         super(label, collapsibleState);
         this.contextValue = contextValue;
@@ -219,7 +292,7 @@ export class TreeItem extends vscode.TreeItem {
         switch (treeItem.contextValue) {
             case "project":
                 // TODO: Add the remaining icons for different statuses
-                switch (treeItem.item.status) {
+                switch (treeItem.item.status.toLowerCase()) {
                     case "active":
                         iconName = "Project_B_Active.png";
                         break;
@@ -237,7 +310,8 @@ export class TreeItem extends vscode.TreeItem {
                 }
                 break;
             case "tov":
-                switch (treeItem.item.status) {
+            case "version":
+                switch (treeItem.item.status.toLowerCase()) {
                     case "active":
                         iconName = "Testobject_B_Active.png";
                         break;
@@ -255,7 +329,7 @@ export class TreeItem extends vscode.TreeItem {
                 }
                 break;
             case "cycle":
-                switch (treeItem.item.status) {
+                switch (treeItem.item.status.toLowerCase()) {
                     case "active":
                         iconName = "TestCycle_Active.png";
                         break;
@@ -325,27 +399,6 @@ export async function initializeTreeView(
     treeView.onDidCollapseElement((e) => {
         treeDataProvider.handleExpansion(e.element, false);
     });
-
-    /*
-    // TODO: Collapse all tree elements recursively when the tree view is created, this would fix the icon issue after resfreshing the tree view
-    async function collapseAllElements(element: TreeItem) {
-        treeDataProvider.handleExpansion(element, false); // Collapse the current element
-        const children = await treeDataProvider.getChildren(element); // Get children of the element
-        if (children) {
-            for (const child of children) {
-                await collapseAllElements(child); // Recursively collapse all child elements
-            }
-        }
-    }
-
-    // Collapse all root elements and their children recursively        
-    const rootElements = await treeDataProvider.getChildren();
-    if (rootElements) {
-        for (const rootElement of rootElements) {
-            await collapseAllElements(rootElement); // Start recursion from root elements
-        }
-    }
-    */
 
     treeDataProvider.refresh();
     context.subscriptions.push(treeView);

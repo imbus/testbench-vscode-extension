@@ -6,6 +6,7 @@ import { TestBenchTreeDataProvider, initializeTreeView } from "./treeView";
 
 export function activate(context: vscode.ExtensionContext) {
     // TODO: Add a new command to clear stored login data? (logout doesnt do that)
+    // TODO: WebViev UI for login?
 
     const baseKey = "testbenchExtension";
     const commands = {
@@ -20,6 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
         getCycleStructure: `${baseKey}.getCycleStructure`,
         getServerVersions: `${baseKey}.getServerVersions`,
         showExtensionSettings: `${baseKey}.showExtensionSettings`,
+        getProjectList: `${baseKey}.getProjectList`, // TODO: Delete after testing
     };
 
     interface ReportGenerationConfiguration {
@@ -32,9 +34,8 @@ export function activate(context: vscode.ExtensionContext) {
     // Variables to hold configuration settings
     let serverName: string;
     let portNumber: number;
-    let username: string;
-    let password: string;
-    let downloadReportLocation: string;
+    let username: string | undefined; // Username has not default value in package.json
+    let workspaceLocation: string | undefined;
     let reportGenerationConfig: ReportGenerationConfiguration;
 
     // Initialize or update configuration settings
@@ -43,9 +44,8 @@ export function activate(context: vscode.ExtensionContext) {
 
         serverName = config.get<string>("serverName", "testbench");
         portNumber = config.get<number>("portNumber", 9445);
-        username = config.get<string>("username", "");
-        password = config.get<string>("password", "");
-        downloadReportLocation = config.get<string>("downloadReportLocation", "");
+        username = config.get<string>("username");
+        workspaceLocation = config.get<string>("workspaceLocation");
         reportGenerationConfig = config.get<ReportGenerationConfiguration>("reportGenerationConfig", {
             generationDirectory: "",
             clearGenerationDirectory: true,
@@ -62,6 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (e.affectsConfiguration(baseKey)) {
             // Reload and apply configuration settings
             loadConfiguration();
+            console.log(`Configuration changed!`);
         }
     });
     context.subscriptions.push(configChangeDisposable);
@@ -71,11 +72,12 @@ export function activate(context: vscode.ExtensionContext) {
         // Open the settings UI of the extension inside the settings editor
         vscode.commands.executeCommand("workbench.action.openSettings2", {
             query: "@ext:imbus.testbench-visual-studio-code-extension",
+            /*
             revealSetting: {
                 key: `${baseKey}`, // Add the setting key with.settingsName if you want to open a specific setting
                 edit: true, // Set to true to focus on the edit control
-            },
-        });
+            },*/            
+        });       
     });
     context.subscriptions.push(showExtensionSettingsDisposable);
 
@@ -85,7 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
     let treeDataProvider: TestBenchTreeDataProvider | null = null;
 
     let loginDisposable = vscode.commands.registerCommand(commands.login, async () => {
-        connection = await performLogin(context);
+        connection = await performLogin(context, baseKey);
         if (!connection) {
             return;
         }
@@ -106,15 +108,12 @@ export function activate(context: vscode.ExtensionContext) {
                     "Logout",
                     "Change connection",
                     "Show Extension Settings",
+                    "(DRAFT) Get Project List",
                     "Display Test Theme Tree",
                     "Cancel",
                 ];
             } else {
-                commandMenuOptions = [
-                    "Login",
-                    "Show Extension Settings",
-                    "Cancel",
-                ];
+                commandMenuOptions = ["Login", "Show Extension Settings", "Cancel"];
             }
 
             const nextAction = await vscode.window.showQuickPick(commandMenuOptions, {
@@ -130,6 +129,9 @@ export function activate(context: vscode.ExtensionContext) {
                     break;
                 case "Show Extension Settings":
                     vscode.commands.executeCommand(commands.showExtensionSettings);
+                    break;
+                case "(DRAFT) Get Project List":
+                    vscode.commands.executeCommand(commands.getProjectList);
                     break;
                 case "Change connection":
                     vscode.commands.executeCommand(commands.changeConnection);
@@ -165,7 +167,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Register the "Change Connection" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.changeConnection, async () => {
-            let { newConnection, newTreeDataProvider } = await changeConnection(context, connection!);
+            let { newConnection, newTreeDataProvider } = await changeConnection(context, baseKey, connection!);
             if (newConnection) {
                 connection = newConnection; // Update the connection
                 if (treeDataProvider) {
@@ -183,7 +185,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.generateTestCases, async (item: TreeItem) => {
             if (connection) {
-                jsonReportHandler.startTestGenerationProcess(item, connection);
+                jsonReportHandler.startTestGenerationProcess(item, connection, baseKey);
             } else {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
             }
@@ -195,6 +197,30 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand(commands.makeRoot, (treeItem: TreeItem) => {
             if (treeDataProvider) {
                 makeRoot(treeItem, treeDataProvider);
+            }
+        })
+    );
+
+    // TESTING NEW PLAY SERVER PROJECT LIST
+    context.subscriptions.push(
+        vscode.commands.registerCommand(commands.getProjectList, async () => {
+            if (connection) {
+                const projectList = await connection.getProjectList();
+
+                if (!projectList){
+                    vscode.window.showErrorMessage("No projects found..");
+                    return;
+                }
+
+                const selectedProjectKey = await connection.selectProjectKeyFromProjectList(projectList);
+                console.log("Selected project key:", selectedProjectKey);
+                // const projectTree = await connection.getProjectTreeOfProject(`${selectedProjectKey}`);
+                treeDataProvider = new TestBenchTreeDataProvider(connection, selectedProjectKey!);
+                treeDataProvider.useNewPlayServer = true;
+                vscode.window.createTreeView("testBenchProjects", { treeDataProvider });
+                //const treeDataProvider = new TestBenchTreeDataProvider(connection);
+                //vscode.window.createTreeView('testBenchProjects', { treeDataProvider });
+                // treeDataProvider.useNewPlayServer = false;
             }
         })
     );

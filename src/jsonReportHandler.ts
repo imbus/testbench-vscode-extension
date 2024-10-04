@@ -141,6 +141,7 @@ function isJobCompletedSuccessfully(jobStatus: JobStatusResponse): boolean {
 // 3. Download the report zip file.
 export async function fetchZipFile(
     connection: PlayServerConnection,
+    baseKey: string,
     projectKey: string,
     cycleKey: string,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
@@ -164,7 +165,7 @@ export async function fetchZipFile(
         const fileName = jobStatus.completion.result.Success!.reportName;
         console.log(`Report name: ${fileName}`);
 
-        const outputPath = await downloadReport(connection, projectKey, fileName);
+        const outputPath = await downloadReport(connection, baseKey, projectKey, fileName);
         if (outputPath) {
             console.log(`Report downloaded and saved to: ${outputPath}`);
             return outputPath;
@@ -191,7 +192,7 @@ async function pollJobStatus(
     cancellationToken?: vscode.CancellationToken,
     maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
 ): Promise<JobStatusResponse | null> {
-    const startTime = Date.now();
+    const startTime = Date.now();  // Start time for the polling to adjust the polling interval after 10 seconds
     let attempt = 0;
     let jobStatus: JobStatusResponse | null = null;
 
@@ -206,13 +207,13 @@ async function pollJobStatus(
 
         try {
             jobStatus = await getJobStatus(connection, projectKey, jobId);
-            console.log(`Attempt ${attempt}: Job Status fetched successfully.`);
+            console.log(`Attempt ${attempt}: Job Status fetched.`);
 
             if (isJobCompletedSuccessfully(jobStatus)) {
                 console.log("Job completed successfully.");
                 return jobStatus;
             } else {
-                console.log("Job not yet completed.");
+                // console.log("Job not yet completed.");
             }
         } catch (error) {
             console.error(`Attempt ${attempt}: Failed to get job status. Error: ${error}`);
@@ -224,10 +225,11 @@ async function pollJobStatus(
             });
         }
 
+        // (Optional) Check if the maximum polling time has been exceeded.
         if (maxPollingTimeMs !== undefined) {
             const elapsedTime = Date.now() - startTime;
             if (elapsedTime >= maxPollingTimeMs) {
-                console.warn("Maximum polling time exceeded.");
+                console.warn("Maximum polling time exceeded. Aborting job status polling.");
                 break;
             }
         }
@@ -236,7 +238,7 @@ async function pollJobStatus(
         // For the first 10 seconds, poll every 200 ms, then poll every 1 second.
         const elapsedTime = Date.now() - startTime;
         const delayMs = elapsedTime < 10000 ? 200 : 1000;
-        console.log(`Waiting ${delayMs} ms before next attempt...`);
+        // console.log(`Waiting ${delayMs} ms before next attempt...`);
         await delay(delayMs);
     }
 
@@ -279,7 +281,7 @@ async function getJobStatus(
 ): Promise<JobStatusResponse> {
     const url = `${connection.newPlayServerBaseUrl}/projects/${projectKey}/report/job/${jobId}/v1`;
 
-    console.log(`Sending request to check job status for job ID ${jobId} to URL ${url}.`);
+    console.log(`Checking job status: ${url}`);
 
     const jobStatusResponse: AxiosResponse<JobStatusResponse> = await axios.get(url, {
         headers: {
@@ -298,6 +300,7 @@ async function getJobStatus(
 // Function to download the report zip file
 async function downloadReport(
     connection: PlayServerConnection,
+    baseKey: string,
     projectKey: string,
     fileName: string
 ): Promise<string | undefined> {
@@ -318,6 +321,33 @@ async function downloadReport(
     }
 
     // Select the output directory to save the report
+    const config = vscode.workspace.getConfiguration(baseKey);
+    const workspaceLocation = config.get<string>("workspaceLocation");
+
+    if (workspaceLocation) {
+        if (fs.existsSync(workspaceLocation)) {
+            console.log(`Using configuration as download location: ${workspaceLocation}`);
+            async function saveReportToFile(
+                downloadZipResponse: AxiosResponse<any>,
+                workspaceLocation: string,
+                fileName: string
+            ): Promise<string | undefined> {
+                const uri = vscode.Uri.file(path.join(workspaceLocation, fileName));
+                return vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadZipResponse.data)).then(() => {
+                    vscode.window.showInformationMessage(`Report downloaded successfully to ${uri.fsPath}`);
+                    return uri.fsPath;
+                });
+            }
+
+            return await saveReportToFile(downloadZipResponse, workspaceLocation, fileName);
+        } else {
+            console.error(`The configured download location does not exist: ${workspaceLocation}`);
+            vscode.window.showErrorMessage(`The configured workspace location does not exist: ${workspaceLocation}`);
+        }
+    }
+
+    console.log(`Using download location manually selected by the user.`);
+
     const uri = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file(fileName),
         filters: { "Zip Files": ["zip"] },
@@ -356,7 +386,7 @@ async function downloadReport(
 
 // Utility function for adding delay
 function delay(ms: number): Promise<void> {
-    console.log(`Waiting for ${ms} milliseconds for Job completion.`);
+    // console.log(`Waiting for ${ms} milliseconds for Job completion.`);
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -711,7 +741,19 @@ function removeExtractedFiles(extractDir: string): void {
 }
 
 // Select an output folder inside VS Code
-async function selectOutputFolder(): Promise<string | undefined> {
+async function selectOutputFolder(baseKey: string): Promise<string | undefined> {
+    const config = vscode.workspace.getConfiguration(baseKey);
+    let workspaceLocation = config.get<string>("workspaceLocation");
+    if (workspaceLocation) {
+        if (fs.existsSync(workspaceLocation)) {
+            console.log(`Using configuration as output folder: ${workspaceLocation}`);
+            return workspaceLocation;
+        } else {
+            console.error(`The configured output folder does not exist: ${workspaceLocation}`);
+            vscode.window.showErrorMessage(`The configured output folder does not exist: ${workspaceLocation}`);
+        }
+    }
+
     // Show a dialog to select a folder
     const folderUri = await vscode.window.showOpenDialog({
         canSelectFiles: false, // Only allow folder selection
@@ -732,6 +774,7 @@ async function selectOutputFolder(): Promise<string | undefined> {
 // Main function to handle the process
 export async function testBenchToRobotFramework(
     itemLabel: string,
+    baseKey: string,
     projectKey: string,
     cycleKey: string,
     connection: PlayServerConnection
@@ -771,6 +814,7 @@ export async function testBenchToRobotFramework(
                 // Fetch the ZIP file from the server, passing the cancellationToken
                 const downloadedZipFilePath = await fetchZipFile(
                     connection,
+                    baseKey,
                     projectKey,
                     cycleKey,
                     progress,
@@ -791,7 +835,7 @@ export async function testBenchToRobotFramework(
                 }
 
                 // Select the output folder to generate the test suites
-                const chosenOutputFolderForZipExtraction = await selectOutputFolder();
+                const chosenOutputFolderForZipExtraction = await selectOutputFolder(baseKey);
                 if (!chosenOutputFolderForZipExtraction) {
                     vscode.window.showErrorMessage("No folder selected.");
                     return;
@@ -802,6 +846,7 @@ export async function testBenchToRobotFramework(
                 );
 
                 // Configuration for the test suite generation
+                // TODO: Use the extension settings for this object
                 const config: Configuration = {
                     generationDirectory: chosenOutputFolderForZipExtraction,
                     clearGenerationDirectory: true,
@@ -856,18 +901,37 @@ export async function testBenchToRobotFramework(
 }
 
 // Entry point for the test generation process
-export async function startTestGenerationProcess(item: TreeItem, connection: PlayServerConnection) {
+export async function startTestGenerationProcess(treeItem: TreeItem, connection: PlayServerConnection, baseKey: string) {
     // Check if the cycle key is available
-    if (item?.item?.key?.serial) {
-        const cycleKey = item.item.key.serial;
+    const cycleKey = treeItem.item.key.serial ?? treeItem.item.key;  // TODO: Workaround to have both old and new play servers, delete key.serial later
+    if (cycleKey) {
 
-        // TODO: parent.parent is used to find the project of a cycle, which could be problematic if more test object versios are in the hierarchy in between
-        const projectKeyOfCycle = item.parent?.parent?.item?.key?.serial;
+        // TODO: Code duplication, also needed in treeView.ts
+        // Function to find the serial key of the project of a cycle element in the tree hierarchy
+        function findProjectKeyOfCycle(element: TreeItem): string | undefined {
+            console.log("findProjectKeyOfCycle called with element:", element);
+            let currentElement: TreeItem | null = element;
+            while (currentElement) {
+                // Check if the current element is a project, if yes, return its key
+                if (currentElement.contextValue === "project") {
+                    return currentElement.item.key.serial ?? currentElement.item.key;  // TODO: Workaround to have both old and new play servers, delete key.serial later
+                }
+                currentElement = currentElement.parent ?? null; // Move to the parent element
+                console.log("currentElement after going upwards to parent:", currentElement);
+            }
+            return undefined;
+        }
+        const projectKeyOfCycle = findProjectKeyOfCycle(treeItem);
+        if (!projectKeyOfCycle) {
+            console.error("Project key of cycle not found.");
+            return Promise.resolve([]);
+        }
+
         if (projectKeyOfCycle) {
             // Check if the user is logged in
             if (connection) {
                 // Start the generation process
-                testBenchToRobotFramework(item.label, projectKeyOfCycle, cycleKey, connection);
+                testBenchToRobotFramework(treeItem.label, baseKey, projectKeyOfCycle, cycleKey, connection);
             } else {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
             }
@@ -970,7 +1034,6 @@ function generateSettingsSection(jsonData: string): string {
     let settings = "*** Settings ***\n";
 
     /*
-    TODO: Current JSON file structre does not contain the (all the) required fields for the creation of settings section.
     // Add Metadata (uniqueID, version, status)
     settings += `Metadata    UniqueID    ${testCase.uniqueID}\n`;
     if (testCase.spec.version) {

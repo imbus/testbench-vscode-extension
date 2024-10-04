@@ -30,22 +30,13 @@
                 },
                 "testbenchExtension.username": {
                     "type": "string",
-                    "default": "",
                     "description": "Username of the user for the TestBench server.",
                     "order": 3
                 },
-                "testbenchExtension.password": {
+                "testbenchExtension.workspaceLocation": {
                     "type": "string",
-                    "default": "",
-                    "description": "Password of the user for the TestBench server.",
-                    "format": "password",
+                    "description": "Workspace location.",
                     "order": 4
-                },
-                "testbenchExtension.downloadReportLocation": {
-                    "type": "string",
-                    "default": "",
-                    "description": "Download location for the report file.",
-                    "order": 5
                 },
                 "testbenchExtension.reportGenerationConfig": {
                     "type": "object",
@@ -77,7 +68,7 @@
                             "default": false,
                             "description": "Remove extracted files after processing."
                         },
-                        "order": 6
+                        "order": 5
                     }
                 }
             }
@@ -130,6 +121,10 @@
             {
                 "command": "testbenchExtension.showExtensionSettings",
                 "title": "TestBench: Show Extension Settings"
+            },
+            {
+                "command": "testbenchExtension.getProjectList",
+                "title": "TestBench: Get Project List"
             }
         ],
         "views": {
