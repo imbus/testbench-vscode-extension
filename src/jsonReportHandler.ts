@@ -5,7 +5,7 @@ import * as unzipper from "unzipper"; // npm install unzipper
 import * as cheerio from "cheerio"; // To parse HTML  npm install --save-dev @types/cheerio
 import axios, { AxiosResponse } from "axios";
 import { PlayServerConnection } from "./testbenchConnection";
-import { TreeItem } from "./treeView";
+import { TestThemeTreeItem } from "./testThemeTreeView";
 
 // Configuration interface
 export interface Configuration {
@@ -137,7 +137,7 @@ function isJobCompletedSuccessfully(jobStatus: JobStatusResponse): boolean {
 // Fetch the TestBench JSON report from the server (ZIP Archive).
 // 3 Calls are needed to download the zip report:
 // 1. Get the job ID
-// 2. Get the job status
+// 2. Get the job status (polling until the job is completed)
 // 3. Download the report zip file.
 export async function fetchZipFile(
     connection: PlayServerConnection,
@@ -192,7 +192,7 @@ async function pollJobStatus(
     cancellationToken?: vscode.CancellationToken,
     maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
 ): Promise<JobStatusResponse | null> {
-    const startTime = Date.now();  // Start time for the polling to adjust the polling interval after 10 seconds
+    const startTime = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
     let attempt = 0;
     let jobStatus: JobStatusResponse | null = null;
 
@@ -238,14 +238,14 @@ async function pollJobStatus(
         // For the first 10 seconds, poll every 200 ms, then poll every 1 second.
         const elapsedTime = Date.now() - startTime;
         const delayMs = elapsedTime < 10000 ? 200 : 1000;
-        // console.log(`Waiting ${delayMs} ms before next attempt...`);
+        // console.log(`Waiting ${delayMs} ms before next attempt.`);
         await delay(delayMs);
     }
 
     return jobStatus;
 }
 
-// Function to get the Job ID
+// Get the job ID from server
 async function getJobId(
     connection: PlayServerConnection,
     projectKey: string,
@@ -273,7 +273,7 @@ async function getJobId(
     return jobIdResponse.data.jobID;
 }
 
-// Function to get the Job Status
+// Get the job status from server
 async function getJobStatus(
     connection: PlayServerConnection,
     projectKey: string,
@@ -297,7 +297,7 @@ async function getJobStatus(
     return jobStatusResponse.data;
 }
 
-// Function to download the report zip file
+// Download the report zip file
 async function downloadReport(
     connection: PlayServerConnection,
     baseKey: string,
@@ -901,20 +901,23 @@ export async function testBenchToRobotFramework(
 }
 
 // Entry point for the test generation process
-export async function startTestGenerationProcess(treeItem: TreeItem, connection: PlayServerConnection, baseKey: string) {
+export async function startTestGenerationProcess(
+    treeItem: TestThemeTreeItem,
+    connection: PlayServerConnection,
+    baseKey: string
+) {
     // Check if the cycle key is available
-    const cycleKey = treeItem.item.key.serial ?? treeItem.item.key;  // TODO: Workaround to have both old and new play servers, delete key.serial later
+    const cycleKey = treeItem.item.key.serial ?? treeItem.item.key; // TODO: Workaround to have both old and new play servers, delete key.serial later
     if (cycleKey) {
-
         // TODO: Code duplication, also needed in treeView.ts
         // Function to find the serial key of the project of a cycle element in the tree hierarchy
-        function findProjectKeyOfCycle(element: TreeItem): string | undefined {
+        function findProjectKeyOfCycle(element: TestThemeTreeItem): string | undefined {
             console.log("findProjectKeyOfCycle called with element:", element);
-            let currentElement: TreeItem | null = element;
+            let currentElement: TestThemeTreeItem | null = element;
             while (currentElement) {
                 // Check if the current element is a project, if yes, return its key
                 if (currentElement.contextValue === "project") {
-                    return currentElement.item.key.serial ?? currentElement.item.key;  // TODO: Workaround to have both old and new play servers, delete key.serial later
+                    return currentElement.item.key.serial ?? currentElement.item.key; // TODO: Workaround to have both old and new play servers, delete key.serial later
                 }
                 currentElement = currentElement.parent ?? null; // Move to the parent element
                 console.log("currentElement after going upwards to parent:", currentElement);

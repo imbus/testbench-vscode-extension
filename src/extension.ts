@@ -1,12 +1,23 @@
 import * as vscode from "vscode";
 import * as jsonReportHandler from "./jsonReportHandler";
-import { TreeItem, makeRoot } from "./treeView";
 import { PlayServerConnection, performLogin, changeConnection } from "./testbenchConnection";
-import { TestBenchTreeDataProvider, initializeTreeView } from "./treeView";
+import {
+    TestThemeTreeItem,
+    makeRoot,
+    TestThemeTreeDataProvider,
+    initializeTreeView_TO_REMOVE,
+} from "./testThemeTreeView";
+import { TreeViewDataProvider } from "./newTreeView";
 
 export function activate(context: vscode.ExtensionContext) {
-    // TODO: Add a new command to clear stored login data? (logout doesnt do that)
     // TODO: WebViev UI for login?
+    // TODO: Replace old play server calls with new play server calls
+    // TODO: Remove TestCases from TreeView
+    // TODO: Create extension documentation in Readme.md
+    // TODO: Add a new command to clear stored login data? (logout doesnt do that)
+    // TODO: Refactor code (+ Todo's in code) / Review code quality
+    // TODO: (Later) Upload test results back to TestBench server.
+    // TODO: 2 Trees
 
     const baseKey = "testbenchExtension";
     const commands = {
@@ -21,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
         getCycleStructure: `${baseKey}.getCycleStructure`,
         getServerVersions: `${baseKey}.getServerVersions`,
         showExtensionSettings: `${baseKey}.showExtensionSettings`,
-        getProjectList: `${baseKey}.getProjectList`, // TODO: Delete after testing
+        getProjectList: `${baseKey}.getProjectList`,
     };
 
     interface ReportGenerationConfiguration {
@@ -31,10 +42,10 @@ export function activate(context: vscode.ExtensionContext) {
         removeExtractedFiles: boolean;
     }
 
-    // Variables to hold configuration settings
+    // Configuration settings
     let serverName: string;
     let portNumber: number;
-    let username: string | undefined; // Username has not default value in package.json
+    let username: string | undefined; // Username has no default value in package.json
     let workspaceLocation: string | undefined;
     let reportGenerationConfig: ReportGenerationConfiguration;
 
@@ -57,10 +68,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Load initial configuration
     loadConfiguration();
 
-    // Handle configuration changes
+    // Respond to configuration changes
     const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration(baseKey)) {
-            // Reload and apply configuration settings
             loadConfiguration();
             console.log(`Configuration changed!`);
         }
@@ -76,27 +86,20 @@ export function activate(context: vscode.ExtensionContext) {
             revealSetting: {
                 key: `${baseKey}`, // Add the setting key with.settingsName if you want to open a specific setting
                 edit: true, // Set to true to focus on the edit control
-            },*/            
-        });       
+            },*/
+        });
     });
     context.subscriptions.push(showExtensionSettingsDisposable);
 
     // Store the connection to server
     let connection: PlayServerConnection | null = null;
-    // Store the tree data provider to be able to clear it on logout
-    let treeDataProvider: TestBenchTreeDataProvider | null = null;
+    // Store the test theme tree data provider to be able to clear it on logout
+    let testThemeDataProvider: TestThemeTreeDataProvider | null = null;
 
-    let loginDisposable = vscode.commands.registerCommand(commands.login, async () => {
-        connection = await performLogin(context, baseKey);
-        if (!connection) {
-            return;
-        }
-        treeDataProvider = await initializeTreeView(context, connection);
-
-        // Display the commands after logging in
-        vscode.commands.executeCommand(commands.displayCommands);
-    });
-    context.subscriptions.push(loginDisposable);
+    // TODO: Implement the new tree view
+    const newTreeDataProvider = new TreeViewDataProvider();
+    // Register the Tree2 view in the TestBench Explorer
+    vscode.window.registerTreeDataProvider("testBenchTree2", newTreeDataProvider);
 
     // Register the "Display Commands" command
     context.subscriptions.push(
@@ -108,7 +111,7 @@ export function activate(context: vscode.ExtensionContext) {
                     "Logout",
                     "Change connection",
                     "Show Extension Settings",
-                    "(DRAFT) Get Project List",
+                    "Get Project List",
                     "Display Test Theme Tree",
                     "Cancel",
                 ];
@@ -130,7 +133,7 @@ export function activate(context: vscode.ExtensionContext) {
                 case "Show Extension Settings":
                     vscode.commands.executeCommand(commands.showExtensionSettings);
                     break;
-                case "(DRAFT) Get Project List":
+                case "Get Project List":
                     vscode.commands.executeCommand(commands.getProjectList);
                     break;
                 case "Change connection":
@@ -145,10 +148,23 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    let loginDisposable = vscode.commands.registerCommand(commands.login, async () => {
+        connection = await performLogin(context, baseKey);
+        if (!connection) {
+            return;
+        }
+        // testThemeDataProvider = await initializeTreeView(context, connection);
+        // vscode.commands.executeCommand(commands.getProjectList);
+
+        // Display the commands after logging in
+        vscode.commands.executeCommand(commands.displayCommands);
+    });
+    context.subscriptions.push(loginDisposable);
+
     // Register the "Display Test Theme Tree" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.displayTestThemeTree, async () => {
-            treeDataProvider = await initializeTreeView(context, connection);
+            testThemeDataProvider = await initializeTreeView_TO_REMOVE(context, connection);
         })
     );
 
@@ -156,7 +172,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.logout, async () => {
             if (connection) {
-                await connection.logoutUser(context, treeDataProvider!);
+                await connection.logoutUser(context, testThemeDataProvider!);
                 connection = null; // Clear the connection
             } else {
                 vscode.window.showInformationMessage("No connection available. Please log in first.");
@@ -170,8 +186,8 @@ export function activate(context: vscode.ExtensionContext) {
             let { newConnection, newTreeDataProvider } = await changeConnection(context, baseKey, connection!);
             if (newConnection) {
                 connection = newConnection; // Update the connection
-                if (treeDataProvider) {
-                    treeDataProvider = newTreeDataProvider; // Update the tree data provider
+                if (testThemeDataProvider) {
+                    testThemeDataProvider = newTreeDataProvider; // Update the tree data provider
                 } else {
                     vscode.window.showErrorMessage("Error: TreeDataProvider is null.");
                 }
@@ -183,7 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Generate Test Cases" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.generateTestCases, async (item: TreeItem) => {
+        vscode.commands.registerCommand(commands.generateTestCases, async (item: TestThemeTreeItem) => {
             if (connection) {
                 jsonReportHandler.startTestGenerationProcess(item, connection, baseKey);
             } else {
@@ -194,9 +210,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Make Root" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.makeRoot, (treeItem: TreeItem) => {
-            if (treeDataProvider) {
-                makeRoot(treeItem, treeDataProvider);
+        vscode.commands.registerCommand(commands.makeRoot, (treeItem: TestThemeTreeItem) => {
+            if (testThemeDataProvider) {
+                makeRoot(treeItem, testThemeDataProvider);
             }
         })
     );
@@ -207,20 +223,21 @@ export function activate(context: vscode.ExtensionContext) {
             if (connection) {
                 const projectList = await connection.getProjectList();
 
-                if (!projectList){
-                    vscode.window.showErrorMessage("No projects found..");
+                if (!projectList) {
+                    // vscode.window.showErrorMessage("No projects found..");
                     return;
                 }
 
                 const selectedProjectKey = await connection.selectProjectKeyFromProjectList(projectList);
-                console.log("Selected project key:", selectedProjectKey);
-                // const projectTree = await connection.getProjectTreeOfProject(`${selectedProjectKey}`);
-                treeDataProvider = new TestBenchTreeDataProvider(connection, selectedProjectKey!);
-                treeDataProvider.useNewPlayServer = true;
-                vscode.window.createTreeView("testBenchProjects", { treeDataProvider });
-                //const treeDataProvider = new TestBenchTreeDataProvider(connection);
-                //vscode.window.createTreeView('testBenchProjects', { treeDataProvider });
-                // treeDataProvider.useNewPlayServer = false;
+
+                if (!selectedProjectKey) {
+                    // vscode.window.showErrorMessage("No project selected..");
+                    return;
+                }
+
+                testThemeDataProvider = new TestThemeTreeDataProvider(connection, selectedProjectKey!);
+                vscode.window.createTreeView("testBenchProjects", { treeDataProvider: testThemeDataProvider });
+                testThemeDataProvider = await initializeTreeView_TO_REMOVE(context, connection, selectedProjectKey!);
             }
         })
     );

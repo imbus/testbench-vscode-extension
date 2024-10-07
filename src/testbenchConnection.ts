@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import * as base64 from "base-64"; // npm i --save-dev @types/base-64
 import * as fs from "fs";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
-import { TestBenchTreeDataProvider, initializeTreeView } from "./treeView";
+import { TestThemeTreeDataProvider, initializeTreeView_TO_REMOVE } from "./testThemeTreeView";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate?
@@ -141,14 +141,14 @@ export class PlayServerConnection {
             placeHolder: "Select a project",
         });
 
-        if (!selectedProjectName) {
-            vscode.window.showErrorMessage("No project selected.");
+        if (selectedProjectName === undefined || !selectedProjectName) {
             return null;
         }
 
+        console.log("selectedProjectName: ", selectedProjectName);
         const selectedProject = projectsData.find((project: Project) => project.name === selectedProjectName);
         if (!selectedProject) {
-            vscode.window.showErrorMessage("Selected project not found.");
+            // vscode.window.showErrorMessage("Selected project not found.");
             return null;
         }
 
@@ -205,13 +205,16 @@ export class PlayServerConnection {
     }
 
     // Get the list of projects from the new play server
-    async getProjectTreeOfProject(projectKey: string): Promise<TreeNode | null> {
+    async getProjectTreeOfProject(projectKey: string | null): Promise<TreeNode | null> {
         if (!this.sessionToken) {
             console.warn("Session token is null. Cannot fetch project tree:", projectKey);
             return null;
         }
+        if (!projectKey || projectKey === null || projectKey === undefined) {
+            console.warn("Project key is null or undefined. Cannot fetch project tree.");
+            return null;
+        }
         try {
-            // console.log("Fetching project tree with project key:", projectKey);
             const projectTreeURL = `${this.newPlayServerBaseUrl}/projects/${projectKey}/tree/v1`;
 
             if (!this.newPlayServerSession) {
@@ -373,7 +376,7 @@ export class PlayServerConnection {
         }
     }
 
-    async logoutUser(context: vscode.ExtensionContext, treeDataProvider: TestBenchTreeDataProvider): Promise<void> {
+    async logoutUser(context: vscode.ExtensionContext, treeDataProvider: TestThemeTreeDataProvider): Promise<void> {
         try {
             const response: AxiosResponse = await axios.delete(`${this.newPlayServerBaseUrl}/login/session/v1`, {
                 headers: {
@@ -776,15 +779,17 @@ export async function changeConnection(
     context: vscode.ExtensionContext,
     baseKey: string,
     oldConnection: PlayServerConnection
-): Promise<{ newConnection: PlayServerConnection | null; newTreeDataProvider: TestBenchTreeDataProvider | null }> {
+): Promise<{ newConnection: PlayServerConnection | null; newTreeDataProvider: TestThemeTreeDataProvider | null }> {
     if (oldConnection) {
         removeSessionData(context, oldConnection);
         await clearStoredCredentials(context);
         let newConnection = await performLogin(context, baseKey, true);
 
-        let newTreeDataProvider: TestBenchTreeDataProvider | null = null;
+        let newTreeDataProvider: TestThemeTreeDataProvider | null = null;
         if (newConnection) {
-            newTreeDataProvider = await initializeTreeView(context, newConnection);
+            newTreeDataProvider = await initializeTreeView_TO_REMOVE(context, newConnection);
+            //newTreeDataProvider = new TestThemeTreeDataProvider(newConnection);
+            //await newTreeDataProvider.initializeTreeView(context, newConnection);
         }
         return { newConnection, newTreeDataProvider };
     } else {

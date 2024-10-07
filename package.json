@@ -132,6 +132,10 @@
                 {
                     "id": "testBenchProjects",
                     "name": "TestBench Test Theme Tree"
+                },
+                {
+                    "id": "testBenchTree2",
+                    "name": "TestBench Tree 2"
                 }
             ]
         },
@@ -150,7 +154,7 @@
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "view == testBenchProjects && viewItem == project || viewItem == tov || viewItem == cycle || viewItem == TestTheme || viewItem == TestCaseSet",
+                    "when": "view == testBenchProjects && viewItem == project || viewItem == tov || viewItem == version || viewItem == cycle || viewItem == TestTheme || viewItem == TestCaseSet",
                     "group": "navigation"
                 }
             ]
