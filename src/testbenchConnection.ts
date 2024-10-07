@@ -54,61 +54,25 @@ interface ServerVersionsResponse {
 
 // TestBench server connection
 export class PlayServerConnection {
-    context: vscode.ExtensionContext; // TODO: Use this to store and retrieve the credentials in secret storage or DELETE?
+    context: vscode.ExtensionContext;
     serverName: string;
-    oldPlayServerPortNumber = 9443;
     newPlayServerPortNumber = 9445;
 
     loginName: string; // TODO: Store in secret storage
     password: string | undefined; // TODO: Store in secret storage
-    oldPlayServerSession: AxiosInstance | null;
     newPlayServerSession: AxiosInstance | null;
     sessionToken: string; // TODO: Store the session token in secret storage
-
-    oldPlayServerBaseUrl: string;
     newPlayServerBaseUrl: string;
 
     // Keep the connection alive by sending a request to the server every 4 minutes, the server timeout is 5 minutes
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
-    constructor(
-        context: vscode.ExtensionContext,
-        serverName: string,
-        loginName: string,
-        password: string, // TODO: Delete this after implementing new play server session
-        sessionToken: string
-    ) {
+    constructor(context: vscode.ExtensionContext, serverName: string, loginName: string, sessionToken: string) {
         this.context = context;
         this.serverName = serverName;
         this.loginName = loginName;
-        this.password = password;
         this.sessionToken = sessionToken;
-
-        this.oldPlayServerBaseUrl = `https://${this.serverName}:${this.oldPlayServerPortNumber}/api/1`;
         this.newPlayServerBaseUrl = `https://${this.serverName}:${this.newPlayServerPortNumber}/api`;
-
-        // TODO: Delete this after implementing new play server session
-        // Create session for API calls to the old play server
-        this.oldPlayServerSession = axios.create({
-            baseURL: this.oldPlayServerBaseUrl,
-            // Old play server, which runs on port 9443, uses BasicAuth.
-            // Use loginName as username, and use sessionToken as the password.
-            auth: {
-                username: loginName,
-                // TODO: username: await context.secrets.get("loginName");
-                password: sessionToken,
-                // TODO: password: await this.getSessionTokenFromSecretStorage(context),
-            },
-            headers: {
-                // Manually encode the credentials to Base64, avoid creating a separate variable for this.
-                Authorization: `Basic ${base64.encode(`${loginName}:${password}`)}`,
-                "Content-Type": "application/vnd.testbench+json; charset=utf-8",
-            },
-            // Ignore self-signed certificates
-            httpsAgent: new https.Agent({
-                rejectUnauthorized: false, // This should only be used in a development environment
-            }),
-        });
 
         // Create session for API calls to the new play server
         this.newPlayServerSession = axios.create({
@@ -254,47 +218,6 @@ export class PlayServerConnection {
         }
     }
 
-    // Method to fetch all projects from the server
-    // TODO: Delete this after the new play server is implemented
-    async getAllProjectsFromOldPlayServer(includeTOVs: boolean = true, includeCycles: boolean = true): Promise<any[]> {
-        try {
-            // console.log(`Getting all projects from server.`);
-
-            // GET request to fetch all projects
-            if (!this.oldPlayServerSession) {
-                vscode.window.showErrorMessage("Session is not initialized.");
-                throw new Error("Session is not initialized.");
-            }
-            const response = await this.oldPlayServerSession.get("/projects", {
-                params: { includeTOVs: includeTOVs, includeCycles: includeCycles }, // Query parameters for the request
-            });
-            console.log("Response from getAllProjectsFromOldPlayServer:", response.data);
-
-            // Save the JSON to a file for analyzing the structure
-            /*
-            const savePath = await vscode.window.showSaveDialog({
-                saveLabel: "Save Project Tree",
-                filters: {
-                    "JSON Files": ["json"],
-                    "All Files": ["*"],
-                },
-            });
-            if (savePath) {
-                const filePath = savePath.fsPath;
-                saveJsonToFile(filePath, response.data);
-            } else {
-                vscode.window.showErrorMessage("No file path selected.");
-            }
-            */
-
-            // Return the list of projects, or an empty array if no projects are found
-            return response.data.projects || [];
-        } catch (error) {
-            console.error("Error getting all projects:", error);
-            return [];
-        }
-    }
-
     // Fetch the structure of a cycle
     async fetchCycleStructure(projectKey: string, cycleKey: string) {
         const cycleStructureUrl = `${this.newPlayServerBaseUrl}/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
@@ -351,19 +274,24 @@ export class PlayServerConnection {
     // Sends a GET request to the projects endpoint to verify if the connection is working.
     async checkIsWorking(): Promise<boolean> {
         try {
-            // console.log(`Checking connection...`);
-            if (!this.oldPlayServerSession) {
+            if (!this.newPlayServerSession) {
                 vscode.window.showErrorMessage("Session is not initialized.");
                 throw new Error("Session is not initialized.");
             }
-            const response: AxiosResponse = await this.oldPlayServerSession.get("/projects", {
-                params: {
-                    includeTOVs: "false",
-                    includeCycles: "false",
+            if (!this.sessionToken) {
+                vscode.window.showErrorMessage("Session token is not initialized.");
+                throw new Error("Session token is not initialized.");
+            }
+
+            const projectsURL = `${this.newPlayServerBaseUrl}/projects/v1`;
+            const projectsResponse = await this.newPlayServerSession.get(projectsURL, {
+                headers: {
+                    Authorization: this.sessionToken,
+                    accept: "application/vnd.testbench+json",
                 },
             });
             // console.log(`Response status for checking connection: ${response.status}`);
-            return response.status === 200;
+            return projectsResponse.status === 200;
         } catch (error: any) {
             console.error("Error checking connection:", error.message);
             console.error("Error config:", error.config);
@@ -390,8 +318,6 @@ export class PlayServerConnection {
                 removeSessionData(context, this); // Clear the session data
                 if (treeDataProvider) {
                     treeDataProvider.clearTree();
-                } else {
-                    vscode.window.showErrorMessage("treeDataProvider is null.");
                 }
 
                 console.log("Logout successful");
@@ -499,8 +425,6 @@ async function promptForInput(
     }
 }
 
-// TODO: Split this function into 2 separate functions: One for the login data input and validation, and one for the actual login request.
-// TODO: Pressing cancel on user name input wont cancel directly, but will show the password input, and then cancel.
 // Entry point for the login process
 export async function performLogin(
     context: vscode.ExtensionContext,
@@ -510,16 +434,12 @@ export async function performLogin(
     // Loop until the user successfully logs in or cancels the login process
     while (true) {
         // Retrieve the stored credentials if they exist
-        // Pwd stored in secret storage, and used to login automatically next time.
         const config = vscode.workspace.getConfiguration(baseKey);
-        let password: string | undefined = undefined;
+        let password: string | undefined = await context.secrets.get("password");
 
-        const hasStoredCredentials =
-            config.get<string>("serverName", "testbench") &&
-            config.get<string>("username") &&
-            (await context.secrets.get("password"));
+        const hasStoredCredentials = config.get<string>("serverName") && config.get<string>("username") && password;
 
-        // Check if the user wants to use the stored credentials to login with one click
+        // Automatic login if the user has stored credentials
         let useStoredCredentials = false;
         if (hasStoredCredentials && !promptForNewCredentials) {
             const choice = await vscode.window.showInformationMessage(
@@ -532,110 +452,184 @@ export async function performLogin(
             }
         }
 
-        // If the user doesn't want to use the stored credentials, prompt for new credentials
-        if (!useStoredCredentials) {
-            let serverNameInput = await promptForInput(
-                `Enter the server name (Default value: ${config.get<string>("serverName", "testbench")})`,
-                true
-            );
-            console.log("Server name input: ", serverNameInput);
-            // If the user enters a non empty input, update the configuration with the new value.
-            if (serverNameInput) {
-                config.update("serverName", serverNameInput);
-                console.log("Server name updated: ", serverNameInput);
-            } // If the user leaves the input empty, do nothing and use the default value in the configuration.
+        let serverName: string | undefined;
+        let portNumber: number | undefined;
+        let username: string | undefined;
 
-            const portInputAsString = await promptForInput(
-                `Enter the port number (Default value: ${config.get<number>("portNumber", 9445)})`,
-                true,
-                false,
-                // Port number must be a number
-                (value) => {
-                    if (value && !/^\d+$/.test(value)) {
-                        return "Port number must be a number";
-                    }
-                    return null;
-                }
-            );
-            console.log("Port number input: ", portInputAsString);
-            if (portInputAsString) {
-                config.update("portNumber", parseInt(portInputAsString, 10));
-                console.log("Port number updated: ", portInputAsString);
-            }
-
-            // New: Check if the server is accessible under this server name and port number
-            const serverVersions = await fetchServerVersions(
-                config.get<string>("serverName", "testbench"),
-                config.get<number>("portNumber", 9445).toString()
-            );
-            if (!serverVersions) {
-                console.log("Server versions not found.");
-                return null;
-            }
-
-            let loginName = await promptForInput(
-                `Enter your login name (Default value ${config.get<string>("username", "undefined")})`,
-                true
-            );
-            // If the user leaves the input empty, do nothing and use the default value in the configuration.
-            if (loginName) {
-                config.update("username", loginName);
-            }
-
-            password = await promptForInput(`Enter your password`, false, true);
-            // Password cannot be empty
-            if (!password) {
-                return null;
-            }
+        if (useStoredCredentials) {
+            serverName = config.get<string>("serverName")!;
+            portNumber = config.get<number>("portNumber")!;
+            username = config.get<string>("username")!;
         } else {
-            // Use the stored credentials to login automatically (Extension settings and SecretStorage)
-            password = await context.secrets.get("password");
+            const credentials = await promptForLoginCredentials(context, baseKey);
+            if (!credentials) {
+                vscode.window.showInformationMessage("Login process aborted");
+                return null;
+            }
+            ({ serverName, portNumber, username, password } = credentials);
         }
 
-        // Check if any of the login credentials are missing
-        if (
-            typeof config.get<string>("serverName", "testbench") === "undefined" ||
-            typeof config.get<string>("username") === "undefined" ||
-            typeof password === "undefined"
-        ) {
-            vscode.window.showErrorMessage("Unexpected error: missing login credentials.");
-            return null;
-        }
-
-        // console.log(`Starting login process with URL: ${newPlayServerBaseUrl}, username: ${loginName}, and password: ${password}.`);
-
-        // Login to the new play server that runs on port 9445 and return the session token.
+        // Attempt to login
         const connection = await loginToNewPlayServerAndInitSessionToken(
             context,
-            baseKey,
-            config.get<string>("serverName", "testbench"),
-            config.get<number>("portNumber", 9445),
-            config.get<string>("username")!,
-            password
+            serverName,
+            portNumber,
+            username,
+            password!
         );
+
         if (connection) {
-            if (connection.sessionToken) {
-                vscode.window.showInformationMessage("Login successful!");
-                return connection;
-            } else {
-                const retry = await vscode.window.showInformationMessage(
-                    "Login failed! Do you want to retry?",
-                    "Retry",
-                    "Cancel"
-                );
-                if (retry === "Cancel") {
-                    vscode.window.showInformationMessage("Login process aborted");
-                    return null;
-                } else {
-                    clearStoredCredentials(context);
-                    // Don't return null here, so that the user can retry the login process
-                }
-            }
+            vscode.window.showInformationMessage("Login successful!");
+            return connection;
         } else {
-            console.log("Login failed.");
-            vscode.window.showErrorMessage("Login failed.");
+            const retry = await vscode.window.showInformationMessage(
+                "Login failed! Do you want to retry?",
+                "Retry",
+                "Cancel"
+            );
+            if (retry !== "Retry") {
+                vscode.window.showInformationMessage("Login process aborted");
+                return null;
+            } else {
+                await clearStoredCredentials(context, baseKey);
+                // Continue the loop to retry
+            }
+        }
+    }
+}
+
+// Function to prompt user for login credentials
+async function promptForLoginCredentials(
+    context: vscode.ExtensionContext,
+    baseKey: string
+): Promise<{
+    serverName: string;
+    portNumber: number;
+    username: string;
+    password: string;
+} | null> {
+    const config = vscode.workspace.getConfiguration(baseKey);
+
+    // Prompt for server name
+    const serverNameInput = await promptForInput(
+        `Enter the server name (Default: ${config.get<string>("serverName", "testbench")})`,
+        true
+    );
+    if (serverNameInput === undefined) {
+        return null;
+    }
+    const serverName = serverNameInput || config.get<string>("serverName", "testbench");
+
+    // Prompt for port number
+    const portInputAsString = await promptForInput(
+        `Enter the port number (Default: ${config.get<number>("portNumber", 9445)})`,
+        true,
+        false,
+        (value) => {
+            if (value && !/^\d+$/.test(value)) {
+                return "Port number must be a number";
+            }
             return null;
         }
+    );
+    if (portInputAsString === undefined) {
+        return null;
+    }
+    const portNumber = portInputAsString ? parseInt(portInputAsString, 10) : config.get<number>("portNumber", 9445);
+
+    // Check if the server is accessible
+    const serverVersions = await fetchServerVersions(serverName, portNumber.toString());
+    if (!serverVersions) {
+        vscode.window.showErrorMessage("Server not accessible with the provided server name and port.");
+        return null;
+    }
+
+    const usernameInput = await promptForInput(
+        `Enter your login name (Default: ${config.get<string>("username", "undefined")})`,
+        true
+    );
+    if (usernameInput === undefined) {
+        return null;
+    } // User cancelled
+    const username = usernameInput || config.get<string>("username", "undefined");
+
+    // Prompt for password
+    const password = await promptForInput("Enter your password", false, true);
+    if (password === undefined) {
+        return null;
+    } // User cancelled
+
+    // Update configuration
+    config.update("serverName", serverName);
+    config.update("portNumber", portNumber);
+    config.update("username", username);
+
+    return { serverName, portNumber, username, password };
+}
+
+// Login to the new play server and return the session token.
+async function loginToNewPlayServerAndInitSessionToken(
+    context: vscode.ExtensionContext,
+    serverName: string,
+    portNumber: number,
+    username: string,
+    password: string
+): Promise<PlayServerConnection | null> {
+    const requestBody: LoginRequest = {
+        login: username,
+        password: password,
+        force: true,
+    };
+
+    try {
+        const newPlayServerBaseUrl = `https://${serverName}:${portNumber}/api`;
+        const loginURL = `${newPlayServerBaseUrl}/login/session/v1`;
+
+        console.log("Sending Login POST request to:", loginURL);
+
+        const response: AxiosResponse<LoginResponse> = await axios.post(loginURL, requestBody, {
+            headers: {
+                accept: "application/vnd.testbench+json",
+                "Content-Type": "application/vnd.testbench+json",
+            },
+            httpsAgent: new https.Agent({
+                rejectUnauthorized: false,
+            }),
+        });
+
+        if (response.status === 201) {
+            console.log("Login successful. Received session token:", response.data.sessionToken);
+
+            // Store password securely
+            await context.secrets.store("password", password);
+            console.log("Password stored securely in secret storage.");
+
+            const connection = new PlayServerConnection(context, serverName, username, response.data.sessionToken);
+            if (await connection.checkIsWorking()) {
+                return connection;
+            }
+            return null;
+        } else {
+            console.log("Login failed. Unexpected status code:", response.status);
+            return null;
+        }
+    } catch (error) {
+        console.error("Error during login:", error);
+        return null;
+    }
+}
+
+// Function to clear stored credentials
+async function clearStoredCredentials(context: vscode.ExtensionContext, baseKey: string) {
+    try {
+        const config = vscode.workspace.getConfiguration(baseKey);
+        await context.secrets.delete("password");
+        config.update("serverName", undefined);
+        config.update("portNumber", undefined);
+        config.update("username", undefined);
+        console.log("Cleared credentials successfully.");
+    } catch (error) {
+        console.error("Failed to clear credentials:", error);
     }
 }
 
@@ -655,80 +649,6 @@ interface LoginResponse {
     internalUserManagement: boolean;
     serverVersion: string;
     licenseWarning: string | null;
-}
-
-// Login to the new play server that runs on port 9445 and return the session token.
-// The old play server that runs on port 9443 has the URL /api/1, while the new play server has the URL /api/login/session/v1 .
-async function loginToNewPlayServerAndInitSessionToken(
-    context: vscode.ExtensionContext,
-    baseKey: string,
-    serverName: string,
-    portNumber: number,
-    username: string,
-    password: string
-): Promise<PlayServerConnection | null> {
-    // Request payload for login
-    const requestBody: LoginRequest = {
-        login: username,
-        password: password,
-        force: true,
-    };
-
-    try {
-        const config = vscode.workspace.getConfiguration(baseKey);
-        const newPlayServerBaseUrl = `https://${config.get<string>("serverName", "testbench")}:${config
-            .get<number>("portNumber", 9445)
-            .toString()}/api`;
-        let loginURLOfNewPlayServer = `${newPlayServerBaseUrl}/login/session/v1`;
-
-        console.log("Sending Login POST request to:", loginURLOfNewPlayServer);
-        // console.log("Request body for login:", requestBody);
-
-        // Send POST request to login to the server
-        const response: AxiosResponse<LoginResponse> = await axios.post(loginURLOfNewPlayServer, requestBody, {
-            headers: {
-                accept: "application/vnd.testbench+json",
-                "Content-Type": "application/vnd.testbench+json",
-            },
-            httpsAgent: new https.Agent({
-                rejectUnauthorized: false,
-            }),
-        });
-
-        // TODO: Dont store Session token in the connection class?
-        if (response.status === 201) {
-            console.log("Login successful. Received session token:", response.data.sessionToken);
-
-            // TODO: Prompt the user to store the credentials in secret storage in order to login automatically next time.
-            await storeCredentialsInSecretStorage(
-                context,
-                baseKey,
-                serverName,
-                portNumber,
-                username,
-                password,
-                response.data.sessionToken
-            );
-
-            const connection = new PlayServerConnection(
-                context,
-                serverName,
-                username, // TODO: remove?
-                password, // TODO: remove?
-                response.data.sessionToken // TODO: remove?
-            );
-            if (await connection.checkIsWorking()) {
-                return connection;
-            }
-            return null;
-        } else {
-            console.log("Login failed. Unexpected status code:", response.status);
-            return null;
-        }
-    } catch (error) {
-        console.error("Error during login:", error);
-        return null;
-    }
 }
 
 async function storeCredentialsInSecretStorage(
@@ -753,24 +673,10 @@ async function storeCredentialsInSecretStorage(
     }
 }
 
-async function clearStoredCredentials(context: vscode.ExtensionContext) {
-    try {
-        await context.secrets.delete("server");
-        await context.secrets.delete("port");
-        await context.secrets.delete("loginName");
-        await context.secrets.delete("password");
-        await context.secrets.delete("sessionToken");
-        console.log("Cleared credentials successfully.");
-    } catch (error) {
-        console.error("Failed to clear credentials:", error);
-    }
-}
-
 function removeSessionData(context: vscode.ExtensionContext, connection: PlayServerConnection | null) {
     if (connection) {
         connection.loginName = "";
         connection.password = "";
-        connection.oldPlayServerSession = null;
         connection.sessionToken = ""; // TODO: Delete after storing in secret storage
     }
 }
@@ -782,7 +688,7 @@ export async function changeConnection(
 ): Promise<{ newConnection: PlayServerConnection | null; newTreeDataProvider: TestThemeTreeDataProvider | null }> {
     if (oldConnection) {
         removeSessionData(context, oldConnection);
-        await clearStoredCredentials(context);
+        await clearStoredCredentials(context, baseKey);
         let newConnection = await performLogin(context, baseKey, true);
 
         let newTreeDataProvider: TestThemeTreeDataProvider | null = null;
@@ -826,17 +732,13 @@ async function fetchServerVersions(serverName: string, portNumber: string): Prom
                 // Server responded with a status outside the 2xx range
                 console.error(`Error: Received status code ${error.response.status}`, error.response.data);
                 if (error.response.status === 404) {
-                    console.error("The TestBench version cannot be found.");
-                    vscode.window.showErrorMessage(
+                    console.error(
                         `TestBench version cannot be found under the URL https://${serverName}:${portNumber}`
                     );
                 }
             } else if (error.request) {
                 // No response was received
                 console.error("Error: No response received from server.", error.request);
-                vscode.window.showErrorMessage(
-                    `TestBench is not available under the URL https://${serverName}:${portNumber}`
-                );
             } else {
                 // Error setting up the request
                 console.error("Error:", error.message);

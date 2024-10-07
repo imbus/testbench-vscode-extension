@@ -5,7 +5,7 @@ import * as unzipper from "unzipper"; // npm install unzipper
 import * as cheerio from "cheerio"; // To parse HTML  npm install --save-dev @types/cheerio
 import axios, { AxiosResponse } from "axios";
 import { PlayServerConnection } from "./testbenchConnection";
-import { TestThemeTreeItem } from "./testThemeTreeView";
+import { TestThemeTreeItem, findProjectKeyOfCycle } from "./testThemeTreeView";
 
 // Configuration interface
 export interface Configuration {
@@ -207,7 +207,7 @@ async function pollJobStatus(
 
         try {
             jobStatus = await getJobStatus(connection, projectKey, jobId);
-            console.log(`Attempt ${attempt}: Job Status fetched.`);
+            // console.log(`Attempt ${attempt}: Job Status fetched.`);
 
             if (isJobCompletedSuccessfully(jobStatus)) {
                 console.log("Job completed successfully.");
@@ -281,7 +281,7 @@ async function getJobStatus(
 ): Promise<JobStatusResponse> {
     const url = `${connection.newPlayServerBaseUrl}/projects/${projectKey}/report/job/${jobId}/v1`;
 
-    console.log(`Checking job status: ${url}`);
+    // console.log(`Checking job status: ${url}`);
 
     const jobStatusResponse: AxiosResponse<JobStatusResponse> = await axios.get(url, {
         headers: {
@@ -907,23 +907,8 @@ export async function startTestGenerationProcess(
     baseKey: string
 ) {
     // Check if the cycle key is available
-    const cycleKey = treeItem.item.key.serial ?? treeItem.item.key; // TODO: Workaround to have both old and new play servers, delete key.serial later
+    const cycleKey = treeItem.item.key;
     if (cycleKey) {
-        // TODO: Code duplication, also needed in treeView.ts
-        // Function to find the serial key of the project of a cycle element in the tree hierarchy
-        function findProjectKeyOfCycle(element: TestThemeTreeItem): string | undefined {
-            console.log("findProjectKeyOfCycle called with element:", element);
-            let currentElement: TestThemeTreeItem | null = element;
-            while (currentElement) {
-                // Check if the current element is a project, if yes, return its key
-                if (currentElement.contextValue === "project") {
-                    return currentElement.item.key.serial ?? currentElement.item.key; // TODO: Workaround to have both old and new play servers, delete key.serial later
-                }
-                currentElement = currentElement.parent ?? null; // Move to the parent element
-                console.log("currentElement after going upwards to parent:", currentElement);
-            }
-            return undefined;
-        }
         const projectKeyOfCycle = findProjectKeyOfCycle(treeItem);
         if (!projectKeyOfCycle) {
             console.error("Project key of cycle not found.");

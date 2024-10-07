@@ -149,10 +149,13 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     let loginDisposable = vscode.commands.registerCommand(commands.login, async () => {
-        connection = await performLogin(context, baseKey);
-        if (!connection) {
+        let connectionAfterLogin = await performLogin(context, baseKey);
+        if (!connectionAfterLogin) {
             return;
+        } else {
+            connection = connectionAfterLogin;
         }
+
         // testThemeDataProvider = await initializeTreeView(context, connection);
         // vscode.commands.executeCommand(commands.getProjectList);
 
@@ -161,10 +164,12 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(loginDisposable);
 
+    // TODO: Refresh command for new play server gets the project list
     // Register the "Display Test Theme Tree" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.displayTestThemeTree, async () => {
-            testThemeDataProvider = await initializeTreeView_TO_REMOVE(context, connection);
+            // testThemeDataProvider = await initializeTreeView_TO_REMOVE(context, connection);
+            vscode.commands.executeCommand(commands.getProjectList);
         })
     );
 
