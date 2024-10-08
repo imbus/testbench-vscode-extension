@@ -11,12 +11,11 @@ import { TreeViewDataProvider } from "./newTreeView";
 
 export function activate(context: vscode.ExtensionContext) {
     // TODO: WebViev UI for login?
-    // TODO: Replace old play server calls with new play server calls
-    // TODO: Remove TestCases from TreeView
     // TODO: Create extension documentation in Readme.md
     // TODO: Add a new command to clear stored login data? (logout doesnt do that)
     // TODO: Refactor code (+ Todo's in code) / Review code quality
     // TODO: (Later) Upload test results back to TestBench server.
+    // TODO: Extra: Create command: Fetch every project with every TOV and cycle and display them in tree view.
     // TODO: 2 Trees
 
     const baseKey = "testbenchExtension";

@@ -32,9 +32,10 @@ interface TreeNode {
     creationTime: string;
     status: string;
     visibility: boolean;
-    children?: TreeNode[]; // Optional property since not all nodes have children
+    children?: TreeNode[]; // Not all nodes have children
 }
 
+// Function to analyse the responses of the server
 function saveJsonToFile(filePath: string, data: any) {
     try {
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
@@ -56,23 +57,22 @@ interface ServerVersionsResponse {
 export class PlayServerConnection {
     context: vscode.ExtensionContext;
     serverName: string;
-    newPlayServerPortNumber = 9445;
-
-    loginName: string; // TODO: Store in secret storage
-    password: string | undefined; // TODO: Store in secret storage
+    portNumber: string;
+    loginName: string;
     newPlayServerSession: AxiosInstance | null;
-    sessionToken: string; // TODO: Store the session token in secret storage
+    sessionToken: string; // TODO: Store the session token in secret storage?
     newPlayServerBaseUrl: string;
 
     // Keep the connection alive by sending a request to the server every 4 minutes, the server timeout is 5 minutes
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
-    constructor(context: vscode.ExtensionContext, serverName: string, loginName: string, sessionToken: string) {
+    constructor(context: vscode.ExtensionContext, serverName: string, portNumber: string, loginName: string, sessionToken: string) {
         this.context = context;
         this.serverName = serverName;
+        this.portNumber = portNumber;
         this.loginName = loginName;
         this.sessionToken = sessionToken;
-        this.newPlayServerBaseUrl = `https://${this.serverName}:${this.newPlayServerPortNumber}/api`;
+        this.newPlayServerBaseUrl = `https://${this.serverName}:${this.portNumber}/api`;
 
         // Create session for API calls to the new play server
         this.newPlayServerSession = axios.create({
@@ -82,11 +82,11 @@ export class PlayServerConnection {
             },
             // Ignore self-signed certificates
             httpsAgent: new https.Agent({
-                rejectUnauthorized: false, // This should only be used in a development environment
+                rejectUnauthorized: false, // TODO: This should only be used in a development environment
             }),
         });
 
-        // Start the keep alive process to keep the session alive
+        // Start the keep alive process to prevent timeout after 5 minutes
         this.startKeepAlive();
     }
 
@@ -158,9 +158,6 @@ export class PlayServerConnection {
             */
 
             console.log("Fetched project list:", projectsResponse.data);
-
-            // TODO: Create a separate command: Fetch every project with every TOV and cycle and display them in tree view.
-
             return projectsResponse.data || [];
         } catch (error) {
             console.error("Error fetching projects:", error);
@@ -510,19 +507,28 @@ async function promptForLoginCredentials(
 } | null> {
     const config = vscode.workspace.getConfiguration(baseKey);
 
-    // Prompt for server name
+    // Get server name from configuration
+    const serverNameConfig = config.get<string>("serverName", "testbench");
+    // Prompt user for server name, showing the default value only if it exists
     const serverNameInput = await promptForInput(
-        `Enter the server name (Default: ${config.get<string>("serverName", "testbench")})`,
+        `Enter the server name${serverNameConfig ? ` (Default: ${serverNameConfig})` : ""}`,
         true
     );
-    if (serverNameInput === undefined) {
+
+    // If user cancels the input prompt, return null to cancel the login process
+    if ((!serverNameInput && !serverNameConfig) || serverNameInput === undefined) {
         return null;
     }
-    const serverName = serverNameInput || config.get<string>("serverName", "testbench");
 
-    // Prompt for port number
+    // Use user input if provided, otherwise fallback to configuration value
+    const serverName = serverNameInput || serverNameConfig;
+
+    // Get port number from configuration (default: 9445)
+    const portConfig = config.get<number>("portNumber", 9445);
+
+    // Prompt user for port number, only showing the default if it's configured
     const portInputAsString = await promptForInput(
-        `Enter the port number (Default: ${config.get<number>("portNumber", 9445)})`,
+        `Enter the port number${portConfig ? ` (Default: ${portConfig})` : ""}`,
         true,
         false,
         (value) => {
@@ -532,10 +538,14 @@ async function promptForLoginCredentials(
             return null;
         }
     );
-    if (portInputAsString === undefined) {
+
+    // If user cancels the input prompt, return null to cancel the login process
+    if ((!portInputAsString && !portConfig) || portInputAsString === undefined) {
         return null;
     }
-    const portNumber = portInputAsString ? parseInt(portInputAsString, 10) : config.get<number>("portNumber", 9445);
+
+    // Use user input if provided, otherwise fallback to configuration value
+    const portNumber = portInputAsString ? parseInt(portInputAsString, 10) : portConfig;
 
     // Check if the server is accessible
     const serverVersions = await fetchServerVersions(serverName, portNumber.toString());
@@ -560,9 +570,10 @@ async function promptForLoginCredentials(
     } // User cancelled
 
     // Update configuration
-    config.update("serverName", serverName);
-    config.update("portNumber", portNumber);
-    config.update("username", username);
+    // TODO: Dont change config
+    // config.update("serverName", serverName);
+    // config.update("portNumber", portNumber);
+    // config.update("username", username);
 
     return { serverName, portNumber, username, password };
 }
@@ -602,9 +613,9 @@ async function loginToNewPlayServerAndInitSessionToken(
 
             // Store password securely
             await context.secrets.store("password", password);
-            console.log("Password stored securely in secret storage.");
+            // console.log("Password stored securely in secret storage.");
 
-            const connection = new PlayServerConnection(context, serverName, username, response.data.sessionToken);
+            const connection = new PlayServerConnection(context, serverName, portNumber.toString(), username, response.data.sessionToken);
             if (await connection.checkIsWorking()) {
                 return connection;
             }
@@ -676,7 +687,6 @@ async function storeCredentialsInSecretStorage(
 function removeSessionData(context: vscode.ExtensionContext, connection: PlayServerConnection | null) {
     if (connection) {
         connection.loginName = "";
-        connection.password = "";
         connection.sessionToken = ""; // TODO: Delete after storing in secret storage
     }
 }

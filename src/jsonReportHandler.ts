@@ -846,13 +846,16 @@ export async function testBenchToRobotFramework(
                 );
 
                 // Configuration for the test suite generation
-                // TODO: Use the extension settings for this object
-                const config: Configuration = {
-                    generationDirectory: chosenOutputFolderForZipExtraction,
-                    clearGenerationDirectory: true,
-                    createOutputZip: false,
-                    removeExtractedFiles: false,
-                };
+                const config = vscode.workspace.getConfiguration(baseKey);
+                const testbench2robotframeworkConfig: Configuration = config.get<Configuration>(
+                    "reportGenerationConfig",
+                    {
+                        generationDirectory: config.get<string>("workspaceLocation", ""),
+                        clearGenerationDirectory: true,
+                        createOutputZip: false,
+                        removeExtractedFiles: false,
+                    }
+                );
 
                 // Paths for extracted files and generated test cases
                 const folderNameOfExtractedZip = `Extracted Files`;
@@ -871,11 +874,10 @@ export async function testBenchToRobotFramework(
                     });
                 }
 
+                // TODO: use testbench2robotframework library instead of doing this manually
                 console.log(`Starting convertJSONsIntoTestCases with path: ${zipExtractionFolderPath}`);
                 await convertJSONsIntoTestCases(zipExtractionFolderPath, robotFilesFolderPath);
-
-                // Optional Step: Remove extracted files if configured
-                if (config.removeExtractedFiles) {
+                if (testbench2robotframeworkConfig.removeExtractedFiles) {
                     if (progress) {
                         progress.report({
                             increment: 10,
@@ -884,6 +886,7 @@ export async function testBenchToRobotFramework(
                     }
                     removeExtractedFiles(zipExtractionFolderPath);
                 }
+                // End of testbench2robotframework library work
 
                 vscode.window.showInformationMessage(`Test suite generation done.`);
             } catch (error: any) {
