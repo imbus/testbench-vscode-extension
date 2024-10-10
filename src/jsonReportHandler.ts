@@ -4,8 +4,8 @@ import * as path from "path";
 import * as unzipper from "unzipper"; // npm install unzipper
 import * as cheerio from "cheerio"; // To parse HTML  npm install --save-dev @types/cheerio
 import axios, { AxiosResponse } from "axios";
-import { PlayServerConnection } from "./testbenchConnection";
-import { TestThemeTreeItem, findProjectKeyOfCycle } from "./testThemeTreeView";
+import { PlayServerConnection } from "./testBenchConnection";
+import { TestThemeTreeItem, findProjectKeyOfCycle } from "./projectManagementTreeView";
 
 // Configuration interface
 export interface Configuration {
@@ -252,7 +252,7 @@ async function getJobId(
     cycleKey: string,
     requestParams?: ReportRequestParams
 ): Promise<string> {
-    const url = `${connection.newPlayServerBaseUrl}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
+    const url = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
 
     console.log(
         `Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`
@@ -261,7 +261,7 @@ async function getJobId(
     const jobIdResponse: AxiosResponse<JobIdResponse> = await axios.post(url, requestParams, {
         headers: {
             accept: "application/json",
-            Authorization: connection.sessionToken, // Include session token for authorization
+            Authorization: connection.getSessionToken(), // Include session token for authorization
             "Content-Type": "application/json",
         },
     });
@@ -279,14 +279,14 @@ async function getJobStatus(
     projectKey: string,
     jobId: string
 ): Promise<JobStatusResponse> {
-    const url = `${connection.newPlayServerBaseUrl}/projects/${projectKey}/report/job/${jobId}/v1`;
+    const url = `${connection.getBaseURL()}/projects/${projectKey}/report/job/${jobId}/v1`;
 
     // console.log(`Checking job status: ${url}`);
 
     const jobStatusResponse: AxiosResponse<JobStatusResponse> = await axios.get(url, {
         headers: {
             accept: "application/vnd.testbench+json",
-            Authorization: connection.sessionToken,
+            Authorization: connection.getSessionToken(),
         },
     });
 
@@ -304,7 +304,7 @@ async function downloadReport(
     projectKey: string,
     fileName: string
 ): Promise<string | undefined> {
-    const url = `${connection.newPlayServerBaseUrl}/projects/${projectKey}/report/${fileName}/v1`;
+    const url = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileName}/v1`;
 
     console.log(`Sending request to download report ${fileName} to URL ${url}.`);
 
@@ -312,7 +312,7 @@ async function downloadReport(
         responseType: "arraybuffer", // Expecting binary data
         headers: {
             accept: "application/vnd.testbench+json",
-            Authorization: connection.sessionToken,
+            Authorization: connection.getSessionToken(),
         },
     });
 
@@ -922,7 +922,11 @@ export async function startTestGenerationProcess(
             // Check if the user is logged in
             if (connection) {
                 // Start the generation process
-                testBenchToRobotFramework(treeItem.label, baseKey, projectKeyOfCycle, cycleKey, connection);
+                if (typeof treeItem.label === "string") {
+                    testBenchToRobotFramework(treeItem.label, baseKey, projectKeyOfCycle, cycleKey, connection);
+                } else {
+                    vscode.window.showErrorMessage("Invalid label type. Test generation aborted.");
+                }
             } else {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
             }
@@ -1073,11 +1077,8 @@ function isValidTestJSON(jsonData: any): boolean {
     return jsonData && Array.isArray(jsonData.interactions);
 }
 
-// Converts JSON files in a directory to Robot Framework test cases
 // TODO: Rewrite this function after testbench2robotframework library is updated.
-// tb2robot --version
-// TestBench2RobotFramework 0.7.0 with [Robot Framework 7.1 (Python 3.12.6 on win32)]
-// tb2robot write -c .\Konfigurationsdatei.json E:\TestBench\report.zip
+// Converts JSON files in a directory to Robot Framework test cases
 async function convertJSONsIntoTestCases(
     folderPathOfJSONFiles: string,
     outputFolderOfTestSuites: string

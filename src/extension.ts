@@ -1,13 +1,13 @@
 import * as vscode from "vscode";
 import * as jsonReportHandler from "./jsonReportHandler";
-import { PlayServerConnection, performLogin, changeConnection } from "./testbenchConnection";
+import { PlayServerConnection, performLogin, changeConnection } from "./testBenchConnection";
 import {
     TestThemeTreeItem,
     makeRoot,
     TestThemeTreeDataProvider,
     initializeTreeView_TO_REMOVE,
-} from "./testThemeTreeView";
-import { TreeViewDataProvider } from "./newTreeView";
+} from "./projectManagementTreeView";
+import { TreeViewDataProvider } from "./testThemeTreeView";
 
 export function activate(context: vscode.ExtensionContext) {
     // TODO: WebViev UI for login?
@@ -16,7 +16,7 @@ export function activate(context: vscode.ExtensionContext) {
     // TODO: Refactor code (+ Todo's in code) / Review code quality
     // TODO: (Later) Upload test results back to TestBench server.
     // TODO: Extra: Create command: Fetch every project with every TOV and cycle and display them in tree view.
-    // TODO: 2 Trees
+
 
     const baseKey = "testbenchExtension";
     const commands = {
@@ -45,16 +45,23 @@ export function activate(context: vscode.ExtensionContext) {
     let serverName: string;
     let portNumber: number;
     let username: string | undefined; // Username has no default value in package.json
+    let storePassword: boolean;
     let workspaceLocation: string | undefined;
     let reportGenerationConfig: ReportGenerationConfiguration;
 
     // Initialize or update configuration settings
-    function loadConfiguration() {
+    async function loadConfiguration() {
         const config = vscode.workspace.getConfiguration(baseKey);
 
         serverName = config.get<string>("serverName", "testbench");
         portNumber = config.get<number>("portNumber", 9445);
         username = config.get<string>("username");
+        storePassword = config.get<boolean>("storePasswordAfterLogin", false);
+        // If storePassword is false, delete the stored password
+        if (!storePassword) {
+            await context.secrets.delete(`password`);
+            console.log("@@ Password deleted from secrets storage.");
+        }
         workspaceLocation = config.get<string>("workspaceLocation");
         reportGenerationConfig = config.get<ReportGenerationConfiguration>("reportGenerationConfig", {
             generationDirectory: "",
@@ -98,7 +105,7 @@ export function activate(context: vscode.ExtensionContext) {
     // TODO: Implement the new tree view
     const newTreeDataProvider = new TreeViewDataProvider();
     // Register the Tree2 view in the TestBench Explorer
-    vscode.window.registerTreeDataProvider("testBenchTree2", newTreeDataProvider);
+    vscode.window.registerTreeDataProvider("testThemeTree", newTreeDataProvider);
 
     // Register the "Display Commands" command
     context.subscriptions.push(
@@ -221,7 +228,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // TESTING NEW PLAY SERVER PROJECT LIST
+    // Register the "Get Projects List" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.getProjectList, async () => {
             if (connection) {
@@ -240,7 +247,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
 
                 testThemeDataProvider = new TestThemeTreeDataProvider(connection, selectedProjectKey!);
-                vscode.window.createTreeView("testBenchProjects", { treeDataProvider: testThemeDataProvider });
+                vscode.window.createTreeView("projectManagementTree", { treeDataProvider: testThemeDataProvider });
                 testThemeDataProvider = await initializeTreeView_TO_REMOVE(context, connection, selectedProjectKey!);
             }
         })

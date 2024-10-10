@@ -33,10 +33,16 @@
                     "description": "Username of the user for the TestBench server.",
                     "order": 3
                 },
+                "testbenchExtension.storePasswordAfterLogin": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Store password after login for automatic login.",
+                    "order": 4
+                },
                 "testbenchExtension.workspaceLocation": {
                     "type": "string",
                     "description": "Workspace location.",
-                    "order": 4
+                    "order": 5
                 },
                 "testbenchExtension.reportGenerationConfig": {
                     "type": "object",
@@ -68,7 +74,7 @@
                             "default": false,
                             "description": "Remove extracted files after processing."
                         },
-                        "order": 5
+                        "order": 6
                     }
                 }
             }
@@ -130,12 +136,12 @@
         "views": {
             "testBenchExplorer": [
                 {
-                    "id": "testBenchProjects",
-                    "name": "TestBench Test Theme Tree"
+                    "id": "projectManagementTree",
+                    "name": "Project Management Tree"
                 },
                 {
-                    "id": "testBenchTree2",
-                    "name": "TestBench Tree 2"
+                    "id": "testThemeTree",
+                    "name": "Test Theme Tree"
                 }
             ]
         },
@@ -149,12 +155,12 @@
             "view/item/context": [
                 {
                     "command": "testbenchExtension.generateTestCases",
-                    "when": "view == testBenchProjects && viewItem == cycle",
+                    "when": "view == projectManagementTree && viewItem == cycle",
                     "group": "inline"
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "view == testBenchProjects && viewItem == project || viewItem == tov || viewItem == version || viewItem == cycle || viewItem == TestTheme || viewItem == TestCaseSet",
+                    "when": "view == projectManagementTree && viewItem == project || viewItem == tov || viewItem == version || viewItem == cycle || viewItem == TestTheme || viewItem == TestCaseSet",
                     "group": "navigation"
                 }
             ]
