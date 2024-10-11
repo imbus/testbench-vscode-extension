@@ -2,7 +2,7 @@ import * as https from "https";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
-import { TestThemeTreeDataProvider, initializeTreeView_TO_REMOVE } from "./projectManagementTreeView";
+import { ProjectManagementTreeDataProvider, initializeTreeView_TO_REMOVE } from "./projectManagementTreeView";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate
@@ -268,7 +268,7 @@ export class PlayServerConnection {
         }
     }
 
-    async logoutUser(context: vscode.ExtensionContext, treeDataProvider: TestThemeTreeDataProvider): Promise<void> {
+    async logoutUser(context: vscode.ExtensionContext, treeDataProvider: ProjectManagementTreeDataProvider): Promise<void> {
         try {
             const response: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
                 headers: {
@@ -655,15 +655,15 @@ export async function changeConnection(
     context: vscode.ExtensionContext,
     baseKey: string,
     oldConnection: PlayServerConnection
-): Promise<{ newConnection: PlayServerConnection | null; newTreeDataProvider: TestThemeTreeDataProvider | null }> {
+): Promise<{ newConnection: PlayServerConnection | null; newTreeDataProvider: ProjectManagementTreeDataProvider | null }> {
     if (oldConnection) {
         removeSessionData(context, oldConnection);
         await clearStoredCredentials(context, baseKey);
         let newConnection = await performLogin(context, baseKey, true);
 
-        let newTreeDataProvider: TestThemeTreeDataProvider | null = null;
+        let newTreeDataProvider: ProjectManagementTreeDataProvider | null = null;
         if (newConnection) {
-            newTreeDataProvider = await initializeTreeView_TO_REMOVE(context, newConnection);
+            [newTreeDataProvider] = await initializeTreeView_TO_REMOVE(context, newConnection);
             // newTreeDataProvider = new TestThemeTreeDataProvider(newConnection);
             // await newTreeDataProvider.initializeTreeView(context, newConnection);
         }

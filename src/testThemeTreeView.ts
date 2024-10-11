@@ -1,35 +1,54 @@
 import * as vscode from "vscode";
+import { ProjectManagementTreeItem } from "./projectManagementTreeView";
 
-// Define the data model for the tree items
-class TreeItem extends vscode.TreeItem {
-    constructor(label: string) {
-        super(label, vscode.TreeItemCollapsibleState.None);
-        this.tooltip = `${this.label}`;
-    }
-}
+// TODO: Create a test theme tree item class?
+export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<ProjectManagementTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<ProjectManagementTreeItem | void> =
+        new vscode.EventEmitter<ProjectManagementTreeItem | void>();
+    readonly onDidChangeTreeData: vscode.Event<ProjectManagementTreeItem | void> = this._onDidChangeTreeData.event;
 
-// Implement the TreeDataProvider for Tree 2
-export class TreeViewDataProvider implements vscode.TreeDataProvider<TreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<TreeItem | undefined | void> = new vscode.EventEmitter<
-        TreeItem | undefined | void
-    >();
-    readonly onDidChangeTreeData: vscode.Event<TreeItem | undefined | void> = this._onDidChangeTreeData.event;
+    private rootElements: ProjectManagementTreeItem[] = [];
 
-    // Reload the tree data
     refresh(): void {
         this._onDidChangeTreeData.fire();
     }
 
-    // Provide the root elements for the tree
-    getTreeItem(element: TreeItem): vscode.TreeItem {
+    getParent(element: ProjectManagementTreeItem): ProjectManagementTreeItem | null {
+        return element.parent;
+    }
+
+    async getChildren(element?: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
+        if (!element) {
+            return this.rootElements;
+        }
+
+        return element.children || [];
+    }
+
+    getTreeItem(element: ProjectManagementTreeItem): vscode.TreeItem {
         return element;
     }
 
-    // Provide the children of the tree
-    getChildren(element?: TreeItem): Thenable<TreeItem[]> {
-        if (!element) {
-            return Promise.resolve([]);
-        }
-        return Promise.resolve([]);
+    // Set the root elements of the tree
+    setRoots(roots: ProjectManagementTreeItem[]): void {
+        this.rootElements = roots;
+        this.refresh();
+    }
+
+    // Set the selected item as the root and refresh the tree view
+    // TODO: Implement
+    makeRoot(): void {}
+
+    handleExpansion(element: ProjectManagementTreeItem, expanded: boolean): void {
+        element.collapsibleState = expanded
+            ? vscode.TreeItemCollapsibleState.Expanded
+            : vscode.TreeItemCollapsibleState.Collapsed;
+        element.updateIcon();
+    }
+
+    // Clear the tree
+    clear(): void {
+        this.rootElements = [];
+        this.refresh();
     }
 }

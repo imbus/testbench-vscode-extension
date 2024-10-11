@@ -2,12 +2,12 @@ import * as vscode from "vscode";
 import * as jsonReportHandler from "./jsonReportHandler";
 import { PlayServerConnection, performLogin, changeConnection } from "./testBenchConnection";
 import {
-    TestThemeTreeItem,
+    ProjectManagementTreeItem,
     makeRoot,
-    TestThemeTreeDataProvider,
+    ProjectManagementTreeDataProvider,
     initializeTreeView_TO_REMOVE,
 } from "./projectManagementTreeView";
-import { TreeViewDataProvider } from "./testThemeTreeView";
+import { TestThemeTreeDataProvider } from "./testThemeTreeView";
 
 export function activate(context: vscode.ExtensionContext) {
     // TODO: WebViev UI for login?
@@ -100,10 +100,10 @@ export function activate(context: vscode.ExtensionContext) {
     // Store the connection to server
     let connection: PlayServerConnection | null = null;
     // Store the test theme tree data provider to be able to clear it on logout
-    let testThemeDataProvider: TestThemeTreeDataProvider | null = null;
+    let testThemeDataProvider: ProjectManagementTreeDataProvider | null = null;
 
     // TODO: Implement the new tree view
-    const newTreeDataProvider = new TreeViewDataProvider();
+    const newTreeDataProvider = new TestThemeTreeDataProvider();
     // Register the Tree2 view in the TestBench Explorer
     vscode.window.registerTreeDataProvider("testThemeTree", newTreeDataProvider);
 
@@ -210,7 +210,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Generate Test Cases" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.generateTestCases, async (item: TestThemeTreeItem) => {
+        vscode.commands.registerCommand(commands.generateTestCases, async (item: ProjectManagementTreeItem) => {
             if (connection) {
                 jsonReportHandler.startTestGenerationProcess(item, connection, baseKey);
             } else {
@@ -221,7 +221,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Make Root" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.makeRoot, (treeItem: TestThemeTreeItem) => {
+        vscode.commands.registerCommand(commands.makeRoot, (treeItem: ProjectManagementTreeItem) => {
             if (testThemeDataProvider) {
                 makeRoot(treeItem, testThemeDataProvider);
             }
@@ -246,9 +246,9 @@ export function activate(context: vscode.ExtensionContext) {
                     return;
                 }
 
-                testThemeDataProvider = new TestThemeTreeDataProvider(connection, selectedProjectKey!);
+                testThemeDataProvider = new ProjectManagementTreeDataProvider(connection, selectedProjectKey!);
                 vscode.window.createTreeView("projectManagementTree", { treeDataProvider: testThemeDataProvider });
-                testThemeDataProvider = await initializeTreeView_TO_REMOVE(context, connection, selectedProjectKey!);
+                [testThemeDataProvider] = await initializeTreeView_TO_REMOVE(context, connection, selectedProjectKey!);
             }
         })
     );

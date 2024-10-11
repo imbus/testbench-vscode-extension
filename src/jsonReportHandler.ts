@@ -5,7 +5,7 @@ import * as unzipper from "unzipper"; // npm install unzipper
 import * as cheerio from "cheerio"; // To parse HTML  npm install --save-dev @types/cheerio
 import axios, { AxiosResponse } from "axios";
 import { PlayServerConnection } from "./testBenchConnection";
-import { TestThemeTreeItem, findProjectKeyOfCycle } from "./projectManagementTreeView";
+import { ProjectManagementTreeItem, findProjectKeyOfCycle } from "./projectManagementTreeView";
 
 // Configuration interface
 export interface Configuration {
@@ -905,7 +905,7 @@ export async function testBenchToRobotFramework(
 
 // Entry point for the test generation process
 export async function startTestGenerationProcess(
-    treeItem: TestThemeTreeItem,
+    treeItem: ProjectManagementTreeItem,
     connection: PlayServerConnection,
     baseKey: string
 ) {

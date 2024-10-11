@@ -160,7 +160,7 @@
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "view == projectManagementTree && viewItem == project || viewItem == tov || viewItem == version || viewItem == cycle || viewItem == TestTheme || viewItem == TestCaseSet",
+                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == project || viewItem == tov || viewItem == version || viewItem == cycle || viewItem == TestTheme || viewItem == TestCaseSet)",
                     "group": "navigation"
                 }
             ]
