@@ -19,29 +19,29 @@
                 "testbenchExtension.serverName": {
                     "type": "string",
                     "default": "testbench",
-                    "description": "The server name that is used to connect to the TestBench server.",
+                    "description": "The hostname or IP address of the TestBench server that the extension will connect to.",
                     "order": 1
                 },
                 "testbenchExtension.portNumber": {
                     "type": "number",
                     "default": 9445,
-                    "description": "Port Number for the TestBench server.",
+                    "description": "The port number on which the TestBench server is listening for incoming connections.",
                     "order": 2
                 },
                 "testbenchExtension.username": {
                     "type": "string",
-                    "description": "Username of the user for the TestBench server.",
+                    "description": "The username used for authentication when connecting to the TestBench server.",
                     "order": 3
                 },
                 "testbenchExtension.storePasswordAfterLogin": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Store password after login for automatic login.",
+                    "description": "If enabled, the extension will securely store the user's password after the first login to facilitate automatic login in future sessions without prompting for credentials.",
                     "order": 4
                 },
                 "testbenchExtension.workspaceLocation": {
                     "type": "string",
-                    "description": "Workspace location.",
+                    "description": "The path to the workspace or project directory on the local machine for storing local files.",
                     "order": 5
                 },
                 "testbenchExtension.reportGenerationConfig": {
@@ -57,7 +57,7 @@
                         "generationDirectory": {
                             "type": "string",
                             "default": "",
-                            "description": "Directory where files will be generated."
+                            "description": "The directory where the files will be generated."
                         },
                         "clearGenerationDirectory": {
                             "type": "boolean",
@@ -82,15 +82,27 @@
         "commands": [
             {
                 "command": "testbenchExtension.login",
-                "title": "Testbench: Login"
+                "title": "Testbench: Login",
+                "icon": {
+                    "light": "resources/icons/User_Add.png",
+                    "dark": "resources/icons/User_Add.png"
+                }
             },
             {
                 "command": "testbenchExtension.logout",
-                "title": "Testbench: Logout"
+                "title": "Testbench: Logout",
+                "icon": {
+                    "light": "resources/icons/User_Delete.png",
+                    "dark": "resources/icons/User_Delete.png"
+                }
             },
             {
                 "command": "testbenchExtension.changeConnection",
                 "title": "TestBench: Change Connection"
+            },
+            {
+                "command": "testbenchExtension.setWorkspaceLocation",
+                "title": "TestBench: Set Workspace Location"
             },
             {
                 "command": "testbenchExtension.generateTestCases",
@@ -98,11 +110,11 @@
             },
             {
                 "command": "testbenchExtension.makeRoot",
-                "title": "Make root"
+                "title": "TestBench: Make root"
             },
             {
-                "command": "testbenchExtension.displayTestThemeTree",
-                "title": "Display Tree View",
+                "command": "testbenchExtension.displayProjectsList",
+                "title": "TestBench: Display Projects List",
                 "icon": {
                     "light": "resources/icons/Global_Settings_List.png",
                     "dark": "resources/icons/Global_Settings_List.png"
@@ -110,15 +122,11 @@
             },
             {
                 "command": "testbenchExtension.refreshTreeView",
-                "title": "Refresh Tree View",
+                "title": "TestBench: Refresh Tree View",
                 "icon": {
                     "light": "resources/icons/Action_Refresh.png",
                     "dark": "resources/icons/Action_Refresh.png"
                 }
-            },
-            {
-                "command": "testbenchExtension.runRobotTests",
-                "title": "TestBench: Run Robot Framework Tests"
             },
             {
                 "command": "testbenchExtension.getCycleStructure",
@@ -126,11 +134,19 @@
             },
             {
                 "command": "testbenchExtension.displayCommands",
-                "title": "TestBench: Display Commands"
+                "title": "TestBench: Display Commands",
+                "icon": {
+                    "light": "resources/icons/lightbulb16.png",
+                    "dark": "resources/icons/lightbulb16.png"
+                }
             },
             {
                 "command": "testbenchExtension.showExtensionSettings",
-                "title": "TestBench: Show Extension Settings"
+                "title": "TestBench: Show Extension Settings",
+                "icon": {
+                    "light": "resources/icons/cog_edit.png",
+                    "dark": "resources/icons/cog_edit.png"
+                }
             },
             {
                 "command": "testbenchExtension.getProjectList",
@@ -152,12 +168,40 @@
         "menus": {
             "view/title": [
                 {
-                    "command": "testbenchExtension.displayTestThemeTree",
-                    "group": "navigation"
+                    "command": "testbenchExtension.login",
+                    "group": "navigation@1",
+                    "title": "Testbench: Login",
+                    "when": "!testbenchExtension.connectionActive",
+                    "icon": {
+                        "light": "resources/icons/User_Add.png",
+                        "dark": "resources/icons/User_Add.png"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.logout",
+                    "group": "navigation@2",
+                    "title": "Testbench: Logout",
+                    "when": "testbenchExtension.connectionActive",
+                    "icon": {
+                        "light": "resources/icons/User_Delete.png",
+                        "dark": "resources/icons/User_Delete.png"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.showExtensionSettings",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "testbenchExtension.displayCommands",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "testbenchExtension.displayProjectsList",
+                    "group": "navigation@5"
                 },
                 {
                     "command": "testbenchExtension.refreshTreeView",
-                    "group": "navigation"
+                    "group": "navigation@6"
                 }
             ],
             "view/item/context": [

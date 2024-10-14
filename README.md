@@ -1,17 +1,17 @@
 # TestBench VS Code Extension
 
-This Visual Studio Code Extension for TestBench allows you to display the test theme tree and generate robotframework test cases directly within Visual Studio Code.
+This Visual Studio Code Extension for TestBench allows you to:
+- Display the project management tree and the test theme tree, where you can navigate through the tree elements.
+- Generate robotframework test cases from test cycles directly within Visual Studio Code.
 
 ## Features
 
-- Display test theme tree down to test cases
+- Display project management tree and test theme tree in separate views
 - Generate robotframework test cases
-- Seamless integration with Visual Studio Code
 
 ## Requirements
 
 - testbench2robotframework python library
-- robotframework python library
 
 ## Installation
 
@@ -19,6 +19,16 @@ This Visual Studio Code Extension for TestBench allows you to display the test t
 2. Go to the Extensions view by clicking on the Extensions icon in the Activity Bar on the side of the window or by pressing `Ctrl+Shift+X`.
 3. Search for "TestBench".
 4. Click Install.
+
+## Configuration
+
+The extension settings contains following configurations:
+- Testbench server
+- Port number
+- Username
+- Automatic login option
+- Workspace location
+- Test generation configuration
 
 ## Usage
 

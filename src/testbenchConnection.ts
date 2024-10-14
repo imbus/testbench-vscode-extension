@@ -314,6 +314,7 @@ export class PlayServerConnection {
             }
         } finally {
             // Regardless of the outcome, stop the keep-alive process
+            vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
             this.stopKeepAlive();
         }
     }
@@ -453,6 +454,7 @@ export async function performLogin(
 
         if (connection) {
             vscode.window.showInformationMessage("Login successful!");
+            vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
             return connection;
         } else {
             await clearStoredCredentials(context, baseKey);
@@ -584,7 +586,7 @@ async function loginToNewPlayServerAndInitSessionToken(
             const storePassword = config.get<boolean>("storePasswordAfterLogin", false);
             if (storePassword) {
                 await context.secrets.store("password", password);
-                console.log("@@ Password stored securely in secret storage.");
+                console.log("Password stored securely in secret storage.");
             }
 
             const connection = new PlayServerConnection(context, serverName, portNumber, response.data.sessionToken);

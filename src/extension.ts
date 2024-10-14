@@ -20,8 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
         login: `${baseKey}.login`,
         changeConnection: `${baseKey}.changeConnection`,
         logout: `${baseKey}.logout`,
-        displayTestThemeTree: `${baseKey}.displayTestThemeTree`,
-        executeRobotTests: `${baseKey}.runRobotTests`,
+        displayProjectsList: `${baseKey}.displayProjectsList`,
         generateTestCases: `${baseKey}.generateTestCases`,
         makeRoot: `${baseKey}.makeRoot`,
         getCycleStructure: `${baseKey}.getCycleStructure`,
@@ -29,6 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
         showExtensionSettings: `${baseKey}.showExtensionSettings`,
         getProjectList: `${baseKey}.getProjectList`,
         refreshTreeView: `${baseKey}.refreshTreeView`,
+        setWorkspaceLocation: `${baseKey}.setWorkspaceLocation`,
     };
 
     interface ReportGenerationConfiguration {
@@ -57,9 +57,10 @@ export function activate(context: vscode.ExtensionContext) {
         // If storePassword is false, delete the stored password
         if (!storePassword) {
             await context.secrets.delete(`password`);
-            console.log("@@ Password deleted from secrets storage.");
+            console.log("Password deleted from secrets storage.");
         }
         workspaceLocation = config.get<string>("workspaceLocation");
+
         reportGenerationConfig = config.get<ReportGenerationConfiguration>("reportGenerationConfig", {
             generationDirectory: "",
             clearGenerationDirectory: true,
@@ -72,27 +73,56 @@ export function activate(context: vscode.ExtensionContext) {
     loadConfiguration();
 
     // Respond to configuration changes
-    const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration(baseKey)) {
-            loadConfiguration();
-            console.log(`Configuration changed!`);
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration(baseKey)) {
+                loadConfiguration();
+                console.log(`Configuration changed!`);
+            }
+        })
+    );
+
+    async function promptForWorkspaceLocation(): Promise<string | undefined> {
+        const options: vscode.OpenDialogOptions = {
+            canSelectMany: false,
+            openLabel: "Select Workspace Location",
+            canSelectFolders: true,
+            canSelectFiles: false,
+        };
+
+        const folderUri = await vscode.window.showOpenDialog(options);
+        if (folderUri && folderUri[0]) {
+            return folderUri[0].fsPath;
         }
-    });
-    context.subscriptions.push(configChangeDisposable);
+        return undefined;
+    }
+
+    // Register the "Set Workspace Location" command
+    context.subscriptions.push(
+        vscode.commands.registerCommand(`${baseKey}.setWorkspaceLocation`, async () => {
+            const newWorkspaceLocation = await promptForWorkspaceLocation();
+            if (newWorkspaceLocation) {
+                workspaceLocation = newWorkspaceLocation;
+                const config = vscode.workspace.getConfiguration(baseKey);
+                await config.update("workspaceLocation", workspaceLocation);
+                vscode.window.showInformationMessage(`Workspace location set to: ${workspaceLocation}`);
+            }
+        })
+    );
 
     // Register Show Extension Settings command
-    const showExtensionSettingsDisposable = vscode.commands.registerCommand(commands.showExtensionSettings, () => {
-        // Open the settings UI of the extension inside the settings editor
-        vscode.commands.executeCommand("workbench.action.openSettings2", {
-            query: "@ext:imbus.testbench-visual-studio-code-extension",
-        });
-    });
-    context.subscriptions.push(showExtensionSettingsDisposable);
+    context.subscriptions.push(
+        vscode.commands.registerCommand(commands.showExtensionSettings, () => {
+            // Open the settings UI of the extension inside the settings editor
+            vscode.commands.executeCommand("workbench.action.openSettings2", {
+                query: "@ext:imbus.testbench-visual-studio-code-extension",
+            });
+        })
+    );
 
-    // Store the connection to server
-    let connection: PlayServerConnection | null = null;
-
-    let projectManagementTreeDataProvider: ProjectManagementTreeDataProvider | null = null;
+    let connection: PlayServerConnection | null = null; // Store the connection to server
+    vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null); // Icon change based on connection status
+    let projectManagementTreeDataProvider: ProjectManagementTreeDataProvider | null = null; // Store the tree data provider
 
     // Register the "Display Commands" command
     context.subscriptions.push(
@@ -133,7 +163,7 @@ export function activate(context: vscode.ExtensionContext) {
                     vscode.commands.executeCommand(commands.changeConnection);
                     break;
                 case "Display Test Theme Tree":
-                    vscode.commands.executeCommand(commands.displayTestThemeTree);
+                    vscode.commands.executeCommand(commands.displayProjectsList);
                     break;
                 case "Cancel":
                     return;
@@ -141,27 +171,35 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // TODO: Change the login icon based on connection status?
     // Register the "Login" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.login, async () => {
-            let connectionAfterLogin = await performLogin(context, baseKey);
-            if (!connectionAfterLogin) {
-                return;
+            if (!connection) {
+                console.log("Connection was null, performing login..");
+                let connectionAfterLogin = await performLogin(context, baseKey);
+                if (!connectionAfterLogin) {
+                    console.log("Login failed.");
+                    return;
+                } else {
+                    connection = connectionAfterLogin;
+                }
+
+                // testThemeDataProvider = await initializeTreeView(context, connection);
+                // vscode.commands.executeCommand(commands.getProjectList);
+
+                // Display the commands after logging in
+                vscode.commands.executeCommand(commands.displayCommands);
             } else {
-                connection = connectionAfterLogin;
+                console.log("Connection not null.");
+                vscode.window.showInformationMessage("You are already logged in.");
             }
-
-            // testThemeDataProvider = await initializeTreeView(context, connection);
-            // vscode.commands.executeCommand(commands.getProjectList);
-
-            // Display the commands after logging in
-            vscode.commands.executeCommand(commands.displayCommands);
         })
     );
 
     // Register the "Display Test Theme Tree" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.displayTestThemeTree, async () => {
+        vscode.commands.registerCommand(commands.displayProjectsList, async () => {
             // testThemeDataProvider = await initializeTreeView_TO_REMOVE(context, connection);
             vscode.commands.executeCommand(commands.getProjectList);
         })
@@ -231,7 +269,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register the "Refresh Tree" command
-    // TODO: Implement
+    // TODO: Fix? When a Tov is set root in the project management tree while the test theme tree is open, and you refresh the project management tree, test theme tree elements disappears.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.refreshTreeView, async () => {
             projectManagementTreeDataProvider?.clearTree();
