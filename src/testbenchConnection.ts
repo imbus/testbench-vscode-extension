@@ -2,7 +2,7 @@ import * as https from "https";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
-import { ProjectManagementTreeDataProvider, initializeTreeView_TO_REMOVE } from "./projectManagementTreeView";
+import { ProjectManagementTreeDataProvider, initializeTreeView } from "./projectManagementTreeView";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate
@@ -97,6 +97,15 @@ export class PlayServerConnection {
             console.error("Session token not found.");
         }
         return token;
+    }
+
+    clearSessionData() {
+        this.baseURL = "";
+        this.serverName = "";
+        this.portNumber = 0;
+        this.sessionToken = "";
+        this.apiClient = axios.create();
+        this.keepAliveIntervalId = null;
     }
 
     async selectProjectKeyFromProjectList(projectsData: Project[]): Promise<string | null> {
@@ -268,7 +277,10 @@ export class PlayServerConnection {
         }
     }
 
-    async logoutUser(context: vscode.ExtensionContext, treeDataProvider: ProjectManagementTreeDataProvider): Promise<void> {
+    async logoutUser(
+        context: vscode.ExtensionContext,
+        treeDataProvider: ProjectManagementTreeDataProvider
+    ): Promise<void> {
         try {
             const response: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
                 headers: {
@@ -278,7 +290,7 @@ export class PlayServerConnection {
 
             if (response.status === 204) {
                 // clearStoredCredentials(context, baseKey); // Clear the stored credentials not needed if the user wants to log in automatically again
-                removeSessionData(context, this); // Clear the session data
+                this.clearSessionData(); // Clear the session data
                 if (treeDataProvider) {
                     treeDataProvider.clearTree();
                 }
@@ -301,6 +313,7 @@ export class PlayServerConnection {
                 console.error(`An unexpected error occurred: ${error}`);
             }
         } finally {
+            // Regardless of the outcome, stop the keep-alive process
             this.stopKeepAlive();
         }
     }
@@ -593,11 +606,6 @@ async function loginToNewPlayServerAndInitSessionToken(
 async function clearStoredCredentials(context: vscode.ExtensionContext, baseKey: string) {
     try {
         await context.secrets.delete("password");
-        // const config = vscode.workspace.getConfiguration(baseKey);
-        // config.update("serverName", undefined);
-        // config.update("portNumber", undefined);
-        // config.update("username", undefined);
-        // console.log("Cleared password successfully.");
     } catch (error) {
         console.error("Failed to clear credentials:", error);
     }
@@ -621,51 +629,23 @@ interface LoginResponse {
     licenseWarning: string | null;
 }
 
-async function storeCredentialsInSecretStorage(
-    context: vscode.ExtensionContext,
-    baseKey: string,
-    serverName: string,
-    portNumber: number,
-    username: string,
-    password: string,
-    sessionToken: string
-): Promise<void> {
-    try {
-        await context.secrets.store("server", serverName);
-        await context.secrets.store("port", portNumber.toString());
-        await context.secrets.store("loginName", username);
-        await context.secrets.store("password", password);
-        await context.secrets.store("sessionToken", sessionToken);
-        console.log("Credentials stored securely in secret storage.");
-    } catch (error) {
-        console.error("Failed to store credentials:", error);
-        vscode.window.showErrorMessage("Failed to store credentials securely.");
-    }
-}
-
-function removeSessionData(context: vscode.ExtensionContext, connection: PlayServerConnection | null) {
-    if (connection) {
-        // Clear sensitive data
-        // connection.username = "";
-        // connection.sessionToken = ""; // TODO: Delete after storing in secret storage
-    }
-}
-
 export async function changeConnection(
     context: vscode.ExtensionContext,
     baseKey: string,
-    oldConnection: PlayServerConnection
-): Promise<{ newConnection: PlayServerConnection | null; newTreeDataProvider: ProjectManagementTreeDataProvider | null }> {
+    oldConnection: PlayServerConnection,
+    oldTreeDataProvider: ProjectManagementTreeDataProvider
+): Promise<{
+    newConnection: PlayServerConnection | null;
+    newTreeDataProvider: ProjectManagementTreeDataProvider | null;
+}> {
     if (oldConnection) {
-        removeSessionData(context, oldConnection);
+        await oldConnection.logoutUser(context, oldTreeDataProvider);
         await clearStoredCredentials(context, baseKey);
         let newConnection = await performLogin(context, baseKey, true);
 
         let newTreeDataProvider: ProjectManagementTreeDataProvider | null = null;
         if (newConnection) {
-            [newTreeDataProvider] = await initializeTreeView_TO_REMOVE(context, newConnection);
-            // newTreeDataProvider = new TestThemeTreeDataProvider(newConnection);
-            // await newTreeDataProvider.initializeTreeView(context, newConnection);
+            [newTreeDataProvider] = await initializeTreeView(context, newConnection);
         }
         return { newConnection, newTreeDataProvider };
     } else {

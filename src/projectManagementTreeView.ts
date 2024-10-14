@@ -3,6 +3,8 @@ import * as path from "path";
 import { PlayServerConnection } from "./testBenchConnection";
 import { TestThemeTreeDataProvider } from "./testThemeTreeView";
 
+// Project management tree that displays projects, versions and cycles.
+// Upon expanding a cycle element, the remaining children elements are displayed in test theme tree (test themes, test case sets, and test cases).
 export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvider<ProjectManagementTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ProjectManagementTreeItem | void> =
         new vscode.EventEmitter<ProjectManagementTreeItem | void>();
@@ -10,8 +12,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     private connection: PlayServerConnection | null;
     private rootItem: ProjectManagementTreeItem | null = null;
-    private currentProjectKeyInView: string | null;
-    private testThemeDataProvider: TestThemeTreeDataProvider;
+    currentProjectKeyInView: string | null;
+    testThemeDataProvider: TestThemeTreeDataProvider;
 
     constructor(
         connection: PlayServerConnection | null,
@@ -41,11 +43,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         }
 
         const contextValue = data.nodeType.toLowerCase(); // project, version, cycle, testtheme, testcaseset, testcase
-        const collapsibleState =
-            contextValue === "testcaseset"
+        const collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        /*  TODO: Test cycle can be set to none to be non expandable and the user can click on it to see the test themes
+            contextValue === "cycle"
                 ? vscode.TreeItemCollapsibleState.None // TestCaseSet is the last level of the tree, so set collapsibleState to None
                 : vscode.TreeItemCollapsibleState.Collapsed; // Set collapsibleState to Collapsed to make items clickable to trigger getChildren when expanded
-
+        */
         const treeItem = new ProjectManagementTreeItem(data.name, contextValue, collapsibleState, data, parent);
         return treeItem;
     }
@@ -69,8 +72,6 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         }
 
         if (element.contextValue === "cycle") {
-            // return this.getChildrenOfCycle(element);
-            // TODO: TEST
             // Offload the children of the cycle to the Test Theme Tree
             this.testThemeDataProvider.setRoots(await this.getChildrenOfCycle(element));
             return []; // Return an empty array to prevent expansion in the Project Management Tree
@@ -167,6 +168,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     clearTree(): void {
+        this.testThemeDataProvider.clearTree();
         this.rootItem = null;
         this.connection = null;
         this.refresh();
@@ -265,7 +267,7 @@ export function makeRoot(
     vscode.window.registerTreeDataProvider("projectManagementTree", treeDataProvider);
 }
 
-export async function initializeTreeView_TO_REMOVE(
+export async function initializeTreeView(
     context: vscode.ExtensionContext,
     connection: PlayServerConnection | null,
     selectedProjectKey?: string

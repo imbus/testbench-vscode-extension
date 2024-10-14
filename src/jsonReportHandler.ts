@@ -792,14 +792,14 @@ export async function testBenchToRobotFramework(
         basedOnExecution: executionBased,
     };
 
-    console.log(`Started Test generation for Cycle key: ${cycleKey}`);
-    vscode.window.showInformationMessage(`Started Test generation for Cycle key: ${cycleKey}`);
+    console.log(`Started Test generation.`);
+    // vscode.window.showInformationMessage(`Started Test generation.`);
 
     // Show a progress bar while the process is running, since this process takes time
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: `Generating Tests for ${itemLabel} (Cycle key ${cycleKey})`,
+            title: `Generating Tests for ${itemLabel}`,
             cancellable: true,
         },
         async (progress, cancellationToken) => {

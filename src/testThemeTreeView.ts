@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import { ProjectManagementTreeItem } from "./projectManagementTreeView";
 
-// TODO: Create a test theme tree item class?
 export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<ProjectManagementTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ProjectManagementTreeItem | void> =
         new vscode.EventEmitter<ProjectManagementTreeItem | void>();
@@ -35,9 +34,11 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
         this.refresh();
     }
 
-    // Set the selected item as the root and refresh the tree view
-    // TODO: Implement
-    makeRoot(): void {}
+    // Set the selected element as the only root element
+    makeRoot(element: ProjectManagementTreeItem): void {
+        this.rootElements = [element]; // Set the selected element as the root
+        this.refresh(); // Refresh the tree to display the new root
+    }
 
     handleExpansion(element: ProjectManagementTreeItem, expanded: boolean): void {
         element.collapsibleState = expanded
@@ -47,7 +48,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
     }
 
     // Clear the tree
-    clear(): void {
+    clearTree(): void {
         this.rootElements = [];
         this.refresh();
     }

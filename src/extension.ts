@@ -3,20 +3,16 @@ import * as jsonReportHandler from "./jsonReportHandler";
 import { PlayServerConnection, performLogin, changeConnection } from "./testBenchConnection";
 import {
     ProjectManagementTreeItem,
-    makeRoot,
     ProjectManagementTreeDataProvider,
-    initializeTreeView_TO_REMOVE,
+    initializeTreeView,
 } from "./projectManagementTreeView";
-import { TestThemeTreeDataProvider } from "./testThemeTreeView";
 
 export function activate(context: vscode.ExtensionContext) {
     // TODO: WebViev UI for login?
     // TODO: Create extension documentation in Readme.md
     // TODO: Add a new command to clear stored login data? (logout doesnt do that)
-    // TODO: Refactor code (+ Todo's in code) / Review code quality
     // TODO: (Later) Upload test results back to TestBench server.
     // TODO: Extra: Create command: Fetch every project with every TOV and cycle and display them in tree view.
-
 
     const baseKey = "testbenchExtension";
     const commands = {
@@ -24,7 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
         login: `${baseKey}.login`,
         changeConnection: `${baseKey}.changeConnection`,
         logout: `${baseKey}.logout`,
-        displayTestThemeTree: `${baseKey}.initTestThemeTree`,
+        displayTestThemeTree: `${baseKey}.displayTestThemeTree`,
         executeRobotTests: `${baseKey}.runRobotTests`,
         generateTestCases: `${baseKey}.generateTestCases`,
         makeRoot: `${baseKey}.makeRoot`,
@@ -32,6 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
         getServerVersions: `${baseKey}.getServerVersions`,
         showExtensionSettings: `${baseKey}.showExtensionSettings`,
         getProjectList: `${baseKey}.getProjectList`,
+        refreshTreeView: `${baseKey}.refreshTreeView`,
     };
 
     interface ReportGenerationConfiguration {
@@ -88,24 +85,14 @@ export function activate(context: vscode.ExtensionContext) {
         // Open the settings UI of the extension inside the settings editor
         vscode.commands.executeCommand("workbench.action.openSettings2", {
             query: "@ext:imbus.testbench-visual-studio-code-extension",
-            /*
-            revealSetting: {
-                key: `${baseKey}`, // Add the setting key with.settingsName if you want to open a specific setting
-                edit: true, // Set to true to focus on the edit control
-            },*/
         });
     });
     context.subscriptions.push(showExtensionSettingsDisposable);
 
     // Store the connection to server
     let connection: PlayServerConnection | null = null;
-    // Store the test theme tree data provider to be able to clear it on logout
-    let testThemeDataProvider: ProjectManagementTreeDataProvider | null = null;
 
-    // TODO: Implement the new tree view
-    const newTreeDataProvider = new TestThemeTreeDataProvider();
-    // Register the Tree2 view in the TestBench Explorer
-    vscode.window.registerTreeDataProvider("testThemeTree", newTreeDataProvider);
+    let projectManagementTreeDataProvider: ProjectManagementTreeDataProvider | null = null;
 
     // Register the "Display Commands" command
     context.subscriptions.push(
@@ -154,23 +141,24 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    let loginDisposable = vscode.commands.registerCommand(commands.login, async () => {
-        let connectionAfterLogin = await performLogin(context, baseKey);
-        if (!connectionAfterLogin) {
-            return;
-        } else {
-            connection = connectionAfterLogin;
-        }
+    // Register the "Login" command
+    context.subscriptions.push(
+        vscode.commands.registerCommand(commands.login, async () => {
+            let connectionAfterLogin = await performLogin(context, baseKey);
+            if (!connectionAfterLogin) {
+                return;
+            } else {
+                connection = connectionAfterLogin;
+            }
 
-        // testThemeDataProvider = await initializeTreeView(context, connection);
-        // vscode.commands.executeCommand(commands.getProjectList);
+            // testThemeDataProvider = await initializeTreeView(context, connection);
+            // vscode.commands.executeCommand(commands.getProjectList);
 
-        // Display the commands after logging in
-        vscode.commands.executeCommand(commands.displayCommands);
-    });
-    context.subscriptions.push(loginDisposable);
+            // Display the commands after logging in
+            vscode.commands.executeCommand(commands.displayCommands);
+        })
+    );
 
-    // TODO: Refresh command for new play server gets the project list
     // Register the "Display Test Theme Tree" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.displayTestThemeTree, async () => {
@@ -183,7 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.logout, async () => {
             if (connection) {
-                await connection.logoutUser(context, testThemeDataProvider!);
+                await connection.logoutUser(context, projectManagementTreeDataProvider!);
                 connection = null; // Clear the connection
             } else {
                 vscode.window.showInformationMessage("No connection available. Please log in first.");
@@ -194,11 +182,16 @@ export function activate(context: vscode.ExtensionContext) {
     // Register the "Change Connection" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.changeConnection, async () => {
-            let { newConnection, newTreeDataProvider } = await changeConnection(context, baseKey, connection!);
+            let { newConnection, newTreeDataProvider } = await changeConnection(
+                context,
+                baseKey,
+                connection!,
+                projectManagementTreeDataProvider!
+            );
             if (newConnection) {
                 connection = newConnection; // Update the connection
-                if (testThemeDataProvider) {
-                    testThemeDataProvider = newTreeDataProvider; // Update the tree data provider
+                if (projectManagementTreeDataProvider) {
+                    projectManagementTreeDataProvider = newTreeDataProvider; // Update the tree data provider
                 } else {
                     vscode.window.showErrorMessage("Error: TreeDataProvider is null.");
                 }
@@ -222,9 +215,31 @@ export function activate(context: vscode.ExtensionContext) {
     // Register the "Make Root" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.makeRoot, (treeItem: ProjectManagementTreeItem) => {
-            if (testThemeDataProvider) {
-                makeRoot(treeItem, testThemeDataProvider);
+            if (projectManagementTreeDataProvider) {
+                // TODO: This is a bad way to find the correct tree data provider
+                if (
+                    treeItem.contextValue === "project" ||
+                    treeItem.contextValue === "version" ||
+                    treeItem.contextValue === "cycle"
+                ) {
+                    projectManagementTreeDataProvider.makeRoot(treeItem);
+                } else {
+                    projectManagementTreeDataProvider.testThemeDataProvider.makeRoot(treeItem);
+                }
             }
+        })
+    );
+
+    // Register the "Refresh Tree" command
+    // TODO: Implement
+    context.subscriptions.push(
+        vscode.commands.registerCommand(commands.refreshTreeView, async () => {
+            projectManagementTreeDataProvider?.clearTree();
+            [projectManagementTreeDataProvider] = await initializeTreeView(
+                context,
+                connection!,
+                projectManagementTreeDataProvider?.currentProjectKeyInView!
+            );
         })
     );
 
@@ -246,9 +261,20 @@ export function activate(context: vscode.ExtensionContext) {
                     return;
                 }
 
-                testThemeDataProvider = new ProjectManagementTreeDataProvider(connection, selectedProjectKey!);
-                vscode.window.createTreeView("projectManagementTree", { treeDataProvider: testThemeDataProvider });
-                [testThemeDataProvider] = await initializeTreeView_TO_REMOVE(context, connection, selectedProjectKey!);
+                projectManagementTreeDataProvider = new ProjectManagementTreeDataProvider(
+                    connection,
+                    selectedProjectKey!
+                );
+                vscode.window.createTreeView("projectManagementTree", {
+                    treeDataProvider: projectManagementTreeDataProvider,
+                });
+                [projectManagementTreeDataProvider] = await initializeTreeView(
+                    context,
+                    connection,
+                    selectedProjectKey!
+                );
+            } else {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
             }
         })
     );

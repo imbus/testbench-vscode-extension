@@ -93,10 +93,6 @@
                 "title": "TestBench: Change Connection"
             },
             {
-                "command": "testbenchExtension.initTestThemeTree",
-                "title": "TestBench: Display Test Theme Tree"
-            },
-            {
                 "command": "testbenchExtension.generateTestCases",
                 "title": "Generate Test Cases"
             },
@@ -105,11 +101,19 @@
                 "title": "Make root"
             },
             {
-                "command": "testbenchExtension.initTestThemeTree",
-                "title": "Refresh Tree and Reset Root",
+                "command": "testbenchExtension.displayTestThemeTree",
+                "title": "Display Tree View",
                 "icon": {
-                    "light": "resources/icons/refresh.svg",
-                    "dark": "resources/icons/refresh.svg"
+                    "light": "resources/icons/Global_Settings_List.png",
+                    "dark": "resources/icons/Global_Settings_List.png"
+                }
+            },
+            {
+                "command": "testbenchExtension.refreshTreeView",
+                "title": "Refresh Tree View",
+                "icon": {
+                    "light": "resources/icons/Action_Refresh.png",
+                    "dark": "resources/icons/Action_Refresh.png"
                 }
             },
             {
@@ -148,7 +152,11 @@
         "menus": {
             "view/title": [
                 {
-                    "command": "testbenchExtension.initTestThemeTree",
+                    "command": "testbenchExtension.displayTestThemeTree",
+                    "group": "navigation"
+                },
+                {
+                    "command": "testbenchExtension.refreshTreeView",
                     "group": "navigation"
                 }
             ],
@@ -160,7 +168,7 @@
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == project || viewItem == tov || viewItem == version || viewItem == cycle || viewItem == TestTheme || viewItem == TestCaseSet)",
+                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == project || viewItem == tov || viewItem == version || viewItem == testtheme)",
                     "group": "navigation"
                 }
             ]
