@@ -113,7 +113,7 @@
                 "title": "TestBench: Make root"
             },
             {
-                "command": "testbenchExtension.displayProjectsList",
+                "command": "testbenchExtension.selectAndLoadProject",
                 "title": "TestBench: Display Projects List",
                 "icon": {
                     "light": "resources/icons/Global_Settings_List.png",
@@ -147,10 +147,6 @@
                     "light": "resources/icons/cog_edit.png",
                     "dark": "resources/icons/cog_edit.png"
                 }
-            },
-            {
-                "command": "testbenchExtension.getProjectList",
-                "title": "TestBench: Get Project List"
             }
         ],
         "views": {
@@ -188,15 +184,15 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.showExtensionSettings",
-                    "group": "navigation@3"
+                    "command": "testbenchExtension.showExtensionSettings",                    
+                    "group": "navigation@3"                    
                 },
                 {
                     "command": "testbenchExtension.displayCommands",
                     "group": "navigation@4"
                 },
                 {
-                    "command": "testbenchExtension.displayProjectsList",
+                    "command": "testbenchExtension.selectAndLoadProject",
                     "group": "navigation@5"
                 },
                 {

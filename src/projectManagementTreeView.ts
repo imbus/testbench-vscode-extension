@@ -125,7 +125,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                         );
 
                         const treeItem = new ProjectManagementTreeItem(
-                            `${data.base.numbering} (${data.elementType}) ${data.base.name} ${data.base.uniqueID}`,
+                            `${data.base.numbering} ${data.base.name}`,
                             data.elementType.toLowerCase(),
                             hasChildren
                                 ? vscode.TreeItemCollapsibleState.Collapsed
@@ -203,6 +203,11 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
         this.contextValue = contextValue;
         this.parent = parent;
         this.updateIcon();
+
+        // Tooltip for the test theme tree items
+        if (item?.base?.numbering) {
+            this.tooltip = `Numbering: ${item.base.numbering}, Type: ${item.elementType}, Name: ${item.base.name}, ID: ${item.base.uniqueID}`;  
+        }
     }
 
     private getIconPath(): string {

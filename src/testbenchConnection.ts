@@ -128,7 +128,7 @@ export class PlayServerConnection {
         return selectedProject.key;
     }
 
-    async getProjectList(): Promise<Project[] | null> {
+    async getProjectsList(): Promise<Project[] | null> {
         if (!this.sessionToken) {
             console.warn("Session token is null. Cannot fetch projects list.");
             return null;
@@ -200,7 +200,7 @@ export class PlayServerConnection {
             }
             */
 
-            // console.log("Fetched project tree:", projectTreeResponse.data);
+            console.log("Fetched project tree:", projectTreeResponse.data);
             return projectTreeResponse.data || null;
         } catch (error) {
             console.error("Error fetching project tree:", error);
@@ -227,7 +227,7 @@ export class PlayServerConnection {
             });
 
             if (response.status === 200) {
-                // console.log("Cycle Structure received:", response.data);
+                console.log("Cycle Structure received:", response.data);
 
                 // User selects a file path for saving the JSON
                 /*

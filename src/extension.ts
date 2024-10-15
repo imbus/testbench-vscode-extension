@@ -16,21 +16,55 @@ export function activate(context: vscode.ExtensionContext) {
 
     const baseKey = "testbenchExtension";
     const commands = {
-        displayCommands: `${baseKey}.displayCommands`,
-        login: `${baseKey}.login`,
-        changeConnection: `${baseKey}.changeConnection`,
-        logout: `${baseKey}.logout`,
-        displayProjectsList: `${baseKey}.displayProjectsList`,
-        generateTestCases: `${baseKey}.generateTestCases`,
-        makeRoot: `${baseKey}.makeRoot`,
-        getCycleStructure: `${baseKey}.getCycleStructure`,
-        getServerVersions: `${baseKey}.getServerVersions`,
-        showExtensionSettings: `${baseKey}.showExtensionSettings`,
-        getProjectList: `${baseKey}.getProjectList`,
-        refreshTreeView: `${baseKey}.refreshTreeView`,
-        setWorkspaceLocation: `${baseKey}.setWorkspaceLocation`,
+        displayCommands: {
+            command: `${baseKey}.displayCommands`,
+            title: "Display Available Commands",
+        },
+        login: {
+            command: `${baseKey}.login`,
+            title: "Login to TestBench Server",
+        },
+        changeConnection: {
+            command: `${baseKey}.changeConnection`,
+            title: "Change account",
+        },
+        logout: {
+            command: `${baseKey}.logout`,
+            title: "Logout from TestBench Server",
+        },
+        generateTestCases: {
+            command: `${baseKey}.generateTestCases`,
+            title: "Generate Test Cases",
+        },
+        makeRoot: {
+            command: `${baseKey}.makeRoot`,
+            title: "Make Root Item",
+        },
+        getCycleStructure: {
+            command: `${baseKey}.getCycleStructure`,
+            title: "Get Cycle Structure",
+        },
+        getServerVersions: {
+            command: `${baseKey}.getServerVersions`,
+            title: "Get Server Versions",
+        },
+        showExtensionSettings: {
+            command: `${baseKey}.showExtensionSettings`,
+            title: "Show Extension Settings",
+        },
+        selectAndLoadProject: {
+            command: `${baseKey}.selectAndLoadProject`,
+            title: "Display Projects List",
+        },
+        refreshTreeView: {
+            command: `${baseKey}.refreshTreeView`,
+            title: "Refresh Tree View",
+        },
+        setWorkspaceLocation: {
+            command: `${baseKey}.setWorkspaceLocation`,
+            title: "Set Workspace Location",
+        },
     };
-
     interface ReportGenerationConfiguration {
         generationDirectory: string;
         clearGenerationDirectory: boolean;
@@ -56,7 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
         storePassword = config.get<boolean>("storePasswordAfterLogin", false);
         // If storePassword is false, delete the stored password
         if (!storePassword) {
-            await context.secrets.delete(`password`);
+            await context.secrets.delete("password");
             console.log("Password deleted from secrets storage.");
         }
         workspaceLocation = config.get<string>("workspaceLocation");
@@ -77,7 +111,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (e.affectsConfiguration(baseKey)) {
                 loadConfiguration();
-                console.log(`Configuration changed!`);
+                console.log("Configuration changed!");
             }
         })
     );
@@ -112,7 +146,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register Show Extension Settings command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.showExtensionSettings, () => {
+        vscode.commands.registerCommand(commands.showExtensionSettings.command, () => {
             // Open the settings UI of the extension inside the settings editor
             vscode.commands.executeCommand("workbench.action.openSettings2", {
                 query: "@ext:imbus.testbench-visual-studio-code-extension",
@@ -121,25 +155,24 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     let connection: PlayServerConnection | null = null; // Store the connection to server
-    vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null); // Icon change based on connection status
+    vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null); // Login/Logout icon changes based on connection status
     let projectManagementTreeDataProvider: ProjectManagementTreeDataProvider | null = null; // Store the tree data provider
 
     // Register the "Display Commands" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.displayCommands, async () => {
+        vscode.commands.registerCommand(commands.displayCommands.command, async () => {
             // Display the commands based on the connection status. (Logout etc. is only available if connection is active)
             let commandMenuOptions = [];
             if (connection) {
                 commandMenuOptions = [
-                    "Logout",
-                    "Change connection",
-                    "Show Extension Settings",
-                    "Get Project List",
-                    "Display Test Theme Tree",
+                    commands.logout.title,
+                    commands.changeConnection.title,
+                    commands.showExtensionSettings.title,
+                    commands.selectAndLoadProject.title,
                     "Cancel",
                 ];
             } else {
-                commandMenuOptions = ["Login", "Show Extension Settings", "Cancel"];
+                commandMenuOptions = [commands.login.title, commands.showExtensionSettings.title, "Cancel"];
             }
 
             const nextAction = await vscode.window.showQuickPick(commandMenuOptions, {
@@ -147,23 +180,20 @@ export function activate(context: vscode.ExtensionContext) {
             });
 
             switch (nextAction) {
-                case "Login":
-                    vscode.commands.executeCommand(commands.login);
+                case commands.login.title:
+                    vscode.commands.executeCommand(commands.login.command);
                     break;
-                case "Logout":
-                    vscode.commands.executeCommand(commands.logout);
+                case commands.logout.title:
+                    vscode.commands.executeCommand(commands.logout.command);
                     break;
-                case "Show Extension Settings":
-                    vscode.commands.executeCommand(commands.showExtensionSettings);
+                case commands.showExtensionSettings.title:
+                    vscode.commands.executeCommand(commands.showExtensionSettings.command);
                     break;
-                case "Get Project List":
-                    vscode.commands.executeCommand(commands.getProjectList);
+                case commands.selectAndLoadProject.title:
+                    vscode.commands.executeCommand(commands.selectAndLoadProject.command);
                     break;
-                case "Change connection":
-                    vscode.commands.executeCommand(commands.changeConnection);
-                    break;
-                case "Display Test Theme Tree":
-                    vscode.commands.executeCommand(commands.displayProjectsList);
+                case commands.changeConnection.title:
+                    vscode.commands.executeCommand(commands.changeConnection.command);
                     break;
                 case "Cancel":
                     return;
@@ -174,7 +204,7 @@ export function activate(context: vscode.ExtensionContext) {
     let insideLogin = false; // The user may press the login button multiple times consecutively. Aviod executing the command if already inside login.
     // Register the "Login" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.login, async () => {
+        vscode.commands.registerCommand(commands.login.command, async () => {
             if (insideLogin) {
                 console.log("Already inside login..");
                 return;
@@ -205,17 +235,9 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Display Test Theme Tree" command
-    context.subscriptions.push(
-        vscode.commands.registerCommand(commands.displayProjectsList, async () => {
-            // testThemeDataProvider = await initializeTreeView_TO_REMOVE(context, connection);
-            vscode.commands.executeCommand(commands.getProjectList);
-        })
-    );
-
     // Register the "Logout" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.logout, async () => {
+        vscode.commands.registerCommand(commands.logout.command, async () => {
             if (connection) {
                 await connection.logoutUser(context, projectManagementTreeDataProvider!);
                 connection = null; // Clear the connection
@@ -228,7 +250,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Change Connection" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.changeConnection, async () => {
+        vscode.commands.registerCommand(commands.changeConnection.command, async () => {
             let { newConnection, newTreeDataProvider } = await changeConnection(
                 context,
                 baseKey,
@@ -246,7 +268,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Generate Test Cases" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.generateTestCases, async (item: ProjectManagementTreeItem) => {
+        vscode.commands.registerCommand(commands.generateTestCases.command, async (item: ProjectManagementTreeItem) => {
             if (connection) {
                 jsonReportHandler.startTestGenerationProcess(item, connection, baseKey);
             } else {
@@ -257,16 +279,18 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register the "Make Root" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.makeRoot, (treeItem: ProjectManagementTreeItem) => {
+        vscode.commands.registerCommand(commands.makeRoot.command, (treeItem: ProjectManagementTreeItem) => {
             if (projectManagementTreeDataProvider) {
-                // TODO: This is a bad way to find the correct tree data provider
+                // TODO: This is a bad way to find the correct tree data provider, use polymorphism / interfaces instead?
                 if (
                     treeItem.contextValue === "project" ||
                     treeItem.contextValue === "version" ||
                     treeItem.contextValue === "cycle"
                 ) {
+                    // If we are in the project management tree, call the makeRoot method of the project management tree data provider
                     projectManagementTreeDataProvider.makeRoot(treeItem);
                 } else {
+                    // If we are in the test theme tree, call the makeRoot method of the test theme tree data provider
                     projectManagementTreeDataProvider.testThemeDataProvider.makeRoot(treeItem);
                 }
             }
@@ -274,9 +298,10 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register the "Refresh Tree" command
-    // TODO: Fix? When a Tov is set root in the project management tree while the test theme tree is open, and you refresh the project management tree, test theme tree elements disappears.
+    // TODO: Bug or Feature? When a Tov is set root in the project management tree while the test theme tree is open,
+    // and you refresh the project management tree, test theme tree elements disappears.
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.refreshTreeView, async () => {
+        vscode.commands.registerCommand(commands.refreshTreeView.command, async () => {
             projectManagementTreeDataProvider?.clearTree();
             [projectManagementTreeDataProvider] = await initializeTreeView(
                 context,
@@ -286,11 +311,11 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Get Projects List" command
+    // Register the "Select And Load Project" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.getProjectList, async () => {
+        vscode.commands.registerCommand(commands.selectAndLoadProject.command, async () => {
             if (connection) {
-                const projectList = await connection.getProjectList();
+                const projectList = await connection.getProjectsList();
 
                 if (!projectList) {
                     // vscode.window.showErrorMessage("No projects found..");
