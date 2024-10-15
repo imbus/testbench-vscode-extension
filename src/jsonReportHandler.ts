@@ -334,7 +334,7 @@ async function downloadReport(
             ): Promise<string | undefined> {
                 const uri = vscode.Uri.file(path.join(workspaceLocation, fileName));
                 return vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadZipResponse.data)).then(() => {
-                    vscode.window.showInformationMessage(`Report downloaded successfully to ${uri.fsPath}`);
+                    // vscode.window.showInformationMessage(`Report downloaded successfully to ${uri.fsPath}`);
                     return uri.fsPath;
                 });
             }
@@ -378,7 +378,7 @@ async function downloadReport(
         }
 
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadZipResponse.data));
-        vscode.window.showInformationMessage(`Report downloaded successfully to ${uri.fsPath}`);
+        // vscode.window.showInformationMessage(`Report downloaded successfully to ${uri.fsPath}`);
         return uri.fsPath; // Return the path of the saved file
     }
     return undefined; // Return undefined if no file was saved
@@ -840,10 +840,6 @@ export async function testBenchToRobotFramework(
                     vscode.window.showErrorMessage("No folder selected.");
                     return;
                 }
-
-                vscode.window.showInformationMessage(
-                    `Selected output folder for zip extraction: ${chosenOutputFolderForZipExtraction}`
-                );
 
                 // Configuration for the test suite generation
                 const config = vscode.workspace.getConfiguration(baseKey);

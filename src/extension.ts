@@ -171,29 +171,37 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // TODO: Change the login icon based on connection status?
+    let insideLogin = false; // The user may press the login button multiple times consecutively. Aviod executing the command if already inside login.
     // Register the "Login" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.login, async () => {
-            if (!connection) {
-                console.log("Connection was null, performing login..");
-                let connectionAfterLogin = await performLogin(context, baseKey);
-                if (!connectionAfterLogin) {
-                    console.log("Login failed.");
-                    return;
-                } else {
-                    connection = connectionAfterLogin;
-                }
-
-                // testThemeDataProvider = await initializeTreeView(context, connection);
-                // vscode.commands.executeCommand(commands.getProjectList);
-
-                // Display the commands after logging in
-                vscode.commands.executeCommand(commands.displayCommands);
-            } else {
-                console.log("Connection not null.");
-                vscode.window.showInformationMessage("You are already logged in.");
+            if (insideLogin) {
+                console.log("Already inside login..");
+                return;
             }
+            insideLogin = true;
+
+            // Only execute the finally block after the login attempt is fully completed to avoid multiple login prompts after clicking login multiple times.
+            performLogin(context, baseKey)
+                .then((connectionAfterLogin) => {
+                    // Login successful
+                    if (!connectionAfterLogin) {
+                        console.log("Login failed.");
+                        return;
+                    } else {
+                        connection = connectionAfterLogin;
+                    }
+
+                    // ... other actions after successful login ...
+                })
+                .catch((error) => {
+                    // Handle login error
+                    console.error("Login process failed:", error);
+                })
+                .finally(() => {
+                    // Reset insideLogin after the login attempt is fully completed
+                    insideLogin = false;
+                });
         })
     );
 
@@ -211,6 +219,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (connection) {
                 await connection.logoutUser(context, projectManagementTreeDataProvider!);
                 connection = null; // Clear the connection
+                projectManagementTreeDataProvider = null; // Clear the tree data provider
             } else {
                 vscode.window.showInformationMessage("No connection available. Please log in first.");
             }
@@ -228,13 +237,9 @@ export function activate(context: vscode.ExtensionContext) {
             );
             if (newConnection) {
                 connection = newConnection; // Update the connection
-                if (projectManagementTreeDataProvider) {
-                    projectManagementTreeDataProvider = newTreeDataProvider; // Update the tree data provider
-                } else {
-                    vscode.window.showErrorMessage("Error: TreeDataProvider is null.");
-                }
+                projectManagementTreeDataProvider = newTreeDataProvider; // Update the tree data provider
             } else {
-                vscode.window.showInformationMessage("Connection change cancelled.");
+                vscode.window.showInformationMessage("Error when changing connection.");
             }
         })
     );

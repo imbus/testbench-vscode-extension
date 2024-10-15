@@ -200,7 +200,7 @@ export class PlayServerConnection {
             }
             */
 
-            console.log("Fetched project tree:", projectTreeResponse.data);
+            // console.log("Fetched project tree:", projectTreeResponse.data);
             return projectTreeResponse.data || null;
         } catch (error) {
             console.error("Error fetching project tree:", error);
@@ -227,7 +227,7 @@ export class PlayServerConnection {
             });
 
             if (response.status === 200) {
-                console.log("Cycle Structure received:", response.data);
+                // console.log("Cycle Structure received:", response.data);
 
                 // User selects a file path for saving the JSON
                 /*
@@ -289,8 +289,6 @@ export class PlayServerConnection {
             });
 
             if (response.status === 204) {
-                // clearStoredCredentials(context, baseKey); // Clear the stored credentials not needed if the user wants to log in automatically again
-                this.clearSessionData(); // Clear the session data
                 if (treeDataProvider) {
                     treeDataProvider.clearTree();
                 }
@@ -314,31 +312,32 @@ export class PlayServerConnection {
             }
         } finally {
             // Regardless of the outcome, stop the keep-alive process
-            vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
             this.stopKeepAlive();
+            this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
+            vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
         }
     }
 
     private startKeepAlive(): void {
         this.stopKeepAlive(); // Ensure no multiple intervals
         this.keepAliveIntervalId = setInterval(() => {
-            this.keepAlive();
+            this.sendKeepAliveRequest();
         }, 4 * 60 * 1000); // Every 4 minutes
         console.log("Keep-alive STARTED.");
         // Send an immediate keep-alive request
-        this.keepAlive();
+        this.sendKeepAliveRequest();
     }
 
     private stopKeepAlive(): void {
-        console.log("Keep-alive STOPPED.");
         if (this.keepAliveIntervalId) {
             clearInterval(this.keepAliveIntervalId);
             this.keepAliveIntervalId = null;
+            console.log("Keep-alive STOPPED.");
         }
     }
 
     // Sends a GET request to the server to keep the session alive, which normally times out after 5 minutes
-    private async keepAlive(): Promise<void> {
+    private async sendKeepAliveRequest(): Promise<void> {
         if (!this.sessionToken) {
             console.warn("Session token is null. Cannot send keep-alive request.");
             return;
@@ -589,8 +588,10 @@ async function loginToNewPlayServerAndInitSessionToken(
                 console.log("Password stored securely in secret storage.");
             }
 
+            // This starts keep alive in the constructor
             const connection = new PlayServerConnection(context, serverName, portNumber, response.data.sessionToken);
-            if (await connection.checkIsWorking()) {
+            if (connection) {
+                // Deleted checkIsWorking from here
                 return connection;
             }
             return null;
