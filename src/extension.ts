@@ -150,6 +150,10 @@ export function activate(context: vscode.ExtensionContext) {
             // Open the settings UI of the extension inside the settings editor
             vscode.commands.executeCommand("workbench.action.openSettings2", {
                 query: "@ext:imbus.testbench-visual-studio-code-extension",
+            })
+            .then(() => {
+                // Open the workspace settings view (The default settings view is user settings)
+                vscode.commands.executeCommand('workbench.action.openWorkspaceSettings');
             });
         })
     );

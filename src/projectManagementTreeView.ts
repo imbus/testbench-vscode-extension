@@ -216,6 +216,7 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
         const treeItemType = this.contextValue!.toLowerCase(); // (Project, TOV, Cycle etc.)
 
         // Map the context and status to the corresponding icon file name
+        // TODO: Replace the png icons with svg icons of web itorx
         const iconMap: Record<string, Record<string, string>> = {
             project: {
                 active: "Project_B_Active.png",
@@ -248,7 +249,7 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
                 default: "TestCase.png",
             },
             default: {
-                default: "iTB-EE-Logo-22x20.png",
+                default: "iTB-EE-Logo.svg",
             },
         };
 

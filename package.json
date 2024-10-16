@@ -84,16 +84,16 @@
                 "command": "testbenchExtension.login",
                 "title": "Testbench: Login",
                 "icon": {
-                    "light": "resources/icons/User_Add.png",
-                    "dark": "resources/icons/User_Add.png"
+                    "light": "resources/icons/login.svg",
+                    "dark": "resources/icons/login.svg"
                 }
             },
             {
                 "command": "testbenchExtension.logout",
                 "title": "Testbench: Logout",
                 "icon": {
-                    "light": "resources/icons/User_Delete.png",
-                    "dark": "resources/icons/User_Delete.png"
+                    "light": "resources/icons/logout.svg",
+                    "dark": "resources/icons/logout.svg"
                 }
             },
             {
@@ -116,16 +116,16 @@
                 "command": "testbenchExtension.selectAndLoadProject",
                 "title": "TestBench: Display Projects List",
                 "icon": {
-                    "light": "resources/icons/Global_Settings_List.png",
-                    "dark": "resources/icons/Global_Settings_List.png"
+                    "light": "resources/icons/menu.svg",
+                    "dark": "resources/icons/menu.svg"
                 }
             },
             {
                 "command": "testbenchExtension.refreshTreeView",
                 "title": "TestBench: Refresh Tree View",
                 "icon": {
-                    "light": "resources/icons/Action_Refresh.png",
-                    "dark": "resources/icons/Action_Refresh.png"
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
                 }
             },
             {
@@ -136,16 +136,16 @@
                 "command": "testbenchExtension.displayCommands",
                 "title": "TestBench: Display Commands",
                 "icon": {
-                    "light": "resources/icons/lightbulb16.png",
-                    "dark": "resources/icons/lightbulb16.png"
+                    "light": "resources/icons/more.svg",
+                    "dark": "resources/icons/more.svg"
                 }
             },
             {
                 "command": "testbenchExtension.showExtensionSettings",
                 "title": "TestBench: Show Extension Settings",
                 "icon": {
-                    "light": "resources/icons/cog_edit.png",
-                    "dark": "resources/icons/cog_edit.png"
+                    "light": "resources/icons/settings.svg",
+                    "dark": "resources/icons/settings.svg"
                 }
             }
         ],
@@ -169,8 +169,8 @@
                     "title": "Testbench: Login",
                     "when": "!testbenchExtension.connectionActive",
                     "icon": {
-                        "light": "resources/icons/User_Add.png",
-                        "dark": "resources/icons/User_Add.png"
+                        "light": "resources/icons/login.svg",
+                        "dark": "resources/icons/login.svg"
                     }
                 },
                 {
@@ -179,8 +179,8 @@
                     "title": "Testbench: Logout",
                     "when": "testbenchExtension.connectionActive",
                     "icon": {
-                        "light": "resources/icons/User_Delete.png",
-                        "dark": "resources/icons/User_Delete.png"
+                        "light": "resources/icons/logout.svg",
+                        "dark": "resources/icons/logout.svg"
                     }
                 },
                 {
@@ -218,7 +218,7 @@
                 {
                     "id": "testBenchExplorer",
                     "title": "TestBench",
-                    "icon": "resources/icons/iTB-EE-Logo-22x20.png"
+                    "icon": "resources/icons/iTB-EE-Logo.svg"
                 }
             ]
         }
