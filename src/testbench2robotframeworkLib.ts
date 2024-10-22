@@ -81,39 +81,5 @@ export async function startTestbench2robotframework(configurationJSONFile: strin
         return;
     }
 
-    await testbench2robotframeworkWrite(configurationJSONFile, reportZipPath);
-
-    /*
-    // Let the user select .robot files
-    const selectedFiles = await vscode.window.showOpenDialog({
-        canSelectMany: true,
-        openLabel: "Select Robot Files",
-        filters: {
-            "Robot Framework Files": ["robot"],
-        },
-    });
-
-    if (!selectedFiles || selectedFiles.length === 0) {
-        vscode.window.showInformationMessage("No .robot files selected.");
-        return;
-    }
-
-    // Convert selected URIs to file paths
-    const robotFilePaths = selectedFiles.map((uri) => uri.fsPath);
-
-    // Ask the user to select an output directory for the results
-    const outputFolderUri = await vscode.window.showOpenDialog({
-        canSelectFolders: true,
-        openLabel: "Select Output Folder For Test Results",
-    });
-
-    if (!outputFolderUri || outputFolderUri.length === 0) {
-        vscode.window.showInformationMessage("No output folder selected.");
-        return;
-    }
-
-    const outputFolder = outputFolderUri[0].fsPath;
-    const outputFolderName = "Test Results";
-    const outputFolderPath = path.join(outputFolder, outputFolderName);  // This folder will contain the robotframework test results
-    */
+    await testbench2robotframeworkWrite(configurationJSONFile, reportZipPath);   
 }

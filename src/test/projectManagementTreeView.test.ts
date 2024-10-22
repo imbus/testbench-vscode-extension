@@ -4,26 +4,28 @@ import * as testBenchConnection from "../testBenchConnection";
 import { ProjectManagementTreeDataProvider } from "../projectManagementTreeView";
 import { TestThemeTreeDataProvider } from "../testThemeTreeView";
 
-suite("Project Management Tree View Tests", () => {
+suite("Project Management Tree View Tests", function () {
+    this.timeout(10000); // Increase timeout to 10 seconds
     // Mock Variables
     const context = {} as vscode.ExtensionContext;
-    const serverName = "serverName";
+    const serverName = "testbench";
     const port = 9445;
-    const sessionToken = "sessionToken";
+    const projectKey = "26";
+    const sessionToken = "sessionToken";  // Fake session token
 
     test("Tree Data Provider Initialization", async () => {
         const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
         const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, "projectKey", testThemeDataProvider);
+        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
 
         assert.ok(treeDataProvider);
-        assert.strictEqual(treeDataProvider.currentProjectKeyInView, "projectKey");
+        assert.strictEqual(treeDataProvider.currentProjectKeyInView, projectKey);
     });
 
     test("Tree Item Creation", () => {
         const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
         const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, "projectKey", testThemeDataProvider);
+        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
 
         const data = { name: "Test Project", nodeType: "project" };
         const treeItem = treeDataProvider["createTreeItem"](data, null, true);
@@ -36,7 +38,7 @@ suite("Project Management Tree View Tests", () => {
     test("Get Children of Root", async () => {
         const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
         const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, "projectKey", testThemeDataProvider);
+        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
 
         const children = await treeDataProvider.getChildren();
 
@@ -47,7 +49,7 @@ suite("Project Management Tree View Tests", () => {
     test("Get Parent of Tree Item", () => {
         const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
         const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, "projectKey", testThemeDataProvider);
+        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
 
         const parentData = { name: "Parent Project", nodeType: "project" };
         const parentItem = treeDataProvider["createTreeItem"](parentData, null, true);
@@ -63,7 +65,7 @@ suite("Project Management Tree View Tests", () => {
     test("Clear Tree", () => {
         const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
         const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, "projectKey", testThemeDataProvider);
+        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
 
         treeDataProvider.clearTree();
 

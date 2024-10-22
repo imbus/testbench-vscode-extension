@@ -43,7 +43,7 @@ exports.createOutputFolderIfNotExists = createOutputFolderIfNotExists;
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-const unzipper = __importStar(require("unzipper")); // npm install unzipper
+const JSZip = __importStar(require("jszip")); // npm install jszip
 const cheerio = __importStar(require("cheerio")); // To parse HTML  npm install --save-dev @types/cheerio
 const axios_1 = __importDefault(require("axios"));
 const projectManagementTreeView_1 = require("./projectManagementTreeView");
@@ -298,116 +298,85 @@ function handleError(error, projectKey, cycleKey) {
 async function extractZip(zipFilePath, outputDir, extractOnlyJson = true // Optional parameter to extract only JSON files
 ) {
     try {
-        console.debug(`Starting extraction of ${zipFilePath} to ${outputDir}`);
+        // console.debug(`Starting extraction of ${zipFilePath} to ${outputDir}`);
         // 1. Check if the ZIP file exists
         if (!fs.existsSync(zipFilePath)) {
             throw new Error(`ZIP file not found: ${zipFilePath}`);
         }
-        console.debug(`ZIP file exists`);
         // 2. Create the output directory if it doesn't exist
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
-            console.debug(`Created output directory: ${outputDir}`);
+            // console.debug(`Created output directory: ${outputDir}`);
         }
-        else {
-            console.debug(`Output directory already exists: ${outputDir}`);
-        }
+        // 3. Read the ZIP file
+        const zipFileContent = await fs.promises.readFile(zipFilePath);
+        const zip = await JSZip.loadAsync(zipFileContent);
         // Flags to track user decisions for overwriting or skipping
         let overwriteAll = false;
         let skipAll = false;
-        // 3. Open the ZIP file as a read stream
-        const readStream = fs.createReadStream(zipFilePath);
-        console.debug(`Opened ZIP file stream`);
-        // 4. Parse the ZIP stream and handle entries sequentially
-        const zip = readStream.pipe(unzipper.Parse({ forceStream: true }));
-        console.debug(`Started parsing ZIP stream`);
-        for await (const entry of zip) {
-            const extractedPath = path.join(outputDir, entry.path);
-            const directoryPath = path.dirname(extractedPath);
+        // 4. Iterate through the files in the ZIP archive
+        for (const fileName in zip.files) {
+            const file = zip.files[fileName];
+            const extractedPath = path.join(outputDir, fileName);
             // 5. Check if the entry is a JSON file (if extractOnlyJson is true)
-            if (extractOnlyJson && !entry.path.toLowerCase().endsWith(".json")) {
-                console.debug(`Skipping non-JSON file: ${entry.path}`);
-                entry.autodrain();
+            if (extractOnlyJson && !fileName.toLowerCase().endsWith(".json")) {
                 continue; // Skip this entry
             }
-            if (entry.type === "Directory") {
-                // 6. Create directories if encountered
+            // Check if the file is a directory
+            if (file.dir) {
+                // Create directories
                 fs.mkdirSync(extractedPath, { recursive: true });
-                console.debug(`Created directory: ${extractedPath}`);
-                entry.autodrain();
             }
             else {
-                // 7. Ensure the directory for the file exists before extracting
-                if (!fs.existsSync(directoryPath)) {
-                    fs.mkdirSync(directoryPath, { recursive: true });
-                    console.debug(`Created directory for file: ${directoryPath}`);
-                }
+                // Extract the file
+                const fileContent = await file.async("nodebuffer");
                 // Check if the file already exists
                 if (fs.existsSync(extractedPath)) {
+                    // Prompt the user until all files are processed or until user chooses to overwrite/skip all
                     if (!overwriteAll && !skipAll) {
                         // Prompt the user for overwrite or skip options
                         const options = ["Overwrite", "Skip", "Overwrite All", "Skip All"];
-                        const result = await vscode.window.showWarningMessage(`The file "${entry.path}" already exists. What would you like to do?`, { modal: true }, // Modal dialog
+                        const result = await vscode.window.showWarningMessage(`The file "${fileName}" already exists. What would you like to do?`, { modal: true }, // Modal dialog
                         ...options);
                         // Handle the user's response and update flags accordingly
                         switch (result) {
                             case "Overwrite":
-                                await writeFile(entry, extractedPath);
+                                await fs.promises.writeFile(extractedPath, fileContent);
                                 break;
                             case "Skip":
-                                console.debug(`Skipped file: ${extractedPath}`);
-                                entry.autodrain();
                                 break;
                             case "Overwrite All":
                                 overwriteAll = true;
-                                await writeFile(entry, extractedPath);
+                                await fs.promises.writeFile(extractedPath, fileContent);
                                 break;
                             case "Skip All":
                                 skipAll = true;
-                                console.debug(`Skipped file: ${extractedPath}`);
-                                entry.autodrain();
                                 break;
                             default: // Handle undefined result (e.g., if dialog is closed)
-                                entry.autodrain();
+                                // No action needed
+                                break;
                         }
                     }
                     else if (overwriteAll) {
                         // If user chose to overwrite all, directly overwrite
-                        await writeFile(entry, extractedPath);
+                        await fs.promises.writeFile(extractedPath, fileContent);
                     }
                     else if (skipAll) {
                         // If user chose to skip all, directly skip
-                        console.debug(`Skipped file: ${extractedPath}`);
-                        entry.autodrain();
+                        // No action needed
                     }
                 }
                 else {
                     // Extract file if it doesn't exist
-                    await writeFile(entry, extractedPath);
+                    await fs.promises.writeFile(extractedPath, fileContent);
                 }
             }
         }
-        console.debug(`Extraction completed successfully`);
     }
     catch (err) {
         console.error(`Extraction failed: ${err}`);
         throw err;
     }
-}
-// Helper function to write a file
-async function writeFile(entry, extractedPath) {
-    return new Promise((resolve, reject) => {
-        entry
-            .pipe(fs.createWriteStream(extractedPath))
-            .on("finish", () => {
-            console.debug(`Extracted file: ${extractedPath}`);
-            resolve();
-        })
-            .on("error", (err) => {
-            console.error(`Error extracting file ${extractedPath}: ${err}`);
-            reject(err);
-        });
-    });
 }
 // Function to load JSON files from extracted directory
 function loadJsonFilesFromDirectory(dir) {
@@ -830,6 +799,7 @@ function isValidTestJSON(jsonData) {
     return jsonData && Array.isArray(jsonData.interactions);
 }
 // TODO: Rewrite this function after testbench2robotframework library is updated.
+// use startTestbench2robotframework function
 // Converts JSON files in a directory to Robot Framework test cases
 async function convertJSONsIntoTestCases(folderPathOfJSONFiles, outputFolderOfTestSuites) {
     createOutputFolderIfNotExists(outputFolderOfTestSuites);

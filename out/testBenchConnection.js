@@ -81,6 +81,9 @@ class PlayServerConnection {
     getBaseURL() {
         return this.baseURL;
     }
+    getApiClient() {
+        return this.apiClient;
+    }
     async getSessionTokenFromSecretStorage(context) {
         const token = await context.secrets.get("sessionToken");
         if (!token) {

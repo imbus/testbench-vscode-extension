@@ -217,7 +217,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             // Only execute the finally block after the login attempt is fully completed to avoid multiple login prompts after clicking login multiple times.
             performLogin(context, baseKey)
-                .then((connectionAfterLogin) => {
+                .then((connectionAfterLogin: any) => {
                     // Login successful
                     if (!connectionAfterLogin) {
                         console.log("Login failed.");
@@ -228,7 +228,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                     // ... other actions after successful login ...
                 })
-                .catch((error) => {
+                .catch((error: any) => {
                     // Handle login error
                     console.error("Login process failed:", error);
                 })

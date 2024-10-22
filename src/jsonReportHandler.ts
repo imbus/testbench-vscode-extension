@@ -1041,6 +1041,7 @@ export function isValidTestJSON(jsonData: any): boolean {
 }
 
 // TODO: Rewrite this function after testbench2robotframework library is updated.
+// use startTestbench2robotframework function
 // Converts JSON files in a directory to Robot Framework test cases
 async function convertJSONsIntoTestCases(
     folderPathOfJSONFiles: string,

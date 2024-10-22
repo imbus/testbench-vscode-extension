@@ -22,10 +22,14 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
 const vscode = __importStar(require("vscode"));
 const extension_1 = require("../extension");
+const path_1 = __importDefault(require("path"));
 suite('Extension Test Suite', () => {
     vscode.window.showInformationMessage('Start all tests.');
     test('Extension should be present', () => {
@@ -79,7 +83,9 @@ suite('Extension Test Suite', () => {
         assert.strictEqual(config.get('portNumber'), 9445);
         assert.strictEqual(config.get('storePasswordAfterLogin'), false);
     });
-    test('Set Workspace Location command should update configuration', async () => {
+    test('Updating configuration should change setting variable', async () => {
+        const workspaceUri = vscode.Uri.file(path_1.default.join(__dirname, '..', '..', 'test-fixture'));
+        await vscode.workspace.updateWorkspaceFolders(0, 0, { uri: workspaceUri });
         const context = {
             subscriptions: [],
             secrets: {
@@ -87,10 +93,9 @@ suite('Extension Test Suite', () => {
             },
         };
         (0, extension_1.activate)(context);
-        const newWorkspaceLocation = '/new/workspace/location';
         const config = vscode.workspace.getConfiguration('testbenchExtension');
-        await config.update('workspaceLocation', newWorkspaceLocation);
-        assert.strictEqual(config.get('workspaceLocation'), newWorkspaceLocation);
+        await config.update('serverName', 'newServerName', vscode.ConfigurationTarget.Global);
+        assert.strictEqual(config.get('serverName'), 'newServerName');
     });
     test('Deactivate should not throw', () => {
         assert.doesNotThrow(() => (0, extension_1.deactivate)());

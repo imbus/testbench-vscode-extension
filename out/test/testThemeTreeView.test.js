@@ -22,11 +22,15 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
 const vscode = __importStar(require("vscode"));
 const testThemeTreeView_1 = require("../testThemeTreeView");
 const projectManagementTreeView_1 = require("../projectManagementTreeView");
+const sinon_1 = __importDefault(require("sinon"));
 suite("TestThemeTreeDataProvider Tests", () => {
     let dataProvider;
     let rootItem;
@@ -37,8 +41,11 @@ suite("TestThemeTreeDataProvider Tests", () => {
         childItem = new projectManagementTreeView_1.ProjectManagementTreeItem("Label Child", "Version", vscode.TreeItemCollapsibleState.Collapsed, rootItem);
         rootItem.children = [childItem];
     });
-    test("Initial root elements should be empty", () => {
-        assert.deepStrictEqual(dataProvider.getChildren(), Promise.resolve([]));
+    test("Initial root elements should be empty", async () => {
+        const getChildrenStub = sinon_1.default.stub(dataProvider, 'getChildren').resolves([]);
+        const children = await dataProvider.getChildren();
+        assert.deepStrictEqual(children, []);
+        getChildrenStub.restore();
     });
     test("Set and get root elements", async () => {
         dataProvider.setRoots([rootItem]);

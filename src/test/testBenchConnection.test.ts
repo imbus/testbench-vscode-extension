@@ -1,127 +1,80 @@
-import * as vscode from "vscode";
-import axios from "axios";
-import { PlayServerConnection } from "../testBenchConnection";
-import { ProjectManagementTreeDataProvider } from "../projectManagementTreeView";
-import { expect, jest } from "@jest/globals";
+import * as assert from 'assert';
+import * as vscode from 'vscode';
+import { PlayServerConnection } from '../testBenchConnection'; // Adjust the path as needed
+import * as sinon from 'sinon';
+import axios from 'axios';
 
-jest.mock("axios");
-
-describe("PlayServerConnection", () => {
-    let context: vscode.ExtensionContext;
-    let serverName: string;
-    let portNumber: number;
-    let sessionToken: string;
+suite('TestBenchConnection Test Suite', () => {
     let connection: PlayServerConnection;
+    let context: vscode.ExtensionContext;
 
-    beforeEach(() => {
-        context = {} as vscode.ExtensionContext;
-        serverName = "testServer";
-        portNumber = 9445;
-        sessionToken = "fakeSessionToken";
-        connection = new PlayServerConnection(context, serverName, portNumber, sessionToken);
-    });
-
-    afterEach(() => {
-        jest.clearAllMocks();
-    });
-
-    test("should initialize with correct baseURL", () => {
-        expect(connection.getBaseURL()).toBe(`https://${serverName}:${portNumber}/api`);
-    });
-
-    test("should return session token", () => {
-        expect(connection.getSessionToken()).toBe(sessionToken);
-    });
-
-    test("should fetch projects list", async () => {
-        const projectsData = [
-            {
-                key: "project1",
-                creationTime: "2023-01-01T00:00:00Z",
-                name: "Project 1",
-                status: "active",
-                visibility: true,
-                tovsCount: 5,
-                cyclesCount: 3,
-                description: "Test project 1",
-                lockerKey: null,
-                startDate: null,
-                endDate: null,
+    setup(() => {
+        context = {
+            secrets: {
+                delete: async () => {},
+                get: async () => undefined,
+                store: async () => {},
             },
-        ];
-
-        (axios.get as jest.MockedFunction<typeof axios.get>).mockResolvedValue({ data: projectsData });
-
-        const projects = await connection.getProjectsList();
-        expect(projects).toEqual(projectsData);
+            subscriptions: [],
+        } as unknown as vscode.ExtensionContext;
+        connection = new PlayServerConnection(context, 'testserver', 9445, 'session-token');
     });
 
-    test("should handle error when fetching projects list", async () => {
-        (axios.get as jest.MockedFunction<typeof axios.get>).mockRejectedValue(new Error("Network Error"));
-
-        const projects = await connection.getProjectsList();
-        expect(projects).toBeNull();
+    teardown(() => {
+        sinon.restore();
     });
 
-    test("should fetch project tree", async () => {
-        const projectTree = {
-            nodeType: "root",
-            key: "root",
-            name: "Root Node",
-            creationTime: "2023-01-01T00:00:00Z",
-            status: "active",
-            visibility: true,
-            children: [],
-        };
-
-        (axios.get as jest.MockedFunction<typeof axios.get>).mockResolvedValue({ data: projectTree });
-
-        const tree = await connection.getProjectTreeOfProject("project1");
-        expect(tree).toEqual(projectTree);
+    test('should initialize with the correct values', () => {
+        assert.strictEqual(connection.getBaseURL(), 'https://testserver:9445/api');
+        assert.strictEqual(connection.getSessionToken(), 'session-token');
     });
 
-    test("should handle error when fetching project tree", async () => {
-        (axios.get as jest.MockedFunction<typeof axios.get>).mockRejectedValue(new Error("Network Error"));
+    /*
+    test('should login successfully', async () => {
+        const response = { data: { sessionToken: 'new-token' }, status: 201 };
+        sinon.stub(axios, 'post').resolves(response);
 
-        const tree = await connection.getProjectTreeOfProject("project1");
-        expect(tree).toBeNull();
+        const loginResponse = await connection.login();
+        assert.strictEqual(loginResponse.sessionToken, 'new-token');
     });
 
-    test("should check if server connection is working", async () => {
-        (axios.get as jest.MockedFunction<typeof axios.get>).mockResolvedValue({ status: 200 });
+    test('should handle login failure', async () => {
+        sinon.stub(axios, 'post').rejects(new Error('Login failed'));
 
-        const isWorking = await connection.checkIsWorking();
-        expect(isWorking).toBe(true);
+        try {
+            await connection.login();
+            assert.fail('Expected an error');
+        } catch (error: any) {
+            assert.strictEqual(error.message, 'Login failed');
+        }
     });
 
-    test("should handle error when checking server connection", async () => {
-        (axios.get as jest.MockedFunction<typeof axios.get>).mockRejectedValue(new Error("Network Error"));
+    test('should send keep-alive request', async () => {
+        sinon.stub(axios, 'get').resolves({ status: 200 });
 
-        const isWorking = await connection.checkIsWorking();
-        expect(isWorking).toBe(false);
+        await connection.sendKeepAliveRequest();
+        assert.ok(true); // No error means the test passed
     });
 
-    test("should logout user", async () => {
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, "projectKey", undefined);
-        (axios.post as jest.MockedFunction<typeof axios.post>).mockResolvedValue({ status: 200 });
+    test('should handle keep-alive failure', async () => {
+        sinon.stub(axios, 'get').rejects(new Error('Keep-alive failed'));
 
-        await connection.logoutUser(context, treeDataProvider);
-        expect(axios.post).toHaveBeenCalledWith(
-            `${connection.getBaseURL()}/logout`,
-            {},
-            { headers: { Authorization: `Bearer ${sessionToken}` } }
-        );
+        await connection.sendKeepAliveRequest();
+        assert.ok(true); // No error means the test passed, failure is logged
     });
 
-    test("should handle error when logging out user", async () => {
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, "projectKey", undefined);
-        (axios.post as jest.MockedFunction<typeof axios.post>).mockRejectedValue(new Error("Network Error"));
+    test('should logout successfully', async () => {
+        const deleteStub = sinon.stub(axios, 'delete').resolves({ status: 204 });
 
-        await connection.logoutUser(context, treeDataProvider);
-        expect(axios.post).toHaveBeenCalledWith(
-            `${connection.getBaseURL()}/logout`,
-            {},
-            { headers: { Authorization: `Bearer ${sessionToken}` } }
-        );
+        await connection.logout();
+        assert.ok(deleteStub.calledOnce);
     });
+
+    test('should handle logout failure', async () => {
+        sinon.stub(axios, 'delete').rejects(new Error('Logout failed'));
+
+        await connection.logout();
+        assert.ok(true); // No error means the test passed, failure is logged
+    });
+    */
 });

@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { activate, deactivate } from '../extension';
+import path from 'path';
 
 suite('Extension Test Suite', () => {
 	vscode.window.showInformationMessage('Start all tests.');
@@ -66,7 +67,10 @@ suite('Extension Test Suite', () => {
 		assert.strictEqual(config.get('storePasswordAfterLogin'), false);
 	});
 
-	test('Set Workspace Location command should update configuration', async () => {
+	test('Updating configuration should change setting variable', async () => {
+		const workspaceUri = vscode.Uri.file(path.join(__dirname, '..', '..', 'test-fixture'));
+		await vscode.workspace.updateWorkspaceFolders(0, 0, { uri: workspaceUri });
+		
 		const context = {
 			subscriptions: [],
 			secrets: {
@@ -76,11 +80,10 @@ suite('Extension Test Suite', () => {
 
 		activate(context);
 
-		const newWorkspaceLocation = '/new/workspace/location';
 		const config = vscode.workspace.getConfiguration('testbenchExtension');
-		await config.update('workspaceLocation', newWorkspaceLocation);
+		await config.update('serverName', 'newServerName', vscode.ConfigurationTarget.Global);
 
-		assert.strictEqual(config.get('workspaceLocation'), newWorkspaceLocation);
+		assert.strictEqual(config.get('serverName'), 'newServerName');
 	});
 
 	test('Deactivate should not throw', () => {

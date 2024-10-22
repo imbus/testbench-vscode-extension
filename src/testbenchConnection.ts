@@ -58,7 +58,7 @@ export class PlayServerConnection {
     private portNumber: number;
     private sessionToken: string;
     private baseURL: string;
-    private apiClient: AxiosInstance;
+    private apiClient: AxiosInstance;    
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
     constructor(context: vscode.ExtensionContext, serverName: string, portNumber: number, sessionToken: string) {
@@ -89,6 +89,10 @@ export class PlayServerConnection {
 
     public getBaseURL(): string {
         return this.baseURL;
+    }
+
+    public getApiClient(): AxiosInstance {
+        return this.apiClient;
     }
 
     async getSessionTokenFromSecretStorage(context: vscode.ExtensionContext): Promise<string | undefined> {

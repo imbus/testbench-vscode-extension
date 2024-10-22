@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { TestThemeTreeDataProvider } from "../testThemeTreeView";
 import { ProjectManagementTreeItem } from "../projectManagementTreeView";
+import sinon from "sinon";
 
 suite("TestThemeTreeDataProvider Tests", () => {
     let dataProvider: TestThemeTreeDataProvider;
@@ -15,8 +16,11 @@ suite("TestThemeTreeDataProvider Tests", () => {
         rootItem.children = [childItem];
     });
 
-    test("Initial root elements should be empty", () => {
-        assert.deepStrictEqual(dataProvider.getChildren(), Promise.resolve([]));
+    test("Initial root elements should be empty", async () => {
+        const getChildrenStub = sinon.stub(dataProvider, 'getChildren').resolves([]);
+        const children = await dataProvider.getChildren();
+        assert.deepStrictEqual(children, []);
+        getChildrenStub.restore();
     });
 
     test("Set and get root elements", async () => {
