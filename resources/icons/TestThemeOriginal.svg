@@ -1,0 +1,5 @@
+<svg id="testtheme" xmlns="http://www.w3.org/2000/svg" width="20" height="16" viewBox="0 0 20 16">
+    <g transform="translate(0)">
+      <path data-name="Pfad 1" d="M9.915,4.034h-6a2,2,0,0,0-1.99,2l-.01,12a2.006,2.006,0,0,0,2,2h16a2.006,2.006,0,0,0,2-2v-10a2.006,2.006,0,0,0-2-2h-8Z" transform="translate(-1.915 -4.034)" fill="#6e7681"/>
+    </g>
+</svg>

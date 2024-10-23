@@ -72,8 +72,11 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         }
 
         if (element.contextValue === "cycle") {
+            // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
+            this.testThemeDataProvider.clearTree();
             // Offload the children of the cycle to the Test Theme Tree
             this.testThemeDataProvider.setRoots(await this.getChildrenOfCycle(element));
+
             return []; // Return an empty array to prevent expansion in the Project Management Tree
         } else if (element && element.children) {
             // Return children directly if they exist (for elements under Test Cycle)
@@ -161,10 +164,26 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     handleExpansion(element: ProjectManagementTreeItem, expanded: boolean): void {
+        // console.log(`@@ Element ${element.label} is expanded: ${expanded}`);
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
         element.updateIcon();
+
+        // If the element is a test cycle and expanding it, initialize the test theme tree
+        if (expanded) {
+            this.handleTestCycleClick(element);
+        }
+    }
+
+    // Trigger initialization of test theme tree when a test cycle is clicked
+    async handleTestCycleClick(testCycleItem: ProjectManagementTreeItem): Promise<void> {
+        if (testCycleItem.contextValue === "cycle") {
+            // console.log(`@@ Test cycle ${testCycleItem.label} is clicked.`);
+            // Use the existing refresh or data loading function for initializing the test theme tree
+            this.testThemeDataProvider.clearTree();
+            this.testThemeDataProvider.setRoots(await this.getChildrenOfCycle(testCycleItem));
+        }
     }
 
     clearTree(): void {
@@ -206,7 +225,7 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
 
         // Tooltip for the test theme tree items
         if (item?.base?.numbering) {
-            this.tooltip = `Numbering: ${item.base.numbering}, Type: ${item.elementType}, Name: ${item.base.name}, ID: ${item.base.uniqueID}`;  
+            this.tooltip = `Numbering: ${item.base.numbering}, Type: ${item.elementType}, Name: ${item.base.name}, ID: ${item.base.uniqueID}`;
         }
     }
 
@@ -219,25 +238,25 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
         // TODO: Replace the png icons with svg icons of web itorx
         const iconMap: Record<string, Record<string, string>> = {
             project: {
-                active: "Project_B_Active.png",
-                planned: "Project_B_Planned.png",
-                finished: "Project_B_Finished.png",
-                closed: "Project_B_Closed.png",
-                default: "Project.png",
+                active: "Project.svg",
+                planned: "Project.svg",
+                finished: "Project.svg",
+                closed: "Project.svg",
+                default: "Project.svg",
             },
             version: {
-                active: "Testobject_B_Active.png",
-                planned: "Testobject_B_Planned.png",
-                finished: "Testobject_B_Finished.png",
-                closed: "Testobject_B_Closed.png",
-                default: "Testobject.png",
+                active: "TestObjectVersion.svg",
+                planned: "TestObjectVersion.svg",
+                finished: "TestObjectVersion.svg",
+                closed: "TestObjectVersion.svg",
+                default: "TestObjectVersion.svg",
             },
             cycle: {
-                active: "TestCycle_Active.png",
-                planned: "TestCycle_Planned.png",
-                finished: "TestCycle_Finished.png",
-                closed: "TestCycle_Closed.png",
-                default: "TestCycle.png",
+                active: "TestCycle.svg",
+                planned: "TestCycle.svg",
+                finished: "TestCycle.svg",
+                closed: "TestCycle.svg",
+                default: "TestCycle.svg",
             },
             testthemenode: {
                 default: "TestTheme.svg",
@@ -246,7 +265,7 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
                 default: "TestCaseSet.svg",
             },
             testcasenode: {
-                default: "TestCase.png",
+                default: "TestCase.svg",
             },
             default: {
                 default: "iTB-EE-Logo.svg",
@@ -304,6 +323,14 @@ export async function initializeTreeView(
 
     projectManagementTreeView.onDidCollapseElement((event) => {
         projectManagementDataProvider.handleExpansion(event.element, false);
+    });
+
+    // Handle click events to trigger test theme tree initialization on test cycle click
+    projectManagementTreeView.onDidChangeSelection((event) => {
+        const selectedElement = event.selection[0];
+        if (selectedElement && selectedElement.contextValue === "cycle") {
+            projectManagementDataProvider.handleTestCycleClick(selectedElement);
+        }
     });
 
     context.subscriptions.push(testThemeTreeView);

@@ -41,6 +41,26 @@ interface ServerVersionsResponse {
     revision: string;
 }
 
+/**
+ * Data structure for the import request body for importing test results from a file.
+ */
+export interface ImportData {
+    fileName: string;
+    reportRootUID: string;
+    useExistingDefect: boolean;
+    ignoreNonExecutedTestCases: boolean;
+    checkPaths: boolean;
+    discardTesterInformation: boolean;
+    defaultTester: string;
+    filters: Filter[];
+}
+
+interface Filter {
+    name: string;
+    filterType: string;
+    testThemeUID: string;
+}
+
 // Function to save JSON data to a file (For analysing the responses of the server)
 function saveJsonToFile(filePath: string, data: any): void {
     try {
@@ -58,7 +78,7 @@ export class PlayServerConnection {
     private portNumber: number;
     private sessionToken: string;
     private baseURL: string;
-    private apiClient: AxiosInstance;    
+    private apiClient: AxiosInstance;
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
     constructor(context: vscode.ExtensionContext, serverName: string, portNumber: number, sessionToken: string) {
@@ -319,6 +339,104 @@ export class PlayServerConnection {
             this.stopKeepAlive();
             this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
+        }
+    }
+
+    /**
+     * Uploads a zip archive containing JSON-based execution results to the TestBench server.
+     * @param projectKey The project key as an integer.
+     * @param zipFilePath The file path to the zip archive that contains the execution results as JSON files.
+     * @throws Error if the upload fails.
+     * @returns A promise that resolves when the upload is successful.
+     */
+    public async uploadExecutionResults(projectKey: number, zipFilePath: string): Promise<void> {
+        const endpoint = `/api/projects/${projectKey}/executionResults/v1`;
+
+        try {
+            const zipFileData = fs.readFileSync(zipFilePath);
+
+            const response = await this.apiClient.post(endpoint, zipFileData, {
+                headers: {
+                    "Content-Type": "application/zip",
+                },
+                validateStatus: () => true, // Use this when you want to handle all status codes manually, otherwise Axios will throw an error for non-2xx status codes
+            });
+
+            switch (response.status) {
+                case 201:
+                    console.log("File uploaded successfully.");
+                    break;
+                case 403:
+                    throw new Error("Forbidden: You do not have permission to perform this action.");
+                case 404:
+                    throw new Error("Not Found: The requested project was not found.");
+                case 422:
+                    throw new Error("Unprocessable Entity: The uploaded file is invalid.");
+                default:
+                    throw new Error(`Unexpected status code ${response.status} received from the server.`);
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                console.error("An error occurred while uploading the file:", error.message);
+                if (error.response) {
+                    console.error("Response data:", error.response.data);
+                }
+            } else {
+                console.error("An unexpected error occurred:", error);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Imports JSON-based execution results in the given zip archive to a specific project and cycle.
+     * @param projectKey The project key as an integer.
+     * @param cycleKey The cycle key as an integer.
+     * @param importData The data for the import as per API specification.
+     * @returns The job ID as a string.
+     * @throws Error if an error occurs during the import.
+     */
+    public async importExecutionResults(projectKey: number, cycleKey: number, importData: ImportData): Promise<string> {
+        const endpoint = `/api/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+
+        try {
+            const response = await this.apiClient.post(endpoint, importData, {
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                validateStatus: () => true, // We handle status codes manually
+            });
+
+            switch (response.status) {
+                case 200:
+                    const jobID = response.data?.jobID;
+                    if (jobID) {
+                        console.log("Import initiated successfully. Job ID:", jobID);
+                        return jobID;
+                    } else {
+                        throw new Error("Success response received but no jobID found in the response.");
+                    }
+                case 400:
+                    throw new Error("Bad Request: The request body structure is wrong.");
+                case 403:
+                    throw new Error("Forbidden: You do not have permission to perform this action.");
+                case 404:
+                    throw new Error("Not Found: Project or test cycle not found.");
+                case 422:
+                    throw new Error("Unprocessable Entity: The server cannot process the request.");
+                default:
+                    throw new Error(`Unexpected status code ${response.status} received from the server.`);
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                console.error("An Axios error occurred:", error.message);
+                if (error.response) {
+                    console.error("Response data:", error.response.data);
+                }
+            } else {
+                console.error("An unexpected error occurred:", error);
+            }
+            throw error;
         }
     }
 

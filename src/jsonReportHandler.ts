@@ -158,7 +158,7 @@ export async function fetchZipFile(
         const jobId = await getJobId(connection, projectKey, cycleKey, requestParams);
         console.log(`Job ID (${jobId}) fetched successfully.`);
 
-        const jobStatus = await pollJobStatus(connection, projectKey, jobId, progress, cancellationToken);
+        const jobStatus = await pollJobStatus(connection, projectKey, jobId, "report", progress, cancellationToken);
 
         if (!jobStatus || !isJobCompletedSuccessfully(jobStatus)) {
             console.warn("Report generation not completed or failed.");
@@ -188,13 +188,14 @@ export async function fetchZipFile(
     }
 }
 
-async function pollJobStatus(
+export async function pollJobStatus(
     connection: PlayServerConnection,
     projectKey: string,
     jobId: string,
-    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    jobType: "report" | "import", // Default job type is "report"
+    progress?: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken?: vscode.CancellationToken,
-    maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
+    maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually    
 ): Promise<JobStatusResponse | null> {
     const startTime = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
     let attempt = 0;
@@ -210,7 +211,7 @@ async function pollJobStatus(
         attempt++;
 
         try {
-            jobStatus = await getJobStatus(connection, projectKey, jobId);
+            jobStatus = await getJobStatus(connection, projectKey, jobId, jobType);
             // console.log(`Attempt ${attempt}: Job Status fetched.`);
 
             if (isJobCompletedSuccessfully(jobStatus)) {
@@ -281,9 +282,10 @@ async function getJobId(
 async function getJobStatus(
     connection: PlayServerConnection,
     projectKey: string,
-    jobId: string
+    jobId: string,
+    jobType: "report" | "import"
 ): Promise<JobStatusResponse> {
-    const url = `${connection.getBaseURL()}/projects/${projectKey}/report/job/${jobId}/v1`;
+    const url = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
 
     console.log(`Checking job status: ${url}`);
 

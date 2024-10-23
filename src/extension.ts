@@ -1,13 +1,15 @@
 import * as vscode from "vscode";
 import * as jsonReportHandler from "./jsonReportHandler";
-import { PlayServerConnection, performLogin, changeConnection } from "./testBenchConnection";
+import { PlayServerConnection, performLogin, changeConnection, ImportData } from "./testBenchConnection";
 import {
     ProjectManagementTreeItem,
     ProjectManagementTreeDataProvider,
     initializeTreeView,
 } from "./projectManagementTreeView";
+import path from "path";
 
 export function activate(context: vscode.ExtensionContext) {
+    // TODO: Import * as ... for all imports?
     // TODO: WebViev UI for login?
     // TODO: Create extension documentation in Readme.md
     // TODO: Add a new command to clear stored login data? (logout doesnt do that)
@@ -148,13 +150,14 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.showExtensionSettings.command, () => {
             // Open the settings UI of the extension inside the settings editor
-            vscode.commands.executeCommand("workbench.action.openSettings2", {
-                query: "@ext:imbus.testbench-visual-studio-code-extension",
-            })
-            .then(() => {
-                // Open the workspace settings view (The default settings view is user settings)
-                vscode.commands.executeCommand('workbench.action.openWorkspaceSettings');
-            });
+            vscode.commands
+                .executeCommand("workbench.action.openSettings2", {
+                    query: "@ext:imbus.testbench-visual-studio-code-extension",
+                })
+                .then(() => {
+                    // Open the workspace settings view (The default settings view is user settings)
+                    vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
+                });
         })
     );
 
@@ -347,6 +350,80 @@ export function activate(context: vscode.ExtensionContext) {
                 );
             } else {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
+            }
+        })
+    );
+
+    // TESTING Upload to TestBench
+    context.subscriptions.push(
+        vscode.commands.registerCommand("testbenchExtension.testUploadToTestbench", async () => {
+            if (connection) {
+                const projectKey = 30;
+                const cycleKey = 119;
+                const resultZipFileName = "report.zip";
+                const reportRootUID = "rep_id-TT-119";
+                const resultZipPath = await promptForWorkspaceLocation();
+                if (!resultZipPath) {
+                    vscode.window.showErrorMessage("No location selected for the report.zip file.");
+                    return;
+                }
+                const resultZipFilePath = path.join(resultZipPath, resultZipFileName);
+
+                // Upload the zip file containing the results to TestBench server
+                (async () => {
+                    try {
+                        await connection.uploadExecutionResults(projectKey, resultZipFilePath);
+                    } catch (error: any) {
+                        console.error("Error:", error.message);
+                    }
+                })();
+
+                // Import the results to TestBench server
+                (async () => {
+                    const importData: ImportData = {
+                        fileName: resultZipFileName,
+                        reportRootUID: reportRootUID,
+                        useExistingDefect: true,
+                        ignoreNonExecutedTestCases: true,
+                        checkPaths: true,
+                        discardTesterInformation: false,
+                        defaultTester: "tester",
+                        filters: [
+                            /*
+                            {
+                                name: "Filter1",
+                                filterType: "TestTheme",
+                                testThemeUID: "themeUID456",
+                            },
+                            */
+                        ],
+                    };
+                    try {
+                        // Start the import job
+                        const jobID = await connection.importExecutionResults(projectKey, cycleKey, importData);
+                        console.log("Import job started with Job ID:", jobID);
+
+                        // Poll the job status until it is completed
+                        const jobStatus = await jsonReportHandler.pollJobStatus(
+                            connection,
+                            projectKey.toString(),
+                            jobID,
+                            "import"
+                        );
+
+                        // Check if the job is completed successfully
+                        if (!jobStatus || !jsonReportHandler.isJobCompletedSuccessfully(jobStatus)) {
+                            console.warn("Import not completed or failed.");
+                            vscode.window.showErrorMessage("Import not completed or failed.");
+                            return undefined;
+                        } else {
+                            console.log("Import completed successfully. Job Status:", jobStatus);
+                            vscode.window.showInformationMessage("Import completed successfully.");
+                        }
+                    } catch (error: any) {
+                        console.error("Error:", error.message);
+                    }
+                })();
             }
         })
     );

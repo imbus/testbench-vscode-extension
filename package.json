@@ -147,6 +147,10 @@
                     "light": "resources/icons/settings.svg",
                     "dark": "resources/icons/settings.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.testUploadToTestbench",
+                "title": "TestBench: TEST Upload results to Testbench"
             }
         ],
         "views": {
@@ -184,7 +188,7 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.showExtensionSettings",
+                    "command": "testbenchExtension.selectAndLoadProject",
                     "group": "navigation@3"
                 },
                 {
@@ -192,11 +196,11 @@
                     "group": "navigation@4"
                 },
                 {
-                    "command": "testbenchExtension.selectAndLoadProject",
+                    "command": "testbenchExtension.refreshTreeView",
                     "group": "navigation@5"
                 },
                 {
-                    "command": "testbenchExtension.refreshTreeView",
+                    "command": "testbenchExtension.showExtensionSettings",
                     "group": "navigation@6"
                 }
             ],
