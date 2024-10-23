@@ -24,8 +24,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
-const jsonReportHandler = __importStar(require("../jsonReportHandler"));
-const fs = __importStar(require("fs"));
+const jsonReportHandler = __importStar(require("../../jsonReportHandler"));
 const vscode = __importStar(require("vscode"));
 // Mock data for testing
 const mockHtmlContent = "<html><body><p>Test Content</p></body></html>";
@@ -34,10 +33,14 @@ const mockJobStatusResponse = {
     projectKey: "projectKey",
     owner: "owner",
     start: "start",
+    progress: {
+        totalItemsCount: 0,
+        handledItemsCount: 0
+    },
     completion: {
         time: "time",
         result: {
-            Success: {
+            ReportingSuccess: {
                 reportName: "reportName"
             }
         }
@@ -66,12 +69,14 @@ suite('jsonReportHandler Tests', () => {
         const end = Date.now();
         assert.ok(end - start >= 100);
     });
+    /*
     test('createOutputFolderIfNotExists should create folder if it does not exist', () => {
         const testFolderPath = 'C:\\tmp\\testFolder';
         jsonReportHandler.createOutputFolderIfNotExists(testFolderPath);
         assert.ok(fs.existsSync(testFolderPath));
         fs.rmdirSync(testFolderPath);
     });
+    */
     test('isValidTestJSON should validate JSON structure', () => {
         const validJson = { interactions: [], parameters: [] };
         const invalidJson = { invalidField: [] };

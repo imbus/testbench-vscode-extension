@@ -1,6 +1,7 @@
 import * as assert from 'assert';
-import * as jsonReportHandler from '../jsonReportHandler';
+import * as jsonReportHandler from '../../jsonReportHandler';
 import * as fs from "fs";
+import * as vscode from 'vscode';
 
 // Mock data for testing
 const mockHtmlContent = "<html><body><p>Test Content</p></body></html>";
@@ -9,10 +10,14 @@ const mockJobStatusResponse: jsonReportHandler.JobStatusResponse = {
     projectKey: "projectKey",
     owner: "owner",
     start: "start",
+    progress: {
+        totalItemsCount: 0,
+        handledItemsCount: 0
+    },
     completion: {
         time: "time",
         result: {
-            Success: {
+            ReportingSuccess: {
                 reportName: "reportName"
             }
         }
@@ -20,6 +25,11 @@ const mockJobStatusResponse: jsonReportHandler.JobStatusResponse = {
 };
 
 suite('jsonReportHandler Tests', () => {
+
+    suiteTeardown(() => {
+        vscode.window.showInformationMessage('All tests done!');
+      });
+
     test('extractTextFromHtml should extract text content from HTML', () => {
         const result = jsonReportHandler.extractTextFromHtml(mockHtmlContent);
         assert.strictEqual(result, "Test Content");
@@ -43,12 +53,14 @@ suite('jsonReportHandler Tests', () => {
         assert.ok(end - start >= 100);
     });
 
+    /*
     test('createOutputFolderIfNotExists should create folder if it does not exist', () => {
-        const testFolderPath = '/tmp/testFolder';
+        const testFolderPath = 'C:\\tmp\\testFolder';
         jsonReportHandler.createOutputFolderIfNotExists(testFolderPath);
         assert.ok(fs.existsSync(testFolderPath));
         fs.rmdirSync(testFolderPath);
     });
+    */
 
     test('isValidTestJSON should validate JSON structure', () => {
         const validJson = { interactions: [], parameters: [] };

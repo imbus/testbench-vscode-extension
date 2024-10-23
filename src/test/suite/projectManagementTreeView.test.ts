@@ -1,10 +1,15 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import * as testBenchConnection from "../testBenchConnection";
-import { ProjectManagementTreeDataProvider } from "../projectManagementTreeView";
-import { TestThemeTreeDataProvider } from "../testThemeTreeView";
+import * as testBenchConnection from "../../testBenchConnection";
+import { ProjectManagementTreeDataProvider } from "../../projectManagementTreeView";
+import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
 
 suite("Project Management Tree View Tests", function () {
+
+    suiteTeardown(() => {
+        vscode.window.showInformationMessage('All tests done!');
+      });
+
     this.timeout(10000); // Increase timeout to 10 seconds
     // Mock Variables
     const context = {} as vscode.ExtensionContext;

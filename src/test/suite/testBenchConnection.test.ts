@@ -1,56 +1,39 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const assert = __importStar(require("assert"));
-const vscode = __importStar(require("vscode"));
-const testBenchConnection_1 = require("../testBenchConnection"); // Adjust the path as needed
-const sinon = __importStar(require("sinon"));
+import * as assert from 'assert';
+import * as vscode from 'vscode';
+import { PlayServerConnection } from '../../testBenchConnection';
+import * as sinon from 'sinon';
+import axios from 'axios';
+
 suite('TestBenchConnection Test Suite', () => {
+
     suiteTeardown(() => {
         vscode.window.showInformationMessage('All tests done!');
-    });
-    let connection;
-    let context;
+      });
+
+    let connection: PlayServerConnection;
+    let context: vscode.ExtensionContext;
+
     setup(() => {
         context = {
             secrets: {
-                delete: async () => { },
+                delete: async () => {},
                 get: async () => undefined,
-                store: async () => { },
+                store: async () => {},
             },
             subscriptions: [],
-        };
-        connection = new testBenchConnection_1.PlayServerConnection(context, 'testserver', 9445, 'session-token');
+        } as unknown as vscode.ExtensionContext;
+        connection = new PlayServerConnection(context, 'testserver', 9445, 'session-token');
     });
+
     teardown(() => {
         sinon.restore();
     });
+
     test('should initialize with the correct values', () => {
         assert.strictEqual(connection.getBaseURL(), 'https://testserver:9445/api');
         assert.strictEqual(connection.getSessionToken(), 'session-token');
     });
+
     /*
     test('should login successfully', async () => {
         const response = { data: { sessionToken: 'new-token' }, status: 201 };
@@ -100,4 +83,3 @@ suite('TestBenchConnection Test Suite', () => {
     });
     */
 });
-//# sourceMappingURL=testBenchConnection.test.js.map

@@ -54,7 +54,7 @@ class ProjectManagementTreeDataProvider {
         if (!data) {
             return null;
         }
-        const contextValue = data.nodeType.toLowerCase(); // project, version, cycle, testtheme, testcaseset, testcase
+        const contextValue = data.nodeType.toLowerCase(); // project, version, cycle, testthemenode, testcasesetnode, testcasenode
         const collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         /*  TODO: Test cycle can be set to none to be non expandable and the user can click on it to see the test themes
             contextValue === "cycle"
@@ -214,13 +214,13 @@ class ProjectManagementTreeItem extends vscode.TreeItem {
                 closed: "TestCycle_Closed.png",
                 default: "TestCycle.png",
             },
-            testtheme: {
-                default: "Testtheme_B.png",
+            testthemenode: {
+                default: "TestTheme.svg",
             },
-            testcaseset: {
-                default: "TestCaseSet_B.png",
+            testcasesetnode: {
+                default: "TestCaseSet.svg",
             },
-            testcase: {
+            testcasenode: {
                 default: "TestCase.png",
             },
             default: {

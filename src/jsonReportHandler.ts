@@ -66,11 +66,15 @@ export interface JobStatusResponse {
     id: string;
     projectKey: string;
     owner: string;
-    start: string;
+    start: string;    
+    progress: {
+        totalItemsCount: number,
+        handledItemsCount: number
+    };
     completion: {
         time: string;
         result: {
-            Success?: {
+            ReportingSuccess?: {
                 reportName: string;
             };
         };
@@ -131,7 +135,7 @@ export function extractTextFromHtml(htmlContent: string): string {
 
 // Helper function to check if the job has completed successfully.
 export function isJobCompletedSuccessfully(jobStatus: JobStatusResponse): boolean {
-    return !!jobStatus?.completion?.result?.Success?.reportName;
+    return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
 }
 
 // Fetch the TestBench JSON report from the server (ZIP Archive).
@@ -162,7 +166,7 @@ export async function fetchZipFile(
             return undefined;
         }
 
-        const fileName = jobStatus.completion.result.Success!.reportName;
+        const fileName = jobStatus.completion.result.ReportingSuccess!.reportName;
         console.log(`Report name: ${fileName}`);
 
         const outputPath = await downloadReport(connection, baseKey, projectKey, fileName);
@@ -281,7 +285,7 @@ async function getJobStatus(
 ): Promise<JobStatusResponse> {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/report/job/${jobId}/v1`;
 
-    // console.log(`Checking job status: ${url}`);
+    console.log(`Checking job status: ${url}`);
 
     const jobStatusResponse: AxiosResponse<JobStatusResponse> = await axios.get(url, {
         headers: {
@@ -289,6 +293,8 @@ async function getJobStatus(
             Authorization: connection.getSessionToken(),
         },
     });
+
+    console.log("jobStatusResponse:", jobStatusResponse);
 
     if (jobStatusResponse.status !== 200) {
         throw new Error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);

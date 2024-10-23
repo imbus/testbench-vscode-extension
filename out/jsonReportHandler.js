@@ -96,7 +96,7 @@ function extractTextFromHtml(htmlContent) {
 }
 // Helper function to check if the job has completed successfully.
 function isJobCompletedSuccessfully(jobStatus) {
-    return !!jobStatus?.completion?.result?.Success?.reportName;
+    return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
 }
 // Fetch the TestBench JSON report from the server (ZIP Archive).
 // 3 Calls are needed to download the zip report:
@@ -114,7 +114,7 @@ async function fetchZipFile(connection, baseKey, projectKey, cycleKey, progress,
             vscode.window.showErrorMessage("Report generation not completed or failed.");
             return undefined;
         }
-        const fileName = jobStatus.completion.result.Success.reportName;
+        const fileName = jobStatus.completion.result.ReportingSuccess.reportName;
         console.log(`Report name: ${fileName}`);
         const outputPath = await downloadReport(connection, baseKey, projectKey, fileName);
         if (outputPath) {
@@ -204,13 +204,14 @@ async function getJobId(connection, projectKey, cycleKey, requestParams) {
 // Get the job status from server
 async function getJobStatus(connection, projectKey, jobId) {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/report/job/${jobId}/v1`;
-    // console.log(`Checking job status: ${url}`);
+    console.log(`Checking job status: ${url}`);
     const jobStatusResponse = await axios_1.default.get(url, {
         headers: {
             accept: "application/vnd.testbench+json",
             Authorization: connection.getSessionToken(),
         },
     });
+    console.log("jobStatusResponse:", jobStatusResponse);
     if (jobStatusResponse.status !== 200) {
         throw new Error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
     }

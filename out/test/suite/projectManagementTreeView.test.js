@@ -25,9 +25,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
 const vscode = __importStar(require("vscode"));
-const testBenchConnection = __importStar(require("../testBenchConnection"));
-const projectManagementTreeView_1 = require("../projectManagementTreeView");
-const testThemeTreeView_1 = require("../testThemeTreeView");
+const testBenchConnection = __importStar(require("../../testBenchConnection"));
+const projectManagementTreeView_1 = require("../../projectManagementTreeView");
+const testThemeTreeView_1 = require("../../testThemeTreeView");
 suite("Project Management Tree View Tests", function () {
     suiteTeardown(() => {
         vscode.window.showInformationMessage('All tests done!');

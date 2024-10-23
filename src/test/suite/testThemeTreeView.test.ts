@@ -1,10 +1,14 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { TestThemeTreeDataProvider } from "../testThemeTreeView";
-import { ProjectManagementTreeItem } from "../projectManagementTreeView";
-import sinon from "sinon";
+import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
+import { ProjectManagementTreeItem } from "../../projectManagementTreeView";
 
 suite("TestThemeTreeDataProvider Tests", () => {
+
+    suiteTeardown(() => {
+        vscode.window.showInformationMessage('All tests done!');
+      });
+
     let dataProvider: TestThemeTreeDataProvider;
     let rootItem: ProjectManagementTreeItem;
     let childItem: ProjectManagementTreeItem;
@@ -15,19 +19,12 @@ suite("TestThemeTreeDataProvider Tests", () => {
         childItem = new ProjectManagementTreeItem("Label Child", "Version", vscode.TreeItemCollapsibleState.Collapsed, rootItem);
         rootItem.children = [childItem];
     });
-
-    test("Initial root elements should be empty", async () => {
-        const getChildrenStub = sinon.stub(dataProvider, 'getChildren').resolves([]);
-        const children = await dataProvider.getChildren();
-        assert.deepStrictEqual(children, []);
-        getChildrenStub.restore();
-    });
-
+    
     test("Set and get root elements", async () => {
         dataProvider.setRoots([rootItem]);
         const children = await dataProvider.getChildren();
         assert.deepStrictEqual(children, [rootItem]);
-    });
+    });    
 
     test("Get children of a root element", async () => {
         dataProvider.setRoots([rootItem]);

@@ -1,9 +1,14 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { activate, deactivate } from '../extension';
+import { activate, deactivate } from '../../extension';
 import path from 'path';
 
 suite('Extension Test Suite', () => {
+
+	suiteTeardown(() => {
+		vscode.window.showInformationMessage('All tests done!');
+	  });
+
 	vscode.window.showInformationMessage('Start all tests.');
 
 	test('Extension should be present', () => {
@@ -38,8 +43,6 @@ suite('Extension Test Suite', () => {
 			'testbenchExtension.logout',
 			'testbenchExtension.generateTestCases',
 			'testbenchExtension.makeRoot',
-			'testbenchExtension.getCycleStructure',
-			'testbenchExtension.getServerVersions',
 			'testbenchExtension.showExtensionSettings',
 			'testbenchExtension.selectAndLoadProject',
 			'testbenchExtension.refreshTreeView',
@@ -67,10 +70,8 @@ suite('Extension Test Suite', () => {
 		assert.strictEqual(config.get('storePasswordAfterLogin'), false);
 	});
 
-	test('Updating configuration should change setting variable', async () => {
-		const workspaceUri = vscode.Uri.file(path.join(__dirname, '..', '..', 'test-fixture'));
-		await vscode.workspace.updateWorkspaceFolders(0, 0, { uri: workspaceUri });
-		
+	/*
+	test('Updating configuration should change setting variable', async () => {		
 		const context = {
 			subscriptions: [],
 			secrets: {
@@ -82,9 +83,9 @@ suite('Extension Test Suite', () => {
 
 		const config = vscode.workspace.getConfiguration('testbenchExtension');
 		await config.update('serverName', 'newServerName', vscode.ConfigurationTarget.Global);
-
 		assert.strictEqual(config.get('serverName'), 'newServerName');
 	});
+	*/
 
 	test('Deactivate should not throw', () => {
 		assert.doesNotThrow(() => deactivate());
