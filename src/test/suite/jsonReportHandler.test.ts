@@ -37,13 +37,13 @@ suite('jsonReportHandler Tests', () => {
     });
 
     test('isJobCompletedSuccessfully should return true for successful job status', () => {
-        const result = jsonReportHandler.isJobCompletedSuccessfully(mockJobStatusResponse);
+        const result = jsonReportHandler.isReportJobCompletedSuccessfully(mockJobStatusResponse);
         assert.strictEqual(result, true);
     });
 
     test('isJobCompletedSuccessfully should return false for unsuccessful job status', () => {
         const incompleteJobStatusResponse = { ...mockJobStatusResponse, completion: { time: "time", result: {} } };
-        const result = jsonReportHandler.isJobCompletedSuccessfully(incompleteJobStatusResponse);
+        const result = jsonReportHandler.isReportJobCompletedSuccessfully(incompleteJobStatusResponse);
         assert.strictEqual(result, false);
     });
 

@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as fs from "fs";
 import path from "path";
 import * as jsonReportHandler from "./jsonReportHandler";
 import { PlayServerConnection, performLogin, changeConnection } from "./testBenchConnection";
@@ -18,7 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
     // TODO: Create extension documentation in Readme.md
     // TODO: Add a new command to clear stored login data? (logout doesnt do that)
     // TODO: (Later) Upload test results back to TestBench server.
-    // TODO: Extra: Create command: Fetch every project with every TOV and cycle and display them in tree view.    
+    // TODO: Extra: Create command: Fetch every project with every TOV and cycle and display them in tree view.
     const commands = {
         displayCommands: {
             command: `${baseKey}.displayCommands`,
@@ -60,6 +59,10 @@ export function activate(context: vscode.ExtensionContext) {
             command: `${baseKey}.selectAndLoadProject`,
             title: "Display Projects List",
         },
+        uploadTestResultsToTestbench: {
+            command: `${baseKey}.uploadTestResultsToTestbench`,
+            title: "Upload Test Results To Testbench",
+        },
         refreshTreeView: {
             command: `${baseKey}.refreshTreeView`,
             title: "Refresh Tree View",
@@ -91,9 +94,13 @@ export function activate(context: vscode.ExtensionContext) {
             await context.secrets.delete("password");
             console.log("Password deleted from secrets storage.");
         }
-        workspaceLocation = config.get<string>("workspaceLocation");        
+
+        // If the user wont specify a workspace location, use the workspace location of VS Code
+        if(!config.get<string>("workspaceLocation")){
+            await config.update("workspaceLocation", vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+        }
         
-        testbench2robotframeworkConfig = getGenerationConfiguration();        
+        testbench2robotframeworkConfig = getGenerationConfiguration();
     }
 
     // Load initial configuration
@@ -122,6 +129,38 @@ export function activate(context: vscode.ExtensionContext) {
             return folderUri[0].fsPath;
         }
         return undefined;
+    }
+
+    async function promptForReportZipFileWithResults(): Promise<string | undefined> {
+        try {
+            const options: vscode.OpenDialogOptions = {
+                canSelectMany: false,
+                openLabel: "Select Zip File with Test Results",
+                canSelectFiles: true,
+                canSelectFolders: false,
+                filters: {
+                    "Zip Files": ["zip"],
+                },
+            };
+
+            const fileUri = await vscode.window.showOpenDialog(options);
+
+            if (!fileUri || !fileUri[0]) {
+                vscode.window.showErrorMessage("No file selected. Please select a valid .zip file.");
+                return undefined;
+            }
+
+            const selectedFilePath = fileUri[0].fsPath;
+            if (!selectedFilePath.endsWith(".zip")) {
+                vscode.window.showErrorMessage("Selected file is not a .zip file. Please select a valid .zip file.");
+                return undefined;
+            }
+
+            return selectedFilePath;
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`An error occurred while selecting the zip file: ${error.message}`);
+            return undefined;
+        }
     }
 
     // Register the "Set Workspace Location" command
@@ -167,6 +206,7 @@ export function activate(context: vscode.ExtensionContext) {
                     commands.changeConnection.title,
                     commands.showExtensionSettings.title,
                     commands.selectAndLoadProject.title,
+                    commands.uploadTestResultsToTestbench.title,
                     "Cancel",
                 ];
             } else {
@@ -189,6 +229,9 @@ export function activate(context: vscode.ExtensionContext) {
                     break;
                 case commands.selectAndLoadProject.title:
                     vscode.commands.executeCommand(commands.selectAndLoadProject.command);
+                    break;
+                case commands.uploadTestResultsToTestbench.title:
+                    vscode.commands.executeCommand(commands.uploadTestResultsToTestbench.command);
                     break;
                 case commands.changeConnection.title:
                     vscode.commands.executeCommand(commands.changeConnection.command);
@@ -345,76 +388,89 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // TESTING Upload to TestBench
+    // Register the Upload Test Results to TestBench command
     context.subscriptions.push(
-        vscode.commands.registerCommand("testbenchExtension.testUploadToTestbench", async () => {
-            if (connection) {
-                const projectKey = 30;
-                const cycleKey = 119;
-                const resultZipFileName = "report.zip";
-                const reportRootUID = "rep_id-TT-119";
-                const resultZipPath = await promptForWorkspaceLocation();
-                if (!resultZipPath) {
-                    vscode.window.showErrorMessage("No location selected for the report.zip file.");
-                    return;
-                }
-                const resultZipFilePath = path.join(resultZipPath, resultZipFileName);
+        vscode.commands.registerCommand(commands.uploadTestResultsToTestbench.command, async () => {
+            if (!connection) {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
+                return;
+            }
 
-                // Upload the zip file containing the results to TestBench server
-                (async () => {
-                    try {
-                        await connection.uploadExecutionResults(projectKey, resultZipFilePath);
-                    } catch (error: any) {
-                        console.error("Error:", error.message);
-                    }
-                })();
+            if (!projectManagementTreeDataProvider) {
+                vscode.window.showErrorMessage("No project selected. Please select a project first.");
+                return;
+            }
 
-                // Import the results to TestBench server
-                (async () => {
-                    const importData: types.ImportData = {
-                        fileName: resultZipFileName,
-                        reportRootUID: reportRootUID,
-                        useExistingDefect: true,
-                        ignoreNonExecutedTestCases: true,
-                        checkPaths: true,
-                        discardTesterInformation: false,
-                        defaultTester: "tester",
-                        filters: [
-                            /*
+            if (!projectManagementTreeDataProvider.currentProjectKeyInView) {
+                vscode.window.showErrorMessage("No project selected. Please select a project first.");
+                return;
+            }
+
+            // TODO: Get the project key and cycle key from the selected project and cycle instead of hardcoding
+            const projectKey = Number(projectManagementTreeDataProvider.currentProjectKeyInView); // 30;
+            const cycleKey = 187;
+            const reportRootUID = "itb-TT-7943";
+            // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
+            const resultZipFilePath = await promptForReportZipFileWithResults();
+            if (!resultZipFilePath) {
+                vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
+                return;
+            }
+
+            // Upload the zip file containing the results to TestBench server
+            let zipFilenameFromServer = "";
+            try {
+                zipFilenameFromServer = await connection.uploadExecutionResults(projectKey, resultZipFilePath);
+            } catch (error: any) {
+                console.error("Error:", error.message);
+            }
+
+            console.log("Upload complete.");
+
+            // Import the results to TestBench server
+            const importData: types.ImportData = {
+                fileName: zipFilenameFromServer,
+                reportRootUID: reportRootUID,
+                useExistingDefect: true,
+                ignoreNonExecutedTestCases: true,
+                checkPaths: true,
+                discardTesterInformation: false,
+                defaultTester: "tester",
+                filters: [
+                    /*
                             {
                                 name: "Filter1",
                                 filterType: "TestTheme",
                                 testThemeUID: "themeUID456",
                             },
                             */
-                        ],
-                    };
-                    try {
-                        // Start the import job
-                        const jobID = await connection.importExecutionResults(projectKey, cycleKey, importData);
-                        console.log("Import job started with Job ID:", jobID);
+                ],
+            };
+            try {
+                // Start the import job
+                console.log("Starting import execution results");
+                const jobID = await connection.importExecutionResults(projectKey, cycleKey, importData);
+                console.log("Import job started with Job ID:", jobID);
 
-                        // Poll the job status until it is completed
-                        const jobStatus = await jsonReportHandler.pollJobStatus(
-                            connection,
-                            projectKey.toString(),
-                            jobID,
-                            "import"
-                        );
+                // Poll the job status until it is completed
+                const jobStatus = await jsonReportHandler.pollJobStatus(
+                    connection,
+                    projectKey.toString(),
+                    jobID,
+                    "import"
+                );
 
-                        // Check if the job is completed successfully
-                        if (!jobStatus || !jsonReportHandler.isJobCompletedSuccessfully(jobStatus)) {
-                            console.warn("Import not completed or failed.");
-                            vscode.window.showErrorMessage("Import not completed or failed.");
-                            return undefined;
-                        } else {
-                            console.log("Import completed successfully. Job Status:", jobStatus);
-                            vscode.window.showInformationMessage("Import completed successfully.");
-                        }
-                    } catch (error: any) {
-                        console.error("Error:", error.message);
-                    }
-                })();
+                // Check if the job is completed successfully
+                if (!jobStatus || jsonReportHandler.isImportJobFailed(jobStatus)) {
+                    console.warn("Import not completed or failed.");
+                    vscode.window.showErrorMessage("Import not completed or failed.");
+                    return undefined;
+                } else {
+                    console.log("Import completed successfully. Job Status:", jobStatus);
+                    vscode.window.showInformationMessage("Import completed successfully.");
+                }
+            } catch (error: any) {
+                console.error("Error:", error.message);
             }
         })
     );
@@ -428,8 +484,14 @@ export function activate(context: vscode.ExtensionContext) {
  */
 export function getGenerationConfiguration(): types.Testbench2robotframeworkConfiguration {
     const config = vscode.workspace.getConfiguration(baseKey);
-    const testbench2robotframeworkConfig = config.get<types.Testbench2robotframeworkConfiguration>("testbench2robotframeworkConfig", types.defaultTestbench2robotframeworkConfig);
-    testbench2robotframeworkConfig.generationDirectory = config.get<string>("workspaceLocation", ""); 
+    const testbench2robotframeworkConfig = config.get<types.Testbench2robotframeworkConfiguration>(
+        "testbench2robotframeworkConfig",
+        types.defaultTestbench2robotframeworkConfig
+    );
+    testbench2robotframeworkConfig.generationDirectory = path.join(
+        config.get<string>("workspaceLocation", ""),
+        "Generated"
+    );
 
     if (!testbench2robotframeworkConfig) {
         throw new Error("Generation configuration is not set in the extension settings.");

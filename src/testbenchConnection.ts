@@ -297,15 +297,17 @@ export class PlayServerConnection {
      * @throws Error if the upload fails.
      * @returns A promise that resolves when the upload is successful.
      */
-    public async uploadExecutionResults(projectKey: number, zipFilePath: string): Promise<void> {
-        const endpoint = `/api/projects/${projectKey}/executionResults/v1`;
+    public async uploadExecutionResults(projectKey: number, zipFilePath: string): Promise<string> {
+        const uploadEndpointURL = `/projects/${projectKey}/executionResults/v1`;
 
         try {
             const zipFileData = fs.readFileSync(zipFilePath);
 
-            const response = await this.apiClient.post(endpoint, zipFileData, {
+            console.log("Uploading zip file to:", uploadEndpointURL);
+            const response = await this.apiClient.post(uploadEndpointURL, zipFileData, {
                 headers: {
                     "Content-Type": "application/zip",
+                    accept: "application/json",
                 },
                 validateStatus: () => true, // Use this when you want to handle all status codes manually, otherwise Axios will throw an error for non-2xx status codes
             });
@@ -313,15 +315,25 @@ export class PlayServerConnection {
             switch (response.status) {
                 case 201:
                     console.log("File uploaded successfully.");
-                    break;
+                    // Extract the fileName from the response and return it
+                    const fileName = response.data?.fileName;
+                    if (fileName) {
+                        return fileName;
+                    } else {
+                        throw new Error("File name not found in the server response.");
+                    }
                 case 403:
-                    throw new Error("Forbidden: You do not have permission to perform this action.");
+                    throw new Error(
+                        "Forbidden: You do not have permission to perform this action (uploadExecutionResults)."
+                    );
                 case 404:
-                    throw new Error("Not Found: The requested project was not found.");
+                    throw new Error("Not Found: The requested project was not found (uploadExecutionResults).");
                 case 422:
-                    throw new Error("Unprocessable Entity: The uploaded file is invalid.");
+                    throw new Error("Unprocessable Entity: The uploaded file is invalid (uploadExecutionResults).");
                 default:
-                    throw new Error(`Unexpected status code ${response.status} received from the server.`);
+                    throw new Error(
+                        `Unexpected status code ${response.status} received from the server (uploadExecutionResults).`
+                    );
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
@@ -344,13 +356,18 @@ export class PlayServerConnection {
      * @returns The job ID as a string.
      * @throws Error if an error occurs during the import.
      */
-    public async importExecutionResults(projectKey: number, cycleKey: number, importData: types.ImportData): Promise<string> {
-        const endpoint = `/api/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+    public async importExecutionResults(
+        projectKey: number,
+        cycleKey: number,
+        importData: types.ImportData
+    ): Promise<string> {
+        const endpoint = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
 
         try {
             const response = await this.apiClient.post(endpoint, importData, {
                 headers: {
                     "Content-Type": "application/json",
+                    accept: "application/json",
                 },
                 validateStatus: () => true, // We handle status codes manually
             });
@@ -362,18 +379,26 @@ export class PlayServerConnection {
                         console.log("Import initiated successfully. Job ID:", jobID);
                         return jobID;
                     } else {
-                        throw new Error("Success response received but no jobID found in the response.");
+                        throw new Error(
+                            "Success response received but no jobID found in the response (importExecutionResults)."
+                        );
                     }
                 case 400:
-                    throw new Error("Bad Request: The request body structure is wrong.");
+                    throw new Error("Bad Request: The request body structure is wrong (importExecutionResults).");
                 case 403:
-                    throw new Error("Forbidden: You do not have permission to perform this action.");
+                    throw new Error(
+                        "Forbidden: You do not have permission to perform this action (importExecutionResults)."
+                    );
                 case 404:
-                    throw new Error("Not Found: Project or test cycle not found.");
+                    throw new Error("Not Found: Project or test cycle not found (importExecutionResults).");
                 case 422:
-                    throw new Error("Unprocessable Entity: The server cannot process the request.");
+                    throw new Error(
+                        "Unprocessable Entity: The server cannot process the request (importExecutionResults)."
+                    );
                 default:
-                    throw new Error(`Unexpected status code ${response.status} received from the server.`);
+                    throw new Error(
+                        `Unexpected status code ${response.status} received from the server (importExecutionResults).`
+                    );
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
@@ -711,7 +736,10 @@ export async function changeConnection(
 
 // Retrieves the current versions of the TestBench web server.
 // Used to verify the availability of server after receiving the server URL and port number in the login process.
-async function fetchServerVersions(serverName: string, portNumber: number): Promise<types.ServerVersionsResponse | null> {
+async function fetchServerVersions(
+    serverName: string,
+    portNumber: number
+): Promise<types.ServerVersionsResponse | null> {
     try {
         const baseURL = `https://${serverName}:${portNumber}`;
         const serverVersionsURL = `${baseURL}/api/serverVersions/v1`;

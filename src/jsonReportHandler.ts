@@ -62,8 +62,16 @@ export function extractTextFromHtml(htmlContent: string): string {
 }
 
 // Helper function to check if the job has completed successfully.
-export function isJobCompletedSuccessfully(jobStatus: types.JobStatusResponse): boolean {
+export function isReportJobCompletedSuccessfully(jobStatus: types.JobStatusResponse): boolean {
     return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
+}
+
+export function isImportJobCompletedSuccessfully(jobStatus: types.JobStatusResponse): boolean {
+    return !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
+}
+
+export function isImportJobFailed(jobStatus: types.JobStatusResponse): boolean {
+    return !!jobStatus?.completion?.result?.ExecutionImportingFailure;
 }
 
 // Fetch the TestBench JSON report from the server (ZIP Archive).
@@ -88,7 +96,7 @@ export async function fetchZipFile(
 
         const jobStatus = await pollJobStatus(connection, projectKey, jobId, "report", progress, cancellationToken);
 
-        if (!jobStatus || !isJobCompletedSuccessfully(jobStatus)) {
+        if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
             console.warn("Report generation not completed or failed.");
             vscode.window.showErrorMessage("Report generation not completed or failed.");
             return undefined;
@@ -116,11 +124,12 @@ export async function fetchZipFile(
     }
 }
 
+// TODO : Create separate polls/interfaces for report and import job status
 export async function pollJobStatus(
     connection: PlayServerConnection,
     projectKey: string,
     jobId: string,
-    jobType: "report" | "import", // Default job type is "report"
+    jobType: "report" | "import",
     progress?: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken?: vscode.CancellationToken,
     maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
@@ -140,14 +149,24 @@ export async function pollJobStatus(
 
         try {
             jobStatus = await getJobStatus(connection, projectKey, jobId, jobType);
-            // console.log(`Attempt ${attempt}: Job Status fetched.`);
+            console.log(`Attempt ${attempt}: Job Status fetched.`);
 
-            if (isJobCompletedSuccessfully(jobStatus)) {
-                console.log("Job completed successfully.");
-                return jobStatus;
-            } else {
-                // console.log("Job not yet completed.");
+            if (jobType === "report") {
+                if (isReportJobCompletedSuccessfully(jobStatus)) {
+                    console.log("Report job completed successfully.");
+                    return jobStatus;
+                } else {
+                    // console.log("Job not yet completed.");
+                }
+            } else if (jobType === "import") {
+                if (isImportJobCompletedSuccessfully(jobStatus)) {
+                    console.log("Import job completed successfully.");
+                    return jobStatus;
+                } else if (isImportJobFailed(jobStatus)) {
+                    return null;
+                }
             }
+            
         } catch (error) {
             console.error(`Attempt ${attempt}: Failed to get job status. Error: ${error}`);
         }
@@ -749,7 +768,8 @@ export async function testBenchToRobotFramework(
 
                 // Create configuration json object called testbench2robotframeworkConfig.json
                 await saveTestbench2RobotConfigurationAsJson();
-                // tb2robot write -c testbench2robotframeworkConfig.json report.zip
+                // tb2robot write -c testbench2robotframeworkConfig.json ReportWithoutResultsForTb2robot.zip
+                // tb2robot read -o output\output.xml -r ReportWithResults.zip ReportWithoutResultsForTb2robot.zip
 
                 // @@ Start of testbench2robotframework library
                 // TODO: Replace all the code between start and end with testbench2robotframework library usage

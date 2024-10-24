@@ -118,15 +118,35 @@ export interface JobStatusResponse {
     projectKey: string;
     owner: string;
     start: string;
-    progress: {
+    progress?: {
         totalItemsCount: number;
         handledItemsCount: number;
-    };
+    } | null;
     completion: {
         time: string;
         result: {
             ReportingSuccess?: {
                 reportName: string;
+            };
+            ExecutionImportingFailure?: {
+                error: {
+                    code: number;
+                    message: string;
+                    description: string;
+                };
+            };
+            ExecutionImportingSuccess?: {
+                testCaseSets: Array<{
+                    key: string;
+                    executionKey: string;
+                    finished: boolean;
+                    error: {
+                        code: number;
+                        message: string;
+                        description: string;
+                    };
+                    testCases: any[];
+                }>;
             };
         };
     };

@@ -43,7 +43,7 @@
                     "type": "string",
                     "description": "The path to the workspace or project directory on the local machine for storing local files.",
                     "order": 5
-                },                
+                },
                 "testbenchExtension.testbench2robotframeworkConfig": {
                     "type": "object",
                     "default": {
@@ -295,8 +295,12 @@
                 }
             },
             {
-                "command": "testbenchExtension.testUploadToTestbench",
-                "title": "TestBench: TEST Upload results to Testbench"
+                "command": "testbenchExtension.uploadTestResultsToTestbench",
+                "title": "TestBench: Upload Test Results To Testbench",
+                "icon": {
+                    "light": "resources/icons/Upload.svg",
+                    "dark": "resources/icons/Upload.svg"
+                }
             }
         ],
         "views": {
@@ -338,16 +342,20 @@
                     "group": "navigation@3"
                 },
                 {
-                    "command": "testbenchExtension.displayCommands",
+                    "command": "testbenchExtension.uploadTestResultsToTestbench",
                     "group": "navigation@4"
                 },
                 {
-                    "command": "testbenchExtension.refreshTreeView",
+                    "command": "testbenchExtension.displayCommands",
                     "group": "navigation@5"
                 },
                 {
-                    "command": "testbenchExtension.showExtensionSettings",
+                    "command": "testbenchExtension.refreshTreeView",
                     "group": "navigation@6"
+                },
+                {
+                    "command": "testbenchExtension.showExtensionSettings",
+                    "group": "navigation@7"
                 }
             ],
             "view/item/context": [

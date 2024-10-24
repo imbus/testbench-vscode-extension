@@ -247,31 +247,31 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
         // TODO: Replace the png icons with svg icons of web itorx
         const iconMap: Record<string, Record<string, string>> = {
             Project: {
-                active: "Project.svg",
-                planned: "Project.svg",
-                finished: "Project.svg",
-                closed: "Project.svg",
-                default: "Project.svg",
+                active: "projects.svg",  // Project.svg
+                planned: "projects.svg",
+                finished: "projects.svg",
+                closed: "projects.svg",
+                default: "projects.svg",
             },
             Version: {
-                active: "TestObjectVersion.svg",
-                planned: "TestObjectVersion.svg",
-                finished: "TestObjectVersion.svg",
-                closed: "TestObjectVersion.svg",
-                default: "TestObjectVersion.svg",
+                active: "TOV-specification.svg",  // TestObjectVersion.svg
+                planned: "TOV-specification.svg",
+                finished: "TOV-specification.svg",
+                closed: "TOV-specification.svg",
+                default: "TOV-specification.svg",
             },
             Cycle: {
-                active: "TestCycle.svg",
-                planned: "TestCycle.svg",
-                finished: "TestCycle.svg",
-                closed: "TestCycle.svg",
-                default: "TestCycle.svg",
+                active: "Cycle-execution.svg",  // TestCycle.svg
+                planned: "Cycle-execution.svg",
+                finished: "Cycle-execution.svg",
+                closed: "Cycle-execution.svg",
+                default: "Cycle-execution.svg",
             },
             TestThemeNode: {
-                default: "TestTheme.svg",
+                default: "TestThemeOriginal.svg",  // TestTheme.svg
             },
             TestCaseSetNode: {
-                default: "TestCaseSet.svg",
+                default: "TestCaseSetOriginal.svg",  // TestCaseSet.svg
             },
             TestCaseNode: {
                 default: "TestCase.svg",
