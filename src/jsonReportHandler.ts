@@ -6,80 +6,8 @@ import * as cheerio from "cheerio"; // To parse HTML  npm install --save-dev @ty
 import axios, { AxiosResponse } from "axios";
 import { PlayServerConnection } from "./testBenchConnection";
 import { ProjectManagementTreeItem, findProjectKeyOfCycle } from "./projectManagementTreeView";
-
-// Configuration interface
-export interface Configuration {
-    generationDirectory: string;
-    clearGenerationDirectory: boolean;
-    createOutputZip: boolean;
-    removeExtractedFiles: boolean; // Option to remove extracted files after processing
-}
-
-// Interface for Test Case
-export interface TestCase {
-    uniqueID: string;
-    name: string;
-    steps: string[];
-}
-
-// Interface for Test Suite containing Test Cases
-export interface TestSuite {
-    themeID: string;
-    testCases: TestCase[];
-}
-
-// Optional Cycle Options request body parameter for the TestBench API
-interface CycleOptions {
-    treeRootUID?: string;
-    basedOnExecution?: boolean;
-    suppressFilteredData?: boolean;
-    suppressNotExecutable?: boolean;
-    suppressEmptyTestThemes?: boolean;
-    filters?: {
-        name: string;
-        filterType: "TestTheme";
-        testThemeUID: string;
-    }[];
-}
-
-// Interface representing the optional request body parameters.
-interface ReportRequestParams {
-    treeRootUID?: string;
-    basedOnExecution?: boolean;
-    suppressFilteredData?: boolean;
-    suppressNotExecutable?: boolean;
-    suppressEmptyTestThemes?: boolean;
-    filters?: {
-        name: string;
-        filterType: "TestTheme";
-        testThemeUID: string;
-    }[];
-}
-
-// Interface representing the successful response from the server.
-interface JobIdResponse {
-    jobID: string;
-}
-
-// Interface representing the successful response from the job status GET request.
-export interface JobStatusResponse {
-    id: string;
-    projectKey: string;
-    owner: string;
-    start: string;    
-    progress: {
-        totalItemsCount: number,
-        handledItemsCount: number
-    };
-    completion: {
-        time: string;
-        result: {
-            ReportingSuccess?: {
-                reportName: string;
-            };
-        };
-    };
-}
+import * as types from "./types";
+import { getGenerationConfiguration } from "./extension";
 
 // Prompt the user to select the export report method (Execution based or Specification based)
 async function selectExecutionOrSpecificationBased(): Promise<boolean | null> {
@@ -134,7 +62,7 @@ export function extractTextFromHtml(htmlContent: string): string {
 }
 
 // Helper function to check if the job has completed successfully.
-export function isJobCompletedSuccessfully(jobStatus: JobStatusResponse): boolean {
+export function isJobCompletedSuccessfully(jobStatus: types.JobStatusResponse): boolean {
     return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
 }
 
@@ -149,7 +77,7 @@ export async function fetchZipFile(
     projectKey: string,
     cycleKey: string,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
-    requestParams?: ReportRequestParams,
+    requestParams?: types.OptionalJobIDRequestParameter,
     cancellationToken?: vscode.CancellationToken
 ): Promise<string | undefined> {
     try {
@@ -195,11 +123,11 @@ export async function pollJobStatus(
     jobType: "report" | "import", // Default job type is "report"
     progress?: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken?: vscode.CancellationToken,
-    maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually    
-): Promise<JobStatusResponse | null> {
+    maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
+): Promise<types.JobStatusResponse | null> {
     const startTime = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
     let attempt = 0;
-    let jobStatus: JobStatusResponse | null = null;
+    let jobStatus: types.JobStatusResponse | null = null;
 
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
@@ -255,7 +183,7 @@ async function getJobId(
     connection: PlayServerConnection,
     projectKey: string,
     cycleKey: string,
-    requestParams?: ReportRequestParams
+    requestParams?: types.OptionalJobIDRequestParameter
 ): Promise<string> {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
 
@@ -263,7 +191,7 @@ async function getJobId(
         `Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`
     );
 
-    const jobIdResponse: AxiosResponse<JobIdResponse> = await axios.post(url, requestParams, {
+    const jobIdResponse: AxiosResponse<types.JobIdResponse> = await axios.post(url, requestParams, {
         headers: {
             accept: "application/json",
             Authorization: connection.getSessionToken(), // Include session token for authorization
@@ -284,12 +212,12 @@ async function getJobStatus(
     projectKey: string,
     jobId: string,
     jobType: "report" | "import"
-): Promise<JobStatusResponse> {
+): Promise<types.JobStatusResponse> {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
 
     console.log(`Checking job status: ${url}`);
 
-    const jobStatusResponse: AxiosResponse<JobStatusResponse> = await axios.get(url, {
+    const jobStatusResponse: AxiosResponse<types.JobStatusResponse> = await axios.get(url, {
         headers: {
             accept: "application/vnd.testbench+json",
             Authorization: connection.getSessionToken(),
@@ -539,7 +467,7 @@ export function parseJsonFile(filePath: string): any {
 }
 
 // Function to process the Test Case files
-export function processTestCaseFile(filePath: string): TestCase | null {
+export function processTestCaseFile(filePath: string): types.TestCase | null {
     try {
         console.debug(`Processing test case file: ${filePath}`);
 
@@ -602,11 +530,11 @@ function extractThemeIDFromTestCaseFile(filePath: string): string {
 }
 
 // Function to create Test Suites based on themes and test cases
-export function createTestSuitesFromFiles(files: string[]): TestSuite[] {
+export function createTestSuitesFromFiles(files: string[]): types.TestSuite[] {
     try {
         console.debug(`Creating test suites from ${files.length} files`);
 
-        const testSuites: TestSuite[] = [];
+        const testSuites: types.TestSuite[] = [];
 
         files.forEach((filePath) => {
             // Process the files that begins with iTB-TC-
@@ -635,7 +563,10 @@ export function createTestSuitesFromFiles(files: string[]): TestSuite[] {
 }
 
 // Function to write Robot Framework test suites to files
-export async function writeRobotFrameworkTestSuites(testSuites: TestSuite[], config: Configuration): Promise<void> {
+export async function writeRobotFrameworkTestSuites(
+    testSuites: types.TestSuite[],
+    config: types.Testbench2robotframeworkConfiguration
+): Promise<void> {
     let overwriteAll = false;
     let ignoreAll = false;
 
@@ -763,7 +694,7 @@ export async function testBenchToRobotFramework(
         return;
     }
 
-    const cycleStructureOptionsRequestParameter: ReportRequestParams = {
+    const cycleStructureOptionsRequestParameter: types.OptionalJobIDRequestParameter = {
         basedOnExecution: executionBased,
     };
 
@@ -816,18 +747,12 @@ export async function testBenchToRobotFramework(
                     return;
                 }
 
-                // Configuration for the test suite generation
-                const config = vscode.workspace.getConfiguration(baseKey);
-                const testbench2robotframeworkConfig: Configuration = config.get<Configuration>(
-                    "reportGenerationConfig",
-                    {
-                        generationDirectory: config.get<string>("workspaceLocation", ""),
-                        clearGenerationDirectory: true,
-                        createOutputZip: false,
-                        removeExtractedFiles: false,
-                    }
-                );
+                // Create configuration json object called testbench2robotframeworkConfig.json
+                await saveTestbench2RobotConfigurationAsJson();
+                // tb2robot write -c testbench2robotframeworkConfig.json report.zip
 
+                // @@ Start of testbench2robotframework library
+                // TODO: Replace all the code between start and end with testbench2robotframework library usage
                 // Paths for extracted files and generated test cases
                 const folderNameOfExtractedZip = `Extracted Files`;
                 const zipExtractionFolderPath = path.join(chosenOutputFolderForZipExtraction, folderNameOfExtractedZip);
@@ -835,6 +760,7 @@ export async function testBenchToRobotFramework(
                 const robotFilesFolderPath = path.join(chosenOutputFolderForZipExtraction, folderNameOfRobotFiles);
 
                 // Extract ZIP file
+                // TODO: Extracting (and removeExtractedFiles) is not needed if testbench2robotframework library can use the zip file directly
                 await extractZip(downloadedZipFilePath, zipExtractionFolderPath);
                 console.log(`ZIP file extracted to: ${zipExtractionFolderPath}`);
 
@@ -845,10 +771,10 @@ export async function testBenchToRobotFramework(
                     });
                 }
 
-                // TODO: use testbench2robotframework library instead of doing this manually
                 console.log(`Starting convertJSONsIntoTestCases with path: ${zipExtractionFolderPath}`);
                 await convertJSONsIntoTestCases(zipExtractionFolderPath, robotFilesFolderPath);
-                if (testbench2robotframeworkConfig.removeExtractedFiles) {
+                let removeExtractedFilesFlag = false;
+                if (removeExtractedFilesFlag) {
                     if (progress) {
                         progress.report({
                             increment: 10,
@@ -857,7 +783,9 @@ export async function testBenchToRobotFramework(
                     }
                     removeExtractedFiles(zipExtractionFolderPath);
                 }
-                // End of testbench2robotframework library work
+                // @@ End of testbench2robotframework library
+                // Delete created json config file after usage
+                deleteConfigurationFile();
 
                 vscode.window.showInformationMessage(`Test suite generation done.`);
             } catch (error: any) {
@@ -913,53 +841,6 @@ export async function startTestGenerationProcess(
     }
 }
 
-// Interfaces for JSON structure
-interface Interaction {
-    key: string;
-    uniqueID: string;
-    name: string;
-    interactionType: string;
-    path: string;
-    spec: {
-        callKey: string;
-        sequencePhase: string;
-        callType: string;
-        description: string;
-        comments: string;
-        references: any[];
-        preConditions: any[];
-        postConditions: any[];
-    };
-    exec: {
-        verdict: string;
-        time: string;
-        duration: number;
-        currentUser: { key: string; name: string };
-        tester: string | null;
-        comments: string;
-        references: any[];
-    };
-    parameters: Parameter[];
-    interactions?: Interaction[];
-}
-
-interface Parameter {
-    dataType: {
-        key: string;
-        kind: string;
-        name: string;
-        path: string;
-        uniqueID: string;
-        version: string | null;
-    };
-    definitionType: string;
-    key: string;
-    name: string;
-    evaluationType: string;
-    value: string;
-    valueType: string;
-}
-
 // Function to read and parse a JSON file asynchronously
 async function readJSONFile(filePath: string): Promise<any> {
     try {
@@ -981,7 +862,7 @@ async function writeContentToFile(filePath: string, content: string): Promise<vo
 }
 
 // Generates Robot Framework test case steps from interactions
-function generateTestCaseSection(interactions: Interaction[]): string {
+function generateTestCaseSection(interactions: types.Interaction[]): string {
     return interactions.reduce((testCase, interaction) => {
         if (interaction.spec.sequencePhase === "TestStep") {
             testCase += processTestStepInteraction(interaction);
@@ -1016,7 +897,7 @@ function generateSettingsSection(jsonData: string): string {
 }
 
 // Processes an individual test step interaction
-function processTestStepInteraction(interaction: Interaction): string {
+function processTestStepInteraction(interaction: types.Interaction): string {
     if (interaction.interactionType === "Textual") {
         return processTextualInteraction(interaction);
     } else if (interaction.interactionType === "Atomic") {
@@ -1026,14 +907,14 @@ function processTestStepInteraction(interaction: Interaction): string {
 }
 
 // Processes textual test step interactions
-function processTextualInteraction(interaction: Interaction): string {
+function processTextualInteraction(interaction: types.Interaction): string {
     const descriptionText = extractTextFromHtml(interaction.spec.description);
     const commentsText = extractTextFromHtml(interaction.spec.comments);
     return descriptionText ? `    ${descriptionText}    # ${commentsText || ""}\n` : "";
 }
 
 // Processes atomic test step interactions
-function processAtomicInteraction(interaction: Interaction): string {
+function processAtomicInteraction(interaction: types.Interaction): string {
     let step = `    ${interaction.name}`;
     if (interaction.parameters && interaction.parameters.length > 0) {
         interaction.parameters.forEach((parameter) => {
@@ -1109,5 +990,76 @@ async function processSingleJSONFile(jsonFilePath: string, outputFolder: string)
         console.log(`Generated Robot Framework test case: ${generatedRobotFilePath}`);
     } catch (error: any) {
         console.error(`Error processing file ${jsonFilePath}: ${error.message}`);
+    }
+}
+
+/**
+ * Main function to write the generation configuration to a JSON file.
+ */
+export async function saveTestbench2RobotConfigurationAsJson(): Promise<void> {
+    try {
+        const generationConfig = getGenerationConfiguration();
+        const jsonContent = JSON.stringify(generationConfig, null, 2);
+        const filePath = await getConfigurationFilePath();
+        fs.writeFile(filePath, jsonContent, "utf8", (err) => {
+            if (err) {
+                throw err;
+            }
+        });
+        // vscode.window.showInformationMessage(`Configuration file created at: ${filePath}`);
+    } catch (error) {
+        if (error instanceof Error) {
+            vscode.window.showErrorMessage(`Failed to write configuration file: ${error.message}`);
+        } else {
+            vscode.window.showErrorMessage("An unknown error occurred while writing the configuration file.");
+        }
+    }
+}
+
+/**
+ * Determines the file path where the configuration file will be saved.
+ */
+async function getConfigurationFilePath(): Promise<string> {
+    const workspaceFolder = getWorkspaceFolder();
+    const fileName = "testbench2robotframeworkConfig.json";
+    const filePath = path.join(workspaceFolder, fileName);
+    return filePath;
+}
+
+/**
+ * Retrieves the path of the currently opened workspace folder.
+ */
+function getWorkspaceFolder(): string {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        throw new Error("No workspace folder is open. Please open a workspace to save the configuration file.");
+    }
+
+    // Handle multiple workspace folders differently
+    return workspaceFolders[0].uri.fsPath;
+}
+
+/**
+ * Main function to delete the configuration JSON file.
+ */
+export async function deleteConfigurationFile(): Promise<void> {
+    try {
+        const filePath = await getConfigurationFilePath();
+
+        fs.unlink(filePath, (err) => {
+            if (err) {
+                throw err;
+            }
+        });
+
+        // vscode.window.showInformationMessage(`Configuration file deleted: ${filePath}`);
+    } catch (error: any) {
+        if (error.code === "ENOENT") {
+            vscode.window.showErrorMessage(`Configuration file not found: ${error.path}`);
+        } else {
+            vscode.window.showErrorMessage(`Failed to delete configuration file: ${error.message}`);
+            console.error(error);
+        }
     }
 }

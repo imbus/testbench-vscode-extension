@@ -42,7 +42,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return null;
         }
 
-        const contextValue = data.nodeType.toLowerCase(); // project, version, cycle, testthemenode, testcasesetnode, testcasenode
+        const contextValue = data.nodeType; //.toLowerCase(); // project, version, cycle, testthemenode, TestCaseSetNode, TestCaseNode
         const collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         /*  TODO: Test cycle can be set to none to be non expandable and the user can click on it to see the test themes
             contextValue === "cycle"
@@ -129,7 +129,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
                         const treeItem = new ProjectManagementTreeItem(
                             `${data.base.numbering} ${data.base.name}`,
-                            data.elementType.toLowerCase(),
+                            data.elementType, //.toLowerCase(),
                             hasChildren
                                 ? vscode.TreeItemCollapsibleState.Collapsed
                                 : vscode.TreeItemCollapsibleState.None,
@@ -178,7 +178,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     // Trigger initialization of test theme tree when a test cycle is clicked
     async handleTestCycleClick(testCycleItem: ProjectManagementTreeItem): Promise<void> {
-        if (testCycleItem.contextValue === "cycle") {
+        if (testCycleItem.contextValue === "Cycle") {
             // console.log(`@@ Test cycle ${testCycleItem.label} is clicked.`);
             // Use the existing refresh or data loading function for initializing the test theme tree
             this.testThemeDataProvider.clearTree();
@@ -198,7 +198,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 export function findProjectKeyOfCycle(element: ProjectManagementTreeItem): string | undefined {
     let currentElement: ProjectManagementTreeItem | null = element;
     while (currentElement) {
-        if (currentElement.contextValue === "project") {
+        if (currentElement.contextValue === "Project") {
             return currentElement.item.key;
         }
         currentElement = currentElement.parent;
@@ -210,6 +210,7 @@ export function findProjectKeyOfCycle(element: ProjectManagementTreeItem): strin
 export class ProjectManagementTreeItem extends vscode.TreeItem {
     public parent: ProjectManagementTreeItem | null;
     public children?: ProjectManagementTreeItem[];
+    public statusOfTreeItem: string;
 
     constructor(
         label: string,
@@ -222,49 +223,57 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
         this.contextValue = contextValue;
         this.parent = parent;
         this.updateIcon();
+        this.statusOfTreeItem = item.exec?.status || item.status || "None"; // (Active, Planned, Finished, Closed etc.)
 
-        // Tooltip for the test theme tree items
-        if (item?.base?.numbering) {
-            this.tooltip = `Numbering: ${item.base.numbering}, Type: ${item.elementType}, Name: ${item.base.name}, ID: ${item.base.uniqueID}`;
+        if (contextValue === "Project" || contextValue === "Version" || contextValue === "Cycle") {
+            this.tooltip = `Type: ${contextValue}, Name: ${item.name}, Status: ${this.statusOfTreeItem}, Key: ${item.key}`;
+        } else if (
+            contextValue === "TestThemeNode" ||
+            contextValue === "TestCaseSetNode" ||
+            contextValue === "TestCaseNode"
+        ) {
+            if (item?.base?.numbering) {
+                this.tooltip = `Numbering: ${item.base.numbering}, Type: ${item.elementType}, Name: ${item.base.name}, Status: ${this.statusOfTreeItem}, ID: ${item.base.uniqueID}`;
+            }
         }
     }
 
     private getIconPath(): string {
         const iconFolderPath = path.join(__dirname, "..", "resources", "icons");
-        const statusOfTreeItem = this.item.status?.toLowerCase() || "default"; // (Active, Planned, Finished, Closed etc.)
-        const treeItemType = this.contextValue!.toLowerCase(); // (Project, TOV, Cycle etc.)
+        const statusOfTreeItem = this.item.status || "default"; // (Active, Planned, Finished, Closed etc.)
+        const treeItemType = this.contextValue!; // (Project, TOV, Cycle etc.)
 
         // Map the context and status to the corresponding icon file name
         // TODO: Replace the png icons with svg icons of web itorx
         const iconMap: Record<string, Record<string, string>> = {
-            project: {
+            Project: {
                 active: "Project.svg",
                 planned: "Project.svg",
                 finished: "Project.svg",
                 closed: "Project.svg",
                 default: "Project.svg",
             },
-            version: {
+            Version: {
                 active: "TestObjectVersion.svg",
                 planned: "TestObjectVersion.svg",
                 finished: "TestObjectVersion.svg",
                 closed: "TestObjectVersion.svg",
                 default: "TestObjectVersion.svg",
             },
-            cycle: {
+            Cycle: {
                 active: "TestCycle.svg",
                 planned: "TestCycle.svg",
                 finished: "TestCycle.svg",
                 closed: "TestCycle.svg",
                 default: "TestCycle.svg",
             },
-            testthemenode: {
+            TestThemeNode: {
                 default: "TestTheme.svg",
             },
-            testcasesetnode: {
+            TestCaseSetNode: {
                 default: "TestCaseSet.svg",
             },
-            testcasenode: {
+            TestCaseNode: {
                 default: "TestCase.svg",
             },
             default: {
@@ -281,15 +290,6 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
     updateIcon(): void {
         this.iconPath = this.getIconPath();
     }
-}
-
-export function makeRoot(
-    treeItem: ProjectManagementTreeItem,
-    treeDataProvider: ProjectManagementTreeDataProvider
-): void {
-    treeDataProvider.makeRoot(treeItem);
-    vscode.window.showInformationMessage(`"${treeItem.label}" is now the root.`);
-    vscode.window.registerTreeDataProvider("projectManagementTree", treeDataProvider);
 }
 
 export async function initializeTreeView(

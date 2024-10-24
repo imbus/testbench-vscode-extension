@@ -1,12 +1,16 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
+import path from "path";
 import * as jsonReportHandler from "./jsonReportHandler";
-import { PlayServerConnection, performLogin, changeConnection, ImportData } from "./testBenchConnection";
+import { PlayServerConnection, performLogin, changeConnection } from "./testBenchConnection";
 import {
     ProjectManagementTreeItem,
     ProjectManagementTreeDataProvider,
     initializeTreeView,
 } from "./projectManagementTreeView";
-import path from "path";
+import * as types from "./types";
+
+const baseKey = "testbenchExtension";
 
 export function activate(context: vscode.ExtensionContext) {
     // TODO: Import * as ... for all imports?
@@ -14,9 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
     // TODO: Create extension documentation in Readme.md
     // TODO: Add a new command to clear stored login data? (logout doesnt do that)
     // TODO: (Later) Upload test results back to TestBench server.
-    // TODO: Extra: Create command: Fetch every project with every TOV and cycle and display them in tree view.
-
-    const baseKey = "testbenchExtension";
+    // TODO: Extra: Create command: Fetch every project with every TOV and cycle and display them in tree view.    
     const commands = {
         displayCommands: {
             command: `${baseKey}.displayCommands`,
@@ -67,12 +69,6 @@ export function activate(context: vscode.ExtensionContext) {
             title: "Set Workspace Location",
         },
     };
-    interface ReportGenerationConfiguration {
-        generationDirectory: string;
-        clearGenerationDirectory: boolean;
-        createOutputZip: boolean;
-        removeExtractedFiles: boolean;
-    }
 
     // Configuration settings
     let serverName: string;
@@ -80,7 +76,7 @@ export function activate(context: vscode.ExtensionContext) {
     let username: string | undefined; // Username has no default value in package.json
     let storePassword: boolean;
     let workspaceLocation: string | undefined;
-    let reportGenerationConfig: ReportGenerationConfiguration;
+    let testbench2robotframeworkConfig: types.Testbench2robotframeworkConfiguration;
 
     // Initialize or update configuration settings
     async function loadConfiguration() {
@@ -95,14 +91,9 @@ export function activate(context: vscode.ExtensionContext) {
             await context.secrets.delete("password");
             console.log("Password deleted from secrets storage.");
         }
-        workspaceLocation = config.get<string>("workspaceLocation");
-
-        reportGenerationConfig = config.get<ReportGenerationConfiguration>("reportGenerationConfig", {
-            generationDirectory: "",
-            clearGenerationDirectory: true,
-            createOutputZip: false,
-            removeExtractedFiles: false,
-        });
+        workspaceLocation = config.get<string>("workspaceLocation");        
+        
+        testbench2robotframeworkConfig = getGenerationConfiguration();        
     }
 
     // Load initial configuration
@@ -290,9 +281,9 @@ export function activate(context: vscode.ExtensionContext) {
             if (projectManagementTreeDataProvider) {
                 // TODO: This is a bad way to find the correct tree data provider, use polymorphism / interfaces instead?
                 if (
-                    treeItem.contextValue === "project" ||
-                    treeItem.contextValue === "version" ||
-                    treeItem.contextValue === "cycle"
+                    treeItem.contextValue === "Project" ||
+                    treeItem.contextValue === "Version" ||
+                    treeItem.contextValue === "Cycle"
                 ) {
                     // If we are in the project management tree, call the makeRoot method of the project management tree data provider
                     projectManagementTreeDataProvider.makeRoot(treeItem);
@@ -380,7 +371,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 // Import the results to TestBench server
                 (async () => {
-                    const importData: ImportData = {
+                    const importData: types.ImportData = {
                         fileName: resultZipFileName,
                         reportRootUID: reportRootUID,
                         useExistingDefect: true,
@@ -430,6 +421,21 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Uncomment this if you want to prompt the user to log in when the extension activates
     // vscode.commands.executeCommand(`${baseKey}.login`);
+}
+
+/**
+ * Retrieves the Generation Configuration from extension settings.
+ */
+export function getGenerationConfiguration(): types.Testbench2robotframeworkConfiguration {
+    const config = vscode.workspace.getConfiguration(baseKey);
+    const testbench2robotframeworkConfig = config.get<types.Testbench2robotframeworkConfiguration>("testbench2robotframeworkConfig", types.defaultTestbench2robotframeworkConfig);
+    testbench2robotframeworkConfig.generationDirectory = config.get<string>("workspaceLocation", ""); 
+
+    if (!testbench2robotframeworkConfig) {
+        throw new Error("Generation configuration is not set in the extension settings.");
+    }
+
+    return testbench2robotframeworkConfig;
 }
 
 export function deactivate() {}

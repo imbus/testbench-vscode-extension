@@ -1,65 +1,13 @@
 import * as https from "https";
 import * as vscode from "vscode";
 import * as fs from "fs";
+import * as types from "./types";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { ProjectManagementTreeDataProvider, initializeTreeView } from "./projectManagementTreeView";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
-// New play server Project structure
-interface Project {
-    key: string;
-    creationTime: string;
-    name: string;
-    status: string;
-    visibility: boolean;
-    tovsCount: number;
-    cyclesCount: number;
-    description: string;
-    lockerKey: string | null;
-    startDate: string | null;
-    endDate: string | null;
-}
-
-// New play server Tree node structure
-interface TreeNode {
-    nodeType: string;
-    key: string;
-    name: string;
-    creationTime: string;
-    status: string;
-    visibility: boolean;
-    children?: TreeNode[]; // Not all nodes have children
-}
-
-// Define an interface for the server versions response
-interface ServerVersionsResponse {
-    releaseVersion: string;
-    databaseVersion: string;
-    revision: string;
-}
-
-/**
- * Data structure for the import request body for importing test results from a file.
- */
-export interface ImportData {
-    fileName: string;
-    reportRootUID: string;
-    useExistingDefect: boolean;
-    ignoreNonExecutedTestCases: boolean;
-    checkPaths: boolean;
-    discardTesterInformation: boolean;
-    defaultTester: string;
-    filters: Filter[];
-}
-
-interface Filter {
-    name: string;
-    filterType: string;
-    testThemeUID: string;
-}
 
 // Function to save JSON data to a file (For analysing the responses of the server)
 function saveJsonToFile(filePath: string, data: any): void {
@@ -132,8 +80,8 @@ export class PlayServerConnection {
         this.keepAliveIntervalId = null;
     }
 
-    async selectProjectKeyFromProjectList(projectsData: Project[]): Promise<string | null> {
-        const projectNames = projectsData.map((project: Project) => project.name);
+    async selectProjectKeyFromProjectList(projectsData: types.Project[]): Promise<string | null> {
+        const projectNames = projectsData.map((project: types.Project) => project.name);
         const selectedProjectName = await vscode.window.showQuickPick(projectNames, {
             placeHolder: "Select a project",
         });
@@ -143,7 +91,7 @@ export class PlayServerConnection {
         }
 
         console.log("Selected project name:", selectedProjectName);
-        const selectedProject = projectsData.find((project: Project) => project.name === selectedProjectName);
+        const selectedProject = projectsData.find((project: types.Project) => project.name === selectedProjectName);
         if (!selectedProject) {
             // vscode.window.showErrorMessage("Selected project not found.");
             return null;
@@ -152,14 +100,14 @@ export class PlayServerConnection {
         return selectedProject.key;
     }
 
-    async getProjectsList(): Promise<Project[] | null> {
+    async getProjectsList(): Promise<types.Project[] | null> {
         if (!this.sessionToken) {
             console.warn("Session token is null. Cannot fetch projects list.");
             return null;
         }
         try {
             const projectsURL = `/projects/v1`;
-            const projectsResponse = await this.apiClient.get<Project[]>(projectsURL, {
+            const projectsResponse = await this.apiClient.get<types.Project[]>(projectsURL, {
                 headers: {
                     accept: "application/vnd.testbench+json",
                 },
@@ -190,7 +138,7 @@ export class PlayServerConnection {
         }
     }
 
-    async getProjectTreeOfProject(projectKey: string | null): Promise<TreeNode | null> {
+    async getProjectTreeOfProject(projectKey: string | null): Promise<types.TreeNode | null> {
         if (!this.sessionToken) {
             console.warn("Session token is null. Cannot fetch project tree:", projectKey);
             return null;
@@ -201,7 +149,7 @@ export class PlayServerConnection {
         }
         try {
             const projectTreeURL = `/projects/${projectKey}/tree/v1`;
-            const projectTreeResponse = await this.apiClient.get<TreeNode>(projectTreeURL, {
+            const projectTreeResponse = await this.apiClient.get<types.TreeNode>(projectTreeURL, {
                 headers: {
                     accept: "application/vnd.testbench+json",
                 },
@@ -396,7 +344,7 @@ export class PlayServerConnection {
      * @returns The job ID as a string.
      * @throws Error if an error occurs during the import.
      */
-    public async importExecutionResults(projectKey: number, cycleKey: number, importData: ImportData): Promise<string> {
+    public async importExecutionResults(projectKey: number, cycleKey: number, importData: types.ImportData): Promise<string> {
         const endpoint = `/api/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
 
         try {
@@ -677,7 +625,7 @@ async function loginToNewPlayServerAndInitSessionToken(
     password: string,
     baseKey: string
 ): Promise<PlayServerConnection | null> {
-    const requestBody: LoginRequest = {
+    const requestBody: types.LoginRequestBody = {
         login: username,
         password: password,
         force: true,
@@ -689,7 +637,7 @@ async function loginToNewPlayServerAndInitSessionToken(
 
         console.log("Sending Login POST request to:", loginURL);
 
-        const response: AxiosResponse<LoginResponse> = await axios.post(loginURL, requestBody, {
+        const response: AxiosResponse<types.LoginResponse> = await axios.post(loginURL, requestBody, {
             headers: {
                 accept: "application/vnd.testbench+json",
                 "Content-Type": "application/vnd.testbench+json",
@@ -736,24 +684,6 @@ async function clearStoredCredentials(context: vscode.ExtensionContext, baseKey:
     }
 }
 
-// Request body structure for the login request
-interface LoginRequest {
-    login: string;
-    password: string;
-    force: boolean;
-}
-
-// Response body structure for the login request
-interface LoginResponse {
-    userKey: string;
-    login: string;
-    sessionToken: string;
-    globalRoles: string[];
-    internalUserManagement: boolean;
-    serverVersion: string;
-    licenseWarning: string | null;
-}
-
 export async function changeConnection(
     context: vscode.ExtensionContext,
     baseKey: string,
@@ -781,13 +711,13 @@ export async function changeConnection(
 
 // Retrieves the current versions of the TestBench web server.
 // Used to verify the availability of server after receiving the server URL and port number in the login process.
-async function fetchServerVersions(serverName: string, portNumber: number): Promise<ServerVersionsResponse | null> {
+async function fetchServerVersions(serverName: string, portNumber: number): Promise<types.ServerVersionsResponse | null> {
     try {
         const baseURL = `https://${serverName}:${portNumber}`;
         const serverVersionsURL = `${baseURL}/api/serverVersions/v1`;
 
         console.log("Fetching server versions with URL:", serverVersionsURL);
-        const response: AxiosResponse<ServerVersionsResponse> = await axios.get(serverVersionsURL, {
+        const response: AxiosResponse<types.ServerVersionsResponse> = await axios.get(serverVersionsURL, {
             headers: {
                 Accept: "application/vnd.testbench+json",
             },

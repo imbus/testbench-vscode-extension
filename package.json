@@ -43,38 +43,184 @@
                     "type": "string",
                     "description": "The path to the workspace or project directory on the local machine for storing local files.",
                     "order": 5
-                },
-                "testbenchExtension.reportGenerationConfig": {
+                },                
+                "testbenchExtension.testbench2robotframeworkConfig": {
                     "type": "object",
                     "default": {
-                        "generationDirectory": "",
+                        "rfLibraryRoots": [
+                            "Interactions",
+                            "RF-Library"
+                        ],
+                        "rfResourceRoots": [
+                            "RF-Resource"
+                        ],
+                        "fullyQualified": true,
+                        "generationDirectory": "{root}/Generated",
+                        "createOutputZip": true,
+                        "resourceDirectory": "{root}/Resources",
                         "clearGenerationDirectory": true,
-                        "createOutputZip": false,
-                        "removeExtractedFiles": false
+                        "logSuiteNumbering": true,
+                        "logCompoundInteractions": true,
+                        "subdivisionsMapping": {
+                            "libraries": {
+                                "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
+                                "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
+                            },
+                            "resources": {
+                                "MyKeywords": "{root}/../MyKeywords.resource",
+                                "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
+                            }
+                        },
+                        "forcedImport": {
+                            "libraries": [],
+                            "resources": [],
+                            "variables": []
+                        },
+                        "testCaseSplitPathRegEx": "^StopWithRestart\\..*",
+                        "loggingConfiguration": {
+                            "console": {
+                                "logLevel": "info"
+                            }
+                        }
                     },
-                    "description": "Configuration settings for the test generation.",
+                    "description": "Configuration settings for the generation process.",
                     "properties": {
+                        "rfLibraryRoots": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "default": [
+                                "Interactions",
+                                "RF-Library"
+                            ],
+                            "description": "List of Robot Framework library root directories."
+                        },
+                        "rfResourceRoots": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "default": [
+                                "RF-Resource"
+                            ],
+                            "description": "List of Robot Framework resource root directories."
+                        },
+                        "fullyQualified": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Use fully qualified names."
+                        },
                         "generationDirectory": {
                             "type": "string",
-                            "default": "",
-                            "description": "The directory where the files will be generated."
+                            "default": "{root}/Generated",
+                            "description": "Directory where files will be generated."
+                        },
+                        "createOutputZip": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Create a ZIP file of the output."
+                        },
+                        "resourceDirectory": {
+                            "type": "string",
+                            "default": "{root}/Resources",
+                            "description": "Directory for resources."
                         },
                         "clearGenerationDirectory": {
                             "type": "boolean",
                             "default": true,
-                            "description": "Clear the generation directory after generating new files."
+                            "description": "Clear the generation directory before generating new files."
                         },
-                        "createOutputZip": {
+                        "logSuiteNumbering": {
                             "type": "boolean",
-                            "default": false,
-                            "description": "Create a zip file of the output."
+                            "default": true,
+                            "description": "Log suite numbering."
                         },
-                        "removeExtractedFiles": {
+                        "logCompoundInteractions": {
                             "type": "boolean",
-                            "default": false,
-                            "description": "Remove extracted files after processing."
+                            "default": true,
+                            "description": "Log compound interactions."
                         },
-                        "order": 6
+                        "subdivisionsMapping": {
+                            "type": "object",
+                            "description": "Mappings for subdivisions.",
+                            "properties": {
+                                "libraries": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "default": {
+                                        "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
+                                        "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
+                                    },
+                                    "description": "Library mappings."
+                                },
+                                "resources": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "default": {
+                                        "MyKeywords": "{root}/../MyKeywords.resource",
+                                        "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
+                                    },
+                                    "description": "Resource mappings."
+                                }
+                            }
+                        },
+                        "forcedImport": {
+                            "type": "object",
+                            "description": "Forced imports configuration.",
+                            "properties": {
+                                "libraries": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "default": [],
+                                    "description": "List of libraries to force import."
+                                },
+                                "resources": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "default": [],
+                                    "description": "List of resources to force import."
+                                },
+                                "variables": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "default": [],
+                                    "description": "List of variables to force import."
+                                }
+                            }
+                        },
+                        "testCaseSplitPathRegEx": {
+                            "type": "string",
+                            "default": "^StopWithRestart\\..*",
+                            "description": "Regex pattern to split test cases."
+                        },
+                        "loggingConfiguration": {
+                            "type": "object",
+                            "description": "Logging configuration settings.",
+                            "properties": {
+                                "console": {
+                                    "type": "object",
+                                    "description": "Console logging configuration.",
+                                    "properties": {
+                                        "logLevel": {
+                                            "type": "string",
+                                            "default": "info",
+                                            "description": "Log level for console output."
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -207,12 +353,12 @@
             "view/item/context": [
                 {
                     "command": "testbenchExtension.generateTestCases",
-                    "when": "view == projectManagementTree && viewItem == cycle",
+                    "when": "view == projectManagementTree && viewItem == Cycle",
                     "group": "inline"
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == project || viewItem == tov || viewItem == version || viewItem == testtheme)",
+                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == tov || viewItem == Version || viewItem == TestThemeNode)",
                     "group": "navigation"
                 }
             ]

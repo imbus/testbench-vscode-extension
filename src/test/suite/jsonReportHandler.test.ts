@@ -2,10 +2,11 @@ import * as assert from 'assert';
 import * as jsonReportHandler from '../../jsonReportHandler';
 import * as fs from "fs";
 import * as vscode from 'vscode';
+import * as types from "../../types";
 
 // Mock data for testing
 const mockHtmlContent = "<html><body><p>Test Content</p></body></html>";
-const mockJobStatusResponse: jsonReportHandler.JobStatusResponse = {
+const mockJobStatusResponse: types.JobStatusResponse = {
     id: "1",
     projectKey: "projectKey",
     owner: "owner",
