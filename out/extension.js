@@ -22,20 +22,27 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
+exports.getGenerationConfiguration = getGenerationConfiguration;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
+const path_1 = __importDefault(require("path"));
 const jsonReportHandler = __importStar(require("./jsonReportHandler"));
 const testBenchConnection_1 = require("./testBenchConnection");
 const projectManagementTreeView_1 = require("./projectManagementTreeView");
+const types = __importStar(require("./types"));
+const baseKey = "testbenchExtension";
 function activate(context) {
+    // TODO: Import * as ... for all imports?
     // TODO: WebViev UI for login?
     // TODO: Create extension documentation in Readme.md
     // TODO: Add a new command to clear stored login data? (logout doesnt do that)
     // TODO: (Later) Upload test results back to TestBench server.
     // TODO: Extra: Create command: Fetch every project with every TOV and cycle and display them in tree view.
-    const baseKey = "testbenchExtension";
     const commands = {
         displayCommands: {
             command: `${baseKey}.displayCommands`,
@@ -77,6 +84,10 @@ function activate(context) {
             command: `${baseKey}.selectAndLoadProject`,
             title: "Display Projects List",
         },
+        uploadTestResultsToTestbench: {
+            command: `${baseKey}.uploadTestResultsToTestbench`,
+            title: "Upload Test Results To Testbench",
+        },
         refreshTreeView: {
             command: `${baseKey}.refreshTreeView`,
             title: "Refresh Tree View",
@@ -92,7 +103,7 @@ function activate(context) {
     let username; // Username has no default value in package.json
     let storePassword;
     let workspaceLocation;
-    let reportGenerationConfig;
+    let testbench2robotframeworkConfig;
     // Initialize or update configuration settings
     async function loadConfiguration() {
         const config = vscode.workspace.getConfiguration(baseKey);
@@ -102,16 +113,14 @@ function activate(context) {
         storePassword = config.get("storePasswordAfterLogin", false);
         // If storePassword is false, delete the stored password
         if (!storePassword) {
-            await context.secrets.delete("password");
+            await context.secrets.delete("password"); // TODO: Replace with clearStoredCredentials() method in testBenchConnection.ts
             console.log("Password deleted from secrets storage.");
         }
-        workspaceLocation = config.get("workspaceLocation");
-        reportGenerationConfig = config.get("reportGenerationConfig", {
-            generationDirectory: "",
-            clearGenerationDirectory: true,
-            createOutputZip: false,
-            removeExtractedFiles: false,
-        });
+        // If the user wont specify a workspace location, use the workspace location of VS Code
+        if (!config.get("workspaceLocation")) {
+            await config.update("workspaceLocation", vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+        }
+        testbench2robotframeworkConfig = getGenerationConfiguration();
     }
     // Load initial configuration
     loadConfiguration();
@@ -135,6 +144,34 @@ function activate(context) {
         }
         return undefined;
     }
+    async function promptForReportZipFileWithResults() {
+        try {
+            const options = {
+                canSelectMany: false,
+                openLabel: "Select Zip File with Test Results",
+                canSelectFiles: true,
+                canSelectFolders: false,
+                filters: {
+                    "Zip Files": ["zip"],
+                },
+            };
+            const fileUri = await vscode.window.showOpenDialog(options);
+            if (!fileUri || !fileUri[0]) {
+                vscode.window.showErrorMessage("No file selected. Please select a valid .zip file.");
+                return undefined;
+            }
+            const selectedFilePath = fileUri[0].fsPath;
+            if (!selectedFilePath.endsWith(".zip")) {
+                vscode.window.showErrorMessage("Selected file is not a .zip file. Please select a valid .zip file.");
+                return undefined;
+            }
+            return selectedFilePath;
+        }
+        catch (error) {
+            vscode.window.showErrorMessage(`An error occurred while selecting the zip file: ${error.message}`);
+            return undefined;
+        }
+    }
     // Register the "Set Workspace Location" command
     context.subscriptions.push(vscode.commands.registerCommand(`${baseKey}.setWorkspaceLocation`, async () => {
         const newWorkspaceLocation = await promptForWorkspaceLocation();
@@ -148,12 +185,13 @@ function activate(context) {
     // Register Show Extension Settings command
     context.subscriptions.push(vscode.commands.registerCommand(commands.showExtensionSettings.command, () => {
         // Open the settings UI of the extension inside the settings editor
-        vscode.commands.executeCommand("workbench.action.openSettings2", {
+        vscode.commands
+            .executeCommand("workbench.action.openSettings2", {
             query: "@ext:imbus.testbench-visual-studio-code-extension",
         })
             .then(() => {
             // Open the workspace settings view (The default settings view is user settings)
-            vscode.commands.executeCommand('workbench.action.openWorkspaceSettings');
+            vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
         });
     }));
     let connection = null; // Store the connection to server
@@ -169,6 +207,7 @@ function activate(context) {
                 commands.changeConnection.title,
                 commands.showExtensionSettings.title,
                 commands.selectAndLoadProject.title,
+                commands.uploadTestResultsToTestbench.title,
                 "Cancel",
             ];
         }
@@ -191,6 +230,9 @@ function activate(context) {
             case commands.selectAndLoadProject.title:
                 vscode.commands.executeCommand(commands.selectAndLoadProject.command);
                 break;
+            case commands.uploadTestResultsToTestbench.title:
+                vscode.commands.executeCommand(commands.uploadTestResultsToTestbench.command);
+                break;
             case commands.changeConnection.title:
                 vscode.commands.executeCommand(commands.changeConnection.command);
                 break;
@@ -200,13 +242,15 @@ function activate(context) {
     }));
     let insideLogin = false; // The user may press the login button multiple times consecutively. Aviod executing the command if already inside login.
     // Register the "Login" command
+    // FIXME: User did not click on the automatic login prompt, and the promt dissapeared. insideLogin set to false without performing login.
+    // Reproduce: Click on the login button to trigger automatic login prompt, wait a little bit, click refresh tree button, prompt dissapears.
     context.subscriptions.push(vscode.commands.registerCommand(commands.login.command, async () => {
         if (insideLogin) {
             console.log("Already inside login..");
             return;
         }
         insideLogin = true;
-        // Only execute the finally block after the login attempt is fully completed to avoid multiple login prompts after clicking login multiple times.
+        // Only execute the finally block after the login attempt is fully completed to avoid multiple login prompts after clicking login multiple times.            
         (0, testBenchConnection_1.performLogin)(context, baseKey)
             .then((connectionAfterLogin) => {
             // Login successful
@@ -217,7 +261,6 @@ function activate(context) {
             else {
                 connection = connectionAfterLogin;
             }
-            // ... other actions after successful login ...
         })
             .catch((error) => {
             // Handle login error
@@ -250,10 +293,18 @@ function activate(context) {
             vscode.window.showInformationMessage("Error when changing connection.");
         }
     }));
+    // Download the zip inside a folder and not directly into the workspace folder, and keep working in the folder.
+    const folderNameToDownloadReport = "Report";
     // Register the "Generate Test Cases" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCases.command, async (item) => {
         if (connection) {
-            jsonReportHandler.startTestGenerationProcess(item, connection, baseKey);
+            // If the user did not expanded a test cycle, test cycle wont have any children so that test themes cannot be displayed in the quickpick.
+            // Call getChildrenOfCycle initialize the sub elements of the cycle.
+            // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
+            projectManagementTreeDataProvider?.testThemeDataProvider.clearTree();
+            // Offload the children of the cycle to the Test Theme Tree
+            projectManagementTreeDataProvider?.testThemeDataProvider.setRoots(await projectManagementTreeDataProvider?.getChildrenOfCycle(item));
+            jsonReportHandler.startTestGenerationProcess(item, connection, baseKey, folderNameToDownloadReport);
         }
         else {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
@@ -263,9 +314,9 @@ function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand(commands.makeRoot.command, (treeItem) => {
         if (projectManagementTreeDataProvider) {
             // TODO: This is a bad way to find the correct tree data provider, use polymorphism / interfaces instead?
-            if (treeItem.contextValue === "project" ||
-                treeItem.contextValue === "version" ||
-                treeItem.contextValue === "cycle") {
+            if (treeItem.contextValue === "Project" ||
+                treeItem.contextValue === "Version" ||
+                treeItem.contextValue === "Cycle") {
                 // If we are in the project management tree, call the makeRoot method of the project management tree data provider
                 projectManagementTreeDataProvider.makeRoot(treeItem);
             }
@@ -305,8 +356,95 @@ function activate(context) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
         }
     }));
+    // Register the Upload Test Results to TestBench command
+    // TODO: Move the implementation into testBenchConnection.ts file
+    context.subscriptions.push(vscode.commands.registerCommand(commands.uploadTestResultsToTestbench.command, async () => {
+        if (!connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            return;
+        }
+        if (!projectManagementTreeDataProvider) {
+            vscode.window.showErrorMessage("No project selected. Please select a project first.");
+            return;
+        }
+        if (!projectManagementTreeDataProvider.currentProjectKeyInView) {
+            vscode.window.showErrorMessage("No project selected. Please select a project first.");
+            return;
+        }
+        // TODO: Get the project key and cycle key from the selected project and cycle instead of hardcoding
+        const projectKey = Number(projectManagementTreeDataProvider.currentProjectKeyInView); // 30;
+        const cycleKey = 187;
+        const reportRootUID = "itb-TT-7943";
+        // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
+        const resultZipFilePath = await promptForReportZipFileWithResults();
+        if (!resultZipFilePath) {
+            vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
+            return;
+        }
+        // Upload the zip file containing the results to TestBench server
+        let zipFilenameFromServer = "";
+        try {
+            zipFilenameFromServer = await connection.uploadExecutionResults(projectKey, resultZipFilePath);
+        }
+        catch (error) {
+            console.error("Error:", error.message);
+        }
+        console.log("Upload complete.");
+        // Import the results to TestBench server
+        const importData = {
+            fileName: zipFilenameFromServer,
+            reportRootUID: reportRootUID,
+            useExistingDefect: true,
+            ignoreNonExecutedTestCases: true,
+            checkPaths: true,
+            discardTesterInformation: false,
+            defaultTester: "tester",
+            filters: [
+            /*
+                    {
+                        name: "Filter1",
+                        filterType: "TestTheme",
+                        testThemeUID: "themeUID456",
+                    },
+                    */
+            ],
+        };
+        try {
+            // Start the import job
+            console.log("Starting import execution results");
+            const jobID = await connection.importExecutionResults(projectKey, cycleKey, importData);
+            console.log("Import job started with Job ID:", jobID);
+            // Poll the job status until it is completed
+            const jobStatus = await jsonReportHandler.pollJobStatus(connection, projectKey.toString(), jobID, "import");
+            // Check if the job is completed successfully
+            if (!jobStatus || jsonReportHandler.isImportJobFailed(jobStatus)) {
+                console.warn("Import not completed or failed.");
+                vscode.window.showErrorMessage("Import not completed or failed.");
+                return undefined;
+            }
+            else {
+                console.log("Import completed successfully. Job Status:", jobStatus);
+                vscode.window.showInformationMessage("Import completed successfully.");
+            }
+        }
+        catch (error) {
+            console.error("Error:", error.message);
+        }
+    }));
     // Uncomment this if you want to prompt the user to log in when the extension activates
     // vscode.commands.executeCommand(`${baseKey}.login`);
+}
+/**
+ * Retrieves the Generation Configuration from extension settings.
+ */
+function getGenerationConfiguration() {
+    const config = vscode.workspace.getConfiguration(baseKey);
+    const testbench2robotframeworkConfig = config.get("testbench2robotframeworkConfig", types.defaultTestbench2robotframeworkConfig);
+    testbench2robotframeworkConfig.generationDirectory = path_1.default.join(config.get("workspaceLocation", ""), "Generated");
+    if (!testbench2robotframeworkConfig) {
+        throw new Error("Generation configuration is not set in the extension settings.");
+    }
+    return testbench2robotframeworkConfig;
 }
 function deactivate() { }
 //# sourceMappingURL=extension.js.map

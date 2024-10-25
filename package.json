@@ -321,7 +321,7 @@
                     "command": "testbenchExtension.login",
                     "group": "navigation@1",
                     "title": "Testbench: Login",
-                    "when": "!testbenchExtension.connectionActive",
+                    "when": "!testbenchExtension.connectionActive && (view == projectManagementTree || view == testThemeTree)",
                     "icon": {
                         "light": "resources/icons/login.svg",
                         "dark": "resources/icons/login.svg"
@@ -331,7 +331,7 @@
                     "command": "testbenchExtension.logout",
                     "group": "navigation@2",
                     "title": "Testbench: Logout",
-                    "when": "testbenchExtension.connectionActive",
+                    "when": "testbenchExtension.connectionActive && (view == projectManagementTree || view == testThemeTree)",
                     "icon": {
                         "light": "resources/icons/logout.svg",
                         "dark": "resources/icons/logout.svg"
@@ -339,23 +339,28 @@
                 },
                 {
                     "command": "testbenchExtension.selectAndLoadProject",
-                    "group": "navigation@3"
+                    "group": "navigation@3",
+                    "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
                     "command": "testbenchExtension.uploadTestResultsToTestbench",
-                    "group": "navigation@4"
+                    "group": "navigation@4",
+                    "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
                     "command": "testbenchExtension.displayCommands",
-                    "group": "navigation@5"
+                    "group": "navigation@5",
+                    "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
                     "command": "testbenchExtension.refreshTreeView",
-                    "group": "navigation@6"
+                    "group": "navigation@6",
+                    "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
                     "command": "testbenchExtension.showExtensionSettings",
-                    "group": "navigation@7"
+                    "group": "navigation@7",
+                    "when": "view == projectManagementTree || view == testThemeTree"
                 }
             ],
             "view/item/context": [

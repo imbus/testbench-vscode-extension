@@ -30,7 +30,7 @@ const projectManagementTreeView_1 = require("../../projectManagementTreeView");
 const testThemeTreeView_1 = require("../../testThemeTreeView");
 suite("Project Management Tree View Tests", function () {
     suiteTeardown(() => {
-        vscode.window.showInformationMessage('All tests done!');
+        vscode.window.showInformationMessage("All tests done!");
     });
     this.timeout(10000); // Increase timeout to 10 seconds
     // Mock Variables

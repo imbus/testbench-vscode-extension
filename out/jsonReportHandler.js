@@ -27,8 +27,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractTextFromHtml = extractTextFromHtml;
-exports.isJobCompletedSuccessfully = isJobCompletedSuccessfully;
+exports.isReportJobCompletedSuccessfully = isReportJobCompletedSuccessfully;
+exports.isImportJobCompletedSuccessfully = isImportJobCompletedSuccessfully;
+exports.isImportJobFailed = isImportJobFailed;
 exports.fetchZipFile = fetchZipFile;
+exports.pollJobStatus = pollJobStatus;
 exports.delay = delay;
 exports.extractZip = extractZip;
 exports.loadJsonFilesFromDirectory = loadJsonFilesFromDirectory;
@@ -40,6 +43,8 @@ exports.testBenchToRobotFramework = testBenchToRobotFramework;
 exports.startTestGenerationProcess = startTestGenerationProcess;
 exports.isValidTestJSON = isValidTestJSON;
 exports.createOutputFolderIfNotExists = createOutputFolderIfNotExists;
+exports.saveTestbench2RobotConfigurationAsJson = saveTestbench2RobotConfigurationAsJson;
+exports.deleteConfigurationFile = deleteConfigurationFile;
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -47,6 +52,7 @@ const JSZip = __importStar(require("jszip")); // npm install jszip
 const cheerio = __importStar(require("cheerio")); // To parse HTML  npm install --save-dev @types/cheerio
 const axios_1 = __importDefault(require("axios"));
 const projectManagementTreeView_1 = require("./projectManagementTreeView");
+const extension_1 = require("./extension");
 // Prompt the user to select the export report method (Execution based or Specification based)
 async function selectExecutionOrSpecificationBased() {
     let executionBased = true; // Default value is "Execution based"
@@ -95,28 +101,34 @@ function extractTextFromHtml(htmlContent) {
     }
 }
 // Helper function to check if the job has completed successfully.
-function isJobCompletedSuccessfully(jobStatus) {
+function isReportJobCompletedSuccessfully(jobStatus) {
     return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
+}
+function isImportJobCompletedSuccessfully(jobStatus) {
+    return !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
+}
+function isImportJobFailed(jobStatus) {
+    return !!jobStatus?.completion?.result?.ExecutionImportingFailure;
 }
 // Fetch the TestBench JSON report from the server (ZIP Archive).
 // 3 Calls are needed to download the zip report:
 // 1. Get the job ID
 // 2. Get the job status (polling until the job is completed)
 // 3. Download the report zip file.
-async function fetchZipFile(connection, baseKey, projectKey, cycleKey, progress, requestParams, cancellationToken) {
+async function fetchZipFile(connection, baseKey, projectKey, cycleKey, progress, folderNameToDownloadReport, requestParams, cancellationToken) {
     try {
         console.log(`Fetching zip file for projectKey: ${projectKey}, cycleKey: ${cycleKey}.`);
         const jobId = await getJobId(connection, projectKey, cycleKey, requestParams);
         console.log(`Job ID (${jobId}) fetched successfully.`);
-        const jobStatus = await pollJobStatus(connection, projectKey, jobId, progress, cancellationToken);
-        if (!jobStatus || !isJobCompletedSuccessfully(jobStatus)) {
+        const jobStatus = await pollJobStatus(connection, projectKey, jobId, "report", progress, cancellationToken);
+        if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
             console.warn("Report generation not completed or failed.");
             vscode.window.showErrorMessage("Report generation not completed or failed.");
             return undefined;
         }
         const fileName = jobStatus.completion.result.ReportingSuccess.reportName;
         console.log(`Report name: ${fileName}`);
-        const outputPath = await downloadReport(connection, baseKey, projectKey, fileName);
+        const outputPath = await downloadReport(connection, baseKey, projectKey, fileName, folderNameToDownloadReport);
         if (outputPath) {
             console.log(`Report downloaded and saved to: ${outputPath}`);
             return outputPath;
@@ -137,7 +149,8 @@ async function fetchZipFile(connection, baseKey, projectKey, cycleKey, progress,
         }
     }
 }
-async function pollJobStatus(connection, projectKey, jobId, progress, cancellationToken, maxPollingTimeMs // Optional timeout, disabled by default so that the user can cancel manually
+// TODO : Create separate polls/interfaces for report and import job status?
+async function pollJobStatus(connection, projectKey, jobId, jobType, progress, cancellationToken, maxPollingTimeMs // Optional timeout, disabled by default so that the user can cancel manually
 ) {
     const startTime = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
     let attempt = 0;
@@ -150,14 +163,25 @@ async function pollJobStatus(connection, projectKey, jobId, progress, cancellati
         }
         attempt++;
         try {
-            jobStatus = await getJobStatus(connection, projectKey, jobId);
-            // console.log(`Attempt ${attempt}: Job Status fetched.`);
-            if (isJobCompletedSuccessfully(jobStatus)) {
-                console.log("Job completed successfully.");
-                return jobStatus;
+            jobStatus = await getJobStatus(connection, projectKey, jobId, jobType);
+            console.log(`Attempt ${attempt}: Job Status fetched.`);
+            if (jobType === "report") {
+                if (isReportJobCompletedSuccessfully(jobStatus)) {
+                    console.log("Report job completed successfully.");
+                    return jobStatus;
+                }
+                else {
+                    // console.log("Job not yet completed.");
+                }
             }
-            else {
-                // console.log("Job not yet completed.");
+            else if (jobType === "import") {
+                if (isImportJobCompletedSuccessfully(jobStatus)) {
+                    console.log("Import job completed successfully.");
+                    return jobStatus;
+                }
+                else if (isImportJobFailed(jobStatus)) {
+                    return null;
+                }
             }
         }
         catch (error) {
@@ -202,8 +226,8 @@ async function getJobId(connection, projectKey, cycleKey, requestParams) {
     return jobIdResponse.data.jobID;
 }
 // Get the job status from server
-async function getJobStatus(connection, projectKey, jobId) {
-    const url = `${connection.getBaseURL()}/projects/${projectKey}/report/job/${jobId}/v1`;
+async function getJobStatus(connection, projectKey, jobId, jobType) {
+    const url = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
     console.log(`Checking job status: ${url}`);
     const jobStatusResponse = await axios_1.default.get(url, {
         headers: {
@@ -218,7 +242,7 @@ async function getJobStatus(connection, projectKey, jobId) {
     return jobStatusResponse.data;
 }
 // Download the report zip file
-async function downloadReport(connection, baseKey, projectKey, fileName) {
+async function downloadReport(connection, baseKey, projectKey, fileName, folderNameToDownloadReport) {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileName}/v1`;
     console.log(`Sending request to download report ${fileName} to URL ${url}.`);
     const downloadZipResponse = await axios_1.default.get(url, {
@@ -238,7 +262,7 @@ async function downloadReport(connection, baseKey, projectKey, fileName) {
         if (fs.existsSync(workspaceLocation)) {
             console.log(`Using configuration as download location: ${workspaceLocation}`);
             async function saveReportToFile(downloadZipResponse, workspaceLocation, fileName) {
-                const uri = vscode.Uri.file(path.join(workspaceLocation, fileName));
+                const uri = vscode.Uri.file(path.join(workspaceLocation, folderNameToDownloadReport, fileName));
                 return vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadZipResponse.data)).then(() => {
                     // vscode.window.showInformationMessage(`Report downloaded successfully to ${uri.fsPath}`);
                     return uri.fsPath;
@@ -587,7 +611,7 @@ async function selectOutputFolder(baseKey) {
     return undefined;
 }
 // Main function to handle the process
-async function testBenchToRobotFramework(itemLabel, baseKey, projectKey, cycleKey, connection) {
+async function testBenchToRobotFramework(treeItem, itemLabel, baseKey, projectKey, cycleKey, connection, workingDirectory) {
     // Execution based or specification based request parameter
     const executionBased = await selectExecutionOrSpecificationBased();
     console.log("executionBased value set to:", executionBased);
@@ -596,8 +620,75 @@ async function testBenchToRobotFramework(itemLabel, baseKey, projectKey, cycleKe
         vscode.window.showInformationMessage(`Test generation aborted.`);
         return;
     }
+    /*
+    Code for storing treeItem variable as a json file to analyze its structure while removing its parent property to avoid circular reference
+
+    // Function to remove the parent property from an object recursively
+    function removeParentProperty(obj: any): any {
+        if (Array.isArray(obj)) {
+            return obj.map(removeParentProperty);
+        } else if (obj !== null && typeof obj === "object") {
+            const newObj: any = {};
+            for (const key in obj) {
+                if (key !== "parent") {
+                    newObj[key] = removeParentProperty(obj[key]);
+                }
+            }
+            return newObj;
+        }
+        return obj;
+    }
+    // Remove the parent property from treeItem
+    const treeItemWithoutParent = removeParentProperty(treeItem);
+    // Save the contents of the variable called treeItemWithoutParent to a file called treeItem.json
+    const treeItemJsonPath = path.join(getWorkspaceFolder(), "treeItem.json");
+    await fs.promises.writeFile(treeItemJsonPath, JSON.stringify(treeItemWithoutParent, null, 2), "utf8");
+    */
+    // Display all TestThemeNode elements in a QuickPick and return the uniqueID of the selected item
+    // to generate tests for only that item or generate all tests.
+    async function showTestThemeNodes(treeItem) {
+        // Recursively find all TestThemeNode elements in treeItem
+        function findTestThemeNodes(node, results = []) {
+            if (node.item?.elementType === "TestThemeNode") {
+                const name = node.item.base?.name || "Unnamed";
+                const uniqueID = node.item.base?.uniqueID || "No ID";
+                const numbering = node.item.base?.numbering;
+                results.push({ name, uniqueID, numbering });
+            }
+            if (Array.isArray(node.children)) {
+                node.children.forEach((child) => findTestThemeNodes(child, results));
+            }
+            return results;
+        }
+        const testThemeNodes = findTestThemeNodes(treeItem);
+        // Map the found nodes to a QuickPick items array
+        const quickPickItems = [
+            { label: "Generate all", description: "Generate All Tests Under The Test Cycle" }, // "Generate all" option is displayed first
+            ...testThemeNodes.map(node => ({
+                label: node.numbering ? `${node.numbering} ${node.name}` : node.name,
+                description: `ID: ${node.uniqueID}`,
+                uniqueID: node.uniqueID
+            }))
+        ];
+        // Show the QuickPick prompt and return the uniqueID of the selected item
+        const selected = await vscode.window.showQuickPick(quickPickItems, {
+            placeHolder: 'Select a test theme or "Generate all" to generate all tests under the cycle.',
+        });
+        if (!selected) {
+            return undefined;
+        }
+        // Return "Generate all" if that option was selected, otherwise the uniqueID
+        return selected?.label === "Generate all" ? "Generate all" : selected.uniqueID;
+    }
+    const UIDofSelectedElement = await showTestThemeNodes(treeItem);
+    if (!UIDofSelectedElement) {
+        console.log(`Test theme selection is empty.`);
+        vscode.window.showInformationMessage(`Test theme selection is empty.`);
+        return;
+    }
     const cycleStructureOptionsRequestParameter = {
         basedOnExecution: executionBased,
+        treeRootUID: UIDofSelectedElement === "Generate all" ? "" : UIDofSelectedElement,
     };
     console.log(`Started Test generation.`);
     // vscode.window.showInformationMessage(`Started Test generation.`);
@@ -615,7 +706,7 @@ async function testBenchToRobotFramework(itemLabel, baseKey, projectKey, cycleKe
                 });
             }
             // Fetch the ZIP file from the server, passing the cancellationToken
-            const downloadedZipFilePath = await fetchZipFile(connection, baseKey, projectKey, cycleKey, progress, cycleStructureOptionsRequestParameter, cancellationToken // Pass the cancellationToken here
+            const downloadedZipFilePath = await fetchZipFile(connection, baseKey, projectKey, cycleKey, progress, workingDirectory, cycleStructureOptionsRequestParameter, cancellationToken // Pass the cancellationToken here
             );
             if (!downloadedZipFilePath) {
                 console.log("Download canceled or failed.");
@@ -633,20 +724,19 @@ async function testBenchToRobotFramework(itemLabel, baseKey, projectKey, cycleKe
                 vscode.window.showErrorMessage("No folder selected.");
                 return;
             }
-            // Configuration for the test suite generation
-            const config = vscode.workspace.getConfiguration(baseKey);
-            const testbench2robotframeworkConfig = config.get("reportGenerationConfig", {
-                generationDirectory: config.get("workspaceLocation", ""),
-                clearGenerationDirectory: true,
-                createOutputZip: false,
-                removeExtractedFiles: false,
-            });
+            // Create configuration json object called testbench2robotframeworkConfig.json
+            await saveTestbench2RobotConfigurationAsJson();
+            // tb2robot write -c testbench2robotframeworkConfig.json ReportWithoutResultsForTb2robot.zip (zip Path is downloadedZipFilePath)
+            // tb2robot read -o output\output.xml -r ReportWithResults.zip ReportWithoutResultsForTb2robot.zip (ReportWithResults.zip is a configurable name)
+            // @@ Start of testbench2robotframework library
+            // TODO: Replace all the code between start and end with testbench2robotframework library usage
             // Paths for extracted files and generated test cases
             const folderNameOfExtractedZip = `Extracted Files`;
             const zipExtractionFolderPath = path.join(chosenOutputFolderForZipExtraction, folderNameOfExtractedZip);
             const folderNameOfRobotFiles = `Generated Test Cases`;
             const robotFilesFolderPath = path.join(chosenOutputFolderForZipExtraction, folderNameOfRobotFiles);
             // Extract ZIP file
+            // TODO: Extracting (and removeExtractedFiles) is not needed if testbench2robotframework library can use the zip file directly
             await extractZip(downloadedZipFilePath, zipExtractionFolderPath);
             console.log(`ZIP file extracted to: ${zipExtractionFolderPath}`);
             if (progress) {
@@ -655,10 +745,10 @@ async function testBenchToRobotFramework(itemLabel, baseKey, projectKey, cycleKe
                     message: `Processing JSON files to create test cases.`,
                 });
             }
-            // TODO: use testbench2robotframework library instead of doing this manually
             console.log(`Starting convertJSONsIntoTestCases with path: ${zipExtractionFolderPath}`);
             await convertJSONsIntoTestCases(zipExtractionFolderPath, robotFilesFolderPath);
-            if (testbench2robotframeworkConfig.removeExtractedFiles) {
+            let removeExtractedFilesFlag = false;
+            if (removeExtractedFilesFlag) {
                 if (progress) {
                     progress.report({
                         increment: 10,
@@ -667,7 +757,9 @@ async function testBenchToRobotFramework(itemLabel, baseKey, projectKey, cycleKe
                 }
                 removeExtractedFiles(zipExtractionFolderPath);
             }
-            // End of testbench2robotframework library work
+            // @@ End of testbench2robotframework library
+            // Delete created json config file after usage
+            deleteConfigurationFile();
             vscode.window.showInformationMessage(`Test suite generation done.`);
         }
         catch (error) {
@@ -684,7 +776,7 @@ async function testBenchToRobotFramework(itemLabel, baseKey, projectKey, cycleKe
     });
 }
 // Entry point for the test generation process
-async function startTestGenerationProcess(treeItem, connection, baseKey) {
+async function startTestGenerationProcess(treeItem, connection, baseKey, workingDirectory) {
     // Check if the cycle key is available
     const cycleKey = treeItem.item.key;
     if (cycleKey) {
@@ -698,7 +790,7 @@ async function startTestGenerationProcess(treeItem, connection, baseKey) {
             if (connection) {
                 // Start the generation process
                 if (typeof treeItem.label === "string") {
-                    testBenchToRobotFramework(treeItem.label, baseKey, projectKeyOfCycle, cycleKey, connection);
+                    testBenchToRobotFramework(treeItem, treeItem.label, baseKey, projectKeyOfCycle, cycleKey, connection, workingDirectory);
                 }
                 else {
                     vscode.window.showErrorMessage("Invalid label type. Test generation aborted.");
@@ -755,17 +847,6 @@ function generateTestCaseSection(interactions) {
 // Generates the Settings section for the Robot Framework test case
 function generateSettingsSection(jsonData) {
     let settings = "*** Settings ***\n";
-    /*
-    // Add Metadata (uniqueID, version, status)
-    settings += `Metadata    UniqueID    ${testCase.uniqueID}\n`;
-    if (testCase.spec.version) {
-        settings += `Metadata    Version    ${testCase.spec.version}\n`;
-    }
-    settings += `Metadata    Status    ${testCase.exec.status}\n`;
-
-    // Add Resources (if applicable, this can be extended later)
-    // settings += 'Resource    path/to/resource.file\n';
-    */
     settings += "\n";
     return settings;
 }
@@ -851,6 +932,73 @@ async function processSingleJSONFile(jsonFilePath, outputFolder) {
     }
     catch (error) {
         console.error(`Error processing file ${jsonFilePath}: ${error.message}`);
+    }
+}
+/**
+ * Main function to write the generation configuration to a JSON file.
+ */
+async function saveTestbench2RobotConfigurationAsJson() {
+    try {
+        const generationConfig = (0, extension_1.getGenerationConfiguration)();
+        const jsonContent = JSON.stringify(generationConfig, null, 2);
+        const filePath = await getConfigurationFilePath();
+        fs.writeFile(filePath, jsonContent, "utf8", (err) => {
+            if (err) {
+                throw err;
+            }
+        });
+        // vscode.window.showInformationMessage(`Configuration file created at: ${filePath}`);
+    }
+    catch (error) {
+        if (error instanceof Error) {
+            vscode.window.showErrorMessage(`Failed to write configuration file: ${error.message}`);
+        }
+        else {
+            vscode.window.showErrorMessage("An unknown error occurred while writing the configuration file.");
+        }
+    }
+}
+/**
+ * Determines the file path where the configuration file will be saved.
+ */
+async function getConfigurationFilePath() {
+    const workspaceFolder = getWorkspaceFolder();
+    const fileName = "testbench2robotframeworkConfig.json";
+    const filePath = path.join(workspaceFolder, fileName);
+    return filePath;
+}
+/**
+ * Retrieves the path of the currently opened workspace folder.
+ */
+function getWorkspaceFolder() {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        throw new Error("No workspace folder is open. Please open a workspace to save the configuration file.");
+    }
+    // Handle multiple workspace folders differently
+    return workspaceFolders[0].uri.fsPath;
+}
+/**
+ * Main function to delete the configuration JSON file.
+ */
+async function deleteConfigurationFile() {
+    try {
+        const filePath = await getConfigurationFilePath();
+        fs.unlink(filePath, (err) => {
+            if (err) {
+                throw err;
+            }
+        });
+        // vscode.window.showInformationMessage(`Configuration file deleted: ${filePath}`);
+    }
+    catch (error) {
+        if (error.code === "ENOENT") {
+            vscode.window.showErrorMessage(`Configuration file not found: ${error.path}`);
+        }
+        else {
+            vscode.window.showErrorMessage(`Failed to delete configuration file: ${error.message}`);
+            console.error(error);
+        }
     }
 }
 //# sourceMappingURL=jsonReportHandler.js.map

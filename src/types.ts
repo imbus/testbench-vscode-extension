@@ -239,7 +239,7 @@ export interface ImportData {
     ignoreNonExecutedTestCases: boolean;
     checkPaths: boolean;
     discardTesterInformation: boolean;
-    defaultTester: string;
+    defaultTester?: string;
     filters: ImportDataFilter[];
 }
 

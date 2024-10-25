@@ -46,38 +46,38 @@ const mockJobStatusResponse = {
         }
     }
 };
-suite('jsonReportHandler Tests', () => {
+suite("jsonReportHandler Tests", () => {
     suiteTeardown(() => {
-        vscode.window.showInformationMessage('All tests done!');
+        vscode.window.showInformationMessage("All tests done!");
     });
-    test('extractTextFromHtml should extract text content from HTML', () => {
+    test("extractTextFromHtml should extract text content from HTML", () => {
         const result = jsonReportHandler.extractTextFromHtml(mockHtmlContent);
         assert.strictEqual(result, "Test Content");
     });
-    test('isJobCompletedSuccessfully should return true for successful job status', () => {
-        const result = jsonReportHandler.isJobCompletedSuccessfully(mockJobStatusResponse);
+    test("isJobCompletedSuccessfully should return true for successful job status", () => {
+        const result = jsonReportHandler.isReportJobCompletedSuccessfully(mockJobStatusResponse);
         assert.strictEqual(result, true);
     });
-    test('isJobCompletedSuccessfully should return false for unsuccessful job status', () => {
+    test("isJobCompletedSuccessfully should return false for unsuccessful job status", () => {
         const incompleteJobStatusResponse = { ...mockJobStatusResponse, completion: { time: "time", result: {} } };
-        const result = jsonReportHandler.isJobCompletedSuccessfully(incompleteJobStatusResponse);
+        const result = jsonReportHandler.isReportJobCompletedSuccessfully(incompleteJobStatusResponse);
         assert.strictEqual(result, false);
     });
-    test('delay should delay execution for specified time', async () => {
+    test("delay should delay execution for specified time", async () => {
         const start = Date.now();
         await jsonReportHandler.delay(100);
         const end = Date.now();
         assert.ok(end - start >= 100);
     });
     /*
-    test('createOutputFolderIfNotExists should create folder if it does not exist', () => {
-        const testFolderPath = 'C:\\tmp\\testFolder';
+    test("createOutputFolderIfNotExists should create folder if it does not exist", () => {
+        const testFolderPath = "C:\\tmp\\testFolder";
         jsonReportHandler.createOutputFolderIfNotExists(testFolderPath);
         assert.ok(fs.existsSync(testFolderPath));
         fs.rmdirSync(testFolderPath);
     });
     */
-    test('isValidTestJSON should validate JSON structure', () => {
+    test("isValidTestJSON should validate JSON structure", () => {
         const validJson = { interactions: [], parameters: [] };
         const invalidJson = { invalidField: [] };
         assert.strictEqual(jsonReportHandler.isValidTestJSON(validJson), true);

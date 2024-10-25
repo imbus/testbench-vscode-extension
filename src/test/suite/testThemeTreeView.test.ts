@@ -6,7 +6,7 @@ import { ProjectManagementTreeItem } from "../../projectManagementTreeView";
 suite("TestThemeTreeDataProvider Tests", () => {
 
     suiteTeardown(() => {
-        vscode.window.showInformationMessage('All tests done!');
+        vscode.window.showInformationMessage("All tests done!");
       });
 
     let dataProvider: TestThemeTreeDataProvider;

@@ -292,6 +292,112 @@ class PlayServerConnection {
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
         }
     }
+    /**
+     * Uploads a zip archive containing JSON-based execution results to the TestBench server.
+     * @param projectKey The project key as an integer.
+     * @param zipFilePath The file path to the zip archive that contains the execution results as JSON files.
+     * @throws Error if the upload fails.
+     * @returns A promise that resolves when the upload is successful.
+     */
+    async uploadExecutionResults(projectKey, zipFilePath) {
+        const uploadEndpointURL = `/projects/${projectKey}/executionResults/v1`;
+        try {
+            const zipFileData = fs.readFileSync(zipFilePath);
+            console.log("Uploading zip file to:", uploadEndpointURL);
+            const response = await this.apiClient.post(uploadEndpointURL, zipFileData, {
+                headers: {
+                    "Content-Type": "application/zip",
+                    accept: "application/json",
+                },
+                validateStatus: () => true, // Use this when you want to handle all status codes manually, otherwise Axios will throw an error for non-2xx status codes
+            });
+            switch (response.status) {
+                case 201:
+                    console.log("File uploaded successfully.");
+                    // Extract the fileName from the response and return it
+                    const fileName = response.data?.fileName;
+                    if (fileName) {
+                        return fileName;
+                    }
+                    else {
+                        throw new Error("File name not found in the server response.");
+                    }
+                case 403:
+                    throw new Error("Forbidden: You do not have permission to perform this action (uploadExecutionResults).");
+                case 404:
+                    throw new Error("Not Found: The requested project was not found (uploadExecutionResults).");
+                case 422:
+                    throw new Error("Unprocessable Entity: The uploaded file is invalid (uploadExecutionResults).");
+                default:
+                    throw new Error(`Unexpected status code ${response.status} received from the server (uploadExecutionResults).`);
+            }
+        }
+        catch (error) {
+            if (axios_1.default.isAxiosError(error)) {
+                console.error("An error occurred while uploading the file:", error.message);
+                if (error.response) {
+                    console.error("Response data:", error.response.data);
+                }
+            }
+            else {
+                console.error("An unexpected error occurred:", error);
+            }
+            throw error;
+        }
+    }
+    /**
+     * Imports JSON-based execution results in the given zip archive to a specific project and cycle.
+     * @param projectKey The project key as an integer.
+     * @param cycleKey The cycle key as an integer.
+     * @param importData The data for the import as per API specification.
+     * @returns The job ID as a string.
+     * @throws Error if an error occurs during the import.
+     */
+    async importExecutionResults(projectKey, cycleKey, importData) {
+        const endpoint = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+        try {
+            const response = await this.apiClient.post(endpoint, importData, {
+                headers: {
+                    "Content-Type": "application/json",
+                    accept: "application/json",
+                },
+                validateStatus: () => true, // We handle status codes manually
+            });
+            switch (response.status) {
+                case 200:
+                    const jobID = response.data?.jobID;
+                    if (jobID) {
+                        console.log("Import initiated successfully. Job ID:", jobID);
+                        return jobID;
+                    }
+                    else {
+                        throw new Error("Success response received but no jobID found in the response (importExecutionResults).");
+                    }
+                case 400:
+                    throw new Error("Bad Request: The request body structure is wrong (importExecutionResults).");
+                case 403:
+                    throw new Error("Forbidden: You do not have permission to perform this action (importExecutionResults).");
+                case 404:
+                    throw new Error("Not Found: Project or test cycle not found (importExecutionResults).");
+                case 422:
+                    throw new Error("Unprocessable Entity: The server cannot process the request (importExecutionResults).");
+                default:
+                    throw new Error(`Unexpected status code ${response.status} received from the server (importExecutionResults).`);
+            }
+        }
+        catch (error) {
+            if (axios_1.default.isAxiosError(error)) {
+                console.error("An Axios error occurred:", error.message);
+                if (error.response) {
+                    console.error("Response data:", error.response.data);
+                }
+            }
+            else {
+                console.error("An unexpected error occurred:", error);
+            }
+            throw error;
+        }
+    }
     startKeepAlive() {
         this.stopKeepAlive(); // Ensure no multiple intervals
         this.keepAliveIntervalId = setInterval(() => {
@@ -368,6 +474,7 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
             password = await context.secrets.get("password");
         }
         const hasStoredCredentials = config.get("serverName") && config.get("username") && password && storePassword;
+        console.log("Before showInformationMessage");
         let useStoredCredentials = false;
         if (hasStoredCredentials && !promptForNewCredentials) {
             const choice = await vscode.window.showInformationMessage("Do you want to login using your previous credentials?", "Yes", "No");
@@ -375,6 +482,7 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
                 useStoredCredentials = true;
             }
         }
+        console.log("After showInformationMessage");
         let serverName;
         let portNumber;
         let username;
@@ -399,7 +507,7 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
             return connection;
         }
         else {
-            await clearStoredCredentials(context, baseKey);
+            // Login may fail due to a server problem or incorrect credentials.
             const retry = await vscode.window.showInformationMessage("Login failed! Do you want to retry?", "Retry", "Cancel");
             if (retry !== "Retry") {
                 vscode.window.showInformationMessage("Login process aborted");
@@ -477,7 +585,7 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
         });
         if (response.status === 201) {
             console.log("Login successful. Received session token:", response.data.sessionToken);
-            // Store password in secret storage if the user chooses to
+            // Store password in secret storage after succesfull login if the user chooses to
             const config = vscode.workspace.getConfiguration(baseKey);
             const storePassword = config.get("storePasswordAfterLogin", false);
             if (storePassword) {

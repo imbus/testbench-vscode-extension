@@ -29,7 +29,7 @@ const testThemeTreeView_1 = require("../../testThemeTreeView");
 const projectManagementTreeView_1 = require("../../projectManagementTreeView");
 suite("TestThemeTreeDataProvider Tests", () => {
     suiteTeardown(() => {
-        vscode.window.showInformationMessage('All tests done!');
+        vscode.window.showInformationMessage("All tests done!");
     });
     let dataProvider;
     let rootItem;
