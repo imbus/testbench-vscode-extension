@@ -1,47 +1,427 @@
 {
-  "name": "testbench-visual-studio-code-extension",
-  "displayName": "TestBench Visual Studio Code Extension",
-  "description": "A Visual Studio Code extension for TestBench.",
-  "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.91.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "testbench-visual-studio-code-extension.helloWorld",
-        "title": "Hello World"
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "vscode-test"
-  },
-  "devDependencies": {
-    "@types/vscode": "^1.91.0",
-    "@types/mocha": "^10.0.7",
-    "@types/node": "20.x",
-    "@typescript-eslint/eslint-plugin": "^7.14.1",
-    "@typescript-eslint/parser": "^7.11.0",
-    "eslint": "^8.57.0",
-    "typescript": "^5.4.5",
-    "ts-loader": "^9.5.1",
-    "webpack": "^5.92.1",
-    "webpack-cli": "^5.1.4",
-    "@vscode/test-cli": "^0.0.9",
-    "@vscode/test-electron": "^2.4.0"
-  }
+    "name": "testbench-visual-studio-code-extension",
+    "publisher": "imbus",
+    "displayName": "TestBench Visual Studio Code Extension",
+    "description": "A Visual Studio Code extension for TestBench.",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.91.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "configuration": {
+            "title": "TestBench Extension Settings",
+            "properties": {
+                "testbenchExtension.serverName": {
+                    "type": "string",
+                    "default": "testbench",
+                    "description": "The hostname or IP address of the TestBench server that the extension will connect to.",
+                    "order": 1
+                },
+                "testbenchExtension.portNumber": {
+                    "type": "number",
+                    "default": 9445,
+                    "description": "The port number on which the TestBench server is listening for incoming connections.",
+                    "order": 2
+                },
+                "testbenchExtension.username": {
+                    "type": "string",
+                    "description": "The username used for authentication when connecting to the TestBench server.",
+                    "order": 3
+                },
+                "testbenchExtension.storePasswordAfterLogin": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If enabled, the extension will securely store the user's password after the first login to facilitate automatic login in future sessions without prompting for credentials.",
+                    "order": 4
+                },
+                "testbenchExtension.workspaceLocation": {
+                    "type": "string",
+                    "description": "The path to the workspace or project directory on the local machine for storing local files.",
+                    "order": 5
+                },
+                "testbenchExtension.testbench2robotframeworkConfig": {
+                    "type": "object",
+                    "default": {
+                        "rfLibraryRoots": [
+                            "Interactions",
+                            "RF-Library"
+                        ],
+                        "rfResourceRoots": [
+                            "RF-Resource"
+                        ],
+                        "fullyQualified": true,
+                        "generationDirectory": "{root}/Generated",
+                        "createOutputZip": true,
+                        "resourceDirectory": "{root}/Resources",
+                        "clearGenerationDirectory": true,
+                        "logSuiteNumbering": true,
+                        "logCompoundInteractions": true,
+                        "subdivisionsMapping": {
+                            "libraries": {
+                                "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
+                                "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
+                            },
+                            "resources": {
+                                "MyKeywords": "{root}/../MyKeywords.resource",
+                                "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
+                            }
+                        },
+                        "forcedImport": {
+                            "libraries": [],
+                            "resources": [],
+                            "variables": []
+                        },
+                        "testCaseSplitPathRegEx": "^StopWithRestart\\..*",
+                        "loggingConfiguration": {
+                            "console": {
+                                "logLevel": "info"
+                            }
+                        }
+                    },
+                    "description": "Configuration settings for the generation process.",
+                    "properties": {
+                        "rfLibraryRoots": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "default": [
+                                "Interactions",
+                                "RF-Library"
+                            ],
+                            "description": "List of Robot Framework library root directories."
+                        },
+                        "rfResourceRoots": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "default": [
+                                "RF-Resource"
+                            ],
+                            "description": "List of Robot Framework resource root directories."
+                        },
+                        "fullyQualified": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Use fully qualified names."
+                        },
+                        "generationDirectory": {
+                            "type": "string",
+                            "default": "{root}/Generated",
+                            "description": "Directory where files will be generated."
+                        },
+                        "createOutputZip": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Create a ZIP file of the output."
+                        },
+                        "resourceDirectory": {
+                            "type": "string",
+                            "default": "{root}/Resources",
+                            "description": "Directory for resources."
+                        },
+                        "clearGenerationDirectory": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Clear the generation directory before generating new files."
+                        },
+                        "logSuiteNumbering": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Log suite numbering."
+                        },
+                        "logCompoundInteractions": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Log compound interactions."
+                        },
+                        "subdivisionsMapping": {
+                            "type": "object",
+                            "description": "Mappings for subdivisions.",
+                            "properties": {
+                                "libraries": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "default": {
+                                        "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
+                                        "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
+                                    },
+                                    "description": "Library mappings."
+                                },
+                                "resources": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "default": {
+                                        "MyKeywords": "{root}/../MyKeywords.resource",
+                                        "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
+                                    },
+                                    "description": "Resource mappings."
+                                }
+                            }
+                        },
+                        "forcedImport": {
+                            "type": "object",
+                            "description": "Forced imports configuration.",
+                            "properties": {
+                                "libraries": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "default": [],
+                                    "description": "List of libraries to force import."
+                                },
+                                "resources": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "default": [],
+                                    "description": "List of resources to force import."
+                                },
+                                "variables": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "default": [],
+                                    "description": "List of variables to force import."
+                                }
+                            }
+                        },
+                        "testCaseSplitPathRegEx": {
+                            "type": "string",
+                            "default": "^StopWithRestart\\..*",
+                            "description": "Regex pattern to split test cases."
+                        },
+                        "loggingConfiguration": {
+                            "type": "object",
+                            "description": "Logging configuration settings.",
+                            "properties": {
+                                "console": {
+                                    "type": "object",
+                                    "description": "Console logging configuration.",
+                                    "properties": {
+                                        "logLevel": {
+                                            "type": "string",
+                                            "default": "info",
+                                            "description": "Log level for console output."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "testbenchExtension.login",
+                "title": "Testbench: Login",
+                "icon": {
+                    "light": "resources/icons/login.svg",
+                    "dark": "resources/icons/login.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.logout",
+                "title": "Testbench: Logout",
+                "icon": {
+                    "light": "resources/icons/logout.svg",
+                    "dark": "resources/icons/logout.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.changeConnection",
+                "title": "TestBench: Change Connection"
+            },
+            {
+                "command": "testbenchExtension.setWorkspaceLocation",
+                "title": "TestBench: Set Workspace Location"
+            },
+            {
+                "command": "testbenchExtension.generateTestCases",
+                "title": "Generate Test Cases"
+            },
+            {
+                "command": "testbenchExtension.makeRoot",
+                "title": "TestBench: Make root"
+            },
+            {
+                "command": "testbenchExtension.selectAndLoadProject",
+                "title": "TestBench: Display Projects List",
+                "icon": {
+                    "light": "resources/icons/menu.svg",
+                    "dark": "resources/icons/menu.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.refreshTreeView",
+                "title": "TestBench: Refresh Tree View",
+                "icon": {
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.getCycleStructure",
+                "title": "TestBench: Get Cycle Structure"
+            },
+            {
+                "command": "testbenchExtension.displayCommands",
+                "title": "TestBench: Display Commands",
+                "icon": {
+                    "light": "resources/icons/more.svg",
+                    "dark": "resources/icons/more.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.showExtensionSettings",
+                "title": "TestBench: Show Extension Settings",
+                "icon": {
+                    "light": "resources/icons/settings.svg",
+                    "dark": "resources/icons/settings.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.uploadTestResultsToTestbench",
+                "title": "TestBench: Upload Test Results To Testbench",
+                "icon": {
+                    "light": "resources/icons/Upload.svg",
+                    "dark": "resources/icons/Upload.svg"
+                }
+            }
+        ],
+        "views": {
+            "testBenchExplorer": [
+                {
+                    "id": "projectManagementTree",
+                    "name": "Project Management Tree"
+                },
+                {
+                    "id": "testThemeTree",
+                    "name": "Test Theme Tree"
+                }
+            ]
+        },
+        "menus": {
+            "view/title": [
+                {
+                    "command": "testbenchExtension.login",
+                    "group": "navigation@1",
+                    "title": "Testbench: Login",
+                    "when": "!testbenchExtension.connectionActive && (view == projectManagementTree || view == testThemeTree)",
+                    "icon": {
+                        "light": "resources/icons/login.svg",
+                        "dark": "resources/icons/login.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.logout",
+                    "group": "navigation@2",
+                    "title": "Testbench: Logout",
+                    "when": "testbenchExtension.connectionActive && (view == projectManagementTree || view == testThemeTree)",
+                    "icon": {
+                        "light": "resources/icons/logout.svg",
+                        "dark": "resources/icons/logout.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.selectAndLoadProject",
+                    "group": "navigation@3",
+                    "when": "view == projectManagementTree || view == testThemeTree"
+                },
+                {
+                    "command": "testbenchExtension.uploadTestResultsToTestbench",
+                    "group": "navigation@4",
+                    "when": "view == projectManagementTree || view == testThemeTree"
+                },
+                {
+                    "command": "testbenchExtension.displayCommands",
+                    "group": "navigation@5",
+                    "when": "view == projectManagementTree || view == testThemeTree"
+                },
+                {
+                    "command": "testbenchExtension.refreshTreeView",
+                    "group": "navigation@6",
+                    "when": "view == projectManagementTree || view == testThemeTree"
+                },
+                {
+                    "command": "testbenchExtension.showExtensionSettings",
+                    "group": "navigation@7",
+                    "when": "view == projectManagementTree || view == testThemeTree"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "testbenchExtension.generateTestCases",
+                    "when": "view == projectManagementTree && viewItem == Cycle",
+                    "group": "inline"
+                },
+                {
+                    "command": "testbenchExtension.makeRoot",
+                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == tov || viewItem == Version || viewItem == TestThemeNode)",
+                    "group": "navigation"
+                }
+            ]
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "testBenchExplorer",
+                    "title": "TestBench",
+                    "icon": "resources/icons/iTB-EE-Logo.svg"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run package",
+        "compile": "webpack",
+        "watch": "webpack --watch",
+        "package": "webpack --mode production --devtool hidden-source-map",
+        "compile-tests": "tsc -p . --outDir out",
+        "watch-tests": "tsc -p . -w --outDir out",
+        "pretest": "npm run compile-tests && npm run compile && npm run lint",
+        "lint": "eslint --config eslint.config.mjs .",
+        "test": "node ./out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/base-64": "^1.0.2",
+        "@types/chai": "^5.0.0",
+        "@types/mocha": "^10.0.9",
+        "@types/node": "^22.7.5",
+        "@types/sinon": "^17.0.3",
+        "@types/vscode": "^1.94.0",
+        "@typescript-eslint/eslint-plugin": "^8.9.0",
+        "@typescript-eslint/parser": "^8.9.0",
+        "@vscode/test-cli": "^0.0.10",
+        "@vscode/test-electron": "^2.4.1",
+        "base-64": "^1.0.0",
+        "chai": "^5.1.1",
+        "cheerio": "^1.0.0",
+        "eslint": "^9.12.0",
+        "mocha": "^10.7.3",
+        "sinon": "^19.0.2",
+        "ts-loader": "^9.5.1",
+        "typescript": "^5.6.3",
+        "webpack": "^5.95.0",
+        "webpack-cli": "^5.1.4"
+    },
+    "dependencies": {
+        "@jest/globals": "^29.7.0",
+        "axios": "^1.7.7",
+        "jszip": "^3.10.1"
+    }
 }

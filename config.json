@@ -1,0 +1,46 @@
+{
+  "rfLibraryRegex": [
+    "(?:.*\\.)?(?P<resourceName>[^.]+?)\\s*\\[Robot-Library\\].*"
+  ],
+  "rfResourceRegex": [
+    "(?:.*\\.)?(?P<resourceName>[^.]+?)\\s*\\[Robot-Resource\\].*"
+  ],
+  "rfLibraryRoots": [
+    "RF",
+    "RF-Library"
+  ],
+  "rfResourceRoots": [
+    "RF-Resource"
+  ],
+  "fullyQualified": false,
+  "subdivisionsMapping": {
+    "libraries": {},
+    "resources": {}
+  },
+  "forcedImport": {
+    "libraries": [],
+    "resources": [],
+    "variables": []
+  },
+  "generationDirectory": "{root}/Generated",
+  "createOutputZip": false,
+  "resourceDirectory": "{root}/Resources",
+  "logSuiteNumbering": false,
+  "clearGenerationDirectory": true,
+  "loggingConfiguration": {
+    "console": {
+      "logLevel": "INFO",
+      "logFormat": "%(levelname)s: %(message)s"
+    },
+    "file": {
+      "logLevel": "DEBUG",
+      "logFormat": "%(asctime)s - %(filename)s:%(lineno)d - %(levelname)8s - %(message)s",
+      "fileName": "testbench2robotframework.log"
+    }
+  },
+  "logCompoundInteractions": true,
+  "testCaseSplitPathRegEx": ".*StopWithRestart.*",
+  "phasePattern": "{testcase} : Phase {index}/{length}",
+  "referenceBehaviour": "ATTACHMENT",
+  "attachmentConflictBehaviour": "USE_EXISTING"
+}

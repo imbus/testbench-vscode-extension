@@ -1,3 +1,9 @@
+# VS Code Unit tests
+.vscode-test/
+
+# Ignore compiled output folder
+out/
+
 ## Typescript 
 
 # Logs
