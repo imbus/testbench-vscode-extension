@@ -6,7 +6,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
         new vscode.EventEmitter<ProjectManagementTreeItem | void>();
     readonly onDidChangeTreeData: vscode.Event<ProjectManagementTreeItem | void> = this._onDidChangeTreeData.event;
 
-    private rootElements: ProjectManagementTreeItem[] = [];
+    rootElements: ProjectManagementTreeItem[] = [];
 
     refresh(): void {
         this._onDidChangeTreeData.fire();

@@ -1,9 +1,7 @@
 import * as vscode from "vscode";
-import path from "path";
 import * as jsonReportHandler from "./jsonReportHandler";
 import * as testbenchConnection from "./testBenchConnection";
 import * as projectManagementTreeView from "./projectManagementTreeView";
-import * as types from "./types";
 
 // TODO: Generate Test Cases button (With an icon) also for test themes?
 // TODO: WebViev UI for login?
@@ -59,9 +57,13 @@ export function activate(context: vscode.ExtensionContext) {
             command: `${baseKey}.uploadTestResultsToTestbench`,
             title: "Upload Test Results To Testbench",
         },
-        refreshTreeView: {
-            command: `${baseKey}.refreshTreeView`,
-            title: "Refresh Tree View",
+        refreshProjectTreeView: {
+            command: `${baseKey}.refreshProjectTreeView`,
+            title: "Refresh Project Tree View",
+        },
+        refreshTestTreeView: {
+            command: `${baseKey}.refreshTestTreeView`,
+            title: "Refresh Test Tree View",
         },
         setWorkspaceLocation: {
             command: `${baseKey}.setWorkspaceLocation`,
@@ -69,20 +71,20 @@ export function activate(context: vscode.ExtensionContext) {
         },
     };
 
-    // Extension configuration settings    
+    // Extension configuration settings
     let storePassword: boolean;
     let workspaceLocation: string | undefined;
 
     // Initialize or update configuration settings
     async function loadConfiguration() {
         const config = vscode.workspace.getConfiguration(baseKey);
-        
+
         storePassword = config.get<boolean>("storePasswordAfterLogin", false);
         // If storePassword is false, delete the stored password.
-        // The password is only stored after a successful login to not to keep it in memory.
+        // The password is only stored after a successful login.
         if (!storePassword) {
             testbenchConnection.clearStoredCredentials(context);
-        }        
+        }
 
         // If the user wont specify a workspace location, use the workspace location of VS Code
         if (!config.get<string>("workspaceLocation")) {
@@ -131,7 +133,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register Show Extension Settings command
+    // Register "Show Extension Settings" command
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.showExtensionSettings.command, () => {
             // Open the settings UI of the extension inside the settings editor
@@ -146,9 +148,9 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null; // Store the tree data provider
     let connection: testbenchConnection.PlayServerConnection | null = null; // Store the connection to server
     vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null); // Login/Logout icon changes based on connection status
-    let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null; // Store the tree data provider
 
     // Register the "Display Commands" command
     context.subscriptions.push(
@@ -197,7 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // The user may press the login button multiple times consecutively. Aviod executing the command if already inside login.
+    // The user may press the login button multiple times consecutively. Aviod executing the command again if already inside login.
     let insideLogin = false;
     // Register the "Login" command
     context.subscriptions.push(
@@ -212,7 +214,6 @@ export function activate(context: vscode.ExtensionContext) {
             testbenchConnection
                 .performLogin(context, baseKey)
                 .then((connectionAfterLogin: any) => {
-                    // Login successful
                     if (!connectionAfterLogin) {
                         return;
                     } else {
@@ -220,7 +221,6 @@ export function activate(context: vscode.ExtensionContext) {
                     }
                 })
                 .catch((error: any) => {
-                    // Handle login error
                     console.error("Login process failed:", error);
                 })
                 .finally(() => {
@@ -261,7 +261,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Download the zip inside a folder and not directly into the workspace folder, and keep working in the folder.
+    // Download the zip inside a folder and not directly into the workspace folder, and keep working in one folder.
     const folderNameToDownloadReport = "Report";
     // Register the "Generate Test Cases" command
     context.subscriptions.push(
@@ -269,14 +269,16 @@ export function activate(context: vscode.ExtensionContext) {
             commands.generateTestCases.command,
             async (item: projectManagementTreeView.ProjectManagementTreeItem) => {
                 if (connection) {
-                    // If the user did not expanded a test cycle, test cycle wont have any children so that test themes cannot be displayed in the quickpick.
-                    // Call getChildrenOfCycle initialize the sub elements of the cycle.
                     // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
                     // projectManagementTreeDataProvider?.testThemeDataProvider.clearTree();
+
+                    // If the user did not expanded a test cycle, test cycle wont have any children so that test themes cannot be displayed in the quickpick.
+                    // Call getChildrenOfCycle initialize the sub elements of the cycle.
                     // Offload the children of the cycle to the Test Theme Tree
-                    projectManagementTreeDataProvider?.testThemeDataProvider.setRoots(
-                        await projectManagementTreeDataProvider?.getChildrenOfCycle(item)
-                    );
+                    if (projectManagementTreeDataProvider?.testThemeDataProvider) {
+                        const children = (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
+                        projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
+                    }
 
                     await jsonReportHandler.startTestGenerationProcess(
                         item,
@@ -314,17 +316,44 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Register the "Refresh Tree" command
-    // TODO: Bug or Feature? When a Tov is set root in the project management tree while the test theme tree is open,
-    // and you refresh the project management tree, test theme tree elements disappears.
+    // Register the "Refresh Project Tree" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(commands.refreshTreeView.command, async () => {
+        vscode.commands.registerCommand(commands.refreshProjectTreeView.command, async () => {
             projectManagementTreeDataProvider?.clearTree();
             [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeView(
                 context,
                 connection!,
                 projectManagementTreeDataProvider?.currentProjectKeyInView!
             );
+        })
+    );
+
+    // Register the "Refresh Test Tree" command
+    context.subscriptions.push(
+        vscode.commands.registerCommand(commands.refreshTestTreeView.command, async () => {
+            projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
+            console.log(
+                "Refreshing test tree root Elements:",
+                projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements
+            );
+            console.log(
+                "Refreshing test tree cycle key:",
+                projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent?.item?.key
+            );
+
+            console.log(
+                "Refreshing test tree parent:",
+                projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent!
+            );
+
+            let cycleElement = projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent!;
+            if (cycleElement && cycleElement.contextValue === "Cycle") {
+                // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
+                projectManagementTreeDataProvider?.testThemeDataProvider?.clearTree();
+                // Fetch the test themes from the server
+                const children = (await projectManagementTreeDataProvider?.getChildrenOfCycle(cycleElement)) ?? [];
+                projectManagementTreeDataProvider?.testThemeDataProvider?.setRoots(children);
+            }
         })
     );
 

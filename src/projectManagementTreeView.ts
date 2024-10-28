@@ -45,9 +45,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         }
 
         const contextValue = data.nodeType; // Project, Version, Cycle, testthemenode, TestCaseSetNode, TestCaseNode
-        const collapsibleState = contextValue === "Cycle"
-            ? vscode.TreeItemCollapsibleState.None  // Test cycles are set to none to be non expandable, the user can click on it to see the test themes
-            : vscode.TreeItemCollapsibleState.Collapsed;  // Set collapsibleState to Collapsed to make items clickable to trigger getChildren when expanded        
+        const collapsibleState =
+            contextValue === "Cycle"
+                ? vscode.TreeItemCollapsibleState.None // Test cycles are set to none to be non expandable, the user can click on it to see the test themes
+                : vscode.TreeItemCollapsibleState.Collapsed; // Set collapsibleState to Collapsed to make items clickable to trigger getChildren when expanded
         const treeItem = new ProjectManagementTreeItem(data.name, contextValue, collapsibleState, data, parent);
         return treeItem;
     }
@@ -119,8 +120,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         const buildTree = (parentKey: string): ProjectManagementTreeItem[] => {
             return (
                 Array.from(elementsByKey.values())
-                    // Filter elements that have the current parentKey and are not TestCase elements
-                    .filter((data) => data.base.parentKey === parentKey && data.elementType !== "TestCase")
+                    // Filter elements that have the current parentKey and are not TestCaseNode elements
+                    .filter((data) => data.base.parentKey === parentKey && data.elementType !== "TestCaseNode")
                     .map((data) => {
                         const hasChildren = Array.from(elementsByKey.values()).some(
                             (childData) => childData.base.parentKey === data.base.key
@@ -128,8 +129,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
                         const treeItem = new ProjectManagementTreeItem(
                             `${data.base.numbering} ${data.base.name}`,
-                            data.elementType, //.toLowerCase(),
-                            hasChildren
+                            data.elementType,
+                            // TestCaseSetNode are the last level of the tree, so they are not collapsible.
+                            // Only show the expand icon if the element has children.
+                            data.elementType === "TestCaseSetNode"
+                                ? vscode.TreeItemCollapsibleState.None
+                                : hasChildren
                                 ? vscode.TreeItemCollapsibleState.Collapsed
                                 : vscode.TreeItemCollapsibleState.None,
                             data,
@@ -178,7 +183,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     // Trigger initialization of test theme tree when a test cycle is clicked
     async handleTestCycleClick(testCycleItem: ProjectManagementTreeItem): Promise<void> {
-        // console.log(`Element ${testCycleItem.label} is clicked.`);       
+        // console.log(`Element ${testCycleItem.label} is clicked.`);
         if (testCycleItem.contextValue === "Cycle") {
             // Use the existing refresh or data loading function for initializing the test theme tree
             this.testThemeDataProvider.clearTree();
@@ -306,6 +311,7 @@ export async function initializeTreeView(
     }
 
     const testThemeDataProvider = new TestThemeTreeDataProvider();
+
     const testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
         treeDataProvider: testThemeDataProvider,
     });

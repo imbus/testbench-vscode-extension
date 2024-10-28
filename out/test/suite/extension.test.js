@@ -60,10 +60,13 @@ suite("Extension Test Suite", () => {
             "testbenchExtension.makeRoot",
             "testbenchExtension.showExtensionSettings",
             "testbenchExtension.selectAndLoadProject",
-            "testbenchExtension.refreshTreeView",
+            "testbenchExtension.refreshProjectTreeView",
+            "testbenchExtension.refreshTestTreeView",
             "testbenchExtension.setWorkspaceLocation",
         ];
-        expectedCommands.forEach(command => {
+        console.log("registeredCommands: ", registeredCommands);
+        console.log("expectedCommands: ", expectedCommands);
+        expectedCommands.forEach((command) => {
             assert.ok(registeredCommands.includes(command), `Command ${command} is not registered`);
         });
     });
@@ -80,22 +83,18 @@ suite("Extension Test Suite", () => {
         assert.strictEqual(config.get("portNumber"), 9445);
         assert.strictEqual(config.get("storePasswordAfterLogin"), false);
     });
-    /*
     test("Updating configuration should change setting variable", async () => {
         const context = {
             subscriptions: [],
             secrets: {
-                delete: async () => {},
+                delete: async () => { },
             },
-        } as unknown as vscode.ExtensionContext;
-
-        activate(context);
-
+        };
+        (0, extension_1.activate)(context);
         const config = vscode.workspace.getConfiguration("testbenchExtension");
         await config.update("serverName", "newServerName", vscode.ConfigurationTarget.Global);
-        assert.strictEqual(config.get("serverName"), "newServerName");
+        assert.strictEqual(config.get("serverName", vscode.ConfigurationTarget.Global), "newServerName");
     });
-    */
     test("Deactivate should not throw", () => {
         assert.doesNotThrow(() => (0, extension_1.deactivate)());
     });

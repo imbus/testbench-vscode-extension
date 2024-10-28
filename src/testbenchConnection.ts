@@ -29,7 +29,7 @@ export class PlayServerConnection {
     private portNumber: number;
     private sessionToken: string;
     private baseURL: string;
-    private apiClient: AxiosInstance;
+    private apiClient: AxiosInstance; // Axios instance for storing the session and API calls to the server
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
     constructor(context: vscode.ExtensionContext, serverName: string, portNumber: number, sessionToken: string) {
@@ -317,7 +317,7 @@ export class PlayServerConnection {
 
             switch (response.status) {
                 case 201:
-                    console.log("File uploaded successfully.");
+                    console.log("Report uploaded to TestBench Server successfully.");
                     // Extract the fileName from the response and return it
                     const fileName = response.data?.fileName;
                     if (fileName) {
@@ -421,7 +421,7 @@ export class PlayServerConnection {
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();
         }, 4 * 60 * 1000); // Every 4 minutes
-        console.log("Keep-alive STARTED.");
+        // console.log("Keep-alive STARTED.");
         // Send an immediate keep-alive request
         this.sendKeepAliveRequest();
     }
@@ -430,7 +430,7 @@ export class PlayServerConnection {
         if (this.keepAliveIntervalId) {
             clearInterval(this.keepAliveIntervalId);
             this.keepAliveIntervalId = null;
-            console.log("Keep-alive STOPPED.");
+            // console.log("Keep-alive STOPPED.");
         }
     }
 
@@ -447,7 +447,7 @@ export class PlayServerConnection {
                 },
             });
 
-            console.log("Keep-alive request SENT.");
+            // console.log("Keep-alive request SENT.");
         } catch (error) {
             console.error("Keep-alive request failed:", error);
         }
@@ -558,8 +558,8 @@ export async function performLogin(
         );
 
         if (connection) {
-            console.log("Login successful!");
-            vscode.window.showInformationMessage("Login successful!");
+            console.log("Login successful.");
+            vscode.window.showInformationMessage("Login successful.");
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
             return connection;
         } else {
@@ -671,7 +671,7 @@ async function loginToNewPlayServerAndInitSessionToken(
         const baseURL = `https://${serverName}:${portNumber}/api`;
         const loginURL = `${baseURL}/login/session/v1`;
 
-        console.log("Sending Login POST request to:", loginURL);
+        // console.log("Sending Login POST request to:", loginURL);
 
         const response: AxiosResponse<types.LoginResponse> = await axios.post(loginURL, requestBody, {
             headers: {
@@ -684,14 +684,14 @@ async function loginToNewPlayServerAndInitSessionToken(
         });
 
         if (response.status === 201) {
-            console.log("Login successful. Received session token:", response.data.sessionToken);
+            // console.log("Login successful. Received session token:", response.data.sessionToken);
 
             // Store password in secret storage after succesfull login if the user chooses to
             const config = vscode.workspace.getConfiguration(baseKey);
             const storePassword = config.get<boolean>("storePasswordAfterLogin", false);
             if (storePassword) {
                 await context.secrets.store("password", password);
-                console.log("Password stored securely in secret storage.");
+                // console.log("Password stored securely in secret storage.");
             }
 
             // This starts keep alive in the constructor
@@ -879,9 +879,10 @@ export async function importTestResultsToTestbench(
     // Later, we should fetch the project tree from the server and search for the cycle key there.
     let allTreeElementsInTreeView = await projectManagementTreeDataProvider?.getChildren(undefined);
     const cycleKeyOfImportedReport = findCycleKeyFromCycleName(allTreeElementsInTreeView, cycleNameOfProject);
-    console.log("Cycle key of imported report:", cycleKeyOfImportedReport);
+    // console.log("Cycle key of imported report:", cycleKeyOfImportedReport);
 
     if (!cycleKeyOfImportedReport) {
+        console.error("Cycle not found in the project tree.");
         vscode.window.showErrorMessage("Cycle not found in the project tree.");
         return;
     }
@@ -891,14 +892,13 @@ export async function importTestResultsToTestbench(
     try {
         zipFilenameFromServer = await connection.uploadExecutionResults(Number(projectKey), resultZipFilePath);
         if (!zipFilenameFromServer) {
+            console.error("Error uploading the zip file to the server.");
             vscode.window.showErrorMessage("Error uploading the zip file to the server.");
             return;
         }
     } catch (error: any) {
         console.error("Error:", error.message);
     }
-
-    console.log("Report uploaded to TestBench Server.");
 
     // Import the results to TestBench server
     const importData: types.ImportData = {

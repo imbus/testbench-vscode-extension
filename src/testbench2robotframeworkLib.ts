@@ -81,5 +81,5 @@ export async function startTestbench2robotframework(configurationJSONFile: strin
         return;
     }
 
-    await testbench2robotframeworkWrite(configurationJSONFile, reportZipPath);   
+    await testbench2robotframeworkWrite(configurationJSONFile, reportZipPath);
 }

@@ -28,12 +28,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.run = run;
 const path = __importStar(require("path"));
-const mocha_1 = __importDefault(require("mocha"));
+//import * as Mocha from "mocha";
+const mocha_1 = __importDefault(require("mocha")); // Corrected import
 const glob_1 = require("glob");
 async function run() {
     // Create the mocha test
     const mocha = new mocha_1.default({
         ui: "tdd",
+        color: true,
+        timeout: 50000,
     });
     const testsRoot = path.resolve(__dirname, "..");
     try {

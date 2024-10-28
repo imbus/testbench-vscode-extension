@@ -2,12 +2,12 @@
 
 This Visual Studio Code Extension for TestBench allows you to:
 - Display the project management tree and the test theme tree, where you can navigate through the tree elements.
-- Generate robotframework test cases from test cycles directly within Visual Studio Code.
+- Generate robotframework test cases from test cycles, test themes and test case sets directly within Visual Studio Code.
 
 ## Features
 
-- Display project management tree and test theme tree in separate views
-- Generate robotframework test cases
+- Display project management tree and test theme tree in separate views.
+- Generate robotframework test cases for the selected tree element type.
 
 ## Installation
 
@@ -29,11 +29,23 @@ The extension settings contains following configurations:
 
 ## Usage
 
-1. Open the Command Palette (`Ctrl+Shift+P`).
-2. Type `TestBench: Display Available Commands` and select the command.
-3. Login to a TestBench server using the Login command. After successful login, you can execute the `Display Projects List` command to select a project.
-4. After the project selection, the project management tree will be initialized. You can navigate through the project elements to find a test cycle to generate test cases. Expanding a test cycle initializes the test theme tree, which can contain test themes, test case sets and test cases of the selected test cycle.
-5. To generate a test case, click the `Generate Test Cases` button for a test cycle in the test theme tree.
+Use the buttons alongside the tree views or open the command palette (Ctrl+Shift+P), type TestBench: Display Commands, and select the desired command.
+
+1. **Login to the TestBench Server**  
+   Use the **Login** button or command, then enter your TestBench server credentials. You can configure these credentials within the extension settings for automatic autofill. Once logged in, select **Display Projects List** to choose a project.
+
+2. **Initialize the Project Management Tree**  
+   After selecting a project, the **Project Management Tree** will be initialized. Navigate through the project elements to locate a test cycle. Clicking on a test cycle will automatically initialize the **Test Theme Tree**, displaying the associated test themes and test case sets for that cycle.
+
+3. **Generate Test Cases**  
+   Within the Project Management Tree, click **Generate Test Cases** on a test cycle. You’ll have the option to either:
+   - Generate test cases for a specific test theme by selecting it, or
+   - Generate all test cases for the chosen test cycle by clicking **Generate All**.
+
+   After making a selection, the extension retrieves the report from the TestBench server and uses the `testbench2robotframework` library to create Robot Framework test cases.
+
+4. **Execute and Upload Test Results**  
+   Once you’ve executed the generated Robot Framework tests, a zip file named `ReportWithResults.zip` will be created, containing the test results. To upload these results back to the TestBench server, click the **Upload** button and select `ReportWithResults.zip` to complete the process.
 
 ## Contributing
 

@@ -1,64 +1,123 @@
 import * as assert from "assert";
+import * as sinon from "sinon";
 import * as vscode from "vscode";
 import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
 import { ProjectManagementTreeItem } from "../../projectManagementTreeView";
 
 suite("TestThemeTreeDataProvider Tests", () => {
-
-    suiteTeardown(() => {
-        vscode.window.showInformationMessage("All tests done!");
-      });
-
-    let dataProvider: TestThemeTreeDataProvider;
-    let rootItem: ProjectManagementTreeItem;
-    let childItem: ProjectManagementTreeItem;
+    let treeDataProvider: TestThemeTreeDataProvider;
+    let sandbox: sinon.SinonSandbox;
 
     setup(() => {
-        dataProvider = new TestThemeTreeDataProvider();
-        rootItem = new ProjectManagementTreeItem("Label Root", "Project", vscode.TreeItemCollapsibleState.Collapsed, undefined);
-        childItem = new ProjectManagementTreeItem("Label Child", "Version", vscode.TreeItemCollapsibleState.Collapsed, rootItem);
-        rootItem.children = [childItem];
-    });
-    
-    test("Set and get root elements", async () => {
-        dataProvider.setRoots([rootItem]);
-        const children = await dataProvider.getChildren();
-        assert.deepStrictEqual(children, [rootItem]);
-    });    
-
-    test("Get children of a root element", async () => {
-        dataProvider.setRoots([rootItem]);
-        const children = await dataProvider.getChildren(rootItem);
-        assert.deepStrictEqual(children, [childItem]);
+        treeDataProvider = new TestThemeTreeDataProvider();
+        sandbox = sinon.createSandbox();
     });
 
-    test("Get parent of a child element", () => {
-        assert.strictEqual(dataProvider.getParent(childItem), rootItem);
+    teardown(() => {
+        sandbox.restore();
     });
 
-    test("Get tree item", () => {
-        assert.strictEqual(dataProvider.getTreeItem(rootItem), rootItem);
+    test("refresh should fire onDidChangeTreeData event", () => {
+        const spy = sandbox.spy(treeDataProvider["_onDidChangeTreeData"], "fire");
+        treeDataProvider.refresh();
+        assert.strictEqual(spy.calledOnce, true);
     });
 
-    test("Make root element", async () => {
-        dataProvider.setRoots([rootItem]);
-        dataProvider.makeRoot(childItem);
-        const children = await dataProvider.getChildren();
-        assert.deepStrictEqual(children, [childItem]);
+    test("getParent should return the parent of the element", () => {
+        const parent = new ProjectManagementTreeItem(
+            "Parent",
+            "contextValue",
+            vscode.TreeItemCollapsibleState.None,
+            {}
+        );
+        const child = new ProjectManagementTreeItem(
+            "Child",
+            "contextValue",
+            vscode.TreeItemCollapsibleState.None,
+            {},
+            parent
+        );
+        assert.strictEqual(treeDataProvider.getParent(child), parent);
     });
 
-    test("Handle expansion", () => {
-        dataProvider.handleExpansion(rootItem, true);
-        assert.strictEqual(rootItem.collapsibleState, vscode.TreeItemCollapsibleState.Expanded);
-
-        dataProvider.handleExpansion(rootItem, false);
-        assert.strictEqual(rootItem.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+    test("getChildren should return root elements if no element is passed", async () => {
+        const rootElements = [
+            new ProjectManagementTreeItem("Root1", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
+            new ProjectManagementTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
+        ];
+        treeDataProvider.setRoots(rootElements);
+        const children = await treeDataProvider.getChildren();
+        assert.deepStrictEqual(children, rootElements);
     });
 
-    test("Clear tree", async () => {
-        dataProvider.setRoots([rootItem]);
-        dataProvider.clearTree();
-        const children = await dataProvider.getChildren();
-        assert.deepStrictEqual(children, []);
+    test("getChildren should return children of the element", async () => {
+        let child1 = new ProjectManagementTreeItem("Child1", "contextValue", vscode.TreeItemCollapsibleState.None, {});
+        let child2 = new ProjectManagementTreeItem("Child2", "contextValue", vscode.TreeItemCollapsibleState.None, {});
+        let parent = new ProjectManagementTreeItem("Parent", "contextValue", vscode.TreeItemCollapsibleState.None, {
+            children: [child1, child2],
+        });
+        child1.parent = parent;
+        child2.parent = parent;
+        parent.children = [child1, child2];
+        const children = await treeDataProvider.getChildren(parent);
+        assert.deepStrictEqual(children, [child1, child2]);
+    });
+
+    test("getTreeItem should return the element itself", () => {
+        const element = new ProjectManagementTreeItem(
+            "Element",
+            "contextValue",
+            vscode.TreeItemCollapsibleState.None,
+            {}
+        );
+        assert.strictEqual(treeDataProvider.getTreeItem(element), element);
+    });
+
+    test("setRoots should set root elements and refresh the tree", () => {
+        const rootElements = [
+            new ProjectManagementTreeItem("Root1", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
+            new ProjectManagementTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
+        ];
+        const spy = sandbox.spy(treeDataProvider, "refresh");
+        treeDataProvider.setRoots(rootElements);
+        assert.deepStrictEqual(treeDataProvider.rootElements, rootElements);
+        assert.strictEqual(spy.calledOnce, true);
+    });
+
+    test("makeRoot should set the selected element as the only root element and refresh the tree", () => {
+        const element = new ProjectManagementTreeItem(
+            "Element",
+            "contextValue",
+            vscode.TreeItemCollapsibleState.None,
+            {}
+        );
+        const spy = sandbox.spy(treeDataProvider, "refresh");
+        treeDataProvider.makeRoot(element);
+        assert.deepStrictEqual(treeDataProvider.rootElements, [element]);
+        assert.strictEqual(spy.calledOnce, true);
+    });
+
+    test("handleExpansion should update the collapsible state and icon of the element", () => {
+        const element = new ProjectManagementTreeItem(
+            "Element",
+            "contextValue",
+            vscode.TreeItemCollapsibleState.None,
+            {}
+        );
+        const updateIconSpy = sandbox.spy(element, "updateIcon");
+        treeDataProvider.handleExpansion(element, true);
+        assert.strictEqual(element.collapsibleState, vscode.TreeItemCollapsibleState.Expanded);
+        assert.strictEqual(updateIconSpy.calledOnce, true);
+
+        treeDataProvider.handleExpansion(element, false);
+        assert.strictEqual(element.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+        assert.strictEqual(updateIconSpy.calledTwice, true);
+    });
+
+    test("clearTree should clear root elements and refresh the tree", () => {
+        const spy = sandbox.spy(treeDataProvider, "refresh");
+        treeDataProvider.clearTree();
+        assert.deepStrictEqual(treeDataProvider.rootElements, []);
+        assert.strictEqual(spy.calledOnce, true);
     });
 });

@@ -1,17 +1,17 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import * as cheerio from "cheerio"; // To parse HTML, npm install --save-dev @types/cheerio
 import * as types from "./types";
-import JSZip from "jszip"; // npm install jszip
 import axios, { AxiosResponse } from "axios";
 import { PlayServerConnection } from "./testBenchConnection";
 import { ProjectManagementTreeItem, findProjectKeyOfCycle } from "./projectManagementTreeView";
-// Prompt the user to select the export report method (Execution based or Specification based)
-async function selectExecutionOrSpecificationBased(): Promise<boolean | null> {
-    let executionBased = true; // Default value is "Execution based"
 
-    // We return a new Promise here, which will resolve with the result after user interaction
+/**
+ * Prompt the user to select the export report method in quick pick format (Execution based or Specification based).
+ * @returns Promise<boolean | null> - Resolves with the selected option (true for Execution based, false for Specification based) or null if the user cancels the selection.
+ */
+export async function isExecutionBasedReportSelected(): Promise<boolean | null> {
+    // Return a Promise, which will resolve with the result after user interaction
     return new Promise((resolve) => {
         // Create the quick pick input
         const quickPick = vscode.window.createQuickPick();
@@ -25,8 +25,7 @@ async function selectExecutionOrSpecificationBased(): Promise<boolean | null> {
                 if (selection[0].label === "Cancel") {
                     resolve(null); // Resolve with null if the user selects "Cancel"
                 } else {
-                    executionBased = selection[0].label === "Execution based";
-                    resolve(executionBased); // Resolve with the selected option
+                    resolve(selection[0].label === "Execution based"); // Resolve with the selected option
                 }
                 quickPick.hide(); // Close the quick pick after selection
             }
@@ -42,24 +41,38 @@ async function selectExecutionOrSpecificationBased(): Promise<boolean | null> {
     });
 }
 
-// Helper function to check if the job has completed successfully.
+// Checks if the report job has completed successfully.
 export function isReportJobCompletedSuccessfully(jobStatus: types.JobStatusResponse): boolean {
     return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
 }
 
+// Checks if the import job has completed successfully.
 export function isImportJobCompletedSuccessfully(jobStatus: types.JobStatusResponse): boolean {
     return !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
 }
 
+// Checks if the import job has failed.
 export function isImportJobFailed(jobStatus: types.JobStatusResponse): boolean {
     return !!jobStatus?.completion?.result?.ExecutionImportingFailure;
 }
 
-// Fetch the TestBench JSON report from the server (ZIP Archive).
-// 3 Calls are needed to download the zip report:
-// 1. Get the job ID
-// 2. Get the job status (polling until the job is completed)
-// 3. Download the report zip file.
+/**
+ * Fetch the TestBench JSON report (ZIP Archive) from the server.
+ * 3 Calls are needed to download the zip report:
+ * 1. Get the job ID
+ * 2. Get the job status (polling until the job is completed)
+ * 3. Download the report zip file.
+ *
+ * @param connection Connection object to the server
+ * @param baseKey The base key of the extension
+ * @param projectKey The project key
+ * @param cycleKey The cycle key
+ * @param progress Progress bar to show the poll attempts to the user
+ * @param folderNameToDownloadReport The folder name to save the downloaded report
+ * @param requestParams Optional request parameters (exec/spec based, root UID) for the job ID request
+ * @param cancellationToken Cancellation token to be able to cancel the polling by clicking cancel button
+ * @returns The path of the downloaded zip file if the download was successful, otherwise undefined
+ */
 export async function fetchZipFile(
     connection: PlayServerConnection,
     baseKey: string,
@@ -71,7 +84,7 @@ export async function fetchZipFile(
     cancellationToken?: vscode.CancellationToken
 ): Promise<string | undefined> {
     try {
-        console.log(`Fetching zip file for projectKey: ${projectKey}, cycleKey: ${cycleKey}.`);
+        console.log(`Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}.`);
 
         const jobId = await getJobId(connection, projectKey, cycleKey, requestParams);
         console.log(`Job ID (${jobId}) fetched successfully.`);
@@ -79,8 +92,8 @@ export async function fetchZipFile(
         const jobStatus = await pollJobStatus(connection, projectKey, jobId, "report", progress, cancellationToken);
 
         if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
-            console.warn("Report generation not completed or failed.");
-            vscode.window.showErrorMessage("Report generation not completed or failed.");
+            console.warn("Report generation was unsuccessful.");
+            vscode.window.showErrorMessage("Report generation was unsuccessful.");
             return undefined;
         }
 
@@ -100,13 +113,27 @@ export async function fetchZipFile(
             vscode.window.showInformationMessage("Operation cancelled by the user.");
             return undefined;
         } else {
-            console.error(`Error in fetchZipFile: ${error}`);
-            handleError(error, projectKey, cycleKey);
+            if (axios.isAxiosError(error) && error.response?.status === 404) {
+                throw new Error("Resource not found.");
+            } else {
+                console.error(`Error fetching the report for project ${projectKey} and cycle ${cycleKey}: ${error}`);
+                throw error;
+            }
         }
     }
 }
 
-// Poll the job status (Either report of import job) until the job is completed.
+/**
+ * Poll the job status (Either report of import job) until the job is completed.
+ * @param connection Connection object to the server
+ * @param projectKey Project key
+ * @param jobId Job ID received from the server
+ * @param jobType Type of job (report or import)
+ * @param progress Progress bar to show the poll attempts to the user
+ * @param cancellationToken Cancellation token to be able to cancel the polling by clicking cancel button
+ * @param maxPollingTimeMs Maximum time to poll the job status, after which the polling will be stopped
+ * @returns Job status response object if the job is completed, otherwise null
+ */
 export async function pollJobStatus(
     connection: PlayServerConnection,
     projectKey: string,
@@ -120,6 +147,7 @@ export async function pollJobStatus(
     let attempt = 0;
     let jobStatus: types.JobStatusResponse | null = null;
 
+    // Poll the job status until the job is completed with either success or failure
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
             console.log("Operation cancelled by the user.");
@@ -178,8 +206,15 @@ export async function pollJobStatus(
     return jobStatus;
 }
 
-// Get the job ID from server
-async function getJobId(
+/**
+ * Get the job ID from server
+ * @param connection Connection object to the server
+ * @param projectKey The project key
+ * @param cycleKey The cycle key
+ * @param requestParams Optional request parameters (exec/spec based, root UID) for the job ID request
+ * @returns The job ID received from the server
+ */
+export async function getJobId(
     connection: PlayServerConnection,
     projectKey: string,
     cycleKey: string,
@@ -187,9 +222,7 @@ async function getJobId(
 ): Promise<string> {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
 
-    console.log(
-        `Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`
-    );
+    // console.log(`Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`);
 
     const jobIdResponse: AxiosResponse<types.JobIdResponse> = await axios.post(url, requestParams, {
         headers: {
@@ -206,8 +239,15 @@ async function getJobId(
     return jobIdResponse.data.jobID;
 }
 
-// Get the job status from server
-async function getJobStatus(
+/**
+ * Get the job status from server
+ * @param connection Connection object to the server
+ * @param projectKey The project key
+ * @param jobId The job ID received from the server
+ * @param jobType The type of job (report or import)
+ * @returns The job status response object
+ */
+export async function getJobStatus(
     connection: PlayServerConnection,
     projectKey: string,
     jobId: string,
@@ -233,8 +273,16 @@ async function getJobStatus(
     return jobStatusResponse.data;
 }
 
-// Download the report zip file
-async function downloadReport(
+/**
+ * Download the report zip file from the server to local storage and return the path of the downloaded file.
+ * @param connection Connection object to the server
+ * @param baseKey  The base key of the extension
+ * @param projectKey The project key
+ * @param fileName The name of the report file to download
+ * @param folderNameToDownloadReport  The folder name to save the downloaded report
+ * @returns The path of the downloaded zip file if the download was successful, otherwise undefined
+ */
+export async function downloadReport(
     connection: PlayServerConnection,
     baseKey: string,
     projectKey: string,
@@ -262,7 +310,7 @@ async function downloadReport(
     const workspaceLocation = config.get<string>("workspaceLocation");
     if (workspaceLocation) {
         if (fs.existsSync(workspaceLocation)) {
-            console.log(`Using configuration as download location: ${workspaceLocation}`);
+            // console.log(`Using configuration as download location: ${workspaceLocation}`);
             async function saveReportToFile(
                 downloadZipResponse: AxiosResponse<any>,
                 workspaceLocation: string,
@@ -320,24 +368,23 @@ async function downloadReport(
     return undefined; // Return undefined if no file was saved
 }
 
-// Utility function for adding delay
+// Utility function for adding delay in milliseconds
 export function delay(ms: number): Promise<void> {
     // console.log(`Waiting for ${ms} milliseconds for Job completion.`);
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Error handling function
-function handleError(error: unknown, projectKey: string, cycleKey: string): void {
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-        console.error("Project, cycle, tree root UID, filter, or test theme UID not found.", error);
-        throw new Error("Resource not found.");
-    } else {
-        console.error(`Error fetching zip file for projectKey: ${projectKey}, cycleKey: ${cycleKey}`, error);
-        throw error;
-    }
-}
-
-// Main function to handle the process
+/**
+ * Generate Robot Framework test cases from the TestBench JSON report.
+ * @param treeItem The selected tree item
+ * @param itemLabel The label of the selected tree item
+ * @param baseKey The base key of the extension
+ * @param projectKey The project key
+ * @param cycleKey The cycle key
+ * @param connection Connection object to the server
+ * @param workingDirectory The path to save the downloaded report
+ * @returns Promise<void>
+ */
 export async function testBenchToRobotFramework(
     treeItem: ProjectManagementTreeItem,
     itemLabel: string,
@@ -348,7 +395,7 @@ export async function testBenchToRobotFramework(
     workingDirectory: string
 ): Promise<void> {
     // Execution based or specification based request parameter
-    const executionBased = await selectExecutionOrSpecificationBased();
+    const executionBased = await isExecutionBasedReportSelected();
     // console.log("executionBased value set to:", executionBased);
     if (executionBased === null) {
         console.log(`Test generation aborted.`);
@@ -358,7 +405,6 @@ export async function testBenchToRobotFramework(
 
     /* 
     Code for storing treeItem variable as a json file to analyze its structure while removing its parent property to avoid circular reference
-
     // Function to remove the parent property from an object recursively
     function removeParentProperty(obj: any): any {
         if (Array.isArray(obj)) {
@@ -426,7 +472,7 @@ export async function testBenchToRobotFramework(
     }
     const UIDofSelectedElement = await showTestThemeNodes(treeItem);
     if (!UIDofSelectedElement) {
-        console.warn(`Test theme selection was empty.`);
+        console.error(`Test theme selection was empty.`);
         // vscode.window.showWarningMessage(`Test theme selection was empty.`);
         return;
     }
@@ -485,8 +531,9 @@ export async function testBenchToRobotFramework(
                 // @@ Start of testbench2robotframework library
                 /*
 
-                // tb2robot write -c testbench2robotframeworkConfig.json ReportWithoutResultsForTb2robot.zip (zip Path is downloadedZipFilePath)
-                // tb2robot read -o output\output.xml -r ReportWithResults.zip ReportWithoutResultsForTb2robot.zip (ReportWithResults.zip is a configurable name)
+                TODO: Call the testbench2robotframework library functions to write (and read for an automated process?) here.
+                tb2robot write -c testbench2robotframeworkConfig.json ReportWithoutResultsForTb2robot.zip (zip Path can be accessed with downloadedZipFilePath)
+                tb2robot read -o output\output.xml -r ReportWithResults.zip ReportWithoutResultsForTb2robot.zip (ReportWithResults.zip is a configurable name)
 
                 */
 
@@ -510,7 +557,14 @@ export async function testBenchToRobotFramework(
     );
 }
 
-// Entry point for the test generation process
+/**
+ * Entry point for the robotframework test generation process from the TestBench JSON report.
+ * @param treeItem The selected tree item
+ * @param connection Connection object to the server
+ * @param baseKey The base key of the extension
+ * @param workingDirectory The path to save the downloaded report
+ * @returns Promise<void>
+ */
 export async function startTestGenerationProcess(
     treeItem: ProjectManagementTreeItem,
     connection: PlayServerConnection,
@@ -558,20 +612,10 @@ export async function startTestGenerationProcess(
     }
 }
 
-// Function to validate JSON structure for the required fields to generate Robot Framework test case
-export function isValidTestJSON(jsonData: any): boolean {
-    return jsonData && Array.isArray(jsonData.interactions);
-}
-
-// Ensures the output folder exists
-export function createOutputFolderIfNotExists(outputFolder: string): void {
-    if (!fs.existsSync(outputFolder)) {
-        fs.mkdirSync(outputFolder);
-        console.log(`Created output folder: ${outputFolder}`);
-    }
-}
-
-// Main function to write the generation configuration to a JSON file.
+/**
+ * Writes the testbench2robotframework configuration to a JSON file in workspace folder.
+ * @param baseKey The base key of the extension
+ */
 export async function saveTestbench2RobotConfigurationAsJson(baseKey: string): Promise<void> {
     try {
         const config = vscode.workspace.getConfiguration(baseKey);
@@ -599,7 +643,10 @@ export async function saveTestbench2RobotConfigurationAsJson(baseKey: string): P
     }
 }
 
-// Determines the file path where the configuration file will be saved.
+/**
+ * Determines the file path where the testbench2robotframework configuration file will be saved.
+ * @returns The file path of the configuration file.
+ */
 async function getConfigurationFilePath(): Promise<string> {
     const workspaceFolder = getWorkspaceFolder();
     const fileName = "testbench2robotframeworkConfig.json";
@@ -607,7 +654,10 @@ async function getConfigurationFilePath(): Promise<string> {
     return filePath;
 }
 
-// Retrieves the path of the currently opened workspace folder.
+/**
+ * Retrieves the path of the currently opened workspace folder.
+ * @returns The path of the currently opened workspace folder.
+ */
 function getWorkspaceFolder(): string {
     const workspaceFolders = vscode.workspace.workspaceFolders;
 
@@ -619,7 +669,9 @@ function getWorkspaceFolder(): string {
     return workspaceFolders[0].uri.fsPath;
 }
 
-// Main function to delete the configuration JSON file.
+/**
+ * Deletes the testbench2robotframework configuration file from the workspace folder.
+ */
 export async function deleteConfigurationFile(): Promise<void> {
     try {
         const filePath = await getConfigurationFilePath();

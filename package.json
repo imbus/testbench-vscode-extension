@@ -267,8 +267,18 @@
                 }
             },
             {
-                "command": "testbenchExtension.refreshTreeView",
-                "title": "TestBench: Refresh Tree View",
+                "command": "testbenchExtension.refreshProjectTreeView",
+                "title": "TestBench: Refresh Project Tree View",
+                "when": "view == projectManagementTree",
+                "icon": {
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.refreshTestTreeView",
+                "title": "TestBench: Refresh Test Tree View",
+                "when": "view == testThemeTree",
                 "icon": {
                     "light": "resources/icons/refresh.svg",
                     "dark": "resources/icons/refresh.svg"
@@ -353,13 +363,18 @@
                     "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
-                    "command": "testbenchExtension.refreshTreeView",
+                    "command": "testbenchExtension.refreshProjectTreeView",
                     "group": "navigation@6",
-                    "when": "view == projectManagementTree || view == testThemeTree"
+                    "when": "view == projectManagementTree"
+                },
+                {
+                    "command": "testbenchExtension.refreshTestTreeView",
+                    "group": "navigation@7",
+                    "when": "view == testThemeTree"
                 },
                 {
                     "command": "testbenchExtension.showExtensionSettings",
-                    "group": "navigation@7",
+                    "group": "navigation@8",
                     "when": "view == projectManagementTree || view == testThemeTree"
                 }
             ],
@@ -398,8 +413,7 @@
         "test": "node ./out/test/runTest.js"
     },
     "devDependencies": {
-        "@types/base-64": "^1.0.2",
-        "@types/chai": "^5.0.0",
+        "@types/glob": "^8.1.0",
         "@types/mocha": "^10.0.9",
         "@types/node": "^22.7.5",
         "@types/sinon": "^17.0.3",
@@ -408,9 +422,6 @@
         "@typescript-eslint/parser": "^8.9.0",
         "@vscode/test-cli": "^0.0.10",
         "@vscode/test-electron": "^2.4.1",
-        "base-64": "^1.0.0",
-        "chai": "^5.1.1",
-        "cheerio": "^1.0.0",
         "eslint": "^9.12.0",
         "mocha": "^10.7.3",
         "sinon": "^19.0.2",
@@ -420,7 +431,6 @@
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
-        "@jest/globals": "^29.7.0",
         "axios": "^1.7.7",
         "jszip": "^3.10.1"
     }
