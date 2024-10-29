@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import {
     ProjectManagementTreeDataProvider,
     ProjectManagementTreeItem,
-    findProjectKeyOfCycle,
+    findProjectKeyOfCycleElement,
 } from "../../projectManagementTreeView";
 import { PlayServerConnection } from "../../testBenchConnection";
 import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
@@ -100,7 +100,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
             projectElement
         );
 
-        const projectKey = findProjectKeyOfCycle(cycleElement);
+        const projectKey = findProjectKeyOfCycleElement(cycleElement);
 
         assert.strictEqual(projectKey, "projectKey");
     });

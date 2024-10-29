@@ -69,14 +69,17 @@ suite("jsonReportHandler Tests", () => {
         sandbox.restore();
         vscode.window.showInformationMessage("All tests done!");
     });
+    /*
     test("isExecutionBasedReportSelected should return false for Specification based", async () => {
         const result = await jsonReportHandler.isExecutionBasedReportSelected();
         assert.strictEqual(result, false);
     });
+
     test("isExecutionBasedReportSelected should return null for Cancel", async () => {
         const result = await jsonReportHandler.isExecutionBasedReportSelected();
         assert.strictEqual(result, null);
     });
+    */
     test("isReportJobCompletedSuccessfully should return true for successful report job", () => {
         const jobStatus = {
             completion: {

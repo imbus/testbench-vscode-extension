@@ -95,7 +95,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     // Fetches the sub-elements of a cycle element and builds the tree structure
     public async getChildrenOfCycle(element: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
         const cycleKey = element.item.key;
-        const projectKey = findProjectKeyOfCycle(element);
+        const projectKey = findProjectKeyOfCycleElement(element);
 
         if (!projectKey) {
             console.error("Project key of cycle not found.");
@@ -200,7 +200,11 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 }
 
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
-export function findProjectKeyOfCycle(element: ProjectManagementTreeItem): string | undefined {
+export function findProjectKeyOfCycleElement(element: ProjectManagementTreeItem): string | undefined {
+    if (element.contextValue !== "Cycle") {
+        console.error("Element is not a cycle.");
+        return undefined;
+    }
     let currentElement: ProjectManagementTreeItem | null = element;
     while (currentElement) {
         if (currentElement.contextValue === "Project") {
@@ -208,6 +212,24 @@ export function findProjectKeyOfCycle(element: ProjectManagementTreeItem): strin
         }
         currentElement = currentElement.parent;
     }
+    console.error("Project key not found.");
+    return undefined;
+}
+
+// Function to find the serial key of the project of a cycle element in the tree hierarchy
+export function findCycleKeyOfTestThemeElement(element: ProjectManagementTreeItem): string | undefined {
+    if (element.contextValue !== "TestThemeNode") {
+        console.error("Element is not a test theme.");
+        return undefined;
+    }
+    let currentElement: ProjectManagementTreeItem | null = element;
+    while (currentElement) {
+        if (currentElement.contextValue === "Cycle") {
+            return currentElement.item.key;
+        }
+        currentElement = currentElement.parent;
+    }
+    console.error("Cycle key not found.");
     return undefined;
 }
 

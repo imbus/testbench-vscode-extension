@@ -95,7 +95,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     test("findProjectKeyOfCycle should return project key of a cycle element", () => {
         const projectElement = new projectManagementTreeView_1.ProjectManagementTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, { key: "projectKey" });
         const cycleElement = new projectManagementTreeView_1.ProjectManagementTreeItem("Cycle", "Cycle", vscode.TreeItemCollapsibleState.Collapsed, { key: "cycleKey" }, projectElement);
-        const projectKey = (0, projectManagementTreeView_1.findProjectKeyOfCycle)(cycleElement);
+        const projectKey = (0, projectManagementTreeView_1.findProjectKeyOfCycleElement)(cycleElement);
         assert_1.default.strictEqual(projectKey, "projectKey");
     });
     test("handleTestCycleClick should initialize test theme tree", async () => {

@@ -4,7 +4,7 @@ import * as path from "path";
 import * as types from "./types";
 import axios, { AxiosResponse } from "axios";
 import { PlayServerConnection } from "./testBenchConnection";
-import { ProjectManagementTreeItem, findProjectKeyOfCycle } from "./projectManagementTreeView";
+import { ProjectManagementTreeItem, findProjectKeyOfCycleElement } from "./projectManagementTreeView";
 
 /**
  * Prompt the user to select the export report method in quick pick format (Execution based or Specification based).
@@ -84,7 +84,10 @@ export async function fetchZipFile(
     cancellationToken?: vscode.CancellationToken
 ): Promise<string | undefined> {
     try {
-        console.log(`Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}.`);
+        console.log(
+            `Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, requestParams: ${requestParams}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`
+        );
+        console.log("requestParams", requestParams);
 
         const jobId = await getJobId(connection, projectKey, cycleKey, requestParams);
         console.log(`Job ID (${jobId}) fetched successfully.`);
@@ -222,7 +225,7 @@ export async function getJobId(
 ): Promise<string> {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
 
-    // console.log(`Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`);
+    console.log(`Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`);
 
     const jobIdResponse: AxiosResponse<types.JobIdResponse> = await axios.post(url, requestParams, {
         headers: {
@@ -231,6 +234,8 @@ export async function getJobId(
             "Content-Type": "application/json",
         },
     });
+
+    console.log("jobIdResponse:", jobIdResponse);
 
     if (jobIdResponse.status !== 200) {
         throw new Error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
@@ -383,16 +388,18 @@ export function delay(ms: number): Promise<void> {
  * @param cycleKey The cycle key
  * @param connection Connection object to the server
  * @param workingDirectory The path to save the downloaded report
+ * @param UIDofTestThemeElementToGenerateTestsFor (Optinal) The uniqueID of the clicked TestThemeNode element to generate tests for
  * @returns Promise<void>
  */
-export async function testBenchToRobotFramework(
+export async function generateTestsWithTestBenchToRobotFramework(
     treeItem: ProjectManagementTreeItem,
     itemLabel: string,
     baseKey: string,
     projectKey: string,
     cycleKey: string,
     connection: PlayServerConnection,
-    workingDirectory: string
+    workingDirectory: string,
+    UIDofTestThemeElementToGenerateTestsFor?: string
 ): Promise<void> {
     // Execution based or specification based request parameter
     const executionBased = await isExecutionBasedReportSelected();
@@ -470,7 +477,16 @@ export async function testBenchToRobotFramework(
         // Return "Generate all" if that option was selected, otherwise the uniqueID
         return selected?.label === "Generate all" ? "Generate all" : (selected as { uniqueID: string }).uniqueID;
     }
-    const UIDofSelectedElement = await showTestThemeNodes(treeItem);
+
+    // If the user clicks "Generate Test Cases" button for a test theme, its UID is automatically passed to this function.
+    // If the user clicks "Generate Test Cases" button for a test cycle, list and get the uniqueID of the selected TestThemeNode element
+    let UIDofSelectedElement;
+    if (UIDofTestThemeElementToGenerateTestsFor) {
+        UIDofSelectedElement = UIDofTestThemeElementToGenerateTestsFor;
+    } else {
+        UIDofSelectedElement = await showTestThemeNodes(treeItem);
+    }
+
     if (!UIDofSelectedElement) {
         console.error(`Test theme selection was empty.`);
         // vscode.window.showWarningMessage(`Test theme selection was empty.`);
@@ -574,9 +590,8 @@ export async function startTestGenerationProcess(
     // Check if the cycle key is available
     const cycleKey = treeItem.item.key;
     if (cycleKey) {
-        const projectKeyOfCycle = findProjectKeyOfCycle(treeItem);
+        const projectKeyOfCycle = findProjectKeyOfCycleElement(treeItem);
         if (!projectKeyOfCycle) {
-            console.error("Project key of cycle not found.");
             return Promise.resolve([]);
         }
 
@@ -585,14 +600,15 @@ export async function startTestGenerationProcess(
             if (connection) {
                 // Start the generation process
                 if (typeof treeItem.label === "string") {
-                    testBenchToRobotFramework(
+                    generateTestsWithTestBenchToRobotFramework(
                         treeItem,
                         treeItem.label,
                         baseKey,
                         projectKeyOfCycle,
                         cycleKey,
                         connection,
-                        workingDirectory
+                        workingDirectory,
+                        undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
                     );
                 } else {
                     vscode.window.showErrorMessage("Invalid label type. Test generation aborted.");

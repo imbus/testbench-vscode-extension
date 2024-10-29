@@ -55,7 +55,11 @@ function activate(context) {
         },
         generateTestCases: {
             command: `${baseKey}.generateTestCases`,
-            title: "Generate Test Cases",
+            title: "Generate Tests",
+        },
+        generateTestCasesForTestTheme: {
+            command: `${baseKey}.generateTestCasesForTestTheme`,
+            title: "Generate Tests",
         },
         makeRoot: {
             command: `${baseKey}.makeRoot`,
@@ -253,7 +257,7 @@ function activate(context) {
     }));
     // Download the zip inside a folder and not directly into the workspace folder, and keep working in one folder.
     const folderNameToDownloadReport = "Report";
-    // Register the "Generate Test Cases" command
+    // Register the "Generate Tests" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCases.command, async (item) => {
         if (connection) {
             // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
@@ -266,6 +270,25 @@ function activate(context) {
                 projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
             }
             await jsonReportHandler.startTestGenerationProcess(item, connection, baseKey, folderNameToDownloadReport);
+        }
+        else {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+        }
+    }));
+    // Register the "Generate Tests For Test Theme" command
+    context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCasesForTestTheme.command, async (treeItem) => {
+        if (connection) {
+            console.log("Generating tests for test theme:", treeItem);
+            let testThemeTreeUniqueID = treeItem.item?.base?.uniqueID;
+            let cycleKey = projectManagementTreeView.findCycleKeyOfTestThemeElement(treeItem);
+            console.log("Selected test theme parent cycle key:", cycleKey);
+            let projectKey = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem.parent);
+            console.log("Selected test theme parent project key:", projectKey);
+            if (!projectKey || !cycleKey || !testThemeTreeUniqueID) {
+                return;
+            }
+            jsonReportHandler.generateTestsWithTestBenchToRobotFramework(treeItem, typeof treeItem.label === "string" ? treeItem.label : "", // Label might be undefined
+            baseKey, projectKey, cycleKey, connection, folderNameToDownloadReport, testThemeTreeUniqueID);
         }
         else {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
@@ -295,9 +318,6 @@ function activate(context) {
     // Register the "Refresh Test Tree" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.refreshTestTreeView.command, async () => {
         projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
-        console.log("Refreshing test tree root Elements:", projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements);
-        console.log("Refreshing test tree cycle key:", projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent?.item?.key);
-        console.log("Refreshing test tree parent:", projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent);
         let cycleElement = projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent;
         if (cycleElement && cycleElement.contextValue === "Cycle") {
             // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes

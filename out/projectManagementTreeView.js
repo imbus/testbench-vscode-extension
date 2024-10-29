@@ -24,7 +24,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProjectManagementTreeItem = exports.ProjectManagementTreeDataProvider = void 0;
-exports.findProjectKeyOfCycle = findProjectKeyOfCycle;
+exports.findProjectKeyOfCycleElement = findProjectKeyOfCycleElement;
+exports.findCycleKeyOfTestThemeElement = findCycleKeyOfTestThemeElement;
 exports.initializeTreeView = initializeTreeView;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
@@ -98,7 +99,7 @@ class ProjectManagementTreeDataProvider {
     // Fetches the sub-elements of a cycle element and builds the tree structure
     async getChildrenOfCycle(element) {
         const cycleKey = element.item.key;
-        const projectKey = findProjectKeyOfCycle(element);
+        const projectKey = findProjectKeyOfCycleElement(element);
         if (!projectKey) {
             console.error("Project key of cycle not found.");
             return [];
@@ -179,7 +180,11 @@ class ProjectManagementTreeDataProvider {
 }
 exports.ProjectManagementTreeDataProvider = ProjectManagementTreeDataProvider;
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
-function findProjectKeyOfCycle(element) {
+function findProjectKeyOfCycleElement(element) {
+    if (element.contextValue !== "Cycle") {
+        console.error("Element is not a cycle.");
+        return undefined;
+    }
     let currentElement = element;
     while (currentElement) {
         if (currentElement.contextValue === "Project") {
@@ -187,6 +192,23 @@ function findProjectKeyOfCycle(element) {
         }
         currentElement = currentElement.parent;
     }
+    console.error("Project key not found.");
+    return undefined;
+}
+// Function to find the serial key of the project of a cycle element in the tree hierarchy
+function findCycleKeyOfTestThemeElement(element) {
+    if (element.contextValue !== "TestThemeNode") {
+        console.error("Element is not a test theme.");
+        return undefined;
+    }
+    let currentElement = element;
+    while (currentElement) {
+        if (currentElement.contextValue === "Cycle") {
+            return currentElement.item.key;
+        }
+        currentElement = currentElement.parent;
+    }
+    console.error("Cycle key not found.");
     return undefined;
 }
 // Represents a tree item (Project, TOV, Cycle, etc) in the tree view

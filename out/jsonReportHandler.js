@@ -36,7 +36,7 @@ exports.getJobId = getJobId;
 exports.getJobStatus = getJobStatus;
 exports.downloadReport = downloadReport;
 exports.delay = delay;
-exports.testBenchToRobotFramework = testBenchToRobotFramework;
+exports.generateTestsWithTestBenchToRobotFramework = generateTestsWithTestBenchToRobotFramework;
 exports.startTestGenerationProcess = startTestGenerationProcess;
 exports.saveTestbench2RobotConfigurationAsJson = saveTestbench2RobotConfigurationAsJson;
 exports.deleteConfigurationFile = deleteConfigurationFile;
@@ -108,7 +108,8 @@ function isImportJobFailed(jobStatus) {
  */
 async function fetchZipFile(connection, baseKey, projectKey, cycleKey, progress, folderNameToDownloadReport, requestParams, cancellationToken) {
     try {
-        console.log(`Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}.`);
+        console.log(`Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, requestParams: ${requestParams}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`);
+        console.log("requestParams", requestParams);
         const jobId = await getJobId(connection, projectKey, cycleKey, requestParams);
         console.log(`Job ID (${jobId}) fetched successfully.`);
         const jobStatus = await pollJobStatus(connection, projectKey, jobId, "report", progress, cancellationToken);
@@ -226,7 +227,7 @@ async function pollJobStatus(connection, projectKey, jobId, jobType, progress, c
  */
 async function getJobId(connection, projectKey, cycleKey, requestParams) {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
-    // console.log(`Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`);
+    console.log(`Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`);
     const jobIdResponse = await axios_1.default.post(url, requestParams, {
         headers: {
             accept: "application/json",
@@ -234,6 +235,7 @@ async function getJobId(connection, projectKey, cycleKey, requestParams) {
             "Content-Type": "application/json",
         },
     });
+    console.log("jobIdResponse:", jobIdResponse);
     if (jobIdResponse.status !== 200) {
         throw new Error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
     }
@@ -346,9 +348,10 @@ function delay(ms) {
  * @param cycleKey The cycle key
  * @param connection Connection object to the server
  * @param workingDirectory The path to save the downloaded report
+ * @param UIDofTestThemeElementToGenerateTestsFor (Optinal) The uniqueID of the clicked TestThemeNode element to generate tests for
  * @returns Promise<void>
  */
-async function testBenchToRobotFramework(treeItem, itemLabel, baseKey, projectKey, cycleKey, connection, workingDirectory) {
+async function generateTestsWithTestBenchToRobotFramework(treeItem, itemLabel, baseKey, projectKey, cycleKey, connection, workingDirectory, UIDofTestThemeElementToGenerateTestsFor) {
     // Execution based or specification based request parameter
     const executionBased = await isExecutionBasedReportSelected();
     // console.log("executionBased value set to:", executionBased);
@@ -416,7 +419,15 @@ async function testBenchToRobotFramework(treeItem, itemLabel, baseKey, projectKe
         // Return "Generate all" if that option was selected, otherwise the uniqueID
         return selected?.label === "Generate all" ? "Generate all" : selected.uniqueID;
     }
-    const UIDofSelectedElement = await showTestThemeNodes(treeItem);
+    // If the user clicks "Generate Test Cases" button for a test theme, its UID is automatically passed to this function.
+    // If the user clicks "Generate Test Cases" button for a test cycle, list and get the uniqueID of the selected TestThemeNode element
+    let UIDofSelectedElement;
+    if (UIDofTestThemeElementToGenerateTestsFor) {
+        UIDofSelectedElement = UIDofTestThemeElementToGenerateTestsFor;
+    }
+    else {
+        UIDofSelectedElement = await showTestThemeNodes(treeItem);
+    }
     if (!UIDofSelectedElement) {
         console.error(`Test theme selection was empty.`);
         // vscode.window.showWarningMessage(`Test theme selection was empty.`);
@@ -494,9 +505,8 @@ async function startTestGenerationProcess(treeItem, connection, baseKey, working
     // Check if the cycle key is available
     const cycleKey = treeItem.item.key;
     if (cycleKey) {
-        const projectKeyOfCycle = (0, projectManagementTreeView_1.findProjectKeyOfCycle)(treeItem);
+        const projectKeyOfCycle = (0, projectManagementTreeView_1.findProjectKeyOfCycleElement)(treeItem);
         if (!projectKeyOfCycle) {
-            console.error("Project key of cycle not found.");
             return Promise.resolve([]);
         }
         if (projectKeyOfCycle) {
@@ -504,7 +514,8 @@ async function startTestGenerationProcess(treeItem, connection, baseKey, working
             if (connection) {
                 // Start the generation process
                 if (typeof treeItem.label === "string") {
-                    testBenchToRobotFramework(treeItem, treeItem.label, baseKey, projectKeyOfCycle, cycleKey, connection, workingDirectory);
+                    generateTestsWithTestBenchToRobotFramework(treeItem, treeItem.label, baseKey, projectKeyOfCycle, cycleKey, connection, workingDirectory, undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
+                    );
                 }
                 else {
                     vscode.window.showErrorMessage("Invalid label type. Test generation aborted.");
