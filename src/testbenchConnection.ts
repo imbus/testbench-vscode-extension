@@ -306,7 +306,7 @@ export class PlayServerConnection {
         try {
             const zipFileData = fs.readFileSync(zipFilePath);
 
-            console.log("Uploading zip file to:", uploadEndpointURL);
+            console.log(`Uploading zip file ${zipFilePath} to ${uploadEndpointURL}`);
             const response = await this.apiClient.post(uploadEndpointURL, zipFileData, {
                 headers: {
                     "Content-Type": "application/zip",
@@ -824,17 +824,13 @@ async function promptForReportZipFileWithResults(): Promise<string | undefined> 
     }
 }
 
-// Import the report zip file which contains the test results to TestBench server
-export async function importTestResultsToTestbench(
+// TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
+export async function importReportWithResultsToTestbench(
     connection: PlayServerConnection,
-    projectManagementTreeDataProvider: ProjectManagementTreeDataProvider
+    projectManagementTreeDataProvider: ProjectManagementTreeDataProvider,
+    resultZipFilePath: string
 ) {
-    // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
-    const resultZipFilePath = await promptForReportZipFileWithResults();
-    if (!resultZipFilePath) {
-        // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
-        return;
-    }
+    console.log("Importing report with results to TestBench server.");
 
     const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReportile(resultZipFilePath);
 
@@ -853,7 +849,7 @@ export async function importTestResultsToTestbench(
     function findCycleKeyFromCycleName(elements: any[], cycleName: string): string | null {
         for (const element of elements) {
             // Check if this element matches the target criteria
-            // TODO: Somehow the element.item is undefined for rlements other than projects, thats why the extra check is added without .item
+            // TODO: Somehow the element.item is undefined for elements other than projects, thats why the extra check is added without .item
             if (
                 (element.item?.nodeType === "Cycle" && element.item?.name === cycleName) ||
                 (element.nodeType === "Cycle" && element.name === cycleName)
@@ -944,6 +940,21 @@ export async function importTestResultsToTestbench(
     } catch (error: any) {
         console.error("Error:", error.message);
     }
+}
+
+// Import the report zip file which contains the test results to TestBench server
+export async function selectReportWithResultsAndImportToTestbench(
+    connection: PlayServerConnection,
+    projectManagementTreeDataProvider: ProjectManagementTreeDataProvider
+) {
+    // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
+    const resultZipFilePath = await promptForReportZipFileWithResults();
+    if (!resultZipFilePath) {
+        // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
+        return;
+    }
+
+    await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
 }
 
 interface ExtractedData {

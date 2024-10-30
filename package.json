@@ -3,9 +3,10 @@
     "publisher": "imbus",
     "displayName": "TestBench Visual Studio Code Extension",
     "description": "A Visual Studio Code extension for TestBench.",
+    "icon": "resources/icons/iTB-EE-Logo-256x256.png",
     "version": "0.0.1",
     "engines": {
-        "vscode": "^1.91.0"
+        "vscode": "^1.94.0"
     },
     "categories": [
         "Other"
@@ -14,7 +15,7 @@
     "main": "./dist/extension.js",
     "contributes": {
         "configuration": {
-            "title": "TestBench Extension Settings",
+            "title": "TestBench",
             "properties": {
                 "testbenchExtension.serverName": {
                     "type": "string",
@@ -415,8 +416,8 @@
         "compile": "webpack",
         "watch": "webpack --watch",
         "package": "webpack --mode production --devtool hidden-source-map",
-        "compile-tests": "tsc -p . --outDir out",
-        "watch-tests": "tsc -p . -w --outDir out",
+        "compile-tests": "tsc -p . --outDir out --incremental",
+        "watch-tests": "tsc -p . -w --outDir out --incremental",
         "pretest": "npm run compile-tests && npm run compile && npm run lint",
         "lint": "eslint --config eslint.config.mjs .",
         "test": "node ./out/test/runTest.js"

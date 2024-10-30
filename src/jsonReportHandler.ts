@@ -3,8 +3,12 @@ import * as fs from "fs";
 import * as path from "path";
 import * as types from "./types";
 import axios, { AxiosResponse } from "axios";
-import { PlayServerConnection } from "./testBenchConnection";
-import { ProjectManagementTreeItem, findProjectKeyOfCycleElement } from "./projectManagementTreeView";
+import { importReportWithResultsToTestbench, PlayServerConnection } from "./testBenchConnection";
+import {
+    ProjectManagementTreeItem,
+    findProjectKeyOfCycleElement,
+    ProjectManagementTreeDataProvider,
+} from "./projectManagementTreeView";
 
 /**
  * Prompt the user to select the export report method in quick pick format (Execution based or Specification based).
@@ -225,7 +229,9 @@ export async function getJobId(
 ): Promise<string> {
     const url = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
 
-    console.log(`Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`);
+    console.log(
+        `Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`
+    );
 
     const jobIdResponse: AxiosResponse<types.JobIdResponse> = await axios.post(url, requestParams, {
         headers: {
@@ -392,6 +398,7 @@ export function delay(ms: number): Promise<void> {
  * @returns Promise<void>
  */
 export async function generateTestsWithTestBenchToRobotFramework(
+    context: vscode.ExtensionContext,
     treeItem: ProjectManagementTreeItem,
     itemLabel: string,
     baseKey: string,
@@ -399,6 +406,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
     cycleKey: string,
     connection: PlayServerConnection,
     workingDirectory: string,
+    projectManagementTreeDataProvider: ProjectManagementTreeDataProvider, // TODO
     UIDofTestThemeElementToGenerateTestsFor?: string
 ): Promise<void> {
     // Execution based or specification based request parameter
@@ -518,7 +526,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
                 }
 
                 // Fetch the ZIP file from the server, passing the cancellationToken
-                const downloadedZipFilePath = await fetchZipFile(
+                const downloadedReportZipFilePath = await fetchZipFile(
                     connection,
                     baseKey,
                     projectKey,
@@ -529,7 +537,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
                     cancellationToken // Pass the cancellationToken here
                 );
 
-                if (!downloadedZipFilePath) {
+                if (!downloadedReportZipFilePath) {
                     console.warn("Download canceled or failed.");
                     return; // Exit if the download was canceled or failed
                 }
@@ -540,25 +548,43 @@ export async function generateTestsWithTestBenchToRobotFramework(
                         message: `Generating test cases with testbench2robotframework.`,
                     });
                 }
+                // @@ Start of testbench2robotframework library
+
+                // executeTb2RobotCommand(downloadedZipFilePath);
+
+                // TODO: Code duplication inside executeCommandsInSequence
+                const config = vscode.workspace.getConfiguration(baseKey);
+                const workspacePath = config.get<string>("workspaceLocation");
+                const terminalCodeExecutionPath = path.join(workspacePath!, workingDirectory);
 
                 // Create configuration json object called testbench2robotframeworkConfig.json
-                await saveTestbench2RobotConfigurationAsJson(baseKey);
+                await saveTestbench2RobotConfigurationAsJson(baseKey, terminalCodeExecutionPath);
 
-                // @@ Start of testbench2robotframework library
+                // TODO: Call the testbench2robotframework library functions to write (and read for an automated process?) here.
+                // tb2robot write -c testbench2robotframeworkConfig.json ReportWithoutResultsForTb2robot.zip (zip Path can be accessed with downloadedZipFilePath)
+                // tb2robot read -o output\output.xml -r ReportWithResults.zip ReportWithoutResultsForTb2robot.zip (ReportWithResults.zip is a configurable name)
+
                 /*
+                const robotOutDirectory = `output`;
+                const generatedRobotTestsDirectory = `Generated`;
+                const robotResultXMLFile = `output/output.xml`;
+                const reportWithResultsZip = `ReportWithResults.zip`;
 
-                TODO: Call the testbench2robotframework library functions to write (and read for an automated process?) here.
-                tb2robot write -c testbench2robotframeworkConfig.json ReportWithoutResultsForTb2robot.zip (zip Path can be accessed with downloadedZipFilePath)
-                tb2robot read -o output\output.xml -r ReportWithResults.zip ReportWithoutResultsForTb2robot.zip (ReportWithResults.zip is a configurable name)
-
+                await generateTestsExecuteTestsReadResults(
+                    terminalCodeExecutionPath,
+                    downloadedReportZipFilePath,
+                    robotOutDirectory,
+                    generatedRobotTestsDirectory,
+                    robotResultXMLFile,
+                    reportWithResultsZip,
+                    progress
+                );
                 */
 
+                deleteConfigurationFile(getConfigurationFilePath(terminalCodeExecutionPath)); // Delete created json config file after usage
+
                 // @@ End of testbench2robotframework library
-
-                // Delete created json config file after usage
-                deleteConfigurationFile();
-
-                vscode.window.showInformationMessage(`Test generation done.`);
+                // vscode.window.showInformationMessage(`Test generation done.`);
             } catch (error: any) {
                 if (error instanceof vscode.CancellationError) {
                     console.log("Process cancelled by the user.");
@@ -582,10 +608,12 @@ export async function generateTestsWithTestBenchToRobotFramework(
  * @returns Promise<void>
  */
 export async function startTestGenerationProcess(
+    context: vscode.ExtensionContext,
     treeItem: ProjectManagementTreeItem,
     connection: PlayServerConnection,
     baseKey: string,
-    workingDirectory: string
+    workingDirectory: string,
+    projectManagementTreeDataProvider: ProjectManagementTreeDataProvider
 ) {
     // Check if the cycle key is available
     const cycleKey = treeItem.item.key;
@@ -601,6 +629,7 @@ export async function startTestGenerationProcess(
                 // Start the generation process
                 if (typeof treeItem.label === "string") {
                     generateTestsWithTestBenchToRobotFramework(
+                        context,
                         treeItem,
                         treeItem.label,
                         baseKey,
@@ -608,6 +637,7 @@ export async function startTestGenerationProcess(
                         cycleKey,
                         connection,
                         workingDirectory,
+                        projectManagementTreeDataProvider,
                         undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
                     );
                 } else {
@@ -632,7 +662,7 @@ export async function startTestGenerationProcess(
  * Writes the testbench2robotframework configuration to a JSON file in workspace folder.
  * @param baseKey The base key of the extension
  */
-export async function saveTestbench2RobotConfigurationAsJson(baseKey: string): Promise<void> {
+export async function saveTestbench2RobotConfigurationAsJson(baseKey: string, pathToJsonConfig: string): Promise<void> {
     try {
         const config = vscode.workspace.getConfiguration(baseKey);
         const generationConfig = config.get<types.Testbench2robotframeworkConfiguration>(
@@ -643,13 +673,16 @@ export async function saveTestbench2RobotConfigurationAsJson(baseKey: string): P
         }
 
         const jsonContent = JSON.stringify(generationConfig, null, 2);
-        const filePath = await getConfigurationFilePath();
+        const filePath = getConfigurationFilePath(pathToJsonConfig);
+
+        // Write file, overwriting if it already exists
         fs.writeFile(filePath, jsonContent, "utf8", (err) => {
             if (err) {
                 throw err;
             }
         });
-        // vscode.window.showInformationMessage(`Configuration file created at: ${filePath}`);
+
+        console.log(`Configuration file created or overwritten at: ${filePath}`);
     } catch (error) {
         if (error instanceof Error) {
             vscode.window.showErrorMessage(`Failed to write configuration file: ${error.message}`);
@@ -663,10 +696,9 @@ export async function saveTestbench2RobotConfigurationAsJson(baseKey: string): P
  * Determines the file path where the testbench2robotframework configuration file will be saved.
  * @returns The file path of the configuration file.
  */
-async function getConfigurationFilePath(): Promise<string> {
-    const workspaceFolder = getWorkspaceFolder();
+function getConfigurationFilePath(pathToJsonConfig: string): string {
     const fileName = "testbench2robotframeworkConfig.json";
-    const filePath = path.join(workspaceFolder, fileName);
+    const filePath = path.join(pathToJsonConfig, fileName);
     return filePath;
 }
 
@@ -688,17 +720,14 @@ function getWorkspaceFolder(): string {
 /**
  * Deletes the testbench2robotframework configuration file from the workspace folder.
  */
-export async function deleteConfigurationFile(): Promise<void> {
+export async function deleteConfigurationFile(configFilePath: string): Promise<void> {
     try {
-        const filePath = await getConfigurationFilePath();
-
-        fs.unlink(filePath, (err) => {
+        fs.unlink(configFilePath, (err) => {
             if (err) {
                 throw err;
             }
         });
-
-        // vscode.window.showInformationMessage(`Configuration file deleted: ${filePath}`);
+        console.log(`Configuration file deleted from: ${configFilePath}`);
     } catch (error: any) {
         if (error.code === "ENOENT") {
             vscode.window.showErrorMessage(`Configuration file not found: ${error.path}`);
@@ -707,4 +736,218 @@ export async function deleteConfigurationFile(): Promise<void> {
             console.error(error);
         }
     }
+}
+
+// TEST CODE FOR AUTOMATING THE WHOLE PROCESS
+
+/**
+ * Executes the 'tb2robot write' command in the VS Code terminal with the provided report zip file name.
+ * @param cycleReportZipFileName - The name of the zip file to be processed by 'tb2robot write' command.
+ */
+export async function executeTb2RobotWriteCommand(
+    terminal: vscode.Terminal,
+    cycleReportZipFileName: string,
+    terminalCodeExecutionPath?: string // Optinal configuration file path for the command
+): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Validate the input to ensure it's a non-empty string
+            if (!cycleReportZipFileName || typeof cycleReportZipFileName !== "string") {
+                throw new Error("Invalid zip file name provided.");
+            }
+
+            // Ensure the file has a .zip extension
+            if (!cycleReportZipFileName.endsWith(".zip")) {
+                throw new Error("The provided file is not a .zip file.");
+            }
+
+            // Create or get an existing terminal named 'tb2robot'
+            // const terminal = getOrCreateTerminal("tb2robot");
+
+            // Execute the command in the terminal
+            terminal.show(true); // Show the terminal and focus on it
+            if (terminalCodeExecutionPath) {
+                terminal.sendText(`tb2robot write -c ${terminalCodeExecutionPath} ${cycleReportZipFileName}`);
+            } else {
+                terminal.sendText(`tb2robot write ${cycleReportZipFileName}`);
+            }
+
+            // Optional: Inform the user the command was executed
+            console.log(`Executing: tb2robot write ${cycleReportZipFileName}`);
+        } catch (error) {
+            console.error("Failed to execute command tb2robot write:", error);
+            // Display any errors encountered during execution
+            vscode.window.showErrorMessage(`Failed to execute command tb2robot write: ${error}`);
+        } finally {
+            resolve(); // Resolve promise when terminal execution is complete
+        }
+    });
+}
+
+/**
+ * Retrieves an existing terminal or creates a new one if it doesn't exist.
+ * @param terminalName - The name of the terminal.
+ * @returns The VS Code Terminal instance.
+ */
+function getOrCreateTerminal(terminalName: string): vscode.Terminal {
+    // Find an existing terminal with the specified name
+    const existingTerminal = vscode.window.terminals.find((t) => t.name === terminalName);
+
+    // If terminal exists, return it; otherwise, create a new one
+    return existingTerminal ?? vscode.window.createTerminal(terminalName);
+}
+
+/**
+ * Executes the 'robot -d output --dryrun Generated' command in the VS Code terminal.
+ * @param outputDirOfRobotframeworkResults - The directory for Robot Framework output.
+ * @param pathOfRobotFrameworkTests - The name of the file or directory to dry run.
+ */
+export async function executeRobotDryRunCommand(
+    terminal: vscode.Terminal,
+    outputDirOfRobotframeworkResults: string,
+    pathOfRobotFrameworkTests: string
+): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Validate input parameters to ensure they are non-empty strings
+            if (!outputDirOfRobotframeworkResults || typeof outputDirOfRobotframeworkResults !== "string") {
+                throw new Error("Invalid output directory provided.");
+            }
+            if (!pathOfRobotFrameworkTests || typeof pathOfRobotFrameworkTests !== "string") {
+                throw new Error("Invalid generated file or directory provided.");
+            }
+
+            // Create or get an existing terminal named 'robot-dryrun'
+            // const terminal = getOrCreateTerminal("robot-dryrun");
+
+            // Execute the command in the terminal
+            const command = `robot -d ${outputDirOfRobotframeworkResults} --dryrun ${pathOfRobotFrameworkTests}`;
+            terminal.show(true); // Show the terminal and focus on it
+            terminal.sendText(command);
+
+            // Inform the user the command was executed
+            console.log(`Executing command: ${command}`);
+        } catch (error) {
+            console.error("Failed to execute command robot --dryrun:", error);
+            // Display any errors encountered during execution
+            vscode.window.showErrorMessage(`Failed to execute command robot --dryrun:: ${error}`);
+        } finally {
+            resolve(); // Resolve promise when terminal execution is complete
+        }
+    });
+}
+
+/**
+ * Executes the 'tb2robot read' command in the VS Code terminal with specified parameters.
+ * @param reportWithoutResultsZip - The name of the cycle zip file to be read by 'tb2robot'.
+ * @param robotframeworkResultXML - The output file path (default is 'output/output.xml').
+ * @param reportWithResultsZip - The report file to be generated (default is 'ReportWithResults.zip').
+ */
+export async function executeTb2RobotReadCommand(
+    terminal: vscode.Terminal,
+    robotframeworkResultXML: string = "output/output.xml",
+    reportWithResultsZip: string = "ReportWithResults.zip",
+    reportWithoutResultsZip: string
+): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Validate input parameters to ensure they are non-empty strings
+            if (!reportWithoutResultsZip || typeof reportWithoutResultsZip !== "string") {
+                throw new Error("Invalid cycle zip file provided.");
+            }
+            if (!robotframeworkResultXML || typeof robotframeworkResultXML !== "string") {
+                throw new Error("Invalid output file path provided.");
+            }
+            if (!reportWithResultsZip || typeof reportWithResultsZip !== "string") {
+                throw new Error("Invalid report zip file provided.");
+            }
+
+            // Construct the command with specified parameters
+            const command = `tb2robot read -o ${robotframeworkResultXML} -r ${reportWithResultsZip} ${reportWithoutResultsZip}`;
+            terminal.show(true); // Show and focus the terminal
+            terminal.sendText(command);
+
+            // Inform the user that the command was executed
+            console.log(`Executing command: ${command}`);
+        } catch (error) {
+            console.error("Failed to execute command tb2robot read:", error);
+            // Display any errors encountered during execution
+            vscode.window.showErrorMessage(`Failed to execute command tb2robot read: ${error}`);
+        } finally {
+            resolve(); // Resolve promise when terminal execution is complete
+        }
+    });
+}
+
+/**
+ * Executes the three required commands in sequence in the same terminal.
+ * @param reportWithoutResultsZipFilePath - The name of the cycle zip file to be processed.
+ * @param outputDirOfRobotframeworkResults - The directory for Robot Framework output.
+ * @param pathOfRobotFrameworkTests - The file or directory to dry run.
+ * @param robotResultXMLFile - The output file path (default is 'output/output.xml').
+ * @param reportWithResultsZipFilePath - The report file to be generated (default is 'ReportWithResults.zip').
+ */
+export async function generateTestsExecuteTestsReadResults(
+    terminalCodeExecutionPath: string,
+    reportWithoutResultsZipFilePath: string,
+    outputDirOfRobotframeworkResults: string,
+    pathOfRobotFrameworkTests: string,
+    robotResultXMLFile: string,
+    reportWithResultsZipFilePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }> | undefined
+): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+        const terminal = getOrCreateTerminal("generate-tests");
+        terminal.sendText(`cd ${terminalCodeExecutionPath}`); // Execute terminal commands inside this directory
+
+        try {
+            // Step 1: Execute 'tb2robot write cycle.zip'
+            await executeTb2RobotWriteCommand(
+                terminal,
+                reportWithoutResultsZipFilePath,
+                getConfigurationFilePath(terminalCodeExecutionPath)
+            );
+            console.log(
+                `Successfully executed: tb2robot write -c ${getConfigurationFilePath(
+                    terminalCodeExecutionPath
+                )} ${reportWithoutResultsZipFilePath}`
+            );
+
+            if (progress) {
+                progress.report({
+                    increment: 10,
+                    message: `Running tests...`,
+                });
+            }
+
+            // Step 2: Execute 'robot -d output --dryrun Generated'
+            await executeRobotDryRunCommand(terminal, outputDirOfRobotframeworkResults, pathOfRobotFrameworkTests);
+            console.log(
+                `Successfully executed: robot -d ${outputDirOfRobotframeworkResults} --dryrun ${pathOfRobotFrameworkTests}`
+            );
+
+            if (progress) {
+                progress.report({
+                    increment: 10,
+                    message: `Reading test resuls...`,
+                });
+            }
+
+            // Step 3: Execute 'tb2robot read -o output/output.xml -r ReportWithResults.zip cycle.zip'
+            await executeTb2RobotReadCommand(
+                terminal,
+                robotResultXMLFile,
+                reportWithResultsZipFilePath,
+                reportWithoutResultsZipFilePath
+            );
+            console.log(
+                `Successfully executed: tb2robot read -o ${robotResultXMLFile} -r ${reportWithResultsZipFilePath} ${reportWithoutResultsZipFilePath}`
+            );
+        } catch (error) {
+            console.error(`Error executing commands in sequence: ${error}`);
+            vscode.window.showErrorMessage(`Error executing commands in sequence: ${error}`);
+        } finally {
+            resolve(); // Resolve promise when terminal execution is complete
+        }
+    });
 }

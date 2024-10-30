@@ -3,12 +3,11 @@ import * as jsonReportHandler from "./jsonReportHandler";
 import * as testbenchConnection from "./testBenchConnection";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 
-// TODO: Generate Test Cases button (With an icon) also for test themes?
 // TODO: WebViev UI for login?
 // TODO: Create extension documentation in Readme.md
 
 // Prefix of the commands in package.json
-const baseKey = "testbenchExtension";
+export const baseKey = "testbenchExtension";
 
 export function activate(context: vscode.ExtensionContext) {
     // Store extension commands with their titles to be able to display them together in a quickpick
@@ -29,7 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
             command: `${baseKey}.logout`,
             title: "Logout from TestBench Server",
         },
-        generateTestCases: {
+        generateTestCasesForCycle: {
             command: `${baseKey}.generateTestCases`,
             title: "Generate Tests",
         },
@@ -267,10 +266,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Download the zip inside a folder and not directly into the workspace folder, and keep working in one folder.
     const folderNameToDownloadReport = "Report";
-    // Register the "Generate Tests" command
+    // Register the "Generate Tests" command, which is activated for a cycle element
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            commands.generateTestCases.command,
+            commands.generateTestCasesForCycle.command,
             async (item: projectManagementTreeView.ProjectManagementTreeItem) => {
                 if (connection) {
                     // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
@@ -284,12 +283,20 @@ export function activate(context: vscode.ExtensionContext) {
                         projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
                     }
 
-                    await jsonReportHandler.startTestGenerationProcess(
-                        item,
-                        connection,
-                        baseKey,
-                        folderNameToDownloadReport
-                    );
+                    if (projectManagementTreeDataProvider) {
+                        await jsonReportHandler.startTestGenerationProcess(
+                            context,
+                            item,
+                            connection,
+                            baseKey,
+                            folderNameToDownloadReport,
+                            projectManagementTreeDataProvider
+                        );
+                    } else {
+                        vscode.window.showErrorMessage(
+                            "Project management tree is not initialized. Please select a project first."
+                        );
+                    }
                 } else {
                     vscode.window.showErrorMessage("No connection available. Please log in first.");
                 }
@@ -297,7 +304,7 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Register the "Generate Tests For Test Theme" command
+    // Register the "Generate Tests For Test Theme" command, which is activated for a test theme element
     context.subscriptions.push(
         vscode.commands.registerCommand(
             commands.generateTestCasesForTestTheme.command,
@@ -306,18 +313,19 @@ export function activate(context: vscode.ExtensionContext) {
                     console.log("Generating tests for test theme:", treeItem);
 
                     let testThemeTreeUniqueID = treeItem.item?.base?.uniqueID;
-
                     let cycleKey = projectManagementTreeView.findCycleKeyOfTestThemeElement(treeItem);
-                    console.log("Selected test theme parent cycle key:", cycleKey);
-
                     let projectKey = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem.parent!);
-                    console.log("Selected test theme parent project key:", projectKey);
 
-                    if (!projectKey || !cycleKey || !testThemeTreeUniqueID) {
+                    // TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
+                    if (!projectKey || !cycleKey || !testThemeTreeUniqueID || !projectManagementTreeDataProvider) {
+                        console.error(
+                            "Error when finding project key, cycle key, test theme unique ID or projectManagementTreeDataProvider."
+                        );
                         return;
                     }
 
                     jsonReportHandler.generateTestsWithTestBenchToRobotFramework(
+                        context,
                         treeItem,
                         typeof treeItem.label === "string" ? treeItem.label : "", // Label might be undefined
                         baseKey,
@@ -325,6 +333,7 @@ export function activate(context: vscode.ExtensionContext) {
                         cycleKey,
                         connection,
                         folderNameToDownloadReport,
+                        projectManagementTreeDataProvider, // TODO
                         testThemeTreeUniqueID
                     );
                 } else {
@@ -340,7 +349,7 @@ export function activate(context: vscode.ExtensionContext) {
             commands.makeRoot.command,
             (treeItem: projectManagementTreeView.ProjectManagementTreeItem) => {
                 if (projectManagementTreeDataProvider) {
-                    // TODO: Polymorphism / interfaces can be used to find the correct tree data provider
+                    // Find out for which element the make root command is called
                     if (
                         treeItem.contextValue === "Project" ||
                         treeItem.contextValue === "Version" ||
@@ -434,7 +443,10 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            testbenchConnection.importTestResultsToTestbench(connection, projectManagementTreeDataProvider);
+            testbenchConnection.selectReportWithResultsAndImportToTestbench(
+                connection,
+                projectManagementTreeDataProvider
+            );
         })
     );
 

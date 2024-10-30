@@ -1,6 +1,9 @@
 # VS Code Unit tests
 .vscode-test/
 
+# VS Code package
+*.vsix
+
 # Ignore compiled output folder
 out/
 
