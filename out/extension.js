@@ -22,108 +22,148 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.lastGeneratedReportParams = exports.folderNameOfTestbenchWorkingDirectory = exports.connection = exports.projectManagementTreeDataProvider = exports.baseKey = void 0;
+exports.setConnection = setConnection;
 exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
-const jsonReportHandler = __importStar(require("./jsonReportHandler"));
+const reportHandler = __importStar(require("./reportHandler"));
 const testbenchConnection = __importStar(require("./testBenchConnection"));
 const projectManagementTreeView = __importStar(require("./projectManagementTreeView"));
-// TODO: Generate Test Cases button (With an icon) also for test themes?
+const types = __importStar(require("./types"));
+const path_1 = __importDefault(require("path"));
 // TODO: WebViev UI for login?
 // TODO: Create extension documentation in Readme.md
-// Prefix of the commands in package.json
-const baseKey = "testbenchExtension";
+// TODO: Merge read + upload test results (automated). Symbol von Upload beibehalten. Open Workspace Folder in File selection, not .testbench.
+// TODO: Test bool extension settings for auto settings.json tb2robot config
+exports.baseKey = "testbenchExtension"; // Prefix of the commands in package.json
+exports.projectManagementTreeDataProvider = null; // Store the tree data provider
+exports.connection = null; // Store the connection to server
+function setConnection(newConnection) {
+    exports.connection = newConnection;
+}
+exports.folderNameOfTestbenchWorkingDirectory = ".testbench"; // Folder to create under the working directory to download / process files
+exports.lastGeneratedReportParams = {
+    executionBased: undefined,
+    projectKey: undefined,
+    cycleKey: undefined,
+    UID: undefined,
+};
 function activate(context) {
     // Store extension commands with their titles to be able to display them together in a quickpick
     const commands = {
         displayCommands: {
-            command: `${baseKey}.displayCommands`,
+            command: `${exports.baseKey}.displayCommands`,
             title: "Display Available Commands",
         },
         login: {
-            command: `${baseKey}.login`,
+            command: `${exports.baseKey}.login`,
             title: "Login to TestBench Server",
         },
         changeConnection: {
-            command: `${baseKey}.changeConnection`,
+            command: `${exports.baseKey}.changeConnection`,
             title: "Change account",
         },
         logout: {
-            command: `${baseKey}.logout`,
+            command: `${exports.baseKey}.logout`,
             title: "Logout from TestBench Server",
         },
-        generateTestCases: {
-            command: `${baseKey}.generateTestCases`,
+        generateTestCasesForCycle: {
+            command: `${exports.baseKey}.generateTestCasesForCycle`,
             title: "Generate Tests",
         },
-        generateTestCasesForTestTheme: {
-            command: `${baseKey}.generateTestCasesForTestTheme`,
+        generateTestCasesForTestThemeOrTestCaseSet: {
+            command: `${exports.baseKey}.generateTestCasesForTestThemeOrTestCaseSet`,
             title: "Generate Tests",
+        },
+        readRFTestResultsAndCreateReportWithResults: {
+            command: `${exports.baseKey}.readRFTestResultsAndCreateReportWithResults`,
+            title: "Read Test Results & Create Report With Results",
         },
         makeRoot: {
-            command: `${baseKey}.makeRoot`,
+            command: `${exports.baseKey}.makeRoot`,
             title: "Make Root Item",
         },
         getCycleStructure: {
-            command: `${baseKey}.getCycleStructure`,
+            command: `${exports.baseKey}.getCycleStructure`,
             title: "Get Cycle Structure",
         },
         getServerVersions: {
-            command: `${baseKey}.getServerVersions`,
+            command: `${exports.baseKey}.getServerVersions`,
             title: "Get Server Versions",
         },
         showExtensionSettings: {
-            command: `${baseKey}.showExtensionSettings`,
+            command: `${exports.baseKey}.showExtensionSettings`,
             title: "Show Extension Settings",
         },
+        fetchReportForSelectedTreeItem: {
+            command: `${exports.baseKey}.fetchReportForSelectedTreeItem`,
+            title: "Fetch Report",
+        },
         selectAndLoadProject: {
-            command: `${baseKey}.selectAndLoadProject`,
+            command: `${exports.baseKey}.selectAndLoadProject`,
             title: "Display Projects List",
         },
         uploadTestResultsToTestbench: {
-            command: `${baseKey}.uploadTestResultsToTestbench`,
+            command: `${exports.baseKey}.uploadTestResultsToTestbench`,
             title: "Upload Test Results To Testbench",
         },
+        readAndUploadTestResultsToTestbench: {
+            command: `${exports.baseKey}.readAndUploadTestResultsToTestbench`,
+            title: "Read Tests & Upload Results To Testbench",
+        },
+        executeRobotFrameworkTests: {
+            command: `${exports.baseKey}.executeRobotFrameworkTests`,
+            title: "Execute Tests",
+        },
         refreshProjectTreeView: {
-            command: `${baseKey}.refreshProjectTreeView`,
+            command: `${exports.baseKey}.refreshProjectTreeView`,
             title: "Refresh Project Tree View",
         },
         refreshTestTreeView: {
-            command: `${baseKey}.refreshTestTreeView`,
+            command: `${exports.baseKey}.refreshTestTreeView`,
             title: "Refresh Test Tree View",
         },
         setWorkspaceLocation: {
-            command: `${baseKey}.setWorkspaceLocation`,
+            command: `${exports.baseKey}.setWorkspaceLocation`,
             title: "Set Workspace Location",
         },
     };
-    // Extension configuration settings
-    let storePassword;
-    let workspaceLocation;
-    // Initialize or update configuration settings
+    // Initialize or update extension configuration settings
     async function loadConfiguration() {
-        const config = vscode.workspace.getConfiguration(baseKey);
-        storePassword = config.get("storePasswordAfterLogin", false);
+        const config = vscode.workspace.getConfiguration(exports.baseKey);
         // If storePassword is false, delete the stored password.
         // The password is only stored after a successful login.
-        if (!storePassword) {
+        if (!config.get("storePasswordAfterLogin", false)) {
             testbenchConnection.clearStoredCredentials(context);
         }
         // If the user wont specify a workspace location, use the workspace location of VS Code
         if (!config.get("workspaceLocation")) {
             await config.update("workspaceLocation", vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
         }
+        if (config.get("useDefaultValuesForTestbench2robotframework")) {
+            // For testbench2robotframework configuration, set the generation and resource directory relative to the workspace location
+            let defaultTestbench2robotframeworkConfig = types.defaultTestbench2robotframeworkConfig;
+            defaultTestbench2robotframeworkConfig.generationDirectory = path_1.default.join(config.get("workspaceLocation"), exports.folderNameOfTestbenchWorkingDirectory, "Generated");
+            defaultTestbench2robotframeworkConfig.resourceDirectory = path_1.default.join(config.get("workspaceLocation"), "resources");
+            await config.update("testbench2robotframeworkConfig", defaultTestbench2robotframeworkConfig);
+            console.log("Updated testbench2robotframeworkConfig with default values.");
+        }
     }
     // Load initial configuration
     loadConfiguration();
     // Respond to configuration changes
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration(baseKey)) {
+        if (e.affectsConfiguration(exports.baseKey)) {
             loadConfiguration();
             console.log("Configuration changed!");
         }
     }));
+    // Prompts the user to select a folder and returns its path
     async function promptForWorkspaceLocation() {
         const options = {
             canSelectMany: false,
@@ -138,13 +178,12 @@ function activate(context) {
         return undefined;
     }
     // Register the "Set Workspace Location" command
-    context.subscriptions.push(vscode.commands.registerCommand(`${baseKey}.setWorkspaceLocation`, async () => {
+    context.subscriptions.push(vscode.commands.registerCommand(`${exports.baseKey}.setWorkspaceLocation`, async () => {
         const newWorkspaceLocation = await promptForWorkspaceLocation();
         if (newWorkspaceLocation) {
-            workspaceLocation = newWorkspaceLocation;
-            const config = vscode.workspace.getConfiguration(baseKey);
-            await config.update("workspaceLocation", workspaceLocation);
-            vscode.window.showInformationMessage(`Workspace location set to: ${workspaceLocation}`);
+            const config = vscode.workspace.getConfiguration(exports.baseKey);
+            await config.update("workspaceLocation", newWorkspaceLocation);
+            vscode.window.showInformationMessage(`Workspace location set to: ${newWorkspaceLocation}`);
         }
     }));
     // Register "Show Extension Settings" command
@@ -159,19 +198,19 @@ function activate(context) {
             vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
         });
     }));
-    let projectManagementTreeDataProvider = null; // Store the tree data provider
-    let connection = null; // Store the connection to server
-    vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null); // Login/Logout icon changes based on connection status
+    vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", exports.connection !== null); // Login/Logout icon changes based on connection status
+    // TODO: Remove this command
     // Register the "Display Commands" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.displayCommands.command, async () => {
         // Display the commands based on the connection status. (Logout etc. is only available if connection is active)
         let commandMenuOptions = [];
-        if (connection) {
+        if (exports.connection) {
             commandMenuOptions = [
                 commands.logout.title,
                 commands.changeConnection.title,
                 commands.showExtensionSettings.title,
                 commands.selectAndLoadProject.title,
+                commands.readRFTestResultsAndCreateReportWithResults.title,
                 commands.uploadTestResultsToTestbench.title,
                 "Cancel",
             ];
@@ -195,6 +234,9 @@ function activate(context) {
             case commands.selectAndLoadProject.title:
                 vscode.commands.executeCommand(commands.selectAndLoadProject.command);
                 break;
+            case commands.readRFTestResultsAndCreateReportWithResults.title:
+                vscode.commands.executeCommand(commands.readRFTestResultsAndCreateReportWithResults.command);
+                break;
             case commands.uploadTestResultsToTestbench.title:
                 vscode.commands.executeCommand(commands.uploadTestResultsToTestbench.command);
                 break;
@@ -205,24 +247,29 @@ function activate(context) {
                 return;
         }
     }));
+    // FIXME: Login was stuck again, servers are crashed also.
     // The user may press the login button multiple times consecutively. Aviod executing the command again if already inside login.
     let insideLogin = false;
     // Register the "Login" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.login.command, async () => {
         if (insideLogin) {
             console.log("Already inside login..");
+            // If somehow login is stuck, reset the insideLogin flag after 10 seconds to avoid blocking the login process.
+            setTimeout(() => {
+                insideLogin = false;
+            }, 5 * 1000);
             return;
         }
         insideLogin = true;
         // Only execute the finally block after the login attempt is fully completed to avoid multiple login prompts after clicking login multiple times.
         testbenchConnection
-            .performLogin(context, baseKey)
+            .performLogin(context, exports.baseKey)
             .then((connectionAfterLogin) => {
             if (!connectionAfterLogin) {
                 return;
             }
             else {
-                connection = connectionAfterLogin;
+                exports.connection = connectionAfterLogin;
             }
         })
             .catch((error) => {
@@ -235,10 +282,10 @@ function activate(context) {
     }));
     // Register the "Logout" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.logout.command, async () => {
-        if (connection) {
-            await connection.logoutUser(context, projectManagementTreeDataProvider);
-            connection = null; // Clear the connection
-            projectManagementTreeDataProvider = null; // Clear the tree data provider
+        if (exports.connection) {
+            await exports.connection.logoutUser(context, exports.projectManagementTreeDataProvider);
+            exports.connection = null; // Clear the connection
+            exports.projectManagementTreeDataProvider = null; // Clear the tree data provider
         }
         else {
             vscode.window.showWarningMessage("No connection available. Please log in first.");
@@ -246,105 +293,86 @@ function activate(context) {
     }));
     // Register the "Change Connection" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.changeConnection.command, async () => {
-        let { newConnection, newTreeDataProvider } = await testbenchConnection.changeConnection(context, baseKey, connection, projectManagementTreeDataProvider);
-        if (newConnection) {
-            connection = newConnection; // Update the connection
-            projectManagementTreeDataProvider = newTreeDataProvider; // Update the tree data provider
+        let { newTreeDataProvider } = await testbenchConnection.changeConnection(context, exports.baseKey, exports.projectManagementTreeDataProvider);
+        if (exports.connection) {
+            exports.projectManagementTreeDataProvider = newTreeDataProvider; // Update the tree data provider
         }
         else {
             vscode.window.showWarningMessage("Error when changing connection.");
         }
     }));
-    // Download the zip inside a folder and not directly into the workspace folder, and keep working in one folder.
-    const folderNameToDownloadReport = "Report";
-    // Register the "Generate Tests" command
-    context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCases.command, async (item) => {
-        if (connection) {
+    // Register the "Generate Tests" command, which is activated for a cycle element
+    context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCasesForCycle.command, async (item) => {
+        if (exports.connection) {
             // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
             // projectManagementTreeDataProvider?.testThemeDataProvider.clearTree();
             // If the user did not expanded a test cycle, test cycle wont have any children so that test themes cannot be displayed in the quickpick.
             // Call getChildrenOfCycle initialize the sub elements of the cycle.
             // Offload the children of the cycle to the Test Theme Tree
-            if (projectManagementTreeDataProvider?.testThemeDataProvider) {
-                const children = (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
-                projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
+            if (exports.projectManagementTreeDataProvider?.testThemeDataProvider) {
+                const children = (await exports.projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
+                exports.projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
             }
-            await jsonReportHandler.startTestGenerationProcess(item, connection, baseKey, folderNameToDownloadReport);
-        }
-        else {
-            vscode.window.showErrorMessage("No connection available. Please log in first.");
-        }
-    }));
-    // Register the "Generate Tests For Test Theme" command
-    context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCasesForTestTheme.command, async (treeItem) => {
-        if (connection) {
-            console.log("Generating tests for test theme:", treeItem);
-            let testThemeTreeUniqueID = treeItem.item?.base?.uniqueID;
-            let cycleKey = projectManagementTreeView.findCycleKeyOfTestThemeElement(treeItem);
-            console.log("Selected test theme parent cycle key:", cycleKey);
-            let projectKey = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem.parent);
-            console.log("Selected test theme parent project key:", projectKey);
-            if (!projectKey || !cycleKey || !testThemeTreeUniqueID) {
-                return;
-            }
-            jsonReportHandler.generateTestsWithTestBenchToRobotFramework(treeItem, typeof treeItem.label === "string" ? treeItem.label : "", // Label might be undefined
-            baseKey, projectKey, cycleKey, connection, folderNameToDownloadReport, testThemeTreeUniqueID);
-        }
-        else {
-            vscode.window.showErrorMessage("No connection available. Please log in first.");
-        }
-    }));
-    // Register the "Make Root" command
-    context.subscriptions.push(vscode.commands.registerCommand(commands.makeRoot.command, (treeItem) => {
-        if (projectManagementTreeDataProvider) {
-            // TODO: Polymorphism / interfaces can be used to find the correct tree data provider
-            if (treeItem.contextValue === "Project" ||
-                treeItem.contextValue === "Version" ||
-                treeItem.contextValue === "Cycle") {
-                // If we are in the project management tree, call the makeRoot method of the project management tree data provider
-                projectManagementTreeDataProvider.makeRoot(treeItem);
+            if (exports.projectManagementTreeDataProvider) {
+                await reportHandler.startTestGenerationProcessForCycle(context, item, exports.baseKey, exports.folderNameOfTestbenchWorkingDirectory);
             }
             else {
-                // If we are in the test theme tree, call the makeRoot method of the test theme tree data provider
-                projectManagementTreeDataProvider.testThemeDataProvider.makeRoot(treeItem);
+                vscode.window.showErrorMessage("Project management tree is not initialized. Please select a project first.");
             }
         }
+        else {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+        }
     }));
-    // Register the "Refresh Project Tree" command
-    context.subscriptions.push(vscode.commands.registerCommand(commands.refreshProjectTreeView.command, async () => {
-        projectManagementTreeDataProvider?.clearTree();
-        [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeView(context, connection, projectManagementTreeDataProvider?.currentProjectKeyInView);
+    // Register the "Fetch Report" command for a tree element
+    context.subscriptions.push(vscode.commands.registerCommand(commands.fetchReportForSelectedTreeItem.command, async (treeItem) => {
+        reportHandler.callFetchReportForTreeElement(treeItem, exports.projectManagementTreeDataProvider, exports.folderNameOfTestbenchWorkingDirectory);
     }));
-    // Register the "Refresh Test Tree" command
-    context.subscriptions.push(vscode.commands.registerCommand(commands.refreshTestTreeView.command, async () => {
-        projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
-        let cycleElement = projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent;
-        if (cycleElement && cycleElement.contextValue === "Cycle") {
-            // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
-            projectManagementTreeDataProvider?.testThemeDataProvider?.clearTree();
-            // Fetch the test themes from the server
-            const children = (await projectManagementTreeDataProvider?.getChildrenOfCycle(cycleElement)) ?? [];
-            projectManagementTreeDataProvider?.testThemeDataProvider?.setRoots(children);
+    // Register the "Generate Tests For Test Theme or Test Case Set" command, which is activated for a test theme element
+    context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCasesForTestThemeOrTestCaseSet.command, async (treeItem) => {
+        if (exports.connection) {
+            console.log("Generating tests for:", treeItem);
+            let treeElementUniqueID = treeItem.item?.base?.uniqueID;
+            let cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
+            let projectKey = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem.parent);
+            if (!projectKey || !cycleKey || !treeElementUniqueID) {
+                console.error("Error when finding project key, cycle key, test theme or unique ID.");
+                return;
+            }
+            reportHandler.generateTestsWithTestBenchToRobotFramework(context, treeItem, typeof treeItem.label === "string" ? treeItem.label : "", // Label might be undefined
+            exports.baseKey, projectKey, cycleKey, exports.folderNameOfTestbenchWorkingDirectory, treeElementUniqueID);
+        }
+        else {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
         }
     }));
     // Register the "Select And Load Project" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.selectAndLoadProject.command, async () => {
-        if (connection) {
-            const projectList = await connection.getProjectsList();
+        if (exports.connection) {
+            const projectList = await exports.connection.getProjectsList();
             if (!projectList) {
                 // vscode.window.showErrorMessage("No projects found..");
                 return;
             }
-            const selectedProjectKey = await connection.selectProjectKeyFromProjectList(projectList);
+            const selectedProjectKey = await exports.connection.selectProjectKeyFromProjectList(projectList);
             if (!selectedProjectKey) {
                 // vscode.window.showErrorMessage("No project selected..");
                 return;
             }
-            projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(connection, selectedProjectKey);
+            exports.projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(exports.connection, selectedProjectKey);
             vscode.window.createTreeView("projectManagementTree", {
-                treeDataProvider: projectManagementTreeDataProvider,
+                treeDataProvider: exports.projectManagementTreeDataProvider,
             });
-            [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeView(context, connection, selectedProjectKey);
+            [exports.projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeView(context, exports.connection, selectedProjectKey);
+        }
+        else {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+        }
+    }));
+    // Register the "Read Test Results" command, which is activated for a test theme or test case set element
+    context.subscriptions.push(vscode.commands.registerCommand(commands.readRFTestResultsAndCreateReportWithResults.command, async () => {
+        if (exports.connection) {
+            reportHandler.readTestResultsAndCreateReportWithResults(context, exports.folderNameOfTestbenchWorkingDirectory);
         }
         else {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
@@ -352,15 +380,57 @@ function activate(context) {
     }));
     // Register the Upload Test Results to TestBench command
     context.subscriptions.push(vscode.commands.registerCommand(commands.uploadTestResultsToTestbench.command, async () => {
-        if (!connection) {
+        if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
             return;
         }
-        if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.currentProjectKeyInView) {
+        if (!exports.projectManagementTreeDataProvider || !exports.projectManagementTreeDataProvider.currentProjectKeyInView) {
             vscode.window.showErrorMessage("No project selected. Please select a project first.");
             return;
         }
-        testbenchConnection.importTestResultsToTestbench(connection, projectManagementTreeDataProvider);
+        testbenchConnection.selectReportWithResultsAndImportToTestbench(exports.connection, exports.projectManagementTreeDataProvider);
+    }));
+    // Register the automated "Read Tests & Upload Results to TestBench" command
+    context.subscriptions.push(vscode.commands.registerCommand(commands.readAndUploadTestResultsToTestbench.command, async () => {
+        reportHandler.readTestsAndCreateResultsAndImportToTestbench(context, exports.folderNameOfTestbenchWorkingDirectory, exports.projectManagementTreeDataProvider);
+    }));
+    // Register the "Execute Tests" command
+    context.subscriptions.push(vscode.commands.registerCommand(commands.executeRobotFrameworkTests.command, async () => {
+        const config = vscode.workspace.getConfiguration(exports.baseKey);
+        reportHandler.generateTestsExecuteTestsReadResults(path_1.default.join(config.get("workspaceLocation"), exports.folderNameOfTestbenchWorkingDirectory));
+    }));
+    // Register the "Refresh Project Tree" command
+    context.subscriptions.push(vscode.commands.registerCommand(commands.refreshProjectTreeView.command, async () => {
+        exports.projectManagementTreeDataProvider?.clearTree();
+        [exports.projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeView(context, exports.connection, exports.projectManagementTreeDataProvider?.currentProjectKeyInView);
+    }));
+    // Register the "Refresh Test Tree" command
+    context.subscriptions.push(vscode.commands.registerCommand(commands.refreshTestTreeView.command, async () => {
+        exports.projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
+        let cycleElement = exports.projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent;
+        if (cycleElement && cycleElement.contextValue === "Cycle") {
+            // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
+            exports.projectManagementTreeDataProvider?.testThemeDataProvider?.clearTree();
+            // Fetch the test themes from the server
+            const children = (await exports.projectManagementTreeDataProvider?.getChildrenOfCycle(cycleElement)) ?? [];
+            exports.projectManagementTreeDataProvider?.testThemeDataProvider?.setRoots(children);
+        }
+    }));
+    // Register the "Make Root" command
+    context.subscriptions.push(vscode.commands.registerCommand(commands.makeRoot.command, (treeItem) => {
+        if (exports.projectManagementTreeDataProvider) {
+            // Find out for which element the make root command is called
+            if (treeItem.contextValue === "Project" ||
+                treeItem.contextValue === "Version" ||
+                treeItem.contextValue === "Cycle") {
+                // If we are in the project management tree, call the makeRoot method of the project management tree data provider
+                exports.projectManagementTreeDataProvider.makeRoot(treeItem);
+            }
+            else {
+                // If we are in the test theme tree, call the makeRoot method of the test theme tree data provider
+                exports.projectManagementTreeDataProvider.testThemeDataProvider.makeRoot(treeItem);
+            }
+        }
     }));
     // Uncomment this if you want to prompt the user to log in when the extension activates
     // vscode.commands.executeCommand(`${baseKey}.login`);

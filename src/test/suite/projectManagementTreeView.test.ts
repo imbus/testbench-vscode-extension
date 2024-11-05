@@ -6,7 +6,7 @@ import {
     ProjectManagementTreeItem,
     findProjectKeyOfCycleElement,
 } from "../../projectManagementTreeView";
-import { PlayServerConnection } from "../../testbenchConnection";
+import { PlayServerConnection } from "../../testBenchConnection";
 import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
 
 suite("ProjectManagementTreeDataProvider Tests", () => {

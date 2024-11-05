@@ -30,15 +30,17 @@ exports.PlayServerConnection = void 0;
 exports.performLogin = performLogin;
 exports.clearStoredCredentials = clearStoredCredentials;
 exports.changeConnection = changeConnection;
-exports.importTestResultsToTestbench = importTestResultsToTestbench;
+exports.importReportWithResultsToTestbench = importReportWithResultsToTestbench;
+exports.selectReportWithResultsAndImportToTestbench = selectReportWithResultsAndImportToTestbench;
 const https = __importStar(require("https"));
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
-const jsonReportHandler = __importStar(require("./jsonReportHandler"));
+const jsonReportHandler = __importStar(require("./reportHandler"));
 const jszip_1 = __importDefault(require("jszip"));
 const axios_1 = __importDefault(require("axios"));
 const projectManagementTreeView_1 = require("./projectManagementTreeView");
 const path_1 = __importDefault(require("path"));
+const extension_1 = require("./extension");
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -308,7 +310,7 @@ class PlayServerConnection {
         const uploadEndpointURL = `/projects/${projectKey}/executionResults/v1`;
         try {
             const zipFileData = fs.readFileSync(zipFilePath);
-            console.log("Uploading zip file to:", uploadEndpointURL);
+            console.log(`Uploading zip file ${zipFilePath} to ${uploadEndpointURL}`);
             const response = await this.apiClient.post(uploadEndpointURL, zipFileData, {
                 headers: {
                     "Content-Type": "application/zip",
@@ -511,12 +513,14 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
             ({ serverName, portNumber, username, password } = credentials);
         }
         // Attempt to login
-        const connection = await loginToNewPlayServerAndInitSessionToken(context, serverName, portNumber, username, password, baseKey);
-        if (connection) {
+        // TODO: Set the original connection or?
+        const newConnection = await loginToNewPlayServerAndInitSessionToken(context, serverName, portNumber, username, password, baseKey);
+        if (newConnection) {
             console.log("Login successful.");
             vscode.window.showInformationMessage("Login successful.");
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
-            return connection;
+            (0, extension_1.setConnection)(newConnection);
+            return newConnection;
         }
         else {
             // Login may fail due to a server problem or incorrect credentials.
@@ -634,21 +638,21 @@ async function clearStoredCredentials(context) {
         console.error("Failed to clear credentials:", error);
     }
 }
-async function changeConnection(context, baseKey, oldConnection, oldTreeDataProvider) {
-    if (oldConnection) {
-        await oldConnection.logoutUser(context, oldTreeDataProvider);
+async function changeConnection(context, baseKey, oldTreeDataProvider) {
+    if (extension_1.connection) {
+        await extension_1.connection.logoutUser(context, oldTreeDataProvider);
         await clearStoredCredentials(context);
-        let newConnection = await performLogin(context, baseKey, true);
+        await performLogin(context, baseKey, true);
         let newTreeDataProvider = null;
-        if (newConnection) {
-            [newTreeDataProvider] = await (0, projectManagementTreeView_1.initializeTreeView)(context, newConnection);
+        if (extension_1.connection) {
+            [newTreeDataProvider] = await (0, projectManagementTreeView_1.initializeTreeView)(context, extension_1.connection);
         }
-        return { newConnection, newTreeDataProvider };
+        return { newTreeDataProvider };
     }
     else {
         vscode.window.showErrorMessage("No connection available. Please log in first.");
     }
-    return { newConnection: null, newTreeDataProvider: null };
+    return { newTreeDataProvider: null };
 }
 // Retrieves the current versions of the TestBench web server.
 // Used to verify the availability of server after receiving the server URL and port number in the login process.
@@ -692,9 +696,13 @@ async function fetchServerVersions(serverName, portNumber) {
 }
 async function promptForReportZipFileWithResults() {
     try {
+        const config = vscode.workspace.getConfiguration(extension_1.baseKey);
+        const workspacePath = config.get("workspaceLocation");
+        const workingDirectoryFullPath = path_1.default.join(workspacePath, extension_1.folderNameOfTestbenchWorkingDirectory);
         const options = {
-            canSelectMany: false,
+            defaultUri: vscode.Uri.file(workingDirectoryFullPath),
             openLabel: "Select Zip File with Test Results",
+            canSelectMany: false,
             canSelectFiles: true,
             canSelectFolders: false,
             filters: {
@@ -718,107 +726,144 @@ async function promptForReportZipFileWithResults() {
         return undefined;
     }
 }
-// Import the report zip file which contains the test results to TestBench server
-async function importTestResultsToTestbench(connection, projectManagementTreeDataProvider) {
-    // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
-    const resultZipFilePath = await promptForReportZipFileWithResults();
-    if (!resultZipFilePath) {
-        // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
-        return;
-    }
-    const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReportile(resultZipFilePath);
-    if (!uniqueID || !projectKey || !cycleNameOfProject) {
-        vscode.window.showErrorMessage("Error extracting project key, cycle name and unique ID from the zip file.");
-        return;
-    }
-    /*
-    // Save the contents of the variable to a file called allTreeElements.json
-    const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
-    saveJsonToFile(allTreeElementsPath, allTreeElements);
-    console.log(`allTreeElements saved to ${allTreeElementsPath}`);
-    */
-    function findCycleKeyFromCycleName(elements, cycleName) {
-        for (const element of elements) {
-            // Check if this element matches the target criteria
-            // TODO: Somehow the element.item is undefined for rlements other than projects, thats why the extra check is added without .item
-            if ((element.item?.nodeType === "Cycle" && element.item?.name === cycleName) ||
-                (element.nodeType === "Cycle" && element.name === cycleName)) {
-                return element.key;
-            }
-            // If there are children, recursively search them
-            if ((element.item?.children && element.item?.children.length > 0) ||
-                (element.children && element.children.length > 0)) {
-                const foundKey = findCycleKeyFromCycleName(element.item?.children || element.children, cycleName);
-                if (foundKey) {
-                    return foundKey;
-                }
-            }
+// Helper function to find the cycle key from the cycle name
+function findCycleKeyFromCycleName(elements, cycleName) {
+    for (const element of elements) {
+        if ((element.item?.nodeType === "Cycle" && element.item?.name === cycleName) ||
+            (element.nodeType === "Cycle" && element.name === cycleName)) {
+            return element.key;
         }
-        return null; // Return null if no matching element is found
+        // Recursively search in children elements
+        const children = element.item?.children || element.children;
+        if (children && children.length > 0) {
+            const foundKey = findCycleKeyFromCycleName(children, cycleName);
+            if (foundKey)
+                return foundKey;
+        }
     }
-    // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
-    // Later, we should fetch the project tree from the server and search for the cycle key there.
-    let allTreeElementsInTreeView = await projectManagementTreeDataProvider?.getChildren(undefined);
-    const cycleKeyOfImportedReport = findCycleKeyFromCycleName(allTreeElementsInTreeView, cycleNameOfProject);
-    // console.log("Cycle key of imported report:", cycleKeyOfImportedReport);
-    if (!cycleKeyOfImportedReport) {
-        console.error("Cycle not found in the project tree.");
-        vscode.window.showErrorMessage("Cycle not found in the project tree.");
-        return;
-    }
-    // Upload the zip file containing the results to TestBench server
-    let zipFilenameFromServer = "";
+    return null;
+}
+// TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
+async function importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath) {
     try {
-        zipFilenameFromServer = await connection.uploadExecutionResults(Number(projectKey), resultZipFilePath);
+        console.log("Importing report with results to TestBench server.");
+        const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReportile(resultZipFilePath);
+        if (!uniqueID || !projectKey || !cycleNameOfProject) {
+            vscode.window.showErrorMessage("Error extracting project key, cycle name and unique ID from the zip file.");
+            return;
+        }
+        /*
+        // Save the contents of the variable to a file called allTreeElements.json
+        const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
+        saveJsonToFile(allTreeElementsPath, allTreeElements);
+        console.log(`allTreeElements saved to ${allTreeElementsPath}`);
+        */
+        // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
+        // Later, we should fetch the project tree from the server and search for the cycle key there.
+        const allTreeElementsInTreeView = await projectManagementTreeDataProvider?.getChildren(undefined);
+        if (!allTreeElementsInTreeView) {
+            vscode.window.showErrorMessage("Failed to load project management tree elements.");
+            return;
+        }
+        const cycleKeyOfImportedReport = findCycleKeyFromCycleName(allTreeElementsInTreeView, cycleNameOfProject);
+        if (!cycleKeyOfImportedReport) {
+            console.error("Cycle not found in the project tree.");
+            vscode.window.showErrorMessage("Cycle not found in the project tree.");
+            return;
+        }
+        // Upload the zip file containing the results to TestBench server
+        // TODO: Add try catch block
+        const zipFilenameFromServer = await connection.uploadExecutionResults(Number(projectKey), resultZipFilePath);
         if (!zipFilenameFromServer) {
             console.error("Error uploading the zip file to the server.");
             vscode.window.showErrorMessage("Error uploading the zip file to the server.");
             return;
         }
-    }
-    catch (error) {
-        console.error("Error:", error.message);
-    }
-    // Import the results to TestBench server
-    const importData = {
-        fileName: zipFilenameFromServer,
-        reportRootUID: uniqueID,
-        useExistingDefect: true,
-        ignoreNonExecutedTestCases: true,
-        checkPaths: true,
-        discardTesterInformation: false,
-        // defaultTester: "tester",
-        filters: [
-        /*
+        // TODO: Chech the new data of the new branch
+        // Import the results to TestBench server
+        const importData = {
+            fileName: zipFilenameFromServer,
+            reportRootUID: uniqueID,
+            useExistingDefect: true,
+            ignoreNonExecutedTestCases: true,
+            checkPaths: true,
+            discardTesterInformation: false,
+            // defaultTester: "tester",
+            filters: [
+            /*
             {
                 name: "Filter1",
                 filterType: "TestTheme",
                 testThemeUID: "themeUID456",
             },
         */
-        ],
-    };
-    try {
-        // Start the import job
-        console.log("Starting import execution results");
-        const jobID = await connection.importExecutionResults(Number(projectKey), Number(cycleKeyOfImportedReport), importData);
-        console.log("Import job started with Job ID:", jobID);
-        // Poll the job status until it is completed
-        const jobStatus = await jsonReportHandler.pollJobStatus(connection, projectKey.toString(), jobID, "import");
-        // Check if the job is completed successfully
-        if (!jobStatus || jsonReportHandler.isImportJobFailed(jobStatus)) {
-            console.warn("Import not completed or failed.");
-            vscode.window.showErrorMessage("Import not completed or failed.");
-            return undefined;
+            ],
+        };
+        try {
+            // Start the import job
+            console.log("Starting import execution results");
+            const jobID = await connection.importExecutionResults(Number(projectKey), Number(cycleKeyOfImportedReport), importData);
+            console.log("Import job started with Job ID:", jobID);
+            // Poll the job status until it is completed
+            const jobStatus = await jsonReportHandler.pollJobStatus(projectKey.toString(), jobID, "import");
+            // Check if the job is completed successfully
+            if (!jobStatus || jsonReportHandler.isImportJobFailed(jobStatus)) {
+                console.warn("Import not completed or failed.");
+                vscode.window.showErrorMessage("Import not completed or failed.");
+                return undefined;
+            }
+            else {
+                console.log("Import completed successfully. Job Status:", jobStatus);
+                vscode.window.showInformationMessage("Import completed successfully.");
+            }
         }
-        else {
-            console.log("Import completed successfully. Job Status:", jobStatus);
-            vscode.window.showInformationMessage("Import completed successfully.");
+        catch (error) {
+            console.error("Error:", error.message);
         }
     }
     catch (error) {
         console.error("Error:", error.message);
+        vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
     }
+}
+// Import the report zip file which contains the test results to TestBench server
+async function selectReportWithResultsAndImportToTestbench(connection, projectManagementTreeDataProvider) {
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Importing results to TestBench server`,
+        cancellable: true,
+    }, async (progress, cancellationToken) => {
+        if (progress) {
+            progress.report({
+                message: `Selecting report file with results.`,
+                increment: 30,
+            });
+        }
+        // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
+        const resultZipFilePath = await promptForReportZipFileWithResults();
+        if (!resultZipFilePath) {
+            // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
+            return;
+        }
+        if (progress) {
+            progress.report({
+                message: `Selecting report file with results.`,
+                increment: 30,
+            });
+        }
+        await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+        if (progress) {
+            progress.report({
+                message: `Cleaning up.`,
+                increment: 30,
+            });
+        }
+        const config = vscode.workspace.getConfiguration(extension_1.baseKey);
+        if (config.get("clearReportAfterProcessing")) {
+            // Remove the report zip file after usage
+            await jsonReportHandler.removeReportZipFile(resultZipFilePath);
+        }
+    });
 }
 async function extractDataFromReportile(zipFilePath) {
     try {

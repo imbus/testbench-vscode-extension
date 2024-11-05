@@ -27,6 +27,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert_1 = __importDefault(require("assert"));
+const vscode = __importStar(require("vscode"));
 const sinon = __importStar(require("sinon"));
 const axios_1 = __importDefault(require("axios"));
 const testBenchConnection_1 = require("../../testBenchConnection");
@@ -42,6 +43,8 @@ suite("PlayServerConnection Tests", () => {
                 delete: sinon.stub().resolves(),
             },
         };
+        // Mock the startKeepAlive method
+        const startKeepAliveStub = sinon.stub(testBenchConnection_1.PlayServerConnection.prototype, "startKeepAlive");
         serverConnection = new testBenchConnection_1.PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
         axiosStub = sinon.stub(axios_1.default, "create").returns({
             get: sinon.stub(),
@@ -52,7 +55,16 @@ suite("PlayServerConnection Tests", () => {
     teardown(() => {
         sinon.restore();
     });
-    test("getSessionToken should return the session token", () => {
+    test("getSessionToken should return the session token", async () => {
+        await vscode.commands.executeCommand("workbench.extensions.installExtension", "ms-python.python");
+        let ext = vscode.extensions.getExtension("ms-python.python");
+        if (!ext) {
+            console.error("Extension not found");
+        }
+        else {
+            console.log("Extension found:", ext);
+        }
+        await vscode.commands.executeCommand("workbench.extensions.uninstallExtension", "ms-python.python");
         const token = serverConnection.getSessionToken();
         assert_1.default.strictEqual(token, "mockSessionToken");
     });

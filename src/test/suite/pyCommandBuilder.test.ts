@@ -1,24 +1,22 @@
-import * as assert from 'assert';
-import * as vscode from 'vscode';
-import * as path from 'path';
-import { getActiveWorkspaceFolder } from '../../pyCommandBuilder';
-import * as fs from 'fs';
-import * as os from 'os';
+import * as assert from "assert";
+import * as vscode from "vscode";
+import * as path from "path";
+import { getActiveWorkspaceFolder } from "../../pyCommandBuilder";
+import * as fs from "fs";
+import * as os from "os";
 
 function createTemporaryFolder(): string {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-workspace-'));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "test-workspace-"));
     return tempDir;
 }
 
 function createFileInFolder(folder: string, filename: string): string {
     const filePath = path.join(folder, filename);
-    fs.writeFileSync(filePath, 'test content');
+    fs.writeFileSync(filePath, "test content");
     return filePath;
 }
 
-suite('getActiveWorkspaceFolder Tests', () => {
-    
-
+suite("getActiveWorkspaceFolder Tests", () => {
     setup(() => {
         /*workspace1 = createTemporaryFolder();
         workspace2 = createTemporaryFolder();
@@ -32,9 +30,9 @@ suite('getActiveWorkspaceFolder Tests', () => {
         fs.rmSync(workspace2, { recursive: true, force: true });*/
     });
 
-    test('Should return undefined when no workspace is open', async () => {
+    test("Should return undefined when no workspace is open", async () => {
         const workspaceFolder = getActiveWorkspaceFolder();
-        assert.strictEqual(workspaceFolder, undefined, 'Expected no active workspace folder');
+        assert.strictEqual(workspaceFolder, undefined, "Expected no active workspace folder");
     });
 
     /*test('Should return the single workspace folder when only one is open', async () => {

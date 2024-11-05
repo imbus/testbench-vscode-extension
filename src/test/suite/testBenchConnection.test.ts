@@ -2,7 +2,7 @@ import assert from "assert";
 import * as vscode from "vscode";
 import * as sinon from "sinon";
 import axios from "axios";
-import { PlayServerConnection } from "../../testbenchConnection";
+import { PlayServerConnection } from "../../testBenchConnection";
 import * as types from "../../types";
 
 suite("PlayServerConnection Tests", () => {
@@ -10,29 +10,41 @@ suite("PlayServerConnection Tests", () => {
     let serverConnection: PlayServerConnection;
     let axiosStub: sinon.SinonStub;
 
-    setup(() => {
-        context = {
-            secrets: {
-                get: sinon.stub().resolves("mockSessionToken"),
-                store: sinon.stub().resolves(),
-                delete: sinon.stub().resolves(),
-            },
-        } as unknown as vscode.ExtensionContext;
+   setup(() => {
+       context = {
+           secrets: {
+               get: sinon.stub().resolves("mockSessionToken"),
+               store: sinon.stub().resolves(),
+               delete: sinon.stub().resolves(),
+           },
+       } as unknown as vscode.ExtensionContext;
 
-        serverConnection = new PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
+       // Mock the startKeepAlive method
+       const startKeepAliveStub = sinon.stub(PlayServerConnection.prototype as any, "startKeepAlive");
 
-        axiosStub = sinon.stub(axios, "create").returns({
-            get: sinon.stub(),
-            post: sinon.stub(),
-            delete: sinon.stub(),
-        } as any);
-    });
+       serverConnection = new PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
+
+       axiosStub = sinon.stub(axios, "create").returns({
+           get: sinon.stub(),
+           post: sinon.stub(),
+           delete: sinon.stub(),
+       } as any);
+   });
 
     teardown(() => {
         sinon.restore();
     });
 
-    test("getSessionToken should return the session token", () => {
+    test("getSessionToken should return the session token", async () => {
+        await vscode.commands.executeCommand("workbench.extensions.installExtension", "ms-python.python");
+        let ext = vscode.extensions.getExtension("ms-python.python");
+        if (!ext) {
+            console.error("Extension not found");
+        } else {
+            console.log("Extension found:", ext);
+        }
+        await vscode.commands.executeCommand("workbench.extensions.uninstallExtension", "ms-python.python");
+
         const token = serverConnection.getSessionToken();
         assert.strictEqual(token, "mockSessionToken");
     });

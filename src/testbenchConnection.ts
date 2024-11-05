@@ -2,11 +2,12 @@ import * as https from "https";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as types from "./types";
-import * as jsonReportHandler from "./jsonReportHandler";
+import * as jsonReportHandler from "./reportHandler";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { ProjectManagementTreeDataProvider, initializeTreeView } from "./projectManagementTreeView";
 import path from "path";
+import { connection, setConnection, baseKey, folderNameOfTestbenchWorkingDirectory } from "./extension";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate
@@ -548,7 +549,8 @@ export async function performLogin(
         }
 
         // Attempt to login
-        const connection = await loginToNewPlayServerAndInitSessionToken(
+        // TODO: Set the original connection or?
+        const newConnection = await loginToNewPlayServerAndInitSessionToken(
             context,
             serverName,
             portNumber,
@@ -557,11 +559,13 @@ export async function performLogin(
             baseKey
         );
 
-        if (connection) {
+        if (newConnection) {
             console.log("Login successful.");
             vscode.window.showInformationMessage("Login successful.");
+
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
-            return connection;
+            setConnection(newConnection);
+            return newConnection;
         } else {
             // Login may fail due to a server problem or incorrect credentials.
             const retry = await vscode.window.showInformationMessage(
@@ -724,26 +728,24 @@ export async function clearStoredCredentials(context: vscode.ExtensionContext) {
 export async function changeConnection(
     context: vscode.ExtensionContext,
     baseKey: string,
-    oldConnection: PlayServerConnection,
     oldTreeDataProvider: ProjectManagementTreeDataProvider
 ): Promise<{
-    newConnection: PlayServerConnection | null;
     newTreeDataProvider: ProjectManagementTreeDataProvider | null;
 }> {
-    if (oldConnection) {
-        await oldConnection.logoutUser(context, oldTreeDataProvider);
+    if (connection) {
+        await connection.logoutUser(context, oldTreeDataProvider);
         await clearStoredCredentials(context);
-        let newConnection = await performLogin(context, baseKey, true);
+        await performLogin(context, baseKey, true);
 
         let newTreeDataProvider: ProjectManagementTreeDataProvider | null = null;
-        if (newConnection) {
-            [newTreeDataProvider] = await initializeTreeView(context, newConnection);
+        if (connection) {
+            [newTreeDataProvider] = await initializeTreeView(context, connection);
         }
-        return { newConnection, newTreeDataProvider };
+        return { newTreeDataProvider };
     } else {
         vscode.window.showErrorMessage("No connection available. Please log in first.");
     }
-    return { newConnection: null, newTreeDataProvider: null };
+    return { newTreeDataProvider: null };
 }
 
 // Retrieves the current versions of the TestBench web server.
@@ -794,9 +796,14 @@ async function fetchServerVersions(
 
 async function promptForReportZipFileWithResults(): Promise<string | undefined> {
     try {
+        const config = vscode.workspace.getConfiguration(baseKey);
+        const workspacePath = config.get<string>("workspaceLocation");
+        const workingDirectoryFullPath = path.join(workspacePath!, folderNameOfTestbenchWorkingDirectory);
+
         const options: vscode.OpenDialogOptions = {
-            canSelectMany: false,
+            defaultUri: vscode.Uri.file(workingDirectoryFullPath),
             openLabel: "Select Zip File with Test Results",
+            canSelectMany: false,
             canSelectFiles: true,
             canSelectFolders: false,
             filters: {
@@ -824,121 +831,120 @@ async function promptForReportZipFileWithResults(): Promise<string | undefined> 
     }
 }
 
+// Helper function to find the cycle key from the cycle name
+function findCycleKeyFromCycleName(elements: any[], cycleName: string): string | null {
+    for (const element of elements) {
+        if (
+            (element.item?.nodeType === "Cycle" && element.item?.name === cycleName) ||
+            (element.nodeType === "Cycle" && element.name === cycleName)
+        ) {
+            return element.key;
+        }
+
+        // Recursively search in children elements
+        const children = element.item?.children || element.children;
+        if (children && children.length > 0) {
+            const foundKey = findCycleKeyFromCycleName(children, cycleName);
+            if (foundKey) return foundKey;
+        }
+    }
+    return null;
+}
+
 // TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
 export async function importReportWithResultsToTestbench(
     connection: PlayServerConnection,
     projectManagementTreeDataProvider: ProjectManagementTreeDataProvider,
     resultZipFilePath: string
 ) {
-    console.log("Importing report with results to TestBench server.");
-
-    const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReportile(resultZipFilePath);
-
-    if (!uniqueID || !projectKey || !cycleNameOfProject) {
-        vscode.window.showErrorMessage("Error extracting project key, cycle name and unique ID from the zip file.");
-        return;
-    }
-
-    /*
-    // Save the contents of the variable to a file called allTreeElements.json
-    const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
-    saveJsonToFile(allTreeElementsPath, allTreeElements);
-    console.log(`allTreeElements saved to ${allTreeElementsPath}`);
-    */
-
-    function findCycleKeyFromCycleName(elements: any[], cycleName: string): string | null {
-        for (const element of elements) {
-            // Check if this element matches the target criteria
-            // TODO: Somehow the element.item is undefined for elements other than projects, thats why the extra check is added without .item
-            if (
-                (element.item?.nodeType === "Cycle" && element.item?.name === cycleName) ||
-                (element.nodeType === "Cycle" && element.name === cycleName)
-            ) {
-                return element.key;
-            }
-
-            // If there are children, recursively search them
-            if (
-                (element.item?.children && element.item?.children.length > 0) ||
-                (element.children && element.children.length > 0)
-            ) {
-                const foundKey = findCycleKeyFromCycleName(element.item?.children || element.children, cycleName);
-                if (foundKey) {
-                    return foundKey;
-                }
-            }
-        }
-        return null; // Return null if no matching element is found
-    }
-
-    // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
-    // Later, we should fetch the project tree from the server and search for the cycle key there.
-    let allTreeElementsInTreeView = await projectManagementTreeDataProvider?.getChildren(undefined);
-    const cycleKeyOfImportedReport = findCycleKeyFromCycleName(allTreeElementsInTreeView, cycleNameOfProject);
-    // console.log("Cycle key of imported report:", cycleKeyOfImportedReport);
-
-    if (!cycleKeyOfImportedReport) {
-        console.error("Cycle not found in the project tree.");
-        vscode.window.showErrorMessage("Cycle not found in the project tree.");
-        return;
-    }
-
-    // Upload the zip file containing the results to TestBench server
-    let zipFilenameFromServer = "";
     try {
-        zipFilenameFromServer = await connection.uploadExecutionResults(Number(projectKey), resultZipFilePath);
+        console.log("Importing report with results to TestBench server.");
+
+        const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReportile(resultZipFilePath);
+
+        if (!uniqueID || !projectKey || !cycleNameOfProject) {
+            vscode.window.showErrorMessage("Error extracting project key, cycle name and unique ID from the zip file.");
+            return;
+        }
+
+        /*
+        // Save the contents of the variable to a file called allTreeElements.json
+        const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
+        saveJsonToFile(allTreeElementsPath, allTreeElements);
+        console.log(`allTreeElements saved to ${allTreeElementsPath}`);
+        */
+
+        // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
+        // Later, we should fetch the project tree from the server and search for the cycle key there.
+        const allTreeElementsInTreeView = await projectManagementTreeDataProvider?.getChildren(undefined);
+        if (!allTreeElementsInTreeView) {
+            vscode.window.showErrorMessage("Failed to load project management tree elements.");
+            return;
+        }
+        const cycleKeyOfImportedReport = findCycleKeyFromCycleName(allTreeElementsInTreeView, cycleNameOfProject);
+        if (!cycleKeyOfImportedReport) {
+            console.error("Cycle not found in the project tree.");
+            vscode.window.showErrorMessage("Cycle not found in the project tree.");
+            return;
+        }
+
+        // Upload the zip file containing the results to TestBench server
+        // TODO: Add try catch block
+        const zipFilenameFromServer = await connection.uploadExecutionResults(Number(projectKey), resultZipFilePath);
         if (!zipFilenameFromServer) {
             console.error("Error uploading the zip file to the server.");
             vscode.window.showErrorMessage("Error uploading the zip file to the server.");
             return;
         }
-    } catch (error: any) {
-        console.error("Error:", error.message);
-    }
 
-    // Import the results to TestBench server
-    const importData: types.ImportData = {
-        fileName: zipFilenameFromServer,
-        reportRootUID: uniqueID,
-        useExistingDefect: true,
-        ignoreNonExecutedTestCases: true,
-        checkPaths: true,
-        discardTesterInformation: false,
-        // defaultTester: "tester",
-        filters: [
-            /*
+        // TODO: Chech the new data of the new branch
+        // Import the results to TestBench server
+        const importData: types.ImportData = {
+            fileName: zipFilenameFromServer,
+            reportRootUID: uniqueID,
+            useExistingDefect: true,
+            ignoreNonExecutedTestCases: true,
+            checkPaths: true,
+            discardTesterInformation: false,
+            // defaultTester: "tester",
+            filters: [
+                /*
                 {
                     name: "Filter1",
                     filterType: "TestTheme",
                     testThemeUID: "themeUID456",
                 },
             */
-        ],
-    };
-    try {
-        // Start the import job
-        console.log("Starting import execution results");
-        const jobID = await connection.importExecutionResults(
-            Number(projectKey),
-            Number(cycleKeyOfImportedReport),
-            importData
-        );
-        console.log("Import job started with Job ID:", jobID);
+            ],
+        };
+        try {
+            // Start the import job
+            console.log("Starting import execution results");
+            const jobID = await connection.importExecutionResults(
+                Number(projectKey),
+                Number(cycleKeyOfImportedReport),
+                importData
+            );
+            console.log("Import job started with Job ID:", jobID);
 
-        // Poll the job status until it is completed
-        const jobStatus = await jsonReportHandler.pollJobStatus(connection, projectKey.toString(), jobID, "import");
+            // Poll the job status until it is completed
+            const jobStatus = await jsonReportHandler.pollJobStatus(projectKey.toString(), jobID, "import");
 
-        // Check if the job is completed successfully
-        if (!jobStatus || jsonReportHandler.isImportJobFailed(jobStatus)) {
-            console.warn("Import not completed or failed.");
-            vscode.window.showErrorMessage("Import not completed or failed.");
-            return undefined;
-        } else {
-            console.log("Import completed successfully. Job Status:", jobStatus);
-            vscode.window.showInformationMessage("Import completed successfully.");
+            // Check if the job is completed successfully
+            if (!jobStatus || jsonReportHandler.isImportJobFailed(jobStatus)) {
+                console.warn("Import not completed or failed.");
+                vscode.window.showErrorMessage("Import not completed or failed.");
+                return undefined;
+            } else {
+                console.log("Import completed successfully. Job Status:", jobStatus);
+                vscode.window.showInformationMessage("Import completed successfully.");
+            }
+        } catch (error: any) {
+            console.error("Error:", error.message);
         }
     } catch (error: any) {
         console.error("Error:", error.message);
+        vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
     }
 }
 
@@ -947,14 +953,49 @@ export async function selectReportWithResultsAndImportToTestbench(
     connection: PlayServerConnection,
     projectManagementTreeDataProvider: ProjectManagementTreeDataProvider
 ) {
-    // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
-    const resultZipFilePath = await promptForReportZipFileWithResults();
-    if (!resultZipFilePath) {
-        // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
-        return;
-    }
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: `Importing results to TestBench server`,
+            cancellable: true,
+        },
+        async (progress, cancellationToken) => {
+            if (progress) {
+                progress.report({
+                    message: `Selecting report file with results.`,
+                    increment: 30,
+                });
+            }
 
-    await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+            // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
+            const resultZipFilePath = await promptForReportZipFileWithResults();
+            if (!resultZipFilePath) {
+                // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
+                return;
+            }
+
+            if (progress) {
+                progress.report({
+                    message: `Selecting report file with results.`,
+                    increment: 30,
+                });
+            }
+
+            await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+
+            if (progress) {
+                progress.report({
+                    message: `Cleaning up.`,
+                    increment: 30,
+                });
+            }
+            const config = vscode.workspace.getConfiguration(baseKey);
+            if (config.get<boolean>("clearReportAfterProcessing")) {
+                // Remove the report zip file after usage
+                await jsonReportHandler.removeReportZipFile(resultZipFilePath);
+            }
+        }
+    );
 }
 
 interface ExtractedData {

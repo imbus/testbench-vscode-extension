@@ -1,11 +1,11 @@
 import * as assert from "assert";
 import * as sinon from "sinon";
 import * as vscode from "vscode";
-import * as jsonReportHandler from "../../jsonReportHandler";
+import * as jsonReportHandler from "../../reportHandler";
 import * as types from "../../types";
 import axios from "axios";
 import * as fs from "fs";
-import { PlayServerConnection } from "../../testbenchConnection";
+import { PlayServerConnection } from "../../testBenchConnection";
 import { ProjectManagementTreeItem } from "../../projectManagementTreeView";
 
 suite("jsonReportHandler Tests", () => {
@@ -174,14 +174,7 @@ suite("jsonReportHandler Tests", () => {
         const cancellationToken = { isCancellationRequested: true } as vscode.CancellationToken;
 
         try {
-            await jsonReportHandler.pollJobStatus(
-                connection,
-                projectKey,
-                "jobId",
-                "report",
-                undefined,
-                cancellationToken
-            );
+            await jsonReportHandler.pollJobStatus(projectKey, "jobId", "report", undefined, cancellationToken);
             assert.fail("Expected error was not thrown");
         } catch (error) {
             assert.ok(error instanceof vscode.CancellationError);
@@ -194,7 +187,7 @@ suite("jsonReportHandler Tests", () => {
 
         sandbox.stub(axios, "post").resolves(jobIdResponse);
 
-        const result = await jsonReportHandler.getJobId(connection, projectKey, cycleKey);
+        const result = await jsonReportHandler.getJobId(projectKey, cycleKey);
 
         assert.strictEqual(result, "jobId");
     });
@@ -205,7 +198,7 @@ suite("jsonReportHandler Tests", () => {
 
         sandbox.stub(axios, "get").resolves(jobStatusResponse);
 
-        const result = await jsonReportHandler.getJobStatus(connection, projectKey, "jobId", "report");
+        const result = await jsonReportHandler.getJobStatus(projectKey, "jobId", "report");
 
         assert.deepStrictEqual(result, jobStatusResponse.data);
     });

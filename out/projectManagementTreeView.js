@@ -25,24 +25,23 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProjectManagementTreeItem = exports.ProjectManagementTreeDataProvider = void 0;
 exports.findProjectKeyOfCycleElement = findProjectKeyOfCycleElement;
-exports.findCycleKeyOfTestThemeElement = findCycleKeyOfTestThemeElement;
+exports.findCycleKeyOfTreeElement = findCycleKeyOfTreeElement;
 exports.initializeTreeView = initializeTreeView;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const testThemeTreeView_1 = require("./testThemeTreeView");
+const extension_1 = require("./extension");
 // Project management tree view that displays projects, versions and cycles.
 // Upon clicking on a cycle element, the remaining children elements are displayed in test theme tree (test themes and test case sets).
 class ProjectManagementTreeDataProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
-    connection;
     rootItem = null;
     // The key of the project currently in view in the tree
     currentProjectKeyInView;
     // The test theme tree data provider to offload the test theme tree data
     testThemeDataProvider;
     constructor(connection, projectKey, testThemeDataProvider) {
-        this.connection = connection;
         this.currentProjectKeyInView = projectKey ?? null;
         this.testThemeDataProvider = testThemeDataProvider;
     }
@@ -64,7 +63,7 @@ class ProjectManagementTreeDataProvider {
         return treeItem;
     }
     async getChildren(element) {
-        if (!this.connection) {
+        if (!extension_1.connection) {
             // vscode.window.showWarningMessage("No connection available for tree view.");
             return [];
         }
@@ -74,7 +73,7 @@ class ProjectManagementTreeDataProvider {
                 return this.getChildren(this.rootItem);
             }
             // No parent element provided, return the root project (single selected project)
-            const projectTree = await this.connection.getProjectTreeOfProject(this.currentProjectKeyInView);
+            const projectTree = await extension_1.connection.getProjectTreeOfProject(this.currentProjectKeyInView);
             const rootItem = this.createTreeItem(projectTree, null, true);
             return rootItem ? [rootItem] : [];
         }
@@ -104,7 +103,11 @@ class ProjectManagementTreeDataProvider {
             console.error("Project key of cycle not found.");
             return [];
         }
-        const cycleData = await this.connection?.fetchCycleStructure(projectKey, cycleKey);
+        if (!extension_1.connection) {
+            console.error("No connection available for tree view.");
+            return [];
+        }
+        const cycleData = await extension_1.connection.fetchCycleStructure(projectKey, cycleKey);
         if (!cycleData || !cycleData.nodes?.length) {
             console.warn("Cycle has no sub-elements.");
             return [];
@@ -120,6 +123,8 @@ class ProjectManagementTreeDataProvider {
             return (Array.from(elementsByKey.values())
                 // Filter elements that have the current parentKey and are not TestCaseNode elements
                 .filter((data) => data.base.parentKey === parentKey && data.elementType !== "TestCaseNode")
+                // Filter out not executable elements and elements that are locked by the system
+                .filter((data) => data.exec?.status !== "NotPlanned" && data.exec?.locker?.key !== "-2")
                 .map((data) => {
                 const hasChildren = Array.from(elementsByKey.values()).some((childData) => childData.base.parentKey === data.base.key);
                 const treeItem = new ProjectManagementTreeItem(`${data.base.numbering} ${data.base.name}`, data.elementType, 
@@ -174,7 +179,6 @@ class ProjectManagementTreeDataProvider {
     clearTree() {
         this.testThemeDataProvider.clearTree();
         this.rootItem = null;
-        this.connection = null;
         this.refresh();
     }
 }
@@ -196,17 +200,18 @@ function findProjectKeyOfCycleElement(element) {
     return undefined;
 }
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
-function findCycleKeyOfTestThemeElement(element) {
-    if (element.contextValue !== "TestThemeNode") {
-        console.error("Element is not a test theme.");
+function findCycleKeyOfTreeElement(element) {
+    /*
+    if ((element.contextValue !== "TestThemeNode") && (element.contextValue !== "TestCaseSetNode")) {
+        console.error("Invalid tree element type.");
         return undefined;
-    }
+    }*/
     let currentElement = element;
     while (currentElement) {
         if (currentElement.contextValue === "Cycle") {
-            return currentElement.item.key;
+            return currentElement?.item?.key;
         }
-        currentElement = currentElement.parent;
+        currentElement = currentElement?.parent;
     }
     console.error("Cycle key not found.");
     return undefined;
