@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as types from "./types";
 import axios, { AxiosResponse } from "axios";
-import { importReportWithResultsToTestbench, PlayServerConnection } from "./testBenchConnection";
+import { importReportWithResultsToTestbench, PlayServerConnection } from "./testbenchConnection";
 import {
     ProjectManagementTreeItem,
     findProjectKeyOfCycleElement,

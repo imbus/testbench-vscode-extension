@@ -1,0 +1,114 @@
+{
+  "key": "4611686020000000170",
+  "numbering": "1.2.2.1.5",
+  "uniqueID": "iTB-TC-326",
+  "name": "FZS",
+  "spec": {
+    "key": "651",
+    "description": "<html><body>\n  \n\n  \nGrundpreise_VarA\n  \n\n</body></html>",
+    "reviewComment": "<html><body/></html>",
+    "status": "Planned",
+    "priority": "Low",
+    "responsible": null,
+    "dueDate": "2021-04-27T00:00:00Z",
+    "reviewer": null,
+    "udfs": [
+      {
+        "key": "1010",
+        "name": "Automatisiert",
+        "value": "true",
+        "udfType": "Boolean"
+      },
+      {
+        "key": "1011",
+        "name": "Entwickler Review durchgef\u00fchrt",
+        "value": "false",
+        "udfType": "Boolean"
+      },
+      {
+        "key": "1020",
+        "name": "Testbar ab Build Nr.",
+        "value": "",
+        "udfType": "String"
+      },
+      {
+        "key": "1021",
+        "name": "Betriebssystem",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1025",
+        "name": "TestTyp",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1028",
+        "name": "TestArt",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": [
+      {
+        "key": "1039",
+        "name": "Demo",
+        "isVariantsMarker": false
+      },
+      {
+        "key": "1042",
+        "name": "Systemtest",
+        "isVariantsMarker": false
+      }
+    ],
+    "references": [],
+    "requirements": [
+      {
+        "key": "2063",
+        "edited": false
+      }
+    ],
+    "preConditions": [],
+    "postConditions": []
+  },
+  "testCases": [
+    {
+      "uniqueID": "iTB-TC-326-PC-1648",
+      "index": 1,
+      "spec": {
+        "key": "3134",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3391",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Fail",
+        "comments": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:03.753\nEnd Time:     2024-10-24 14:16:04.377\nElapsed Time: 0:00:00.624000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    }
+  ],
+  "exec": {
+    "key": "4611686020000001676",
+    "comments": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:03.753\nEnd Time:     2024-10-24 14:16:04.377\n</pre><table><tr><td>iTB-TC-326-PC-1648</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>",
+    "udfs": [
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": []
+  }
+}

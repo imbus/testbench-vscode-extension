@@ -7,7 +7,7 @@
 # Ignore compiled output folder
 out/
 
-## Typescript 
+bundled/libs/bin/
 
 # Logs
 logs
@@ -174,6 +174,8 @@ celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
+
+
 
 # Environments
 .env

@@ -2,7 +2,7 @@ import assert from "assert";
 import * as vscode from "vscode";
 import * as sinon from "sinon";
 import axios from "axios";
-import { PlayServerConnection } from "../../testBenchConnection";
+import { PlayServerConnection } from "../../testbenchConnection";
 import * as types from "../../types";
 
 suite("PlayServerConnection Tests", () => {

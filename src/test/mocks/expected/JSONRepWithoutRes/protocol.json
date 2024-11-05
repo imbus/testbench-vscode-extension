@@ -1,0 +1,948 @@
+[
+  {
+    "testCaseSetKey": "4611686020000000165",
+    "durationMillis": 10043,
+    "executionKey": "4611686020000001671",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-337-PC-1659",
+        "testCaseExecutionKey": "3385",
+        "durationMillis": 8494,
+        "result": {
+          "timestamp": "2024-10-24T12:15:57.771Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:15:49.278\nEnd Time:     2024-10-24 14:15:57.771\nElapsed Time: 0:00:08.494000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-337-PC-120167",
+        "testCaseExecutionKey": "3386",
+        "durationMillis": 1242,
+        "result": {
+          "timestamp": "2024-10-24T12:15:59.071Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:15:57.829\nEnd Time:     2024-10-24 14:15:59.071\nElapsed Time: 0:00:01.242000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:15:49.278\nEnd Time:     2024-10-24 14:15:59.071\n</pre><table><tr><td>iTB-TC-337-PC-1659</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-337-PC-120167</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000166",
+    "durationMillis": 932,
+    "executionKey": "4611686020000001672",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-325-PC-1647",
+        "testCaseExecutionKey": "3387",
+        "durationMillis": 902,
+        "result": {
+          "timestamp": "2024-10-24T12:16:00.035Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:15:59.133\nEnd Time:     2024-10-24 14:16:00.035\nElapsed Time: 0:00:00.902000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:15:59.133\nEnd Time:     2024-10-24 14:16:00.035\n</pre><table><tr><td>iTB-TC-325-PC-1647</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000167",
+    "durationMillis": 1878,
+    "executionKey": "4611686020000001673",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-329-PC-1651",
+        "testCaseExecutionKey": "3388",
+        "durationMillis": 1862,
+        "result": {
+          "timestamp": "2024-10-24T12:16:01.934Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:00.072\nEnd Time:     2024-10-24 14:16:01.934\nElapsed Time: 0:00:01.862000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n\n\nAlso teardown failed:\nSeveral failures occurred:\n\n1) Error: Could not find active page\n\n2) Error: Could not find active page</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:00.072\nEnd Time:     2024-10-24 14:16:01.934\n</pre><table><tr><td>iTB-TC-329-PC-1651</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n\n\nAlso teardown failed:\nSeveral failures occurred:\n\n1) Error: Could not find active page\n\n2) Error: Could not find active page</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000168",
+    "durationMillis": 1051,
+    "executionKey": "4611686020000001674",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-327-PC-1649",
+        "testCaseExecutionKey": "3389",
+        "durationMillis": 1009,
+        "result": {
+          "timestamp": "2024-10-24T12:16:02.963Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:01.954\nEnd Time:     2024-10-24 14:16:02.963\nElapsed Time: 0:00:01.009000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:01.954\nEnd Time:     2024-10-24 14:16:02.963\n</pre><table><tr><td>iTB-TC-327-PC-1649</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000169",
+    "durationMillis": 747,
+    "executionKey": "4611686020000001675",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-328-PC-1650",
+        "testCaseExecutionKey": "3390",
+        "durationMillis": 715,
+        "result": {
+          "timestamp": "2024-10-24T12:16:03.712Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:02.997\nEnd Time:     2024-10-24 14:16:03.712\nElapsed Time: 0:00:00.715000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:02.997\nEnd Time:     2024-10-24 14:16:03.712\n</pre><table><tr><td>iTB-TC-328-PC-1650</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000170",
+    "durationMillis": 665,
+    "executionKey": "4611686020000001676",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-326-PC-1648",
+        "testCaseExecutionKey": "3391",
+        "durationMillis": 624,
+        "result": {
+          "timestamp": "2024-10-24T12:16:04.377Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:03.753\nEnd Time:     2024-10-24 14:16:04.377\nElapsed Time: 0:00:00.624000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:03.753\nEnd Time:     2024-10-24 14:16:04.377\n</pre><table><tr><td>iTB-TC-326-PC-1648</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000171",
+    "durationMillis": 717,
+    "executionKey": "4611686020000001677",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-330-PC-1652",
+        "testCaseExecutionKey": "3392",
+        "durationMillis": 675,
+        "result": {
+          "timestamp": "2024-10-24T12:16:05.090Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:04.415\nEnd Time:     2024-10-24 14:16:05.090\nElapsed Time: 0:00:00.675000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:04.415\nEnd Time:     2024-10-24 14:16:05.090\n</pre><table><tr><td>iTB-TC-330-PC-1652</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000172",
+    "durationMillis": 2468,
+    "executionKey": "4611686020000001678",
+    "testCases": [
+      {
+        "uniqueID": "itb-TC-19617-PC-119491",
+        "testCaseExecutionKey": "3393",
+        "durationMillis": 623,
+        "result": {
+          "timestamp": "2024-10-24T12:16:05.759Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:05.136\nEnd Time:     2024-10-24 14:16:05.759\nElapsed Time: 0:00:00.623000\n</pre>Message: <p><pre>Setup failed:\nError: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19617-PC-188585",
+        "testCaseExecutionKey": "3394",
+        "durationMillis": 593,
+        "result": {
+          "timestamp": "2024-10-24T12:16:06.352Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:05.759\nEnd Time:     2024-10-24 14:16:06.352\nElapsed Time: 0:00:00.593000\n</pre>Message: <p><pre>Setup failed:\nError: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19617-PC-188587",
+        "testCaseExecutionKey": "3395",
+        "durationMillis": 619,
+        "result": {
+          "timestamp": "2024-10-24T12:16:06.975Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:06.356\nEnd Time:     2024-10-24 14:16:06.975\nElapsed Time: 0:00:00.619000\n</pre>Message: <p><pre>Setup failed:\nError: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19617-PC-188589",
+        "testCaseExecutionKey": "3396",
+        "durationMillis": 608,
+        "result": {
+          "timestamp": "2024-10-24T12:16:07.584Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:06.977\nEnd Time:     2024-10-24 14:16:07.584\nElapsed Time: 0:00:00.608000\n</pre>Message: <p><pre>Setup failed:\nError: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:05.136\nEnd Time:     2024-10-24 14:16:07.584\n</pre><table><tr><td>itb-TC-19617-PC-119491</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Setup failed:\nError: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19617-PC-188585</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Setup failed:\nError: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19617-PC-188587</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Setup failed:\nError: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19617-PC-188589</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Setup failed:\nError: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000173",
+    "durationMillis": 682,
+    "executionKey": "4611686020000001679",
+    "testCases": [
+      {
+        "uniqueID": "itb-TC-19619-PC-119581",
+        "testCaseExecutionKey": "3397",
+        "durationMillis": 644,
+        "result": {
+          "timestamp": "2024-10-24T12:16:08.266Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:07.623\nEnd Time:     2024-10-24 14:16:08.266\nElapsed Time: 0:00:00.644000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:07.623\nEnd Time:     2024-10-24 14:16:08.266\n</pre><table><tr><td>itb-TC-19619-PC-119581</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000174",
+    "durationMillis": 1960,
+    "executionKey": "4611686020000001680",
+    "testCases": [
+      {
+        "uniqueID": "itb-TC-19616-PC-119480",
+        "testCaseExecutionKey": "3398",
+        "durationMillis": 598,
+        "result": {
+          "timestamp": "2024-10-24T12:16:08.905Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:08.308\nEnd Time:     2024-10-24 14:16:08.905\nElapsed Time: 0:00:00.598000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19616-PC-119546",
+        "testCaseExecutionKey": "3399",
+        "durationMillis": 613,
+        "result": {
+          "timestamp": "2024-10-24T12:16:09.585Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:08.972\nEnd Time:     2024-10-24 14:16:09.585\nElapsed Time: 0:00:00.613000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19616-PC-119557",
+        "testCaseExecutionKey": "3400",
+        "durationMillis": 593,
+        "result": {
+          "timestamp": "2024-10-24T12:16:10.209Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:09.616\nEnd Time:     2024-10-24 14:16:10.209\nElapsed Time: 0:00:00.593000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:08.308\nEnd Time:     2024-10-24 14:16:10.209\n</pre><table><tr><td>itb-TC-19616-PC-119480</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19616-PC-119546</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19616-PC-119557</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000175",
+    "durationMillis": 3052,
+    "executionKey": "4611686020000001681",
+    "testCases": [
+      {
+        "uniqueID": "itb-TC-19615-PC-119469",
+        "testCaseExecutionKey": "3401",
+        "durationMillis": 570,
+        "result": {
+          "timestamp": "2024-10-24T12:16:10.842Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:10.273\nEnd Time:     2024-10-24 14:16:10.842\nElapsed Time: 0:00:00.570000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19615-PC-119502",
+        "testCaseExecutionKey": "3402",
+        "durationMillis": 568,
+        "result": {
+          "timestamp": "2024-10-24T12:16:11.423Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:10.856\nEnd Time:     2024-10-24 14:16:11.423\nElapsed Time: 0:00:00.568000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19615-PC-119513",
+        "testCaseExecutionKey": "3403",
+        "durationMillis": 582,
+        "result": {
+          "timestamp": "2024-10-24T12:16:12.037Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:11.455\nEnd Time:     2024-10-24 14:16:12.037\nElapsed Time: 0:00:00.582000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19615-PC-119524",
+        "testCaseExecutionKey": "3404",
+        "durationMillis": 605,
+        "result": {
+          "timestamp": "2024-10-24T12:16:12.668Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:12.063\nEnd Time:     2024-10-24 14:16:12.668\nElapsed Time: 0:00:00.605000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19615-PC-119535",
+        "testCaseExecutionKey": "3405",
+        "durationMillis": 563,
+        "result": {
+          "timestamp": "2024-10-24T12:16:13.273Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:12.710\nEnd Time:     2024-10-24 14:16:13.273\nElapsed Time: 0:00:00.563000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:10.273\nEnd Time:     2024-10-24 14:16:13.273\n</pre><table><tr><td>itb-TC-19615-PC-119469</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19615-PC-119502</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19615-PC-119513</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19615-PC-119524</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19615-PC-119535</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000176",
+    "durationMillis": 1186,
+    "executionKey": "4611686020000001682",
+    "testCases": [
+      {
+        "uniqueID": "itb-TC-19628-PC-120085",
+        "testCaseExecutionKey": "3406",
+        "durationMillis": 529,
+        "result": {
+          "timestamp": "2024-10-24T12:16:13.856Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:13.327\nEnd Time:     2024-10-24 14:16:13.856\nElapsed Time: 0:00:00.529000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19628-PC-120096",
+        "testCaseExecutionKey": "3407",
+        "durationMillis": 555,
+        "result": {
+          "timestamp": "2024-10-24T12:16:14.461Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:13.906\nEnd Time:     2024-10-24 14:16:14.461\nElapsed Time: 0:00:00.555000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:13.327\nEnd Time:     2024-10-24 14:16:14.461\n</pre><table><tr><td>itb-TC-19628-PC-120085</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19628-PC-120096</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000177",
+    "durationMillis": 2413,
+    "executionKey": "4611686020000001683",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-338-PC-1660",
+        "testCaseExecutionKey": "3408",
+        "durationMillis": 589,
+        "result": {
+          "timestamp": "2024-10-24T12:16:15.118Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:14.529\nEnd Time:     2024-10-24 14:16:15.118\nElapsed Time: 0:00:00.589000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-338-PC-1661",
+        "testCaseExecutionKey": "3409",
+        "durationMillis": 613,
+        "result": {
+          "timestamp": "2024-10-24T12:16:15.755Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:15.141\nEnd Time:     2024-10-24 14:16:15.755\nElapsed Time: 0:00:00.613000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-338-PC-1662",
+        "testCaseExecutionKey": "3410",
+        "durationMillis": 560,
+        "result": {
+          "timestamp": "2024-10-24T12:16:16.343Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:15.783\nEnd Time:     2024-10-24 14:16:16.343\nElapsed Time: 0:00:00.560000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-338-PC-195545",
+        "testCaseExecutionKey": "3411",
+        "durationMillis": 542,
+        "result": {
+          "timestamp": "2024-10-24T12:16:16.908Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:16.366\nEnd Time:     2024-10-24 14:16:16.908\nElapsed Time: 0:00:00.542000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:14.529\nEnd Time:     2024-10-24 14:16:16.908\n</pre><table><tr><td>iTB-TC-338-PC-1660</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-338-PC-1661</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-338-PC-1662</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-338-PC-195545</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000178",
+    "durationMillis": 2999,
+    "executionKey": "4611686020000001684",
+    "testCases": [
+      {
+        "uniqueID": "itb-TC-19621-PC-119695",
+        "testCaseExecutionKey": "3412",
+        "durationMillis": 520,
+        "result": {
+          "timestamp": "2024-10-24T12:16:17.471Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:16.951\nEnd Time:     2024-10-24 14:16:17.471\nElapsed Time: 0:00:00.520000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19621-PC-119694",
+        "testCaseExecutionKey": "3413",
+        "durationMillis": 548,
+        "result": {
+          "timestamp": "2024-10-24T12:16:18.040Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:17.492\nEnd Time:     2024-10-24 14:16:18.040\nElapsed Time: 0:00:00.548000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19621-PC-119693",
+        "testCaseExecutionKey": "3414",
+        "durationMillis": 630,
+        "result": {
+          "timestamp": "2024-10-24T12:16:18.714Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:18.084\nEnd Time:     2024-10-24 14:16:18.714\nElapsed Time: 0:00:00.630000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19621-PC-119692",
+        "testCaseExecutionKey": "3415",
+        "durationMillis": 527,
+        "result": {
+          "timestamp": "2024-10-24T12:16:19.282Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:18.755\nEnd Time:     2024-10-24 14:16:19.282\nElapsed Time: 0:00:00.527000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19621-PC-119893",
+        "testCaseExecutionKey": "3416",
+        "durationMillis": 557,
+        "result": {
+          "timestamp": "2024-10-24T12:16:19.877Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:19.320\nEnd Time:     2024-10-24 14:16:19.877\nElapsed Time: 0:00:00.557000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:16.951\nEnd Time:     2024-10-24 14:16:19.877\n</pre><table><tr><td>itb-TC-19621-PC-119695</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19621-PC-119694</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19621-PC-119693</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19621-PC-119692</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19621-PC-119893</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000179",
+    "durationMillis": 4062,
+    "executionKey": "4611686020000001685",
+    "testCases": [
+      {
+        "uniqueID": "itb-TC-19623-PC-119826",
+        "testCaseExecutionKey": "3417",
+        "durationMillis": 2738,
+        "result": {
+          "timestamp": "2024-10-24T12:16:22.703Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:19.965\nEnd Time:     2024-10-24 14:16:22.703\nElapsed Time: 0:00:02.738000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19623-PC-119825",
+        "testCaseExecutionKey": "3418",
+        "durationMillis": 667,
+        "result": {
+          "timestamp": "2024-10-24T12:16:23.395Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:22.728\nEnd Time:     2024-10-24 14:16:23.395\nElapsed Time: 0:00:00.667000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19623-PC-119824",
+        "testCaseExecutionKey": "3419",
+        "durationMillis": 552,
+        "result": {
+          "timestamp": "2024-10-24T12:16:23.975Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:23.423\nEnd Time:     2024-10-24 14:16:23.975\nElapsed Time: 0:00:00.552000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:19.965\nEnd Time:     2024-10-24 14:16:23.975\n</pre><table><tr><td>itb-TC-19623-PC-119826</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19623-PC-119825</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19623-PC-119824</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000180",
+    "durationMillis": 4946,
+    "executionKey": "4611686020000001686",
+    "testCases": [
+      {
+        "uniqueID": "itb-TC-19622-PC-119739",
+        "testCaseExecutionKey": "3420",
+        "durationMillis": 541,
+        "result": {
+          "timestamp": "2024-10-24T12:16:24.575Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:24.034\nEnd Time:     2024-10-24 14:16:24.575\nElapsed Time: 0:00:00.541000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19622-PC-119738",
+        "testCaseExecutionKey": "3421",
+        "durationMillis": 642,
+        "result": {
+          "timestamp": "2024-10-24T12:16:25.235Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:24.594\nEnd Time:     2024-10-24 14:16:25.235\nElapsed Time: 0:00:00.642000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19622-PC-119737",
+        "testCaseExecutionKey": "3422",
+        "durationMillis": 593,
+        "result": {
+          "timestamp": "2024-10-24T12:16:25.871Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:25.278\nEnd Time:     2024-10-24 14:16:25.871\nElapsed Time: 0:00:00.593000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19622-PC-119736",
+        "testCaseExecutionKey": "3423",
+        "durationMillis": 576,
+        "result": {
+          "timestamp": "2024-10-24T12:16:26.469Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:25.893\nEnd Time:     2024-10-24 14:16:26.469\nElapsed Time: 0:00:00.576000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19622-PC-119743",
+        "testCaseExecutionKey": "3424",
+        "durationMillis": 618,
+        "result": {
+          "timestamp": "2024-10-24T12:16:27.115Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:26.497\nEnd Time:     2024-10-24 14:16:27.115\nElapsed Time: 0:00:00.618000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19622-PC-119742",
+        "testCaseExecutionKey": "3425",
+        "durationMillis": 605,
+        "result": {
+          "timestamp": "2024-10-24T12:16:27.741Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:27.135\nEnd Time:     2024-10-24 14:16:27.741\nElapsed Time: 0:00:00.605000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19622-PC-119741",
+        "testCaseExecutionKey": "3426",
+        "durationMillis": 580,
+        "result": {
+          "timestamp": "2024-10-24T12:16:28.343Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:27.763\nEnd Time:     2024-10-24 14:16:28.343\nElapsed Time: 0:00:00.580000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "itb-TC-19622-PC-119740",
+        "testCaseExecutionKey": "3427",
+        "durationMillis": 574,
+        "result": {
+          "timestamp": "2024-10-24T12:16:28.943Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:28.369\nEnd Time:     2024-10-24 14:16:28.943\nElapsed Time: 0:00:00.574000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:24.034\nEnd Time:     2024-10-24 14:16:28.943\n</pre><table><tr><td>itb-TC-19622-PC-119739</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19622-PC-119738</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19622-PC-119737</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19622-PC-119736</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19622-PC-119743</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19622-PC-119742</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19622-PC-119741</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>itb-TC-19622-PC-119740</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000162",
+    "durationMillis": 2453,
+    "executionKey": "4611686020000001668",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-318-PC-1613",
+        "testCaseExecutionKey": "3374",
+        "durationMillis": 546,
+        "result": {
+          "timestamp": "2024-10-24T12:16:29.535Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:28.989\nEnd Time:     2024-10-24 14:16:29.535\nElapsed Time: 0:00:00.546000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-318-PC-1614",
+        "testCaseExecutionKey": "3375",
+        "durationMillis": 624,
+        "result": {
+          "timestamp": "2024-10-24T12:16:30.218Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:29.594\nEnd Time:     2024-10-24 14:16:30.218\nElapsed Time: 0:00:00.624000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-318-PC-1615",
+        "testCaseExecutionKey": "3376",
+        "durationMillis": 571,
+        "result": {
+          "timestamp": "2024-10-24T12:16:30.814Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:30.244\nEnd Time:     2024-10-24 14:16:30.814\nElapsed Time: 0:00:00.571000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-318-PC-1616",
+        "testCaseExecutionKey": "3377",
+        "durationMillis": 570,
+        "result": {
+          "timestamp": "2024-10-24T12:16:31.414Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:30.844\nEnd Time:     2024-10-24 14:16:31.414\nElapsed Time: 0:00:00.570000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:28.989\nEnd Time:     2024-10-24 14:16:31.414\n</pre><table><tr><td>iTB-TC-318-PC-1613</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-318-PC-1614</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-318-PC-1615</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-318-PC-1616</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000163",
+    "durationMillis": 2468,
+    "executionKey": "4611686020000001669",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-320-PC-1622",
+        "testCaseExecutionKey": "3378",
+        "durationMillis": 650,
+        "result": {
+          "timestamp": "2024-10-24T12:16:32.097Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:31.447\nEnd Time:     2024-10-24 14:16:32.097\nElapsed Time: 0:00:00.650000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-320-PC-1623",
+        "testCaseExecutionKey": "3379",
+        "durationMillis": 610,
+        "result": {
+          "timestamp": "2024-10-24T12:16:32.739Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:32.130\nEnd Time:     2024-10-24 14:16:32.739\nElapsed Time: 0:00:00.610000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-320-PC-1624",
+        "testCaseExecutionKey": "3380",
+        "durationMillis": 573,
+        "result": {
+          "timestamp": "2024-10-24T12:16:33.335Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:32.763\nEnd Time:     2024-10-24 14:16:33.335\nElapsed Time: 0:00:00.573000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-320-PC-389172",
+        "testCaseExecutionKey": "3381",
+        "durationMillis": 525,
+        "result": {
+          "timestamp": "2024-10-24T12:16:33.885Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:33.360\nEnd Time:     2024-10-24 14:16:33.885\nElapsed Time: 0:00:00.525000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:31.447\nEnd Time:     2024-10-24 14:16:33.885\n</pre><table><tr><td>iTB-TC-320-PC-1622</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-320-PC-1623</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-320-PC-1624</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-320-PC-389172</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  },
+  {
+    "testCaseSetKey": "4611686020000000164",
+    "durationMillis": 1798,
+    "executionKey": "4611686020000001670",
+    "testCases": [
+      {
+        "uniqueID": "iTB-TC-319-PC-1619",
+        "testCaseExecutionKey": "3382",
+        "durationMillis": 591,
+        "result": {
+          "timestamp": "2024-10-24T12:16:34.512Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:33.921\nEnd Time:     2024-10-24 14:16:34.512\nElapsed Time: 0:00:00.591000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-319-PC-1620",
+        "testCaseExecutionKey": "3383",
+        "durationMillis": 541,
+        "result": {
+          "timestamp": "2024-10-24T12:16:35.079Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:34.538\nEnd Time:     2024-10-24 14:16:35.079\nElapsed Time: 0:00:00.541000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      },
+      {
+        "uniqueID": "iTB-TC-319-PC-1621",
+        "testCaseExecutionKey": "3384",
+        "durationMillis": 579,
+        "result": {
+          "timestamp": "2024-10-24T12:16:35.681Z",
+          "status": "Performed",
+          "verdict": "Fail",
+          "execStatus": "NotBlocked"
+        },
+        "comments": {
+          "html": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:35.102\nEnd Time:     2024-10-24 14:16:35.681\nElapsed Time: 0:00:00.579000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>"
+        }
+      }
+    ],
+    "comments": {
+      "html": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:33.921\nEnd Time:     2024-10-24 14:16:35.681\n</pre><table><tr><td>iTB-TC-319-PC-1619</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-319-PC-1620</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-319-PC-1621</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>"
+    }
+  }
+]

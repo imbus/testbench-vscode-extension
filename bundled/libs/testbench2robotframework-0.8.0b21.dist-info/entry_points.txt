@@ -1,0 +1,4 @@
+[console_scripts]
+tb2robot = testbench2robotframework.__main__:run
+testbench2robotframework = testbench2robotframework.__main__:run
+

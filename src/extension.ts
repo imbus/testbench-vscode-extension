@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as jsonReportHandler from "./jsonReportHandler";
-import * as testbenchConnection from "./testBenchConnection";
+import * as testbenchConnection from "./testbenchConnection";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 
 // TODO: WebViev UI for login?

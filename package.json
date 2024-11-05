@@ -441,7 +441,11 @@
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
+        "@vscode/python-extension": "^1.0.5",
         "axios": "^1.7.7",
         "jszip": "^3.10.1"
-    }
+    },
+    "extensionDependencies": [
+        "ms-python.python"
+    ]
 }

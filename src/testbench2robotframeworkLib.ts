@@ -1,85 +1,214 @@
 import * as vscode from "vscode";
-import { exec, spawn } from "child_process";
+import { exec } from "child_process";
+import { buildTb2RobotCommand, buildRobotCommand } from "./pyCommandBuilder";
 
-// Check if testbench2robotframework is installed
-function isTestbench2robotframeworkInstalled(): Promise<boolean> {
-    return new Promise((resolve) => {
-        let robotPath = "tb2robot";
-        const robotProcess = spawn(robotPath, ["--version"]);
+export abstract class tb2robotLib {
+    /**
+     * Generates Robot Framework Testsuites.
+     * @param {vscode.ExtensionContext} context - The ExtensionContext.
+     * @param {string} workingDirectory - Directory in which the command is to be executed.
+     * @param {string} reportPath - Path to a folder or ZIP file containing TestBench JSON reports.
+     * @param {string} configJSONPath - Path to a JSON file, for the configuration of the output. If not provided, a config.json will be automatically generated.
+     */
+    public static tb2robotWrite(
+        context: vscode.ExtensionContext,
+        workingDirectory: string,
+        reportPath: string,
+        configJSONPath?: string
+    ): Promise<void> {
+        return new Promise(async (resolve, reject) => {
+            const commandBase = await buildTb2RobotCommand(context);
 
-        robotProcess.stdout.on("data", (data) => {
-            const output = data.toString();
-            console.log("stdout:", output);
-            if (output.includes("TestBench2RobotFramework")) {
-                resolve(true);
-            } else {
-                resolve(false);
+            let command = `${commandBase} write ${reportPath}`;
+            if (configJSONPath) {
+                command = `${commandBase} write -c ${configJSONPath} ${reportPath}`;
             }
+
+            console.log(`Executing command: ${command}`);
+
+            exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
+                if (error) {
+                    reject(stderr || stdout || "An unknown Error occurred.");
+                    console.log(error.message);
+                    return;
+                }
+                console.log(stdout || stderr);
+                resolve();
+            });
         });
-
-        robotProcess.stderr.on("data", (data) => {
-            console.error("stderr:", data.toString());
-            resolve(false);
-        });
-
-        robotProcess.on("error", (error) => {
-            console.error("Error executing command:", error);
-            resolve(false);
-        });
-    });
-}
-
-// testbench2robotframework: Convert JSONs to Robot Framework Testsuites
-function testbench2robotframeworkWrite(configurationJSONFile: string, reportZipPath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const command = `tb2robot write -c ${configurationJSONFile} ${reportZipPath}`;
-
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                reject(stderr || stdout);
-                return;
-            }
-            resolve();
-        });
-    });
-}
-
-// testbench2robotframework: Write test results back to the Tesbench Json report by reading an XML file and writing the results back to the JSON file
-// (Optional parameter) testResultsPath can be a zip file or a folder containing the test results
-// (Optional parameter) jsonReportPath can be a zip file or a folder containing the JSON report
-// ?? tb2robot write -o .\output.xml -r .\ReportWithResults.zip E:\TestBench\report.zip
-function testbench2robotframeworkRead(
-    resultXMLPath: string,
-    testResultsPath?: string,
-    jsonReportPath?: string
-): Promise<void> {
-    return new Promise((resolve, reject) => {
-        let command = `tb2robot read ${resultXMLPath}`;
-        if (testResultsPath) {
-            command += ` ${testResultsPath}`;
-        }
-        if (jsonReportPath) {
-            command += ` ${jsonReportPath}`;
-        }
-
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                reject(stderr || stdout);
-                return;
-            }
-            resolve();
-        });
-    });
-}
-
-export async function startTestbench2robotframework(configurationJSONFile: string, reportZipPath: string) {
-    const isInstalled = await isTestbench2robotframeworkInstalled();
-    if (!isInstalled) {
-        vscode.window.showErrorMessage(
-            "testbench2robotframework is not installed. Please install it to run the commands."
-        );
-        return;
     }
 
-    await testbench2robotframeworkWrite(configurationJSONFile, reportZipPath);
+    /**
+     * Writes XML test results back to the TestBench Json report.
+     * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
+     * @param {string} workingDirectory - Directory in which the command is to be executed.
+     * @param {string} outputXmlPath - Path to a Robot Framework XML resultfile.
+     * @param {string} reportWithoutResultsPath - Path to a folder or ZIP file containing TestBench JSON reports (without results).
+     * @param {string} resultPath - Path to a folder or ZIP file to save the results to. If not provided, reports provided in reportPath will be overritten.
+     */
+    public static tb2robotRead(
+        context: vscode.ExtensionContext,
+        workingDirectory: string,
+        outputXmlPath: string,
+        reportWithoutResultsPath: string,
+        resultPath?: string,
+        configJSONPath?: string
+    ): Promise<void> {
+        return new Promise(async (resolve, reject) => {
+            const commandBase = await buildTb2RobotCommand(context);
+
+            // OVerwrite the results in the reportPath if no resultPath is provided.
+            let command = `${commandBase} read -o ${outputXmlPath} -r ${reportWithoutResultsPath}`;
+
+            // Write the results to the resultPath if provided.
+            if (resultPath) {
+                command = `${commandBase} read -o ${outputXmlPath} -r ${resultPath} ${reportWithoutResultsPath}`;
+            }
+
+            // Use the provided config file if provided.
+            if (configJSONPath) {
+                command = `${commandBase} read -c ${configJSONPath} -o ${outputXmlPath} -r ${resultPath} ${reportWithoutResultsPath}`;
+            }
+
+            console.log(`Executing command: ${command}`);
+            exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
+                if (error) {
+                    reject(stderr || stdout || "An unknown Error occurred.");
+                    return;
+                }
+                resolve();
+            });
+        });
+    }
+
+    /**
+     * Generates XML resultfiles from TestBench JSON reports.
+     * @param {string} workingDirectory - Directory in which the command is to be executed.
+     * @param {string} outputResultDir - Directory in which the result is to be stored..
+     * @param {string} robotFilesPath - Path to a folder containing the robotframework tests.
+     * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
+     */
+    public static robotGenerateXMLResults(
+        workingDirectory: string,
+        outputResultDir: string,
+        robotFilesPath: string
+    ): Promise<boolean> {
+        return new Promise(async (resolve, reject) => {
+            const commandBase = await buildRobotCommand();
+
+            let command = `${commandBase} -d ${outputResultDir} --dryrun ${robotFilesPath}`;
+
+            exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
+                if (error) {
+                    reject(stderr || stdout || "An unknown Error occurred.");
+                    resolve(false);
+                }
+                resolve(true);
+            });
+        });
+    }
+
+    /**
+     * Entry point for the Testbench2Robotframework write command.
+     * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
+     * @param {string} workingDirectory The directory in which the command is to be executed.
+     * @param {string} reportPath Path to a folder or ZIP file containing TestBench JSON reports.
+     * @param {string} configJSONPath Path to a JSON configuration file. If not provided, a config.json will be automatically generated.
+     * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
+     */
+    public static async startTb2robotWrite(
+        context: vscode.ExtensionContext,
+        workingDirectory: string,
+        reportPath: string,
+        configJSONPath?: string
+    ): Promise<boolean> {
+        let res = true;
+
+        await this.tb2robotWrite(context, workingDirectory, reportPath, configJSONPath)
+            .then(() => {
+                let config = "no";
+                if (configJSONPath) {
+                    config = configJSONPath;
+                }
+
+                console.log(`tb2robot write-generation completed using ${reportPath}, ${config} config file provided.`);
+            })
+            .catch((err) => {
+                console.error("Error:", err);
+                vscode.window.showErrorMessage(`testbench2robotframework ${err}`);
+                res = false;
+            });
+
+        return res;
+    }
+
+    /**
+     * Entry point for the Testbench2Robotframework read command.
+     * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
+     * @param {string} workingDirectory The directory in which the command is to be executed.
+     * @param {string} outputXmlPath Path to a Robot Framework XML resultfile.
+     * @param {string} reportPath Path to a folder or ZIP file containing TestBench JSON reports. *
+     * @param {string} resultPath  Path to a folder or ZIP file to save the results to. If not provided, reports provided in reportPath will be overritten.
+     * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
+     */
+    public static async startTb2robotRead(
+        context: vscode.ExtensionContext,
+        workingDirectory: string,
+        outputXmlPath: string,
+        reportPath: string,
+        resultPath?: string,
+        configJSONPath?: string
+    ): Promise<boolean> {
+        let res = true;
+
+        await this.tb2robotRead(context, workingDirectory, outputXmlPath, reportPath, resultPath, configJSONPath)
+            .then(() => {
+                let providedPath = "none";
+                let providedConfig = "";
+                if (resultPath) {
+                    providedPath = resultPath;
+                }
+                if (configJSONPath) {
+                    providedConfig = `, ${configJSONPath}`;
+                }
+
+                console.log(
+                    `tb2robot read-generation completed using ${outputXmlPath}${providedConfig} and ${reportPath}. Provided path for results: ${providedPath}.`
+                );
+            })
+            .catch((err) => {
+                console.error("Error:", err);
+                vscode.window.showErrorMessage(`testbench2robotframework ${err}`);
+                res = false;
+            });
+
+        return res;
+    }
+
+    /**
+     * Entry point for the Robot Framework XML generation command.
+     * @param {string} workingDirectory The directory in which the command is to be executed.
+     * @param {string} outputResultDir The directory in which the result is to be stored.
+     * @param {string} reportPath Path to a folder containing the robotframework tests.
+     * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
+     */
+    public static async startRobotGenerateXMLResults(
+        workingDirectory: string,
+        outputResultDir: string,
+        reportPath: string
+    ): Promise<boolean> {
+        let res = true;
+
+        await this.robotGenerateXMLResults(workingDirectory, outputResultDir, reportPath)
+            .then(() => {
+                console.log(`Robot Framework generation completed using ${outputResultDir} and ${reportPath}.`);
+            })
+            .catch((err) => {
+                console.error("Error:", err);
+                vscode.window.showErrorMessage(`Robot Framework ${err}`);
+                res = false;
+            });
+
+        return res;
+    }
 }

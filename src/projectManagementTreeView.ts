@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { PlayServerConnection } from "./testBenchConnection";
+import { PlayServerConnection } from "./testbenchConnection";
 import { TestThemeTreeDataProvider } from "./testThemeTreeView";
 
 // Project management tree view that displays projects, versions and cycles.

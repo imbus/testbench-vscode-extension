@@ -1,0 +1,168 @@
+{
+  "key": "4611686020000000177",
+  "numbering": "1.2.3.1.1",
+  "uniqueID": "iTB-TC-338",
+  "name": "Sondermodellbestandteile",
+  "spec": {
+    "key": "662",
+    "description": "<html><body>\n  \n\n  \n  \n\n</body></html>",
+    "reviewComment": "<html><body>\n  \n\n  \n  \n\n</body></html>",
+    "status": "Planned",
+    "priority": "Middle",
+    "responsible": null,
+    "dueDate": "2021-04-27T00:00:00Z",
+    "reviewer": null,
+    "udfs": [
+      {
+        "key": "1010",
+        "name": "Automatisiert",
+        "value": "true",
+        "udfType": "Boolean"
+      },
+      {
+        "key": "1011",
+        "name": "Entwickler Review durchgef\u00fchrt",
+        "value": "false",
+        "udfType": "Boolean"
+      },
+      {
+        "key": "1020",
+        "name": "Testbar ab Build Nr.",
+        "value": "",
+        "udfType": "String"
+      },
+      {
+        "key": "1021",
+        "name": "Betriebssystem",
+        "value": "beide",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1025",
+        "name": "TestTyp",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1028",
+        "name": "TestArt",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": [
+      {
+        "key": "1039",
+        "name": "Demo",
+        "isVariantsMarker": false
+      },
+      {
+        "key": "1042",
+        "name": "Systemtest",
+        "isVariantsMarker": false
+      }
+    ],
+    "references": [],
+    "requirements": [
+      {
+        "key": "2264",
+        "edited": false
+      }
+    ],
+    "preConditions": [],
+    "postConditions": []
+  },
+  "testCases": [
+    {
+      "uniqueID": "iTB-TC-338-PC-1660",
+      "index": 1,
+      "spec": {
+        "key": "3185",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3408",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Fail",
+        "comments": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:14.529\nEnd Time:     2024-10-24 14:16:15.118\nElapsed Time: 0:00:00.589000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "iTB-TC-338-PC-1661",
+      "index": 2,
+      "spec": {
+        "key": "3186",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3409",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Fail",
+        "comments": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:15.141\nEnd Time:     2024-10-24 14:16:15.755\nElapsed Time: 0:00:00.613000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "iTB-TC-338-PC-1662",
+      "index": 3,
+      "spec": {
+        "key": "3187",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3410",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Fail",
+        "comments": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:15.783\nEnd Time:     2024-10-24 14:16:16.343\nElapsed Time: 0:00:00.560000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "iTB-TC-338-PC-195545",
+      "index": 4,
+      "spec": {
+        "key": "3188",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3411",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Fail",
+        "comments": "<html><body><b><span style='background-color: #ce3e01; color: #fff;'>FAIL</span></b><pre>Start Time:   2024-10-24 14:16:16.366\nEnd Time:     2024-10-24 14:16:16.908\nElapsed Time: 0:00:00.542000\n</pre>Message: <p><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to &quot;http://car.keyword-driven.de/&quot;, waiting until &quot;load&quot;\n</pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    }
+  ],
+  "exec": {
+    "key": "4611686020000001683",
+    "comments": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-24 14:16:14.529\nEnd Time:     2024-10-24 14:16:16.908\n</pre><table><tr><td>iTB-TC-338-PC-1660</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-338-PC-1661</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-338-PC-1662</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr><tr><td>iTB-TC-338-PC-195545</td><td></td><td style='background-color: #ce3e01; color: #fff;'><b>FAIL</b></td><td><pre>Error: page.goto: Target page, context or browser has been closed\nCall log:\n  - navigating to \"http://car.keyword-driven.de/\", waiting until \"load\"\n</pre></td></tr></table></body></html>",
+    "udfs": [
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": []
+  }
+}

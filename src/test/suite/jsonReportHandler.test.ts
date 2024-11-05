@@ -5,7 +5,7 @@ import * as jsonReportHandler from "../../jsonReportHandler";
 import * as types from "../../types";
 import axios from "axios";
 import * as fs from "fs";
-import { PlayServerConnection } from "../../testBenchConnection";
+import { PlayServerConnection } from "../../testbenchConnection";
 import { ProjectManagementTreeItem } from "../../projectManagementTreeView";
 
 suite("jsonReportHandler Tests", () => {
