@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { exec } from "child_process";
 import { buildTb2RobotCommand, buildRobotCommand } from "./pyCommandBuilder";
 
-export abstract class tb2robotLib {
+export class tb2robotLib {
     /**
      * Generates Robot Framework Testsuites.
      * @param {vscode.ExtensionContext} context - The ExtensionContext.

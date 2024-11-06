@@ -6,7 +6,7 @@ import * as types from "../../types";
 import axios from "axios";
 import * as fs from "fs";
 import { PlayServerConnection } from "../../testBenchConnection";
-import { ProjectManagementTreeItem } from "../../projectManagementTreeView";
+import { TestbenchTreeItem } from "../../projectManagementTreeView";
 
 suite("jsonReportHandler Tests", () => {
     let sandbox: sinon.SinonSandbox;

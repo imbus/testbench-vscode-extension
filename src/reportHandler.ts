@@ -476,7 +476,7 @@ export function delay(ms: number): Promise<void> {
  * @param workingDirectory - The directory where the ZIP file should be downloaded.
  */
 export async function callFetchReportForTreeElement(
-    treeItem: projectManagementTreeView.ProjectManagementTreeItem,
+    treeItem: projectManagementTreeView.TestbenchTreeItem,
     projectManagementTreeViewOfExtension: projectManagementTreeView.ProjectManagementTreeDataProvider | null,
     workingDirectory: string
 ): Promise<void> {
@@ -561,17 +561,52 @@ export async function callFetchReportForTreeElement(
 async function handleExecutionError(
     workingDirectoryFullPath: string,
     isExecutionSuccessfull: boolean,
-    downloadedReportZipFilePath: string
+    downloadedReportZipFileFullPath: string
 ): Promise<boolean> {
     if (!isExecutionSuccessfull) {
         await deleteConfigurationFile(getConfigurationFilePath(workingDirectoryFullPath)); // Delete created json config file after usage
         if (vscode.workspace.getConfiguration(baseKey).get<boolean>("clearReportAfterProcessing")) {
-            await removeReportZipFile(downloadedReportZipFilePath);
+            await removeReportZipFile(downloadedReportZipFileFullPath);
         }
         console.error(`Test generation failed.`);
         // vscode.window.showErrorMessage(`Test generation failed.`);
     }
     return isExecutionSuccessfull;
+}
+
+/**
+ * Generate test cases for the selected TestThemeNode or TestCaseSetNode.
+ * @param context VS Code extension context
+ * @param treeItem The selected tree item
+ * @param folderNameOfTestbenchWorkingDirectory The folder name of the testbench working directory
+ * @returns 
+ */
+export async function generateTestCasesForTestThemeOrTestCaseSet(
+    context: vscode.ExtensionContext,
+    treeItem: projectManagementTreeView.TestbenchTreeItem,
+    folderNameOfTestbenchWorkingDirectory: string
+): Promise<void> {
+    console.log("Generating tests for:", treeItem);
+
+    let treeElementUniqueID = treeItem.item?.base?.uniqueID;
+    let cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
+    let projectKey = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem.parent!);
+
+    if (!projectKey || !cycleKey || !treeElementUniqueID) {
+        console.error("Error when finding project key, cycle key, test theme or unique ID.");
+        return;
+    }
+
+    generateTestsWithTestBenchToRobotFramework(
+        context,
+        treeItem,
+        typeof treeItem.label === "string" ? treeItem.label : "", // Label might be undefined
+        baseKey,
+        projectKey,
+        cycleKey,
+        folderNameOfTestbenchWorkingDirectory,
+        treeElementUniqueID
+    );
 }
 
 /**
@@ -587,7 +622,7 @@ async function handleExecutionError(
  */
 export async function generateTestsWithTestBenchToRobotFramework(
     context: vscode.ExtensionContext,
-    treeItem: projectManagementTreeView.ProjectManagementTreeItem,
+    treeItem: projectManagementTreeView.TestbenchTreeItem,
     itemLabel: string,
     baseKey: string,
     projectKey: string,
@@ -680,7 +715,7 @@ function findTestThemeNodes(
     }
 
     if (Array.isArray(node.children)) {
-        node.children.forEach((child: projectManagementTreeView.ProjectManagementTreeItem) =>
+        node.children.forEach((child: projectManagementTreeView.TestbenchTreeItem) =>
             findTestThemeNodes(child, results)
         );
     }
@@ -754,7 +789,8 @@ async function runTestGenerationProcess(
     }
 
     updateLastGeneratedReportParams(UIDofSelectedElement, projectKey, cycleKey, executionBased);
-    await cleanUp(configFilePath, downloadedReportZipFilePath, baseKey, workingDirectoryFullPath);
+    await cleanUp(configFilePath, downloadedReportZipFilePath, baseKey);
+    // Open the Testing view of VS Code after generating the tests
     vscode.commands.executeCommand("workbench.view.extension.test");
 }
 
@@ -770,17 +806,15 @@ function updateLastGeneratedReportParams(UID: string, projectKey: string, cycleK
 
 /**
  * Clean up temporary files and configurations.
+ * @param configFilePath The path of the testbench2robotframework configuration file
+ * @param reportZipFileFullPath The path of the report ZIP file
+ * @param baseKey The base key of the extension
  */
-async function cleanUp(
-    configFilePath: string,
-    reportZipFilePath: string,
-    baseKey: string,
-    workingDirectoryFullPath: string
-) {
+async function cleanUp(configFilePath: string, reportZipFileFullPath: string, baseKey: string) {
     await deleteConfigurationFile(configFilePath);
 
     if (vscode.workspace.getConfiguration(baseKey).get<boolean>("clearReportAfterProcessing")) {
-        await removeReportZipFile(reportZipFilePath);
+        await removeReportZipFile(reportZipFileFullPath);
     }
 
     vscode.window.showInformationMessage("Test generation done.");
@@ -833,16 +867,16 @@ export async function findOutputXml(): Promise<string | undefined> {
 
 /**
  * Removes the specified zip file from the system if it exists and is a valid zip file.
- * @param zipFilePath The path of the zip file to be removed
+ * @param zipFileFullPath The path of the zip file to be removed
  * @returns Promise<void>
  */
-export async function removeReportZipFile(zipFilePath: string): Promise<void> {
+export async function removeReportZipFile(zipFileFullPath: string): Promise<void> {
     try {
         // Check if the file exists
-        await fsPromise.access(zipFilePath);
+        await fsPromise.access(zipFileFullPath);
 
-        const fileName = path.basename(zipFilePath);
-        const fileExtension = path.extname(zipFilePath);
+        const fileName = path.basename(zipFileFullPath);
+        const fileExtension = path.extname(zipFileFullPath);
 
         // Validate that the file is a zip file
         if (fileExtension !== ".zip") {
@@ -850,14 +884,14 @@ export async function removeReportZipFile(zipFilePath: string): Promise<void> {
         }
 
         // Remove the file
-        await fsPromise.unlink(zipFilePath);
+        await fsPromise.unlink(zipFileFullPath);
         console.log(`Zip file ${fileName} successfully removed.`);
     } catch (error: any) {
         if (error.code === "ENOENT") {
-            vscode.window.showWarningMessage(`File not found: ${zipFilePath}`);
+            vscode.window.showWarningMessage(`File not found: ${zipFileFullPath}`);
         } else {
             vscode.window.showErrorMessage(`Error removing the file: ${(error as Error).message}`);
-            console.error(`Error removing file at ${zipFilePath}:`, error);
+            console.error(`Error removing file at ${zipFileFullPath}:`, error);
         }
     }
 }
@@ -1013,19 +1047,19 @@ export async function readTestResultsAndCreateReportWithResults(
 
             reportProgress(`Working on report.`, reportIncrement);
 
-            const reportWithResultsZipFilePath =
+            const reportWithResultsZipFileFullPath =
                 downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(workingDirectoryFullPath));
-            if (!reportWithResultsZipFilePath) {
+            if (!reportWithResultsZipFileFullPath) {
                 throw new Error("No report file selected.");
             }
 
             reportProgress(`Preparing configuration for testbench2robotframework.`, reportIncrement / 2);
 
-            const tb2robotConfigFilePath = await saveTestbench2RobotConfigurationAsJson(
+            const tb2robotConfigFileFullPath = await saveTestbench2RobotConfigurationAsJson(
                 baseKey,
                 workingDirectoryFullPath
             );
-            if (!tb2robotConfigFilePath) {
+            if (!tb2robotConfigFileFullPath) {
                 throw new Error("Failed to create configuration file.");
             }
 
@@ -1038,9 +1072,9 @@ export async function readTestResultsAndCreateReportWithResults(
                 context,
                 workingDirectoryFullPath,
                 robotResultXMLFile,
-                reportWithResultsZipFilePath,
+                reportWithResultsZipFileFullPath,
                 fullPathOfReportWithResultsZip,
-                tb2robotConfigFilePath
+                tb2robotConfigFileFullPath
             );
             // console.log("startTb2robotRead executed with success variable:", isSuccess);
 
@@ -1048,14 +1082,14 @@ export async function readTestResultsAndCreateReportWithResults(
                 !(await handleExecutionError(
                     workingDirectoryFullPath,
                     isExecutionSuccessful,
-                    reportWithResultsZipFilePath
+                    reportWithResultsZipFileFullPath
                 ))
             ) {
                 return;
             }
 
             if (config.get<boolean>("clearReportAfterProcessing")) {
-                await removeReportZipFile(reportWithResultsZipFilePath);
+                await removeReportZipFile(reportWithResultsZipFileFullPath);
             }
 
             console.log(`tb2robot read executed successfully.`);
@@ -1111,12 +1145,12 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
                 increment: 25,
             });
 
-            let createdReportWithResultsPath = await readTestResultsAndCreateReportWithResults(
+            let createdReportWithResultsFullPath = await readTestResultsAndCreateReportWithResults(
                 context,
                 folderNameOfTestbenchWorkingDirectory,
                 progress
             );
-            if (!createdReportWithResultsPath) {
+            if (!createdReportWithResultsFullPath) {
                 console.error("Error when reading test results and creating report with results.");
                 return;
             }
@@ -1129,7 +1163,7 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
             await importReportWithResultsToTestbench(
                 connection,
                 projectManagementTreeDataProvider,
-                createdReportWithResultsPath
+                createdReportWithResultsFullPath
             );
 
             progress.report({
@@ -1140,7 +1174,7 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
             const config = vscode.workspace.getConfiguration(baseKey);
             if (config.get<boolean>("clearReportAfterProcessing")) {
                 // Remove the report zip file after usage
-                await removeReportZipFile(createdReportWithResultsPath);
+                await removeReportZipFile(createdReportWithResultsFullPath);
             }
         }
     );
@@ -1156,7 +1190,7 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
  */
 export async function startTestGenerationProcessForCycle(
     context: vscode.ExtensionContext,
-    treeItem: projectManagementTreeView.ProjectManagementTreeItem,
+    treeItem: projectManagementTreeView.TestbenchTreeItem,
     baseKey: string,
     workingDirectory: string
 ): Promise<void> {
@@ -1239,9 +1273,9 @@ export async function saveTestbench2RobotConfigurationAsJson(
  * Determines the file path where the testbench2robotframework configuration file will be saved.
  * @returns The file path of the configuration file.
  */
-function getConfigurationFilePath(pathToJsonConfig: string): string {
+function getConfigurationFilePath(fullPathToJsonConfig: string): string {
     const fileName = "testbench2robotframeworkConfig.json";
-    const filePath = path.join(pathToJsonConfig, fileName);
+    const filePath = path.join(fullPathToJsonConfig, fileName);
     return filePath;
 }
 

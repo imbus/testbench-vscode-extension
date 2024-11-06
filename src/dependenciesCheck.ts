@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { exec } from "child_process";
 
-export abstract class dependenciesCheck {
+export class dependenciesCheck {
     public static checkVSCodeVersion(vsCodeVersion: string): boolean {
         const [major, minor] = vsCodeVersion.split(".").map(Number);
         console.log(`Current VS-Code version: ${vsCodeVersion}`);

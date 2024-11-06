@@ -5,9 +5,14 @@ import * as types from "./types";
 import * as jsonReportHandler from "./reportHandler";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
-import { ProjectManagementTreeDataProvider, initializeTreeView } from "./projectManagementTreeView";
+import { ProjectManagementTreeDataProvider } from "./projectManagementTreeView";
 import path from "path";
-import { connection, setConnection, baseKey, folderNameOfTestbenchWorkingDirectory } from "./extension";
+import {
+    setConnection,
+    baseKey,
+    folderNameOfTestbenchWorkingDirectory,
+    setProjectManagementTreeDataProvider,
+} from "./extension";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate
@@ -291,6 +296,8 @@ export class PlayServerConnection {
             this.stopKeepAlive();
             this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
+            setProjectManagementTreeDataProvider(null); // Clear the connection
+            setConnection(null); // Clear the tree data provider
         }
     }
 
@@ -725,29 +732,6 @@ export async function clearStoredCredentials(context: vscode.ExtensionContext) {
     }
 }
 
-export async function changeConnection(
-    context: vscode.ExtensionContext,
-    baseKey: string,
-    oldTreeDataProvider: ProjectManagementTreeDataProvider
-): Promise<{
-    newTreeDataProvider: ProjectManagementTreeDataProvider | null;
-}> {
-    if (connection) {
-        await connection.logoutUser(context, oldTreeDataProvider);
-        await clearStoredCredentials(context);
-        await performLogin(context, baseKey, true);
-
-        let newTreeDataProvider: ProjectManagementTreeDataProvider | null = null;
-        if (connection) {
-            [newTreeDataProvider] = await initializeTreeView(context, connection);
-        }
-        return { newTreeDataProvider };
-    } else {
-        vscode.window.showErrorMessage("No connection available. Please log in first.");
-    }
-    return { newTreeDataProvider: null };
-}
-
 // Retrieves the current versions of the TestBench web server.
 // Used to verify the availability of server after receiving the server URL and port number in the login process.
 async function fetchServerVersions(
@@ -925,7 +909,6 @@ export async function importReportWithResultsToTestbench(
                 Number(cycleKeyOfImportedReport),
                 importData
             );
-            console.log("Import job started with Job ID:", jobID);
 
             // Poll the job status until it is completed
             const jobStatus = await jsonReportHandler.pollJobStatus(projectKey.toString(), jobID, "import");
