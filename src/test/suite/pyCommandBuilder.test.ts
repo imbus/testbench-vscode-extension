@@ -1,97 +1,78 @@
-<<<<<<< HEAD
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { pyCommandBuilder } from '../../pyCommandBuilder';
 import * as sinon from 'sinon';
-import { PythonExtension, EnvironmentPath, Environment, ResolvedEnvironment } from '@vscode/python-extension'; // Adjust this path
+import { PythonExtension, EnvironmentPath, Environment, ResolvedEnvironment } from '@vscode/python-extension';
 
 suite('getActiveWorkspaceFolder tests', () => {
     let workspaceFoldersStub: sinon.SinonStub;
-    let workspaceFolder1Stub: sinon.SinonStubbedInstance<vscode.WorkspaceFolder>;
-    let workspaceFolder2Stub: sinon.SinonStubbedInstance<vscode.WorkspaceFolder>;
+    let workspaceFolder1: vscode.WorkspaceFolder
+    let workspaceFolder2: vscode.WorkspaceFolder
+    let activeTextEditorStub: sinon.SinonStub;
 
-=======
-import * as assert from "assert";
-import * as vscode from "vscode";
-import * as path from "path";
-import { getActiveWorkspaceFolder } from "../../pyCommandBuilder";
-import * as fs from "fs";
-import * as os from "os";
-
-function createTemporaryFolder(): string {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "test-workspace-"));
-    return tempDir;
-}
-
-function createFileInFolder(folder: string, filename: string): string {
-    const filePath = path.join(folder, filename);
-    fs.writeFileSync(filePath, "test content");
-    return filePath;
-}
-
-suite("getActiveWorkspaceFolder Tests", () => {
->>>>>>> 5fbc0b0ab3a04c6eccf598d716d78e885c4bc1e3
     setup(() => {
         workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders');
+        activeTextEditorStub = sinon.stub(vscode.window, 'activeTextEditor');
     });
 
     teardown(() => {
+        sinon.restore();
     });
 
-<<<<<<< HEAD
     test('Should return undefined when no workspace is open', async () => {
+        workspaceFoldersStub.value([]);
+
         const workspaceFolder = pyCommandBuilder.getActiveWorkspaceFolder();
         assert.strictEqual(workspaceFolder, undefined, 'Expected no active workspace folder');
-=======
-    test("Should return undefined when no workspace is open", async () => {
-        const workspaceFolder = getActiveWorkspaceFolder();
-        assert.strictEqual(workspaceFolder, undefined, "Expected no active workspace folder");
->>>>>>> 5fbc0b0ab3a04c6eccf598d716d78e885c4bc1e3
     });
 
-    /*test('Should return the single workspace folder when only one is open', async () => {
-        await vscode.workspace.updateWorkspaceFolders(0, null, { uri: vscode.Uri.file(workspace1) });
-        
-        const workspaceFolder = getActiveWorkspaceFolder();
-        const activeWorkspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        assert.strictEqual(workspaceFolder?.uri.fsPath, activeWorkspacePath, 'Expected the single open workspace folder');
-
-        vscode.workspace.updateWorkspaceFolders(0, vscode.workspace.workspaceFolders?.length || 0);
-    });*/
-
-    /*test('Should return the workspace folder of the active file when multiple are open', async () => {
-        let workspace1: string;
-        let workspace2: string;
-
-        workspace1 = createTemporaryFolder();
-        workspace2 = createTemporaryFolder();
-
-        createFileInFolder(workspace1, 'testFile1.txt');
-        createFileInFolder(workspace2, 'testFile2.txt');
-
-        try{
-        await vscode.workspace.updateWorkspaceFolders(0, null, { uri: vscode.Uri.file(workspace1) }, { uri: vscode.Uri.file(workspace2) });
-
-        const testFileUri = vscode.Uri.file(path.join(workspace2, 'testFile2.txt'));
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        try{
-        const document = await vscode.workspace.openTextDocument(testFileUri);
-        await vscode.window.showTextDocument(document);
-        } catch(e) {console.log(e)}
-
-        const workspaceFolder = getActiveWorkspaceFolder();
-        //assert.strictEqual(true, true, 'example 2');
-        assert.strictEqual(workspaceFolder?.uri.fsPath, workspace2, 'Expected the workspace folder of the active file');
-        } finally {
-
-        fs.rmSync(workspace1, { recursive: true, force: true });
-        fs.rmSync(workspace2, { recursive: true, force: true });
-
+    test('Should return the single workspace folder when only one is open', async () => {
+        workspaceFolder1 = {
+            uri: vscode.Uri.parse('workspaceFolder1Path'),
+            name: 'workspaceFolder1',
+            index: 0
         }
-    });*/
+
+        workspaceFoldersStub.value([workspaceFolder1]);
+
+        const workspaceFolder = pyCommandBuilder.getActiveWorkspaceFolder();
+        assert.strictEqual(workspaceFolder, workspaceFolder1, 'Expected to return workspaceFolder1');
+    });
+
+    //TODO: vscode.workspace.getWorkspaceFolder(passed Test value) returns undefined
+    test('Should return the correct workspace folder when multiple are open', async () => {
+        workspaceFolder1 = {
+            uri: vscode.Uri.parse('file:///workspaceFolder1Path'),
+            name: 'workspaceFolder1',
+            index: 0
+        }
+
+        workspaceFolder2 = {
+            uri: vscode.Uri.parse('file:///workspaceFolder2Path'),
+            name: 'workspaceFolder2',
+            index: 1
+        }
+
+        workspaceFoldersStub.value([workspaceFolder1, workspaceFolder2]);
+
+        activeTextEditorStub.get(() => {
+            return {
+                document: {
+                    uri: workspaceFolder2.uri,
+                    fileName: 'stubFile',
+                    languageId: 'plaintext',
+                    getText: () => 'stubFile content',
+                    lineCount: 10,
+                },
+                selection: new vscode.Selection(new vscode.Position(0, 0), new vscode.Position(0, 0)),
+            } as unknown as vscode.TextEditor;
+        });
+
+        const workspaceFolder = pyCommandBuilder.getActiveWorkspaceFolder();
+        assert.strictEqual(workspaceFolder, workspaceFolder2, 'Expected to return workspaceFolder2Stub');
+    });
 });
-<<<<<<< HEAD
 
 suite('getPythonEnviromentExe tests', () => {
     let pythonApiStub: sinon.SinonStubbedInstance<PythonExtension>;
@@ -239,5 +220,3 @@ suite('buildRobotCommand tests', function () {
         assert.strictEqual(result, '', 'Expected buildRobotCommand to return empty string');
     });
 });
-=======
->>>>>>> 5fbc0b0ab3a04c6eccf598d716d78e885c4bc1e3
