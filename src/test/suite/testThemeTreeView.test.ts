@@ -24,29 +24,18 @@ suite("TestThemeTreeDataProvider Tests", () => {
     });
 
     test("getParent should return the parent of the element", () => {
-        const parent = new TestbenchTreeItem(
-            "Parent",
-            "contextValue",
-            vscode.TreeItemCollapsibleState.None,
-            {}
-        );
-        const child = new TestbenchTreeItem(
-            "Child",
-            "contextValue",
-            vscode.TreeItemCollapsibleState.None,
-            {},
-            parent
-        );
+        const parent = new TestbenchTreeItem("Parent", "contextValue", vscode.TreeItemCollapsibleState.None, {});
+        const child = new TestbenchTreeItem("Child", "contextValue", vscode.TreeItemCollapsibleState.None, {}, parent);
         assert.strictEqual(treeDataProvider.getParent(child), parent);
     });
 
     test("getChildren should return root elements if no element is passed", async () => {
-        const rootElements = [
+        const rootElements: TestbenchTreeItem[] = [
             new TestbenchTreeItem("Root1", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
             new TestbenchTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
         ];
         treeDataProvider.setRoots(rootElements);
-        const children = await treeDataProvider.getChildren();
+        const children: TestbenchTreeItem[] = await treeDataProvider.getChildren();
         assert.deepStrictEqual(children, rootElements);
     });
 
@@ -64,12 +53,7 @@ suite("TestThemeTreeDataProvider Tests", () => {
     });
 
     test("getTreeItem should return the element itself", () => {
-        const element = new TestbenchTreeItem(
-            "Element",
-            "contextValue",
-            vscode.TreeItemCollapsibleState.None,
-            {}
-        );
+        const element = new TestbenchTreeItem("Element", "contextValue", vscode.TreeItemCollapsibleState.None, {});
         assert.strictEqual(treeDataProvider.getTreeItem(element), element);
     });
 
@@ -85,12 +69,7 @@ suite("TestThemeTreeDataProvider Tests", () => {
     });
 
     test("makeRoot should set the selected element as the only root element and refresh the tree", () => {
-        const element = new TestbenchTreeItem(
-            "Element",
-            "contextValue",
-            vscode.TreeItemCollapsibleState.None,
-            {}
-        );
+        const element = new TestbenchTreeItem("Element", "contextValue", vscode.TreeItemCollapsibleState.None, {});
         const spy = sandbox.spy(treeDataProvider, "refresh");
         treeDataProvider.makeRoot(element);
         assert.deepStrictEqual(treeDataProvider.rootElements, [element]);
@@ -98,12 +77,7 @@ suite("TestThemeTreeDataProvider Tests", () => {
     });
 
     test("handleExpansion should update the collapsible state and icon of the element", () => {
-        const element = new TestbenchTreeItem(
-            "Element",
-            "contextValue",
-            vscode.TreeItemCollapsibleState.None,
-            {}
-        );
+        const element = new TestbenchTreeItem("Element", "contextValue", vscode.TreeItemCollapsibleState.None, {});
         const updateIconSpy = sandbox.spy(element, "updateIcon");
         treeDataProvider.handleExpansion(element, true);
         assert.strictEqual(element.collapsibleState, vscode.TreeItemCollapsibleState.Expanded);

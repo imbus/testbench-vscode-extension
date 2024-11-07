@@ -4,18 +4,16 @@ import * as vscode from "vscode";
 import * as jsonReportHandler from "../../reportHandler";
 import * as types from "../../types";
 import axios from "axios";
-import * as fs from "fs";
 import { PlayServerConnection } from "../../testBenchConnection";
-import { TestbenchTreeItem } from "../../projectManagementTreeView";
 
 suite("jsonReportHandler Tests", () => {
     let sandbox: sinon.SinonSandbox;
     let context: vscode.ExtensionContext;
-    let url = "http://example.com";
-    let port = 1234;
-    let sessionToken = "mockSessionToken";
-    let projectKey = "30";
-    let cycleKey = "179";
+    let url: string = "http://example.com";
+    let port: number = 1234;
+    let sessionToken: string = "mockSessionToken";
+    let projectKey: string = "30";
+    let cycleKey: string = "179";
 
     setup(() => {
         sandbox = sinon.createSandbox();
@@ -72,7 +70,7 @@ suite("jsonReportHandler Tests", () => {
             },
         } as any;
 
-        const result = jsonReportHandler.isReportJobCompletedSuccessfully(jobStatus);
+        const result: boolean = jsonReportHandler.isReportJobCompletedSuccessfully(jobStatus);
         assert.strictEqual(result, true);
     });
 
@@ -83,7 +81,7 @@ suite("jsonReportHandler Tests", () => {
             },
         } as any;
 
-        const result = jsonReportHandler.isReportJobCompletedSuccessfully(jobStatus);
+        const result: boolean = jsonReportHandler.isReportJobCompletedSuccessfully(jobStatus);
         assert.strictEqual(result, false);
     });
 
@@ -170,7 +168,7 @@ suite("jsonReportHandler Tests", () => {
     });
     */
     test("pollJobStatus should throw CancellationError if operation is cancelled", async () => {
-        const connection = new PlayServerConnection(context, url, port, sessionToken);
+        const connection: PlayServerConnection = new PlayServerConnection(context, url, port, sessionToken);
         const cancellationToken = { isCancellationRequested: true } as vscode.CancellationToken;
 
         try {
@@ -182,7 +180,7 @@ suite("jsonReportHandler Tests", () => {
     });
 
     test("getJobId should return job ID from server", async () => {
-        const connection = new PlayServerConnection(context, url, port, sessionToken);
+        const connection: PlayServerConnection = new PlayServerConnection(context, url, port, sessionToken);
         const jobIdResponse = { data: { jobID: "jobId" }, status: 200 } as any;
 
         sandbox.stub(axios, "post").resolves(jobIdResponse);

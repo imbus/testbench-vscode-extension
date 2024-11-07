@@ -157,13 +157,6 @@ suite("PlayServerConnection Tests", () => {
         }
     });
 
-    test("checkIsWorking should return true if connection is working", async () => {
-        axiosStub().get.resolves({ status: 200 });
-
-        const isWorking = await serverConnection.checkIsWorking();
-        assert.strictEqual(isWorking, true);
-    });
-
     test("logoutUser should clear session data and stop keep-alive", async () => {
         const stopKeepAliveStub = sinon.stub(serverConnection as any, "stopKeepAlive");
         axiosStub().delete.resolves({ status: 204 });

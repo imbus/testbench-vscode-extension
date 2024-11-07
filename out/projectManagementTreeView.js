@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ProjectManagementTreeItem = exports.ProjectManagementTreeDataProvider = void 0;
+exports.TestbenchTreeItem = exports.ProjectManagementTreeDataProvider = void 0;
 exports.findProjectKeyOfCycleElement = findProjectKeyOfCycleElement;
 exports.findCycleKeyOfTreeElement = findCycleKeyOfTreeElement;
 exports.initializeTreeView = initializeTreeView;
@@ -36,6 +36,7 @@ const extension_1 = require("./extension");
 class ProjectManagementTreeDataProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
+    // The root item (A project) of the tree view
     rootItem = null;
     // The key of the project currently in view in the tree
     currentProjectKeyInView;
@@ -59,7 +60,7 @@ class ProjectManagementTreeDataProvider {
         const collapsibleState = contextValue === "Cycle"
             ? vscode.TreeItemCollapsibleState.None // Test cycles are set to none to be non expandable, the user can click on it to see the test themes
             : vscode.TreeItemCollapsibleState.Collapsed; // Set collapsibleState to Collapsed to make items clickable to trigger getChildren when expanded
-        const treeItem = new ProjectManagementTreeItem(data.name, contextValue, collapsibleState, data, parent);
+        const treeItem = new TestbenchTreeItem(data.name, contextValue, collapsibleState, data, parent);
         return treeItem;
     }
     async getChildren(element) {
@@ -70,7 +71,7 @@ class ProjectManagementTreeDataProvider {
         if (!element) {
             if (this.rootItem) {
                 // If a root item is set, return its children
-                return this.getChildren(this.rootItem);
+                return await this.getChildren(this.rootItem);
             }
             // No parent element provided, return the root project (single selected project)
             const projectTree = await extension_1.connection.getProjectTreeOfProject(this.currentProjectKeyInView);
@@ -127,7 +128,7 @@ class ProjectManagementTreeDataProvider {
                 .filter((data) => data.exec?.status !== "NotPlanned" && data.exec?.locker?.key !== "-2")
                 .map((data) => {
                 const hasChildren = Array.from(elementsByKey.values()).some((childData) => childData.base.parentKey === data.base.key);
-                const treeItem = new ProjectManagementTreeItem(`${data.base.numbering} ${data.base.name}`, data.elementType, 
+                const treeItem = new TestbenchTreeItem(`${data.base.numbering} ${data.base.name}`, data.elementType, 
                 // TestCaseSetNode are the last level of the tree, so they are not collapsible.
                 // Only show the expand icon if the element has children.
                 data.elementType === "TestCaseSetNode"
@@ -155,7 +156,7 @@ class ProjectManagementTreeDataProvider {
         this.rootItem = treeItem;
         this.refresh();
     }
-    handleExpansion(element, expanded) {
+    async handleExpansion(element, expanded) {
         // console.log(`@@ Element ${element.label} is expanded: ${expanded}`);
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
@@ -164,7 +165,7 @@ class ProjectManagementTreeDataProvider {
         // The test Cycles are not expandable anymore, but this code is left to be able to switch back to expandable cycles.
         // If the element is a test cycle and expanding it, initialize the test theme tree
         if (expanded) {
-            this.handleTestCycleClick(element);
+            await this.handleTestCycleClick(element);
         }
     }
     // Trigger initialization of test theme tree when a test cycle is clicked
@@ -217,13 +218,14 @@ function findCycleKeyOfTreeElement(element) {
     return undefined;
 }
 // Represents a tree item (Project, TOV, Cycle, etc) in the tree view
-class ProjectManagementTreeItem extends vscode.TreeItem {
+class TestbenchTreeItem extends vscode.TreeItem {
     item;
     parent;
     children;
     statusOfTreeItem;
     constructor(label, contextValue, // The type of the tree item (Project, TOV, Cycle etc.)
-    collapsibleState, item, parent = null) {
+    collapsibleState, item, // The original data of the tree item
+    parent = null) {
         super(label, collapsibleState);
         this.item = item;
         this.contextValue = contextValue;
@@ -292,7 +294,7 @@ class ProjectManagementTreeItem extends vscode.TreeItem {
         this.iconPath = this.getIconPath();
     }
 }
-exports.ProjectManagementTreeItem = ProjectManagementTreeItem;
+exports.TestbenchTreeItem = TestbenchTreeItem;
 async function initializeTreeView(context, connection, selectedProjectKey) {
     if (!connection) {
         vscode.window.showErrorMessage("No connection available. Please log in first.");
@@ -307,18 +309,18 @@ async function initializeTreeView(context, connection, selectedProjectKey) {
         treeDataProvider: projectManagementDataProvider,
     });
     // Handle expansion and collapse events to update icons dynamically
-    projectManagementTreeView.onDidExpandElement((event) => {
-        projectManagementDataProvider.handleExpansion(event.element, true);
+    projectManagementTreeView.onDidExpandElement(async (event) => {
+        await projectManagementDataProvider.handleExpansion(event.element, true);
     });
-    projectManagementTreeView.onDidCollapseElement((event) => {
-        projectManagementDataProvider.handleExpansion(event.element, false);
+    projectManagementTreeView.onDidCollapseElement(async (event) => {
+        await projectManagementDataProvider.handleExpansion(event.element, false);
     });
     // Handle click events to trigger test theme tree initialization on test cycle click
-    projectManagementTreeView.onDidChangeSelection((event) => {
+    projectManagementTreeView.onDidChangeSelection(async (event) => {
         //  Retrieve the currently selected element in the tree view
         const selectedElement = event.selection[0];
         if (selectedElement && selectedElement.contextValue === "Cycle") {
-            projectManagementDataProvider.handleTestCycleClick(selectedElement);
+            await projectManagementDataProvider.handleTestCycleClick(selectedElement);
         }
     });
     context.subscriptions.push(testThemeTreeView);

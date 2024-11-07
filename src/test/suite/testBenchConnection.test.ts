@@ -10,26 +10,26 @@ suite("PlayServerConnection Tests", () => {
     let serverConnection: PlayServerConnection;
     let axiosStub: sinon.SinonStub;
 
-   setup(() => {
-       context = {
-           secrets: {
-               get: sinon.stub().resolves("mockSessionToken"),
-               store: sinon.stub().resolves(),
-               delete: sinon.stub().resolves(),
-           },
-       } as unknown as vscode.ExtensionContext;
+    setup(() => {
+        context = {
+            secrets: {
+                get: sinon.stub().resolves("mockSessionToken"),
+                store: sinon.stub().resolves(),
+                delete: sinon.stub().resolves(),
+            },
+        } as unknown as vscode.ExtensionContext;
 
-       // Mock the startKeepAlive method
-       const startKeepAliveStub = sinon.stub(PlayServerConnection.prototype as any, "startKeepAlive");
+        // Mock the startKeepAlive method
+        const startKeepAliveStub = sinon.stub(PlayServerConnection.prototype as any, "startKeepAlive");
 
-       serverConnection = new PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
+        serverConnection = new PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
 
-       axiosStub = sinon.stub(axios, "create").returns({
-           get: sinon.stub(),
-           post: sinon.stub(),
-           delete: sinon.stub(),
-       } as any);
-   });
+        axiosStub = sinon.stub(axios, "create").returns({
+            get: sinon.stub(),
+            post: sinon.stub(),
+            delete: sinon.stub(),
+        } as any);
+    });
 
     teardown(() => {
         sinon.restore();
@@ -45,22 +45,22 @@ suite("PlayServerConnection Tests", () => {
         }
         await vscode.commands.executeCommand("workbench.extensions.uninstallExtension", "ms-python.python");
 
-        const token = serverConnection.getSessionToken();
+        const token: string = serverConnection.getSessionToken();
         assert.strictEqual(token, "mockSessionToken");
     });
 
     test("getBaseURL should return the base URL", () => {
-        const baseURL = serverConnection.getBaseURL();
+        const baseURL: string = serverConnection.getBaseURL();
         assert.strictEqual(baseURL, "https://mockServer:1234/api");
     });
 
     test("getApiClient should return the axios instance", () => {
-        const apiClient = serverConnection.getApiClient();
+        const apiClient: axios.AxiosInstance = serverConnection.getApiClient();
         assert.ok(apiClient);
     });
 
     test("getSessionTokenFromSecretStorage should return the session token from secret storage", async () => {
-        const token = await serverConnection.getSessionTokenFromSecretStorage(context);
+        const token: string | undefined = await serverConnection.getSessionTokenFromSecretStorage(context);
         assert.strictEqual(token, "mockSessionToken");
     });
 
@@ -140,13 +140,6 @@ suite("PlayServerConnection Tests", () => {
         } catch (error) {
             assert.fail("fetchCycleStructure should not throw an error");
         }
-    });
-
-    test("checkIsWorking should return true if connection is working", async () => {
-        axiosStub().get.resolves({ status: 200 });
-
-        const isWorking = await serverConnection.checkIsWorking();
-        assert.strictEqual(isWorking, true);
     });
 
     test("logoutUser should clear session data and stop keep-alive", async () => {

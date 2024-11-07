@@ -29,7 +29,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PlayServerConnection = void 0;
 exports.performLogin = performLogin;
 exports.clearStoredCredentials = clearStoredCredentials;
-exports.changeConnection = changeConnection;
 exports.importReportWithResultsToTestbench = importReportWithResultsToTestbench;
 exports.selectReportWithResultsAndImportToTestbench = selectReportWithResultsAndImportToTestbench;
 const https = __importStar(require("https"));
@@ -38,7 +37,6 @@ const fs = __importStar(require("fs"));
 const jsonReportHandler = __importStar(require("./reportHandler"));
 const jszip_1 = __importDefault(require("jszip"));
 const axios_1 = __importDefault(require("axios"));
-const projectManagementTreeView_1 = require("./projectManagementTreeView");
 const path_1 = __importDefault(require("path"));
 const extension_1 = require("./extension");
 // Ignore SSL certificate validation in node requests
@@ -218,14 +216,13 @@ class PlayServerConnection {
                 console.log("Cycle Structure received:", response.data);
                 // User selects a file path for saving the JSON
                 /*
-                const savePath = await vscode.window.showSaveDialog({
+                const savePath: vscode.Uri | undefined = await vscode.window.showSaveDialog({
                     saveLabel: "Save Cycle Structure",
                     filters: {
                         "JSON Files": ["json"],
                         "All Files": ["*"],
                     },
                 });
-
                 if (savePath) {
                     const filePath = savePath.fsPath;
                     saveJsonToFile(filePath, response.data);
@@ -241,27 +238,6 @@ class PlayServerConnection {
         }
         catch (error) {
             console.error("Error fetching cycle structure:", error);
-        }
-    }
-    // Sends a GET request to the projects endpoint to verify if the connection is working.
-    async checkIsWorking() {
-        try {
-            const projectsURL = `/projects/v1`;
-            const projectsResponse = await this.apiClient.get(projectsURL, {
-                headers: {
-                    accept: "application/vnd.testbench+json",
-                },
-            });
-            return projectsResponse.status === 200;
-        }
-        catch (error) {
-            console.error("Error checking connection:", error.message);
-            if (error.response) {
-                console.error("Error response data:", error.response.data);
-                console.error("Error response status:", error.response.status);
-                console.error("Error response headers:", error.response.headers);
-            }
-            return false;
         }
     }
     async logoutUser(context, treeDataProvider) {
@@ -297,6 +273,8 @@ class PlayServerConnection {
             this.stopKeepAlive();
             this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
+            (0, extension_1.setProjectManagementTreeDataProvider)(null); // Clear the connection
+            (0, extension_1.setConnection)(null); // Clear the tree data provider
         }
     }
     /**
@@ -480,9 +458,12 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
         if (storePassword) {
             password = await context.secrets.get("password");
         }
-        const hasStoredCredentials = config.get("serverName") && config.get("username") && password && storePassword;
+        const hasStoredCredentialsAndCanAutoLogin = !!(config.get("serverName") &&
+            config.get("username") &&
+            password &&
+            storePassword);
         let useStoredCredentials = false;
-        if (hasStoredCredentials && !promptForNewCredentials) {
+        if (hasStoredCredentialsAndCanAutoLogin && !promptForNewCredentials) {
             const choice = await vscode.window.showInformationMessage("Do you want to login using your previous credentials?", { modal: true }, // Modal dialog is used so that the input box wont disappear which locks the login function
             "Yes", "No");
             if (choice === "Yes") {
@@ -513,7 +494,6 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
             ({ serverName, portNumber, username, password } = credentials);
         }
         // Attempt to login
-        // TODO: Set the original connection or?
         const newConnection = await loginToNewPlayServerAndInitSessionToken(context, serverName, portNumber, username, password, baseKey);
         if (newConnection) {
             console.log("Login successful.");
@@ -613,7 +593,6 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
             // This starts keep alive in the constructor
             const connection = new PlayServerConnection(context, serverName, portNumber, response.data.sessionToken);
             if (connection) {
-                // Deleted checkIsWorking from here
                 return connection;
             }
             return null;
@@ -637,22 +616,6 @@ async function clearStoredCredentials(context) {
     catch (error) {
         console.error("Failed to clear credentials:", error);
     }
-}
-async function changeConnection(context, baseKey, oldTreeDataProvider) {
-    if (extension_1.connection) {
-        await extension_1.connection.logoutUser(context, oldTreeDataProvider);
-        await clearStoredCredentials(context);
-        await performLogin(context, baseKey, true);
-        let newTreeDataProvider = null;
-        if (extension_1.connection) {
-            [newTreeDataProvider] = await (0, projectManagementTreeView_1.initializeTreeView)(context, extension_1.connection);
-        }
-        return { newTreeDataProvider };
-    }
-    else {
-        vscode.window.showErrorMessage("No connection available. Please log in first.");
-    }
-    return { newTreeDataProvider: null };
 }
 // Retrieves the current versions of the TestBench web server.
 // Used to verify the availability of server after receiving the server URL and port number in the login process.
@@ -803,7 +766,6 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
             // Start the import job
             console.log("Starting import execution results");
             const jobID = await connection.importExecutionResults(Number(projectKey), Number(cycleKeyOfImportedReport), importData);
-            console.log("Import job started with Job ID:", jobID);
             // Poll the job status until it is completed
             const jobStatus = await jsonReportHandler.pollJobStatus(projectKey.toString(), jobID, "import");
             // Check if the job is completed successfully
