@@ -1,40 +1,20 @@
-import * as child_process from 'child_process';
-import * as fs from 'fs';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as assert from 'assert';
 import * as vscode from 'vscode'
 import { tb2robotLib} from '../../testbench2robotframeworkLib';
-import * as commandBuilder from '../../pyCommandBuilder';
-import { PythonExtension } from "@vscode/python-extension";
-import { exec } from 'child_process';
-import { VSCodeCommandError } from '@vscode/test-electron';
-import { info } from 'console';
+import { pyCommandBuilder } from '../../pyCommandBuilder';
 
-const mockPath = path.resolve(__dirname, '../src/test/mocks')
+const rootPath = path.resolve(__dirname, '../../../')
 
-export async function sleep(timeout: number): Promise<number> {
-    return new Promise<number>((resolve) => {
-      setTimeout(() => resolve(timeout), timeout);
-    });
-  }
-
-suite('tb2robotWrite', async function () {
+suite('tb2robotWrite unit test', () => {
     let context: vscode.ExtensionContext;
     let execStub: sinon.SinonStub;
     let buildTb2RobotCommandStub: sinon.SinonStub;
 
-    this.timeout(60000);
-
-    setup(async () => {
+    setup(() => {
         execStub = sinon.stub(require('child_process'), 'exec');
-        buildTb2RobotCommandStub = sinon.stub(commandBuilder, 'buildTb2RobotCommand');
-
-        let ext = vscode.extensions.getExtension('ms-python.python');
-        if (ext) {
-            console.log('Extension was installed');
-            await ext.activate();         
-        }
+        buildTb2RobotCommandStub = sinon.stub(pyCommandBuilder, 'buildTb2RobotCommand');
     });
 
     teardown(() => {
@@ -101,63 +81,15 @@ suite('tb2robotWrite', async function () {
             assert.strictEqual(error, 'An unknown Error occurred.', 'The error message should match');
         }
     });
-
-    test('should generate correct JSON output, with result path', async () => {
-        //assert.strictEqual('Installed extensions:', vscode.extensions.all.map(ext => ext.id));
-        const pythonExtension = vscode.extensions.getExtension('ms-python.python');
-        if (!pythonExtension) {
-            assert.fail('Python extension is not installed or could not be found');
-        }
-        
-        const pythonApi: PythonExtension = await PythonExtension.api();               
-        
-        console.log("await python ext ready");
-        await pythonApi.ready;        
-
-        //assert.ok(pythonApi, '1 not found')
-        let environmentPath = pythonApi?.environments.getActiveEnvironmentPath();
-        environmentPath = pythonApi?.environments.getActiveEnvironmentPath();
-        //assert.ok(environmentPath, '2 not found')
-        console.log('EnviromenrPath: ' + environmentPath.path);
-        const enviroment = await pythonApi?.environments.resolveEnvironment(environmentPath);
-        assert.ok(enviroment, '3 not found')
-        const pythonPath = enviroment?.executable.uri?.fsPath;
-        if (pythonPath) {
-            assert.match(pythonPath, /python\.exe/, 'Did not find python.exe')
-        }
-        else {
-            assert.fail('pythonPath was undefined')
-        }
-        const tb2robMain = path.join(process.cwd(), "bundled", "tools", "tb2robot", "__main__.py");
-        const commandBase = `python -u ${tb2robMain}`
-        assert.strictEqual('this is fake', commandBase);
-        /*const outputXmlPath = './src/test/mocks/expected/XMLOutput/output.xml';
-        const reportPath = './src/test/mocks/expected/JSONRepWithoutRes';
-        const resultPath = './src/test/mocks/results/JSONRepWithRes';
-
-        let testpath =process.cwd();
-        assert.strictEqual('path', testpath);
-
-        await tb2r.tb2robotRead('comBase', 'workingDir', outputXmlPath, reportPath, resultPath, 'config.json');
-
-        const generatedFilePath = path.join(resultPath, 'expected-output.json');
-        const generatedData = JSON.parse(fs.readFileSync(generatedFilePath, 'utf-8'));
-
-        const expectedFilePath = path.join(__dirname, 'expected-output.json');
-        const expectedData = JSON.parse(fs.readFileSync(expectedFilePath, 'utf-8'));
-
-
-        assert.deepStrictEqual(generatedData, expectedData);*/
-    });
 });
 
-suite('robotGenerateXMLResults', () => {
+suite('robotGenerateXMLResults unit test', () => {
     let execStub: sinon.SinonStub;
     let buildRobotCommandStub: sinon.SinonStub;
 
     setup(() => {
         execStub = sinon.stub(require('child_process'), 'exec');
-        buildRobotCommandStub = sinon.stub(commandBuilder, 'buildRobotCommand');
+        buildRobotCommandStub = sinon.stub(pyCommandBuilder, 'buildRobotCommand');
     });
 
     teardown(() => {
@@ -210,59 +142,16 @@ suite('robotGenerateXMLResults', () => {
             assert.strictEqual(error, 'An unknown Error occurred.', 'The error message should match');
         }
     });
-
-    /*test('should generate correct JSON output, with result path', async () => {
-        assert.strictEqual('Installed extensions:', vscode.extensions.all.map(ext => ext.id));
-        const pythonExtension = vscode.extensions.getExtension('ms-python.python');
-        if (!pythonExtension) {
-            assert.fail('Python extension is not installed or could not be found');
-        } else {
-            if (!pythonExtension.isActive) {
-                await pythonExtension.activate();
-            }
-        }
-        
-        const pythonApi: PythonExtension = await PythonExtension.api();
-        const environmentPath = pythonApi?.environments.getActiveEnvironmentPath();
-        const enviroment = await pythonApi?.environments.resolveEnvironment(environmentPath);
-        const pythonPath = enviroment?.executable.uri?.fsPath;
-        if (pythonPath) {
-            assert.match(pythonPath, /python\.exe/, 'Did not find python.exe')
-        }
-        else {
-            assert.fail('pythonPath was undefined')
-        }
-        const tb2robMain = path.join(process.cwd(), "bundled", "tools", "tb2robot", "__main__.py");
-        const commandBase = `${pythonPath} -u ${tb2robMain}`
-        assert.strictEqual('this is fake', commandBase);
-        /*const outputXmlPath = './src/test/mocks/expected/XMLOutput/output.xml';
-        const reportPath = './src/test/mocks/expected/JSONRepWithoutRes';
-        const resultPath = './src/test/mocks/results/JSONRepWithRes';
-
-        let testpath =process.cwd();
-        assert.strictEqual('path', testpath);
-
-        await tb2r.tb2robotRead('comBase', 'workingDir', outputXmlPath, reportPath, resultPath, 'config.json');
-
-        const generatedFilePath = path.join(resultPath, 'expected-output.json');
-        const generatedData = JSON.parse(fs.readFileSync(generatedFilePath, 'utf-8'));
-
-        const expectedFilePath = path.join(__dirname, 'expected-output.json');
-        const expectedData = JSON.parse(fs.readFileSync(expectedFilePath, 'utf-8'));
-
-
-        assert.deepStrictEqual(generatedData, expectedData);
-    });*/
 });
 
-suite('tb2robotRead', () => {
+suite('tb2robotRead unit test', () => {
     let context: vscode.ExtensionContext;
     let execStub: sinon.SinonStub;
     let buildTb2RobotCommandStub: sinon.SinonStub;
 
     setup(() => {
         execStub = sinon.stub(require('child_process'), 'exec');
-        buildTb2RobotCommandStub = sinon.stub(commandBuilder, 'buildTb2RobotCommand');
+        buildTb2RobotCommandStub = sinon.stub(pyCommandBuilder, 'buildTb2RobotCommand');
     });
 
     teardown(() => {
@@ -278,7 +167,7 @@ suite('tb2robotRead', () => {
         assert.ok(execStub.calledOnce, 'exec should be called once');
         assert.strictEqual(
             execStub.firstCall.args[0],
-            'commandBase read -o outputXmlPath -r reportWithoutResultsPath',
+            'commandBase read -o outputXmlPath reportWithoutResultsPath',
             'The command should match the expected command string'
         );
     });
@@ -350,52 +239,9 @@ suite('tb2robotRead', () => {
             assert.strictEqual(error, 'An unknown Error occurred.', 'The error message should match');
         }
     });
-
-    /*test('should generate correct JSON output, with result path', async () => {
-        assert.strictEqual('Installed extensions:', vscode.extensions.all.map(ext => ext.id));
-        const pythonExtension = vscode.extensions.getExtension('ms-python.python');
-        if (!pythonExtension) {
-            assert.fail('Python extension is not installed or could not be found');
-        } else {
-            if (!pythonExtension.isActive) {
-                await pythonExtension.activate();
-            }
-        }
-        
-        const pythonApi: PythonExtension = await PythonExtension.api();
-        const environmentPath = pythonApi?.environments.getActiveEnvironmentPath();
-        const enviroment = await pythonApi?.environments.resolveEnvironment(environmentPath);
-        const pythonPath = enviroment?.executable.uri?.fsPath;
-        if (pythonPath) {
-            assert.match(pythonPath, /python\.exe/, 'Did not find python.exe')
-        }
-        else {
-            assert.fail('pythonPath was undefined')
-        }
-        const tb2robMain = path.join(process.cwd(), "bundled", "tools", "tb2robot", "__main__.py");
-        const commandBase = `${pythonPath} -u ${tb2robMain}`
-        assert.strictEqual('this is fake', commandBase);
-        /*const outputXmlPath = './src/test/mocks/expected/XMLOutput/output.xml';
-        const reportWithoutResultsPath = './src/test/mocks/expected/JSONRepWithoutRes';
-        const resultPath = './src/test/mocks/results/JSONRepWithRes';
-
-        let testpath =process.cwd();
-        assert.strictEqual('path', testpath);
-
-        await tb2r.tb2robotRead('comBase', 'workingDir', outputXmlPath, reportWithoutResultsPath, resultPath, 'configJSONPath');
-
-        const generatedFilePath = path.join(resultPath, 'expected-output.json');
-        const generatedData = JSON.parse(fs.readFileSync(generatedFilePath, 'utf-8'));
-
-        const expectedFilePath = path.join(__dirname, 'expected-output.json');
-        const expectedData = JSON.parse(fs.readFileSync(expectedFilePath, 'utf-8'));
-
-
-        assert.deepStrictEqual(generatedData, expectedData);
-    });*/
 });
 
-suite('startTb2robotWrite', () => {
+suite('startTb2robotWrite unit test', () => {
     let context: vscode.ExtensionContext;
     let tb2robotWriteStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;
@@ -465,7 +311,7 @@ suite('startTb2robotWrite', () => {
     });
 });
 
-suite('startRobotGenerateXMLResults', () => {
+suite('startRobotGenerateXMLResults unit test', () => {
     let robotGenerateXMLResultsStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;
     let consoleLogStub: sinon.SinonStub;
@@ -519,7 +365,7 @@ suite('startRobotGenerateXMLResults', () => {
     });
 });
 
-suite('startTb2robotRead', () => {
+suite('startTb2robotRead unit test', () => {
     let context: vscode.ExtensionContext;
     let tb2robotReadStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;

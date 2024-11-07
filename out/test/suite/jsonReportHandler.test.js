@@ -31,7 +31,7 @@ const sinon = __importStar(require("sinon"));
 const vscode = __importStar(require("vscode"));
 const jsonReportHandler = __importStar(require("../../jsonReportHandler"));
 const axios_1 = __importDefault(require("axios"));
-const testBenchConnection_1 = require("../../testBenchConnection");
+const testbenchConnection_1 = require("../../testbenchConnection");
 suite("jsonReportHandler Tests", () => {
     let sandbox;
     let context;
@@ -185,7 +185,7 @@ suite("jsonReportHandler Tests", () => {
     });
     */
     test("pollJobStatus should throw CancellationError if operation is cancelled", async () => {
-        const connection = new testBenchConnection_1.PlayServerConnection(context, url, port, sessionToken);
+        const connection = new testbenchConnection_1.PlayServerConnection(context, url, port, sessionToken);
         const cancellationToken = { isCancellationRequested: true };
         try {
             await jsonReportHandler.pollJobStatus(connection, projectKey, "jobId", "report", undefined, cancellationToken);
@@ -196,14 +196,14 @@ suite("jsonReportHandler Tests", () => {
         }
     });
     test("getJobId should return job ID from server", async () => {
-        const connection = new testBenchConnection_1.PlayServerConnection(context, url, port, sessionToken);
+        const connection = new testbenchConnection_1.PlayServerConnection(context, url, port, sessionToken);
         const jobIdResponse = { data: { jobID: "jobId" }, status: 200 };
         sandbox.stub(axios_1.default, "post").resolves(jobIdResponse);
         const result = await jsonReportHandler.getJobId(connection, projectKey, cycleKey);
         assert.strictEqual(result, "jobId");
     });
     test("getJobStatus should return job status from server", async () => {
-        const connection = new testBenchConnection_1.PlayServerConnection(context, url, port, sessionToken);
+        const connection = new testbenchConnection_1.PlayServerConnection(context, url, port, sessionToken);
         const jobStatusResponse = { data: { completion: { result: {} } }, status: 200 };
         sandbox.stub(axios_1.default, "get").resolves(jobStatusResponse);
         const result = await jsonReportHandler.getJobStatus(connection, projectKey, "jobId", "report");

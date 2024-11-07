@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { exec } from "child_process";
-import { buildTb2RobotCommand, buildRobotCommand } from "./pyCommandBuilder";
+import { pyCommandBuilder } from "./pyCommandBuilder";
 
 export abstract class tb2robotLib {
     /**
@@ -17,7 +17,7 @@ export abstract class tb2robotLib {
         configJSONPath?: string
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
-            const commandBase = await buildTb2RobotCommand(context);
+            const commandBase = await pyCommandBuilder.buildTb2RobotCommand(context);
 
             let command = `${commandBase} write ${reportPath}`;
             if (configJSONPath) {
@@ -55,10 +55,10 @@ export abstract class tb2robotLib {
         configJSONPath?: string
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
-            const commandBase = await buildTb2RobotCommand(context);
+            const commandBase = await pyCommandBuilder.buildTb2RobotCommand(context);
 
             // OVerwrite the results in the reportPath if no resultPath is provided.
-            let command = `${commandBase} read -o ${outputXmlPath} -r ${reportWithoutResultsPath}`;
+            let command = `${commandBase} read -o ${outputXmlPath} ${reportWithoutResultsPath}`;
 
             // Write the results to the resultPath if provided.
             if (resultPath) {
@@ -94,7 +94,7 @@ export abstract class tb2robotLib {
         robotFilesPath: string
     ): Promise<boolean> {
         return new Promise(async (resolve, reject) => {
-            const commandBase = await buildRobotCommand();
+            const commandBase = await pyCommandBuilder.buildRobotCommand();
 
             let command = `${commandBase} -d ${outputResultDir} --dryrun ${robotFilesPath}`;
 

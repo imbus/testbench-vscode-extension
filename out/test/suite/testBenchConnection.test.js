@@ -29,7 +29,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const assert_1 = __importDefault(require("assert"));
 const sinon = __importStar(require("sinon"));
 const axios_1 = __importDefault(require("axios"));
-const testBenchConnection_1 = require("../../testBenchConnection");
+const testbenchConnection_1 = require("../../testbenchConnection");
 suite("PlayServerConnection Tests", () => {
     let context;
     let serverConnection;
@@ -42,7 +42,7 @@ suite("PlayServerConnection Tests", () => {
                 delete: sinon.stub().resolves(),
             },
         };
-        serverConnection = new testBenchConnection_1.PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
+        serverConnection = new testbenchConnection_1.PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
         axiosStub = sinon.stub(axios_1.default, "create").returns({
             get: sinon.stub(),
             post: sinon.stub(),

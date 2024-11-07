@@ -22,9 +22,9 @@
     "resources": [],
     "variables": []
   },
-  "generationDirectory": "{root}/src/test/mocks/src/test/mocks/results/Generated",
+  "generationDirectory": "{root}/src/test/mocks/results/Generated",
   "createOutputZip": false,
-  "resourceDirectory": "{root}/src/test/mocks/src/test/mocks/results/Resources",
+  "resourceDirectory": "{root}/src/test/mocks/results/Resources",
   "logSuiteNumbering": false,
   "clearGenerationDirectory": true,
   "loggingConfiguration": {

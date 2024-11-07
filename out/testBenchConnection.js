@@ -30,7 +30,8 @@ exports.PlayServerConnection = void 0;
 exports.performLogin = performLogin;
 exports.clearStoredCredentials = clearStoredCredentials;
 exports.changeConnection = changeConnection;
-exports.importTestResultsToTestbench = importTestResultsToTestbench;
+exports.importReportWithResultsToTestbench = importReportWithResultsToTestbench;
+exports.selectReportWithResultsAndImportToTestbench = selectReportWithResultsAndImportToTestbench;
 const https = __importStar(require("https"));
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
@@ -308,7 +309,7 @@ class PlayServerConnection {
         const uploadEndpointURL = `/projects/${projectKey}/executionResults/v1`;
         try {
             const zipFileData = fs.readFileSync(zipFilePath);
-            console.log("Uploading zip file to:", uploadEndpointURL);
+            console.log(`Uploading zip file ${zipFilePath} to ${uploadEndpointURL}`);
             const response = await this.apiClient.post(uploadEndpointURL, zipFileData, {
                 headers: {
                     "Content-Type": "application/zip",
@@ -718,14 +719,9 @@ async function promptForReportZipFileWithResults() {
         return undefined;
     }
 }
-// Import the report zip file which contains the test results to TestBench server
-async function importTestResultsToTestbench(connection, projectManagementTreeDataProvider) {
-    // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
-    const resultZipFilePath = await promptForReportZipFileWithResults();
-    if (!resultZipFilePath) {
-        // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
-        return;
-    }
+// TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
+async function importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath) {
+    console.log("Importing report with results to TestBench server.");
     const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReportile(resultZipFilePath);
     if (!uniqueID || !projectKey || !cycleNameOfProject) {
         vscode.window.showErrorMessage("Error extracting project key, cycle name and unique ID from the zip file.");
@@ -740,7 +736,7 @@ async function importTestResultsToTestbench(connection, projectManagementTreeDat
     function findCycleKeyFromCycleName(elements, cycleName) {
         for (const element of elements) {
             // Check if this element matches the target criteria
-            // TODO: Somehow the element.item is undefined for rlements other than projects, thats why the extra check is added without .item
+            // TODO: Somehow the element.item is undefined for elements other than projects, thats why the extra check is added without .item
             if ((element.item?.nodeType === "Cycle" && element.item?.name === cycleName) ||
                 (element.nodeType === "Cycle" && element.name === cycleName)) {
                 return element.key;
@@ -820,6 +816,16 @@ async function importTestResultsToTestbench(connection, projectManagementTreeDat
         console.error("Error:", error.message);
     }
 }
+// Import the report zip file which contains the test results to TestBench server
+async function selectReportWithResultsAndImportToTestbench(connection, projectManagementTreeDataProvider) {
+    // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
+    const resultZipFilePath = await promptForReportZipFileWithResults();
+    if (!resultZipFilePath) {
+        // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
+        return;
+    }
+    await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+}
 async function extractDataFromReportile(zipFilePath) {
     try {
         // Read zip file from disk
@@ -864,4 +870,4 @@ async function extractAndParseJsonContent(zipContents, fileName) {
         return null;
     }
 }
-//# sourceMappingURL=testBenchConnection.js.map
+//# sourceMappingURL=testbenchConnection.js.map

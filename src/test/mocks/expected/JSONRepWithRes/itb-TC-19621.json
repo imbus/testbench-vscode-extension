@@ -1,0 +1,190 @@
+{
+  "key": "4611686020000000178",
+  "numbering": "1.2.3.2.1",
+  "uniqueID": "itb-TC-19621",
+  "name": "Nur Fahrzeugpreise",
+  "spec": {
+    "key": "664",
+    "description": "<html><body>\n  \n\n  \n  \n    <p>\n\u00a0\n\n    </p>\n\n\n</body></html>",
+    "reviewComment": "<html><body>\n  \n\n  \n  \n\n</body></html>",
+    "status": "Planned",
+    "priority": "Low",
+    "responsible": null,
+    "dueDate": "2021-04-27T00:00:00Z",
+    "reviewer": null,
+    "udfs": [
+      {
+        "key": "1010",
+        "name": "Automatisiert",
+        "value": "true",
+        "udfType": "Boolean"
+      },
+      {
+        "key": "1011",
+        "name": "Entwickler Review durchgef\u00fchrt",
+        "value": "false",
+        "udfType": "Boolean"
+      },
+      {
+        "key": "1020",
+        "name": "Testbar ab Build Nr.",
+        "value": "",
+        "udfType": "String"
+      },
+      {
+        "key": "1021",
+        "name": "Betriebssystem",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1025",
+        "name": "TestTyp",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1028",
+        "name": "TestArt",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": [
+      {
+        "key": "1039",
+        "name": "Demo",
+        "isVariantsMarker": false
+      },
+      {
+        "key": "1042",
+        "name": "Systemtest",
+        "isVariantsMarker": false
+      }
+    ],
+    "references": [],
+    "requirements": [
+      {
+        "key": "2612",
+        "edited": false
+      },
+      {
+        "key": "2796",
+        "edited": false
+      }
+    ],
+    "preConditions": [],
+    "postConditions": []
+  },
+  "testCases": [
+    {
+      "uniqueID": "itb-TC-19621-PC-119695",
+      "index": 1,
+      "spec": {
+        "key": "3197",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3412",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:46.348\nEnd Time:     2024-10-25 11:22:46.368\nElapsed Time: 0:00:00.020000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "itb-TC-19621-PC-119694",
+      "index": 2,
+      "spec": {
+        "key": "3198",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3413",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:46.406\nEnd Time:     2024-10-25 11:22:46.419\nElapsed Time: 0:00:00.014000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "itb-TC-19621-PC-119693",
+      "index": 3,
+      "spec": {
+        "key": "3199",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3414",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:46.445\nEnd Time:     2024-10-25 11:22:46.463\nElapsed Time: 0:00:00.018000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "itb-TC-19621-PC-119692",
+      "index": 4,
+      "spec": {
+        "key": "3200",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3415",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:46.499\nEnd Time:     2024-10-25 11:22:46.511\nElapsed Time: 0:00:00.012000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "itb-TC-19621-PC-119893",
+      "index": 5,
+      "spec": {
+        "key": "3201",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3416",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:46.541\nEnd Time:     2024-10-25 11:22:46.559\nElapsed Time: 0:00:00.018000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    }
+  ],
+  "exec": {
+    "key": "4611686020000001684",
+    "comments": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-25 11:22:46.348\nEnd Time:     2024-10-25 11:22:46.559\n</pre><table><tr><td>itb-TC-19621-PC-119695</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:46.368</pre></td></tr><tr><td>itb-TC-19621-PC-119694</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:46.419</pre></td></tr><tr><td>itb-TC-19621-PC-119693</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:46.463</pre></td></tr><tr><td>itb-TC-19621-PC-119692</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:46.511</pre></td></tr><tr><td>itb-TC-19621-PC-119893</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:46.559</pre></td></tr></table></body></html>",
+    "udfs": [
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": []
+  }
+}

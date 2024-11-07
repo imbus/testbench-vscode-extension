@@ -2,7 +2,8 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { EnvironmentPath, PythonExtension } from "@vscode/python-extension";
 
-export function getActiveWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
+export class pyCommandBuilder{
+public static getActiveWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
     const workspaceFolders = vscode.workspace.workspaceFolders;
 
     if (workspaceFolders && workspaceFolders.length > 0) {
@@ -18,12 +19,16 @@ export function getActiveWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
     return undefined;
 }
 
-async function getPythonEnviromentExe(
+public static async getPythonEnviromentExe(
     activeWorkspace: vscode.WorkspaceFolder | undefined
 ): Promise<string | undefined> {
     let res: string | undefined;
 
     const pythonApi: PythonExtension = await PythonExtension.api();
+
+    if (pythonApi === undefined) {
+        return undefined;
+    }
 
     let environmentPath: EnvironmentPath | undefined;
     if (activeWorkspace) {
@@ -32,25 +37,21 @@ async function getPythonEnviromentExe(
         environmentPath = pythonApi?.environments.getActiveEnvironmentPath();
     }
 
-    if (environmentPath === undefined) {
-        return undefined;
-    }
-
     const enviroment = await pythonApi?.environments.resolveEnvironment(environmentPath);
     res = enviroment?.executable.uri?.fsPath;
 
     return res;
 }
 
-export async function buildTb2RobotCommand(extensionContext: vscode.ExtensionContext): Promise<string> {
+public static async buildTb2RobotCommand(extensionContext: vscode.ExtensionContext): Promise<string> {
     let res = "";
 
     const tb2robMain = extensionContext.asAbsolutePath(path.join("bundled", "tools", "tb2robot", "__main__.py"));
     console.log(tb2robMain);
 
-    const folder = getActiveWorkspaceFolder();
+    const folder = this.getActiveWorkspaceFolder();
 
-    let pythonExe = await getPythonEnviromentExe(folder);
+    let pythonExe = await this.getPythonEnviromentExe(folder);
     console.log(pythonExe);
 
     if (pythonExe === undefined) {
@@ -63,20 +64,21 @@ export async function buildTb2RobotCommand(extensionContext: vscode.ExtensionCon
     return res;
 }
 
-export async function buildRobotCommand(): Promise<string | undefined> {
+public static async buildRobotCommand(): Promise<string> {
     let res = "";
 
-    const folder = getActiveWorkspaceFolder();
+    const folder = this.getActiveWorkspaceFolder();
 
-    let pythonExe = await getPythonEnviromentExe(folder);
+    let pythonExe = await this.getPythonEnviromentExe(folder);
     console.log(pythonExe);
 
     if (pythonExe === undefined) {
-        return undefined;
+        return res;
     }
 
     res = pythonExe + " -m robot";
     console.log(res);
 
     return res;
+}
 }

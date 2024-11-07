@@ -30,7 +30,7 @@ const assert_1 = __importDefault(require("assert"));
 const sinon = __importStar(require("sinon"));
 const vscode = __importStar(require("vscode"));
 const projectManagementTreeView_1 = require("../../projectManagementTreeView");
-const testBenchConnection_1 = require("../../testBenchConnection");
+const testbenchConnection_1 = require("../../testbenchConnection");
 const testThemeTreeView_1 = require("../../testThemeTreeView");
 suite("ProjectManagementTreeDataProvider Tests", () => {
     let sandbox;
@@ -39,7 +39,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     let treeDataProvider;
     setup(() => {
         sandbox = sinon.createSandbox();
-        connectionStub = sandbox.createStubInstance(testBenchConnection_1.PlayServerConnection);
+        connectionStub = sandbox.createStubInstance(testbenchConnection_1.PlayServerConnection);
         testThemeDataProviderStub = sandbox.createStubInstance(testThemeTreeView_1.TestThemeTreeDataProvider);
         treeDataProvider = new projectManagementTreeView_1.ProjectManagementTreeDataProvider(connectionStub, "projectKey", testThemeDataProviderStub);
     });
