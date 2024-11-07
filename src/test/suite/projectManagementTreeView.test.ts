@@ -3,11 +3,12 @@ import * as sinon from "sinon";
 import * as vscode from "vscode";
 import {
     ProjectManagementTreeDataProvider,
-    ProjectManagementTreeItem,
+    TestbenchTreeItem,
     findProjectKeyOfCycleElement,
 } from "../../projectManagementTreeView";
-import { PlayServerConnection } from "../../testbenchConnection";
+import { PlayServerConnection } from "../../testBenchConnection";
 import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
+import * as types from "../../types";
 
 suite("ProjectManagementTreeDataProvider Tests", () => {
     let sandbox: sinon.SinonSandbox;
@@ -31,7 +32,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     test("getChildren should return root project when no element is provided", async () => {
-        const projectTree = {
+        const projectTree: types.TreeNode = {
             name: "Project",
             nodeType: "Project",
             children: [],
@@ -42,7 +43,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
         };
         connectionStub.getProjectTreeOfProject.resolves(projectTree);
 
-        const children = await treeDataProvider.getChildren();
+        const children: TestbenchTreeItem[] = await treeDataProvider.getChildren();
 
         assert.strictEqual(children.length, 1);
         assert.strictEqual(children[0].label, "Project");
@@ -51,16 +52,16 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     test("getChildren should return empty array when no connection is available", async () => {
         treeDataProvider = new ProjectManagementTreeDataProvider(null, "projectKey", testThemeDataProviderStub);
 
-        const children = await treeDataProvider.getChildren();
+        const children: TestbenchTreeItem[] = await treeDataProvider.getChildren();
 
         assert.strictEqual(children.length, 0);
     });
 
     test("getChildren should return children of the provided element", async () => {
-        const element = new ProjectManagementTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
+        const element = new TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
             children: [{ name: "Version", nodeType: "Version" }],
         });
-        const children = await treeDataProvider.getChildren(element);
+        const children: TestbenchTreeItem[] = await treeDataProvider.getChildren(element);
 
         assert.strictEqual(children.length, 1);
         assert.strictEqual(children[0].label, "Version");
@@ -71,7 +72,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     test("getChildrenOfCycle should return children of a cycle element", async () => {
         const cycleElement = new ProjectManagementTreeItem("Cycle", "Cycle", vscode.TreeItemCollapsibleState.Collapsed, { key: "cycleKey" });
         const cycleData = {
-            root: { base: { key: "rootKey" } },
+            root: { base: { key: "rootKey", numbering: "1", parentKey: "parentKey", name: "Root Name", uniqueID: "uniqueID", matchesFilter: true } },
             nodes: [
                 { base: { key: "childKey", parentKey: "rootKey", numbering: "1", name: "Test Theme" }, elementType: "TestThemeNode" }
             ]
@@ -86,13 +87,10 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     */
 
     test("findProjectKeyOfCycle should return project key of a cycle element", () => {
-        const projectElement = new ProjectManagementTreeItem(
-            "Project",
-            "Project",
-            vscode.TreeItemCollapsibleState.Collapsed,
-            { key: "projectKey" }
-        );
-        const cycleElement = new ProjectManagementTreeItem(
+        const projectElement = new TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
+            key: "projectKey",
+        });
+        const cycleElement = new TestbenchTreeItem(
             "Cycle",
             "Cycle",
             vscode.TreeItemCollapsibleState.Collapsed,
@@ -106,18 +104,37 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     test("handleTestCycleClick should initialize test theme tree", async () => {
-        const cycleElement = new ProjectManagementTreeItem(
-            "Cycle",
-            "Cycle",
-            vscode.TreeItemCollapsibleState.Collapsed,
-            { key: "cycleKey" }
-        );
-        const cycleData = {
-            root: { base: { key: "rootKey" } },
+        const cycleElement = new TestbenchTreeItem("Cycle Label", "Cycle", vscode.TreeItemCollapsibleState.None, {
+            key: "cycleKey",
+        });
+        const cycleData: types.CycleStructure = {
+            root: {
+                base: {
+                    key: "rootKey",
+                    numbering: "1",
+                    parentKey: "parentKey",
+                    name: "Root Name",
+                    uniqueID: "uniqueID",
+                    matchesFilter: true,
+                },
+                filters: [],
+                elementType: "RootElementType",
+            },
             nodes: [
                 {
-                    base: { key: "childKey", parentKey: "rootKey", numbering: "1", name: "Test Theme" },
+                    base: {
+                        key: "childKey",
+                        parentKey: "rootKey",
+                        numbering: "1",
+                        name: "Test Theme",
+                        uniqueID: "uniqueID",
+                        matchesFilter: true,
+                    },
                     elementType: "TestThemeNode",
+                    spec: { key: "specKey", locker: null, status: "active" },
+                    aut: { key: "autKey", locker: null, status: "active" },
+                    exec: { key: "execKey", locker: null, status: "active", execStatus: "pending", verdict: "none" },
+                    filters: [],
                 },
             ],
         };

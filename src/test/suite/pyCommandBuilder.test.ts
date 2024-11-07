@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -10,6 +11,27 @@ suite('getActiveWorkspaceFolder tests', () => {
     let workspaceFolder1Stub: sinon.SinonStubbedInstance<vscode.WorkspaceFolder>;
     let workspaceFolder2Stub: sinon.SinonStubbedInstance<vscode.WorkspaceFolder>;
 
+=======
+import * as assert from "assert";
+import * as vscode from "vscode";
+import * as path from "path";
+import { getActiveWorkspaceFolder } from "../../pyCommandBuilder";
+import * as fs from "fs";
+import * as os from "os";
+
+function createTemporaryFolder(): string {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "test-workspace-"));
+    return tempDir;
+}
+
+function createFileInFolder(folder: string, filename: string): string {
+    const filePath = path.join(folder, filename);
+    fs.writeFileSync(filePath, "test content");
+    return filePath;
+}
+
+suite("getActiveWorkspaceFolder Tests", () => {
+>>>>>>> 5fbc0b0ab3a04c6eccf598d716d78e885c4bc1e3
     setup(() => {
         workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders');
     });
@@ -17,9 +39,15 @@ suite('getActiveWorkspaceFolder tests', () => {
     teardown(() => {
     });
 
+<<<<<<< HEAD
     test('Should return undefined when no workspace is open', async () => {
         const workspaceFolder = pyCommandBuilder.getActiveWorkspaceFolder();
         assert.strictEqual(workspaceFolder, undefined, 'Expected no active workspace folder');
+=======
+    test("Should return undefined when no workspace is open", async () => {
+        const workspaceFolder = getActiveWorkspaceFolder();
+        assert.strictEqual(workspaceFolder, undefined, "Expected no active workspace folder");
+>>>>>>> 5fbc0b0ab3a04c6eccf598d716d78e885c4bc1e3
     });
 
     /*test('Should return the single workspace folder when only one is open', async () => {
@@ -63,6 +91,7 @@ suite('getActiveWorkspaceFolder tests', () => {
         }
     });*/
 });
+<<<<<<< HEAD
 
 suite('getPythonEnviromentExe tests', () => {
     let pythonApiStub: sinon.SinonStubbedInstance<PythonExtension>;
@@ -210,3 +239,5 @@ suite('buildRobotCommand tests', function () {
         assert.strictEqual(result, '', 'Expected buildRobotCommand to return empty string');
     });
 });
+=======
+>>>>>>> 5fbc0b0ab3a04c6eccf598d716d78e885c4bc1e3

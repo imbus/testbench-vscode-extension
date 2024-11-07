@@ -80,6 +80,50 @@ export const defaultTestbench2robotframeworkConfig: Testbench2robotframeworkConf
     },
 };
 
+export interface CycleStructure {
+    root: {
+        base: {
+            key: string;
+            numbering: string;
+            parentKey: string;
+            name: string;
+            uniqueID: string;
+            matchesFilter: boolean;
+        };
+        filters: any[];
+        elementType: string;
+    };
+    nodes: Array<{
+        base: {
+            key: string;
+            numbering: string;
+            parentKey: string;
+            name: string;
+            uniqueID: string;
+            matchesFilter: boolean;
+        };
+        spec: {
+            key: string;
+            locker: string | null;
+            status: string;
+        };
+        aut: {
+            key: string;
+            locker: string | null;
+            status: string;
+        };
+        exec: {
+            status: string;
+            execStatus: string;
+            verdict: string;
+            key: string;
+            locker: string | null;
+        };
+        filters: any[];
+        elementType: string;
+    }>;
+}
+
 // Interface for Test Case
 export interface TestCase {
     uniqueID: string;

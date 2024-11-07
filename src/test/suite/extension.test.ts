@@ -14,7 +14,9 @@ suite("Extension Test Suite", () => {
     });
 
     test("Extension should be active after activation", async () => {
-        const extension = vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension");
+        const extension: vscode.Extension<any> | undefined = vscode.extensions.getExtension(
+            "imbus.testbench-visual-studio-code-extension"
+        );
         if (!extension) {
             assert.fail("Extension not found");
         }
@@ -33,8 +35,8 @@ suite("Extension Test Suite", () => {
 
         activate(context);
 
-        const registeredCommands = await vscode.commands.getCommands(true);
-        const expectedCommands = [
+        const registeredCommands: string[] = await vscode.commands.getCommands(true);
+        const expectedCommands: string[] = [
             "testbenchExtension.displayCommands",
             "testbenchExtension.login",
             "testbenchExtension.changeConnection",
@@ -66,7 +68,7 @@ suite("Extension Test Suite", () => {
 
         activate(context);
 
-        const config = vscode.workspace.getConfiguration("testbenchExtension");
+        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration("testbenchExtension");
         assert.strictEqual(config.get("serverName"), "testbench");
         assert.strictEqual(config.get("portNumber"), 9445);
         assert.strictEqual(config.get("storePasswordAfterLogin"), false);
@@ -82,7 +84,7 @@ suite("Extension Test Suite", () => {
 
         activate(context);
 
-        const config = vscode.workspace.getConfiguration("testbenchExtension");
+        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration("testbenchExtension");
         await config.update("serverName", "newServerName", vscode.ConfigurationTarget.Global);
         assert.strictEqual(config.get("serverName", vscode.ConfigurationTarget.Global), "newServerName");
     });

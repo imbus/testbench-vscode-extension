@@ -2,12 +2,13 @@
 
 This Visual Studio Code Extension for TestBench allows you to:
 - Display the project management tree and the test theme tree, where you can navigate through the tree elements.
-- Generate robotframework test cases from test cycles, test themes and test case sets directly within Visual Studio Code.
+- Generate robotframework test cases from test cycles, test themes and test case sets directly within Visual Studio Code, and upload the test results back to the TestBench server.
 
 ## Features
 
 - Display project management tree and test theme tree in separate views.
 - Generate robotframework test cases for the selected tree element type.
+- Upload test results back to the TestBench server.
 
 ## Installation
 
@@ -26,6 +27,8 @@ The extension settings contains following configurations:
 - Automatic login option
 - Workspace location
 - Test generation configuration
+- Clean up option after processing reports
+- Path to execution results (output.xml)
 
 ## Usage
 
@@ -45,7 +48,7 @@ Use the buttons alongside the tree views or open the command palette (Ctrl+Shift
    After making a selection, the extension retrieves the report from the TestBench server and uses the `testbench2robotframework` library to create Robot Framework test cases.
 
 4. **Execute and Upload Test Results**  
-   Once you’ve executed the generated Robot Framework tests, a zip file named `ReportWithResults.zip` will be created, containing the test results. To upload these results back to the TestBench server, click the **Upload** button and select `ReportWithResults.zip` to complete the process.
+   Once you’ve executed the generated Robot Framework tests (for example via [RobotCode](https://robotcode.io/)), you can click the **Upload** button to send the test results back to the TestBench server. The extension automatically locates the output.xml file, where Robot Framework test results are stored. During the creation process of the results, a report file named `ReportWithResults.zip` with a timestamp at the end of the file will be created, containing the test results. If you choose to clear the reports after processing in the extension settings, this report file will be deleted automatically.
 
 ## Contributing
 
