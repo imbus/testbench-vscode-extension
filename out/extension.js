@@ -33,7 +33,7 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const reportHandler = __importStar(require("./reportHandler"));
-const testbenchConnection = __importStar(require("./testBenchConnection"));
+const testBenchConnection = __importStar(require("./testBenchConnection"));
 const projectManagementTreeView = __importStar(require("./projectManagementTreeView"));
 const testBenchTypes = __importStar(require("./testBenchTypes"));
 const path_1 = __importDefault(require("path"));
@@ -140,7 +140,7 @@ async function activate(context) {
         // If storePassword is false, delete the stored password.
         // The password is only stored after a successful login.
         if (!config.get("storePasswordAfterLogin", false)) {
-            await testbenchConnection.clearStoredCredentials(context);
+            await testBenchConnection.clearStoredCredentials(context);
         }
         // If the user wont specify a workspace location, use the workspace location of VS Code
         if (!config.get("workspaceLocation")) {
@@ -161,7 +161,7 @@ async function activate(context) {
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
         if (e.affectsConfiguration(exports.baseKey)) {
             await loadConfiguration();
-            console.log("Configuration changed!");
+            console.log("Configuration changed and updated.");
         }
     }));
     // Prompts the user to select a folder and returns its path
@@ -216,7 +216,7 @@ async function activate(context) {
         }
         insideLogin = true;
         // Only execute the finally block after the login attempt is fully completed to avoid multiple login prompts after clicking login multiple times.
-        await testbenchConnection
+        await testBenchConnection
             .performLogin(context, exports.baseKey)
             .catch((error) => {
             console.error("Login process failed:", error);
@@ -305,7 +305,7 @@ async function activate(context) {
             vscode.window.showErrorMessage("No project selected. Please select a project first.");
             return;
         }
-        await testbenchConnection.selectReportWithResultsAndImportToTestbench(exports.connection, exports.projectManagementTreeDataProvider);
+        await testBenchConnection.selectReportWithResultsAndImportToTestbench(exports.connection, exports.projectManagementTreeDataProvider);
     }));
     // Register the automated "Read Tests & Upload Results to TestBench" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.readAndUploadTestResultsToTestbench.command, async () => {

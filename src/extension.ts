@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as reportHandler from "./reportHandler";
-import * as testbenchConnection from "./testBenchConnection";
+import * as testBenchConnection from "./testBenchConnection";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testBenchTypes from "./testBenchTypes";
 import path from "path";
@@ -14,8 +14,8 @@ export function setProjectManagementTreeDataProvider(
 ) {
     projectManagementTreeDataProvider = newProjectManagementTreeDataProvider;
 }
-export let connection: testbenchConnection.PlayServerConnection | null = null; // Store the connection to server
-export function setConnection(newConnection: testbenchConnection.PlayServerConnection | null) {
+export let connection: testBenchConnection.PlayServerConnection | null = null; // Store the connection to server
+export function setConnection(newConnection: testBenchConnection.PlayServerConnection | null) {
     connection = newConnection;
 }
 export const folderNameOfTestbenchWorkingDirectory: string = ".testbench"; // Folder to create under the working directory to download / process files
@@ -122,7 +122,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // If storePassword is false, delete the stored password.
         // The password is only stored after a successful login.
         if (!config.get<boolean>("storePasswordAfterLogin", false)) {
-            await testbenchConnection.clearStoredCredentials(context);
+            await testBenchConnection.clearStoredCredentials(context);
         }
 
         // If the user wont specify a workspace location, use the workspace location of VS Code
@@ -156,7 +156,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (e.affectsConfiguration(baseKey)) {
                 await loadConfiguration();
-                console.log("Configuration changed!");
+                console.log("Configuration changed and updated.");
             }
         })
     );
@@ -224,7 +224,7 @@ export async function activate(context: vscode.ExtensionContext) {
             insideLogin = true;
 
             // Only execute the finally block after the login attempt is fully completed to avoid multiple login prompts after clicking login multiple times.
-            await testbenchConnection
+            await testBenchConnection
                 .performLogin(context, baseKey)
                 .catch((error: any) => {
                     console.error("Login process failed:", error);
@@ -379,7 +379,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            await testbenchConnection.selectReportWithResultsAndImportToTestbench(
+            await testBenchConnection.selectReportWithResultsAndImportToTestbench(
                 connection,
                 projectManagementTreeDataProvider
             );

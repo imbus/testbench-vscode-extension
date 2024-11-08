@@ -27,12 +27,9 @@ const assert = __importStar(require("assert"));
 const vscode = __importStar(require("vscode"));
 const extension_1 = require("../../extension");
 suite("Extension Test Suite", () => {
-    suiteSetup(async () => {
-    });
     suiteTeardown(() => {
         vscode.window.showInformationMessage("All tests done!");
     });
-    vscode.window.showInformationMessage("Start all tests.");
     test("Extension should be present", () => {
         assert.ok(vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension"));
     });

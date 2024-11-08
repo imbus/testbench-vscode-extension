@@ -91,9 +91,9 @@ export async function fetchZipFile(
         }
 
         console.log(
-            `Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, requestParams: ${requestParams}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`
+            `Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`
         );
-        console.log("requestParams", requestParams);
+        console.log("Fetching report with requestParams:", requestParams);
 
         const jobId: string | null = await getJobId(projectKey, cycleKey, requestParams);
         if (!jobId) {
@@ -117,7 +117,7 @@ export async function fetchZipFile(
         }
 
         const fileName: string = jobStatus.completion.result.ReportingSuccess!.reportName;
-        console.log(`Report name: ${fileName}`);
+        console.log(`Report name to download: ${fileName}`);
 
         const outputPath: string | undefined = await downloadReport(
             baseKey,
@@ -125,8 +125,7 @@ export async function fetchZipFile(
             fileName,
             folderNameToDownloadReport
         );
-        if (outputPath) {
-            console.log(`Report downloaded and saved to: ${outputPath}`);
+        if (outputPath) {            
             return outputPath;
         } else {
             console.warn("Download canceled or failed.");
@@ -869,7 +868,7 @@ export async function removeReportZipFile(zipFileFullPath: string): Promise<void
 
         // Remove the file
         await fsPromise.unlink(zipFileFullPath);
-        console.log(`Zip file ${fileName} successfully removed.`);
+        console.log(`Zip file successfully removed: ${fileName} `);
     } catch (error: any) {
         if (error.code === "ENOENT") {
             vscode.window.showWarningMessage(`File not found: ${zipFileFullPath}`);
@@ -912,15 +911,23 @@ export async function findFileRecursively(dir: string, fileName: string): Promis
     return undefined;
 }
 
+/**
+ * Opens a file selection dialog for the user to choose the output XML file.
+ * Note: If multiple output XML files are present, the first one found will be returned.
+ * If the wrong file is selected automatically, the upload process will fail. To avoid this, set the output XML path in the settings correctly
+ * @param workingDirectoryFullPath The full path of the working directory.
+ * @returns The full path of the selected output XML file, or undefined if no file is selected.
+ */
 async function chooseRobotXMLFile(workingDirectoryFullPath: string): Promise<string | undefined> {
     // Open file selection dialog, filtered for XML files
-
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
     let outputXMLFolderFullPath: string | undefined = config.get<string>("outputXMLPath");
     if (!outputXMLFolderFullPath) {
         console.warn("Output XML path is not configured.");
     } else {
-        const outputXmlFilePath: string | undefined = await findFileRecursively(outputXMLFolderFullPath, "output.xml");
+        const fileName = "output.xml";
+        console.log(`Searching for ${fileName} in ${outputXMLFolderFullPath}`);
+        const outputXmlFilePath: string | undefined = await findFileRecursively(outputXMLFolderFullPath, fileName);
         if (outputXmlFilePath) {
             return outputXmlFilePath;
         }
@@ -975,6 +982,9 @@ export async function readTestResultsAndCreateReportWithResults(
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
 ): Promise<string | null> {
     try {
+
+        console.log("Started reading test results and creating report with results.");
+
         let fullPathOfReportWithResultsZip: string | null = null;
 
         // Main execution logic encapsulated in a function for use with progress
@@ -1005,6 +1015,8 @@ export async function readTestResultsAndCreateReportWithResults(
                 throw new Error("No XML file selected.");
             }
 
+            console.log(`The report with result zip file will be named ${reportFileWithResultsZipName}`);
+
             reportProgress(`Fetching report.`, reportIncrement);
 
             if (
@@ -1031,11 +1043,14 @@ export async function readTestResultsAndCreateReportWithResults(
 
             reportProgress(`Working on report.`, reportIncrement);
 
+            // Either use the downloaded report zip file or prompt the user to select one
             const reportWithResultsZipFileFullPath: string | undefined =
                 downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(workingDirectoryFullPath));
             if (!reportWithResultsZipFileFullPath) {
                 throw new Error("No report file selected.");
             }
+
+            console.log(`Report with results is saved to ${reportWithResultsZipFileFullPath}`);
 
             reportProgress(`Preparing configuration for testbench2robotframework.`, reportIncrement / 2);
 
@@ -1051,7 +1066,7 @@ export async function readTestResultsAndCreateReportWithResults(
 
             fullPathOfReportWithResultsZip = path.join(workingDirectoryFullPath, reportFileWithResultsZipName);
 
-            // console.log("Calling startTb2robotRead.");
+            console.log("Calling startTb2robotRead.");
             const isExecutionSuccessful: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
                 context,
                 workingDirectoryFullPath,
@@ -1060,7 +1075,7 @@ export async function readTestResultsAndCreateReportWithResults(
                 fullPathOfReportWithResultsZip,
                 tb2robotConfigFileFullPath
             );
-            // console.log("startTb2robotRead executed with success variable:", isSuccess);
+            console.log("startTb2robotRead executed with success variable:", isExecutionSuccessful);
 
             if (
                 !(await handleExecutionError(
@@ -1238,7 +1253,7 @@ export async function saveTestbench2RobotConfigurationAsJson(
 
         // Write file, overwriting if it already exists
         await fsPromise.writeFile(filePath, jsonContent, "utf8");
-        console.log(`Configuration file created or overwritten at: ${filePath}`);
+        console.log(`Tb2robot configuration file created or overwritten at: ${filePath}`);
 
         return filePath;
     } catch (error) {
