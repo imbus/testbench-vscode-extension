@@ -17,9 +17,9 @@ export class tb2robotLib {
         configJSONPath?: string
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
-            const commandBase = await pyCommandBuilder.buildTb2RobotCommand(context);
+            const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
 
-            let command = `${commandBase} write ${reportPath}`;
+            let command: string = `${commandBase} write ${reportPath}`;
             if (configJSONPath) {
                 command = `${commandBase} write -c ${configJSONPath} ${reportPath}`;
             }
@@ -55,10 +55,10 @@ export class tb2robotLib {
         configJSONPath?: string
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
-            const commandBase = await pyCommandBuilder.buildTb2RobotCommand(context);
+            const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
 
             // OVerwrite the results in the reportPath if no resultPath is provided.
-            let command = `${commandBase} read -o ${outputXmlPath} ${reportWithoutResultsPath}`;
+            let command: string = `${commandBase} read -o ${outputXmlPath} ${reportWithoutResultsPath}`;
 
             // Write the results to the resultPath if provided.
             if (resultPath) {
@@ -94,9 +94,9 @@ export class tb2robotLib {
         robotFilesPath: string
     ): Promise<boolean> {
         return new Promise(async (resolve, reject) => {
-            const commandBase = await pyCommandBuilder.buildRobotCommand();
+            const commandBase: string = await pyCommandBuilder.buildRobotCommand();
 
-            let command = `${commandBase} -d ${outputResultDir} --dryrun ${robotFilesPath}`;
+            let command: string = `${commandBase} -d ${outputResultDir} --dryrun ${robotFilesPath}`;
 
             exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
                 if (error) {
@@ -122,7 +122,7 @@ export class tb2robotLib {
         reportPath: string,
         configJSONPath?: string
     ): Promise<boolean> {
-        let res = true;
+        let res: boolean = true;
 
         await this.tb2robotWrite(context, workingDirectory, reportPath, configJSONPath)
             .then(() => {
@@ -159,11 +159,11 @@ export class tb2robotLib {
         resultPath?: string,
         configJSONPath?: string
     ): Promise<boolean> {
-        let res = true;
+        let res: boolean = true;
 
         await this.tb2robotRead(context, workingDirectory, outputXmlPath, reportPath, resultPath, configJSONPath)
             .then(() => {
-                let providedPath = "none";
+                let providedPath: string = "none";
                 let providedConfig = "";
                 if (resultPath) {
                     providedPath = resultPath;
@@ -197,7 +197,7 @@ export class tb2robotLib {
         outputResultDir: string,
         reportPath: string
     ): Promise<boolean> {
-        let res = true;
+        let res:boolean = true;
 
         await this.robotGenerateXMLResults(workingDirectory, outputResultDir, reportPath)
             .then(() => {
