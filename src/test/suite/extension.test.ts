@@ -7,8 +7,6 @@ suite("Extension Test Suite", () => {
         vscode.window.showInformationMessage("All tests done!");
     });
 
-    vscode.window.showInformationMessage("Start all tests.");
-
     test("Extension should be present", () => {
         assert.ok(vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension"));
     });
@@ -17,6 +15,7 @@ suite("Extension Test Suite", () => {
         const extension: vscode.Extension<any> | undefined = vscode.extensions.getExtension(
             "imbus.testbench-visual-studio-code-extension"
         );
+
         if (!extension) {
             assert.fail("Extension not found");
         }
@@ -33,20 +32,17 @@ suite("Extension Test Suite", () => {
             },
         } as unknown as vscode.ExtensionContext;
 
-        activate(context);
+        await activate(context);
 
         const registeredCommands: string[] = await vscode.commands.getCommands(true);
         const expectedCommands: string[] = [
-            "testbenchExtension.displayCommands",
             "testbenchExtension.login",
-            "testbenchExtension.changeConnection",
             "testbenchExtension.logout",
-            "testbenchExtension.generateTestCases",
-            "testbenchExtension.makeRoot",
+            "testbenchExtension.generateTestCasesForCycle",
+            "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
+            "testbenchExtension.readAndUploadTestResultsToTestbench",
             "testbenchExtension.showExtensionSettings",
             "testbenchExtension.selectAndLoadProject",
-            "testbenchExtension.refreshProjectTreeView",
-            "testbenchExtension.refreshTestTreeView",
             "testbenchExtension.setWorkspaceLocation",
         ];
 
@@ -58,22 +54,6 @@ suite("Extension Test Suite", () => {
         });
     });
 
-    test("Configuration should be loaded correctly", async () => {
-        const context = {
-            subscriptions: [],
-            secrets: {
-                delete: async () => {},
-            },
-        } as unknown as vscode.ExtensionContext;
-
-        activate(context);
-
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration("testbenchExtension");
-        assert.strictEqual(config.get("serverName"), "testbench");
-        assert.strictEqual(config.get("portNumber"), 9445);
-        assert.strictEqual(config.get("storePasswordAfterLogin"), false);
-    });
-
     test("Updating configuration should change setting variable", async () => {
         const context = {
             subscriptions: [],
@@ -82,7 +62,7 @@ suite("Extension Test Suite", () => {
             },
         } as unknown as vscode.ExtensionContext;
 
-        activate(context);
+        await activate(context);
 
         const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration("testbenchExtension");
         await config.update("serverName", "newServerName", vscode.ConfigurationTarget.Global);

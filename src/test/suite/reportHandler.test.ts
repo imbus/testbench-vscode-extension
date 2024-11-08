@@ -2,11 +2,11 @@ import * as assert from "assert";
 import * as sinon from "sinon";
 import * as vscode from "vscode";
 import * as jsonReportHandler from "../../reportHandler";
-import * as types from "../../types";
 import axios from "axios";
 import { PlayServerConnection } from "../../testBenchConnection";
+import * as testBenchTypes from "../../testBenchTypes";
 
-suite("jsonReportHandler Tests", () => {
+suite("reportHandler Tests", () => {
     let sandbox: sinon.SinonSandbox;
     let context: vscode.ExtensionContext;
     let url: string = "http://example.com";
@@ -47,20 +47,9 @@ suite("jsonReportHandler Tests", () => {
         vscode.window.showInformationMessage("All tests done!");
     });
 
-    /*
-    test("isExecutionBasedReportSelected should return false for Specification based", async () => {
-        const result = await jsonReportHandler.isExecutionBasedReportSelected();
-        assert.strictEqual(result, false);
-    });
-
-    test("isExecutionBasedReportSelected should return null for Cancel", async () => {
-        const result = await jsonReportHandler.isExecutionBasedReportSelected();
-        assert.strictEqual(result, null);
-    });
-    */
-
     test("isReportJobCompletedSuccessfully should return true for successful report job", () => {
-        const jobStatus: types.JobStatusResponse = {
+        const jobStatus: testBenchTypes.JobStatusResponse = {
+            //
             completion: {
                 result: {
                     ReportingSuccess: {
@@ -75,7 +64,7 @@ suite("jsonReportHandler Tests", () => {
     });
 
     test("isReportJobCompletedSuccessfully should return false for unsuccessful report job", () => {
-        const jobStatus: types.JobStatusResponse = {
+        const jobStatus: testBenchTypes.JobStatusResponse = {
             completion: {
                 result: {},
             },
@@ -89,7 +78,7 @@ suite("jsonReportHandler Tests", () => {
     test("fetchZipFile should return undefined if report generation is unsuccessful", async () => {
         const connection = new PlayServerConnection(context, url, port, sessionToken);
         const progress = { report: sinon.stub() };
-        const jobStatus: types.JobStatusResponse = {
+        const jobStatus: testBenchTypes.JobStatusResponse = {
             completion: {
                 result: {},
             },
@@ -114,7 +103,7 @@ suite("jsonReportHandler Tests", () => {
     test("fetchZipFile should return the path of the downloaded zip file if successful", async () => {
         const connection = new PlayServerConnection(context, url, port, sessionToken);
         const progress = { report: sinon.stub() };
-        const jobStatus: types.JobStatusResponse = {
+        const jobStatus: testBenchTypes.JobStatusResponse = {
             completion: {
                 result: {
                     ReportingSuccess: {
@@ -150,7 +139,7 @@ suite("jsonReportHandler Tests", () => {
         } as unknown as vscode.ExtensionContext;
 
         const connection = new PlayServerConnection(context, url, port, sessionToken);
-        const jobStatus: types.JobStatusResponse = {
+        const jobStatus: testBenchTypes.JobStatusResponse = {
             completion: {
                 result: {
                     ReportingSuccess: {
@@ -178,48 +167,4 @@ suite("jsonReportHandler Tests", () => {
             assert.ok(error instanceof vscode.CancellationError);
         }
     });
-
-    test("getJobId should return job ID from server", async () => {
-        const connection: PlayServerConnection = new PlayServerConnection(context, url, port, sessionToken);
-        const jobIdResponse = { data: { jobID: "jobId" }, status: 200 } as any;
-
-        sandbox.stub(axios, "post").resolves(jobIdResponse);
-
-        const result = await jsonReportHandler.getJobId(projectKey, cycleKey);
-
-        assert.strictEqual(result, "jobId");
-    });
-
-    test("getJobStatus should return job status from server", async () => {
-        const connection = new PlayServerConnection(context, url, port, sessionToken);
-        const jobStatusResponse = { data: { completion: { result: {} } }, status: 200 } as any;
-
-        sandbox.stub(axios, "get").resolves(jobStatusResponse);
-
-        const result = await jsonReportHandler.getJobStatus(projectKey, "jobId", "report");
-
-        assert.deepStrictEqual(result, jobStatusResponse.data);
-    });
-    /*
-    test("downloadReport should return the path of the downloaded file", async () => {
-        const connection = new PlayServerConnection(context, url, port, sessionToken);
-        const downloadZipResponse = { data: new ArrayBuffer(8), status: 200 } as any;
-
-        sandbox.stub(axios, "get").resolves(downloadZipResponse);
-        sandbox.stub(vscode.workspace, "getConfiguration").returns({
-            get: sinon.stub().returns("workspaceLocation"),
-        } as any);
-        sandbox.stub(fs, "existsSync").returns(true);
-        sandbox.stub(vscode.workspace.fs, "writeFile").resolves();
-
-        const result = await jsonReportHandler.downloadReport(
-            connection,
-            "baseKey",
-            projectKey,
-            "report.zip",
-            "folderNameToDownloadReport"
-        );
-
-        assert.strictEqual(result, "workspaceLocation/folderNameToDownloadReport/report.zip");
-    });*/
 });

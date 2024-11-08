@@ -35,7 +35,7 @@ const vscode = __importStar(require("vscode"));
 const reportHandler = __importStar(require("./reportHandler"));
 const testbenchConnection = __importStar(require("./testBenchConnection"));
 const projectManagementTreeView = __importStar(require("./projectManagementTreeView"));
-const types = __importStar(require("./types"));
+const testBenchTypes = __importStar(require("./testBenchTypes"));
 const path_1 = __importDefault(require("path"));
 // TODO: Create extension documentation in Readme.md
 exports.baseKey = "testbenchExtension"; // Prefix of the commands in package.json
@@ -148,7 +148,7 @@ async function activate(context) {
         }
         if (config.get("useDefaultValuesForTestbench2robotframework")) {
             // For testbench2robotframework configuration, set the generation and resource directory relative to the workspace location
-            let defaultTestbench2robotframeworkConfig = types.defaultTestbench2robotframeworkConfig;
+            let defaultTestbench2robotframeworkConfig = testBenchTypes.defaultTestbench2robotframeworkConfig;
             defaultTestbench2robotframeworkConfig.generationDirectory = path_1.default.join(config.get("workspaceLocation"), exports.folderNameOfTestbenchWorkingDirectory, "Generated");
             defaultTestbench2robotframeworkConfig.resourceDirectory = path_1.default.join(config.get("workspaceLocation"), "resources");
             await config.update("testbench2robotframeworkConfig", defaultTestbench2robotframeworkConfig);

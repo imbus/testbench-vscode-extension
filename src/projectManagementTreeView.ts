@@ -3,7 +3,7 @@ import * as path from "path";
 import { PlayServerConnection } from "./testBenchConnection";
 import { TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { connection } from "./extension";
-import * as types from "./types";
+import * as testBenchTypes from "./testBenchTypes";
 
 // Project management tree view that displays projects, versions and cycles.
 // Upon clicking on a cycle element, the remaining children elements are displayed in test theme tree (test themes and test case sets).
@@ -73,7 +73,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             }
 
             // No parent element provided, return the root project (single selected project)
-            const projectTree: types.TreeNode | null = await connection.getProjectTreeOfProject(
+            const projectTree: testBenchTypes.TreeNode | null = await connection.getProjectTreeOfProject(
                 this.currentProjectKeyInView
             );
             const rootItem: TestbenchTreeItem | null = this.createTreeItem(projectTree, null, true);
@@ -116,7 +116,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return [];
         }
 
-        const cycleData: types.CycleStructure | undefined = await connection.fetchCycleStructure(projectKey, cycleKey);
+        const cycleData: testBenchTypes.CycleStructure | undefined = await connection.fetchCycleStructure(
+            projectKey,
+            cycleKey
+        );
 
         if (!cycleData || !cycleData.nodes?.length) {
             console.warn("Cycle has no sub-elements.");

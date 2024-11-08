@@ -1,8 +1,8 @@
 import * as https from "https";
 import * as vscode from "vscode";
 import * as fs from "fs";
-import * as types from "./types";
-import * as jsonReportHandler from "./reportHandler";
+import * as testBenchTypes from "./testBenchTypes";
+import * as reportHandler from "./reportHandler";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { ProjectManagementTreeDataProvider } from "./projectManagementTreeView";
@@ -89,8 +89,8 @@ export class PlayServerConnection {
         this.keepAliveIntervalId = null;
     }
 
-    async selectProjectKeyFromProjectList(projectsData: types.Project[]): Promise<string | null> {
-        const projectNames: string[] = projectsData.map((project: types.Project) => project.name);
+    async selectProjectKeyFromProjectList(projectsData: testBenchTypes.Project[]): Promise<string | null> {
+        const projectNames: string[] = projectsData.map((project: testBenchTypes.Project) => project.name);
         const selectedProjectName: string | undefined = await vscode.window.showQuickPick(projectNames, {
             placeHolder: "Select a project",
         });
@@ -100,8 +100,8 @@ export class PlayServerConnection {
         }
 
         console.log("Selected project name:", selectedProjectName);
-        const selectedProject: types.Project | undefined = projectsData.find(
-            (project: types.Project) => project.name === selectedProjectName
+        const selectedProject: testBenchTypes.Project | undefined = projectsData.find(
+            (project: testBenchTypes.Project) => project.name === selectedProjectName
         );
         if (!selectedProject) {
             // vscode.window.showErrorMessage("Selected project not found.");
@@ -111,21 +111,20 @@ export class PlayServerConnection {
         return selectedProject.key;
     }
 
-    async getProjectsList(): Promise<types.Project[] | null> {
+    async getProjectsList(): Promise<testBenchTypes.Project[] | null> {
         if (!this.sessionToken) {
             console.warn("Session token is null. Cannot fetch projects list.");
             return null;
         }
         try {
             const projectsURL: string = `/projects/v1`;
-            const projectsResponse: AxiosResponse<types.Project[]> = await this.apiClient.get<types.Project[]>(
-                projectsURL,
-                {
-                    headers: {
-                        accept: "application/vnd.testbench+json",
-                    },
-                }
-            );
+            const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await this.apiClient.get<
+                testBenchTypes.Project[]
+            >(projectsURL, {
+                headers: {
+                    accept: "application/vnd.testbench+json",
+                },
+            });
 
             // Save the JSON to a file for analyzing the structure
             /*
@@ -152,7 +151,7 @@ export class PlayServerConnection {
         }
     }
 
-    async getProjectTreeOfProject(projectKey: string | null): Promise<types.TreeNode | null> {
+    async getProjectTreeOfProject(projectKey: string | null): Promise<testBenchTypes.TreeNode | null> {
         if (!this.sessionToken) {
             console.warn("Session token is null. Cannot fetch project tree:", projectKey);
             return null;
@@ -163,14 +162,12 @@ export class PlayServerConnection {
         }
         try {
             const projectTreeURL: string = `/projects/${projectKey}/tree/v1`;
-            const projectTreeResponse: AxiosResponse<types.TreeNode> = await this.apiClient.get<types.TreeNode>(
-                projectTreeURL,
-                {
+            const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> =
+                await this.apiClient.get<testBenchTypes.TreeNode>(projectTreeURL, {
                     headers: {
                         accept: "application/vnd.testbench+json",
                     },
-                }
-            );
+                });
 
             // Save the JSON to a file for analyzing the structure
             /*
@@ -197,9 +194,12 @@ export class PlayServerConnection {
         }
     }
 
-    async fetchCycleStructure(projectKey: string, cycleKey: string): Promise<types.CycleStructure | undefined> {
+    async fetchCycleStructure(
+        projectKey: string,
+        cycleKey: string
+    ): Promise<testBenchTypes.CycleStructure | undefined> {
         const cycleStructureUrl: string = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
-        const requestBody: types.OptionalJobIDRequestParameter = {
+        const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
             basedOnExecution: true,
             suppressFilteredData: false,
             suppressNotExecutable: false,
@@ -208,7 +208,7 @@ export class PlayServerConnection {
         };
 
         try {
-            const response: AxiosResponse<types.CycleStructure> = await this.apiClient.post(
+            const response: AxiosResponse<testBenchTypes.CycleStructure> = await this.apiClient.post(
                 cycleStructureUrl,
                 requestBody,
                 {
@@ -360,7 +360,7 @@ export class PlayServerConnection {
     public async importExecutionResults(
         projectKey: number,
         cycleKey: number,
-        importData: types.ImportData
+        importData: testBenchTypes.ImportData
     ): Promise<string> {
         const endpoint: string = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
 
@@ -636,7 +636,10 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
     const portNumber: number = portInputAsString ? parseInt(portInputAsString, 10) : portConfig;
 
     // Check if the server is accessible
-    const serverVersions: types.ServerVersionsResponse | null = await fetchServerVersions(serverName, portNumber);
+    const serverVersions: testBenchTypes.ServerVersionsResponse | null = await fetchServerVersions(
+        serverName,
+        portNumber
+    );
     if (!serverVersions) {
         console.error("Server not accessible with the provided server name and port.");
         vscode.window.showErrorMessage("Server not accessible with the provided server name and port.");
@@ -670,7 +673,7 @@ async function loginToNewPlayServerAndInitSessionToken(
     password: string,
     baseKey: string
 ): Promise<PlayServerConnection | null> {
-    const requestBody: types.LoginRequestBody = {
+    const requestBody: testBenchTypes.LoginRequestBody = {
         login: username,
         password: password,
         force: true,
@@ -682,7 +685,7 @@ async function loginToNewPlayServerAndInitSessionToken(
 
         // console.log("Sending Login POST request to:", loginURL);
 
-        const response: AxiosResponse<types.LoginResponse> = await axios.post(loginURL, requestBody, {
+        const response: AxiosResponse<testBenchTypes.LoginResponse> = await axios.post(loginURL, requestBody, {
             headers: {
                 accept: "application/vnd.testbench+json",
                 "Content-Type": "application/vnd.testbench+json",
@@ -739,13 +742,13 @@ export async function clearStoredCredentials(context: vscode.ExtensionContext) {
 async function fetchServerVersions(
     serverName: string,
     portNumber: number
-): Promise<types.ServerVersionsResponse | null> {
+): Promise<testBenchTypes.ServerVersionsResponse | null> {
     try {
         const baseURL: string = `https://${serverName}:${portNumber}`;
         const serverVersionsURL: string = `${baseURL}/api/serverVersions/v1`;
 
         console.log("Fetching server versions with URL:", serverVersionsURL);
-        const response: AxiosResponse<types.ServerVersionsResponse> = await axios.get(serverVersionsURL, {
+        const response: AxiosResponse<testBenchTypes.ServerVersionsResponse> = await axios.get(serverVersionsURL, {
             headers: {
                 Accept: "application/vnd.testbench+json",
             },
@@ -891,7 +894,7 @@ export async function importReportWithResultsToTestbench(
 
         // TODO: Chech the new data of the new branch
         // Import the results to TestBench server
-        const importData: types.ImportData = {
+        const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
             reportRootUID: uniqueID,
             useExistingDefect: true,
@@ -919,14 +922,14 @@ export async function importReportWithResultsToTestbench(
             );
 
             // Poll the job status until it is completed
-            const jobStatus: types.JobStatusResponse | null = await jsonReportHandler.pollJobStatus(
+            const jobStatus: testBenchTypes.JobStatusResponse | null = await reportHandler.pollJobStatus(
                 projectKey.toString(),
                 jobID,
                 "import"
             );
 
             // Check if the job is completed successfully
-            if (!jobStatus || jsonReportHandler.isImportJobFailed(jobStatus)) {
+            if (!jobStatus || reportHandler.isImportJobFailed(jobStatus)) {
                 console.warn("Import not completed or failed.");
                 vscode.window.showErrorMessage("Import not completed or failed.");
                 return undefined;
@@ -987,7 +990,7 @@ export async function selectReportWithResultsAndImportToTestbench(
             const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
             if (config.get<boolean>("clearReportAfterProcessing")) {
                 // Remove the report zip file after usage
-                await jsonReportHandler.removeReportZipFile(resultZipFilePath);
+                await reportHandler.removeReportZipFile(resultZipFilePath);
             }
         }
     );

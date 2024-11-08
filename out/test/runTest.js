@@ -40,6 +40,7 @@ async function main() {
         await (0, test_electron_1.runTests)({
             extensionDevelopmentPath,
             extensionTestsPath,
+            // launchArgs: [testWorkspaceFolder], // Open the test workspace
             // launchArgs: ['--disable-extensions']
         });
     }

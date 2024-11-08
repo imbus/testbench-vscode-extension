@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as fsPromise from "fs/promises";
 import * as path from "path";
-import * as types from "./types";
+import * as testBenchTypes from "./testBenchTypes";
 import axios, { AxiosResponse } from "axios";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
@@ -45,17 +45,17 @@ export async function isExecutionBasedReportSelected(): Promise<boolean | null> 
 }
 
 // Checks if the report job has completed successfully.
-export function isReportJobCompletedSuccessfully(jobStatus: types.JobStatusResponse): boolean {
+export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
 }
 
 // Checks if the import job has completed successfully.
-export function isImportJobCompletedSuccessfully(jobStatus: types.JobStatusResponse): boolean {
+export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     return !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
 }
 
 // Checks if the import job has failed.
-export function isImportJobFailed(jobStatus: types.JobStatusResponse): boolean {
+export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     return !!jobStatus?.completion?.result?.ExecutionImportingFailure;
 }
 
@@ -80,7 +80,7 @@ export async function fetchZipFile(
     projectKey: string,
     cycleKey: string,
     folderNameToDownloadReport: string,
-    requestParams?: types.OptionalJobIDRequestParameter,
+    requestParams?: testBenchTypes.OptionalJobIDRequestParameter,
     progress?: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken?: vscode.CancellationToken
 ): Promise<string | undefined> {
@@ -102,7 +102,7 @@ export async function fetchZipFile(
         }
         console.log(`Job ID (${jobId}) fetched successfully.`);
 
-        const jobStatus: types.JobStatusResponse | null = await pollJobStatus(
+        const jobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
             projectKey,
             jobId,
             "report",
@@ -165,10 +165,10 @@ export async function pollJobStatus(
     progress?: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken?: vscode.CancellationToken,
     maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
-): Promise<types.JobStatusResponse | null> {
+): Promise<testBenchTypes.JobStatusResponse | null> {
     const startTime: number = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
     let attempt: number = 0;
-    let jobStatus: types.JobStatusResponse | null = null;
+    let jobStatus: testBenchTypes.JobStatusResponse | null = null;
     let lastIncrement: number = 0;
 
     // Poll the job status until the job is completed with either success or failure
@@ -264,7 +264,7 @@ export async function pollJobStatus(
 export async function getJobId(
     projectKey: string,
     cycleKey: string,
-    requestParams?: types.OptionalJobIDRequestParameter // TODO: Execution mode is added in new branch, project tree is also changed? ExecutionImportingSuccess
+    requestParams?: testBenchTypes.OptionalJobIDRequestParameter // TODO: Execution mode is added in new branch, project tree is also changed? ExecutionImportingSuccess
 ): Promise<string | null> {
     if (!connection) {
         console.error("Connection object is missing.");
@@ -277,7 +277,7 @@ export async function getJobId(
         `Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`
     );
 
-    const jobIdResponse: AxiosResponse<types.JobIdResponse> = await axios.post(url, requestParams, {
+    const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await axios.post(url, requestParams, {
         headers: {
             accept: "application/json",
             Authorization: connection.getSessionToken(), // Include session token for authorization
@@ -306,7 +306,7 @@ export async function getJobStatus(
     projectKey: string,
     jobId: string,
     jobType: "report" | "import"
-): Promise<types.JobStatusResponse | null> {
+): Promise<testBenchTypes.JobStatusResponse | null> {
     if (!connection) {
         console.error("Connection object is missing.");
         return null;
@@ -316,7 +316,7 @@ export async function getJobStatus(
 
     console.log(`Checking job status: ${url}`);
 
-    const jobStatusResponse: AxiosResponse<types.JobStatusResponse> = await axios.get(url, {
+    const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await axios.get(url, {
         headers: {
             accept: "application/vnd.testbench+json",
             Authorization: connection.getSessionToken(),
@@ -537,7 +537,7 @@ export async function callFetchReportForTreeElement(
 
                 // Set up the request parameters
                 // TODO: For now use executionBased, remove selection dialog
-                const cycleStructureOptionsRequestParameter: types.OptionalJobIDRequestParameter = {
+                const cycleStructureOptionsRequestParameter: testBenchTypes.OptionalJobIDRequestParameter = {
                     basedOnExecution: executionBased,
                     treeRootUID: treeElementUniqueID,
                 };
@@ -654,7 +654,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
             return;
         }
 
-        const cycleReportOptions: types.OptionalJobIDRequestParameter = {
+        const cycleReportOptions: testBenchTypes.OptionalJobIDRequestParameter = {
             basedOnExecution: executionBased,
             treeRootUID: UIDofSelectedElement === "Generate all" ? "" : UIDofSelectedElement,
         };
@@ -756,7 +756,7 @@ async function runTestGenerationProcess(
     executionBased: boolean,
     workingDirectory: string,
     UIDofSelectedElement: string,
-    cycleStructureOptions: types.OptionalJobIDRequestParameter,
+    cycleStructureOptions: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
 ) {
@@ -1016,7 +1016,7 @@ export async function readTestResultsAndCreateReportWithResults(
                 throw new Error("Last generated report parameters are missing.");
             }
 
-            const cycleStructureOptionsRequestParameter: types.OptionalJobIDRequestParameter = {
+            const cycleStructureOptionsRequestParameter: testBenchTypes.OptionalJobIDRequestParameter = {
                 basedOnExecution: lastGeneratedReportParams.executionBased,
                 treeRootUID: lastGeneratedReportParams.UID,
             };
@@ -1225,7 +1225,7 @@ export async function saveTestbench2RobotConfigurationAsJson(
 ): Promise<string | null> {
     try {
         const config = vscode.workspace.getConfiguration(baseKey);
-        const generationConfig = config.get<types.Testbench2robotframeworkConfiguration>(
+        const generationConfig = config.get<testBenchTypes.Testbench2robotframeworkConfiguration>(
             "testbench2robotframeworkConfig"
         );
         if (!generationConfig) {

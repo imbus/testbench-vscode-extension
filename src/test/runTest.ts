@@ -21,6 +21,7 @@ async function main() {
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
+            // launchArgs: [testWorkspaceFolder], // Open the test workspace
             // launchArgs: ['--disable-extensions']
         });
     } catch (err: any) {

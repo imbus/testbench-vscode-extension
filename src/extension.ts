@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as reportHandler from "./reportHandler";
 import * as testbenchConnection from "./testBenchConnection";
 import * as projectManagementTreeView from "./projectManagementTreeView";
-import * as types from "./types";
+import * as testBenchTypes from "./testBenchTypes";
 import path from "path";
 
 // TODO: Create extension documentation in Readme.md
@@ -132,8 +132,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (config.get<boolean>("useDefaultValuesForTestbench2robotframework")) {
             // For testbench2robotframework configuration, set the generation and resource directory relative to the workspace location
-            let defaultTestbench2robotframeworkConfig: types.Testbench2robotframeworkConfiguration =
-                types.defaultTestbench2robotframeworkConfig;
+            let defaultTestbench2robotframeworkConfig: testBenchTypes.Testbench2robotframeworkConfiguration =
+                testBenchTypes.defaultTestbench2robotframeworkConfig;
             defaultTestbench2robotframeworkConfig.generationDirectory = path.join(
                 config.get<string>("workspaceLocation")!,
                 folderNameOfTestbenchWorkingDirectory,
@@ -322,7 +322,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
                 return;
             }
-            const projectList: types.Project[] | null = await connection.getProjectsList();
+            const projectList: testBenchTypes.Project[] | null = await connection.getProjectsList();
 
             if (!projectList) {
                 // vscode.window.showErrorMessage("No projects found..");

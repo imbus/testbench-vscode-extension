@@ -34,7 +34,7 @@ exports.selectReportWithResultsAndImportToTestbench = selectReportWithResultsAnd
 const https = __importStar(require("https"));
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
-const jsonReportHandler = __importStar(require("./reportHandler"));
+const reportHandler = __importStar(require("./reportHandler"));
 const jszip_1 = __importDefault(require("jszip"));
 const axios_1 = __importDefault(require("axios"));
 const path_1 = __importDefault(require("path"));
@@ -767,9 +767,9 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
             console.log("Starting import execution results");
             const jobID = await connection.importExecutionResults(Number(projectKey), Number(cycleKeyOfImportedReport), importData);
             // Poll the job status until it is completed
-            const jobStatus = await jsonReportHandler.pollJobStatus(projectKey.toString(), jobID, "import");
+            const jobStatus = await reportHandler.pollJobStatus(projectKey.toString(), jobID, "import");
             // Check if the job is completed successfully
-            if (!jobStatus || jsonReportHandler.isImportJobFailed(jobStatus)) {
+            if (!jobStatus || reportHandler.isImportJobFailed(jobStatus)) {
                 console.warn("Import not completed or failed.");
                 vscode.window.showErrorMessage("Import not completed or failed.");
                 return undefined;
@@ -823,7 +823,7 @@ async function selectReportWithResultsAndImportToTestbench(connection, projectMa
         const config = vscode.workspace.getConfiguration(extension_1.baseKey);
         if (config.get("clearReportAfterProcessing")) {
             // Remove the report zip file after usage
-            await jsonReportHandler.removeReportZipFile(resultZipFilePath);
+            await reportHandler.removeReportZipFile(resultZipFilePath);
         }
     });
 }

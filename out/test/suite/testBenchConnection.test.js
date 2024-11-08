@@ -87,7 +87,7 @@ suite("PlayServerConnection Tests", () => {
     });
     /*
     test("selectProjectKeyFromProjectList should return the selected project key", async () => {
-        const projectsData: types.Project[] = [
+        const projectsData: testBenchTypes.Project[] = [
             {
                 name: "Project1", key: "key1", creationTime: new Date().toISOString(), status: "active", visibility: true, tovsCount: 0,
                 cyclesCount: 0,
@@ -113,7 +113,7 @@ suite("PlayServerConnection Tests", () => {
     });
     
     test("getProjectsList should return the list of projects", async () => {
-        const mockProjects: types.Project[] = [{
+        const mockProjects: testBenchTypes.Project[] = [{
             name: "Project1",
             key: "key1",
             creationTime: new Date().toISOString(),
@@ -133,7 +133,7 @@ suite("PlayServerConnection Tests", () => {
     });
 
     test("getProjectTreeOfProject should return the project tree", async () => {
-        const mockTree: types.TreeNode = {
+        const mockTree: testBenchTypes.TreeNode = {
             name: "Root", children: [],
             nodeType: "",
             key: "",
