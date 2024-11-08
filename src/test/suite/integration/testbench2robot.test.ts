@@ -16,7 +16,10 @@ async function checkPythonExtension() {
         }
     }
     else {
-        await vscode.commands.executeCommand('workbench.extensions.installExtension', 'ms-python.python');
+        ext = await vscode.commands.executeCommand('workbench.extensions.installExtension', 'ms-python.python');
+        if (!ext?.isActive) {
+            await ext?.activate();
+        }
     }
 }
 
