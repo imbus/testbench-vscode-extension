@@ -881,8 +881,7 @@ export async function importReportWithResultsToTestbench(
             return;
         }
 
-        // Upload the zip file containing the results to TestBench server
-        // TODO: Add try catch block
+        // Upload the zip file containing the results to TestBench server        
         const zipFilenameFromServer: string = await connection.uploadExecutionResults(
             Number(projectKey),
             resultZipFilePath

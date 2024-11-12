@@ -32,83 +32,64 @@ export async function activate(context: vscode.ExtensionContext) {
     logger = new TestBenchLogger();
     logger.info("Extension activated.");
 
-    // Store extension commands with their titles to be able to display them together in a quickpick
-    const commands: { [key: string]: { command: string; title: string } } = {
+    // Store extension commands
+    const commands: { [key: string]: { command: string } } = {
         displayCommands: {
-            command: `${baseKey}.displayCommands`,
-            title: "Display Available Commands",
+            command: `${baseKey}.displayCommands`
         },
         login: {
-            command: `${baseKey}.login`,
-            title: "Login to TestBench Server",
+            command: `${baseKey}.login`
         },
         changeConnection: {
             command: `${baseKey}.changeConnection`,
-            title: "Change account",
         },
         logout: {
-            command: `${baseKey}.logout`,
-            title: "Logout from TestBench Server",
+            command: `${baseKey}.logout`
         },
         generateTestCasesForCycle: {
-            command: `${baseKey}.generateTestCasesForCycle`,
-            title: "Generate Tests",
+            command: `${baseKey}.generateTestCasesForCycle`
         },
         generateTestCasesForTestThemeOrTestCaseSet: {
-            command: `${baseKey}.generateTestCasesForTestThemeOrTestCaseSet`,
-            title: "Generate Tests",
+            command: `${baseKey}.generateTestCasesForTestThemeOrTestCaseSet`
         },
         readRFTestResultsAndCreateReportWithResults: {
-            command: `${baseKey}.readRFTestResultsAndCreateReportWithResults`,
-            title: "Read Test Results & Create Report With Results",
+            command: `${baseKey}.readRFTestResultsAndCreateReportWithResults`
         },
         makeRoot: {
-            command: `${baseKey}.makeRoot`,
-            title: "Make Root Item",
+            command: `${baseKey}.makeRoot`
         },
         getCycleStructure: {
-            command: `${baseKey}.getCycleStructure`,
-            title: "Get Cycle Structure",
+            command: `${baseKey}.getCycleStructure`
         },
         getServerVersions: {
-            command: `${baseKey}.getServerVersions`,
-            title: "Get Server Versions",
+            command: `${baseKey}.getServerVersions`
         },
         showExtensionSettings: {
-            command: `${baseKey}.showExtensionSettings`,
-            title: "Show Extension Settings",
+            command: `${baseKey}.showExtensionSettings`
         },
         fetchReportForSelectedTreeItem: {
-            command: `${baseKey}.fetchReportForSelectedTreeItem`,
-            title: "Fetch Report",
+            command: `${baseKey}.fetchReportForSelectedTreeItem`
         },
         selectAndLoadProject: {
-            command: `${baseKey}.selectAndLoadProject`,
-            title: "Display Projects List",
+            command: `${baseKey}.selectAndLoadProject`
         },
         uploadTestResultsToTestbench: {
-            command: `${baseKey}.uploadTestResultsToTestbench`,
-            title: "Upload Test Results To Testbench",
+            command: `${baseKey}.uploadTestResultsToTestbench`
         },
         readAndUploadTestResultsToTestbench: {
-            command: `${baseKey}.readAndUploadTestResultsToTestbench`,
-            title: "Read Tests & Upload Results To Testbench",
+            command: `${baseKey}.readAndUploadTestResultsToTestbench`
         },
         executeRobotFrameworkTests: {
-            command: `${baseKey}.executeRobotFrameworkTests`,
-            title: "Execute Tests",
+            command: `${baseKey}.executeRobotFrameworkTests`
         },
         refreshProjectTreeView: {
-            command: `${baseKey}.refreshProjectTreeView`,
-            title: "Refresh Project Tree View",
+            command: `${baseKey}.refreshProjectTreeView`
         },
         refreshTestTreeView: {
-            command: `${baseKey}.refreshTestTreeView`,
-            title: "Refresh Test Tree View",
+            command: `${baseKey}.refreshTestTreeView`
         },
         setWorkspaceLocation: {
-            command: `${baseKey}.setWorkspaceLocation`,
-            title: "Set Workspace Location",
+            command: `${baseKey}.setWorkspaceLocation`
         },
     };
 
@@ -206,7 +187,6 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
     logger.debug(`Context value connectionActive set to: ${connection !== null}`);
 
-    // FIXME: Login was stuck again, servers are crashed also.
     // The user may press the login button multiple times consecutively. Aviod executing the command again if already inside login.
     let insideLogin: boolean = false;
     // Register the "Login" command
