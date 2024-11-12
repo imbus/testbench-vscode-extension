@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PlayServerConnection } from "./testBenchConnection";
 import { TestThemeTreeDataProvider } from "./testThemeTreeView";
-import { connection } from "./extension";
+import { connection, logger } from "./extension";
 import * as testBenchTypes from "./testBenchTypes";
 
 // Project management tree view that displays projects, versions and cycles.
@@ -107,12 +107,14 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         const projectKey: string | undefined = findProjectKeyOfCycleElement(element);
 
         if (!projectKey) {
-            console.error("Project key of cycle not found.");
+            // console.warn("Project key of cycle not found.");
+            logger.warn("Project key of cycle not found (getChildrenOfCycle).");
             return [];
         }
 
         if (!connection) {
-            console.error("No connection available for tree view.");
+            // console.warn("No connection available for tree view.");
+            logger.warn("No connection available for tree view (getChildrenOfCycle).");
             return [];
         }
 
@@ -122,7 +124,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         );
 
         if (!cycleData || !cycleData.nodes?.length) {
-            console.warn("Cycle has no sub-elements.");
+            // console.warn("Cycle has no sub-elements.");
+            logger.warn("Cycle has no sub-elements (getChildrenOfCycle).");
             return [];
         }
 
@@ -220,7 +223,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
 export function findProjectKeyOfCycleElement(element: TestbenchTreeItem): string | undefined {
     if (element.contextValue !== "Cycle") {
-        console.error("Element is not a cycle.");
+        // console.error("Element is not a cycle.");
+        logger.error("Element is not a cycle (findProjectKeyOfCycleElement).");
         return undefined;
     }
     let currentElement: TestbenchTreeItem | null = element;
@@ -230,7 +234,8 @@ export function findProjectKeyOfCycleElement(element: TestbenchTreeItem): string
         }
         currentElement = currentElement.parent;
     }
-    console.error("Project key not found.");
+    // console.error("Project key not found.");
+    logger.error("Project key not found (findProjectKeyOfCycleElement).");
     return undefined;
 }
 
@@ -248,7 +253,8 @@ export function findCycleKeyOfTreeElement(element: TestbenchTreeItem): string | 
         }
         currentElement = currentElement?.parent;
     }
-    console.error("Cycle key not found.");
+    // console.error("Cycle key not found.");
+    logger.error("Cycle key not found (findCycleKeyOfTreeElement).");
     return undefined;
 }
 

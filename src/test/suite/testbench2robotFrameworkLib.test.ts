@@ -4,6 +4,8 @@ import * as assert from 'assert';
 import * as vscode from 'vscode'
 import { tb2robotLib} from '../../testbench2robotframeworkLib';
 import { pyCommandBuilder } from '../../pyCommandBuilder';
+import * as extension from '../../extension';
+import { TestBenchLogger } from "../..//testBenchLogger";
 
 const rootPath = path.resolve(__dirname, '../../../')
 
@@ -11,6 +13,8 @@ suite('tb2robotWrite test', () => {
     let context: vscode.ExtensionContext;
     let execStub: sinon.SinonStub;
     let buildTb2RobotCommandStub: sinon.SinonStub;
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
 
     setup(() => {
         execStub = sinon.stub(require('child_process'), 'exec');
@@ -21,7 +25,7 @@ suite('tb2robotWrite test', () => {
         sinon.restore();
     });
 
-    test("should execute the correct command without optional parameters", async () => {
+    test("Should execute the correct command without optional parameters", async () => {
         execStub.yields(null, "Success");
         buildTb2RobotCommandStub.resolves("commandBase");
 
@@ -35,7 +39,7 @@ suite('tb2robotWrite test', () => {
         );
     });
 
-    test("should execute the correct command with configJSONPath", async () => {
+    test("Should execute the correct command with configJSONPath", async () => {
         execStub.yields(null, "Success");
         buildTb2RobotCommandStub.resolves("commandBase");
 
@@ -49,7 +53,7 @@ suite('tb2robotWrite test', () => {
         );
     });
 
-    test("should reject with stderr if exec returns an error", async () => {
+    test("Should reject with stderr if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "", "stderr");
 
         try {
@@ -60,7 +64,7 @@ suite('tb2robotWrite test', () => {
         }
     });
 
-    test("should reject with stdout if exec returns an error", async () => {
+    test("Should reject with stdout if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "stdout", "");
 
         try {
@@ -71,7 +75,7 @@ suite('tb2robotWrite test', () => {
         }
     });
 
-    test("should reject with default if exec returns an error", async () => {
+    test("Should reject with default if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "", "");
 
         try {
@@ -86,6 +90,8 @@ suite('tb2robotWrite test', () => {
 suite('robotGenerateXMLResults test', () => {
     let execStub: sinon.SinonStub;
     let buildRobotCommandStub: sinon.SinonStub;
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
 
     setup(() => {
         execStub = sinon.stub(require('child_process'), 'exec');
@@ -96,7 +102,7 @@ suite('robotGenerateXMLResults test', () => {
         sinon.restore();
     });
 
-    test("should execute the correct command", async () => {
+    test("Should execute the correct command", async () => {
         execStub.yields(null, "Success");
         buildRobotCommandStub.resolves("commandBase");
 
@@ -110,7 +116,7 @@ suite('robotGenerateXMLResults test', () => {
         );
     });
 
-    test("should reject with stderr if exec returns an error", async () => {
+    test("Should reject with stderr if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "", "stderr");
 
         try {
@@ -121,7 +127,7 @@ suite('robotGenerateXMLResults test', () => {
         }
     });
 
-    test("should reject with stdout if exec returns an error", async () => {
+    test("Should reject with stdout if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "stdout", "");
 
         try {
@@ -132,7 +138,7 @@ suite('robotGenerateXMLResults test', () => {
         }
     });
 
-    test("should reject with default if exec returns an error", async () => {
+    test("Should reject with default if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "", "");
 
         try {
@@ -148,6 +154,8 @@ suite('tb2robotRead test', () => {
     let context: vscode.ExtensionContext;
     let execStub: sinon.SinonStub;
     let buildTb2RobotCommandStub: sinon.SinonStub;
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
 
     setup(() => {
         execStub = sinon.stub(require('child_process'), 'exec');
@@ -158,7 +166,7 @@ suite('tb2robotRead test', () => {
         sinon.restore();
     });
 
-    test("should execute the correct command without optional parameters", async () => {
+    test("Should execute the correct command without optional parameters", async () => {
         execStub.yields(null, "Success");
         buildTb2RobotCommandStub.resolves("commandBase");
 
@@ -172,7 +180,7 @@ suite('tb2robotRead test', () => {
         );
     });
 
-    test("should execute the correct command with resultPath", async () => {
+    test("Should execute the correct command with resultPath", async () => {
         execStub.yields(null, "Success");
         buildTb2RobotCommandStub.resolves("commandBase");
 
@@ -192,7 +200,7 @@ suite('tb2robotRead test', () => {
         );
     });
 
-    test("should execute the correct command with configJSONPath", async () => {
+    test("Should execute the correct command with configJSONPath", async () => {
         execStub.yields(null, "Success");
         buildTb2RobotCommandStub.resolves("commandBase");
 
@@ -213,7 +221,7 @@ suite('tb2robotRead test', () => {
         );
     });
 
-    test("should reject with stderr if exec returns an error", async () => {
+    test("Should reject with stderr if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "", "stderr");
 
         try {
@@ -224,7 +232,7 @@ suite('tb2robotRead test', () => {
         }
     });
 
-    test("should reject with stdout if exec returns an error", async () => {
+    test("Should reject with stdout if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "stdout", "");
 
         try {
@@ -235,7 +243,7 @@ suite('tb2robotRead test', () => {
         }
     });
 
-    test("should reject with default if exec returns an error", async () => {
+    test("Should reject with default if exec returns an error", async () => {
         execStub.yields(new Error("Execution failed"), "", "");
 
         try {
@@ -251,35 +259,33 @@ suite('startTb2robotWrite test', () => {
     let context: vscode.ExtensionContext;
     let tb2robotWriteStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;
-    let consoleLogStub: sinon.SinonStub;
-    let consoleErrorStub: sinon.SinonStub;
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
 
     setup(() => {
         tb2robotWriteStub = sinon.stub(tb2robotLib, "tb2robotWrite");
         showErrorMessageStub = sinon.stub(vscode.window, "showErrorMessage");
-        consoleLogStub = sinon.stub(console, "log");
-        consoleErrorStub = sinon.stub(console, "error");
     });
 
     teardown(() => {
         sinon.restore();
     });
 
-    test("should return true and log correct message when tb2robotWrite resolves without config", async () => {
+    test("Should return true and log correct message when tb2robotWrite resolves without config", async () => {
         tb2robotWriteStub.resolves();
         const result = await tb2robotLib.startTb2robotWrite(context, "workingDirectory", "reportPath");
         assert.ok(tb2robotWriteStub.called);
 
         assert.strictEqual(true, result, "Expected the function to return true on success");
-        //assert.ok(consoleLogStub.calledOnce, 'Expected console.log to be called once');
-        /*assert.strictEqual(
-            consoleLogStub.firstCall.args[0],
+        assert.ok(loggerStub.info.called, 'Expected logger.info to be called');
+        assert.strictEqual(
+            loggerStub.info.firstCall.args[0],
             'tb2robot write-generation completed using reportPath, no config file provided.',
             'Expected log message to include "write-generation completed"'
-        );*/
+        );
     });
 
-    test("should return true and log correct message when tb2robotWrite resolves with config", async () => {
+    test("Should return true and log correct message when tb2robotWrite resolves with config", async () => {
         tb2robotWriteStub.resolves();
 
         const result = await tb2robotLib.startTb2robotWrite(
@@ -291,28 +297,28 @@ suite('startTb2robotWrite test', () => {
         assert.ok(tb2robotWriteStub.called);
 
         assert.strictEqual(true, result, "Expected the function to return true on success");
-        //assert.ok(consoleLogStub.calledOnce, 'Expected console.log to be called once');
-        /*assert.strictEqual(
-            consoleLogStub.firstCall.args[0],
+        assert.ok(loggerStub.info.called, 'Expected loggerStub.info to be called');
+        assert.strictEqual(
+            loggerStub.info.firstCall.args[0],
             'tb2robot write-generation completed using reportPath, configJSONPath config file provided.',
-            'Expected log message to include "write-generation completed"'
-        );*/
+            'Expected correct write messag'
+        );
     });
 
-    test("should return false and show error message when tb2robotWrite rejects", async () => {
-        const errorMessage = "An error occurred";
+    test("Should return false and show error message when tb2robotWrite rejects", async () => {
+        const errorMessage = "Error: An error occurred";
         tb2robotWriteStub.rejects(new Error(errorMessage));
 
         const result = await tb2robotLib.startTb2robotWrite(context, "workingDirectory", "reportPath");
         assert.ok(tb2robotWriteStub.called);
 
         assert.strictEqual(false, result, "Expected the function to return false on failure");
-        //assert.ok(consoleErrorStub.calledOnce, 'Expected console.error to be called once');
-        /*assert.strictEqual(
-            consoleErrorStub.firstCall.args[1],
+        assert.ok(loggerStub.error.calledOnce, 'Expected loggerStub.error to be called once');
+        assert.strictEqual(
+            loggerStub.error.firstCall.args[0],
             errorMessage,
             'Expected error log to match the simulated error'
-        );*/
+        );
         assert.ok(showErrorMessageStub.calledOnce, "Expected showErrorMessage to be called once");
         assert.strictEqual(
             showErrorMessageStub.firstCall.args[0],
@@ -325,21 +331,19 @@ suite('startTb2robotWrite test', () => {
 suite('startRobotGenerateXMLResults test', () => {
     let robotGenerateXMLResultsStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;
-    let consoleLogStub: sinon.SinonStub;
-    let consoleErrorStub: sinon.SinonStub;
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
 
     setup(() => {
         robotGenerateXMLResultsStub = sinon.stub(tb2robotLib, "robotGenerateXMLResults");
         showErrorMessageStub = sinon.stub(vscode.window, "showErrorMessage");
-        consoleLogStub = sinon.stub(console, "log");
-        consoleErrorStub = sinon.stub(console, "error");
     });
 
     teardown(() => {
         sinon.restore();
     });
 
-    test("should return true and log correct message", async () => {
+    test("Should return true and log correct message", async () => {
         robotGenerateXMLResultsStub.resolves();
         const result = await tb2robotLib.startRobotGenerateXMLResults(
             "workingDirectory",
@@ -349,16 +353,16 @@ suite('startRobotGenerateXMLResults test', () => {
         assert.ok(robotGenerateXMLResultsStub.called);
 
         assert.strictEqual(true, result, "Expected the function to return true on success");
-        //assert.ok(consoleLogStub.calledOnce, 'Expected console.log to be called once');
-        /*assert.strictEqual(
-            consoleLogStub.firstCall.args[0],
-            'tb2robot write-generation completed using reportPath, no config file provided.',
-            'Expected log message to include "write-generation completed"'
-        );*/
+        assert.ok(loggerStub.info.called, 'Expected loggerStub.info to be called');
+        assert.strictEqual(
+            loggerStub.info.firstCall.args[0],
+            'Robot Framework generation completed using outputResultDir and reportPath.',
+            'Expected correct XML generation message'
+        );
     });
 
-    test("should return false and show error message when robotGenerateXMLResults rejects", async () => {
-        const errorMessage = "An error occurred";
+    test("Should return false and show error message when robotGenerateXMLResults rejects", async () => {
+        const errorMessage = "Error: An error occurred";
         robotGenerateXMLResultsStub.rejects(new Error(errorMessage));
 
         const result = await tb2robotLib.startRobotGenerateXMLResults(
@@ -369,13 +373,13 @@ suite('startRobotGenerateXMLResults test', () => {
         assert.ok(robotGenerateXMLResultsStub.called);
 
         assert.strictEqual(false, result, "Expected the function to return false on failure");
-        //assert.ok(consoleErrorStub.calledOnce, 'Expected console.error to be called once');
-        /*assert.strictEqual(
-            consoleErrorStub.firstCall.args[1],
+        assert.ok(loggerStub.error.called, 'Expected loggerStub.error to be called');
+        assert.strictEqual(
+            loggerStub.error.firstCall.args[0],
             errorMessage,
             'Expected error log to match the simulated error'
-        );*/
-        assert.ok(showErrorMessageStub.calledOnce, "Expected showErrorMessage to be called once");
+        );
+        assert.ok(showErrorMessageStub.called, "Expected showErrorMessage to be called");
         assert.strictEqual(
             showErrorMessageStub.firstCall.args[0],
             `Robot Framework Error: ${errorMessage}`,
@@ -388,24 +392,19 @@ suite('startTb2robotRead test', () => {
     let context: vscode.ExtensionContext;
     let tb2robotReadStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;
-    //let consoleLogStub: sinon.SinonStub;
-    //let consoleErrorStub: sinon.SinonStub;
-    let sandbox: sinon.SinonSandbox;
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
 
     setup(async () => {
         tb2robotReadStub = sinon.stub(tb2robotLib, "tb2robotRead");
         showErrorMessageStub = sinon.stub(vscode.window, "showErrorMessage");
-        //consoleLogStub = sinon.stub(global.console, "log");
-        //consoleErrorStub = sinon.stub(global.console, "error");
-        sandbox = sinon.createSandbox();
     });
 
     teardown(async () => {
         sinon.restore();
     });
 
-    test("should return true and log correct message with all optional arguments", async () => {
-        const consoleLogSpy = sandbox.spy(console, 'log');
+    test("Should return true and log correct message with all optional arguments", async () => {
         tb2robotReadStub.resolves();
         const result = await tb2robotLib.startTb2robotRead(
             context,
@@ -418,42 +417,42 @@ suite('startTb2robotRead test', () => {
         assert.ok(tb2robotReadStub.called);
 
         assert.strictEqual(true, result, "Expected the function to return true on success");
-        assert.ok(consoleLogSpy.called, "Expected console.log to be called once");
-        /*assert.strictEqual(
-            consoleLogStub.firstCall.args[0],
-            'tb2robot write-generation completed using reportPath, no config file provided.',
-            'Expected log message to include "write-generation completed"'
-        );*/
+        assert.ok(loggerStub.info.called, "Expected loggerStub.info to be called");
+        assert.strictEqual(
+            loggerStub.info.firstCall.args[0],
+            'tb2robot read-generation completed using outputXmlPath, configJSONPath and reportPath. Provided path for results: resultPath.',
+            'Expected correct read log message'
+        );
     });
 
-    test("should return true and log correct message with no optional arguments", async () => {
+    test("Should return true and log correct message with no optional arguments", async () => {
         tb2robotReadStub.resolves();
         const result = await tb2robotLib.startTb2robotRead(context, "workingDirectory", "outputXmlPath", "reportPath");
         assert.ok(tb2robotReadStub.called);
 
         assert.strictEqual(true, result, "Expected the function to return true on success");
-        //assert.ok(consoleLogStub.calledOnce, 'Expected console.log to be called once');
-        /*assert.strictEqual(
-            consoleLogStub.firstCall.args[0],
-            'tb2robot write-generation completed using reportPath, no config file provided.',
-            'Expected log message to include "write-generation completed"'
-        );*/
+        assert.ok(loggerStub.info.calledOnce, 'Expected loggerStub.info to be called');
+        assert.strictEqual(
+            loggerStub.info.firstCall.args[0],
+            'tb2robot read-generation completed using outputXmlPath and reportPath. Provided path for results: none.',
+            'Expected correct read log message'
+        );
     });
 
-    test("should return false and show error message when tb2robotRead rejects", async () => {
-        const errorMessage = "An error occurred";
+    test("Should return false and show error message when tb2robotRead rejects", async () => {
+        const errorMessage = "Error: An error occurred";
         tb2robotReadStub.rejects(new Error(errorMessage));
 
         const result = await tb2robotLib.startTb2robotRead(context, "workingDirectory", "outputXmlPath", "reportPath");
         assert.ok(tb2robotReadStub.called);
 
         assert.strictEqual(false, result, "Expected the function to return false on failure");
-        //assert.ok(consoleErrorStub.calledOnce, 'Expected console.error to be called once');
-        /*assert.strictEqual(
-            consoleErrorStub.firstCall.args[1],
+        assert.ok(loggerStub.error.calledOnce, 'Expected loggerStub.info to be called');
+        assert.strictEqual(
+            loggerStub.error.firstCall.args[0],
             errorMessage,
             'Expected error log to match the simulated error'
-        );*/
+        );
         assert.ok(showErrorMessageStub.calledOnce, "Expected showErrorMessage to be called once");
         assert.strictEqual(
             showErrorMessageStub.firstCall.args[0],

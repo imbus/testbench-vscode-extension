@@ -6,7 +6,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import axios, { AxiosResponse } from "axios";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
-import { connection, baseKey, lastGeneratedReportParams } from "./extension";
+import { connection, baseKey, lastGeneratedReportParams, logger } from "./extension";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
 
 /**
@@ -27,8 +27,10 @@ export async function isExecutionBasedReportSelected(): Promise<boolean | null> 
             if (selection[0]) {
                 if (selection[0].label === "Cancel") {
                     resolve(null); // Resolve with null if the user selects "Cancel"
+                    logger.debug("User canceled the export method selection.");
                 } else {
                     resolve(selection[0].label === "Execution based"); // Resolve with the selected option
+                    logger.debug(`Export method selected: ${selection[0].label}`);
                 }
                 quickPick.hide(); // Close the quick pick after selection
             }
@@ -37,6 +39,7 @@ export async function isExecutionBasedReportSelected(): Promise<boolean | null> 
         // Handle case when the quick pick is hidden without user selection (e.g., if user clicks away)
         quickPick.onDidHide(() => {
             resolve(null);
+            logger.debug("User closed the export method selection dialog.");
             quickPick.dispose(); // Clean up resources after closing
         });
 
@@ -46,16 +49,23 @@ export async function isExecutionBasedReportSelected(): Promise<boolean | null> 
 
 // Checks if the report job has completed successfully.
 export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
+    logger.debug(
+        `isReportJobCompletedSuccessfully resulted in ${!!jobStatus?.completion?.result?.ReportingSuccess?.reportName}`
+    );
     return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
 }
 
 // Checks if the import job has completed successfully.
 export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
+    logger.debug(
+        `isImportJobCompletedSuccessfully resulted in ${!!jobStatus?.completion?.result?.ExecutionImportingSuccess}`
+    );
     return !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
 }
 
 // Checks if the import job has failed.
 export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): boolean {
+    logger.debug(`isImportJobFailed resulted in ${!!jobStatus?.completion?.result?.ExecutionImportingFailure}`);
     return !!jobStatus?.completion?.result?.ExecutionImportingFailure;
 }
 
@@ -86,21 +96,21 @@ export async function fetchZipFile(
 ): Promise<string | undefined> {
     try {
         if (!connection) {
-            console.error("Connection object is missing.");
+            logger.error("Connection object is missing.", true);
             return undefined;
         }
 
-        console.log(
+        logger.debug(
             `Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`
         );
-        console.log("Fetching report with requestParams:", requestParams);
+        logger.debug(`Fetching report with requestParams ${requestParams}`, requestParams);
 
         const jobId: string | null = await getJobId(projectKey, cycleKey, requestParams);
         if (!jobId) {
             console.warn("Job ID not received.");
             return undefined;
         }
-        console.log(`Job ID (${jobId}) fetched successfully.`);
+        logger.debug(`Job ID (${jobId}) fetched successfully.`);
 
         const jobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
             projectKey,
@@ -111,13 +121,13 @@ export async function fetchZipFile(
         );
 
         if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
-            console.warn("Report generation was unsuccessful.");
+            logger.warn("Report generation was unsuccessful.");
             vscode.window.showErrorMessage("Report generation was unsuccessful.");
             return undefined;
         }
 
         const fileName: string = jobStatus.completion.result.ReportingSuccess!.reportName;
-        console.log(`Report name to download: ${fileName}`);
+        logger.debug(`Report name to download: ${fileName}`);
 
         const outputPath: string | undefined = await downloadReport(
             baseKey,
@@ -125,21 +135,21 @@ export async function fetchZipFile(
             fileName,
             folderNameToDownloadReport
         );
-        if (outputPath) {            
+        if (outputPath) {
             return outputPath;
         } else {
-            console.warn("Download canceled or failed.");
+            logger.warn("Download canceled or failed.");
         }
     } catch (error) {
         if (error instanceof vscode.CancellationError) {
-            console.log("Operation cancelled by the user.");
+            logger.debug("Operation cancelled by the user.");
             vscode.window.showInformationMessage("Operation cancelled by the user.");
             return undefined;
         } else {
             if (axios.isAxiosError(error) && error.response?.status === 404) {
                 throw new Error("Resource not found.");
             } else {
-                console.error(`Error fetching the report for project ${projectKey} and cycle ${cycleKey}: ${error}`);
+                logger.error(`Error fetching the report for project ${projectKey} and cycle ${cycleKey}: ${error}`);
                 throw error;
             }
         }
@@ -173,13 +183,13 @@ export async function pollJobStatus(
     // Poll the job status until the job is completed with either success or failure
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
-            console.log("Operation cancelled by the user.");
-            vscode.window.showInformationMessage("Operation cancelled by the user.");
+            logger.debug("Polling operation cancelled by the user.");
+            vscode.window.showInformationMessage("Polling operation cancelled by the user.");
             throw new vscode.CancellationError();
         }
 
         if (!connection) {
-            console.error("Connection object is missing.");
+            logger.error("Connection object is missing (pollJobStatus).");
             return null;
         }
 
@@ -188,7 +198,7 @@ export async function pollJobStatus(
         try {
             jobStatus = await getJobStatus(projectKey, jobId, jobType);
             if (!jobStatus) {
-                console.warn("Job status not received.");
+                logger.warn("Job status not received.");
                 return null;
             }
 
@@ -204,30 +214,30 @@ export async function pollJobStatus(
                     message: `Fetching job status (${jobStatusResponseHandledItemsCount}/${jobStatusResponseTotalItemsCount}).`,
                     increment: (roundedProgressPercentage - lastIncrement) / 3,
                 });
-                console.log(`Attempt ${attempt}: Job Status fetched. Progress: ${roundedProgressPercentage}%`);
+                logger.debug(`Attempt ${attempt}: Job Status fetched. Progress: ${roundedProgressPercentage}%`);
 
                 lastIncrement = roundedProgressPercentage;
             } else {
-                console.log(`Attempt ${attempt}: Job Status fetched.`);
+                logger.debug(`Attempt ${attempt}: Job Status fetched.`);
             }
 
             if (jobType === "report") {
                 if (isReportJobCompletedSuccessfully(jobStatus)) {
-                    console.log("Report job completed successfully.");
+                    logger.debug("Report job completed successfully.");
                     return jobStatus;
                 } else {
-                    // console.log("Job not yet completed.");
+                    // logger.debug("Job not yet completed.");
                 }
             } else if (jobType === "import") {
                 if (isImportJobCompletedSuccessfully(jobStatus)) {
-                    console.log("Import job completed successfully.");
+                    logger.debug("Import job completed successfully.");
                     return jobStatus;
                 } else if (isImportJobFailed(jobStatus)) {
                     return null;
                 }
             }
         } catch (error) {
-            console.error(`Attempt ${attempt}: Failed to get job status. Error: ${error}`);
+            logger.error(`Attempt ${attempt}: Failed to get job status.`, error);
         }
 
         // Update the progress bar, if provided
@@ -237,7 +247,7 @@ export async function pollJobStatus(
         if (maxPollingTimeMs !== undefined) {
             const elapsedTime: number = Date.now() - startTime;
             if (elapsedTime >= maxPollingTimeMs) {
-                console.warn("Maximum polling time exceeded. Aborting job status polling.");
+                logger.warn("Maximum polling time exceeded. Aborting job status polling.");
                 break;
             }
         }
@@ -266,13 +276,13 @@ export async function getJobId(
     requestParams?: testBenchTypes.OptionalJobIDRequestParameter // TODO: Execution mode is added in new branch, project tree is also changed? ExecutionImportingSuccess
 ): Promise<string | null> {
     if (!connection) {
-        console.error("Connection object is missing.");
+        logger.error("Connection object is missing.");
         return "";
     }
 
     const url: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
 
-    console.log(
+    logger.debug(
         `Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`
     );
 
@@ -284,9 +294,10 @@ export async function getJobId(
         },
     });
 
-    console.log("jobIdResponse:", jobIdResponse);
+    logger.debug("jobIdResponse received from server:", jobIdResponse);
 
     if (jobIdResponse.status !== 200) {
+        logger.error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
         throw new Error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
     }
 
@@ -307,13 +318,13 @@ export async function getJobStatus(
     jobType: "report" | "import"
 ): Promise<testBenchTypes.JobStatusResponse | null> {
     if (!connection) {
-        console.error("Connection object is missing.");
+        logger.error("Connection object is missing (getJobStatus).");
         return null;
     }
 
     const url: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
 
-    console.log(`Checking job status: ${url}`);
+    logger.debug(`Checking job status: ${url}`);
 
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await axios.get(url, {
         headers: {
@@ -322,9 +333,10 @@ export async function getJobStatus(
         },
     });
 
-    console.log("jobStatusResponse:", jobStatusResponse);
+    logger.debug("jobStatusResponse:", jobStatusResponse);
 
     if (jobStatusResponse.status !== 200) {
+        logger.error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
         throw new Error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
     }
 
@@ -348,13 +360,13 @@ export async function downloadReport(
     try {
         // Ensure the connection object is available
         if (!connection) {
-            console.error("Connection object is missing.");
+            logger.error("Connection object is missing (downloadReport).");
             return undefined;
         }
 
         // Construct the download URL
         const url: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileName}/v1`;
-        console.log(`Sending request to download report ${fileName} from URL ${url}.`);
+        logger.debug(`Sending request to download report ${fileName} from URL ${url}.`);
 
         // Fetch the report from the server
         const downloadZipResponse: AxiosResponse<any> = await axios.get(url, {
@@ -367,6 +379,7 @@ export async function downloadReport(
 
         // Check for successful response
         if (downloadZipResponse.status !== 200) {
+            logger.error(`Failed to download report, status code: ${downloadZipResponse.status}`);
             throw new Error(`Failed to download report, status code: ${downloadZipResponse.status}`);
         }
 
@@ -378,14 +391,14 @@ export async function downloadReport(
             // Save report to the specified workspace location
             return await saveReportToFile(workspaceLocation, folderNameToDownloadReport, fileName, downloadZipResponse);
         } else if (workspaceLocation) {
-            console.error(`The configured download location does not exist: ${workspaceLocation}`);
+            logger.error(`The configured download location does not exist: ${workspaceLocation}`);
             vscode.window.showErrorMessage(`The configured workspace location does not exist: ${workspaceLocation}`);
         }
 
         // If no valid workspace location, prompt the user to choose a save location
         return await promptUserForSaveLocationAndSaveReportToFile(fileName, downloadZipResponse);
     } catch (error) {
-        console.error(`Error downloading the report: ${(error as Error).message}`);
+        logger.error(`Error downloading the report: ${(error as Error).message}`);
         vscode.window.showErrorMessage(`Error downloading the report: ${(error as Error).message}`);
         return undefined;
     }
@@ -411,10 +424,10 @@ async function saveReportToFile(
 
         // Write the file to the specified location
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
-        console.log(`Report downloaded successfully to ${uri.fsPath}`);
+        logger.debug(`Report downloaded successfully to ${uri.fsPath}`);
         return uri.fsPath;
     } catch (error) {
-        console.error(`Failed to save report to file: ${(error as Error).message}`);
+        logger.error(`Failed to save report to file: ${(error as Error).message}`);
         vscode.window.showErrorMessage(`Failed to save report: ${(error as Error).message}`);
         return undefined;
     }
@@ -450,7 +463,8 @@ async function promptUserForSaveLocationAndSaveReportToFile(
                 );
 
                 if (overwriteOption === "Skip") {
-                    vscode.window.showInformationMessage("File download skipped.");
+                    vscode.window.showInformationMessage("File download skipped by the user.");
+                    logger.debug("File download skipped by the user.");
                     return undefined;
                 }
             } catch (error) {
@@ -462,10 +476,10 @@ async function promptUserForSaveLocationAndSaveReportToFile(
 
             // Write the file to the chosen location
             await vscode.workspace.fs.writeFile(zipUri, new Uint8Array(downloadResponse.data));
-            console.log(`Report downloaded successfully to ${zipUri.fsPath}`);
+            logger.debug(`Report downloaded successfully to ${zipUri.fsPath}`);
             return zipUri.fsPath;
         } catch (error) {
-            console.error(`Failed to save file: ${(error as Error).message}`);
+            logger.error(`Failed to save file: ${(error as Error).message}`);
             vscode.window.showErrorMessage(`Failed to save file: ${(error as Error).message}`);
         }
     }
@@ -500,28 +514,32 @@ export async function callFetchReportForTreeElement(
             try {
                 // Report initial progress
                 progress?.report({ increment: 30, message: "Selecting report parameters." });
-                console.log("Fetching report for the selected tree item:", treeItem);
+                logger.debug("Fetching report for the selected tree item:", treeItem);
 
                 // Validate the connection
                 if (!connection) {
+                    logger.warn("No connection available (callFetchReportForTreeElement)");
                     throw new Error("No connection available. Please log in first.");
                 }
 
                 // Validate the project management tree view
                 if (!projectManagementTreeViewOfExtension) {
+                    logger.warn("Project management tree is not initialized. (callFetchReportForTreeElement)");
                     throw new Error("Project management tree is not initialized. Please select a project first.");
                 }
 
                 // Get the current project key
                 const projectKey: string | null = projectManagementTreeViewOfExtension.currentProjectKeyInView;
                 if (!projectKey) {
+                    logger.warn("No project selected. (callFetchReportForTreeElement)");
                     throw new Error("No project selected. Please select a project first.");
                 }
 
                 // Find the cycle key associated with the tree item
                 const cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
                 if (!cycleKey) {
-                    throw new Error("No cycle selected. Please select a cycle first.");
+                    logger.warn("Cycle key for the selected tree element not found. (callFetchReportForTreeElement)");
+                    throw new Error("Cycle key for the selected tree element not found. Please select a cycle first.");
                 }
 
                 // Get the unique ID of the tree element
@@ -530,7 +548,7 @@ export async function callFetchReportForTreeElement(
                 // Check if the report should be based on execution
                 const executionBased: boolean = true; // await isExecutionBasedReportSelected();  // TODO: Using execution based for QS day by default.
                 if (executionBased === null) {
-                    console.log("Export method is not selected. Fetching report for the selected tree item.");
+                    logger.debug("Export method is not selected. Fetching report for the selected tree item.");
                     return;
                 }
 
@@ -541,7 +559,7 @@ export async function callFetchReportForTreeElement(
                     treeRootUID: treeElementUniqueID,
                 };
 
-                console.log(
+                logger.debug(
                     `Started fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, uniqueID: ${treeElementUniqueID}.`
                 );
 
@@ -557,7 +575,7 @@ export async function callFetchReportForTreeElement(
                     cycleStructureOptionsRequestParameter
                 );
 
-                console.log(`Report successfully downloaded to: ${downloadedReportZipFilePath}.`);
+                logger.debug(`Report successfully downloaded to: ${downloadedReportZipFilePath}.`);
             } catch (error) {
                 // Handle errors and show an error message to the user
                 vscode.window.showErrorMessage((error as Error).message);
@@ -577,7 +595,7 @@ async function handleExecutionError(
         if (vscode.workspace.getConfiguration(baseKey).get<boolean>("clearReportAfterProcessing")) {
             await removeReportZipFile(downloadedReportZipFileFullPath);
         }
-        console.error(`Test generation failed.`);
+        logger.error(`Test generation failed.`);
         // vscode.window.showErrorMessage(`Test generation failed.`);
     }
     return isExecutionSuccessfull;
@@ -595,14 +613,14 @@ export async function generateTestCasesForTestThemeOrTestCaseSet(
     treeItem: projectManagementTreeView.TestbenchTreeItem,
     folderNameOfTestbenchWorkingDirectory: string
 ): Promise<void> {
-    console.log("Generating tests for:", treeItem);
+    logger.debug("Generating tests for:", treeItem);
 
     let treeElementUniqueID: string | undefined = treeItem.item?.base?.uniqueID;
     let cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
     let projectKey: string | undefined = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem.parent!);
 
     if (!projectKey || !cycleKey || !treeElementUniqueID) {
-        console.error("Error when finding project key, cycle key, test theme or unique ID.");
+        logger.error("Error when finding project key, cycle key, test theme or unique ID.");
         return;
     }
 
@@ -643,13 +661,14 @@ export async function generateTestsWithTestBenchToRobotFramework(
         const executionBased: boolean = true; // await isExecutionBasedReportSelected();  // TODO: For QS day, use true for this value.
         if (executionBased === null) {
             vscode.window.showInformationMessage("Test generation aborted.");
+            logger.debug("Test generation aborted.");
             return;
         }
 
         const UIDofSelectedElement: string | undefined =
             UIDofTestThemeElementToGenerateTestsFor || (await displayAndSelectTestThemeNode(treeItem));
         if (!UIDofSelectedElement) {
-            console.error("Test theme selection was empty.");
+            logger.error("Test theme selection was empty.");
             return;
         }
 
@@ -772,7 +791,7 @@ async function runTestGenerationProcess(
     );
 
     if (!downloadedReportZipFilePath) {
-        console.warn("Download canceled or failed.");
+        logger.warn("Download canceled or failed.");
         return;
     }
 
@@ -786,7 +805,7 @@ async function runTestGenerationProcess(
         workingDirectoryFullPath
     );
     if (!configFilePath) {
-        console.error("Failed to save configuration file.");
+        logger.error("Failed to save configuration file.");
         return;
     }
 
@@ -833,6 +852,7 @@ async function cleanUp(configFilePath: string, reportZipFileFullPath: string, ba
     }
 
     vscode.window.showInformationMessage("Test generation done.");
+    logger.debug("Test generation done.");
 }
 
 /**
@@ -840,10 +860,10 @@ async function cleanUp(configFilePath: string, reportZipFileFullPath: string, ba
  */
 function handleError(error: any) {
     if (error instanceof vscode.CancellationError) {
-        console.log("Process cancelled by the user.");
+        logger.debug("Process cancelled by the user.");
         vscode.window.showInformationMessage("Process cancelled by the user.");
     } else {
-        console.error("An error occurred:", error);
+        logger.error("An error occurred:", error);
         vscode.window.showErrorMessage(`An error occurred: ${error.message || error}`);
     }
 }
@@ -868,13 +888,13 @@ export async function removeReportZipFile(zipFileFullPath: string): Promise<void
 
         // Remove the file
         await fsPromise.unlink(zipFileFullPath);
-        console.log(`Zip file successfully removed: ${fileName} `);
+        logger.debug(`Zip file successfully removed: ${fileName} `);
     } catch (error: any) {
         if (error.code === "ENOENT") {
             vscode.window.showWarningMessage(`File not found: ${zipFileFullPath}`);
         } else {
             vscode.window.showErrorMessage(`Error removing the file: ${(error as Error).message}`);
-            console.error(`Error removing file at ${zipFileFullPath}:`, error);
+            logger.error(`Error removing file at ${zipFileFullPath}:`, error);
         }
     }
 }
@@ -900,12 +920,12 @@ export async function findFileRecursively(dir: string, fileName: string): Promis
                     return result;
                 }
             } else if (stat.isFile() && file === fileName) {
-                console.log(`File found: ${fullPath}`);
+                logger.debug(`File found: ${fullPath}`);
                 return fullPath;
             }
         }
     } catch (error) {
-        console.error(`Error searching for file: ${error instanceof Error ? error.message : String(error)}`);
+        logger.error(`Error searching for file: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return undefined;
@@ -923,10 +943,10 @@ async function chooseRobotXMLFile(workingDirectoryFullPath: string): Promise<str
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
     let outputXMLFolderFullPath: string | undefined = config.get<string>("outputXMLPath");
     if (!outputXMLFolderFullPath) {
-        console.warn("Output XML path is not configured.");
+        logger.warn("Output XML path is not configured.");
     } else {
         const fileName = "output.xml";
-        console.log(`Searching for ${fileName} in ${outputXMLFolderFullPath}`);
+        logger.debug(`Searching for ${fileName} in ${outputXMLFolderFullPath}`);
         const outputXmlFilePath: string | undefined = await findFileRecursively(outputXMLFolderFullPath, fileName);
         if (outputXmlFilePath) {
             return outputXmlFilePath;
@@ -982,8 +1002,7 @@ export async function readTestResultsAndCreateReportWithResults(
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
 ): Promise<string | null> {
     try {
-
-        console.log("Started reading test results and creating report with results.");
+        logger.debug("Started reading test results and creating report with results.");
 
         let fullPathOfReportWithResultsZip: string | null = null;
 
@@ -1015,7 +1034,7 @@ export async function readTestResultsAndCreateReportWithResults(
                 throw new Error("No XML file selected.");
             }
 
-            console.log(`The report with result zip file will be named ${reportFileWithResultsZipName}`);
+            logger.debug(`The report with result zip file will be named ${reportFileWithResultsZipName}`);
 
             reportProgress(`Fetching report.`, reportIncrement);
 
@@ -1050,7 +1069,7 @@ export async function readTestResultsAndCreateReportWithResults(
                 throw new Error("No report file selected.");
             }
 
-            console.log(`Report with results is saved to ${reportWithResultsZipFileFullPath}`);
+            logger.debug(`Report with results is saved to ${reportWithResultsZipFileFullPath}`);
 
             reportProgress(`Preparing configuration for testbench2robotframework.`, reportIncrement / 2);
 
@@ -1066,7 +1085,7 @@ export async function readTestResultsAndCreateReportWithResults(
 
             fullPathOfReportWithResultsZip = path.join(workingDirectoryFullPath, reportFileWithResultsZipName);
 
-            console.log("Calling startTb2robotRead.");
+            logger.debug("Calling startTb2robotRead.");
             const isExecutionSuccessful: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
                 context,
                 workingDirectoryFullPath,
@@ -1075,7 +1094,7 @@ export async function readTestResultsAndCreateReportWithResults(
                 fullPathOfReportWithResultsZip,
                 tb2robotConfigFileFullPath
             );
-            console.log("startTb2robotRead executed with success variable:", isExecutionSuccessful);
+            logger.debug("startTb2robotRead executed with success variable:", isExecutionSuccessful);
 
             if (
                 !(await handleExecutionError(
@@ -1091,7 +1110,7 @@ export async function readTestResultsAndCreateReportWithResults(
                 await removeReportZipFile(reportWithResultsZipFileFullPath);
             }
 
-            console.log(`tb2robot read executed successfully.`);
+            logger.debug(`tb2robot read executed successfully.`);
             vscode.window.showInformationMessage(`Test results read and report created.`);
         };
 
@@ -1112,7 +1131,7 @@ export async function readTestResultsAndCreateReportWithResults(
         return fullPathOfReportWithResultsZip;
     } catch (error) {
         vscode.window.showErrorMessage(`An error occurred: ${(error as Error).message}`);
-        console.error(`Error in readTestResultsAndCreateReportWithResults:`, error);
+        logger.error(`Error in readTestResultsAndCreateReportWithResults:`, error);
         return null;
     }
 }
@@ -1131,11 +1150,13 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
         async (progress, cancellationToken) => {
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
+                logger.warn("No connection available (readTestsAndCreateResultsAndImportToTestbench).");
                 return;
             }
 
             if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.currentProjectKeyInView) {
                 vscode.window.showErrorMessage("No project selected. Please select a project first.");
+                logger.warn("No project selected (readTestsAndCreateResultsAndImportToTestbench).");
                 return;
             }
 
@@ -1150,7 +1171,7 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
                 progress
             );
             if (!createdReportWithResultsFullPath) {
-                console.error("Error when reading test results and creating report with results.");
+                logger.error("Error when reading test results and creating report with results.");
                 return;
             }
 
@@ -1196,20 +1217,24 @@ export async function startTestGenerationProcessForCycle(
     try {
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
+            logger.warn("No connection available (startTestGenerationProcessForCycle).");
             return;
         }
 
         const cycleKey: string | undefined = treeItem.item.key;
         if (!cycleKey) {
-            throw new Error("Cycle key is unidentified!");
+            logger.error("Cycle key is unidentified for test generation process.");
+            throw new Error("Cycle key is unidentified for test generation process.");
         }
 
         const projectKeyOfCycle: string | undefined = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem);
         if (!projectKeyOfCycle) {
-            throw new Error("Project key of cycle is unidentified!");
+            logger.error("Project key of cycle is unidentified for test generation process.");
+            throw new Error("Project key of cycle is unidentified for test generation process.");
         }
 
         if (typeof treeItem.label !== "string") {
+            logger.error("Invalid label type. Test generation aborted.");
             throw new Error("Invalid label type. Test generation aborted.");
         }
 
@@ -1225,7 +1250,7 @@ export async function startTestGenerationProcessForCycle(
             undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
         );
     } catch (error: any) {
-        console.error(error.message);
+        logger.error(error.message);
         vscode.window.showErrorMessage(error.message);
     }
 }
@@ -1244,7 +1269,7 @@ export async function saveTestbench2RobotConfigurationAsJson(
             "testbench2robotframeworkConfig"
         );
         if (!generationConfig) {
-            console.error("Configuration object is missing.");
+            logger.error("Configuration object is missing.");
             return null;
         }
 
@@ -1253,7 +1278,7 @@ export async function saveTestbench2RobotConfigurationAsJson(
 
         // Write file, overwriting if it already exists
         await fsPromise.writeFile(filePath, jsonContent, "utf8");
-        console.log(`Tb2robot configuration file created or overwritten at: ${filePath}`);
+        logger.debug(`Tb2robot configuration file created or overwritten at: ${filePath}`);
 
         return filePath;
     } catch (error) {
@@ -1263,7 +1288,7 @@ export async function saveTestbench2RobotConfigurationAsJson(
                 : "An unknown error occurred while writing the configuration file.";
 
         vscode.window.showErrorMessage(errorMessage);
-        console.error(errorMessage);
+        logger.error(errorMessage);
         return null;
     }
 }
@@ -1290,13 +1315,13 @@ export async function deleteConfigurationFile(configFilePath: string): Promise<v
 
         // Delete the file
         await fsPromise.unlink(configFilePath);
-        console.log(`Configuration file deleted from: ${configFilePath}`);
+        logger.debug(`Configuration file deleted from: ${configFilePath}`);
     } catch (error: any) {
         if (error.code === "ENOENT") {
             vscode.window.showErrorMessage(`Configuration file not found: ${configFilePath}`);
         } else {
             vscode.window.showErrorMessage(`Failed to delete configuration file: ${error.message}`);
-            console.error(`Error deleting file at ${configFilePath}:`, error);
+            logger.error(`Error deleting file at ${configFilePath}:`, error);
         }
     }
 }

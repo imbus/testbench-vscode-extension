@@ -65,7 +65,7 @@ class ProjectManagementTreeDataProvider {
     }
     async getChildren(element) {
         if (!extension_1.connection) {
-            // vscode.window.showWarningMessage("No connection available for tree view.");
+            // vscode.window.showWarningMessage("No connection available for tree view.");            
             return [];
         }
         if (!element) {
@@ -101,16 +101,19 @@ class ProjectManagementTreeDataProvider {
         const cycleKey = element.item.key;
         const projectKey = findProjectKeyOfCycleElement(element);
         if (!projectKey) {
-            console.error("Project key of cycle not found.");
+            // console.warn("Project key of cycle not found.");
+            extension_1.logger.warn("Project key of cycle not found (getChildrenOfCycle).");
             return [];
         }
         if (!extension_1.connection) {
-            console.error("No connection available for tree view.");
+            // console.warn("No connection available for tree view.");
+            extension_1.logger.warn("No connection available for tree view (getChildrenOfCycle).");
             return [];
         }
         const cycleData = await extension_1.connection.fetchCycleStructure(projectKey, cycleKey);
         if (!cycleData || !cycleData.nodes?.length) {
-            console.warn("Cycle has no sub-elements.");
+            // console.warn("Cycle has no sub-elements.");
+            extension_1.logger.warn("Cycle has no sub-elements (getChildrenOfCycle).");
             return [];
         }
         // A key identifies an element uniquely.
@@ -187,7 +190,8 @@ exports.ProjectManagementTreeDataProvider = ProjectManagementTreeDataProvider;
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
 function findProjectKeyOfCycleElement(element) {
     if (element.contextValue !== "Cycle") {
-        console.error("Element is not a cycle.");
+        // console.error("Element is not a cycle.");
+        extension_1.logger.error("Element is not a cycle (findProjectKeyOfCycleElement).");
         return undefined;
     }
     let currentElement = element;
@@ -197,7 +201,8 @@ function findProjectKeyOfCycleElement(element) {
         }
         currentElement = currentElement.parent;
     }
-    console.error("Project key not found.");
+    // console.error("Project key not found.");
+    extension_1.logger.error("Project key not found (findProjectKeyOfCycleElement).");
     return undefined;
 }
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
@@ -214,7 +219,8 @@ function findCycleKeyOfTreeElement(element) {
         }
         currentElement = currentElement?.parent;
     }
-    console.error("Cycle key not found.");
+    // console.error("Cycle key not found.");
+    extension_1.logger.error("Cycle key not found (findCycleKeyOfTreeElement).");
     return undefined;
 }
 // Represents a tree item (Project, TOV, Cycle, etc) in the tree view

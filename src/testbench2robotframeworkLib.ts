@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { exec } from "child_process";
 import { pyCommandBuilder } from "./pyCommandBuilder";
+import { logger } from "./extension";
 
 export class tb2robotLib {
     /**
@@ -19,20 +20,20 @@ export class tb2robotLib {
         return new Promise(async (resolve, reject) => {
             const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
 
-            let command: string = `${commandBase} write ${reportPath}`;
+            let command = `${commandBase} write ${reportPath}`;
             if (configJSONPath) {
                 command = `${commandBase} write -c ${configJSONPath} ${reportPath}`;
             }
 
-            console.log(`Executing command: ${command}`);
+            logger.debug(`Executing command: ${command}`);
 
             exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
                 if (error) {
                     reject(stderr || stdout || "An unknown Error occurred.");
-                    console.log(error.message);
+                    logger.error(error.message);
                     return;
                 }
-                console.log(stdout || stderr);
+                logger.debug(stdout || stderr);
                 resolve();
             });
         });
@@ -70,7 +71,7 @@ export class tb2robotLib {
                 command = `${commandBase} read -c ${configJSONPath} -o ${outputXmlPath} -r ${resultPath} ${reportWithoutResultsPath}`;
             }
 
-            console.log(`Executing command: ${command}`);
+            logger.debug(`Executing command: ${command}`);
             exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
                 if (error) {
                     reject(stderr || stdout || "An unknown Error occurred.");
@@ -131,10 +132,12 @@ export class tb2robotLib {
                     config = configJSONPath;
                 }
 
-                console.log(`tb2robot write-generation completed using ${reportPath}, ${config} config file provided.`);
+                logger.debug(
+                    `tb2robot write-generation completed using ${reportPath}, ${config} config file provided.`
+                );
             })
             .catch((err) => {
-                console.error("Error:", err);
+                logger.error(err.message);
                 vscode.window.showErrorMessage(`testbench2robotframework ${err}`);
                 res = false;
             });
@@ -163,7 +166,7 @@ export class tb2robotLib {
 
         await this.tb2robotRead(context, workingDirectory, outputXmlPath, reportPath, resultPath, configJSONPath)
             .then(() => {
-                let providedPath: string = "none";
+                let providedPath = "none";
                 let providedConfig = "";
                 if (resultPath) {
                     providedPath = resultPath;
@@ -172,12 +175,12 @@ export class tb2robotLib {
                     providedConfig = `, ${configJSONPath}`;
                 }
 
-                console.log(
+                logger.debug(
                     `tb2robot read-generation completed using ${outputXmlPath}${providedConfig} and ${reportPath}. Provided path for results: ${providedPath}.`
                 );
             })
             .catch((err) => {
-                console.error("Error:", err);
+                logger.error(err);
                 vscode.window.showErrorMessage(`testbench2robotframework ${err}`);
                 res = false;
             });
@@ -197,14 +200,14 @@ export class tb2robotLib {
         outputResultDir: string,
         reportPath: string
     ): Promise<boolean> {
-        let res:boolean = true;
+        let res: boolean = true;
 
         await this.robotGenerateXMLResults(workingDirectory, outputResultDir, reportPath)
             .then(() => {
-                console.log(`Robot Framework generation completed using ${outputResultDir} and ${reportPath}.`);
+                logger.debug(`Robot Framework generation completed using ${outputResultDir} and ${reportPath}.`);
             })
             .catch((err) => {
-                console.error("Error:", err);
+                logger.error(err);
                 vscode.window.showErrorMessage(`Robot Framework ${err}`);
                 res = false;
             });

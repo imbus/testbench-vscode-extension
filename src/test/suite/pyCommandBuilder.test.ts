@@ -3,9 +3,13 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { pyCommandBuilder } from '../../pyCommandBuilder';
 import * as sinon from 'sinon';
-import { PythonExtension, EnvironmentPath, Environment, ResolvedEnvironment } from '@vscode/python-extension';
+import { PythonExtension, EnvironmentPath, ResolvedEnvironment } from '@vscode/python-extension';
+import * as extension from '../../extension';
+import { TestBenchLogger } from "../../testBenchLogger";
 
 suite('getActiveWorkspaceFolder tests', () => {
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     let workspaceFoldersStub: sinon.SinonStub;
     let workspaceFolder1: vscode.WorkspaceFolder
     let workspaceFolder2: vscode.WorkspaceFolder
@@ -75,6 +79,8 @@ suite('getActiveWorkspaceFolder tests', () => {
 });
 
 suite('getPythonEnviromentExe tests', () => {
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     let pythonApiStub: sinon.SinonStubbedInstance<PythonExtension>;
 
     setup(() => {
@@ -90,7 +96,7 @@ suite('getPythonEnviromentExe tests', () => {
         sinon.restore();
     });
 
-    test('should return pythonPath with activeWorkspace', async () => {
+    test('Should return pythonPath with activeWorkspace', async () => {
         const mockWorkspace = {} as vscode.WorkspaceFolder;
         const mockEnvironmentPath = {} as EnvironmentPath;
         const mockEnvironment = { executable: { uri: { fsPath: 'pythonPath' } } } as ResolvedEnvironment;
@@ -106,7 +112,7 @@ suite('getPythonEnviromentExe tests', () => {
         assert.strictEqual(result, 'pythonPath', 'Expected getPythonEnviromentExe to return pythonPath');
     });
 
-    test('should return pythonPath without activeWorkspace', async () => {
+    test('Should return pythonPath without activeWorkspace', async () => {
         const mockEnvironmentPath = {} as EnvironmentPath;
         const mockEnvironment = { executable: { uri: { fsPath: 'pythonPath' } } } as ResolvedEnvironment;
         sinon.stub(PythonExtension, 'api').resolves(pythonApiStub);
@@ -121,14 +127,14 @@ suite('getPythonEnviromentExe tests', () => {
         assert.strictEqual(result, 'pythonPath', 'Expected getPythonEnviromentExe to return pythonPath');
     });
 
-    test('should return undefined if pythonApi is undefined', async () => {
+    test('Should return undefined if pythonApi is undefined', async () => {
         sinon.stub(PythonExtension, 'api').resolves(undefined);
 
         const result = await pyCommandBuilder.getPythonEnviromentExe(undefined);
         assert.strictEqual(result, undefined, 'Expected getPythonEnviromentExe to return undefined when no environment path is found');
     });
 
-    test('should return undefined if resolveEnvironment resolves undefined', async () => {
+    test('Should return undefined if resolveEnvironment resolves undefined', async () => {
         const mockEnvironmentPath = {} as EnvironmentPath;
         sinon.stub(PythonExtension, 'api').resolves(pythonApiStub);
 
@@ -144,6 +150,8 @@ suite('getPythonEnviromentExe tests', () => {
 });
 
 suite('buildTb2RobotCommand tests', function () {
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     let context: vscode.ExtensionContext;
     context = {
         secrets: {
@@ -177,7 +185,7 @@ suite('buildTb2RobotCommand tests', function () {
         sinon.restore();
     });
 
-    test('should return commandBase if getPythonEnviromentExe resolves defined', async () => {
+    test('Should return commandBase if getPythonEnviromentExe resolves defined', async () => {
         const getPythonEnviromentExeStub = sinon.stub(pyCommandBuilder, 'getPythonEnviromentExe');
         getPythonEnviromentExeStub.resolves('pythonpath');
 
@@ -185,7 +193,7 @@ suite('buildTb2RobotCommand tests', function () {
         assert.strictEqual(result, 'pythonpath -u rootPath\\bundled\\tools\\tb2robot\\__main__.py', 'Expected buildTb2RobotCommand to return correct base command');
     });
 
-    test('should return empty string if getPythonEnviromentExe resolves undefined', async () => {
+    test('Should return empty string if getPythonEnviromentExe resolves undefined', async () => {
         const getPythonEnviromentExeStub = sinon.stub(pyCommandBuilder, 'getPythonEnviromentExe');
         getPythonEnviromentExeStub.resolves(undefined);
 
@@ -195,6 +203,8 @@ suite('buildTb2RobotCommand tests', function () {
 });
 
 suite('buildRobotCommand tests', function () {
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     this.timeout(5000);
 
     setup(() => {
@@ -204,7 +214,7 @@ suite('buildRobotCommand tests', function () {
         sinon.restore();
     });
 
-    test('should return commandBase if getPythonEnviromentExe resolves defined', async () => {
+    test('Should return commandBase if getPythonEnviromentExe resolves defined', async () => {
         const getPythonEnviromentExeStub = sinon.stub(pyCommandBuilder, 'getPythonEnviromentExe');
         getPythonEnviromentExeStub.resolves('pythonpath');
 
@@ -212,7 +222,7 @@ suite('buildRobotCommand tests', function () {
         assert.strictEqual(result, 'pythonpath -m robot', 'Expected buildRobotCommand to return correct base command');
     });
 
-    test('should return empty string if getPythonEnviromentExe resolves undefined', async () => {
+    test('Should return empty string if getPythonEnviromentExe resolves undefined', async () => {
         const getPythonEnviromentExeStub = sinon.stub(pyCommandBuilder, 'getPythonEnviromentExe');
         getPythonEnviromentExeStub.resolves(undefined);
 

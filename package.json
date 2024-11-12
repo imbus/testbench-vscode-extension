@@ -231,16 +231,37 @@
                     },
                     "order": 7
                 },
-                "testbenchExtension.outputXMLPath": {
-                    "type": "string",
-                    "description": "The path to the output XML file where robotframework test results are stored.",
-                    "order": 9
-                },
                 "testbenchExtension.clearReportAfterProcessing": {
                     "type": "boolean",
                     "default": true,
                     "description": "Remove report file after processing.",
                     "order": 8
+                },
+                "testbenchExtension.outputXMLPath": {
+                    "type": "string",
+                    "description": "The path to the output XML file where robotframework test results are stored.",
+                    "order": 9
+                },
+                "testbenchExtension.testBenchLogger": {
+                    "type": "number",
+                    "description": "Set the minimum log level. Log file is stored within the workspace location.",
+                    "order": 10,
+                    "enum": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ],
+                    "enumDescriptions": [
+                        "No logging",
+                        "Trace: 1",
+                        "Debug: 2",
+                        "Info: 3",
+                        "Warn: 4",
+                        "Error: 5"
+                    ]
                 }
             }
         },

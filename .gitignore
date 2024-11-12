@@ -6,6 +6,10 @@
 
 # Ignore compiled output folder
 out/
+/out
+
+# Typescript
+tsconfig.tsbuildinfo
 
 bundled/libs/bin/
 

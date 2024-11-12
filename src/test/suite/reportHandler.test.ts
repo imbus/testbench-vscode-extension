@@ -2,7 +2,6 @@ import * as assert from "assert";
 import * as sinon from "sinon";
 import * as vscode from "vscode";
 import * as jsonReportHandler from "../../reportHandler";
-import axios from "axios";
 import { PlayServerConnection } from "../../testBenchConnection";
 import * as testBenchTypes from "../../testBenchTypes";
 

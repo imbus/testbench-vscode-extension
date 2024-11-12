@@ -92,7 +92,7 @@ class PlayServerConnection {
     async getSessionTokenFromSecretStorage(context) {
         const token = await context.secrets.get("sessionToken");
         if (!token) {
-            console.error("Session token not found.");
+            extension_1.logger.error("Session token not found.");
         }
         return token;
     }
@@ -112,7 +112,7 @@ class PlayServerConnection {
         if (!selectedProjectName) {
             return null;
         }
-        console.log("Selected project name:", selectedProjectName);
+        extension_1.logger.debug("Selected project name:", selectedProjectName);
         const selectedProject = projectsData.find((project) => project.name === selectedProjectName);
         if (!selectedProject) {
             // vscode.window.showErrorMessage("Selected project not found.");
@@ -122,7 +122,7 @@ class PlayServerConnection {
     }
     async getProjectsList() {
         if (!this.sessionToken) {
-            console.warn("Session token is null. Cannot fetch projects list.");
+            extension_1.logger.warn("Session token is null. Cannot fetch projects list.");
             return null;
         }
         try {
@@ -148,21 +148,21 @@ class PlayServerConnection {
                 vscode.window.showErrorMessage("No file path selected.");
             }
             */
-            console.log("Fetched project list:", projectsResponse.data);
+            extension_1.logger.debug("Fetched project list:", projectsResponse.data);
             return projectsResponse.data || [];
         }
         catch (error) {
-            console.error("Error fetching projects:", error);
+            extension_1.logger.error("Error fetching projects:", error);
             return null;
         }
     }
     async getProjectTreeOfProject(projectKey) {
         if (!this.sessionToken) {
-            console.warn("Session token is null. Cannot fetch project tree:", projectKey);
+            extension_1.logger.warn("Session token is null. Cannot fetch project tree:", projectKey);
             return null;
         }
         if (!projectKey) {
-            console.warn("Project key is null or undefined. Cannot fetch project tree.");
+            extension_1.logger.warn("Project key is null or undefined. Cannot fetch project tree.");
             return null;
         }
         try {
@@ -188,11 +188,11 @@ class PlayServerConnection {
                 vscode.window.showErrorMessage("No file path selected.");
             }
             */
-            console.log("Fetched project tree:", projectTreeResponse.data);
+            extension_1.logger.debug("Fetched project tree:", projectTreeResponse.data);
             return projectTreeResponse.data || null;
         }
         catch (error) {
-            console.error("Error fetching project tree:", error);
+            extension_1.logger.error("Error fetching project tree:", error);
             return null;
         }
     }
@@ -213,7 +213,7 @@ class PlayServerConnection {
                 },
             });
             if (response.status === 200) {
-                console.log("Cycle Structure received:", response.data);
+                extension_1.logger.debug("Cycle Structure received:", response.data);
                 // User selects a file path for saving the JSON
                 /*
                 const savePath: vscode.Uri | undefined = await vscode.window.showSaveDialog({
@@ -233,11 +233,11 @@ class PlayServerConnection {
                 return response.data;
             }
             else {
-                console.error(`Unexpected response code: ${response.status}`);
+                extension_1.logger.error(`Unexpected response code: ${response.status}`);
             }
         }
         catch (error) {
-            console.error("Error fetching cycle structure:", error);
+            extension_1.logger.error("Error fetching cycle structure:", error);
         }
     }
     async logoutUser(context, treeDataProvider) {
@@ -251,21 +251,21 @@ class PlayServerConnection {
                 if (treeDataProvider) {
                     treeDataProvider.clearTree();
                 }
-                console.log("Logout successful");
+                extension_1.logger.debug("Logout successful");
                 vscode.window.showInformationMessage("Logout successful.");
             }
             else {
-                console.error(`Unexpected response status: ${response.status}`);
+                extension_1.logger.error(`Unexpected response status: ${response.status}`);
                 vscode.window.showWarningMessage(`Unexpected response status: ${response.status}`);
             }
         }
         catch (error) {
             if (axios_1.default.isAxiosError(error)) {
-                console.error(`Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`);
+                extension_1.logger.error(`Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`);
                 vscode.window.showWarningMessage(`Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`);
             }
             else {
-                console.error(`An unexpected error occurred: ${error}`);
+                extension_1.logger.error(`An unexpected error occurred: ${error}`);
             }
         }
         finally {
@@ -288,7 +288,7 @@ class PlayServerConnection {
         const uploadEndpointURL = `/projects/${projectKey}/executionResults/v1`;
         try {
             const zipFileData = fs.readFileSync(zipFilePath);
-            console.log(`Uploading zip file ${zipFilePath} to ${uploadEndpointURL}`);
+            extension_1.logger.debug(`Uploading zip file ${zipFilePath} to ${uploadEndpointURL}`);
             const response = await this.apiClient.post(uploadEndpointURL, zipFileData, {
                 headers: {
                     "Content-Type": "application/zip",
@@ -298,7 +298,7 @@ class PlayServerConnection {
             });
             switch (response.status) {
                 case 201:
-                    console.log("Report uploaded to TestBench Server successfully.");
+                    extension_1.logger.debug("Report uploaded to TestBench Server successfully.");
                     // Extract the fileName from the response and return it
                     const fileName = response.data?.fileName;
                     if (fileName) {
@@ -319,13 +319,13 @@ class PlayServerConnection {
         }
         catch (error) {
             if (axios_1.default.isAxiosError(error)) {
-                console.error("An error occurred while uploading the file:", error.message);
+                extension_1.logger.error("An error occurred while uploading the file:", error.message);
                 if (error.response) {
                     console.error("Response data:", error.response.data);
                 }
             }
             else {
-                console.error("An unexpected error occurred:", error);
+                extension_1.logger.error("An unexpected error occurred:", error);
             }
             throw error;
         }
@@ -372,13 +372,13 @@ class PlayServerConnection {
         }
         catch (error) {
             if (axios_1.default.isAxiosError(error)) {
-                console.error("An Axios error occurred:", error.message);
+                extension_1.logger.error("An Axios error occurred:", error.message);
                 if (error.response) {
                     console.error("Response data:", error.response.data);
                 }
             }
             else {
-                console.error("An unexpected error occurred:", error);
+                extension_1.logger.error("An unexpected error occurred:", error);
             }
             throw error;
         }
@@ -402,7 +402,7 @@ class PlayServerConnection {
     // Sends a GET request to the server to keep the session alive, which normally times out after 5 minutes
     async sendKeepAliveRequest() {
         if (!this.sessionToken) {
-            console.warn("Session token is null. Cannot send keep-alive request.");
+            extension_1.logger.warn("Session token is null. Cannot send keep-alive request.");
             return;
         }
         try {
@@ -414,7 +414,7 @@ class PlayServerConnection {
             // console.log("Keep-alive request SENT.");
         }
         catch (error) {
-            console.error("Keep-alive request failed:", error);
+            extension_1.logger.error("Keep-alive request failed:", error);
         }
     }
 }
@@ -471,7 +471,7 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
             }
             // User selected Cancel, which sets choice to undefined
             else if (!choice) {
-                console.log("Login process aborted.");
+                extension_1.logger.debug("Login process aborted.");
                 return null;
             }
             // Continue the function in case of "No"
@@ -488,7 +488,7 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
             const credentials = await promptForLoginCredentials(baseKey);
             if (!credentials) {
                 vscode.window.showInformationMessage("Login process aborted.");
-                console.log("Login process aborted.");
+                extension_1.logger.debug("Login process aborted.");
                 return null;
             }
             ({ serverName, portNumber, username, password } = credentials);
@@ -496,7 +496,7 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
         // Attempt to login
         const newConnection = await loginToNewPlayServerAndInitSessionToken(context, serverName, portNumber, username, password, baseKey);
         if (newConnection) {
-            console.log("Login successful.");
+            extension_1.logger.debug("Login successful.");
             vscode.window.showInformationMessage("Login successful.");
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
             (0, extension_1.setConnection)(newConnection);
@@ -507,7 +507,7 @@ async function performLogin(context, baseKey, promptForNewCredentials = false) {
             const retry = await vscode.window.showInformationMessage("Login failed! Do you want to retry?", "Retry", "Cancel");
             if (retry !== "Retry") {
                 vscode.window.showInformationMessage("Login process aborted.");
-                console.log("Login process aborted");
+                extension_1.logger.debug("Login process aborted");
                 return null;
             }
             else {
@@ -545,7 +545,7 @@ async function promptForLoginCredentials(baseKey) {
     // Check if the server is accessible
     const serverVersions = await fetchServerVersions(serverName, portNumber);
     if (!serverVersions) {
-        console.error("Server not accessible with the provided server name and port.");
+        extension_1.logger.error("Server not accessible with the provided server name and port.");
         vscode.window.showErrorMessage("Server not accessible with the provided server name and port.");
         return null;
     }
@@ -598,12 +598,12 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
             return null;
         }
         else {
-            console.error("Login failed. Unexpected status code:", response.status);
+            extension_1.logger.error("Login failed. Unexpected status code:", response.status);
             return null;
         }
     }
     catch (error) {
-        console.error("Error during login:", error);
+        extension_1.logger.error("Error during login:", error);
         return null;
     }
 }
@@ -611,10 +611,10 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
 async function clearStoredCredentials(context) {
     try {
         await context.secrets.delete("password");
-        console.log("Credentials deleted from secrets storage.");
+        extension_1.logger.debug("Credentials deleted from secrets storage.");
     }
     catch (error) {
-        console.error("Failed to clear credentials:", error);
+        extension_1.logger.error("Failed to clear credentials:", error);
     }
 }
 // Retrieves the current versions of the TestBench web server.
@@ -623,7 +623,7 @@ async function fetchServerVersions(serverName, portNumber) {
     try {
         const baseURL = `https://${serverName}:${portNumber}`;
         const serverVersionsURL = `${baseURL}/api/serverVersions/v1`;
-        console.log("Fetching server versions with URL:", serverVersionsURL);
+        extension_1.logger.debug("Fetching server versions with URL:", serverVersionsURL);
         const response = await axios_1.default.get(serverVersionsURL, {
             headers: {
                 Accept: "application/vnd.testbench+json",
@@ -633,26 +633,26 @@ async function fetchServerVersions(serverName, portNumber) {
             }),
         });
         // vscode.window.showInformationMessage(`TestBench Release Version: ${response.data.releaseVersion}, Database Version: ${response.data.databaseVersion}, Revision: ${response.data.revision}`);
-        console.log(`TestBench Release Version: ${response.data.releaseVersion}, Database Version: ${response.data.databaseVersion}, Revision: ${response.data.revision}`);
+        extension_1.logger.debug(`TestBench Release Version: ${response.data.releaseVersion}, Database Version: ${response.data.databaseVersion}, Revision: ${response.data.revision}`);
         return response.data;
     }
     catch (error) {
         if (axios_1.default.isAxiosError(error)) {
             if (error.response) {
-                console.error(`Error: Received status code ${error.response.status}`, error.response.data);
+                extension_1.logger.error(`Error: Received status code ${error.response.status}`, error.response.data);
                 if (error.response.status === 404) {
-                    console.error(`TestBench version cannot be found under the URL https://${serverName}:${portNumber}`);
+                    extension_1.logger.error(`TestBench version cannot be found under the URL https://${serverName}:${portNumber}`);
                 }
             }
             else if (error.request) {
-                console.error("Error: No response received from server.", error.request);
+                extension_1.logger.error("Error: No response received from server.", error.request);
             }
             else {
-                console.error("Error:", error.message);
+                extension_1.logger.error("Error:", error.message);
             }
         }
         else {
-            console.error("Unexpected error:", error);
+            extension_1.logger.error("Unexpected error:", error);
         }
         return null;
     }
@@ -675,17 +675,20 @@ async function promptForReportZipFileWithResults() {
         const fileUri = await vscode.window.showOpenDialog(options);
         if (!fileUri || !fileUri[0]) {
             vscode.window.showErrorMessage("No file selected. Please select a valid .zip file.");
+            extension_1.logger.debug("No .zip file selected for report selection.");
             return undefined;
         }
         const selectedFilePath = fileUri[0].fsPath;
         if (!selectedFilePath.endsWith(".zip")) {
             vscode.window.showErrorMessage("Selected file is not a .zip file. Please select a valid .zip file.");
+            extension_1.logger.debug("Selected file is not a .zip file.");
             return undefined;
         }
         return selectedFilePath;
     }
     catch (error) {
-        vscode.window.showErrorMessage(`An error occurred while selecting the zip file: ${error.message}`);
+        vscode.window.showErrorMessage(`An error occurred while selecting the report zip file: ${error.message}`);
+        extension_1.logger.error(`An error occurred while selecting the report zip file: ${error.message}`);
         return undefined;
     }
 }
@@ -709,10 +712,11 @@ function findCycleKeyFromCycleName(elements, cycleName) {
 // TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
 async function importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath) {
     try {
-        console.log("Importing report with results to TestBench server.");
+        extension_1.logger.debug("Importing report with results to TestBench server.");
         const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReportile(resultZipFilePath);
         if (!uniqueID || !projectKey || !cycleNameOfProject) {
             vscode.window.showErrorMessage("Error extracting project key, cycle name and unique ID from the zip file.");
+            extension_1.logger.error("Error extracting project key, cycle name and unique ID from the zip file.");
             return;
         }
         /*
@@ -725,12 +729,13 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
         // Later, we should fetch the project tree from the server and search for the cycle key there.
         const allTreeElementsInTreeView = await projectManagementTreeDataProvider?.getChildren(undefined);
         if (!allTreeElementsInTreeView) {
+            extension_1.logger.error("Failed to load project management tree elements to import results.");
             vscode.window.showErrorMessage("Failed to load project management tree elements.");
             return;
         }
         const cycleKeyOfImportedReport = findCycleKeyFromCycleName(allTreeElementsInTreeView, cycleNameOfProject);
         if (!cycleKeyOfImportedReport) {
-            console.error("Cycle not found in the project tree.");
+            extension_1.logger.error("Cycle not found in the project tree.");
             vscode.window.showErrorMessage("Cycle not found in the project tree.");
             return;
         }
@@ -738,8 +743,8 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
         // TODO: Add try catch block
         const zipFilenameFromServer = await connection.uploadExecutionResults(Number(projectKey), resultZipFilePath);
         if (!zipFilenameFromServer) {
-            console.error("Error uploading the zip file to the server.");
-            vscode.window.showErrorMessage("Error uploading the zip file to the server.");
+            extension_1.logger.error("Error uploading the result zip file to the server.");
+            vscode.window.showErrorMessage("Error uploading the results to the server.");
             return;
         }
         // TODO: Chech the new data of the new branch
@@ -764,27 +769,27 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
         };
         try {
             // Start the import job
-            console.log("Starting import execution results");
+            extension_1.logger.debug("Starting import execution results");
             const jobID = await connection.importExecutionResults(Number(projectKey), Number(cycleKeyOfImportedReport), importData);
             // Poll the job status until it is completed
             const jobStatus = await reportHandler.pollJobStatus(projectKey.toString(), jobID, "import");
             // Check if the job is completed successfully
             if (!jobStatus || reportHandler.isImportJobFailed(jobStatus)) {
-                console.warn("Import not completed or failed.");
+                extension_1.logger.warn("Import not completed or failed.");
                 vscode.window.showErrorMessage("Import not completed or failed.");
                 return undefined;
             }
             else {
-                console.log("Import completed successfully. Job Status:", jobStatus);
+                extension_1.logger.debug("Import completed successfully. Job Status:", jobStatus);
                 vscode.window.showInformationMessage("Import completed successfully.");
             }
         }
         catch (error) {
-            console.error("Error:", error.message);
+            extension_1.logger.error("Error:", error.message);
         }
     }
     catch (error) {
-        console.error("Error:", error.message);
+        extension_1.logger.error("Error:", error.message);
         vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
     }
 }
@@ -856,7 +861,7 @@ async function extractDataFromReportile(zipFilePath) {
         return { uniqueID, projectKey, cycleNameOfProject };
     }
     catch (error) {
-        console.error("Error extracting JSON data from zip file:", error);
+        extension_1.logger.error("Error extracting JSON data from zip file:", error);
         return { uniqueID: null, projectKey: null, cycleNameOfProject: null };
     }
 }
@@ -867,7 +872,7 @@ async function extractAndParseJsonContent(zipContents, fileName) {
         return fileData ? JSON.parse(fileData) : null;
     }
     catch (error) {
-        console.error(`Error reading or parsing ${fileName}:`, error);
+        extension_1.logger.error(`Error reading or parsing ${fileName}:`, error);
         return null;
     }
 }

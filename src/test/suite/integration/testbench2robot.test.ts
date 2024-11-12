@@ -5,6 +5,8 @@ import * as assert from 'assert';
 import * as vscode from 'vscode'
 import { tb2robotLib} from '../../../testbench2robotframeworkLib';
 import { compareDirectories, copyFolderSync } from './comparisonHelper';
+import * as extension from '../../../extension';
+import { TestBenchLogger } from "../../../testBenchLogger";
 
 const rootPath = path.resolve(__dirname, '../../../../')
 
@@ -25,10 +27,17 @@ async function checkPythonExtension() {
 
 suite('tb2robot -w integration test', async function () {
     let context: vscode.ExtensionContext;
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
+    const reportPath = path.join(rootPath, 'src/test/mocks/expected/JSONRepWithoutRes');
+    const configJSONPath = path.join(rootPath, 'src/test/mocks/expected/config.json');
+    const expectedGeneration = path.join(rootPath, 'src/test/mocks/expected/RobFraTestsuites');
+    const createdGeneration = path.join(rootPath, 'src/test/mocks/results/Generated');
 
     this.timeout(50000);
 
     setup(async () => {
+
         context = {
             secrets: {
                 get: sinon.stub().resolves("mockSessionToken"),
@@ -69,12 +78,7 @@ suite('tb2robot -w integration test', async function () {
         }
     });
 
-    test('should return true and generate correct robot files, with config', async () => {
-        const reportPath = path.join(rootPath, 'src/test/mocks/expected/JSONRepWithoutRes');
-        const configJSONPath = path.join(rootPath, 'src/test/mocks/expected/config.json');
-        const expectedGeneration = path.join(rootPath, 'src/test/mocks/expected/RobFraTestsuites');
-        const createdGeneration = path.join(rootPath, 'src/test/mocks/results/Generated');
-
+    test('Should return true and generate correct robot files, with config', async () => {
         const res = await tb2robotLib.startTb2robotWrite(context, rootPath, reportPath, configJSONPath);
 
         const contentComparison = compareDirectories(expectedGeneration, createdGeneration);
@@ -86,7 +90,7 @@ suite('tb2robot -w integration test', async function () {
         assert.strictEqual(res, true, 'Expected startTb2robotWrite to return true')
     });
 
-    test('should return false and call error message', async () => {
+    test('Should return false and call error message', async () => {
         const spy = sinon.spy(vscode.window, 'showErrorMessage');
         let res = false;
 
@@ -100,6 +104,8 @@ suite('tb2robot -w integration test', async function () {
 
 suite('tb2robot -r integration test', async function () {
     let context: vscode.ExtensionContext;
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     const reportPath = path.join(rootPath, 'src/test/mocks/expected/JSONRepWithoutRes');
     const outputXmlPath = path.join(rootPath, 'src/test/mocks/expected/XMLOutput/output.xml');
     const configJSONPath = path.join(rootPath, 'src/test/mocks/expected/config.json');
@@ -149,7 +155,7 @@ suite('tb2robot -r integration test', async function () {
         }
     });
 
-    test('should return true and generate correct json results, with resultPath and config', async () => {
+    test('Should return true and generate correct json results, with resultPath and config', async () => {
         const createdGeneration = resultPath;
 
         const res = await tb2robotLib.startTb2robotRead(context, rootPath, outputXmlPath, reportPath, resultPath, configJSONPath);
@@ -163,7 +169,7 @@ suite('tb2robot -r integration test', async function () {
         assert.strictEqual(res, true, 'Expected startTb2robotRead to return true')
     });
 
-    test('should return true and generate correct json results, with resultPath', async () => {
+    test('Should return true and generate correct json results, with resultPath', async () => {
         const createdGeneration = resultPath;
 
         const res = await tb2robotLib.startTb2robotRead(context, rootPath, outputXmlPath, reportPath, resultPath);
@@ -177,7 +183,7 @@ suite('tb2robot -r integration test', async function () {
         assert.strictEqual(res, true, 'Expected startTb2robotRead to return true')
     });
 
-    test('should return true and generate correct json results, without optional parameters', async () => {
+    test('Should return true and generate correct json results, without optional parameters', async () => {
         const copiedReportPath = path.join(rootPath, 'src/test/mocks/results/JSONRepWithoutRes');
         const createdGeneration = copiedReportPath;
 
@@ -194,7 +200,7 @@ suite('tb2robot -r integration test', async function () {
         assert.strictEqual(res, true, 'Expected startTb2robotRead to return true')
     });
 
-    test('should return false and call error message', async () => {
+    test('Should return false and call error message', async () => {
         const spy = sinon.spy(vscode.window, 'showErrorMessage');
         let res = false;
 
@@ -207,6 +213,8 @@ suite('tb2robot -r integration test', async function () {
 });
 
 suite('XML generation integration test', async function () {
+    let getLoggerStub: sinon.SinonStub;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     const robotFilesPath = path.join(rootPath, 'src/test/mocks/expected/RobFraTestsuites');
     const outputResultDir = path.join(rootPath, 'src/test/mocks/results/XMLOutput');
     const expectedGeneration = path.join(rootPath, 'src/test/mocks/expected/XMLOutput');
@@ -226,7 +234,7 @@ suite('XML generation integration test', async function () {
         }
     });
 
-    test('should return true and generate correct output.xml', async () => {
+    test('Should return true and generate correct output.xml', async () => {
         const createdGeneration = outputResultDir;
 
         if (!fs.existsSync(outputResultDir)) {
@@ -244,7 +252,7 @@ suite('XML generation integration test', async function () {
 
     });
 
-    test('should return false and call error message', async () => {
+    test('Should return false and call error message', async () => {
         const spy = sinon.spy(vscode.window, 'showErrorMessage');
 
         const res = await tb2robotLib.startRobotGenerateXMLResults('', '', '');

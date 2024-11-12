@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.lastGeneratedReportParams = exports.folderNameOfTestbenchWorkingDirectory = exports.connection = exports.projectManagementTreeDataProvider = exports.baseKey = void 0;
+exports.lastGeneratedReportParams = exports.folderNameOfTestbenchWorkingDirectory = exports.connection = exports.projectManagementTreeDataProvider = exports.logger = exports.baseKey = void 0;
 exports.setProjectManagementTreeDataProvider = setProjectManagementTreeDataProvider;
 exports.setConnection = setConnection;
 exports.activate = activate;
@@ -37,7 +37,7 @@ const testBenchConnection = __importStar(require("./testBenchConnection"));
 const projectManagementTreeView = __importStar(require("./projectManagementTreeView"));
 const testBenchTypes = __importStar(require("./testBenchTypes"));
 const path_1 = __importDefault(require("path"));
-// TODO: Create extension documentation in Readme.md
+const testBenchLogger_1 = require("./testBenchLogger");
 exports.baseKey = "testbenchExtension"; // Prefix of the commands in package.json
 exports.projectManagementTreeDataProvider = null; // Store the tree data provider
 function setProjectManagementTreeDataProvider(newProjectManagementTreeDataProvider) {
@@ -55,6 +55,9 @@ exports.lastGeneratedReportParams = {
     UID: undefined,
 };
 async function activate(context) {
+    const config = vscode.workspace.getConfiguration(exports.baseKey);
+    exports.logger = new testBenchLogger_1.TestBenchLogger();
+    exports.logger.info("Extension activated.");
     // Store extension commands with their titles to be able to display them together in a quickpick
     const commands = {
         displayCommands: {
@@ -136,7 +139,6 @@ async function activate(context) {
     };
     // Initialize or update extension configuration settings
     async function loadConfiguration() {
-        const config = vscode.workspace.getConfiguration(exports.baseKey);
         // If storePassword is false, delete the stored password.
         // The password is only stored after a successful login.
         if (!config.get("storePasswordAfterLogin", false)) {
@@ -152,7 +154,8 @@ async function activate(context) {
             defaultTestbench2robotframeworkConfig.generationDirectory = path_1.default.join(config.get("workspaceLocation"), exports.folderNameOfTestbenchWorkingDirectory, "Generated");
             defaultTestbench2robotframeworkConfig.resourceDirectory = path_1.default.join(config.get("workspaceLocation"), "resources");
             await config.update("testbench2robotframeworkConfig", defaultTestbench2robotframeworkConfig);
-            console.log("Updated testbench2robotframeworkConfig with default values.");
+            // console.log("Updated testbench2robotframeworkConfig with default values.");
+            exports.logger.debug("Updated testbench2robotframeworkConfig with default values.");
         }
     }
     // Load initial configuration
@@ -161,7 +164,8 @@ async function activate(context) {
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
         if (e.affectsConfiguration(exports.baseKey)) {
             await loadConfiguration();
-            console.log("Configuration changed and updated.");
+            // console.log("Configuration changed and updated.");
+            exports.logger.debug("Configuration changed and updated.");
         }
     }));
     // Prompts the user to select a folder and returns its path
@@ -185,6 +189,7 @@ async function activate(context) {
             const config = vscode.workspace.getConfiguration(exports.baseKey);
             await config.update("workspaceLocation", newWorkspaceLocation);
             vscode.window.showInformationMessage(`Workspace location set to: ${newWorkspaceLocation}`);
+            exports.logger.debug(`Workspace location set to: ${newWorkspaceLocation}`);
         }
     }));
     // Register "Show Extension Settings" command
@@ -198,19 +203,23 @@ async function activate(context) {
             // Open the workspace settings view (The default settings view is user settings)
             vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
         });
+        exports.logger.debug("Extension settings opened.");
     }));
     // Login/Logout icon changes based on connection status
     vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", exports.connection !== null);
+    exports.logger.debug(`Context value connectionActive set to: ${exports.connection !== null}`);
     // FIXME: Login was stuck again, servers are crashed also.
     // The user may press the login button multiple times consecutively. Aviod executing the command again if already inside login.
     let insideLogin = false;
     // Register the "Login" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.login.command, async () => {
         if (insideLogin) {
-            console.log("Already inside login..");
+            // console.log("Already inside login..");
+            exports.logger.debug(`Login process is already running.`);
             // If somehow login is stuck, reset the insideLogin flag after 10 seconds to avoid blocking the login process.
             setTimeout(() => {
                 insideLogin = false;
+                exports.logger.debug(`insideLogin flag reset after 10 seconds.`);
             }, 5 * 1000);
             return;
         }
@@ -219,17 +228,20 @@ async function activate(context) {
         await testBenchConnection
             .performLogin(context, exports.baseKey)
             .catch((error) => {
-            console.error("Login process failed:", error);
+            // console.error("Login process failed:", error);
+            exports.logger.error(`Login process failed: ${error}`, true);
         })
             .finally(() => {
             // Reset insideLogin after the login attempt is fully completed
             insideLogin = false;
+            exports.logger.debug(`insideLogin flag reset after login attempt.`);
         });
     }));
     // Register the "Logout" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.logout.command, async () => {
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.warn(`Logout command is called without a connection.`);
             return;
         }
         await exports.connection.logoutUser(context, exports.projectManagementTreeDataProvider);
@@ -238,10 +250,12 @@ async function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCasesForCycle.command, async (item) => {
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.warn(`generateTestCasesForCycle command is called without a connection.`);
             return;
         }
         if (!exports.projectManagementTreeDataProvider) {
             vscode.window.showErrorMessage("Project management tree is not initialized. Please select a project first.");
+            exports.logger.warn(`generateTestCasesForCycle command is called without a project data provider.`);
             return;
         }
         // If the user did not clicked on a test cycle, test cycle wont have any children so that test themes cannot be displayed in the quickpick.
@@ -261,6 +275,7 @@ async function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCasesForTestThemeOrTestCaseSet.command, async (treeItem) => {
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.warn(`generateTestCasesForTestThemeOrTestCaseSet command is called without a connection.`);
             return;
         }
         await reportHandler.generateTestCasesForTestThemeOrTestCaseSet(context, treeItem, exports.folderNameOfTestbenchWorkingDirectory);
@@ -269,16 +284,19 @@ async function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand(commands.selectAndLoadProject.command, async () => {
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.warn(`selectAndLoadProject command is called without a connection.`);
             return;
         }
         const projectList = await exports.connection.getProjectsList();
         if (!projectList) {
             // vscode.window.showErrorMessage("No projects found..");
+            exports.logger.warn(`No projects found for the selectAndLoadProject command.`);
             return;
         }
         const selectedProjectKey = await exports.connection.selectProjectKeyFromProjectList(projectList);
         if (!selectedProjectKey) {
             // vscode.window.showErrorMessage("No project selected..");
+            exports.logger.warn(`No project selected for the selectAndLoadProject command.`);
             return;
         }
         exports.projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(exports.connection, selectedProjectKey);
@@ -291,6 +309,7 @@ async function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand(commands.readRFTestResultsAndCreateReportWithResults.command, async () => {
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.warn(`readRFTestResultsAndCreateReportWithResults command is called without a connection.`);
             return;
         }
         await reportHandler.readTestResultsAndCreateReportWithResults(context, exports.folderNameOfTestbenchWorkingDirectory);
@@ -299,10 +318,12 @@ async function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand(commands.uploadTestResultsToTestbench.command, async () => {
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.warn(`uploadTestResultsToTestbench command is called without a connection.`);
             return;
         }
         if (!exports.projectManagementTreeDataProvider || !exports.projectManagementTreeDataProvider.currentProjectKeyInView) {
             vscode.window.showErrorMessage("No project selected. Please select a project first.");
+            exports.logger.warn(`uploadTestResultsToTestbench command is called without a selected project.`);
             return;
         }
         await testBenchConnection.selectReportWithResultsAndImportToTestbench(exports.connection, exports.projectManagementTreeDataProvider);
@@ -347,5 +368,7 @@ async function activate(context) {
     // Uncomment this if you want to prompt the user to log in when the extension activates
     // vscode.commands.executeCommand(`${baseKey}.login`);
 }
-function deactivate() { }
+function deactivate() {
+    exports.logger.info("Extension deactivated.");
+}
 //# sourceMappingURL=extension.js.map

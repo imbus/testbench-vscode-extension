@@ -27,6 +27,7 @@ exports.tb2robotLib = void 0;
 const vscode = __importStar(require("vscode"));
 const child_process_1 = require("child_process");
 const pyCommandBuilder_1 = require("./pyCommandBuilder");
+const extension_1 = require("./extension");
 class tb2robotLib {
     /**
      * Generates Robot Framework Testsuites.
@@ -42,14 +43,14 @@ class tb2robotLib {
             if (configJSONPath) {
                 command = `${commandBase} write -c ${configJSONPath} ${reportPath}`;
             }
-            console.log(`Executing command: ${command}`);
+            extension_1.logger.debug(`Executing command: ${command}`);
             (0, child_process_1.exec)(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
                 if (error) {
                     reject(stderr || stdout || "An unknown Error occurred.");
-                    console.log(error.message);
+                    extension_1.logger.error(error.message);
                     return;
                 }
-                console.log(stdout || stderr);
+                extension_1.logger.debug(stdout || stderr);
                 resolve();
             });
         });
@@ -75,7 +76,7 @@ class tb2robotLib {
             if (configJSONPath) {
                 command = `${commandBase} read -c ${configJSONPath} -o ${outputXmlPath} -r ${resultPath} ${reportWithoutResultsPath}`;
             }
-            console.log(`Executing command: ${command}`);
+            extension_1.logger.debug(`Executing command: ${command}`);
             (0, child_process_1.exec)(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
                 if (error) {
                     reject(stderr || stdout || "An unknown Error occurred.");
@@ -121,10 +122,10 @@ class tb2robotLib {
             if (configJSONPath) {
                 config = configJSONPath;
             }
-            console.log(`tb2robot write-generation completed using ${reportPath}, ${config} config file provided.`);
+            extension_1.logger.debug(`tb2robot write-generation completed using ${reportPath}, ${config} config file provided.`);
         })
             .catch((err) => {
-            console.error("Error:", err);
+            extension_1.logger.error(err.message);
             vscode.window.showErrorMessage(`testbench2robotframework ${err}`);
             res = false;
         });
@@ -151,10 +152,10 @@ class tb2robotLib {
             if (configJSONPath) {
                 providedConfig = `, ${configJSONPath}`;
             }
-            console.log(`tb2robot read-generation completed using ${outputXmlPath}${providedConfig} and ${reportPath}. Provided path for results: ${providedPath}.`);
+            extension_1.logger.debug(`tb2robot read-generation completed using ${outputXmlPath}${providedConfig} and ${reportPath}. Provided path for results: ${providedPath}.`);
         })
             .catch((err) => {
-            console.error("Error:", err);
+            extension_1.logger.error(err);
             vscode.window.showErrorMessage(`testbench2robotframework ${err}`);
             res = false;
         });
@@ -171,10 +172,10 @@ class tb2robotLib {
         let res = true;
         await this.robotGenerateXMLResults(workingDirectory, outputResultDir, reportPath)
             .then(() => {
-            console.log(`Robot Framework generation completed using ${outputResultDir} and ${reportPath}.`);
+            extension_1.logger.debug(`Robot Framework generation completed using ${outputResultDir} and ${reportPath}.`);
         })
             .catch((err) => {
-            console.error("Error:", err);
+            extension_1.logger.error(err);
             vscode.window.showErrorMessage(`Robot Framework ${err}`);
             res = false;
         });
