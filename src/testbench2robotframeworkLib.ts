@@ -133,12 +133,12 @@ export class tb2robotLib {
                 }
 
                 logger.debug(
-                    `tb2robot write-generation completed using ${reportPath}, ${config} config file provided.`
+                    `tb2robot write completed using ${reportPath}, ${config} config file provided.`
                 );
             })
             .catch((err) => {
                 logger.error(err.message);
-                vscode.window.showErrorMessage(`testbench2robotframework ${err}`);
+                vscode.window.showErrorMessage(`Error in testbench2robotframework write: ${err}`);
                 res = false;
             });
 
@@ -176,39 +176,12 @@ export class tb2robotLib {
                 }
 
                 logger.debug(
-                    `tb2robot read-generation completed using ${outputXmlPath}${providedConfig} and ${reportPath}. Provided path for results: ${providedPath}.`
+                    `tb2robot read completed using ${outputXmlPath}${providedConfig} and ${reportPath}. Provided path for results: ${providedPath}.`
                 );
             })
             .catch((err) => {
                 logger.error(err);
-                vscode.window.showErrorMessage(`testbench2robotframework ${err}`);
-                res = false;
-            });
-
-        return res;
-    }
-
-    /**
-     * Entry point for the Robot Framework XML generation command.
-     * @param {string} workingDirectory The directory in which the command is to be executed.
-     * @param {string} outputResultDir The directory in which the result is to be stored.
-     * @param {string} reportPath Path to a folder containing the robotframework tests.
-     * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
-     */
-    public static async startRobotGenerateXMLResults(
-        workingDirectory: string,
-        outputResultDir: string,
-        reportPath: string
-    ): Promise<boolean> {
-        let res: boolean = true;
-
-        await this.robotGenerateXMLResults(workingDirectory, outputResultDir, reportPath)
-            .then(() => {
-                logger.debug(`Robot Framework generation completed using ${outputResultDir} and ${reportPath}.`);
-            })
-            .catch((err) => {
-                logger.error(err);
-                vscode.window.showErrorMessage(`Robot Framework ${err}`);
+                vscode.window.showErrorMessage(`Error in testbench2robotframework read: ${err}`);
                 res = false;
             });
 

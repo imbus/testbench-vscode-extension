@@ -240,7 +240,7 @@ class PlayServerConnection {
             extension_1.logger.error("Error fetching cycle structure:", error);
         }
     }
-    async logoutUser(context, treeDataProvider) {
+    async logoutUser(treeDataProvider) {
         try {
             const response = await this.apiClient.delete(`/login/session/v1`, {
                 headers: {
@@ -739,8 +739,7 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
             vscode.window.showErrorMessage("Cycle not found in the project tree.");
             return;
         }
-        // Upload the zip file containing the results to TestBench server
-        // TODO: Add try catch block
+        // Upload the zip file containing the results to TestBench server        
         const zipFilenameFromServer = await connection.uploadExecutionResults(Number(projectKey), resultZipFilePath);
         if (!zipFilenameFromServer) {
             extension_1.logger.error("Error uploading the result zip file to the server.");

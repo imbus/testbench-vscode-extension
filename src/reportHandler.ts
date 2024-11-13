@@ -103,7 +103,7 @@ export async function fetchZipFile(
         logger.debug(
             `Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`
         );
-        logger.debug(`Fetching report with requestParams ${requestParams}`, requestParams);
+        logger.debug(`Fetching report with requestParams:`, requestParams);
 
         const jobId: string | null = await getJobId(projectKey, cycleKey, requestParams);
         if (!jobId) {
@@ -333,7 +333,7 @@ export async function getJobStatus(
         },
     });
 
-    logger.debug("jobStatusResponse:", jobStatusResponse);
+    logger.debug("jobStatusResponse:", jobStatusResponse.data);
 
     if (jobStatusResponse.status !== 200) {
         logger.error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
@@ -498,7 +498,7 @@ export function delay(ms: number): Promise<void> {
  * @param projectManagementTreeViewOfExtension - The project management tree data provider.
  * @param workingDirectory - The directory where the ZIP file should be downloaded.
  */
-export async function callFetchReportForTreeElement(
+export async function fetchReportForTreeElement(
     treeItem: projectManagementTreeView.TestbenchTreeItem,
     projectManagementTreeViewOfExtension: projectManagementTreeView.ProjectManagementTreeDataProvider | null,
     workingDirectory: string
@@ -528,14 +528,14 @@ export async function callFetchReportForTreeElement(
                     throw new Error("Project management tree is not initialized. Please select a project first.");
                 }
 
-                // Get the current project key
+                // Get the key of the current project that is displayed in the project managemement tree view
                 const projectKey: string | null = projectManagementTreeViewOfExtension.currentProjectKeyInView;
                 if (!projectKey) {
                     logger.warn("No project selected. (callFetchReportForTreeElement)");
                     throw new Error("No project selected. Please select a project first.");
                 }
 
-                // Find the cycle key associated with the tree item
+                // Find the cycle key associated with the selected tree item to fetch the report
                 const cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
                 if (!cycleKey) {
                     logger.warn("Cycle key for the selected tree element not found. (callFetchReportForTreeElement)");
@@ -585,22 +585,6 @@ export async function callFetchReportForTreeElement(
     );
 }
 
-async function handleExecutionError(
-    workingDirectoryFullPath: string,
-    isExecutionSuccessfull: boolean,
-    downloadedReportZipFileFullPath: string
-): Promise<boolean> {
-    if (!isExecutionSuccessfull) {
-        await deleteConfigurationFile(getConfigurationFilePath(workingDirectoryFullPath)); // Delete created json config file after usage
-        if (vscode.workspace.getConfiguration(baseKey).get<boolean>("clearReportAfterProcessing")) {
-            await removeReportZipFile(downloadedReportZipFileFullPath);
-        }
-        logger.error(`Test generation failed.`);
-        // vscode.window.showErrorMessage(`Test generation failed.`);
-    }
-    return isExecutionSuccessfull;
-}
-
 /**
  * Generate test cases for the selected TestThemeNode or TestCaseSetNode.
  * @param context VS Code extension context
@@ -644,7 +628,7 @@ export async function generateTestCasesForTestThemeOrTestCaseSet(
  * @param baseKey - The base key of the extension
  * @param projectKey - The project key
  * @param cycleKey - The cycle key
- * @param workingDirectory - The path to save the downloaded report
+ * @param folderNameOfTestbenchWorkingDirectory - The path to save the downloaded report
  * @param UIDofTestThemeElementToGenerateTestsFor - (Optional) The unique ID of the clicked TestThemeNode element to generate tests for
  */
 export async function generateTestsWithTestBenchToRobotFramework(
@@ -654,7 +638,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
     baseKey: string,
     projectKey: string,
     cycleKey: string,
-    workingDirectory: string,
+    folderNameOfTestbenchWorkingDirectory: string,
     UIDofTestThemeElementToGenerateTestsFor?: string
 ): Promise<void> {
     try {
@@ -690,7 +674,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
                     projectKey,
                     cycleKey,
                     executionBased,
-                    workingDirectory,
+                    folderNameOfTestbenchWorkingDirectory,
                     UIDofSelectedElement,
                     cycleReportOptions,
                     progress,
@@ -760,7 +744,7 @@ function findTestThemeNodes(
  * @param baseKey - The base key of the extension
  * @param projectKey - The project key
  * @param cycleKey - The cycle key
- * @param workingDirectory - The working directory path
+ * @param folderNameOfTestbenchWorkingDirectory - The working directory path
  * @param UIDofSelectedElement - The unique ID of the selected element
  * @param cycleStructureOptions - Request parameters for cycle structure
  * @param progress - VS Code progress reporter
@@ -772,7 +756,7 @@ async function runTestGenerationProcess(
     projectKey: string,
     cycleKey: string,
     executionBased: boolean,
-    workingDirectory: string,
+    folderNameOfTestbenchWorkingDirectory: string,
     UIDofSelectedElement: string,
     cycleStructureOptions: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
@@ -784,7 +768,7 @@ async function runTestGenerationProcess(
         baseKey,
         projectKey,
         cycleKey,
-        workingDirectory,
+        folderNameOfTestbenchWorkingDirectory, // The (.testbench) folder name we process files in
         cycleStructureOptions,
         progress,
         cancellationToken
@@ -797,33 +781,47 @@ async function runTestGenerationProcess(
 
     progress.report({ increment: 30, message: "Generating test cases with testbench2robotframework." });
 
+    // Workspace path is the folder we are working in, workingDirectoryPath is the (.testbench) folder path we process files in.
     const workspacePath: string = vscode.workspace.getConfiguration(baseKey).get<string>("workspaceLocation")!;
-    const workingDirectoryFullPath: string = path.join(workspacePath, workingDirectory);
+    const workingDirectoryPath: string = path.join(workspacePath, folderNameOfTestbenchWorkingDirectory);
 
-    const configFilePath: string | null = await saveTestbench2RobotConfigurationAsJson(
+    const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJson(
         baseKey,
-        workingDirectoryFullPath
+        workingDirectoryPath
     );
-    if (!configFilePath) {
+    if (!tb2robotConfigFilePath) {
         logger.error("Failed to save configuration file.");
         return;
     }
 
-    // console.log("Calling startTb2robotWrite.");
-    const isSuccess: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotWrite(
+    logger.debug("Calling testbench2robotframework write command");
+    const isTb2RobotExecutionSuccessful: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotWrite(
         context,
-        workingDirectoryFullPath,
+        workingDirectoryPath,
         downloadedReportZipFilePath,
-        configFilePath
+        tb2robotConfigFilePath
     );
-    // console.log("startTb2robotWrite executed with success variable:", isSuccess);
+    logger.debug(
+        `testbench2robotframework write command executed with success variable: ${isTb2RobotExecutionSuccessful}`
+    );
 
-    if (!(await handleExecutionError(workingDirectoryFullPath, isSuccess, downloadedReportZipFilePath))) {
+    if (!isTb2RobotExecutionSuccessful){
+        await cleanUpConfigAndReportFiles(
+            getConfigurationFilePath(workingDirectoryPath),
+            downloadedReportZipFilePath,
+            baseKey
+        ); 
+        logger.error(`Test generation failed.`);
+        vscode.window.showErrorMessage(`Test generation failed.`); 
         return;
     }
 
     updateLastGeneratedReportParams(UIDofSelectedElement, projectKey, cycleKey, executionBased);
-    await cleanUp(configFilePath, downloadedReportZipFilePath, baseKey);
+    await cleanUpConfigAndReportFiles(tb2robotConfigFilePath, downloadedReportZipFilePath, baseKey);
+
+    vscode.window.showInformationMessage("Test generation done.");
+    logger.debug("Test generation done.");
+
     // Open the Testing view of VS Code after generating the tests
     vscode.commands.executeCommand("workbench.view.extension.test");
 }
@@ -840,19 +838,17 @@ function updateLastGeneratedReportParams(UID: string, projectKey: string, cycleK
 
 /**
  * Clean up temporary files and configurations.
- * @param configFilePath The path of the testbench2robotframework configuration file
- * @param reportZipFileFullPath The path of the report ZIP file
+ * @param tb2robotConfigFilePath The path of the testbench2robotframework configuration file
+ * @param reportZipFilePath The path of the report ZIP file
  * @param baseKey The base key of the extension
  */
-async function cleanUp(configFilePath: string, reportZipFileFullPath: string, baseKey: string) {
-    await deleteConfigurationFile(configFilePath);
+async function cleanUpConfigAndReportFiles(tb2robotConfigFilePath: string, reportZipFilePath: string, baseKey: string) {
+    await deleteTb2RobotConfigurationFile(tb2robotConfigFilePath);
 
     if (vscode.workspace.getConfiguration(baseKey).get<boolean>("clearReportAfterProcessing")) {
-        await removeReportZipFile(reportZipFileFullPath);
-    }
-
-    vscode.window.showInformationMessage("Test generation done.");
-    logger.debug("Test generation done.");
+        await removeReportZipFile(reportZipFilePath);
+    }    
+    logger.debug("Cleanup done.");
 }
 
 /**
@@ -1027,7 +1023,7 @@ export async function readTestResultsAndCreateReportWithResults(
                 throw new Error("Workspace location is not configured.");
             }
 
-            const workingDirectoryFullPath: string = path.join(workspacePath, workingDirectory);
+            const workingDirectoryPath: string = path.join(workspacePath, workingDirectory);
 
             const robotResultXMLFile: string | undefined = await chooseRobotXMLFile(workspacePath);
             if (!robotResultXMLFile) {
@@ -1063,19 +1059,19 @@ export async function readTestResultsAndCreateReportWithResults(
             reportProgress(`Working on report.`, reportIncrement);
 
             // Either use the downloaded report zip file or prompt the user to select one
-            const reportWithResultsZipFileFullPath: string | undefined =
-                downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(workingDirectoryFullPath));
-            if (!reportWithResultsZipFileFullPath) {
+            const reportWithResultsZipFilePath: string | undefined =
+                downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(workingDirectoryPath));
+            if (!reportWithResultsZipFilePath) {
                 throw new Error("No report file selected.");
             }
 
-            logger.debug(`Report with results is saved to ${reportWithResultsZipFileFullPath}`);
+            logger.debug(`Report with results is saved to ${reportWithResultsZipFilePath}`);
 
             reportProgress(`Preparing configuration for testbench2robotframework.`, reportIncrement / 2);
 
             const tb2robotConfigFileFullPath: string | null = await saveTestbench2RobotConfigurationAsJson(
                 baseKey,
-                workingDirectoryFullPath
+                workingDirectoryPath
             );
             if (!tb2robotConfigFileFullPath) {
                 throw new Error("Failed to create configuration file.");
@@ -1083,32 +1079,31 @@ export async function readTestResultsAndCreateReportWithResults(
 
             reportProgress(`Reading test results and creating report.`, reportIncrement / 2);
 
-            fullPathOfReportWithResultsZip = path.join(workingDirectoryFullPath, reportFileWithResultsZipName);
+            fullPathOfReportWithResultsZip = path.join(workingDirectoryPath, reportFileWithResultsZipName);
 
             logger.debug("Calling startTb2robotRead.");
-            const isExecutionSuccessful: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
+            const isTb2RobotExecutionSuccessful: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
                 context,
-                workingDirectoryFullPath,
+                workingDirectoryPath,
                 robotResultXMLFile,
-                reportWithResultsZipFileFullPath,
+                reportWithResultsZipFilePath,
                 fullPathOfReportWithResultsZip,
                 tb2robotConfigFileFullPath
             );
-            logger.debug("startTb2robotRead executed with success variable:", isExecutionSuccessful);
+            logger.debug("startTb2robotRead executed with success variable:", isTb2RobotExecutionSuccessful);
 
-            if (
-                !(await handleExecutionError(
-                    workingDirectoryFullPath,
-                    isExecutionSuccessful,
-                    reportWithResultsZipFileFullPath
-                ))
-            ) {
+            if (!isTb2RobotExecutionSuccessful) {
+                await cleanUpConfigAndReportFiles(
+                    getConfigurationFilePath(workingDirectoryPath),
+                    reportWithResultsZipFilePath,
+                    baseKey
+                ); 
+                logger.error(`Importing test results failed.`);
+                vscode.window.showErrorMessage(`Importing test results failed.`); 
                 return;
             }
 
-            if (config.get<boolean>("clearReportAfterProcessing")) {
-                await removeReportZipFile(reportWithResultsZipFileFullPath);
-            }
+            await cleanUpConfigAndReportFiles(tb2robotConfigFileFullPath, reportWithResultsZipFilePath, baseKey);
 
             logger.debug(`tb2robot read executed successfully.`);
             vscode.window.showInformationMessage(`Test results read and report created.`);
@@ -1261,7 +1256,7 @@ export async function startTestGenerationProcessForCycle(
  */
 export async function saveTestbench2RobotConfigurationAsJson(
     baseKey: string,
-    pathToJsonConfig: string
+    folderPathToStoreTb2robotConfig: string
 ): Promise<string | null> {
     try {
         const config = vscode.workspace.getConfiguration(baseKey);
@@ -1274,13 +1269,13 @@ export async function saveTestbench2RobotConfigurationAsJson(
         }
 
         const jsonContent: string = JSON.stringify(generationConfig, null, 2);
-        const filePath: string = getConfigurationFilePath(pathToJsonConfig);
+        const tb2robotConfigFilePath: string = getConfigurationFilePath(folderPathToStoreTb2robotConfig);
 
         // Write file, overwriting if it already exists
-        await fsPromise.writeFile(filePath, jsonContent, "utf8");
-        logger.debug(`Tb2robot configuration file created or overwritten at: ${filePath}`);
+        await fsPromise.writeFile(tb2robotConfigFilePath, jsonContent, "utf8");
+        logger.debug(`Tb2robot configuration file created or overwritten at: ${tb2robotConfigFilePath}`);
 
-        return filePath;
+        return tb2robotConfigFilePath;
     } catch (error) {
         const errorMessage =
             error instanceof Error
@@ -1297,9 +1292,9 @@ export async function saveTestbench2RobotConfigurationAsJson(
  * Determines the file path where the testbench2robotframework configuration file will be saved.
  * @returns The file path of the configuration file.
  */
-function getConfigurationFilePath(fullPathToJsonConfig: string): string {
+function getConfigurationFilePath(folderPathToJsonConfig: string): string {
     const fileName: string = "testbench2robotframeworkConfig.json";
-    const filePath: string = path.join(fullPathToJsonConfig, fileName);
+    const filePath: string = path.join(folderPathToJsonConfig, fileName);
     return filePath;
 }
 
@@ -1308,7 +1303,7 @@ function getConfigurationFilePath(fullPathToJsonConfig: string): string {
  * @param configFilePath The path to the configuration file to be deleted
  * @returns Promise<void>
  */
-export async function deleteConfigurationFile(configFilePath: string): Promise<void> {
+export async function deleteTb2RobotConfigurationFile(configFilePath: string): Promise<void> {
     try {
         // Check if the file exists before attempting to delete
         await fsPromise.access(configFilePath);

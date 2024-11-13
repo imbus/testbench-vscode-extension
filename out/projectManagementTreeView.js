@@ -65,7 +65,7 @@ class ProjectManagementTreeDataProvider {
     }
     async getChildren(element) {
         if (!extension_1.connection) {
-            // vscode.window.showWarningMessage("No connection available for tree view.");            
+            // vscode.window.showWarningMessage("No connection available for tree view.");
             return [];
         }
         if (!element) {

@@ -3,6 +3,7 @@
 This Visual Studio Code Extension for TestBench allows you to:
 
 -   Display the project management tree and the test theme tree, where you can navigate through the tree elements.
+-   Hovering over the tree view elements will display additional information such as the status and unique ID of the element.
 -   Generate robotframework test cases from test cycles, test themes and test case sets directly within Visual Studio Code, and upload the test results back to the TestBench server.
 
 ## Features
@@ -45,7 +46,7 @@ The extension settings contains following configurations:
 
 -   **Initialize the Project Management Tree**
 
-    After selecting a project, the **Project Management Tree** will be initialized. Navigate through the project elements by expanding or clicking on the tree items. Clicking on a test cycle in the project management tree will automatically initialize the **Test Theme Tree**, displaying the associated test themes and test case sets for that cycle.
+    After selecting a project, the **Project Management Tree** will be initialized. Navigate through the project elements by expanding or clicking on the tree items. Clicking on a test cycle in the project management tree will automatically initialize the **Test Theme Tree**, displaying the associated test themes and test case sets for that cycle. In the test theme tree, not executable elements and elements that are locked by the system are hidden.
 
 -   **Generate Test Cases**
 

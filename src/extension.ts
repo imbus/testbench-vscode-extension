@@ -120,7 +120,6 @@ export async function activate(context: vscode.ExtensionContext) {
                 "resources"
             );
             await config.update("testbench2robotframeworkConfig", defaultTestbench2robotframeworkConfig);
-            // console.log("Updated testbench2robotframeworkConfig with default values.");
             logger.debug("Updated testbench2robotframeworkConfig with default values.");
         }
     }
@@ -133,7 +132,6 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (e.affectsConfiguration(baseKey)) {
                 await loadConfiguration();
-                // console.log("Configuration updated.");
                 logger.info("Configuration updated.");
             }
         })
@@ -193,7 +191,6 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.login.command, async () => {
             if (insideLogin) {
-                // console.log("Already inside login..");
                 logger.debug(`Login process is already running.`);
 
                 // If somehow login is stuck, reset the insideLogin flag after 10 seconds to avoid blocking the login process.
@@ -275,7 +272,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand(
             commands.fetchReportForSelectedTreeItem.command,
             async (treeItem: projectManagementTreeView.TestbenchTreeItem) => {
-                await reportHandler.callFetchReportForTreeElement(
+                await reportHandler.fetchReportForTreeElement(
                     treeItem,
                     projectManagementTreeDataProvider,
                     folderNameOfTestbenchWorkingDirectory

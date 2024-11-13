@@ -64,6 +64,11 @@ export class TestBenchLogger {
     // We always log to extension.log, and rename it to extension.log.0, extension.log.1, etc. when it exceeds MAX_LOG_FILE_SIZE
     private async rotateLogs() {
         try {
+            // If log file does not exist, no rotation is needed
+            if (!fs.existsSync(this.logFilePath)) {
+                return;
+            }
+
             // Get the size of the current log file
             const logFileSize: number = (await fsStat(this.logFilePath)).size;
             if (logFileSize >= MAX_LOG_FILE_SIZE) {
@@ -103,19 +108,44 @@ export class TestBenchLogger {
         // Initialize the complete log message
         let fullLogMessage = baseLogMessage;
 
+        // Dynamically import flatted only if needed
+        const { stringify } = await import("flatted");
+
         // Check if details is an array and process each item; otherwise, handle as a single item
-        if (Array.isArray(details)) {
-            for (const detail of details) {
-                const detailMessage = typeof detail === "object" ? JSON.stringify(detail, null, 2) : detail;
-                fullLogMessage += `\n${detailMessage}`;
+        try {
+            if (Array.isArray(details)) {
+                for (const detail of details) {
+                    const detailMessage = typeof detail === "object" ? JSON.stringify(detail, null, 2) : detail;
+                    fullLogMessage += `\n${detailMessage}`;
+                }
+            } else if (details) {
+                fullLogMessage += `\n${typeof details === "object" ? JSON.stringify(details, null, 2) : details}`;
             }
-        } else if (details) {
-            fullLogMessage += `\n${typeof details === "object" ? JSON.stringify(details, null, 2) : details}`;
+        } catch (error) {
+            // If the object is circular, use flatted to stringify
+            if (error instanceof TypeError && error.message.includes("Converting circular structure to JSON")) {
+                // fullLogMessage += `\n[Error: Converting circular structure to JSON]`;
+
+                if (Array.isArray(details)) {
+                    for (const detail of details) {
+                        const detailMessage = typeof detail === "object" ? stringify(detail) : detail;
+                        fullLogMessage += `\n${detailMessage}`;
+                    }
+                } else if (details) {
+                    fullLogMessage += `\n${typeof details === "object" ? stringify(details) : details}`;
+                }
+            }
         }
 
         // Write to log file
         try {
             await this.rotateLogs();
+
+            // Ensure the log file exists; if not, create it
+            if (!fs.existsSync(this.logFilePath)) {
+                fs.writeFileSync(this.logFilePath, ""); // Create an empty log file if missing
+            }
+
             await fsAppendFile(this.logFilePath, `${fullLogMessage}\n`);
         } catch (error) {
             console.error(`Logging error: ${error}`);

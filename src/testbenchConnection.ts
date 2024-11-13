@@ -375,7 +375,7 @@ export class PlayServerConnection {
                 case 200:
                     const jobID: string | undefined = response.data?.jobID;
                     if (jobID) {
-                        console.log("Import initiated successfully. Job ID:", jobID);
+                        logger.debug(`Import initiated successfully. Job ID: ${jobID}`);
                         return jobID;
                     } else {
                         throw new Error(
@@ -909,7 +909,7 @@ export async function importReportWithResultsToTestbench(
                     filterType: "TestTheme",
                     testThemeUID: "themeUID456",
                 },
-            */
+                */
             ],
         };
         try {

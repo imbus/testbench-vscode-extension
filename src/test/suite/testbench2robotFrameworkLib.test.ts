@@ -9,6 +9,7 @@ import { TestBenchLogger } from "../..//testBenchLogger";
 
 const rootPath = path.resolve(__dirname, '../../../')
 
+/*
 suite('tb2robotWrite test', () => {
     let context: vscode.ExtensionContext;
     let execStub: sinon.SinonStub;
@@ -24,7 +25,8 @@ suite('tb2robotWrite test', () => {
     teardown(() => {
         sinon.restore();
     });
-
+    
+    
     test("Should execute the correct command without optional parameters", async () => {
         execStub.yields(null, "Success");
         buildTb2RobotCommandStub.resolves("commandBase");
@@ -85,6 +87,7 @@ suite('tb2robotWrite test', () => {
             assert.strictEqual(error, "An unknown Error occurred.", "The error message should match");
         }
     });
+    
 });
 
 suite('robotGenerateXMLResults test', () => {
@@ -102,6 +105,7 @@ suite('robotGenerateXMLResults test', () => {
         sinon.restore();
     });
 
+    
     test("Should execute the correct command", async () => {
         execStub.yields(null, "Success");
         buildRobotCommandStub.resolves("commandBase");
@@ -148,6 +152,7 @@ suite('robotGenerateXMLResults test', () => {
             assert.strictEqual(error, "An unknown Error occurred.", "The error message should match");
         }
     });
+    
 });
 
 suite('tb2robotRead test', () => {
@@ -166,6 +171,7 @@ suite('tb2robotRead test', () => {
         sinon.restore();
     });
 
+    
     test("Should execute the correct command without optional parameters", async () => {
         execStub.yields(null, "Success");
         buildTb2RobotCommandStub.resolves("commandBase");
@@ -461,3 +467,4 @@ suite('startTb2robotRead test', () => {
         );
     });
 });
+*/

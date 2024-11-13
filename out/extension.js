@@ -58,83 +58,64 @@ async function activate(context) {
     const config = vscode.workspace.getConfiguration(exports.baseKey);
     exports.logger = new testBenchLogger_1.TestBenchLogger();
     exports.logger.info("Extension activated.");
-    // Store extension commands with their titles to be able to display them together in a quickpick
+    // Store extension commands
     const commands = {
         displayCommands: {
-            command: `${exports.baseKey}.displayCommands`,
-            title: "Display Available Commands",
+            command: `${exports.baseKey}.displayCommands`
         },
         login: {
-            command: `${exports.baseKey}.login`,
-            title: "Login to TestBench Server",
+            command: `${exports.baseKey}.login`
         },
         changeConnection: {
             command: `${exports.baseKey}.changeConnection`,
-            title: "Change account",
         },
         logout: {
-            command: `${exports.baseKey}.logout`,
-            title: "Logout from TestBench Server",
+            command: `${exports.baseKey}.logout`
         },
         generateTestCasesForCycle: {
-            command: `${exports.baseKey}.generateTestCasesForCycle`,
-            title: "Generate Tests",
+            command: `${exports.baseKey}.generateTestCasesForCycle`
         },
         generateTestCasesForTestThemeOrTestCaseSet: {
-            command: `${exports.baseKey}.generateTestCasesForTestThemeOrTestCaseSet`,
-            title: "Generate Tests",
+            command: `${exports.baseKey}.generateTestCasesForTestThemeOrTestCaseSet`
         },
         readRFTestResultsAndCreateReportWithResults: {
-            command: `${exports.baseKey}.readRFTestResultsAndCreateReportWithResults`,
-            title: "Read Test Results & Create Report With Results",
+            command: `${exports.baseKey}.readRFTestResultsAndCreateReportWithResults`
         },
         makeRoot: {
-            command: `${exports.baseKey}.makeRoot`,
-            title: "Make Root Item",
+            command: `${exports.baseKey}.makeRoot`
         },
         getCycleStructure: {
-            command: `${exports.baseKey}.getCycleStructure`,
-            title: "Get Cycle Structure",
+            command: `${exports.baseKey}.getCycleStructure`
         },
         getServerVersions: {
-            command: `${exports.baseKey}.getServerVersions`,
-            title: "Get Server Versions",
+            command: `${exports.baseKey}.getServerVersions`
         },
         showExtensionSettings: {
-            command: `${exports.baseKey}.showExtensionSettings`,
-            title: "Show Extension Settings",
+            command: `${exports.baseKey}.showExtensionSettings`
         },
         fetchReportForSelectedTreeItem: {
-            command: `${exports.baseKey}.fetchReportForSelectedTreeItem`,
-            title: "Fetch Report",
+            command: `${exports.baseKey}.fetchReportForSelectedTreeItem`
         },
         selectAndLoadProject: {
-            command: `${exports.baseKey}.selectAndLoadProject`,
-            title: "Display Projects List",
+            command: `${exports.baseKey}.selectAndLoadProject`
         },
         uploadTestResultsToTestbench: {
-            command: `${exports.baseKey}.uploadTestResultsToTestbench`,
-            title: "Upload Test Results To Testbench",
+            command: `${exports.baseKey}.uploadTestResultsToTestbench`
         },
         readAndUploadTestResultsToTestbench: {
-            command: `${exports.baseKey}.readAndUploadTestResultsToTestbench`,
-            title: "Read Tests & Upload Results To Testbench",
+            command: `${exports.baseKey}.readAndUploadTestResultsToTestbench`
         },
         executeRobotFrameworkTests: {
-            command: `${exports.baseKey}.executeRobotFrameworkTests`,
-            title: "Execute Tests",
+            command: `${exports.baseKey}.executeRobotFrameworkTests`
         },
         refreshProjectTreeView: {
-            command: `${exports.baseKey}.refreshProjectTreeView`,
-            title: "Refresh Project Tree View",
+            command: `${exports.baseKey}.refreshProjectTreeView`
         },
         refreshTestTreeView: {
-            command: `${exports.baseKey}.refreshTestTreeView`,
-            title: "Refresh Test Tree View",
+            command: `${exports.baseKey}.refreshTestTreeView`
         },
         setWorkspaceLocation: {
-            command: `${exports.baseKey}.setWorkspaceLocation`,
-            title: "Set Workspace Location",
+            command: `${exports.baseKey}.setWorkspaceLocation`
         },
     };
     // Initialize or update extension configuration settings
@@ -154,7 +135,6 @@ async function activate(context) {
             defaultTestbench2robotframeworkConfig.generationDirectory = path_1.default.join(config.get("workspaceLocation"), exports.folderNameOfTestbenchWorkingDirectory, "Generated");
             defaultTestbench2robotframeworkConfig.resourceDirectory = path_1.default.join(config.get("workspaceLocation"), "resources");
             await config.update("testbench2robotframeworkConfig", defaultTestbench2robotframeworkConfig);
-            // console.log("Updated testbench2robotframeworkConfig with default values.");
             exports.logger.debug("Updated testbench2robotframeworkConfig with default values.");
         }
     }
@@ -164,8 +144,7 @@ async function activate(context) {
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
         if (e.affectsConfiguration(exports.baseKey)) {
             await loadConfiguration();
-            // console.log("Configuration changed and updated.");
-            exports.logger.debug("Configuration changed and updated.");
+            exports.logger.info("Configuration updated.");
         }
     }));
     // Prompts the user to select a folder and returns its path
@@ -208,13 +187,11 @@ async function activate(context) {
     // Login/Logout icon changes based on connection status
     vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", exports.connection !== null);
     exports.logger.debug(`Context value connectionActive set to: ${exports.connection !== null}`);
-    // FIXME: Login was stuck again, servers are crashed also.
     // The user may press the login button multiple times consecutively. Aviod executing the command again if already inside login.
     let insideLogin = false;
     // Register the "Login" command
     context.subscriptions.push(vscode.commands.registerCommand(commands.login.command, async () => {
         if (insideLogin) {
-            // console.log("Already inside login..");
             exports.logger.debug(`Login process is already running.`);
             // If somehow login is stuck, reset the insideLogin flag after 10 seconds to avoid blocking the login process.
             setTimeout(() => {
@@ -244,7 +221,7 @@ async function activate(context) {
             exports.logger.warn(`Logout command is called without a connection.`);
             return;
         }
-        await exports.connection.logoutUser(context, exports.projectManagementTreeDataProvider);
+        await exports.connection.logoutUser(exports.projectManagementTreeDataProvider);
     }));
     // Register the "Generate Tests" command, which is activated for a cycle element
     context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCasesForCycle.command, async (item) => {
@@ -269,7 +246,7 @@ async function activate(context) {
     }));
     // Register the "Fetch Report" command for a tree element
     context.subscriptions.push(vscode.commands.registerCommand(commands.fetchReportForSelectedTreeItem.command, async (treeItem) => {
-        await reportHandler.callFetchReportForTreeElement(treeItem, exports.projectManagementTreeDataProvider, exports.folderNameOfTestbenchWorkingDirectory);
+        await reportHandler.fetchReportForTreeElement(treeItem, exports.projectManagementTreeDataProvider, exports.folderNameOfTestbenchWorkingDirectory);
     }));
     // Register the "Generate Tests For Test Theme or Test Case Set" command, which is activated for a test theme element
     context.subscriptions.push(vscode.commands.registerCommand(commands.generateTestCasesForTestThemeOrTestCaseSet.command, async (treeItem) => {
@@ -368,7 +345,9 @@ async function activate(context) {
     // Uncomment this if you want to prompt the user to log in when the extension activates
     // vscode.commands.executeCommand(`${baseKey}.login`);
 }
-function deactivate() {
+async function deactivate() {
+    // Gracefully logout the user when the extension is deactivated
+    await exports.connection?.logoutUser(exports.projectManagementTreeDataProvider);
     exports.logger.info("Extension deactivated.");
 }
 //# sourceMappingURL=extension.js.map

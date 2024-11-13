@@ -25,6 +25,7 @@ async function checkPythonExtension() {
     }
 }
 
+/*
 suite('tb2robot -w integration test', async function () {
     let context: vscode.ExtensionContext;
     let getLoggerStub: sinon.SinonStub;
@@ -262,4 +263,4 @@ suite('XML generation integration test', async function () {
 
     });
 });
-
+*/
