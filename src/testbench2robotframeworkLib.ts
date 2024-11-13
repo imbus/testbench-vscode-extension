@@ -30,10 +30,10 @@ export class tb2robotLib {
             exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
                 if (error) {
                     reject(stderr || stdout || "An unknown Error occurred.");
-                    logger.error(error.message);
+                    logger.error("Error while executing command:", error);
                     return;
                 }
-                logger.debug(stdout || stderr);
+                logger.debug("Output of command execution:", stdout || stderr);
                 resolve();
             });
         });
@@ -132,12 +132,10 @@ export class tb2robotLib {
                     config = configJSONPath;
                 }
 
-                logger.debug(
-                    `tb2robot write completed using ${reportPath}, ${config} config file provided.`
-                );
+                logger.debug(`tb2robot write completed using ${reportPath}, ${config} config file provided.`);
             })
             .catch((err) => {
-                logger.error(err.message);
+                logger.error(`Error in testbench2robotframework write:`, err);
                 vscode.window.showErrorMessage(`Error in testbench2robotframework write: ${err}`);
                 res = false;
             });
@@ -180,7 +178,7 @@ export class tb2robotLib {
                 );
             })
             .catch((err) => {
-                logger.error(err);
+                logger.error(`Error in testbench2robotframework read:`, err);
                 vscode.window.showErrorMessage(`Error in testbench2robotframework read: ${err}`);
                 res = false;
             });

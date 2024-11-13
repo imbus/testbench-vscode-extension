@@ -181,8 +181,8 @@ export class TestBenchLogger {
     public warn(message: string, details?: any | any[], outputToTerminal?: boolean) {
         this.log("warn", message, details, outputToTerminal);
     }
-
-    public error(message: string, details?: any | any[], outputToTerminal?: boolean) {
+    // Log the error messages always to the terminal
+    public error(message: string, details?: any | any[], outputToTerminal: boolean = true) {
         this.log("error", message, details, outputToTerminal);
     }
 }

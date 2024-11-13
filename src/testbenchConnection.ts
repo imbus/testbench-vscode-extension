@@ -144,7 +144,7 @@ export class PlayServerConnection {
             }
             */
 
-            logger.debug("Fetched project list:", projectsResponse.data);
+            logger.trace("Fetched project list:", projectsResponse.data);
             return projectsResponse.data || [];
         } catch (error) {
             logger.error("Error fetching projects:", error);
@@ -187,7 +187,7 @@ export class PlayServerConnection {
             }
             */
 
-            logger.debug("Fetched project tree:", projectTreeResponse.data);
+            logger.trace("Fetched project tree:", projectTreeResponse.data);
             return projectTreeResponse.data || null;
         } catch (error) {
             logger.error("Error fetching project tree:", error);
@@ -221,7 +221,7 @@ export class PlayServerConnection {
             );
 
             if (response.status === 200) {
-                logger.debug("Cycle Structure received:", response.data);
+                logger.trace("Cycle Structure received:", response.data);
 
                 // User selects a file path for saving the JSON
                 /*
@@ -881,7 +881,7 @@ export async function importReportWithResultsToTestbench(
             return;
         }
 
-        // Upload the zip file containing the results to TestBench server        
+        // Upload the zip file containing the results to TestBench server
         const zipFilenameFromServer: string = await connection.uploadExecutionResults(
             Number(projectKey),
             resultZipFilePath
@@ -930,11 +930,10 @@ export async function importReportWithResultsToTestbench(
 
             // Check if the job is completed successfully
             if (!jobStatus || reportHandler.isImportJobFailed(jobStatus)) {
-                logger.warn("Import not completed or failed.");
+                logger.warn("Import job not completed or failed.");
                 vscode.window.showErrorMessage("Import not completed or failed.");
                 return undefined;
             } else {
-                logger.debug("Import completed successfully. Job Status:", jobStatus);
                 vscode.window.showInformationMessage("Import completed successfully.");
             }
         } catch (error: any) {

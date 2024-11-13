@@ -96,14 +96,14 @@ export async function fetchZipFile(
 ): Promise<string | undefined> {
     try {
         if (!connection) {
-            logger.error("Connection object is missing.", true);
+            logger.error("Connection object is missing.");
             return undefined;
         }
 
         logger.debug(
             `Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`
         );
-        logger.debug(`Fetching report with requestParams:`, requestParams);
+        logger.trace(`Fetching report with requestParams:`, requestParams);
 
         const jobId: string | null = await getJobId(projectKey, cycleKey, requestParams);
         if (!jobId) {
@@ -260,6 +260,7 @@ export async function pollJobStatus(
         await delay(delayMs);
     }
 
+    logger.trace("Job Status:", jobStatus);
     return jobStatus;
 }
 
@@ -294,7 +295,7 @@ export async function getJobId(
         },
     });
 
-    logger.debug("jobIdResponse received from server:", jobIdResponse);
+    logger.trace("jobIdResponse received from server:", jobIdResponse);
 
     if (jobIdResponse.status !== 200) {
         logger.error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
@@ -333,7 +334,7 @@ export async function getJobStatus(
         },
     });
 
-    logger.debug("jobStatusResponse:", jobStatusResponse.data);
+    logger.trace("jobStatusResponse:", jobStatusResponse.data);
 
     if (jobStatusResponse.status !== 200) {
         logger.error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
@@ -597,7 +598,7 @@ export async function generateTestCasesForTestThemeOrTestCaseSet(
     treeItem: projectManagementTreeView.TestbenchTreeItem,
     folderNameOfTestbenchWorkingDirectory: string
 ): Promise<void> {
-    logger.debug("Generating tests for:", treeItem);
+    logger.trace("Generating tests for non cycle element:", treeItem);
 
     let treeElementUniqueID: string | undefined = treeItem.item?.base?.uniqueID;
     let cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
@@ -805,14 +806,14 @@ async function runTestGenerationProcess(
         `testbench2robotframework write command executed with success variable: ${isTb2RobotExecutionSuccessful}`
     );
 
-    if (!isTb2RobotExecutionSuccessful){
+    if (!isTb2RobotExecutionSuccessful) {
         await cleanUpConfigAndReportFiles(
             getConfigurationFilePath(workingDirectoryPath),
             downloadedReportZipFilePath,
             baseKey
-        ); 
-        logger.error(`Test generation failed.`);
-        vscode.window.showErrorMessage(`Test generation failed.`); 
+        );
+        logger.error(`Test generation failed. Please make sure that your tests can be automated.`);
+        vscode.window.showErrorMessage(`Test generation failed. Please make sure that your tests can be automated.`);
         return;
     }
 
@@ -847,7 +848,7 @@ async function cleanUpConfigAndReportFiles(tb2robotConfigFilePath: string, repor
 
     if (vscode.workspace.getConfiguration(baseKey).get<boolean>("clearReportAfterProcessing")) {
         await removeReportZipFile(reportZipFilePath);
-    }    
+    }
     logger.debug("Cleanup done.");
 }
 
@@ -869,28 +870,43 @@ function handleError(error: any) {
  * @param zipFileFullPath The path of the zip file to be removed
  * @returns Promise<void>
  */
-export async function removeReportZipFile(zipFileFullPath: string): Promise<void> {
-    try {
-        // Check if the file exists
-        await fsPromise.access(zipFileFullPath);
+export async function removeReportZipFile(
+    zipFileFullPath: string,
+    maxRetries: number = 5,
+    delay: number = 500
+): Promise<void> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            // Check if the file exists
+            await fsPromise.access(zipFileFullPath);
 
-        const fileName: string = path.basename(zipFileFullPath);
-        const fileExtension: string = path.extname(zipFileFullPath);
+            const fileName: string = path.basename(zipFileFullPath);
+            const fileExtension: string = path.extname(zipFileFullPath);
 
-        // Validate that the file is a zip file
-        if (fileExtension !== ".zip") {
-            throw new Error(`Invalid file type: ${fileExtension}. Only zip files can be removed.`);
-        }
+            // Validate that the file is a zip file
+            if (fileExtension !== ".zip") {
+                throw new Error(`Invalid file type: ${fileExtension}. Only zip files can be removed.`);
+            }
 
-        // Remove the file
-        await fsPromise.unlink(zipFileFullPath);
-        logger.debug(`Zip file successfully removed: ${fileName} `);
-    } catch (error: any) {
-        if (error.code === "ENOENT") {
-            vscode.window.showWarningMessage(`File not found: ${zipFileFullPath}`);
-        } else {
-            vscode.window.showErrorMessage(`Error removing the file: ${(error as Error).message}`);
-            logger.error(`Error removing file at ${zipFileFullPath}:`, error);
+            // Remove the file
+            await fsPromise.unlink(zipFileFullPath);
+            logger.debug(`Zip file successfully removed: ${fileName} `);
+            return;
+        } catch (error: any) {
+            if (error.code === "ENOENT") {
+                logger.error(`File not found: ${zipFileFullPath}`);
+                vscode.window.showWarningMessage(`File not found: ${zipFileFullPath}`);
+                return;
+            } else if (error.code === "EBUSY" && attempt < maxRetries) {
+                logger.warn(
+                    `Attempt ${attempt} to delete file ${zipFileFullPath} failed due to "EBUSY". Retrying in ${delay}ms...`
+                );
+                await new Promise((resolve) => setTimeout(resolve, delay));
+            } else {
+                logger.error(`Error removing file at ${zipFileFullPath}:`, error);
+                vscode.window.showErrorMessage(`Error removing the file: ${(error as Error).message}`);
+                return;
+            }
         }
     }
 }
@@ -1082,24 +1098,29 @@ export async function readTestResultsAndCreateReportWithResults(
             fullPathOfReportWithResultsZip = path.join(workingDirectoryPath, reportFileWithResultsZipName);
 
             logger.debug("Calling startTb2robotRead.");
-            const isTb2RobotExecutionSuccessful: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
-                context,
-                workingDirectoryPath,
-                robotResultXMLFile,
-                reportWithResultsZipFilePath,
-                fullPathOfReportWithResultsZip,
-                tb2robotConfigFileFullPath
-            );
-            logger.debug("startTb2robotRead executed with success variable:", isTb2RobotExecutionSuccessful);
+            const isTb2RobotExecutionSuccessful: boolean =
+                await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
+                    context,
+                    workingDirectoryPath,
+                    robotResultXMLFile,
+                    reportWithResultsZipFilePath,
+                    fullPathOfReportWithResultsZip,
+                    tb2robotConfigFileFullPath
+                );
+            logger.debug(`startTb2robotRead executed with success variable: ${isTb2RobotExecutionSuccessful}`);
 
             if (!isTb2RobotExecutionSuccessful) {
                 await cleanUpConfigAndReportFiles(
                     getConfigurationFilePath(workingDirectoryPath),
                     reportWithResultsZipFilePath,
                     baseKey
-                ); 
-                logger.error(`Importing test results failed.`);
-                vscode.window.showErrorMessage(`Importing test results failed.`); 
+                );
+                logger.error(
+                    `Importing test results failed. Please make sure you are using the correct output.xml path in the extension settings.`
+                );
+                vscode.window.showErrorMessage(
+                    `Importing test results failed. Please make sure you are using the correct output.xml path in the extension settings.`
+                );
                 return;
             }
 
@@ -1245,7 +1266,7 @@ export async function startTestGenerationProcessForCycle(
             undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
         );
     } catch (error: any) {
-        logger.error(error.message);
+        logger.error("Error in startTestGenerationProcessForCycle:", error.message);
         vscode.window.showErrorMessage(error.message);
     }
 }
@@ -1283,7 +1304,7 @@ export async function saveTestbench2RobotConfigurationAsJson(
                 : "An unknown error occurred while writing the configuration file.";
 
         vscode.window.showErrorMessage(errorMessage);
-        logger.error(errorMessage);
+        logger.error("Error inside saveTestbench2RobotConfigurationAsJson:", errorMessage);
         return null;
     }
 }
@@ -1299,24 +1320,41 @@ function getConfigurationFilePath(folderPathToJsonConfig: string): string {
 }
 
 /**
- * Deletes a file from the system if it exists.
+ * Deletes a file from the system if it exists. Retries if the file is busy.
  * @param configFilePath The path to the configuration file to be deleted
  * @returns Promise<void>
  */
-export async function deleteTb2RobotConfigurationFile(configFilePath: string): Promise<void> {
-    try {
-        // Check if the file exists before attempting to delete
-        await fsPromise.access(configFilePath);
+export async function deleteTb2RobotConfigurationFile(
+    configFilePath: string,
+    maxRetries: number = 5,
+    delay: number = 500
+): Promise<void> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            // Check if the file exists before attempting to delete
+            await fsPromise.access(configFilePath);
 
-        // Delete the file
-        await fsPromise.unlink(configFilePath);
-        logger.debug(`Configuration file deleted from: ${configFilePath}`);
-    } catch (error: any) {
-        if (error.code === "ENOENT") {
-            vscode.window.showErrorMessage(`Configuration file not found: ${configFilePath}`);
-        } else {
-            vscode.window.showErrorMessage(`Failed to delete configuration file: ${error.message}`);
-            logger.error(`Error deleting file at ${configFilePath}:`, error);
+            // Delete the file
+            await fsPromise.unlink(configFilePath);
+            logger.debug(`Configuration file deleted from: ${configFilePath}`);
+            return;
+        } catch (error: any) {
+            if (error.code === "ENOENT") {
+                vscode.window.showErrorMessage(`Configuration file not found: ${configFilePath}`);
+                return;
+            } else if (error.code === "EBUSY" && attempt < maxRetries) {
+                logger.warn(`Attempt ${attempt} to delete file failed due to "EBUSY". Retrying in ${delay}ms...`);
+                vscode.window.showErrorMessage(
+                    `Failed to delete configuration file due to "EBUSY". Retrying in ${delay}ms...`
+                );
+                await new Promise((resolve) => setTimeout(resolve, delay));
+            } else {
+                vscode.window.showErrorMessage(
+                    `Failed to delete configuration file after ${attempt} attempts: ${error.message}`
+                );
+                logger.error(`Error deleting file at ${configFilePath}:`, error);
+                return;
+            }
         }
     }
 }

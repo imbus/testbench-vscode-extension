@@ -52,19 +52,19 @@ export class pyCommandBuilder {
         const tb2robMain: string = extensionContext.asAbsolutePath(
             path.join("bundled", "tools", "tb2robot", "__main__.py")
         );
-        logger.debug(tb2robMain);
+        //logger.debug("rb2robot main path:", tb2robMain);
 
         const folder: vscode.WorkspaceFolder | undefined = this.getActiveWorkspaceFolder();
 
         let pythonExe: string | undefined = await this.getPythonEnviromentExe(folder);
-        logger.debug(pythonExe || "");
+        // logger.debug(`python.exe Path: ${pythonExe}`);
 
         if (pythonExe === undefined) {
             return res;
         }
 
         res = pythonExe + " -u " + tb2robMain;
-        logger.debug(res);
+        // logger.debug(res);
 
         return res;
     }
@@ -75,14 +75,14 @@ export class pyCommandBuilder {
         const folder: vscode.WorkspaceFolder | undefined = this.getActiveWorkspaceFolder();
 
         let pythonExe: string | undefined = await this.getPythonEnviromentExe(folder);
-        logger.debug(pythonExe || "");
+        // logger.debug(`python.exe Path: ${pythonExe}`);
 
         if (pythonExe === undefined) {
             return res;
         }
 
         res = pythonExe + " -m robot";
-        logger.debug(res);
+        // logger.debug(res);
 
         return res;
     }

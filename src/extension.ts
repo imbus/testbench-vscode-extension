@@ -35,61 +35,61 @@ export async function activate(context: vscode.ExtensionContext) {
     // Store extension commands
     const commands: { [key: string]: { command: string } } = {
         displayCommands: {
-            command: `${baseKey}.displayCommands`
+            command: `${baseKey}.displayCommands`,
         },
         login: {
-            command: `${baseKey}.login`
+            command: `${baseKey}.login`,
         },
         changeConnection: {
             command: `${baseKey}.changeConnection`,
         },
         logout: {
-            command: `${baseKey}.logout`
+            command: `${baseKey}.logout`,
         },
         generateTestCasesForCycle: {
-            command: `${baseKey}.generateTestCasesForCycle`
+            command: `${baseKey}.generateTestCasesForCycle`,
         },
         generateTestCasesForTestThemeOrTestCaseSet: {
-            command: `${baseKey}.generateTestCasesForTestThemeOrTestCaseSet`
+            command: `${baseKey}.generateTestCasesForTestThemeOrTestCaseSet`,
         },
         readRFTestResultsAndCreateReportWithResults: {
-            command: `${baseKey}.readRFTestResultsAndCreateReportWithResults`
+            command: `${baseKey}.readRFTestResultsAndCreateReportWithResults`,
         },
         makeRoot: {
-            command: `${baseKey}.makeRoot`
+            command: `${baseKey}.makeRoot`,
         },
         getCycleStructure: {
-            command: `${baseKey}.getCycleStructure`
+            command: `${baseKey}.getCycleStructure`,
         },
         getServerVersions: {
-            command: `${baseKey}.getServerVersions`
+            command: `${baseKey}.getServerVersions`,
         },
         showExtensionSettings: {
-            command: `${baseKey}.showExtensionSettings`
+            command: `${baseKey}.showExtensionSettings`,
         },
         fetchReportForSelectedTreeItem: {
-            command: `${baseKey}.fetchReportForSelectedTreeItem`
+            command: `${baseKey}.fetchReportForSelectedTreeItem`,
         },
         selectAndLoadProject: {
-            command: `${baseKey}.selectAndLoadProject`
+            command: `${baseKey}.selectAndLoadProject`,
         },
         uploadTestResultsToTestbench: {
-            command: `${baseKey}.uploadTestResultsToTestbench`
+            command: `${baseKey}.uploadTestResultsToTestbench`,
         },
         readAndUploadTestResultsToTestbench: {
-            command: `${baseKey}.readAndUploadTestResultsToTestbench`
+            command: `${baseKey}.readAndUploadTestResultsToTestbench`,
         },
         executeRobotFrameworkTests: {
-            command: `${baseKey}.executeRobotFrameworkTests`
+            command: `${baseKey}.executeRobotFrameworkTests`,
         },
         refreshProjectTreeView: {
-            command: `${baseKey}.refreshProjectTreeView`
+            command: `${baseKey}.refreshProjectTreeView`,
         },
         refreshTestTreeView: {
-            command: `${baseKey}.refreshTestTreeView`
+            command: `${baseKey}.refreshTestTreeView`,
         },
         setWorkspaceLocation: {
-            command: `${baseKey}.setWorkspaceLocation`
+            command: `${baseKey}.setWorkspaceLocation`,
         },
     };
 
@@ -207,7 +207,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 .performLogin(context, baseKey)
                 .catch((error: any) => {
                     // console.error("Login process failed:", error);
-                    logger.error(`Login process failed: ${error}`, true);
+                    logger.error(`Login process failed: ${error}`);
                 })
                 .finally(() => {
                     // Reset insideLogin after the login attempt is fully completed
