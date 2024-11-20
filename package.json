@@ -245,6 +245,7 @@
                 "testbenchExtension.testBenchLogger": {
                     "type": "number",
                     "description": "Set the minimum log level. Log file is stored within the workspace location.",
+                    "default": 0,
                     "order": 10,
                     "enum": [
                         0,

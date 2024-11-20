@@ -19,7 +19,11 @@ import {
 // TODO: Remove this in production, and use a valid certificate
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-// Function to save JSON data to a file (For analysing the responses of the server)
+/**
+ * Function to save JSON data to a file (For analysing the responses of the server)
+ * @param filePath The file path to save the JSON data
+ * @param data The JSON data to save
+ */
 function saveJsonToFile(filePath: string, data: any): void {
     try {
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
@@ -29,7 +33,7 @@ function saveJsonToFile(filePath: string, data: any): void {
     }
 }
 
-// TestBench server connection
+// Class to handle the connection to the TestBench server.
 export class PlayServerConnection {
     private context: vscode.ExtensionContext;
     private serverName: string;
@@ -90,6 +94,11 @@ export class PlayServerConnection {
         this.keepAliveIntervalId = null;
     }
 
+    /**
+     * Select a project key from the quick pick list of projects fetched from the server.
+     * @param projectsData The list of projects fetched from the server.
+     * @returns {Promise<string | null>} The selected project key as a string or null if no project is selected.
+     */
     async selectProjectKeyFromProjectList(projectsData: testBenchTypes.Project[]): Promise<string | null> {
         const projectNames: string[] = projectsData.map((project: testBenchTypes.Project) => project.name);
         const selectedProjectName: string | undefined = await vscode.window.showQuickPick(projectNames, {
@@ -112,6 +121,10 @@ export class PlayServerConnection {
         return selectedProject.key;
     }
 
+    /**
+     * Fetches the list of projects from the TestBench server.
+     * @returns {Promise<testBenchTypes.Project[] | null>} The list of projects fetched from the server or null if an error occurs.
+     */
     async getProjectsList(): Promise<testBenchTypes.Project[] | null> {
         if (!this.sessionToken) {
             logger.warn("Session token is null. Cannot fetch projects list.");
@@ -152,6 +165,11 @@ export class PlayServerConnection {
         }
     }
 
+    /**
+     * Fetches the project tree of a specific project from the TestBench server.
+     * @param projectKey The project key as a string.
+     * @returns {Promise<testBenchTypes.TreeNode | null>} The project tree fetched from the server or null if an error occurs.
+     */
     async getProjectTreeOfProject(projectKey: string | null): Promise<testBenchTypes.TreeNode | null> {
         if (!this.sessionToken) {
             logger.warn("Session token is null. Cannot fetch project tree:", projectKey);
@@ -195,6 +213,12 @@ export class PlayServerConnection {
         }
     }
 
+    /**
+     * Fetches the cycle structure of a specific project and cycle from the TestBench server.
+     * @param projectKey The project key as a string.
+     * @param cycleKey The cycle key as a string.
+     * @returns {Promise<testBenchTypes.CycleStructure | undefined>} The cycle structure fetched from the server or undefined if an error occurs.
+     */
     async fetchCycleStructure(
         projectKey: string,
         cycleKey: string
@@ -249,6 +273,10 @@ export class PlayServerConnection {
         }
     }
 
+    /**
+     * Logs out the user from the TestBench server, clears the session data and stops the keep-alive process, clears the tree data provider.
+     * @param treeDataProvider The tree data provider to clear the tree after logout.
+     */
     async logoutUser(treeDataProvider: ProjectManagementTreeDataProvider): Promise<void> {
         try {
             const response: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
@@ -293,8 +321,8 @@ export class PlayServerConnection {
      * Uploads a zip archive containing JSON-based execution results to the TestBench server.
      * @param projectKey The project key as an integer.
      * @param zipFilePath The file path to the zip archive that contains the execution results as JSON files.
+     * @returns {Promise<string>} A promise that resolves when the upload is successful.
      * @throws Error if the upload fails.
-     * @returns A promise that resolves when the upload is successful.
      */
     public async uploadExecutionResults(projectKey: number, zipFilePath: string): Promise<string> {
         const uploadEndpointURL: string = `/projects/${projectKey}/executionResults/v1`;
@@ -352,7 +380,7 @@ export class PlayServerConnection {
      * @param projectKey The project key as an integer.
      * @param cycleKey The cycle key as an integer.
      * @param importData The data for the import as per API specification.
-     * @returns The job ID as a string.
+     * @returns {Promise<string>} The job ID as a string.
      * @throws Error if an error occurs during the import.
      */
     public async importExecutionResults(
@@ -412,6 +440,12 @@ export class PlayServerConnection {
         }
     }
 
+    /**
+     * Starts the keep-alive process to prevent the session from timing out.
+     * The keep-alive process sends a GET request to the server every 4 minutes.
+     * If the session token is null, the keep-alive process is not started.
+     * If the keep-alive process is already running, it is stopped before starting a new one.
+     */
     private startKeepAlive(): void {
         this.stopKeepAlive(); // Ensure no multiple intervals
         this.keepAliveIntervalId = setInterval(() => {
@@ -422,6 +456,9 @@ export class PlayServerConnection {
         this.sendKeepAliveRequest();
     }
 
+    /**
+     * Stops the keep-alive process.
+     */
     private stopKeepAlive(): void {
         if (this.keepAliveIntervalId) {
             clearInterval(this.keepAliveIntervalId);
@@ -450,7 +487,15 @@ export class PlayServerConnection {
     }
 }
 
-// A generalized method to prompt for any user input with live validation
+/**
+ * A generalized method to prompt for any user input with live validation. The function loops until the user provides a valid input or cancels the prompt.
+ * @param prompt The prompt message to display to the user.
+ * @param canBeEmpty Whether the input can be empty or not.
+ * @param password Whether the input should be hidden as a password or not.
+ * @param validate A function to validate the input. If the input is invalid, the function should return an error message.
+ * If the input is valid, the function should return null.
+ * @returns {Promise<string | undefined>} A promise that resolves with the user input as a string or undefined if the user cancels the prompt.
+ */
 async function promptForInput(
     prompt: string,
     canBeEmpty: boolean = false,
@@ -486,7 +531,13 @@ async function promptForInput(
     }
 }
 
-// Entry point for the login process
+/**
+ * Function to perform the login process to the TestBench server.
+ * @param context The extension context
+ * @param baseKey The base key for the configuration settings
+ * @param promptForNewCredentials Whether to prompt the user for new credentials or not. Default is false.
+ * @returns {Promise<PlayServerConnection | null>} A promise that resolves with the connection object if the login is successful, otherwise null.
+ */
 export async function performLogin(
     context: vscode.ExtensionContext,
     baseKey: string,
@@ -587,7 +638,12 @@ export async function performLogin(
     }
 }
 
-// Function to prompt user for login credentials
+/**
+ * Function to prompt user for login credentials
+ * @param baseKey The base key for the configuration settings
+ * @returns {Promise<{ serverName: string; portNumber: number; username: string; password: string } | null>}
+ * A promise that resolves with the login credentials if the user provides them, otherwise null.
+ */
 async function promptForLoginCredentials(baseKey: string): Promise<{
     serverName: string;
     portNumber: number;
@@ -662,7 +718,16 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
     return { serverName, portNumber, username, password };
 }
 
-// Login to the new play server and return the session token.
+/**
+ * Login to the new play server and return the session token.
+ * @param context The extension context
+ * @param serverName The server name
+ * @param portNumber The port number
+ * @param username The username
+ * @param password The password
+ * @param baseKey The base key for the configuration settings
+ * @returns {Promise<PlayServerConnection | null>} A promise that resolves with the connection object if the login is successful, otherwise null.
+ */
 async function loginToNewPlayServerAndInitSessionToken(
     context: vscode.ExtensionContext,
     serverName: string,
@@ -725,8 +790,11 @@ async function loginToNewPlayServerAndInitSessionToken(
     }
 }
 
-// Function to clear stored credentials
-export async function clearStoredCredentials(context: vscode.ExtensionContext) {
+/**
+ * Function to clear stored user credentials
+ * @param context The extension context
+ */
+export async function clearStoredCredentials(context: vscode.ExtensionContext): Promise<void> {
     try {
         await context.secrets.delete("password");
         logger.debug("Credentials deleted from secrets storage.");
@@ -735,8 +803,12 @@ export async function clearStoredCredentials(context: vscode.ExtensionContext) {
     }
 }
 
-// Retrieves the current versions of the TestBench web server.
-// Used to verify the availability of server after receiving the server URL and port number in the login process.
+/**
+ * Retrieves the current versions of the TestBench web server. Used to verify the availability of server after receiving the server URL and port number in the login process.
+ * @param serverName The server name
+ * @param portNumber The port number
+ * @returns {Promise<testBenchTypes.ServerVersionsResponse | null>} A promise that resolves with the server versions if successful, otherwise null.
+ */
 async function fetchServerVersions(
     serverName: string,
     portNumber: number
@@ -779,6 +851,10 @@ async function fetchServerVersions(
     }
 }
 
+/**
+ * Opens a file select dialog for the user to select a zip file with the test results.
+ * @returns {Promise<string | undefined>} A promise that resolves with the zip file path if the user selects a file, otherwise undefined.
+ */
 async function promptForReportZipFileWithResults(): Promise<string | undefined> {
     try {
         const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
@@ -819,7 +895,12 @@ async function promptForReportZipFileWithResults(): Promise<string | undefined> 
     }
 }
 
-// Helper function to find the cycle key from the cycle name
+/**
+ * Finds the cycle key from the cycle name
+ * @param elements The elements to search in
+ * @param cycleName The cycle name to search for
+ * @returns {string | null} The cycle key as a string or null if not found
+ */
 function findCycleKeyFromCycleName(elements: any[], cycleName: string): string | null {
     for (const element of elements) {
         if (
@@ -840,11 +921,19 @@ function findCycleKeyFromCycleName(elements: any[], cycleName: string): string |
 }
 
 // TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
+/**
+ * Imports the report with results to TestBench server.
+ * @param connection The connection to the TestBench server.
+ * @param projectManagementTreeDataProvider The project management tree data provider.
+ * @param resultZipFilePath The file path of the zip file containing the results.
+ * @returns {Promise<void>} A promise that resolves when the import is completed.
+ */
 export async function importReportWithResultsToTestbench(
     connection: PlayServerConnection,
     projectManagementTreeDataProvider: ProjectManagementTreeDataProvider,
     resultZipFilePath: string
-) {
+): Promise<void>
+{
     try {
         logger.debug("Importing report with results to TestBench server.");
 
@@ -938,18 +1027,24 @@ export async function importReportWithResultsToTestbench(
             }
         } catch (error: any) {
             logger.error("Error:", error.message);
+            return undefined;
         }
     } catch (error: any) {
         logger.error("Error:", error.message);
         vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
+        return undefined;
     }
 }
 
-// Import the report zip file which contains the test results to TestBench server
+/**
+ * Import the report zip file which contains the test results to TestBench server
+ * @param connection The connection to the TestBench server.
+ * @param projectManagementTreeDataProvider The project management tree data provider.
+ */
 export async function selectReportWithResultsAndImportToTestbench(
     connection: PlayServerConnection,
     projectManagementTreeDataProvider: ProjectManagementTreeDataProvider
-) {
+): Promise<void> {
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -1001,6 +1096,11 @@ interface ExtractedData {
     cycleNameOfProject: string | null;
 }
 
+/**
+ * Extracts the unique ID, project key and cycle name from the report zip file.
+ * @param zipFilePath The file path of the zip file containing the results.
+ * @returns {Promise<ExtractedData>} A promise that resolves with the extracted data.
+ */
 async function extractDataFromReportile(zipFilePath: string): Promise<ExtractedData> {
     try {
         // Read zip file from disk
@@ -1038,7 +1138,12 @@ async function extractDataFromReportile(zipFilePath: string): Promise<ExtractedD
     }
 }
 
-// Helper function to extract and parse JSON file content
+/**
+ * Extract and parse JSON file content from a zip file
+ * @param zipContents The zip file contents
+ * @param fileName The name of the file to extract and parse
+ * @returns {Promise<any>} A promise that resolves with the parsed JSON content or null if an error occurs.
+ */
 async function extractAndParseJsonContent(zipContents: JSZip, fileName: string): Promise<any> {
     try {
         const fileData: string | undefined = await zipContents.file(fileName)?.async("string");

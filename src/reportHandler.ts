@@ -47,7 +47,11 @@ export async function isExecutionBasedReportSelected(): Promise<boolean | null> 
     });
 }
 
-// Checks if the report job has completed successfully.
+/**
+ * Checks if the report job has completed successfully.
+ * @param {testBenchTypes.JobStatusResponse} jobStatus The job status response object
+ * @returns {boolean} True if the report job has completed successfully, otherwise false
+ */
 export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     logger.debug(
         `isReportJobCompletedSuccessfully resulted in ${!!jobStatus?.completion?.result?.ReportingSuccess?.reportName}`
@@ -55,7 +59,11 @@ export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
     return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
 }
 
-// Checks if the import job has completed successfully.
+/**
+ * Checks if the import job has completed successfully.
+ * @param {testBenchTypes.JobStatusResponse} jobStatus The job status response object
+ * @returns {boolean} True if the import job has completed successfully, otherwise false
+ */
 export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     logger.debug(
         `isImportJobCompletedSuccessfully resulted in ${!!jobStatus?.completion?.result?.ExecutionImportingSuccess}`
@@ -63,17 +71,21 @@ export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
     return !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
 }
 
-// Checks if the import job has failed.
+/**
+ * Checks if the import job has failed.
+ * @param {testBenchTypes.JobStatusResponse} jobStatus The job status response object
+ * @returns {boolean} True if the import job has failed, otherwise false
+ */
 export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     logger.debug(`isImportJobFailed resulted in ${!!jobStatus?.completion?.result?.ExecutionImportingFailure}`);
     return !!jobStatus?.completion?.result?.ExecutionImportingFailure;
 }
 
 /**
- * Fetch the TestBench JSON report (ZIP Archive) from the server.
+ * Fetch the TestBench JSON report (ZIP Archive) for the selected item from the server.
  * 3 Calls are needed to download the zip report:
  * 1. Get the job ID
- * 2. Get the job status (polling until the job is completed)
+ * 2. Get the job status of that job ID (Polling until the job is completed)
  * 3. Download the report zip file.
  *
  * @param baseKey The base key of the extension
@@ -83,7 +95,7 @@ export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): 
  * @param folderNameToDownloadReport The folder name to save the downloaded report
  * @param requestParams Optional request parameters (exec/spec based, root UID) for the job ID request
  * @param cancellationToken Cancellation token to be able to cancel the polling by clicking cancel button
- * @returns The path of the downloaded zip file if the download was successful, otherwise undefined
+ * @returns {Promise<string | undefined>} The path of the downloaded zip file if the download was successful, otherwise undefined
  */
 export async function fetchZipFile(
     baseKey: string,
@@ -157,7 +169,7 @@ export async function fetchZipFile(
 }
 
 /**
- * Poll the job status (Either report of import job) until the job is completed.
+ * Poll the job status (Either report of import job) until the job is completed successfully or failed.
  * @param connection Connection object to the server
  * @param projectKey Project key
  * @param jobId Job ID received from the server
@@ -165,7 +177,7 @@ export async function fetchZipFile(
  * @param progress Progress bar to show the poll attempts to the user
  * @param cancellationToken Cancellation token to be able to cancel the polling by clicking cancel button
  * @param maxPollingTimeMs Maximum time to poll the job status, after which the polling will be stopped
- * @returns Job status response object if the job is completed, otherwise null
+ * @returns {Promise<testBenchTypes.JobStatusResponse | null>} Job status response object if the job is completed, otherwise null
  */
 export async function pollJobStatus(
     projectKey: string,
@@ -269,7 +281,7 @@ export async function pollJobStatus(
  * @param projectKey The project key
  * @param cycleKey The cycle key
  * @param requestParams Optional request parameters (exec/spec based, root UID) for the job ID request
- * @returns The job ID received from the server
+ * @returns {Promise<string | null>} The job ID received from the server
  */
 export async function getJobId(
     projectKey: string,
@@ -311,7 +323,7 @@ export async function getJobId(
  * @param projectKey The project key
  * @param jobId The job ID received from the server
  * @param jobType The type of job (report or import)
- * @returns The job status response object
+ * @returns {Promise<testBenchTypes.JobStatusResponse | null>} The job status response object
  */
 export async function getJobStatus(
     projectKey: string,
@@ -350,7 +362,7 @@ export async function getJobStatus(
  * @param projectKey The project key
  * @param fileName The name of the report file to download
  * @param folderNameToDownloadReport The folder name to save the downloaded report
- * @returns The path of the downloaded zip file if successful, otherwise undefined
+ * @returns {Promise<string | undefined>} The path of the downloaded zip file if successful, otherwise undefined
  */
 export async function downloadReport(
     baseKey: string,
@@ -411,7 +423,7 @@ export async function downloadReport(
  * @param folderName The folder name for saving the report
  * @param fileName The name of the file to save
  * @param downloadResponse The Axios response containing the file data
- * @returns The path of the saved file
+ * @returns {Promise<string | undefined>} The path of the saved file
  */
 async function saveReportToFile(
     workspaceLocation: string,
@@ -438,7 +450,7 @@ async function saveReportToFile(
  * Prompts the user to choose a save location and writes the file there.
  * @param fileName The name of the file to save
  * @param downloadResponse The Axios response containing the file data
- * @returns The path of the saved file if successful, otherwise undefined
+ * @returns {Promise<string | undefined>} The path of the saved file if successful, otherwise undefined
  */
 async function promptUserForSaveLocationAndSaveReportToFile(
     fileName: string,
@@ -554,7 +566,7 @@ export async function fetchReportForTreeElement(
                 }
 
                 // Set up the request parameters
-                // TODO: For now use executionBased, remove selection dialog
+                // TODO: For QS Day, executionBased is used by default without asking the user.
                 const cycleStructureOptionsRequestParameter: testBenchTypes.OptionalJobIDRequestParameter = {
                     basedOnExecution: executionBased,
                     treeRootUID: treeElementUniqueID,
@@ -591,7 +603,6 @@ export async function fetchReportForTreeElement(
  * @param context VS Code extension context
  * @param treeItem The selected tree item
  * @param folderNameOfTestbenchWorkingDirectory The folder name of the testbench working directory
- * @returns
  */
 export async function generateTestCasesForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
@@ -691,7 +702,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
 /**
  * Show a QuickPick for selecting a TestThemeNode.
  * @param treeItem - The tree item to search for TestThemeNodes
- * @returns The unique ID of the selected TestThemeNode or 'Generate all'
+ * @returns {Promise<string | undefined>} The unique ID of the selected TestThemeNode or 'Generate all'
  */
 async function displayAndSelectTestThemeNode(treeItem: any): Promise<string | undefined> {
     const testThemeNodes: { name: string; uniqueID: string; numbering?: string }[] = findTestThemeNodes(treeItem);
@@ -762,7 +773,7 @@ async function runTestGenerationProcess(
     cycleStructureOptions: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
-) {
+): Promise<void> {
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
 
     const downloadedReportZipFilePath: string | undefined = await fetchZipFile(
@@ -830,7 +841,12 @@ async function runTestGenerationProcess(
 /**
  * Update the parameters for the last generated report.
  */
-function updateLastGeneratedReportParams(UID: string, projectKey: string, cycleKey: string, executionBased: boolean) {
+function updateLastGeneratedReportParams(
+    UID: string,
+    projectKey: string,
+    cycleKey: string,
+    executionBased: boolean
+): void {
     lastGeneratedReportParams.UID = UID;
     lastGeneratedReportParams.projectKey = projectKey;
     lastGeneratedReportParams.cycleKey = cycleKey;
@@ -843,7 +859,11 @@ function updateLastGeneratedReportParams(UID: string, projectKey: string, cycleK
  * @param reportZipFilePath The path of the report ZIP file
  * @param baseKey The base key of the extension
  */
-async function cleanUpConfigAndReportFiles(tb2robotConfigFilePath: string, reportZipFilePath: string, baseKey: string) {
+async function cleanUpConfigAndReportFiles(
+    tb2robotConfigFilePath: string,
+    reportZipFilePath: string,
+    baseKey: string
+): Promise<void> {
     await deleteTb2RobotConfigurationFile(tb2robotConfigFilePath);
 
     if (vscode.workspace.getConfiguration(baseKey).get<boolean>("clearReportAfterProcessing")) {
@@ -855,7 +875,7 @@ async function cleanUpConfigAndReportFiles(tb2robotConfigFilePath: string, repor
 /**
  * Handle errors gracefully.
  */
-function handleError(error: any) {
+function handleError(error: any): void {
     if (error instanceof vscode.CancellationError) {
         logger.debug("Process cancelled by the user.");
         vscode.window.showInformationMessage("Process cancelled by the user.");
@@ -948,7 +968,7 @@ export async function findFileRecursively(dir: string, fileName: string): Promis
  * Note: If multiple output XML files are present, the first one found will be returned.
  * If the wrong file is selected automatically, the upload process will fail. To avoid this, set the output XML path in the settings correctly
  * @param workingDirectoryFullPath The full path of the working directory.
- * @returns The full path of the selected output XML file, or undefined if no file is selected.
+ * @returns {Promise<string | undefined>} The full path of the selected output XML file, or undefined if no file is selected.
  */
 async function chooseRobotXMLFile(workingDirectoryFullPath: string): Promise<string | undefined> {
     // Open file selection dialog, filtered for XML files
@@ -983,6 +1003,11 @@ async function chooseRobotXMLFile(workingDirectoryFullPath: string): Promise<str
     return undefined;
 }
 
+/**
+ * Opens a file selection dialog for the user to choose the report zip file.
+ * @param workingDirectoryFullPath The full path of the working directory.
+ * @returns {Promise<string | undefined>} The full path of the selected report zip file, or undefined if no file is selected.
+ */
 async function chooseReportWithouResultsZipFile(workingDirectoryFullPath: string): Promise<string | undefined> {
     // Open file selection dialog, filtered for XML files
     const selectedFiles: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
@@ -1006,7 +1031,7 @@ async function chooseReportWithouResultsZipFile(workingDirectoryFullPath: string
  * @param context - The extension context.
  * @param workingDirectory - The working directory path.
  * @param currentProgress - Optional existing progress instance to report updates.
- * @returns The full path of the created report with results zip, or null if an error occurs.
+ * @returns {Promise<string | null>} The full path of the created report with results zip, or null if an error occurs.
  */
 export async function readTestResultsAndCreateReportWithResults(
     context: vscode.ExtensionContext,
@@ -1127,7 +1152,9 @@ export async function readTestResultsAndCreateReportWithResults(
             await cleanUpConfigAndReportFiles(tb2robotConfigFileFullPath, reportWithResultsZipFilePath, baseKey);
 
             logger.debug(`tb2robot read executed successfully.`);
-            vscode.window.showInformationMessage(`Test results read and report created.`);
+
+            // When reading results and importing are automated together, this info message is not needed.
+            // vscode.window.showInformationMessage(`Test results read and report created.`);
         };
 
         // Use provided progress or create a new one
@@ -1152,6 +1179,12 @@ export async function readTestResultsAndCreateReportWithResults(
     }
 }
 
+/**
+ * Executes the testbench2robotframework read command to create a report zip with results and imports it to TestBench server.
+ * @param connection - The TestBench connection
+ * @param projectManagementTreeDataProvider - The project management tree data provider
+ * @param reportWithResultsZipFilePath - The full path of the report with results zip file
+ */
 export async function readTestsAndCreateResultsAndImportToTestbench(
     context: vscode.ExtensionContext,
     folderNameOfTestbenchWorkingDirectory: string,
@@ -1222,7 +1255,6 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
  * @param treeItem The selected tree item
  * @param baseKey The base key of the extension
  * @param workingDirectory The path to save the downloaded report
- * @returns Promise<void>
  */
 export async function startTestGenerationProcessForCycle(
     context: vscode.ExtensionContext,
@@ -1274,6 +1306,8 @@ export async function startTestGenerationProcessForCycle(
 /**
  * Writes the testbench2robotframework configuration to a JSON file in workspace folder.
  * @param baseKey The base key of the extension
+ * @param folderPathToStoreTb2robotConfig The folder path to store the configuration file
+ * @returns {Promise<string | null>} The full path of the configuration file, or null if an error occurs
  */
 export async function saveTestbench2RobotConfigurationAsJson(
     baseKey: string,
@@ -1310,8 +1344,9 @@ export async function saveTestbench2RobotConfigurationAsJson(
 }
 
 /**
- * Determines the file path where the testbench2robotframework configuration file will be saved.
- * @returns The file path of the configuration file.
+ * Get the full path of the testbench2robotframework configuration file.
+ * @param folderPathToJsonConfig The folder path to store the configuration file
+ * @returns {string} The full path of the configuration file
  */
 function getConfigurationFilePath(folderPathToJsonConfig: string): string {
     const fileName: string = "testbench2robotframeworkConfig.json";
@@ -1320,9 +1355,10 @@ function getConfigurationFilePath(folderPathToJsonConfig: string): string {
 }
 
 /**
- * Deletes a file from the system if it exists. Retries if the file is busy.
- * @param configFilePath The path to the configuration file to be deleted
- * @returns Promise<void>
+ * Deletes the testbench2robotframework configuration file.
+ * @param configFilePath The full path of the configuration file
+ * @param maxRetries The maximum number of retries to delete the file
+ * @param delay The delay in milliseconds between retries
  */
 export async function deleteTb2RobotConfigurationFile(
     configFilePath: string,
