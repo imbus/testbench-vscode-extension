@@ -1,0 +1,168 @@
+{
+  "key": "4611686020000000163",
+  "numbering": "1.2.4.2",
+  "uniqueID": "iTB-TC-320",
+  "name": "Zubeh\u00f6rpreis",
+  "spec": {
+    "key": "640",
+    "description": "<html><body/></html>",
+    "reviewComment": "<html><body/></html>",
+    "status": "Planned",
+    "priority": "Low",
+    "responsible": null,
+    "dueDate": "2021-04-27T00:00:00Z",
+    "reviewer": null,
+    "udfs": [
+      {
+        "key": "1010",
+        "name": "Automatisiert",
+        "value": "true",
+        "udfType": "Boolean"
+      },
+      {
+        "key": "1011",
+        "name": "Entwickler Review durchgef\u00fchrt",
+        "value": "false",
+        "udfType": "Boolean"
+      },
+      {
+        "key": "1020",
+        "name": "Testbar ab Build Nr.",
+        "value": "",
+        "udfType": "String"
+      },
+      {
+        "key": "1021",
+        "name": "Betriebssystem",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1025",
+        "name": "TestTyp",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1028",
+        "name": "TestArt",
+        "value": "",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": [
+      {
+        "key": "1039",
+        "name": "Demo",
+        "isVariantsMarker": false
+      },
+      {
+        "key": "1042",
+        "name": "Systemtest",
+        "isVariantsMarker": false
+      }
+    ],
+    "references": [],
+    "requirements": [
+      {
+        "key": "2556",
+        "edited": false
+      }
+    ],
+    "preConditions": [],
+    "postConditions": []
+  },
+  "testCases": [
+    {
+      "uniqueID": "iTB-TC-320-PC-1622",
+      "index": 1,
+      "spec": {
+        "key": "3087",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3378",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:47.590\nEnd Time:     2024-10-25 11:22:47.622\nElapsed Time: 0:00:00.032000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "iTB-TC-320-PC-1623",
+      "index": 2,
+      "spec": {
+        "key": "3088",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3379",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:47.658\nEnd Time:     2024-10-25 11:22:47.688\nElapsed Time: 0:00:00.030000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "iTB-TC-320-PC-1624",
+      "index": 3,
+      "spec": {
+        "key": "3089",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3380",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:47.718\nEnd Time:     2024-10-25 11:22:47.767\nElapsed Time: 0:00:00.049000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    },
+    {
+      "uniqueID": "iTB-TC-320-PC-389172",
+      "index": 4,
+      "spec": {
+        "key": "3090",
+        "comments": "<html><body/></html>",
+        "requirements": []
+      },
+      "exec": {
+        "key": "3381",
+        "status": "Performed",
+        "execStatus": "NotBlocked",
+        "verdict": "Pass",
+        "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:47.794\nEnd Time:     2024-10-25 11:22:47.815\nElapsed Time: 0:00:00.020000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+        "defects": [],
+        "tester": null
+      }
+    }
+  ],
+  "exec": {
+    "key": "4611686020000001669",
+    "comments": "<html><head><style>td {padding: 5px; border: none; white-space: pre-wrap;} table {font-family: monospace; border: none;}</style></head><body><pre>Start Time:   2024-10-25 11:22:47.590\nEnd Time:     2024-10-25 11:22:47.815\n</pre><table><tr><td>iTB-TC-320-PC-1622</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:47.622</pre></td></tr><tr><td>iTB-TC-320-PC-1623</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:47.688</pre></td></tr><tr><td>iTB-TC-320-PC-1624</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:47.767</pre></td></tr><tr><td>iTB-TC-320-PC-389172</td><td></td><td style='background-color: #04AF91; color: #fff;'><b>PASS</b></td><td><pre>2024-10-25 11:22:47.815</pre></td></tr></table></body></html>",
+    "udfs": [
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": []
+  }
+}

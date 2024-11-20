@@ -1,0 +1,86 @@
+{
+  "key" : "172",
+  "name" : "Anzeigen",
+  "uniqueID" : "itb-TT-8162",
+  "numbering" : "1.2.1",
+  "spec" : {
+    "key" : "643",
+    "description" : "<html><body>\n  \n\n  \n  \n    <p>\n<a href=\"http://ananke:8081/browse/TBT-33\">http://ananke:8081/browse/TBT-33</a>\n\n    </p>\n\n    <p>\n \n\n    </p>\n\n\n</body></html>",
+    "reviewComment" : "<html><body/></html>",
+    "status" : "Planned",
+    "priority" : "Undefined",
+    "dueDate" : "2021-04-27T00:00",
+    "reviewer" : null,
+    "responsible" : null,
+    "udfs" : [
+      {
+        "key" : "1010",
+        "name" : "Automatisiert",
+        "value" : "true",
+        "udfType" : "Boolean"
+      },
+      {
+        "key" : "1011",
+        "name" : "Entwickler Review durchgeführt",
+        "value" : "false",
+        "udfType" : "Boolean"
+      },
+      {
+        "key" : "1012",
+        "name" : "Testumgebung",
+        "value" : "HIL 1",
+        "udfType" : "Enumeration"
+      },
+      {
+        "key" : "1021",
+        "name" : "Betriebssystem",
+        "value" : "",
+        "udfType" : "Enumeration"
+      },
+      {
+        "key" : "1032",
+        "name" : "text",
+        "value" : "",
+        "udfType" : "String"
+      },
+      {
+        "key" : "1033",
+        "name" : "Berechtigungen",
+        "value" : "",
+        "udfType" : "Enumeration"
+      }
+    ],
+    "keywords" : [
+      {
+        "key" : "1039",
+        "name" : "Demo",
+        "isVariantsMarker" : false
+      }
+    ],
+    "requirements" : [
+    ],
+    "references" : [
+      "1253"
+    ]
+  },
+  "exec" : {
+    "key" : "4611686020000001617",
+    "comments" : "<html><body></body></html>",
+    "status" : "Performed",
+    "execStatus" : "NotBlocked",
+    "verdict" : "Pass",
+    "responsible" : null,
+    "udfs" : [
+      {
+        "key" : "1032",
+        "name" : "text",
+        "value" : "",
+        "udfType" : "String"
+      }
+    ],
+    "keywords" : [
+    ],
+    "references" : [
+    ]
+  }
+}

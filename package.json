@@ -3,9 +3,10 @@
     "publisher": "imbus",
     "displayName": "TestBench Visual Studio Code Extension",
     "description": "A Visual Studio Code extension for TestBench.",
+    "icon": "resources/icons/iTB-EE-Logo-256x256.png",
     "version": "0.0.1",
     "engines": {
-        "vscode": "^1.91.0"
+        "vscode": "^1.95.0"
     },
     "categories": [
         "Other"
@@ -14,7 +15,7 @@
     "main": "./dist/extension.js",
     "contributes": {
         "configuration": {
-            "title": "TestBench Extension Settings",
+            "title": "TestBench",
             "properties": {
                 "testbenchExtension.serverName": {
                     "type": "string",
@@ -43,6 +44,12 @@
                     "type": "string",
                     "description": "The path to the workspace or project directory on the local machine for storing local files.",
                     "order": 5
+                },
+                "testbenchExtension.useDefaultValuesForTestbench2robotframework": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Use default values for the testbench2robotframework configuration.",
+                    "order": 6
                 },
                 "testbenchExtension.testbench2robotframeworkConfig": {
                     "type": "object",
@@ -221,7 +228,41 @@
                                 }
                             }
                         }
-                    }
+                    },
+                    "order": 7
+                },
+                "testbenchExtension.clearReportAfterProcessing": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Remove report file after processing.",
+                    "order": 8
+                },
+                "testbenchExtension.outputXMLPath": {
+                    "type": "string",
+                    "description": "The path to the output XML file where robotframework test results are stored.",
+                    "order": 9
+                },
+                "testbenchExtension.testBenchLogger": {
+                    "type": "number",
+                    "description": "Set the minimum log level. Log file is stored within the workspace location.",
+                    "default": 0,
+                    "order": 10,
+                    "enum": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ],
+                    "enumDescriptions": [
+                        "No logging",
+                        "Trace: 1",
+                        "Debug: 2",
+                        "Info: 3",
+                        "Warn: 4",
+                        "Error: 5"
+                    ]
                 }
             }
         },
@@ -251,8 +292,28 @@
                 "title": "TestBench: Set Workspace Location"
             },
             {
-                "command": "testbenchExtension.generateTestCases",
-                "title": "Generate Test Cases"
+                "command": "testbenchExtension.generateTestCasesForCycle",
+                "title": "Generate Tests",
+                "icon": {
+                    "light": "resources/icons/robot_dark.svg",
+                    "dark": "resources/icons/robot_dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
+                "title": "Generate Tests",
+                "icon": {
+                    "light": "resources/icons/robot_dark.svg",
+                    "dark": "resources/icons/robot_dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.fetchReportForSelectedTreeItem",
+                "title": "Fetch Report",
+                "icon": {
+                    "light": "resources/icons/download.svg",
+                    "dark": "resources/icons/download.svg"
+                }
             },
             {
                 "command": "testbenchExtension.makeRoot",
@@ -267,8 +328,26 @@
                 }
             },
             {
-                "command": "testbenchExtension.refreshTreeView",
-                "title": "TestBench: Refresh Tree View",
+                "command": "testbenchExtension.readRFTestResultsAndCreateReportWithResults",
+                "title": "TestBench: Read Test Results & Create Report With Results",
+                "icon": {
+                    "light": "resources/icons/read.svg",
+                    "dark": "resources/icons/read.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.refreshProjectTreeView",
+                "title": "TestBench: Refresh Project Tree View",
+                "when": "view == projectManagementTree",
+                "icon": {
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.refreshTestTreeView",
+                "title": "TestBench: Refresh Test Tree View",
+                "when": "view == testThemeTree",
                 "icon": {
                     "light": "resources/icons/refresh.svg",
                     "dark": "resources/icons/refresh.svg"
@@ -292,6 +371,14 @@
                 "icon": {
                     "light": "resources/icons/settings.svg",
                     "dark": "resources/icons/settings.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
+                "title": "TestBench: Read Tests & Upload Results To Testbench",
+                "icon": {
+                    "light": "resources/icons/Upload.svg",
+                    "dark": "resources/icons/Upload.svg"
                 }
             },
             {
@@ -321,7 +408,7 @@
                     "command": "testbenchExtension.login",
                     "group": "navigation@1",
                     "title": "Testbench: Login",
-                    "when": "!testbenchExtension.connectionActive && (view == projectManagementTree || view == testThemeTree)",
+                    "when": "!testbenchExtension.connectionActive && (view == projectManagementTree)",
                     "icon": {
                         "light": "resources/icons/login.svg",
                         "dark": "resources/icons/login.svg"
@@ -331,7 +418,7 @@
                     "command": "testbenchExtension.logout",
                     "group": "navigation@2",
                     "title": "Testbench: Logout",
-                    "when": "testbenchExtension.connectionActive && (view == projectManagementTree || view == testThemeTree)",
+                    "when": "testbenchExtension.connectionActive && (view == projectManagementTree)",
                     "icon": {
                         "light": "resources/icons/logout.svg",
                         "dark": "resources/icons/logout.svg"
@@ -340,34 +427,29 @@
                 {
                     "command": "testbenchExtension.selectAndLoadProject",
                     "group": "navigation@3",
-                    "when": "view == projectManagementTree || view == testThemeTree"
+                    "when": "view == projectManagementTree"
                 },
                 {
-                    "command": "testbenchExtension.uploadTestResultsToTestbench",
-                    "group": "navigation@4",
-                    "when": "view == projectManagementTree || view == testThemeTree"
-                },
-                {
-                    "command": "testbenchExtension.displayCommands",
+                    "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
                     "group": "navigation@5",
                     "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
-                    "command": "testbenchExtension.refreshTreeView",
-                    "group": "navigation@6",
-                    "when": "view == projectManagementTree || view == testThemeTree"
-                },
-                {
                     "command": "testbenchExtension.showExtensionSettings",
-                    "group": "navigation@7",
-                    "when": "view == projectManagementTree || view == testThemeTree"
+                    "group": "navigation@6",
+                    "when": "view == projectManagementTree"
                 }
             ],
             "view/item/context": [
                 {
-                    "command": "testbenchExtension.generateTestCases",
+                    "command": "testbenchExtension.generateTestCasesForCycle",
                     "when": "view == projectManagementTree && viewItem == Cycle",
-                    "group": "inline"
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
+                    "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode)",
+                    "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
@@ -391,28 +473,25 @@
         "compile": "webpack",
         "watch": "webpack --watch",
         "package": "webpack --mode production --devtool hidden-source-map",
-        "compile-tests": "tsc -p . --outDir out",
-        "watch-tests": "tsc -p . -w --outDir out",
+        "compile-tests": "tsc -p . --outDir out --incremental",
+        "watch-tests": "tsc -p . -w --outDir out --incremental",
         "pretest": "npm run compile-tests && npm run compile && npm run lint",
         "lint": "eslint --config eslint.config.mjs .",
         "test": "node ./out/test/runTest.js"
     },
     "devDependencies": {
-        "@types/base-64": "^1.0.2",
-        "@types/chai": "^5.0.0",
+        "@types/glob": "^8.1.0",
         "@types/mocha": "^10.0.9",
         "@types/node": "^22.7.5",
         "@types/sinon": "^17.0.3",
-        "@types/vscode": "^1.94.0",
+        "@types/vscode": "^1.95.0",
         "@typescript-eslint/eslint-plugin": "^8.9.0",
         "@typescript-eslint/parser": "^8.9.0",
         "@vscode/test-cli": "^0.0.10",
         "@vscode/test-electron": "^2.4.1",
-        "base-64": "^1.0.0",
-        "chai": "^5.1.1",
-        "cheerio": "^1.0.0",
         "eslint": "^9.12.0",
         "mocha": "^10.7.3",
+        "proxyquire": "^2.1.3",
         "sinon": "^19.0.2",
         "ts-loader": "^9.5.1",
         "typescript": "^5.6.3",
@@ -420,8 +499,12 @@
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
-        "@jest/globals": "^29.7.0",
+        "@vscode/python-extension": "^1.0.5",
         "axios": "^1.7.7",
+        "flatted": "^3.3.1",
         "jszip": "^3.10.1"
-    }
+    },
+    "extensionDependencies": [
+        "ms-python.python"
+    ]
 }

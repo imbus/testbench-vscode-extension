@@ -22,81 +22,168 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const assert = __importStar(require("assert"));
+const assert_1 = __importDefault(require("assert"));
 const vscode = __importStar(require("vscode"));
-const testBenchConnection_1 = require("../../testBenchConnection");
 const sinon = __importStar(require("sinon"));
-suite("TestBenchConnection Test Suite", () => {
-    suiteTeardown(() => {
-        vscode.window.showInformationMessage("All tests done!");
-    });
-    let connection;
+const axios_1 = __importDefault(require("axios"));
+const testBenchConnection_1 = require("../../testBenchConnection");
+suite("PlayServerConnection Tests", () => {
     let context;
+    let serverConnection;
+    let axiosStub;
     setup(() => {
         context = {
             secrets: {
-                delete: async () => { },
-                get: async () => undefined,
-                store: async () => { },
+                get: sinon.stub().resolves("mockSessionToken"),
+                store: sinon.stub().resolves(),
+                delete: sinon.stub().resolves(),
             },
-            subscriptions: [],
         };
-        connection = new testBenchConnection_1.PlayServerConnection(context, "testserver", 9445, "session-token");
+        // Mock the startKeepAlive method
+        const startKeepAliveStub = sinon.stub(testBenchConnection_1.PlayServerConnection.prototype, "startKeepAlive");
+        serverConnection = new testBenchConnection_1.PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
+        axiosStub = sinon.stub(axios_1.default, "create").returns({
+            get: sinon.stub(),
+            post: sinon.stub(),
+            delete: sinon.stub(),
+        });
     });
     teardown(() => {
         sinon.restore();
     });
-    test("should initialize with the correct values", () => {
-        assert.strictEqual(connection.getBaseURL(), "https://testserver:9445/api");
-        assert.strictEqual(connection.getSessionToken(), "session-token");
+    test("getSessionToken should return the session token", async () => {
+        await vscode.commands.executeCommand("workbench.extensions.installExtension", "ms-python.python");
+        let ext = vscode.extensions.getExtension("ms-python.python");
+        if (!ext) {
+            console.error("Extension not found");
+        }
+        else {
+            console.log("Extension found:", ext);
+        }
+        await vscode.commands.executeCommand("workbench.extensions.uninstallExtension", "ms-python.python");
+        const token = serverConnection.getSessionToken();
+        assert_1.default.strictEqual(token, "mockSessionToken");
+    });
+    test("getBaseURL should return the base URL", () => {
+        const baseURL = serverConnection.getBaseURL();
+        assert_1.default.strictEqual(baseURL, "https://mockServer:1234/api");
+    });
+    test("getApiClient should return the axios instance", () => {
+        const apiClient = serverConnection.getApiClient();
+        assert_1.default.ok(apiClient);
+    });
+    test("getSessionTokenFromSecretStorage should return the session token from secret storage", async () => {
+        const token = await serverConnection.getSessionTokenFromSecretStorage(context);
+        assert_1.default.strictEqual(token, "mockSessionToken");
+    });
+    test("clearSessionData should clear session data", () => {
+        serverConnection.clearSessionData();
+        assert_1.default.strictEqual(serverConnection.getSessionToken(), "");
+        assert_1.default.strictEqual(serverConnection.getBaseURL(), "");
     });
     /*
-    test("should login successfully", async () => {
-        const response = { data: { sessionToken: "new-token" }, status: 201 };
-        sinon.stub(axios, "post").resolves(response);
+    test("selectProjectKeyFromProjectList should return the selected project key", async () => {
+        const projectsData: testBenchTypes.Project[] = [
+            {
+                name: "Project1", key: "key1", creationTime: new Date().toISOString(), status: "active", visibility: true, tovsCount: 0,
+                cyclesCount: 0,
+                description: "",
+                lockerKey: null,
+                startDate: null,
+                endDate: null
+            },
+            {
+                name: "Project2", key: "key2", creationTime: new Date().toISOString(), status: "active", visibility: true, tovsCount: 0,
+                cyclesCount: 0,
+                description: "",
+                lockerKey: null,
+                startDate: null,
+                endDate: null
+            },
+        ];
 
-        const loginResponse = await connection.login();
-        assert.strictEqual(loginResponse.sessionToken, "new-token");
+        sinon.stub(vscode.window, "showQuickPick").resolves({ label: "Project1" });
+
+        const projectKey = await serverConnection.selectProjectKeyFromProjectList(projectsData);
+        assert.strictEqual(projectKey, "key1");
+    });
+    
+    test("getProjectsList should return the list of projects", async () => {
+        const mockProjects: testBenchTypes.Project[] = [{
+            name: "Project1",
+            key: "key1",
+            creationTime: new Date().toISOString(),
+            status: "active",
+            visibility: true,
+            tovsCount: 0,
+            cyclesCount: 0,
+            description: "",
+            lockerKey: null,
+            startDate: null,
+            endDate: null
+        }];
+        axiosStub().get.resolves({ data: mockProjects, status: 200 });
+
+        const projects = await serverConnection.getProjectsList();
+        assert.deepStrictEqual(projects, mockProjects);
     });
 
-    test("should handle login failure", async () => {
-        sinon.stub(axios, "post").rejects(new Error("Login failed"));
+    test("getProjectTreeOfProject should return the project tree", async () => {
+        const mockTree: testBenchTypes.TreeNode = {
+            name: "Root", children: [],
+            nodeType: "",
+            key: "",
+            creationTime: "",
+            status: "",
+            visibility: false
+        };
+        axiosStub().get.resolves({ data: mockTree, status: 200 });
+
+        const tree = await serverConnection.getProjectTreeOfProject("key1");
+        assert.deepStrictEqual(tree, mockTree);
+    });
+
+    test("fetchCycleStructure should handle errors gracefully", async () => {
+        axiosStub().post.rejects(new Error("Network Error"));
 
         try {
-            await connection.login();
-            assert.fail("Expected an error");
-        } catch (error: any) {
-            assert.strictEqual(error.message, "Login failed");
+            await serverConnection.fetchCycleStructure("projectKey", "cycleKey");
+        } catch (error) {
+            assert.fail("fetchCycleStructure should not throw an error");
         }
     });
 
-    test("should send keep-alive request", async () => {
-        sinon.stub(axios, "get").resolves({ status: 200 });
+    test("logoutUser should clear session data and stop keep-alive", async () => {
+        const stopKeepAliveStub = sinon.stub(serverConnection as any, "stopKeepAlive");
+        axiosStub().delete.resolves({ status: 204 });
 
-        await connection.sendKeepAliveRequest();
-        assert.ok(true); // No error means the test passed
+        await serverConnection.logoutUser(context, {} as any);
+        assert.strictEqual(serverConnection.getSessionToken(), "");
+        assert(stopKeepAliveStub.calledOnce);
     });
 
-    test("should handle keep-alive failure", async () => {
-        sinon.stub(axios, "get").rejects(new Error("Keep-alive failed"));
+    test("uploadExecutionResults should handle errors gracefully", async () => {
+        axiosStub().post.rejects(new Error("Network Error"));
 
-        await connection.sendKeepAliveRequest();
-        assert.ok(true); // No error means the test passed, failure is logged
+        try {
+            await serverConnection.uploadExecutionResults(1, "path/to/zip");
+        } catch (error) {
+            assert.fail("uploadExecutionResults should not throw an error");
+        }
     });
 
-    test("should logout successfully", async () => {
-        const deleteStub = sinon.stub(axios, "delete").resolves({ status: 204 });
+    test("importExecutionResults should handle errors gracefully", async () => {
+        axiosStub().post.rejects(new Error("Network Error"));
 
-        await connection.logout();
-        assert.ok(deleteStub.calledOnce);
-    });
-
-    test("should handle logout failure", async () => {
-        sinon.stub(axios, "delete").rejects(new Error("Logout failed"));
-
-        await connection.logout();
-        assert.ok(true); // No error means the test passed, failure is logged
+        try {
+            await serverConnection.importExecutionResults(1, 1, {} as any);
+        } catch (error) {
+            assert.fail("importExecutionResults should not throw an error");
+        }
     });
     */
 });

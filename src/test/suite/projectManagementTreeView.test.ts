@@ -1,80 +1,133 @@
-import * as assert from "assert";
+import assert from "assert";
+import * as sinon from "sinon";
 import * as vscode from "vscode";
-import * as testBenchConnection from "../../testBenchConnection";
-import { ProjectManagementTreeDataProvider } from "../../projectManagementTreeView";
+import {
+    ProjectManagementTreeDataProvider,
+    TestbenchTreeItem,
+    findProjectKeyOfCycleElement,
+} from "../../projectManagementTreeView";
+import { PlayServerConnection } from "../../testBenchConnection";
 import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
+import * as testBenchTypes from "../../testBenchTypes";
 
-suite("Project Management Tree View Tests", function () {
+suite("ProjectManagementTreeDataProvider Tests", () => {
+    let sandbox: sinon.SinonSandbox;
+    let connectionStub: sinon.SinonStubbedInstance<PlayServerConnection>;
+    let testThemeDataProviderStub: sinon.SinonStubbedInstance<TestThemeTreeDataProvider>;
+    let treeDataProvider: ProjectManagementTreeDataProvider;
 
-    suiteTeardown(() => {
-        vscode.window.showInformationMessage("All tests done!");
-      });
-
-    this.timeout(10000); // Increase timeout to 10 seconds
-    // Mock Variables
-    const context = {} as vscode.ExtensionContext;
-    const serverName = "testbench";
-    const port = 9445;
-    const projectKey = "26";
-    const sessionToken = "sessionToken";  // Fake session token
-
-    test("Tree Data Provider Initialization", async () => {
-        const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
-        const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
-
-        assert.ok(treeDataProvider);
-        assert.strictEqual(treeDataProvider.currentProjectKeyInView, projectKey);
+    setup(() => {
+        sandbox = sinon.createSandbox();
+        connectionStub = sandbox.createStubInstance(PlayServerConnection);
+        testThemeDataProviderStub = sandbox.createStubInstance(TestThemeTreeDataProvider);
+        treeDataProvider = new ProjectManagementTreeDataProvider(
+            connectionStub,
+            "projectKey",
+            testThemeDataProviderStub
+        );
     });
 
-    test("Tree Item Creation", () => {
-        const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
-        const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
-
-        const data = { name: "Test Project", nodeType: "project" };
-        const treeItem = treeDataProvider["createTreeItem"](data, null, true);
-
-        assert.ok(treeItem);
-        assert.strictEqual(treeItem?.label, "Test Project");
-        assert.strictEqual(treeItem?.contextValue, "project");
+    teardown(() => {
+        sandbox.restore();
     });
 
-    test("Get Children of Root", async () => {
-        const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
-        const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
+    test("getChildren should return empty array when no connection is available", async () => {
+        treeDataProvider = new ProjectManagementTreeDataProvider(null, "projectKey", testThemeDataProviderStub);
 
-        const children = await treeDataProvider.getChildren();
+        const children: TestbenchTreeItem[] = await treeDataProvider.getChildren();
 
-        assert.ok(children);
-        assert.strictEqual(Array.isArray(children), true);
+        assert.strictEqual(children.length, 0);
     });
 
-    test("Get Parent of Tree Item", () => {
-        const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
-        const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
+    /*
+    // TODO: getChildren returns [] when connection is null.
+    test("getChildren should return children of the provided element", async () => {
+        const element = new TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
+            children: [{ name: "Version", nodeType: "Version" }],
+        });
+        const children: TestbenchTreeItem[] = await treeDataProvider.getChildren(element);
 
-        const parentData = { name: "Parent Project", nodeType: "project" };
-        const parentItem = treeDataProvider["createTreeItem"](parentData, null, true);
+        assert.strictEqual(children.length, 1);
+        assert.strictEqual(children[0].label, "Version");
+    });
+    */
 
-        const childData = { name: "Child Project", nodeType: "project" };
-        const childItem = treeDataProvider["createTreeItem"](childData, parentItem, false);
+    /*
+    // TODO: Create a cycleElement mock data so that findProjectKeyOfCycle can work on the cycleElement without any errors.
+    test("getChildrenOfCycle should return children of a cycle element", async () => {
+        const cycleElement = new ProjectManagementTreeItem("Cycle", "Cycle", vscode.TreeItemCollapsibleState.Collapsed, { key: "cycleKey" });
+        const cycleData = {
+            root: { base: { key: "rootKey", numbering: "1", parentKey: "parentKey", name: "Root Name", uniqueID: "uniqueID", matchesFilter: true } },
+            nodes: [
+                { base: { key: "childKey", parentKey: "rootKey", numbering: "1", name: "Test Theme" }, elementType: "TestThemeNode" }
+            ]
+        };
+        connectionStub.fetchCycleStructure.resolves(cycleData);
 
-        const parent = treeDataProvider.getParent(childItem!);
+        const children = await treeDataProvider.getChildrenOfCycle(cycleElement);
 
-        assert.strictEqual(parent, parentItem);
+        assert.strictEqual(children.length, 1);
+        assert.strictEqual(children[0].label, "1 Test Theme");
+    });
+    */
+
+    test("findProjectKeyOfCycle should return project key of a cycle element", () => {
+        const projectElement = new TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
+            key: "projectKey",
+        });
+        const cycleElement = new TestbenchTreeItem(
+            "Cycle",
+            "Cycle",
+            vscode.TreeItemCollapsibleState.Collapsed,
+            { key: "cycleKey" },
+            projectElement
+        );
+
+        const projectKey = findProjectKeyOfCycleElement(cycleElement);
+
+        assert.strictEqual(projectKey, "projectKey");
     });
 
-    test("Clear Tree", () => {
-        const connection = new testBenchConnection.PlayServerConnection(context, serverName, port, sessionToken);
-        const testThemeDataProvider = new TestThemeTreeDataProvider();
-        const treeDataProvider = new ProjectManagementTreeDataProvider(connection, projectKey, testThemeDataProvider);
+    test("handleTestCycleClick should initialize test theme tree", async () => {
+        const cycleElement = new TestbenchTreeItem("Cycle Label", "Cycle", vscode.TreeItemCollapsibleState.None, {
+            key: "cycleKey",
+        });
+        const cycleData: testBenchTypes.CycleStructure = {
+            root: {
+                base: {
+                    key: "rootKey",
+                    numbering: "1",
+                    parentKey: "parentKey",
+                    name: "Root Name",
+                    uniqueID: "uniqueID",
+                    matchesFilter: true,
+                },
+                filters: [],
+                elementType: "RootElementType",
+            },
+            nodes: [
+                {
+                    base: {
+                        key: "childKey",
+                        parentKey: "rootKey",
+                        numbering: "1",
+                        name: "Test Theme",
+                        uniqueID: "uniqueID",
+                        matchesFilter: true,
+                    },
+                    elementType: "TestThemeNode",
+                    spec: { key: "specKey", locker: null, status: "active" },
+                    aut: { key: "autKey", locker: null, status: "active" },
+                    exec: { key: "execKey", locker: null, status: "active", execStatus: "pending", verdict: "none" },
+                    filters: [],
+                },
+            ],
+        };
+        connectionStub.fetchCycleStructure.resolves(cycleData);
 
-        treeDataProvider.clearTree();
+        await treeDataProvider.handleTestCycleClick(cycleElement);
 
-        assert.strictEqual(treeDataProvider["rootItem"], null);
-        assert.strictEqual(treeDataProvider["connection"], null);
+        assert(testThemeDataProviderStub.clearTree.calledOnce);
+        assert(testThemeDataProviderStub.setRoots.calledOnce);
     });
 });

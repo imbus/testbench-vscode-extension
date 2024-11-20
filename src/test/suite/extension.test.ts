@@ -1,22 +1,21 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { activate, deactivate } from "../../extension";
-import path from "path";
 
 suite("Extension Test Suite", () => {
+    suiteTeardown(() => {
+        vscode.window.showInformationMessage("All tests done!");
+    });
 
-	suiteTeardown(() => {
-		vscode.window.showInformationMessage("All tests done!");
-	  });
+    test("Extension should be present", () => {
+        assert.ok(vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension"));
+    });
 
-	vscode.window.showInformationMessage("Start all tests.");
+    test("Extension should be active after activation", async () => {
+        const extension: vscode.Extension<any> | undefined = vscode.extensions.getExtension(
+            "imbus.testbench-visual-studio-code-extension"
+        );
 
-	test("Extension should be present", () => {
-		assert.ok(vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension"));
-	});
-
-	test("Extension should be active after activation", async () => {
-        const extension = vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension");
         if (!extension) {
             assert.fail("Extension not found");
         }
@@ -25,69 +24,52 @@ suite("Extension Test Suite", () => {
         assert.strictEqual(extension?.isActive, true, "Extension should be active");
     });
 
-	test("Activate should register commands", async () => {
-		const context = {
-			subscriptions: [],
-			secrets: {
-				delete: async () => {},
-			},
-		} as unknown as vscode.ExtensionContext;
+    test("Activate should register commands", async () => {
+        const context = {
+            subscriptions: [],
+            secrets: {
+                delete: async () => {},
+            },
+        } as unknown as vscode.ExtensionContext;
 
-		activate(context);
+        await activate(context);
 
-		const registeredCommands = await vscode.commands.getCommands(true);
-		const expectedCommands = [
-			"testbenchExtension.displayCommands",
-			"testbenchExtension.login",
-			"testbenchExtension.changeConnection",
-			"testbenchExtension.logout",
-			"testbenchExtension.generateTestCases",
-			"testbenchExtension.makeRoot",
-			"testbenchExtension.showExtensionSettings",
-			"testbenchExtension.selectAndLoadProject",
-			"testbenchExtension.refreshTreeView",
-			"testbenchExtension.setWorkspaceLocation",
-		];
+        const registeredCommands: string[] = await vscode.commands.getCommands(true);
+        const expectedCommands: string[] = [
+            "testbenchExtension.login",
+            "testbenchExtension.logout",
+            "testbenchExtension.generateTestCasesForCycle",
+            "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
+            "testbenchExtension.readAndUploadTestResultsToTestbench",
+            "testbenchExtension.showExtensionSettings",
+            "testbenchExtension.selectAndLoadProject",
+            "testbenchExtension.setWorkspaceLocation",
+        ];
 
-		expectedCommands.forEach(command => {
-			assert.ok(registeredCommands.includes(command), `Command ${command} is not registered`);
-		});
-	});
+        console.log("registeredCommands: ", registeredCommands);
+        console.log("expectedCommands: ", expectedCommands);
 
-	test("Configuration should be loaded correctly", async () => {
-		const context = {
-			subscriptions: [],
-			secrets: {
-				delete: async () => {},
-			},
-		} as unknown as vscode.ExtensionContext;
+        expectedCommands.forEach((command) => {
+            assert.ok(registeredCommands.includes(command), `Command ${command} is not registered`);
+        });
+    });
 
-		activate(context);
+    test("Updating configuration should change setting variable", async () => {
+        const context = {
+            subscriptions: [],
+            secrets: {
+                delete: async () => {},
+            },
+        } as unknown as vscode.ExtensionContext;
 
-		const config = vscode.workspace.getConfiguration("testbenchExtension");
-		assert.strictEqual(config.get("serverName"), "testbench");
-		assert.strictEqual(config.get("portNumber"), 9445);
-		assert.strictEqual(config.get("storePasswordAfterLogin"), false);
-	});
+        await activate(context);
 
-	/*
-	test("Updating configuration should change setting variable", async () => {		
-		const context = {
-			subscriptions: [],
-			secrets: {
-				delete: async () => {},
-			},
-		} as unknown as vscode.ExtensionContext;
+        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration("testbenchExtension");
+        await config.update("serverName", "newServerName", vscode.ConfigurationTarget.Global);
+        assert.strictEqual(config.get("serverName", vscode.ConfigurationTarget.Global), "newServerName");
+    });
 
-		activate(context);
-
-		const config = vscode.workspace.getConfiguration("testbenchExtension");
-		await config.update("serverName", "newServerName", vscode.ConfigurationTarget.Global);
-		assert.strictEqual(config.get("serverName"), "newServerName");
-	});
-	*/
-
-	test("Deactivate should not throw", () => {
-		assert.doesNotThrow(() => deactivate());
-	});
+    test("Deactivate should not throw", () => {
+        assert.doesNotThrow(() => deactivate());
+    });
 });

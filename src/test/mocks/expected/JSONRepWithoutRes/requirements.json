@@ -1,0 +1,134 @@
+[
+  {
+    "key" : "2063",
+    "name" : "Als Verkäufer möchte ich in jeder Reihenfolge die drei Komponenten wählen können um Unterschiede der Konfigurationen besser testen zu können",
+    "id" : "TBT-3",
+    "extendedId" : "TBT-3",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Kritisch",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "2264",
+    "name" : "Sondermodelle enhalten Zubehörteile",
+    "id" : "TBT-4",
+    "extendedId" : "TBT-4",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Kritisch",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "2403",
+    "name" : "Als verkäufer möchte ich eine Möglichkeit haben den Konfigurator zurück zu setzen um für einen neuen Kunden am Anfang starten zu können.",
+    "id" : "TBT-32",
+    "extendedId" : "TBT-32",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Closed",
+    "priority" : "Major",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "2556",
+    "name" : "Initiale Preiskonfiguration Zubehörteile",
+    "id" : "TBT-23",
+    "extendedId" : "TBT-23",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Schwer",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "2612",
+    "name" : "Als Verkäufer möchte ich einen Gesamtpreis ausgegeben bekommen um ihn schnell nennen zu können",
+    "id" : "TBT-28",
+    "extendedId" : "TBT-28",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Schwer",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "2668",
+    "name" : "Als Nutzer möchte ich Fahrzeuge auswählen können",
+    "id" : "TBT-25",
+    "extendedId" : "TBT-25",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Schwer",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "2724",
+    "name" : "Als Verkäufer möchte ich immer den aktuellen Endpreis sehen können um Preisentwicklungen einfacher kommunizieren zu können",
+    "id" : "TBT-30",
+    "extendedId" : "TBT-30",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Closed",
+    "priority" : "Critical",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "2796",
+    "name" : "I5 hat keinen Preis",
+    "id" : "TBT-8",
+    "extendedId" : "TBT-8",
+    "version" : "1",
+    "owner" : "admin",
+    "status" : "Resolved",
+    "priority" : "Major",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "2997",
+    "name" : "Als Nutzer möchte ich Sondermodelle wählen können",
+    "id" : "TBT-26",
+    "extendedId" : "TBT-26",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Schwer",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "3067",
+    "name" : "Als Nutzer möchte ich Zubehörteile auswählen können",
+    "id" : "TBT-27",
+    "extendedId" : "TBT-27",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Schwer",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "3217",
+    "name" : "Initiale Preiskonfiguration Fahrzeuge",
+    "id" : "TBT-2",
+    "extendedId" : "TBT-2",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Schwer",
+    "repositoryId" : "Jira"
+  },
+  {
+    "key" : "3273",
+    "name" : "Initiale Preiskonfiguration Sondermodelle",
+    "id" : "TBT-22",
+    "extendedId" : "TBT-22",
+    "version" : "1",
+    "owner" : "Administrator",
+    "status" : "Geschlossen",
+    "priority" : "Schwer",
+    "repositoryId" : "Jira"
+  }
+]

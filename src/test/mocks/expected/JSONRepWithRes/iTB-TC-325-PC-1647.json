@@ -1,0 +1,924 @@
+{
+  "uniqueID": "iTB-TC-325-PC-1647",
+  "spec": {
+    "key": "3122",
+    "version": null,
+    "comments": "<html><body/></html>",
+    "udfs": [
+      {
+        "key": "1012",
+        "name": "Testumgebung",
+        "value": "HIL 1",
+        "udfType": "Enumeration"
+      },
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": [
+      {
+        "key": "1039",
+        "name": "Demo",
+        "isVariantsMarker": false
+      },
+      {
+        "key": "1042",
+        "name": "Systemtest",
+        "isVariantsMarker": false
+      }
+    ],
+    "requirements": []
+  },
+  "interactions": [
+    {
+      "key": "2305843010000000819",
+      "uniqueID": "iTB-IA-3631",
+      "name": "CarConfig starten",
+      "version": null,
+      "interactionType": "Compound",
+      "path": "Fachliche Bausteine CarConfig",
+      "spec": {
+        "callKey": "",
+        "sequencePhase": "TestStep",
+        "callType": "Flow",
+        "description": "<html><body>\n  \n\n  \n  \n    <p>\nStarten sie den CarConfigurator.      \n<br/>\n\n    </p>\n\n    <p>\nX:\\TestBench_Demo\\CarConfigurator\\run_car_de_ohne_login.bat\n\n    </p>\n\n\n</body></html>",
+        "comments": "<html><body/></html>",
+        "references": [],
+        "preConditions": [],
+        "postConditions": []
+      },
+      "exec": {
+        "verdict": "Pass",
+        "time": "20241025 11:22:44.386",
+        "duration": 5,
+        "currentUser": {
+          "key": "-1",
+          "name": ""
+        },
+        "tester": null,
+        "comments": "",
+        "references": []
+      },
+      "parameters": [],
+      "interactions": [
+        {
+          "key": "2305843010000000788",
+          "uniqueID": "itba-IA-d69a9216ce",
+          "name": "Open CarConfig",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body>\n  \n\n  \n  \n    <div style=\"color:#d4d4d4;background-color:#1e1e1e;font-family:Source Code Pro, Consolas, Courier New, monospace;font-weight:500;font-size:14px;line-height:19px;white-space:pre;\">\n      <div>\n\n      </div>\n      <div>\n<span style=\"color:#d4d4d4;\">\u00a0 \u00a0 ${ids}= \u00a0 \u00a0Get Browser Ids</span>\n      </div>\n      <div>\n<span style=\"color:#d4d4d4;\">\u00a0 \u00a0 </span><span style=\"color:#569cd6;\">IF</span><span style=\"color:#d4d4d4;\"> \u00a0 \u00a0</span><span style=\"color:#ce9178;\">len($ids) == 0</span>\n      </div>\n      <div>\n<span style=\"color:#d4d4d4;\">\u00a0 \u00a0 \u00a0 \u00a0 New Browser</span><span style=\"color:#ce9178;\"> \u00a0 \u00a0</span><span style=\"color:#ce9178;\">chromium</span><span style=\"color:#ce9178;\"> \u00a0 \u00a0headless</span><span style=\"color:#d4d4d4;\">=</span><span style=\"color:#d4d4d4;\">${</span><span style=\"color:#ce9178;\">headless</span><span style=\"color:#d4d4d4;\">}</span><span style=\"color:#ce9178;\"> \u00a0 \u00a0 \u00a0 \u00a0</span>\n      </div>\n      <div>\n<span style=\"color:#d4d4d4;\">\u00a0 \u00a0 </span><span style=\"color:#569cd6;\">END</span>\n      </div>\n      <div>\n<span style=\"color:#d4d4d4;\">\u00a0 \u00a0 New Context</span><span style=\"color:#ce9178;\"> \u00a0 \u00a0</span>\n      </div>\n      <div>\n<span style=\"color:#d4d4d4;\">\u00a0 \u00a0 New Page</span><span style=\"color:#ce9178;\"> \u00a0 \u00a0</span><span style=\"color:#d4d4d4;\">${</span><span style=\"color:#ce9178;\">BASE-URL</span><span style=\"color:#d4d4d4;\">}</span>\n      </div>\n    </div>\n    <p>\n\u00a0\n\n    </p>\n\n\n</body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.382",
+            "duration": 2,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.380\nEnd Time:     2024-10-25 11:22:44.382\nElapsed Time: 0:00:00.002000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [],
+          "interactions": []
+        },
+        {
+          "key": "2305843010000000805",
+          "uniqueID": "itba-IA-5552e8fd54",
+          "name": "Set Username",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.384",
+            "duration": 1,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.383\nEnd Time:     2024-10-25 11:22:44.384\nElapsed Time: 0:00:00.001000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [
+            {
+              "key": "9688",
+              "name": "user",
+              "value": "schulung20",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            }
+          ],
+          "interactions": []
+        },
+        {
+          "key": "2305843010000000803",
+          "uniqueID": "itba-IA-0cb54fd4b0",
+          "name": "Set Password",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.385",
+            "duration": 1,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.384\nEnd Time:     2024-10-25 11:22:44.385\nElapsed Time: 0:00:00.001000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [
+            {
+              "key": "9686",
+              "name": "password",
+              "value": "@RBTFRMWRK@",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            }
+          ],
+          "interactions": []
+        },
+        {
+          "key": "2305843010000000778",
+          "uniqueID": "itba-IA-d396966018",
+          "name": "Click Login Btn",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.386",
+            "duration": 1,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.385\nEnd Time:     2024-10-25 11:22:44.386\nElapsed Time: 0:00:00.001000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [],
+          "interactions": []
+        }
+      ]
+    },
+    {
+      "key": "2305843010000000835",
+      "uniqueID": "itb-IA-355905",
+      "name": "Neues Fahrzeug erstellen",
+      "version": null,
+      "interactionType": "Compound",
+      "path": "Fachliche Bausteine CarConfig",
+      "spec": {
+        "callKey": "",
+        "sequencePhase": "TestStep",
+        "callType": "Flow",
+        "description": "<html><body/></html>",
+        "comments": "<html><body/></html>",
+        "references": [],
+        "preConditions": [],
+        "postConditions": []
+      },
+      "exec": {
+        "verdict": "Pass",
+        "time": "20241025 11:22:44.389",
+        "duration": 2,
+        "currentUser": {
+          "key": "-1",
+          "name": ""
+        },
+        "tester": null,
+        "comments": "",
+        "references": []
+      },
+      "parameters": [],
+      "interactions": [
+        {
+          "key": "2305843010000000780",
+          "uniqueID": "itba-IA-2fb1fcd0d5",
+          "name": "Click New_Car",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.389",
+            "duration": 2,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.387\nEnd Time:     2024-10-25 11:22:44.389\nElapsed Time: 0:00:00.002000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [],
+          "interactions": []
+        }
+      ]
+    },
+    {
+      "key": "2305843010000000830",
+      "uniqueID": "iTB-IA-3630",
+      "name": "Fahrzeug w\u00e4hlen",
+      "version": null,
+      "interactionType": "Compound",
+      "path": "Fachliche Bausteine CarConfig",
+      "spec": {
+        "callKey": "",
+        "sequencePhase": "TestStep",
+        "callType": "Flow",
+        "description": "<html><body>\n  \n\n  \n  \n    <p>\nW\u00e4hlen Sie das bezeichnete Fahrzeug.\n\n    </p>\n\n    <p>\n      \n<img src=\"itb/image/970.png\"/>\n\n    </p>\n\n\n</body></html>",
+        "comments": "<html><body/></html>",
+        "references": [],
+        "preConditions": [],
+        "postConditions": []
+      },
+      "exec": {
+        "verdict": "Pass",
+        "time": "20241025 11:22:44.390",
+        "duration": 1,
+        "currentUser": {
+          "key": "-1",
+          "name": ""
+        },
+        "tester": null,
+        "comments": "",
+        "references": []
+      },
+      "parameters": [
+        {
+          "key": "9711",
+          "name": "Fahrzeug",
+          "value": "Minigolf",
+          "valueType": "Text",
+          "definitionType": "AtomicInstance",
+          "evaluationType": "CallByValue",
+          "dataType": {
+            "key": "6917529030000000198",
+            "name": "Fahrzeug",
+            "kind": "Regular",
+            "version": null,
+            "path": "",
+            "uniqueID": "iTB-DT-722"
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "key": "2305843010000000797",
+          "uniqueID": "itba-IA-65a66885b3",
+          "name": "Select Base Model",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.390",
+            "duration": 1,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.389\nEnd Time:     2024-10-25 11:22:44.390\nElapsed Time: 0:00:00.001000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [
+            {
+              "key": "9680",
+              "name": "basemodel",
+              "value": "Minigolf",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            }
+          ],
+          "interactions": []
+        }
+      ]
+    },
+    {
+      "key": "2305843010000000840",
+      "uniqueID": "iTB-IA-3632",
+      "name": "Sondermodell w\u00e4hlen",
+      "version": null,
+      "interactionType": "Compound",
+      "path": "Fachliche Bausteine CarConfig",
+      "spec": {
+        "callKey": "",
+        "sequencePhase": "TestStep",
+        "callType": "Flow",
+        "description": "<html><body>\n  \n\n  \n    <p>\nW\u00e4hlen sie \u00fcber das \"DropDown-Men\u00fc\"das entsprechende Sondermodell.\n    </p>\n\n    <p>\n      \n<img src=\"itb/image/971.png\"/>\n    </p>\n\n  \n\n</body></html>",
+        "comments": "<html><body/></html>",
+        "references": [],
+        "preConditions": [],
+        "postConditions": []
+      },
+      "exec": {
+        "verdict": "Pass",
+        "time": "20241025 11:22:44.393",
+        "duration": 2,
+        "currentUser": {
+          "key": "-1",
+          "name": ""
+        },
+        "tester": null,
+        "comments": "",
+        "references": []
+      },
+      "parameters": [
+        {
+          "key": "9719",
+          "name": "Sondermodell",
+          "value": "Gomera",
+          "valueType": "Text",
+          "definitionType": "AtomicInstance",
+          "evaluationType": "CallByValue",
+          "dataType": {
+            "key": "6917529030000000206",
+            "name": "Sondermodell",
+            "kind": "Regular",
+            "version": null,
+            "path": "",
+            "uniqueID": "iTB-DT-63026"
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "key": "2305843010000000800",
+          "uniqueID": "itba-IA-3882584a77",
+          "name": "Select Special Model",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.393",
+            "duration": 2,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.391\nEnd Time:     2024-10-25 11:22:44.393\nElapsed Time: 0:00:00.002000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [
+            {
+              "key": "9683",
+              "name": "special",
+              "value": "Gomera",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            }
+          ],
+          "interactions": []
+        }
+      ]
+    },
+    {
+      "key": "2305843010000000842",
+      "uniqueID": "iTB-IA-3633",
+      "name": "Zubeh\u00f6r w\u00e4hlen",
+      "version": null,
+      "interactionType": "Compound",
+      "path": "Fachliche Bausteine CarConfig",
+      "spec": {
+        "callKey": "",
+        "sequencePhase": "TestStep",
+        "callType": "Flow",
+        "description": "<html><body>\n  \n\n  \n    <p>\nSelektieren sie das entsprechende Zubeh\u00f6rteil mittels der Checkbox.\n    </p>\n\n    <p>\n\u00a0       \n<img src=\"itb/image/972.png\"/>\n\n    </p>\n\n  \n\n</body></html>",
+        "comments": "<html><body/></html>",
+        "references": [],
+        "preConditions": [],
+        "postConditions": []
+      },
+      "exec": {
+        "verdict": "Pass",
+        "time": "20241025 11:22:44.396",
+        "duration": 2,
+        "currentUser": {
+          "key": "-1",
+          "name": ""
+        },
+        "tester": null,
+        "comments": "",
+        "references": []
+      },
+      "parameters": [
+        {
+          "key": "9721",
+          "name": "Zubeh\u00f6r(Liste)",
+          "value": "0,00",
+          "valueType": "Text",
+          "definitionType": "AtomicInstance",
+          "evaluationType": "CallByValue",
+          "dataType": {
+            "key": "6917529030000000210",
+            "name": "Zubeh\u00f6r(Liste)",
+            "kind": "Regular",
+            "version": null,
+            "path": "",
+            "uniqueID": "iTB-DT-1014"
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "key": "2305843010000000794",
+          "uniqueID": "itba-IA-28b3abec39",
+          "name": "Select Accessory",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.396",
+            "duration": 2,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.394\nEnd Time:     2024-10-25 11:22:44.396\nElapsed Time: 0:00:00.002000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [
+            {
+              "key": "9677",
+              "name": "accessory",
+              "value": "0,00",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            }
+          ],
+          "interactions": []
+        }
+      ]
+    },
+    {
+      "key": "2305843010000000824",
+      "uniqueID": "iTB-IA-3636",
+      "name": "Endpreis pr\u00fcfen",
+      "version": null,
+      "interactionType": "Compound",
+      "path": "Fachliche Bausteine CarConfig",
+      "spec": {
+        "callKey": "",
+        "sequencePhase": "TestStep",
+        "callType": "Check",
+        "description": "<html><body>\n  \n\n  \n    <p>\nPr\u00fcfen Sie ob der angezeigte Endpreis (gelb markiert) mit dem vorgegebenen Wert \u00fcbereinstimmt.      \n<br/>      \n<img src=\"itb/image/968.png\"/>\n\n    </p>\n\n  \n\n</body></html>",
+        "comments": "<html><body/></html>",
+        "references": [],
+        "preConditions": [],
+        "postConditions": []
+      },
+      "exec": {
+        "verdict": "Pass",
+        "time": "20241025 11:22:44.398",
+        "duration": 1,
+        "currentUser": {
+          "key": "-1",
+          "name": ""
+        },
+        "tester": null,
+        "comments": "",
+        "references": []
+      },
+      "parameters": [
+        {
+          "key": "9705",
+          "name": "Endpreis",
+          "value": "Sportfelgen",
+          "valueType": "Text",
+          "definitionType": "DetailedInstance",
+          "evaluationType": "CallByValue",
+          "dataType": {
+            "key": "6917529030000000214",
+            "name": "Endpreis",
+            "kind": "Regular",
+            "version": null,
+            "path": "",
+            "uniqueID": "iTB-DT-63023"
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "key": "2305843010000000812",
+          "uniqueID": "itba-IA-fd081ec1f2",
+          "name": "Verify Total Price",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.398",
+            "duration": 1,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.397\nEnd Time:     2024-10-25 11:22:44.398\nElapsed Time: 0:00:00.001000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [
+            {
+              "key": "9693",
+              "name": "expected_price",
+              "value": "Sportfelgen",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            },
+            {
+              "key": "9694",
+              "name": "unit",
+              "value": "\u20ac",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            }
+          ],
+          "interactions": []
+        }
+      ]
+    },
+    {
+      "key": "2305843010000000824",
+      "uniqueID": "iTB-IA-3636",
+      "name": "Endpreis pr\u00fcfen",
+      "version": null,
+      "interactionType": "Compound",
+      "path": "Fachliche Bausteine CarConfig",
+      "spec": {
+        "callKey": "",
+        "sequencePhase": "TestStep",
+        "callType": "Check",
+        "description": "<html><body>\n  \n\n  \n    <p>\nPr\u00fcfen Sie ob der angezeigte Endpreis (gelb markiert) mit dem vorgegebenen Wert \u00fcbereinstimmt.      \n<br/>      \n<img src=\"itb/image/968.png\"/>\n\n    </p>\n\n  \n\n</body></html>",
+        "comments": "<html><body/></html>",
+        "references": [],
+        "preConditions": [],
+        "postConditions": []
+      },
+      "exec": {
+        "verdict": "Pass",
+        "time": "20241025 11:22:44.400",
+        "duration": 1,
+        "currentUser": {
+          "key": "-1",
+          "name": ""
+        },
+        "tester": null,
+        "comments": "",
+        "references": []
+      },
+      "parameters": [
+        {
+          "key": "9705",
+          "name": "Endpreis",
+          "value": "ABS",
+          "valueType": "Text",
+          "definitionType": "DetailedInstance",
+          "evaluationType": "CallByValue",
+          "dataType": {
+            "key": "6917529030000000214",
+            "name": "Endpreis",
+            "kind": "Regular",
+            "version": null,
+            "path": "",
+            "uniqueID": "iTB-DT-63023"
+          }
+        }
+      ],
+      "interactions": [
+        {
+          "key": "2305843010000000812",
+          "uniqueID": "itba-IA-fd081ec1f2",
+          "name": "Verify Total Price",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body><p/></body></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.400",
+            "duration": 1,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.399\nEnd Time:     2024-10-25 11:22:44.400\nElapsed Time: 0:00:00.001000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [
+            {
+              "key": "9693",
+              "name": "expected_price",
+              "value": "ABS",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            },
+            {
+              "key": "9694",
+              "name": "unit",
+              "value": "\u20ac",
+              "valueType": "Text",
+              "definitionType": "DetailedInstance",
+              "evaluationType": "CallByValue",
+              "dataType": null
+            }
+          ],
+          "interactions": []
+        }
+      ]
+    },
+    {
+      "key": "2305843010000000816",
+      "uniqueID": "iTB-IA-3635",
+      "name": "CarConfig beenden",
+      "version": null,
+      "interactionType": "Compound",
+      "path": "Fachliche Bausteine CarConfig",
+      "spec": {
+        "callKey": "",
+        "sequencePhase": "TestStep",
+        "callType": "Flow",
+        "description": "<html><body>\n  \n\n  \n  \nBeenden sie den CarConfigurator \u00fcber das X am oberen rechten Rand.    \n<br/>    \n<img src=\"itb/image/967.png\"/>\n</body></html>",
+        "comments": "<html><body/></html>",
+        "references": [],
+        "preConditions": [],
+        "postConditions": []
+      },
+      "exec": {
+        "verdict": "Pass",
+        "time": "20241025 11:22:44.402",
+        "duration": 2,
+        "currentUser": {
+          "key": "-1",
+          "name": ""
+        },
+        "tester": null,
+        "comments": "",
+        "references": []
+      },
+      "parameters": [],
+      "interactions": [
+        {
+          "key": "2305843010000000782",
+          "uniqueID": "itb-IA-316780",
+          "name": "Close CarConfig",
+          "version": null,
+          "interactionType": "Atomic",
+          "path": "RF-Resource.functional_keywords",
+          "spec": {
+            "callKey": "",
+            "sequencePhase": "TestStep",
+            "callType": "Flow",
+            "description": "<html><body/></html>",
+            "comments": "<html><body/></html>",
+            "references": [],
+            "preConditions": [],
+            "postConditions": []
+          },
+          "exec": {
+            "verdict": "Pass",
+            "time": "20241025 11:22:44.402",
+            "duration": 2,
+            "currentUser": {
+              "key": "",
+              "name": ""
+            },
+            "tester": null,
+            "comments": "<html><body><style>td {padding: 5px; border: none;} table {font-family: monospace; border: none;}</style><pre>Start Time:   2024-10-25 11:22:44.400\nEnd Time:     2024-10-25 11:22:44.402\nElapsed Time: 0:00:00.002000\n</pre><table><tr></tr></table></body></html>",
+            "references": []
+          },
+          "parameters": [],
+          "interactions": []
+        }
+      ]
+    }
+  ],
+  "parameters": [
+    {
+      "key": "32406",
+      "name": "Fahrzeug",
+      "value": "Minigolf",
+      "valueType": "Text",
+      "definitionType": "AtomicInstance",
+      "evaluationType": "CallByValue",
+      "dataType": {
+        "key": "6917529030000000198",
+        "name": "Fahrzeug",
+        "kind": "Regular",
+        "version": null,
+        "path": "",
+        "uniqueID": "iTB-DT-722"
+      }
+    },
+    {
+      "key": "32407",
+      "name": "Sondermodell",
+      "value": "Gomera",
+      "valueType": "Text",
+      "definitionType": "DetailedInstance",
+      "evaluationType": "CallByValue",
+      "dataType": {
+        "key": "6917529030000000206",
+        "name": "Sondermodell",
+        "kind": "Regular",
+        "version": null,
+        "path": "",
+        "uniqueID": "iTB-DT-63026"
+      }
+    },
+    {
+      "key": "32408",
+      "name": "Zubeh\u00f6r(Liste)",
+      "value": "0,00",
+      "valueType": "Text",
+      "definitionType": "InstanceTable",
+      "evaluationType": "CallByValue",
+      "dataType": {
+        "key": "6917529030000000210",
+        "name": "Zubeh\u00f6r(Liste)",
+        "kind": "Regular",
+        "version": null,
+        "path": "",
+        "uniqueID": "iTB-DT-1014"
+      }
+    },
+    {
+      "key": "32409",
+      "name": "Endpreis",
+      "value": "S-A",
+      "valueType": "Text",
+      "definitionType": "DetailedInstance",
+      "evaluationType": "CallByValue",
+      "dataType": {
+        "key": "6917529030000000214",
+        "name": "Endpreis",
+        "kind": "Regular",
+        "version": null,
+        "path": "",
+        "uniqueID": "iTB-DT-63023"
+      }
+    }
+  ],
+  "exec": {
+    "key": "3387",
+    "status": "Performed",
+    "execStatus": "NotBlocked",
+    "verdict": "Pass",
+    "plannedDuration": 0,
+    "actualDuration": 23,
+    "currentUser": {
+      "key": "-1",
+      "name": ""
+    },
+    "comments": "<html><body><b><span style='background-color: #04AF91; color: #fff;'>PASS</span></b><pre>Start Time:   2024-10-25 11:22:44.379\nEnd Time:     2024-10-25 11:22:44.402\nElapsed Time: 0:00:00.023000\n</pre>Message: <p><pre></pre></p>\n</body></html>",
+    "version": null,
+    "defects": [],
+    "udfs": [
+      {
+        "key": "1019",
+        "name": "Getestet in Build",
+        "value": "",
+        "udfType": "String"
+      },
+      {
+        "key": "1032",
+        "name": "text",
+        "value": "",
+        "udfType": "String"
+      }
+    ],
+    "keywords": [],
+    "references": [],
+    "tester": null
+  }
+}

@@ -1,22 +1,22 @@
 import * as vscode from "vscode";
-import { ProjectManagementTreeItem } from "./projectManagementTreeView";
+import { TestbenchTreeItem } from "./projectManagementTreeView";
 
-export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<ProjectManagementTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<ProjectManagementTreeItem | void> =
-        new vscode.EventEmitter<ProjectManagementTreeItem | void>();
-    readonly onDidChangeTreeData: vscode.Event<ProjectManagementTreeItem | void> = this._onDidChangeTreeData.event;
+export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<TestbenchTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<TestbenchTreeItem | void> =
+        new vscode.EventEmitter<TestbenchTreeItem | void>();
+    readonly onDidChangeTreeData: vscode.Event<TestbenchTreeItem | void> = this._onDidChangeTreeData.event;
 
-    private rootElements: ProjectManagementTreeItem[] = [];
+    rootElements: TestbenchTreeItem[] = [];
 
     refresh(): void {
         this._onDidChangeTreeData.fire();
     }
 
-    getParent(element: ProjectManagementTreeItem): ProjectManagementTreeItem | null {
+    getParent(element: TestbenchTreeItem): TestbenchTreeItem | null {
         return element.parent;
     }
 
-    async getChildren(element?: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
+    async getChildren(element?: TestbenchTreeItem): Promise<TestbenchTreeItem[]> {
         if (!element) {
             return this.rootElements;
         }
@@ -24,23 +24,23 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
         return element.children || [];
     }
 
-    getTreeItem(element: ProjectManagementTreeItem): vscode.TreeItem {
+    getTreeItem(element: TestbenchTreeItem): vscode.TreeItem {
         return element;
     }
 
     // Set the root elements of the tree
-    setRoots(roots: ProjectManagementTreeItem[]): void {
+    setRoots(roots: TestbenchTreeItem[]): void {
         this.rootElements = roots;
         this.refresh();
     }
 
     // Set the selected element as the only root element
-    makeRoot(element: ProjectManagementTreeItem): void {
+    makeRoot(element: TestbenchTreeItem): void {
         this.rootElements = [element]; // Set the selected element as the root
         this.refresh(); // Refresh the tree to display the new root
     }
 
-    handleExpansion(element: ProjectManagementTreeItem, expanded: boolean): void {
+    handleExpansion(element: TestbenchTreeItem, expanded: boolean): void {
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;

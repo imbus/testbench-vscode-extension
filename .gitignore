@@ -1,10 +1,17 @@
 # VS Code Unit tests
 .vscode-test/
 
+# VS Code package
+*.vsix
+
 # Ignore compiled output folder
 out/
+/out
 
-## Typescript 
+# Typescript
+tsconfig.tsbuildinfo
+
+bundled/libs/bin/
 
 # Logs
 logs
@@ -171,6 +178,8 @@ celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
+
+
 
 # Environments
 .env

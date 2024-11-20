@@ -1,0 +1,90 @@
+{
+  "key" : "171",
+  "name" : "Daten",
+  "uniqueID" : "itb-TT-8164",
+  "numbering" : "1.2.4",
+  "spec" : {
+    "key" : "637",
+    "description" : "<html><body>\n  \n\n  \n  \n    <p>\nsdfsdfsdfsdfsfsd\n\n    </p>\n\n    <p>\nfs\n\n    </p>\n\n    <p>\ndf\n\n    </p>\n\n    <p>\nsd\n\n    </p>\n\n    <p>\nf\n\n    </p>\n\n    <p>\nsdf\n\n    </p>\n\n    <p>\nsdf\n\n    </p>\n\n\n</body></html>",
+    "reviewComment" : "<html><body>\n  \n\n  \n  \n    <p>\nsdfsd\n\n    </p>\n\n    <p>\nf\n\n    </p>\n\n    <p>\nsdf\n\n    </p>\n\n    <p>\nsdf\n\n    </p>\n\n    <p>\nsd\n\n    </p>\n\n    <p>\nfsdf\n\n    </p>\n\n\n</body></html>",
+    "status" : "Planned",
+    "priority" : "Undefined",
+    "dueDate" : "2021-04-27T00:00",
+    "reviewer" : null,
+    "responsible" : null,
+    "udfs" : [
+      {
+        "key" : "1010",
+        "name" : "Automatisiert",
+        "value" : "true",
+        "udfType" : "Boolean"
+      },
+      {
+        "key" : "1011",
+        "name" : "Entwickler Review durchgeführt",
+        "value" : "false",
+        "udfType" : "Boolean"
+      },
+      {
+        "key" : "1012",
+        "name" : "Testumgebung",
+        "value" : "HIL 1",
+        "udfType" : "Enumeration"
+      },
+      {
+        "key" : "1021",
+        "name" : "Betriebssystem",
+        "value" : "",
+        "udfType" : "Enumeration"
+      },
+      {
+        "key" : "1032",
+        "name" : "text",
+        "value" : "",
+        "udfType" : "String"
+      },
+      {
+        "key" : "1033",
+        "name" : "Berechtigungen",
+        "value" : "",
+        "udfType" : "Enumeration"
+      }
+    ],
+    "keywords" : [
+      {
+        "key" : "1039",
+        "name" : "Demo",
+        "isVariantsMarker" : false
+      },
+      {
+        "key" : "1042",
+        "name" : "Systemtest",
+        "isVariantsMarker" : false
+      }
+    ],
+    "requirements" : [
+    ],
+    "references" : [
+    ]
+  },
+  "exec" : {
+    "key" : "4611686020000001616",
+    "comments" : "<html><body></body></html>",
+    "status" : "Planned",
+    "execStatus" : "NotBlocked",
+    "verdict" : "Undefined",
+    "responsible" : null,
+    "udfs" : [
+      {
+        "key" : "1032",
+        "name" : "text",
+        "value" : "",
+        "udfType" : "String"
+      }
+    ],
+    "keywords" : [
+    ],
+    "references" : [
+    ]
+  }
+}
