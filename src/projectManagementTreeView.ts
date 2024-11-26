@@ -332,7 +332,7 @@ export class TestbenchTreeItem extends vscode.TreeItem {
                 default: "TestCase.svg",
             },
             default: {
-                default: "iTB-EE-Logo.svg",
+                default: "TBU_Logo_cropped.svg",
             },
         };
 
