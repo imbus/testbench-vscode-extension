@@ -3,8 +3,11 @@ import * as reportHandler from "./reportHandler";
 import * as testBenchConnection from "./testBenchConnection";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testBenchTypes from "./testBenchTypes";
+import * as fsPromises from "fs/promises";
 import path from "path";
-import { TestBenchLogger } from "./testBenchLogger";
+import { TestBenchLogger, folderNameOfLogs } from "./testBenchLogger";
+
+// FIXME: Sometimes the robot framework test exeution fails on some tests and report upload fails. Clearing the working directory and restarting the process solves the problem.
 
 export const baseKey: string = "testbenchExtension"; // Prefix of the commands in package.json
 export let logger: TestBenchLogger;
@@ -90,6 +93,9 @@ export async function activate(context: vscode.ExtensionContext) {
         },
         setWorkspaceLocation: {
             command: `${baseKey}.setWorkspaceLocation`,
+        },
+        clearWorkspaceFolder: {
+            command: `${baseKey}.clearWorkspaceFolder`,
         },
     };
 
@@ -249,6 +255,11 @@ export async function activate(context: vscode.ExtensionContext) {
                     return;
                 }
 
+                // Clear the working directory before starting the test generation process if the configuration is set
+                if (config.get<boolean>("clearWorkingDirectoryBeforeTestGeneration")) {
+                    await vscode.commands.executeCommand(commands.clearWorkspaceFolder.command);
+                }
+
                 // If the user did not clicked on a test cycle, test cycle wont have any children so that test themes cannot be displayed in the quickpick.
                 // Call getChildrenOfCycle initialize the sub elements of the cycle.
                 // Offload the children of the cycle to the Test Theme Tree
@@ -291,6 +302,12 @@ export async function activate(context: vscode.ExtensionContext) {
                     logger.warn(`generateTestCasesForTestThemeOrTestCaseSet command is called without a connection.`);
                     return;
                 }
+
+                // Clear the working directory before starting the test generation process if the configuration is set
+                if (config.get<boolean>("clearWorkingDirectoryBeforeTestGeneration")) {
+                    await vscode.commands.executeCommand(commands.clearWorkspaceFolder.command);
+                }
+
                 await reportHandler.generateTestCasesForTestThemeOrTestCaseSet(
                     context,
                     treeItem,
@@ -346,8 +363,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
                 logger.warn(`readRFTestResultsAndCreateReportWithResults command is called without a connection.`);
                 return;
-            }
-
+            }           
             await reportHandler.readTestResultsAndCreateReportWithResults(
                 context,
                 folderNameOfTestbenchWorkingDirectory
@@ -368,7 +384,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage("No project selected. Please select a project first.");
                 logger.warn(`uploadTestResultsToTestbench command is called without a selected project.`);
                 return;
-            }
+            }          
 
             await testBenchConnection.selectReportWithResultsAndImportToTestbench(
                 connection,
@@ -441,8 +457,137 @@ export async function activate(context: vscode.ExtensionContext) {
         )
     );
 
+    // Register the "Clear Workspace Folder" command
+    context.subscriptions.push(
+        vscode.commands.registerCommand(commands.clearWorkspaceFolder.command, async () => {
+
+            const workspaceLocationPath = config.get<string>("workspaceLocation", "");
+            if (!workspaceLocationPath) {
+                vscode.window.showErrorMessage("No workspace location set. Please set the workspace location first.");
+                logger.warn(`Workspace location is empty. (Clear Workspace Folder Command)`);
+                return;
+            }
+
+            const testbenchWorkingDirectoryPath = path.join(workspaceLocationPath, folderNameOfTestbenchWorkingDirectory);
+            await clearWorkspaceFolder(
+                testbenchWorkingDirectoryPath,
+                [folderNameOfLogs],
+                !config.get<boolean>("clearWorkingDirectoryBeforeTestGeneration")
+            );
+        })
+    );
+
     // Uncomment this if you want to prompt the user to log in when the extension activates
     // vscode.commands.executeCommand(`${baseKey}.login`);
+}
+
+/**
+ * Deletes all contents of a workspace folder after user confirmation, excluding specified folders.
+ * @param workspaceLocation - The path of the workspace folder to be cleared.
+ * @param excludedFolders - A list of folder names to exclude from deletion.
+ */
+export async function clearWorkspaceFolder(
+    workspaceLocation: string,
+    excludedFolders: string[] = [],
+    promptForConfirmation: boolean = true
+): Promise<void> {
+    try {
+        // Check if the workspaceLocation path exists and is a directory
+        try {
+            const stats = await fsPromises.stat(workspaceLocation);
+            if (!stats.isDirectory()) {
+                vscode.window.showErrorMessage(`The path "${workspaceLocation}" is not a directory.`);
+                logger.error(`The path "${workspaceLocation}" is not a directory. (clearWorkspaceFolder)`);
+                return;
+            }
+        } catch {
+            vscode.window.showErrorMessage(`The folder at path "${workspaceLocation}" does not exist.`);
+            logger.error(`The folder at path "${workspaceLocation}" does not exist. (clearWorkspaceFolder)`);
+            return;
+        }
+
+        if (promptForConfirmation) {
+            // Prompt the user for confirmation
+            const userResponse = await vscode.window.showWarningMessage(
+                "Are you sure you want to delete all contents of the testbench folder? Log files will not be deleted.",
+                { modal: true },
+                "Yes",
+                "No"
+            );
+
+            // Exit if the user selects "No" or closes the dialog
+            if (userResponse !== "Yes") {
+                return;
+            }
+        }
+
+        // Read and process folder contents
+        const files = await fsPromises.readdir(workspaceLocation);
+        for (const file of files) {
+            const filePath = path.join(workspaceLocation, file);
+
+            // Skip excluded folders
+            if (excludedFolders.includes(file)) {
+                // vscode.window.showInformationMessage(`Skipping excluded folder: ${file}`);
+                logger.trace(`Skipping excluded folder: ${file} (clearWorkspaceFolder)`);
+                continue;
+            }
+
+            // Check if it's a directory or file and delete accordingly
+            const fileStats = await fsPromises.stat(filePath);
+            if (fileStats.isDirectory()) {
+                await deleteDirectoryRecursively(filePath, excludedFolders);
+            } else {
+                await fsPromises.unlink(filePath);
+            }
+        }
+
+        vscode.window.showInformationMessage("Workspace folder cleared successfully.");
+        logger.debug(`Workspace folder cleared successfully.`);
+    } catch (error: any) {
+        // Log and display error messages
+        vscode.window.showErrorMessage(`An error occurred while clearing the workspace folder: ${error.message}`);
+        logger.error(`An error occurred while clearing the workspace folder: ${error.message}`);
+    }
+}
+
+/**
+ * Recursively deletes a directory and its contents, excluding specified folders.
+ *
+ * @param dirPath - The directory path to delete.
+ * @param excludedFolders - A list of folder names to exclude from deletion.
+ */
+async function deleteDirectoryRecursively(dirPath: string, excludedFolders: string[]): Promise<void> {
+    try {
+        const files = await fsPromises.readdir(dirPath);
+
+        for (const file of files) {
+            const currentPath = path.join(dirPath, file);
+
+            // Skip excluded folders
+            if (excludedFolders.includes(file)) {
+                continue;
+            }
+
+            const fileStats = await fsPromises.stat(currentPath);
+            if (fileStats.isDirectory()) {
+                // Recursively delete subdirectories
+                await deleteDirectoryRecursively(currentPath, excludedFolders);
+            } else {
+                // Delete files
+                await fsPromises.unlink(currentPath);
+            }
+        }
+
+        // Remove the directory itself unless it's an excluded folder
+        const folderName = path.basename(dirPath);
+        if (!excludedFolders.includes(folderName)) {
+            await fsPromises.rmdir(dirPath);
+        }
+    } catch (error: any) {
+        logger.error(`Failed to delete directory ${dirPath}: ${error.message} (deleteDirectoryRecursively)`);
+        throw error;
+    }
 }
 
 export async function deactivate() {

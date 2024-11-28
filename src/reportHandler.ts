@@ -307,7 +307,7 @@ export async function getJobId(
         },
     });
 
-    logger.trace("jobIdResponse received from server:", jobIdResponse);
+    logger.trace("jobIdResponse received from server:", jobIdResponse.data);
 
     if (jobIdResponse.status !== 200) {
         logger.error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
@@ -1329,6 +1329,7 @@ export async function saveTestbench2RobotConfigurationAsJson(
         // Write file, overwriting if it already exists
         await fsPromise.writeFile(tb2robotConfigFilePath, jsonContent, "utf8");
         logger.debug(`Tb2robot configuration file created or overwritten at: ${tb2robotConfigFilePath}`);
+        logger.trace(`Tb2robot configuration file content:`, jsonContent);
 
         return tb2robotConfigFilePath;
     } catch (error) {

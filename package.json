@@ -21,35 +21,41 @@
                     "type": "string",
                     "default": "testbench",
                     "description": "The hostname or IP address of the TestBench server that the extension will connect to.",
-                    "order": 1
+                    "order": 1,
+                    "scope": "resource"
                 },
                 "testbenchExtension.portNumber": {
                     "type": "number",
                     "default": 9445,
                     "description": "The port number on which the TestBench server is listening for incoming connections.",
-                    "order": 2
+                    "order": 2,
+                    "scope": "resource"
                 },
                 "testbenchExtension.username": {
                     "type": "string",
                     "description": "The username used for authentication when connecting to the TestBench server.",
-                    "order": 3
+                    "order": 3,
+                    "scope": "resource"
                 },
                 "testbenchExtension.storePasswordAfterLogin": {
                     "type": "boolean",
                     "default": false,
                     "description": "If enabled, the extension will securely store the user's password after the first login to facilitate automatic login in future sessions without prompting for credentials.",
-                    "order": 4
+                    "order": 4,
+                    "scope": "resource"
                 },
                 "testbenchExtension.workspaceLocation": {
                     "type": "string",
                     "description": "The path to the workspace or project directory on the local machine for storing local files.",
-                    "order": 5
+                    "order": 5,
+                    "scope": "resource"
                 },
                 "testbenchExtension.useDefaultValuesForTestbench2robotframework": {
                     "type": "boolean",
                     "default": false,
                     "description": "Use default values for the testbench2robotframework configuration.",
-                    "order": 6
+                    "order": 6,
+                    "scope": "resource"
                 },
                 "testbenchExtension.testbench2robotframeworkConfig": {
                     "type": "object",
@@ -229,40 +235,51 @@
                             }
                         }
                     },
-                    "order": 7
+                    "order": 7,
+                    "scope": "resource"
+                },
+                "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Delete all files inside the working directory excluding the logs before generating tests.",
+                    "order": 8,
+                    "scope": "resource"
                 },
                 "testbenchExtension.clearReportAfterProcessing": {
                     "type": "boolean",
                     "default": true,
                     "description": "Remove report file after processing.",
-                    "order": 8
+                    "order": 9,
+                    "scope": "resource"
                 },
                 "testbenchExtension.outputXMLPath": {
                     "type": "string",
                     "description": "The path to the output XML file where robotframework test results are stored.",
-                    "order": 9
+                    "order": 10,
+                    "scope": "resource"
                 },
                 "testbenchExtension.testBenchLogger": {
-                    "type": "number",
+                    "type": "string",
                     "description": "Set the minimum log level. Log file is stored within the workspace location.",
-                    "default": 0,
-                    "order": 10,
+                    "default": "No logging",
+                    "order": 11,
                     "enum": [
-                        0,
-                        1,
-                        2,
-                        3,
-                        4,
-                        5
+                        "No logging",
+                        "Trace",
+                        "Debug",
+                        "Info",
+                        "Warn",
+                        "Error"
                     ],
                     "enumDescriptions": [
-                        "No logging",
-                        "Trace: 1",
-                        "Debug: 2",
-                        "Info: 3",
-                        "Warn: 4",
-                        "Error: 5"
-                    ]
+                        "Disable logging",
+                        "Most detailed information",
+                        "Detailed information",
+                        "Information messages",
+                        "Warning messages",
+                        "Error messages"
+                    ],
+                    "scope": "resource"
                 }
             }
         },
@@ -290,6 +307,14 @@
             {
                 "command": "testbenchExtension.setWorkspaceLocation",
                 "title": "TestBench: Set Workspace Location"
+            },
+            {
+                "command": "testbenchExtension.clearWorkspaceFolder",
+                "title": "TestBench: Clear Workspace Folder",
+                "icon": {
+                    "light": "resources/icons/clearWorkspaceFolder.svg",
+                    "dark": "resources/icons/clearWorkspaceFolder.svg"
+                }
             },
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
@@ -435,8 +460,13 @@
                     "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
-                    "command": "testbenchExtension.showExtensionSettings",
+                    "command": "testbenchExtension.clearWorkspaceFolder",
                     "group": "navigation@6",
+                    "when": "view == projectManagementTree"
+                },
+                {
+                    "command": "testbenchExtension.showExtensionSettings",
+                    "group": "navigation@7",
                     "when": "view == projectManagementTree"
                 }
             ],
