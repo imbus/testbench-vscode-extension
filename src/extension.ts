@@ -7,7 +7,7 @@ import * as fsPromises from "fs/promises";
 import path from "path";
 import { TestBenchLogger, folderNameOfLogs } from "./testBenchLogger";
 
-// FIXME: Sometimes the robot framework test exeution fails on some tests and report upload fails. Clearing the working directory and restarting the process solves the problem.
+// FIXME: Sometimes robot framework tests fails on some tests (No matching Keyword problem?) and uploading the report fails. Clearing the working directory and restarting the process did not work.
 
 export const baseKey: string = "testbenchExtension"; // Prefix of the commands in package.json
 export let logger: TestBenchLogger;
