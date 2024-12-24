@@ -23,7 +23,7 @@ export class pyCommandBuilder {
     public static async getPythonEnviromentExe(
         activeWorkspace: vscode.WorkspaceFolder | undefined
     ): Promise<string | undefined> {
-        let res: string | undefined;
+        let pythonExecutablePath: string | undefined;
 
         const pythonApi: PythonExtension = await PythonExtension.api();
 
@@ -41,49 +41,49 @@ export class pyCommandBuilder {
         const enviroment: ResolvedEnvironment | undefined = await pythonApi?.environments.resolveEnvironment(
             environmentPath
         );
-        res = enviroment?.executable.uri?.fsPath;
+        pythonExecutablePath = enviroment?.executable.uri?.fsPath;
 
-        return res;
+        return pythonExecutablePath;
     }
 
     public static async buildTb2RobotCommand(extensionContext: vscode.ExtensionContext): Promise<string> {
-        let res: string = "";
+        let resultString: string = "";
 
         const tb2robMain: string = extensionContext.asAbsolutePath(
             path.join("bundled", "tools", "tb2robot", "__main__.py")
         );
-        //logger.debug("rb2robot main path:", tb2robMain);
+        logger.trace("rb2robot main path set to:", tb2robMain);
 
         const folder: vscode.WorkspaceFolder | undefined = this.getActiveWorkspaceFolder();
 
         let pythonExe: string | undefined = await this.getPythonEnviromentExe(folder);
-        // logger.debug(`python.exe Path: ${pythonExe}`);
+        logger.trace(`python.exe Path: ${pythonExe}`);
 
         if (pythonExe === undefined) {
-            return res;
+            return resultString;
         }
 
-        res = pythonExe + " -u " + tb2robMain;
-        // logger.debug(res);
+        resultString = pythonExe + " -u " + tb2robMain;
+        logger.trace(`Built tb2robot command: ${resultString}`);
 
-        return res;
+        return resultString;
     }
 
     public static async buildRobotCommand(): Promise<string> {
-        let res: string = "";
+        let resultString: string = "";
 
         const folder: vscode.WorkspaceFolder | undefined = this.getActiveWorkspaceFolder();
 
         let pythonExe: string | undefined = await this.getPythonEnviromentExe(folder);
-        // logger.debug(`python.exe Path: ${pythonExe}`);
+        logger.trace(`python.exe Path: ${pythonExe}`);
 
         if (pythonExe === undefined) {
-            return res;
+            return resultString;
         }
 
-        res = pythonExe + " -m robot";
-        // logger.debug(res);
+        resultString = pythonExe + " -m robot";
+        logger.trace(`Built robot command: ${resultString}`);
 
-        return res;
+        return resultString;
     }
 }

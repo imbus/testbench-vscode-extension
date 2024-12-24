@@ -58,7 +58,7 @@ export class tb2robotLib {
         return new Promise(async (resolve, reject) => {
             const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
 
-            // OVerwrite the results in the reportPath if no resultPath is provided.
+            // Overwrite the results in the reportPath if no resultPath is provided.
             let command: string = `${commandBase} read -o ${outputXmlPath} ${reportWithoutResultsPath}`;
 
             // Write the results to the resultPath if provided.
@@ -83,7 +83,7 @@ export class tb2robotLib {
     }
 
     /**
-     * Generates XML resultfiles from TestBench JSON reports.
+     * Runs robotframework tests and generates output XML results.
      * @param {string} workingDirectory - Directory in which the command is to be executed.
      * @param {string} outputResultDir - Directory in which the result is to be stored..
      * @param {string} robotFilesPath - Path to a folder containing the robotframework tests.
@@ -123,7 +123,7 @@ export class tb2robotLib {
         reportPath: string,
         configJSONPath?: string
     ): Promise<boolean> {
-        let res: boolean = true;
+        let isWriteCommandSuccessful: boolean = true;
 
         await this.tb2robotWrite(context, workingDirectory, reportPath, configJSONPath)
             .then(() => {
@@ -137,10 +137,10 @@ export class tb2robotLib {
             .catch((err) => {
                 logger.error(`Error in testbench2robotframework write:`, err);
                 vscode.window.showErrorMessage(`Error in testbench2robotframework write: ${err}`);
-                res = false;
+                isWriteCommandSuccessful = false;
             });
 
-        return res;
+        return isWriteCommandSuccessful;
     }
 
     /**
@@ -160,7 +160,7 @@ export class tb2robotLib {
         resultPath?: string,
         configJSONPath?: string
     ): Promise<boolean> {
-        let res: boolean = true;
+        let isReadCommandSuccessful: boolean = true;
 
         await this.tb2robotRead(context, workingDirectory, outputXmlPath, reportPath, resultPath, configJSONPath)
             .then(() => {
@@ -180,9 +180,9 @@ export class tb2robotLib {
             .catch((err) => {
                 logger.error(`Error in testbench2robotframework read:`, err);
                 vscode.window.showErrorMessage(`Error in testbench2robotframework read: ${err}`);
-                res = false;
+                isReadCommandSuccessful = false;
             });
 
-        return res;
+        return isReadCommandSuccessful;
     }
 }

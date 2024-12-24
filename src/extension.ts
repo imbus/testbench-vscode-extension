@@ -11,18 +11,22 @@ import { TestBenchLogger, folderNameOfLogs } from "./testBenchLogger";
 
 export const baseKey: string = "testbenchExtension"; // Prefix of the commands in package.json
 export let logger: TestBenchLogger;
+
 export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null; // Store the tree data provider
 export function setProjectManagementTreeDataProvider(
     newProjectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null
 ) {
     projectManagementTreeDataProvider = newProjectManagementTreeDataProvider;
 }
+
 export let connection: testBenchConnection.PlayServerConnection | null = null; // Store the connection to server
 export function setConnection(newConnection: testBenchConnection.PlayServerConnection | null) {
     connection = newConnection;
 }
+
 export const folderNameOfTestbenchWorkingDirectory: string = ".testbench"; // Folder to create under the working directory to download / process files
 
+// Store the last fethed report parameters to be able to use it while uploading the report
 export let lastGeneratedReportParams: testBenchTypes.LastGeneratedReportParams = {
     executionBased: undefined,
     projectKey: undefined,
@@ -35,7 +39,7 @@ export async function activate(context: vscode.ExtensionContext) {
     logger = new TestBenchLogger();
     logger.info("Extension activated.");
 
-    // Store extension commands
+    // Store extension commands listed in package.json
     const commands: { [key: string]: { command: string } } = {
         displayCommands: {
             command: `${baseKey}.displayCommands`,
@@ -101,19 +105,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize or update extension configuration settings
     async function loadConfiguration() {
-        // If storePassword is false, delete the stored password.
-        // The password is only stored after a successful login.
+        // If storePassword is set to false, delete the stored password immediately.
+        // If storePassword is set to true, the password is only stored after a successful login.
         if (!config.get<boolean>("storePasswordAfterLogin", false)) {
             await testBenchConnection.clearStoredCredentials(context);
         }
 
-        // If the user wont specify a workspace location, use the workspace location of VS Code
+        // If the user wont specify a workspace location, use the first current workspace location of VS Code
         if (!config.get<string>("workspaceLocation")) {
             await config.update("workspaceLocation", vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
         }
 
         if (config.get<boolean>("useDefaultValuesForTestbench2robotframework")) {
-            // For testbench2robotframework configuration, set the generation and resource directory relative to the workspace location
+            // For testbench2robotframework library configuration, set the generation and resource directory relative to the workspace location
             let defaultTestbench2robotframeworkConfig: testBenchTypes.Testbench2robotframeworkConfiguration =
                 testBenchTypes.defaultTestbench2robotframeworkConfig;
             defaultTestbench2robotframeworkConfig.generationDirectory = path.join(
@@ -130,10 +134,10 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     }
 
-    // Load initial configuration
+    // Load initial configuration of the extension
     await loadConfiguration();
 
-    // Respond to configuration changes
+    // Respond to configuration changes of the user
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (e.affectsConfiguration(baseKey)) {
@@ -143,7 +147,7 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Prompts the user to select a folder and returns its path
+    // Prompts the user to select a workspace folder and returns its path
     async function promptForWorkspaceLocation(): Promise<string | undefined> {
         const options: vscode.OpenDialogOptions = {
             canSelectMany: false,
@@ -159,7 +163,8 @@ export async function activate(context: vscode.ExtensionContext) {
         return undefined;
     }
 
-    // Register the "Set Workspace Location" command
+    // Register the "Set Workspace Location" command.
+    // Prompt the user to select a workspace location and update the workspace configuration with the selected path.
     context.subscriptions.push(
         vscode.commands.registerCommand(`${baseKey}.setWorkspaceLocation`, async () => {
             const newWorkspaceLocation: string | undefined = await promptForWorkspaceLocation();
@@ -172,7 +177,8 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register "Show Extension Settings" command
+    // Register "Show Extension Settings" command.
+    // Opens the settings UI of the extension inside the settings editor.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.showExtensionSettings.command, () => {
             // Open the settings UI of the extension inside the settings editor
@@ -187,19 +193,23 @@ export async function activate(context: vscode.ExtensionContext) {
             logger.debug("Extension settings opened.");
         })
     );
-    // Login/Logout icon changes based on connection status
+
+    // The connectionActive context value is used to enable or disable the login and logout buttons in the status bar,
+    // which allows icon changes for login/logout buttons based on connection status.
     vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
     logger.debug(`Context value connectionActive set to: ${connection !== null}`);
 
-    // The user may press the login button multiple times consecutively. Aviod executing the command again if already inside login.
+    // The user may press the login button multiple times consecutively which may cause multiple login processes to run at the same time.
+    // Aviod executing the command again if we are already inside login command.
     let insideLogin: boolean = false;
-    // Register the "Login" command
+    // Register the "Login" command.
+    // Perform the login process and store the connection object.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.login.command, async () => {
             if (insideLogin) {
                 logger.debug(`Login process is already running.`);
 
-                // If somehow login is stuck, reset the insideLogin flag after 10 seconds to avoid blocking the login process.
+                // If (somehow) login flag is stuck and set to true, reset the insideLogin flag after 10 seconds to avoid blocking the login process.
                 setTimeout(() => {
                     insideLogin = false;
                     logger.debug(`insideLogin flag reset after 10 seconds.`);
@@ -212,7 +222,6 @@ export async function activate(context: vscode.ExtensionContext) {
             await testBenchConnection
                 .performLogin(context, baseKey)
                 .catch((error: any) => {
-                    // console.error("Login process failed:", error);
                     logger.error(`Login process failed: ${error}`);
                 })
                 .finally(() => {
@@ -223,7 +232,8 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Logout" command
+    // Register the "Logout" command.
+    // Performs the logout process and clears the connection object.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.logout.command, async () => {
             if (!connection) {
@@ -236,7 +246,7 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Generate Tests" command, which is activated for a cycle element
+    // Register the "Generate Test Cases For Cycle" command, which is activated for a cycle element in the tree view.
     context.subscriptions.push(
         vscode.commands.registerCommand(
             commands.generateTestCasesForCycle.command,
@@ -260,9 +270,10 @@ export async function activate(context: vscode.ExtensionContext) {
                     await vscode.commands.executeCommand(commands.clearWorkspaceFolder.command);
                 }
 
-                // If the user did not clicked on a test cycle, test cycle wont have any children so that test themes cannot be displayed in the quickpick.
-                // Call getChildrenOfCycle initialize the sub elements of the cycle.
-                // Offload the children of the cycle to the Test Theme Tree
+                // If the user did not clicked on a test cycle in the tree view before,
+                // the test cycle wont have any initialized children so that test themes cannot be displayed in the quickpick.
+                // Call getChildrenOfCycle to initialize the sub elements (Test themes etc.) of the cycle.
+                // Offload the children of the cycle to the Test Theme Tree View.
                 if (projectManagementTreeDataProvider?.testThemeDataProvider) {
                     const children = (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
                     projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
@@ -278,7 +289,7 @@ export async function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Register the "Fetch Report" command for a tree element
+    // Register the "Fetch Report" command for a tree element.
     context.subscriptions.push(
         vscode.commands.registerCommand(
             commands.fetchReportForSelectedTreeItem.command,
@@ -292,7 +303,7 @@ export async function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Register the "Generate Tests For Test Theme or Test Case Set" command, which is activated for a test theme element
+    // Register the "Generate Tests For Test Theme or Test Case Set" command.
     context.subscriptions.push(
         vscode.commands.registerCommand(
             commands.generateTestCasesForTestThemeOrTestCaseSet.command,
@@ -317,7 +328,8 @@ export async function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Register the "Select And Load Project" command
+    // Register the "Select And Load Project" command.
+    // Fetches the projects list from the server and prompts the user to select a project to display its contents in the tree view.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.selectAndLoadProject.command, async () => {
             if (!connection) {
@@ -356,14 +368,15 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Read Test Results" command, which is activated for a test theme or test case set element
+    // Register the "Read Test Results" command, which is activated for a test theme or test case set element.
+    // Reads the test results from the testbench working directory and creates a report with the results.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.readRFTestResultsAndCreateReportWithResults.command, async () => {
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
                 logger.warn(`readRFTestResultsAndCreateReportWithResults command is called without a connection.`);
                 return;
-            }           
+            }
             await reportHandler.readTestResultsAndCreateReportWithResults(
                 context,
                 folderNameOfTestbenchWorkingDirectory
@@ -371,7 +384,8 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the Upload Test Results to TestBench command
+    // Register the "Upload Test Results To Testbench" to TestBench command.
+    // Uploads the selected test results for a test cycle to the testbench server.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.uploadTestResultsToTestbench.command, async () => {
             if (!connection) {
@@ -384,7 +398,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage("No project selected. Please select a project first.");
                 logger.warn(`uploadTestResultsToTestbench command is called without a selected project.`);
                 return;
-            }          
+            }
 
             await testBenchConnection.selectReportWithResultsAndImportToTestbench(
                 connection,
@@ -393,7 +407,7 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the automated "Read Tests & Upload Results to TestBench" command
+    // Register the automated "Read Tests, Create Results & Upload Results to TestBench" command.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.readAndUploadTestResultsToTestbench.command, async () => {
             await reportHandler.readTestsAndCreateResultsAndImportToTestbench(
@@ -404,7 +418,7 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Refresh Project Tree" command
+    // Register the "Refresh Project Tree" command.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.refreshProjectTreeView.command, async () => {
             projectManagementTreeDataProvider?.clearTree();
@@ -434,7 +448,8 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Make Root" command
+    // Register the "Make Root" command.
+    // Makes the selected tree item the root of the tree.
     context.subscriptions.push(
         vscode.commands.registerCommand(
             commands.makeRoot.command,
@@ -457,10 +472,10 @@ export async function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Register the "Clear Workspace Folder" command
+    // Register the "Clear Workspace Folder" command.
+    // Clears the workspace folder of its contents, excluding log files.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.clearWorkspaceFolder.command, async () => {
-
             const workspaceLocationPath = config.get<string>("workspaceLocation", "");
             if (!workspaceLocationPath) {
                 vscode.window.showErrorMessage("No workspace location set. Please set the workspace location first.");
@@ -468,7 +483,10 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            const testbenchWorkingDirectoryPath = path.join(workspaceLocationPath, folderNameOfTestbenchWorkingDirectory);
+            const testbenchWorkingDirectoryPath = path.join(
+                workspaceLocationPath,
+                folderNameOfTestbenchWorkingDirectory
+            );
             await clearWorkspaceFolder(
                 testbenchWorkingDirectoryPath,
                 [folderNameOfLogs],
@@ -553,7 +571,6 @@ export async function clearWorkspaceFolder(
 
 /**
  * Recursively deletes a directory and its contents, excluding specified folders.
- *
  * @param dirPath - The directory path to delete.
  * @param excludedFolders - A list of folder names to exclude from deletion.
  */
@@ -591,7 +608,7 @@ async function deleteDirectoryRecursively(dirPath: string, excludedFolders: stri
 }
 
 export async function deactivate() {
-    // Gracefully logout the user when the extension is deactivated
+    // Gracefully logout the user when the extension is deactivated.
     await connection?.logoutUser(projectManagementTreeDataProvider!);
     logger.info("Extension deactivated.");
 }

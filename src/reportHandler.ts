@@ -1027,7 +1027,7 @@ async function chooseReportWithouResultsZipFile(workingDirectoryFullPath: string
 }
 
 /**
- * Reads test results and creates a report with the results, using VS Code's progress API.
+ * Reads test results and creates a report with the results. Displays a progress bar using VS Code's progress API.
  * @param context - The extension context.
  * @param workingDirectory - The working directory path.
  * @param currentProgress - Optional existing progress instance to report updates.

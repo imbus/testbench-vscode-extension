@@ -3,7 +3,7 @@ import { exec } from "child_process";
 import { logger } from "./extension";
 
 export class dependenciesCheck {
-    public static checkVSCodeVersion(vsCodeVersion: string): boolean {
+    public static isVSCodeVersionValid(vsCodeVersion: string): boolean {
         const [major, minor] = vsCodeVersion.split(".").map(Number);
 
         if (major > 1 || (major === 1 && minor >= 86)) {
@@ -18,7 +18,7 @@ export class dependenciesCheck {
         }
     }
 
-    public static checkPythonExtension(pythonExtension: vscode.Extension<any> | undefined): boolean {
+    public static isPythonExtensionInstalled(pythonExtension: vscode.Extension<any> | undefined): boolean {
         if (pythonExtension) {
             logger.debug(`Python Extension is installed.`);
             return true;
@@ -29,7 +29,7 @@ export class dependenciesCheck {
         }
     }
 
-    public static checkRobotFramework(): Promise<boolean> {
+    public static isRobotFrameworkInstalled(): Promise<boolean> {
         return new Promise((resolve) => {
             exec("pip show robotframework", (error, stdout, stderr) => {
                 if (error) {
@@ -53,7 +53,7 @@ export class dependenciesCheck {
         });
     }
 
-    public static async checkPythonVersion(): Promise<boolean> {
+    public static async isPythonVersionCompatible(): Promise<boolean> {
         return new Promise((resolve) => {
             exec(
                 "python -c \"import sys; print('.'.join(map(str, sys.version_info[:3])))\"",
@@ -89,24 +89,24 @@ export class dependenciesCheck {
         });
     }
 
-    public static async checkDependencies(): Promise<boolean> {
+    public static async verifyRequiredDependencies(): Promise<boolean> {
         let res: boolean = true;
 
-        if (!this.checkVSCodeVersion(vscode.version)) {
+        if (!this.isVSCodeVersionValid(vscode.version)) {
             res = false;
         }
 
-        if (!this.checkPythonExtension(vscode.extensions.getExtension("ms-python.python"))) {
+        if (!this.isPythonExtensionInstalled(vscode.extensions.getExtension("ms-python.python"))) {
             res = false;
         }
 
-        await this.checkPythonVersion().then((successful) => {
+        await this.isPythonVersionCompatible().then((successful) => {
             if (!successful) {
                 res = false;
             }
         });
 
-        await this.checkRobotFramework().then((successful) => {
+        await this.isRobotFrameworkInstalled().then((successful) => {
             if (!successful) {
                 res = false;
             }

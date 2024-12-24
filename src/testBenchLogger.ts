@@ -6,11 +6,13 @@ import { baseKey, folderNameOfTestbenchWorkingDirectory } from "./extension";
 
 export const folderNameOfLogs = "logs"; 
 
-const MAX_LOG_FILE_SIZE: number = 5 * 1024 * 1024; // 5 MB // 1024; // 1 KB for testing.
+const MAX_LOG_FILE_SIZE: number = 5 * 1024 * 1024; // 5 MB
 const MAX_LOG_FILES: number = 3; // Maximum number of backup log files.
 
-// Async logging for performance
-// Use promisify to convert fs functions to promises
+// In total, MAX_LOG_FILE_SIZE * MAX_LOG_FILES MegaBytes of logs will be stored at maximum.
+
+// Async logging for performance.
+// Use promisify to convert fs functions to promises.
 const fsAppendFile = promisify(fs.appendFile);
 const fsStat = promisify(fs.stat);
 const fsRename = promisify(fs.rename);
