@@ -13,7 +13,7 @@ import { importReportWithResultsToTestbench } from "./testBenchConnection";
  * Prompt the user to select the export report method in quick pick format (Execution based or Specification based).
  * @returns {Promise<boolean | null>} - Resolves with the selected option (true for Execution based, false for Specification based) or null if the user cancels the selection.
  */
-export async function isExecutionBasedReportSelected(): Promise<boolean | null> {
+export async function promptForReportGenerationMethodAndCheckIfExecBasedChosen(): Promise<boolean | null> {
     // Return a Promise, which will resolve with the result after user interaction
     return new Promise((resolve) => {
         // Create the quick pick input
@@ -39,7 +39,7 @@ export async function isExecutionBasedReportSelected(): Promise<boolean | null> 
         // Handle case when the quick pick is hidden without user selection (e.g., if user clicks away)
         quickPick.onDidHide(() => {
             resolve(null);
-            logger.debug("User closed the export method selection dialog.");
+            logger.debug("Export method selection dialog closed by the user.");
             quickPick.dispose(); // Clean up resources after closing
         });
 
@@ -53,10 +53,11 @@ export async function isExecutionBasedReportSelected(): Promise<boolean | null> 
  * @returns {boolean} True if the report job has completed successfully, otherwise false
  */
 export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
-    logger.debug(
-        `isReportJobCompletedSuccessfully resulted in ${!!jobStatus?.completion?.result?.ReportingSuccess?.reportName}`
-    );
-    return !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
+
+    const isReportJobCompletedSuccessfully: boolean = !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
+
+    logger.trace(`isReportJobCompletedSuccessfully resulted in ${isReportJobCompletedSuccessfully}`);
+    return isReportJobCompletedSuccessfully;
 }
 
 /**
@@ -65,10 +66,11 @@ export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
  * @returns {boolean} True if the import job has completed successfully, otherwise false
  */
 export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
-    logger.debug(
-        `isImportJobCompletedSuccessfully resulted in ${!!jobStatus?.completion?.result?.ExecutionImportingSuccess}`
-    );
-    return !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
+
+    const isImportJobCompletedSuccessfully: boolean = !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
+
+    logger.trace(`isImportJobCompletedSuccessfully resulted in ${isImportJobCompletedSuccessfully}`);
+    return isImportJobCompletedSuccessfully;
 }
 
 /**
@@ -77,8 +79,11 @@ export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
  * @returns {boolean} True if the import job has failed, otherwise false
  */
 export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): boolean {
-    logger.debug(`isImportJobFailed resulted in ${!!jobStatus?.completion?.result?.ExecutionImportingFailure}`);
-    return !!jobStatus?.completion?.result?.ExecutionImportingFailure;
+
+    const isImportJobFailed: boolean = !!jobStatus?.completion?.result?.ExecutionImportingFailure;
+
+    logger.trace(`isImportJobFailed resulted in ${isImportJobFailed}`);
+    return isImportJobFailed;
 }
 
 /**
@@ -86,7 +91,7 @@ export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): 
  * 3 Calls are needed to download the zip report:
  * 1. Get the job ID
  * 2. Get the job status of that job ID (Polling until the job is completed)
- * 3. Download the report zip file.
+ * 3. Download the report zip file when the job is complete.
  *
  * @param baseKey The base key of the extension
  * @param projectKey The project key
@@ -97,7 +102,7 @@ export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): 
  * @param cancellationToken Cancellation token to be able to cancel the polling by clicking cancel button
  * @returns {Promise<string | undefined>} The path of the downloaded zip file if the download was successful, otherwise undefined
  */
-export async function fetchZipFile(
+export async function fetchReportZipFromServer(
     baseKey: string,
     projectKey: string,
     cycleKey: string,
@@ -108,21 +113,21 @@ export async function fetchZipFile(
 ): Promise<string | undefined> {
     try {
         if (!connection) {
-            logger.error("Connection object is missing.");
+            logger.error("Connection object is missing, can't fetch report zip from server.");
             return undefined;
         }
 
         logger.debug(
-            `Fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`
+            `Fetching report zip with projectKey: ${projectKey}, cycleKey: ${cycleKey}, folderNameToDownloadReport: ${folderNameToDownloadReport}.`
         );
         logger.trace(`Fetching report with requestParams:`, requestParams);
 
         const jobId: string | null = await getJobId(projectKey, cycleKey, requestParams);
         if (!jobId) {
-            console.warn("Job ID not received.");
+            console.warn("Job ID not received from server.");
             return undefined;
         }
-        logger.debug(`Job ID (${jobId}) fetched successfully.`);
+        logger.debug(`Job ID (${jobId}) fetched from server successfully.`);
 
         const jobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
             projectKey,
@@ -133,8 +138,9 @@ export async function fetchZipFile(
         );
 
         if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
-            logger.warn("Report generation was unsuccessful.");
-            vscode.window.showErrorMessage("Report generation was unsuccessful.");
+            const reportGenerationUnsuccesfullWarningMessage: string = "Report generation was unsuccessful.";
+            logger.warn(reportGenerationUnsuccesfullWarningMessage);
+            vscode.window.showErrorMessage(reportGenerationUnsuccesfullWarningMessage);
             return undefined;
         }
 
@@ -154,14 +160,15 @@ export async function fetchZipFile(
         }
     } catch (error) {
         if (error instanceof vscode.CancellationError) {
-            logger.debug("Operation cancelled by the user.");
-            vscode.window.showInformationMessage("Operation cancelled by the user.");
+            const operationCancelledMessage: string = "Fetch report operation cancelled by the user.";
+            logger.debug(operationCancelledMessage);
+            vscode.window.showInformationMessage(operationCancelledMessage);
             return undefined;
         } else {
             if (axios.isAxiosError(error) && error.response?.status === 404) {
                 throw new Error("Resource not found.");
             } else {
-                logger.error(`Error fetching the report for project ${projectKey} and cycle ${cycleKey}: ${error}`);
+                logger.error(`Error fetching the report with project key ${projectKey} and cycle key ${cycleKey}: ${error}`);
                 throw error;
             }
         }
@@ -188,20 +195,21 @@ export async function pollJobStatus(
     maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
 ): Promise<testBenchTypes.JobStatusResponse | null> {
     const startTime: number = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
-    let attempt: number = 0;
+    let attempt: number = 0;  // Polling attempt counter
     let jobStatus: testBenchTypes.JobStatusResponse | null = null;
     let lastIncrement: number = 0;
 
     // Poll the job status until the job is completed with either success or failure
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
-            logger.debug("Polling operation cancelled by the user.");
-            vscode.window.showInformationMessage("Polling operation cancelled by the user.");
+            const jobStatusPollingCancelledMessage: string = "Job status polling operation cancelled by the user.";
+            logger.debug(jobStatusPollingCancelledMessage);
+            vscode.window.showInformationMessage(jobStatusPollingCancelledMessage);
             throw new vscode.CancellationError();
         }
 
         if (!connection) {
-            logger.error("Connection object is missing (pollJobStatus).");
+            logger.error("Connection object is missing, cannot proceed to poll job status.");
             return null;
         }
 
@@ -210,7 +218,7 @@ export async function pollJobStatus(
         try {
             jobStatus = await getJobStatus(projectKey, jobId, jobType);
             if (!jobStatus) {
-                logger.warn("Job status not received.");
+                logger.warn("Job status not received from server.");
                 return null;
             }
 
@@ -226,11 +234,11 @@ export async function pollJobStatus(
                     message: `Fetching job status (${jobStatusResponseHandledItemsCount}/${jobStatusResponseTotalItemsCount}).`,
                     increment: (roundedProgressPercentage - lastIncrement) / 3,
                 });
-                logger.debug(`Attempt ${attempt}: Job Status fetched. Progress: ${roundedProgressPercentage}%`);
+                logger.debug(`Polling attempt ${attempt}: Job Status fetched. Progress: ${roundedProgressPercentage}%`);
 
                 lastIncrement = roundedProgressPercentage;
             } else {
-                logger.debug(`Attempt ${attempt}: Job Status fetched.`);
+                logger.debug(`Polling attempt ${attempt}: Job Status fetched.`);
             }
 
             if (jobType === "report") {
@@ -249,7 +257,7 @@ export async function pollJobStatus(
                 }
             }
         } catch (error) {
-            logger.error(`Attempt ${attempt}: Failed to get job status.`, error);
+            logger.error(`Polling attempt ${attempt}: Failed to get job status.`, error);
         }
 
         // Update the progress bar, if provided
@@ -289,17 +297,17 @@ export async function getJobId(
     requestParams?: testBenchTypes.OptionalJobIDRequestParameter // TODO: Execution mode is added in new branch, project tree is also changed? ExecutionImportingSuccess
 ): Promise<string | null> {
     if (!connection) {
-        logger.error("Connection object is missing.");
+        logger.error("Connection object is missing, cannot get the job ID from server.");
         return "";
     }
 
-    const url: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
+    const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
 
     logger.debug(
-        `Sending request to fetch job ID for projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${url}.`
+        `Sending request to fetch job ID with projectKey: ${projectKey}, cycleKey: ${cycleKey} to the URL ${getJobIDUrl}.`
     );
 
-    const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await axios.post(url, requestParams, {
+    const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await axios.post(getJobIDUrl, requestParams, {
         headers: {
             accept: "application/json",
             Authorization: connection.getSessionToken(), // Include session token for authorization
@@ -331,15 +339,15 @@ export async function getJobStatus(
     jobType: "report" | "import"
 ): Promise<testBenchTypes.JobStatusResponse | null> {
     if (!connection) {
-        logger.error("Connection object is missing (getJobStatus).");
+        logger.error("Connection object is missing, cannot get job status from server.");
         return null;
     }
 
-    const url: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
+    const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
 
-    logger.debug(`Checking job status: ${url}`);
+    logger.debug(`Checking job status: ${getJobStatusUrl}`);
 
-    const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await axios.get(url, {
+    const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await axios.get(getJobStatusUrl, {
         headers: {
             accept: "application/vnd.testbench+json",
             Authorization: connection.getSessionToken(),
@@ -373,16 +381,16 @@ export async function downloadReport(
     try {
         // Ensure the connection object is available
         if (!connection) {
-            logger.error("Connection object is missing (downloadReport).");
+            logger.error("Connection object is missing, cannot download report from server.");
             return undefined;
         }
 
         // Construct the download URL
-        const url: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileName}/v1`;
-        logger.debug(`Sending request to download report ${fileName} from URL ${url}.`);
+        const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileName}/v1`;
+        logger.debug(`Sending request to download report ${fileName} from URL ${downloadReportUrl}.`);
 
         // Fetch the report from the server
-        const downloadZipResponse: AxiosResponse<any> = await axios.get(url, {
+        const downloadZipResponse: AxiosResponse<any> = await axios.get(downloadReportUrl, {
             responseType: "arraybuffer", // Expecting binary data
             headers: {
                 accept: "application/vnd.testbench+json",
@@ -401,14 +409,14 @@ export async function downloadReport(
         const workspaceLocation: string | undefined = config.get<string>("workspaceLocation");
 
         if (workspaceLocation && fs.existsSync(workspaceLocation)) {
-            // Save report to the specified workspace location
-            return await saveReportToFile(workspaceLocation, folderNameToDownloadReport, fileName, downloadZipResponse);
+            // Save report file to the specified workspace location
+            return await storeReportFileLocally(workspaceLocation, folderNameToDownloadReport, fileName, downloadZipResponse);
         } else if (workspaceLocation) {
             logger.error(`The configured download location does not exist: ${workspaceLocation}`);
             vscode.window.showErrorMessage(`The configured workspace location does not exist: ${workspaceLocation}`);
         }
 
-        // If no valid workspace location, prompt the user to choose a save location
+        // If workspace location is not valid or not set, prompt the user to choose a save location to store the report
         return await promptUserForSaveLocationAndSaveReportToFile(fileName, downloadZipResponse);
     } catch (error) {
         logger.error(`Error downloading the report: ${(error as Error).message}`);
@@ -418,22 +426,22 @@ export async function downloadReport(
 }
 
 /**
- * Saves the report file to the specified location.
- * @param workspaceLocation The workspace location to save the file
- * @param folderName The folder name for saving the report
- * @param fileName The name of the file to save
+ * Saves the report file to the specified location and returns the path of the saved file.
+ * @param testbenchWorkspaceLocation The testbench workspace location to save the file
+ * @param folderNameOfReport The folder name for saving the report file
+ * @param fileNameOfReport The name of the file
  * @param downloadResponse The Axios response containing the file data
  * @returns {Promise<string | undefined>} The path of the saved file
  */
-async function saveReportToFile(
-    workspaceLocation: string,
-    folderName: string,
-    fileName: string,
+async function storeReportFileLocally(
+    testbenchWorkspaceLocation: string,
+    folderNameOfReport: string,
+    fileNameOfReport: string,
     downloadResponse: AxiosResponse<any>
 ): Promise<string | undefined> {
     try {
-        const filePath: string = path.join(workspaceLocation, folderName, fileName);
-        const uri: vscode.Uri = vscode.Uri.file(filePath);
+        const filePathToSaveReport: string = path.join(testbenchWorkspaceLocation, folderNameOfReport, fileNameOfReport);
+        const uri: vscode.Uri = vscode.Uri.file(filePathToSaveReport);
 
         // Write the file to the specified location
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
@@ -447,17 +455,18 @@ async function saveReportToFile(
 }
 
 /**
- * Prompts the user to choose a save location and writes the file there.
- * @param fileName The name of the file to save
+ * Prompts the user to choose a save location and stores the file there.
+ * @param fileNameOfReport The name of the file to save
  * @param downloadResponse The Axios response containing the file data
  * @returns {Promise<string | undefined>} The path of the saved file if successful, otherwise undefined
  */
 async function promptUserForSaveLocationAndSaveReportToFile(
-    fileName: string,
+    fileNameOfReport: string,
     downloadResponse: AxiosResponse<any>
 ): Promise<string | undefined> {
+    // Prompt the user to choose a save location
     const zipUri: vscode.Uri | undefined = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file(fileName),
+        defaultUri: vscode.Uri.file(fileNameOfReport),
         filters: { "Zip Files": ["zip"] },
     });
 
@@ -469,7 +478,7 @@ async function promptUserForSaveLocationAndSaveReportToFile(
 
                 // Prompt user for overwrite confirmation
                 const overwriteOption: string | undefined = await vscode.window.showWarningMessage(
-                    `The file "${fileName}" already exists. Do you want to overwrite it?`,
+                    `The file "${fileNameOfReport}" already exists. Do you want to overwrite it?`,
                     { modal: true },
                     "Overwrite",
                     "Skip"
@@ -507,56 +516,62 @@ export function delay(ms: number): Promise<void> {
 
 /**
  * Fetches and downloads a report in ZIP format for a selected tree view element.
- * @param treeItem - The selected tree item in the project management tree.
+ * @param selectedProjectManagementTreeItem - The selected tree item in the project management tree.
  * @param projectManagementTreeViewOfExtension - The project management tree data provider.
- * @param workingDirectory - The directory where the ZIP file should be downloaded.
+ * @param workingDirectoryToStoreReport - The directory where the ZIP file should be downloaded.
  */
 export async function fetchReportForTreeElement(
-    treeItem: projectManagementTreeView.TestbenchTreeItem,
+    selectedProjectManagementTreeItem: projectManagementTreeView.TestbenchTreeItem,
     projectManagementTreeViewOfExtension: projectManagementTreeView.ProjectManagementTreeDataProvider | null,
-    workingDirectory: string
+    workingDirectoryToStoreReport: string
 ): Promise<void> {
     // Show progress in VS Code
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: `Fetching Report for ${treeItem.label}`,
+            title: `Fetching Report for ${selectedProjectManagementTreeItem.label}`,
             cancellable: true,
         },
         async (progress, cancellationToken) => {
             try {
                 // Report initial progress
                 progress?.report({ increment: 30, message: "Selecting report parameters." });
-                logger.debug("Fetching report for the selected tree item:", treeItem);
+                logger.debug("Fetching report for the selected tree item:", selectedProjectManagementTreeItem);
 
                 // Validate the connection
                 if (!connection) {
-                    logger.warn("No connection available (callFetchReportForTreeElement)");
-                    throw new Error("No connection available. Please log in first.");
+                    const connectionMissingErrorMessage: string =
+                        "No connection available, cannot fetch report. (callFetchReportForTreeElement)";
+                    logger.warn(connectionMissingErrorMessage);
+                    throw new Error(connectionMissingErrorMessage);
                 }
 
                 // Validate the project management tree view
                 if (!projectManagementTreeViewOfExtension) {
-                    logger.warn("Project management tree is not initialized. (callFetchReportForTreeElement)");
-                    throw new Error("Project management tree is not initialized. Please select a project first.");
+                    const projectManagementTreeViewMissingErrorMessage: string =
+                        "Project management tree is not initialized, cannot fetch report. (callFetchReportForTreeElement)";
+                    logger.warn(projectManagementTreeViewMissingErrorMessage);
+                    throw new Error(projectManagementTreeViewMissingErrorMessage);
                 }
 
                 // Get the key of the current project that is displayed in the project managemement tree view
                 const projectKey: string | null = projectManagementTreeViewOfExtension.currentProjectKeyInView;
                 if (!projectKey) {
-                    logger.warn("No project selected. (callFetchReportForTreeElement)");
-                    throw new Error("No project selected. Please select a project first.");
+                    const projectKeyMissingErrorMessage: string = "No project selected, cannot fetch report. (callFetchReportForTreeElement)";
+                    logger.warn(projectKeyMissingErrorMessage);
+                    throw new Error(projectKeyMissingErrorMessage);
                 }
 
                 // Find the cycle key associated with the selected tree item to fetch the report
-                const cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
+                const cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(selectedProjectManagementTreeItem);
                 if (!cycleKey) {
-                    logger.warn("Cycle key for the selected tree element not found. (callFetchReportForTreeElement)");
-                    throw new Error("Cycle key for the selected tree element not found. Please select a cycle first.");
+                    const cycleKeyMissingErrorMessage: string = "Cycle key for the selected tree element not found, cannot fetch report. (callFetchReportForTreeElement)";
+                    logger.warn(cycleKeyMissingErrorMessage);
+                    throw new Error(cycleKeyMissingErrorMessage);
                 }
 
                 // Get the unique ID of the tree element
-                const treeElementUniqueID: string | undefined = treeItem.item?.base?.uniqueID;
+                const treeElementUniqueID: string | undefined = selectedProjectManagementTreeItem.item?.base?.uniqueID;
 
                 // Check if the report should be based on execution
                 const executionBased: boolean = true; // await isExecutionBasedReportSelected();  // TODO: Using execution based for QS day by default.
@@ -573,18 +588,18 @@ export async function fetchReportForTreeElement(
                 };
 
                 logger.debug(
-                    `Started fetching report for projectKey: ${projectKey}, cycleKey: ${cycleKey}, uniqueID: ${treeElementUniqueID}.`
+                    `Started fetching report with projectKey: ${projectKey}, cycleKey: ${cycleKey}, uniqueID: ${treeElementUniqueID}.`
                 );
 
                 // Report progress for fetching the report
                 progress?.report({ increment: 30, message: "Fetching report." });
 
                 // Fetch the ZIP file, handle potential cancellation
-                const downloadedReportZipFilePath: string | undefined = await fetchZipFile(
+                const downloadedReportZipFilePath: string | undefined = await fetchReportZipFromServer(
                     baseKey,
                     projectKey,
                     cycleKey,
-                    workingDirectory,
+                    workingDirectoryToStoreReport,
                     cycleStructureOptionsRequestParameter
                 );
 
@@ -599,31 +614,31 @@ export async function fetchReportForTreeElement(
 }
 
 /**
- * Generate test cases for the selected TestThemeNode or TestCaseSetNode.
+ * Generate robot framework test cases for the selected TestThemeNode or TestCaseSetNode item in the tree view.
  * @param context VS Code extension context
- * @param treeItem The selected tree item
+ * @param selectedTreeItem The selected tree item
  * @param folderNameOfTestbenchWorkingDirectory The folder name of the testbench working directory
  */
-export async function generateTestCasesForTestThemeOrTestCaseSet(
+export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
-    treeItem: projectManagementTreeView.TestbenchTreeItem,
+    selectedTreeItem: projectManagementTreeView.TestbenchTreeItem,
     folderNameOfTestbenchWorkingDirectory: string
 ): Promise<void> {
-    logger.trace("Generating tests for non cycle element:", treeItem);
+    logger.trace("Generating tests for non cycle element:", selectedTreeItem);
 
-    let treeElementUniqueID: string | undefined = treeItem.item?.base?.uniqueID;
-    let cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
-    let projectKey: string | undefined = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem.parent!);
+    let treeElementUniqueID: string | undefined = selectedTreeItem.item?.base?.uniqueID;
+    let cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
+    let projectKey: string | undefined = projectManagementTreeView.findProjectKeyOfCycleElement(selectedTreeItem.parent!);
 
     if (!projectKey || !cycleKey || !treeElementUniqueID) {
         logger.error("Error when finding project key, cycle key, test theme or unique ID.");
         return;
     }
 
-    await generateTestsWithTestBenchToRobotFramework(
+    await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
         context,
-        treeItem,
-        typeof treeItem.label === "string" ? treeItem.label : "", // Label might be undefined
+        selectedTreeItem,
+        typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : "", // Label might be undefined
         baseKey,
         projectKey,
         cycleKey,
@@ -633,9 +648,9 @@ export async function generateTestCasesForTestThemeOrTestCaseSet(
 }
 
 /**
- * Generate Robot Framework test cases from the TestBench JSON report.
+ * Generate Robot Framework test cases from the TestBench JSON report using testbench2robotframework library.
  * @param context - VS Code extension context
- * @param treeItem - The selected tree item
+ * @param selectedTreeItem - The selected tree item
  * @param itemLabel - The label of the selected tree item
  * @param baseKey - The base key of the extension
  * @param projectKey - The project key
@@ -643,9 +658,9 @@ export async function generateTestCasesForTestThemeOrTestCaseSet(
  * @param folderNameOfTestbenchWorkingDirectory - The path to save the downloaded report
  * @param UIDofTestThemeElementToGenerateTestsFor - (Optional) The unique ID of the clicked TestThemeNode element to generate tests for
  */
-export async function generateTestsWithTestBenchToRobotFramework(
+export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
     context: vscode.ExtensionContext,
-    treeItem: projectManagementTreeView.TestbenchTreeItem,
+    selectedTreeItem: projectManagementTreeView.TestbenchTreeItem,
     itemLabel: string,
     baseKey: string,
     projectKey: string,
@@ -662,7 +677,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
         }
 
         const UIDofSelectedElement: string | undefined =
-            UIDofTestThemeElementToGenerateTestsFor || (await displayAndSelectTestThemeNode(treeItem));
+            UIDofTestThemeElementToGenerateTestsFor || (await displayAndPromptToSelectTestThemeNode(selectedTreeItem));
         if (!UIDofSelectedElement) {
             logger.error("Test theme selection was empty.");
             return;
@@ -680,7 +695,7 @@ export async function generateTestsWithTestBenchToRobotFramework(
                 cancellable: true,
             },
             async (progress, cancellationToken) => {
-                await runTestGenerationProcess(
+                await runRobotFrameworkTestGenerationProcess(
                     context,
                     baseKey,
                     projectKey,
@@ -694,8 +709,15 @@ export async function generateTestsWithTestBenchToRobotFramework(
                 );
             }
         );
-    } catch (error: any) {
-        handleError(error);
+    } catch (error: any) {        
+        if (error instanceof vscode.CancellationError) {
+            const testGenerationCancelledByUserMessage: string = "Test generation process cancelled by the user.";
+            logger.debug(testGenerationCancelledByUserMessage);
+            vscode.window.showInformationMessage(testGenerationCancelledByUserMessage);
+        } else {
+            logger.error("An error occurred:", error);
+            vscode.window.showErrorMessage(`An error occurred: ${error.message || error}`);
+        }        
     }
 }
 
@@ -704,8 +726,8 @@ export async function generateTestsWithTestBenchToRobotFramework(
  * @param treeItem - The tree item to search for TestThemeNodes
  * @returns {Promise<string | undefined>} The unique ID of the selected TestThemeNode or 'Generate all'
  */
-async function displayAndSelectTestThemeNode(treeItem: any): Promise<string | undefined> {
-    const testThemeNodes: { name: string; uniqueID: string; numbering?: string }[] = findTestThemeNodes(treeItem);
+async function displayAndPromptToSelectTestThemeNode(treeItem: any): Promise<string | undefined> {
+    const testThemeNodes: { name: string; uniqueID: string; numbering?: string }[] = findAllTestThemeNodesOfTreeItem(treeItem);
 
     const quickPickItems: { label: string; description: string; uniqueID?: string }[] = [
         { label: "Generate all", description: "Generate All Tests Under The Test Cycle" },
@@ -727,23 +749,25 @@ async function displayAndSelectTestThemeNode(treeItem: any): Promise<string | un
 }
 
 /**
- * Find all TestThemeNode elements recursively.
- * @param node - The node to search
+ * Find all TestThemeNode elements of the tree item recursively.
+ * @param treeItem - The tree item to search
  * @param results - An array to collect the results
  * @returns An array of found TestThemeNodes
  */
-function findTestThemeNodes(
-    node: any,
+function findAllTestThemeNodesOfTreeItem(
+    treeItem: any,
     results: { name: string; uniqueID: string; numbering?: string }[] = []
 ): typeof results {
-    if (node.item?.elementType === "TestThemeNode") {
-        const { name = "Unnamed", uniqueID = "No ID", numbering } = node.item.base || {};
+    // Check if the tree item is a TestThemeNode, and if so, add it to the results
+    if (treeItem.item?.elementType === "TestThemeNode") {
+        const { name = "Unnamed", uniqueID = "No ID", numbering } = treeItem.item.base || {};
         results.push({ name, uniqueID, numbering });
     }
 
-    if (Array.isArray(node.children)) {
-        node.children.forEach((child: projectManagementTreeView.TestbenchTreeItem) =>
-            findTestThemeNodes(child, results)
+    // Recursively search for TestThemeNodes in the children of the tree item
+    if (Array.isArray(treeItem.children)) {
+        treeItem.children.forEach((child: projectManagementTreeView.TestbenchTreeItem) =>
+            findAllTestThemeNodesOfTreeItem(child, results)
         );
     }
 
@@ -762,7 +786,7 @@ function findTestThemeNodes(
  * @param progress - VS Code progress reporter
  * @param cancellationToken - VS Code cancellation token
  */
-async function runTestGenerationProcess(
+async function runRobotFrameworkTestGenerationProcess(
     context: vscode.ExtensionContext,
     baseKey: string,
     projectKey: string,
@@ -776,7 +800,7 @@ async function runTestGenerationProcess(
 ): Promise<void> {
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
 
-    const downloadedReportZipFilePath: string | undefined = await fetchZipFile(
+    const downloadedReportZipFilePath: string | undefined = await fetchReportZipFromServer(
         baseKey,
         projectKey,
         cycleKey,
@@ -787,19 +811,19 @@ async function runTestGenerationProcess(
     );
 
     if (!downloadedReportZipFilePath) {
-        logger.warn("Download canceled or failed.");
+        logger.warn("Download cancelled or failed.");
         return;
     }
 
-    progress.report({ increment: 30, message: "Generating test cases with testbench2robotframework." });
+    progress.report({ increment: 30, message: "Generating robot framework tests with testbench2robotframework." });
 
-    // Workspace path is the folder we are working in, workingDirectoryPath is the (.testbench) folder path we process files in.
-    const workspacePath: string = vscode.workspace.getConfiguration(baseKey).get<string>("workspaceLocation")!;
-    const workingDirectoryPath: string = path.join(workspacePath, folderNameOfTestbenchWorkingDirectory);
+    // Workspace location is the folder we are working in, workingDirectoryPath is the (.testbench) folder path we process files in.
+    const workspaceLocation: string = vscode.workspace.getConfiguration(baseKey).get<string>("workspaceLocation")!;
+    const testbenchWorkingDirectoryInsideWorkspace: string = path.join(workspaceLocation, folderNameOfTestbenchWorkingDirectory);
 
-    const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJson(
+    const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJsonLocally(
         baseKey,
-        workingDirectoryPath
+        testbenchWorkingDirectoryInsideWorkspace
     );
     if (!tb2robotConfigFilePath) {
         logger.error("Failed to save configuration file.");
@@ -807,39 +831,36 @@ async function runTestGenerationProcess(
     }
 
     logger.debug("Calling testbench2robotframework write command");
-    const isTb2RobotExecutionSuccessful: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotWrite(
+    const isTb2RobotframeworkWriteExecutionSuccessful: boolean = await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkWrite(
         context,
-        workingDirectoryPath,
+        testbenchWorkingDirectoryInsideWorkspace,
         downloadedReportZipFilePath,
         tb2robotConfigFilePath
     );
     logger.debug(
-        `testbench2robotframework write command executed with success variable: ${isTb2RobotExecutionSuccessful}`
+        `testbench2robotframework write command executed with success variable: ${isTb2RobotframeworkWriteExecutionSuccessful}`
     );
 
-    if (!isTb2RobotExecutionSuccessful) {
-        await cleanUpConfigAndReportFiles(
-            getConfigurationFilePath(workingDirectoryPath),
-            downloadedReportZipFilePath,
-            baseKey
-        );
+    await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, downloadedReportZipFilePath, baseKey);
+
+    if (!isTb2RobotframeworkWriteExecutionSuccessful) {        
         logger.error(`Test generation failed. Please make sure that your tests can be automated.`);
         vscode.window.showErrorMessage(`Test generation failed. Please make sure that your tests can be automated.`);
         return;
     }
 
-    updateLastGeneratedReportParams(UIDofSelectedElement, projectKey, cycleKey, executionBased);
-    await cleanUpConfigAndReportFiles(tb2robotConfigFilePath, downloadedReportZipFilePath, baseKey);
+    updateLastGeneratedReportParams(UIDofSelectedElement, projectKey, cycleKey, executionBased);    
 
-    vscode.window.showInformationMessage("Test generation done.");
-    logger.debug("Test generation done.");
+    const testGenerationSuccessMessage: string = "Robotframework test generation is successful.";
+    vscode.window.showInformationMessage(testGenerationSuccessMessage);
+    logger.debug(testGenerationSuccessMessage);
 
     // Open the Testing view of VS Code after generating the tests
     vscode.commands.executeCommand("workbench.view.extension.test");
 }
 
 /**
- * Update the parameters for the last generated report.
+ * Update the parameters for the last generated report to use in the next operations.
  */
 function updateLastGeneratedReportParams(
     UID: string,
@@ -854,12 +875,12 @@ function updateLastGeneratedReportParams(
 }
 
 /**
- * Clean up temporary files and configurations.
+ * Clean up the testbench2robotframework configuration file after processing, and remove the report ZIP file if configured.
  * @param tb2robotConfigFilePath The path of the testbench2robotframework configuration file
  * @param reportZipFilePath The path of the report ZIP file
  * @param baseKey The base key of the extension
  */
-async function cleanUpConfigAndReportFiles(
+async function cleanUpTb2robotConfigAndReportFiles(
     tb2robotConfigFilePath: string,
     reportZipFilePath: string,
     baseKey: string
@@ -873,22 +894,10 @@ async function cleanUpConfigAndReportFiles(
 }
 
 /**
- * Handle errors gracefully.
- */
-function handleError(error: any): void {
-    if (error instanceof vscode.CancellationError) {
-        logger.debug("Process cancelled by the user.");
-        vscode.window.showInformationMessage("Process cancelled by the user.");
-    } else {
-        logger.error("An error occurred:", error);
-        vscode.window.showErrorMessage(`An error occurred: ${error.message || error}`);
-    }
-}
-
-/**
- * Removes the specified zip file from the system if it exists and is a valid zip file.
+ * Removes the specified zip file from the system if it exists and it is a valid zip file. 
+ * The function retries the operation in case the file is busy with small delays. Without the retries, the file might not be removed successfully.
  * @param zipFileFullPath The path of the zip file to be removed
- * @returns Promise<void>
+ * @returns {Promise<void>} A promise that resolves when the file is removed successfully, or rejects with an error.
  */
 export async function removeReportZipFile(
     zipFileFullPath: string,
@@ -933,25 +942,25 @@ export async function removeReportZipFile(
 
 /**
  * Recursively searches for a file within a directory.
- * @param {string} dir - The directory to search in.
- * @param {string} fileName - The name of the file to search for.
+ * @param {string} directory - The directory to search in.
+ * @param {string} fileNametoSearch - The name of the file to search for.
  * @returns {string | undefined} The full path of the file if found, otherwise undefined.
  */
-export async function findFileRecursively(dir: string, fileName: string): Promise<string | undefined> {
+export async function findFileRecursivelyInDirectory(directory: string, fileNametoSearch: string): Promise<string | undefined> {
     try {
-        const files: string[] = await fsPromise.readdir(dir);
+        const files: string[] = await fsPromise.readdir(directory);
 
         for (const file of files) {
-            const fullPath: string = path.join(dir, file);
+            const fullPath: string = path.join(directory, file);
             const stat: fs.Stats = await fsPromise.stat(fullPath);
 
             if (stat.isDirectory()) {
                 // Recursively search in subdirectories
-                const result: string | undefined = await findFileRecursively(fullPath, fileName);
+                const result: string | undefined = await findFileRecursivelyInDirectory(fullPath, fileNametoSearch);
                 if (result) {
                     return result;
                 }
-            } else if (stat.isFile() && file === fileName) {
+            } else if (stat.isFile() && file === fileNametoSearch) {
                 logger.debug(`File found: ${fullPath}`);
                 return fullPath;
             }
@@ -970,16 +979,16 @@ export async function findFileRecursively(dir: string, fileName: string): Promis
  * @param workingDirectoryFullPath The full path of the working directory.
  * @returns {Promise<string | undefined>} The full path of the selected output XML file, or undefined if no file is selected.
  */
-async function chooseRobotXMLFile(workingDirectoryFullPath: string): Promise<string | undefined> {
-    // Open file selection dialog, filtered for XML files
+async function chooseRobotOutputXMLFile(workingDirectoryFullPath: string): Promise<string | undefined> {
+    // Open file selection dialog to select the output xml file, display only XML files in the selection.
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
     let outputXMLFolderFullPath: string | undefined = config.get<string>("outputXMLPath");
     if (!outputXMLFolderFullPath) {
         logger.warn("Output XML path is not configured.");
     } else {
-        const fileName = "output.xml";
-        logger.debug(`Searching for ${fileName} in ${outputXMLFolderFullPath}`);
-        const outputXmlFilePath: string | undefined = await findFileRecursively(outputXMLFolderFullPath, fileName);
+        const fileNameToSearchFor = "output.xml";
+        logger.debug(`Searching for ${fileNameToSearchFor} in ${outputXMLFolderFullPath}`);
+        const outputXmlFilePath: string | undefined = await findFileRecursivelyInDirectory(outputXMLFolderFullPath, fileNameToSearchFor);
         if (outputXmlFilePath) {
             return outputXmlFilePath;
         }
@@ -1004,14 +1013,14 @@ async function chooseRobotXMLFile(workingDirectoryFullPath: string): Promise<str
 }
 
 /**
- * Opens a file selection dialog for the user to choose the report zip file.
- * @param workingDirectoryFullPath The full path of the working directory.
+ * Opens a file selection dialog for the user to choose the report zip file that doesn't contain test results.
+ * @param workingDirectoryPath The full path of the working directory.
  * @returns {Promise<string | undefined>} The full path of the selected report zip file, or undefined if no file is selected.
  */
-async function chooseReportWithouResultsZipFile(workingDirectoryFullPath: string): Promise<string | undefined> {
+async function chooseReportWithouResultsZipFile(workingDirectoryPath: string): Promise<string | undefined> {
     // Open file selection dialog, filtered for XML files
     const selectedFiles: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
-        defaultUri: vscode.Uri.file(workingDirectoryFullPath),
+        defaultUri: vscode.Uri.file(workingDirectoryPath),
         title: "Select Report Zip File",
         openLabel: "Select Report Zip File",
         canSelectFiles: true,
@@ -1027,21 +1036,22 @@ async function chooseReportWithouResultsZipFile(workingDirectoryFullPath: string
 }
 
 /**
- * Reads test results and creates a report with the results. Displays a progress bar using VS Code's progress API.
+ * Reads robot framework test results and creates a report zip file with the results using testbench2robotframework library. Displays a progress bar using VS Code's progress API.
+ * lastGeneratedReportParams must be initialized before calling this function, it is initialized in the test generation process.
  * @param context - The extension context.
- * @param workingDirectory - The working directory path.
+ * @param folderNameOfTestbenchWorkingDirectory - The folder name of the testbench working directory (.testbench).
  * @param currentProgress - Optional existing progress instance to report updates.
  * @returns {Promise<string | null>} The full path of the created report with results zip, or null if an error occurs.
  */
-export async function readTestResultsAndCreateReportWithResults(
+export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
-    workingDirectory: string,
+    folderNameOfTestbenchWorkingDirectory: string,
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
 ): Promise<string | null> {
     try {
         logger.debug("Started reading test results and creating report with results.");
 
-        let fullPathOfReportWithResultsZip: string | null = null;
+        let pathOfReportWithResultsZip: string | null = null;
 
         // Main execution logic encapsulated in a function for use with progress
         const executeWithProgress = async (
@@ -1057,17 +1067,17 @@ export async function readTestResultsAndCreateReportWithResults(
 
             reportProgress(`Choosing result XML file.`, reportIncrement);
 
-            const reportFileWithResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;
+            const reportFileWithResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;  // Add a timestamp to the report name
             const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-            const workspacePath: string | undefined = config.get<string>("workspaceLocation");
-            if (!workspacePath) {
+            const workspaceLocation: string | undefined = config.get<string>("workspaceLocation");
+            if (!workspaceLocation) {
                 throw new Error("Workspace location is not configured.");
             }
 
-            const workingDirectoryPath: string = path.join(workspacePath, workingDirectory);
+            const testbenchWorkingDirectoryPath: string = path.join(workspaceLocation, folderNameOfTestbenchWorkingDirectory);
 
-            const robotResultXMLFile: string | undefined = await chooseRobotXMLFile(workspacePath);
-            if (!robotResultXMLFile) {
+            const robotResultOutputXMLFilePath: string | undefined = await chooseRobotOutputXMLFile(workspaceLocation);
+            if (!robotResultOutputXMLFilePath) {
                 throw new Error("No XML file selected.");
             }
 
@@ -1075,6 +1085,7 @@ export async function readTestResultsAndCreateReportWithResults(
 
             reportProgress(`Fetching report.`, reportIncrement);
 
+            // Check if the last generated report parameters are available
             if (
                 !lastGeneratedReportParams.executionBased ||
                 !lastGeneratedReportParams.projectKey ||
@@ -1089,11 +1100,11 @@ export async function readTestResultsAndCreateReportWithResults(
                 treeRootUID: lastGeneratedReportParams.UID,
             };
 
-            const downloadedReportZipFilePath: string | undefined = await fetchZipFile(
+            const downloadedReportZipFilePath: string | undefined = await fetchReportZipFromServer(
                 baseKey,
                 lastGeneratedReportParams.projectKey,
                 lastGeneratedReportParams.cycleKey,
-                workingDirectory,
+                folderNameOfTestbenchWorkingDirectory,
                 cycleStructureOptionsRequestParameter
             );
 
@@ -1101,7 +1112,7 @@ export async function readTestResultsAndCreateReportWithResults(
 
             // Either use the downloaded report zip file or prompt the user to select one
             const reportWithResultsZipFilePath: string | undefined =
-                downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(workingDirectoryPath));
+                downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(testbenchWorkingDirectoryPath));
             if (!reportWithResultsZipFilePath) {
                 throw new Error("No report file selected.");
             }
@@ -1110,46 +1121,43 @@ export async function readTestResultsAndCreateReportWithResults(
 
             reportProgress(`Preparing configuration for testbench2robotframework.`, reportIncrement / 2);
 
-            const tb2robotConfigFileFullPath: string | null = await saveTestbench2RobotConfigurationAsJson(
+            const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJsonLocally(
                 baseKey,
-                workingDirectoryPath
+                testbenchWorkingDirectoryPath
             );
-            if (!tb2robotConfigFileFullPath) {
+            if (!tb2robotConfigFilePath) {
                 throw new Error("Failed to create configuration file.");
             }
 
             reportProgress(`Reading test results and creating report.`, reportIncrement / 2);
 
-            fullPathOfReportWithResultsZip = path.join(workingDirectoryPath, reportFileWithResultsZipName);
+            pathOfReportWithResultsZip = path.join(testbenchWorkingDirectoryPath, reportFileWithResultsZipName);
 
             logger.debug("Calling startTb2robotRead.");
-            const isTb2RobotExecutionSuccessful: boolean =
+            const isTb2RobotReadExecutionSuccessful: boolean =
                 await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
                     context,
-                    workingDirectoryPath,
-                    robotResultXMLFile,
+                    testbenchWorkingDirectoryPath,
+                    robotResultOutputXMLFilePath,
                     reportWithResultsZipFilePath,
-                    fullPathOfReportWithResultsZip,
-                    tb2robotConfigFileFullPath
+                    pathOfReportWithResultsZip,
+                    tb2robotConfigFilePath
                 );
-            logger.debug(`startTb2robotRead executed with success variable: ${isTb2RobotExecutionSuccessful}`);
+            logger.debug(`startTb2robotRead executed with success variable: ${isTb2RobotReadExecutionSuccessful}`);
 
-            if (!isTb2RobotExecutionSuccessful) {
-                await cleanUpConfigAndReportFiles(
-                    getConfigurationFilePath(workingDirectoryPath),
-                    reportWithResultsZipFilePath,
-                    baseKey
-                );
-                logger.error(
-                    `Importing test results failed. Please make sure you are using the correct output.xml path in the extension settings.`
-                );
-                vscode.window.showErrorMessage(
-                    `Importing test results failed. Please make sure you are using the correct output.xml path in the extension settings.`
-                );
+            await cleanUpTb2robotConfigAndReportFiles(
+                tb2robotConfigFilePath,
+                reportWithResultsZipFilePath,
+                baseKey
+            );
+
+            if (!isTb2RobotReadExecutionSuccessful) {
+                const importErrorMessage: string = "Reading test results failed. Please make sure you are using the correct output.xml path in the extension settings.";
+
+                logger.error(importErrorMessage);
+                vscode.window.showErrorMessage(importErrorMessage);
                 return;
             }
-
-            await cleanUpConfigAndReportFiles(tb2robotConfigFileFullPath, reportWithResultsZipFilePath, baseKey);
 
             logger.debug(`tb2robot read executed successfully.`);
 
@@ -1171,7 +1179,7 @@ export async function readTestResultsAndCreateReportWithResults(
             );
         }
 
-        return fullPathOfReportWithResultsZip;
+        return pathOfReportWithResultsZip;
     } catch (error) {
         vscode.window.showErrorMessage(`An error occurred: ${(error as Error).message}`);
         logger.error(`Error in readTestResultsAndCreateReportWithResults:`, error);
@@ -1214,7 +1222,7 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
                 increment: 25,
             });
 
-            let createdReportWithResultsFullPath: string | null = await readTestResultsAndCreateReportWithResults(
+            let createdReportWithResultsFullPath: string | null = await readTestResultsAndCreateReportWithResultsWithTb2Robot(
                 context,
                 folderNameOfTestbenchWorkingDirectory,
                 progress
@@ -1252,53 +1260,53 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
 /**
  * Entry point for the Robot Framework test generation process from the TestBench JSON report.
  * @param context The VS Code extension context
- * @param treeItem The selected tree item
+ * @param selectedTestCycleTreeItem The selected cycle tree item
  * @param baseKey The base key of the extension
- * @param workingDirectory The path to save the downloaded report
+ * @param folderNameOfTestbenchWorkingDirectory The path to save the downloaded report
  */
-export async function startTestGenerationProcessForCycle(
+export async function startTestGenerationForCycle(
     context: vscode.ExtensionContext,
-    treeItem: projectManagementTreeView.TestbenchTreeItem,
+    selectedTestCycleTreeItem: projectManagementTreeView.TestbenchTreeItem,
     baseKey: string,
-    workingDirectory: string
+    folderNameOfTestbenchWorkingDirectory: string
 ): Promise<void> {
     try {
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.warn("No connection available (startTestGenerationProcessForCycle).");
+            logger.warn("No connection available (startTestGenerationForCycle).");
             return;
         }
 
-        const cycleKey: string | undefined = treeItem.item.key;
+        const cycleKey: string | undefined = selectedTestCycleTreeItem.item.key;
         if (!cycleKey) {
             logger.error("Cycle key is unidentified for test generation process.");
             throw new Error("Cycle key is unidentified for test generation process.");
         }
 
-        const projectKeyOfCycle: string | undefined = projectManagementTreeView.findProjectKeyOfCycleElement(treeItem);
+        const projectKeyOfCycle: string | undefined = projectManagementTreeView.findProjectKeyOfCycleElement(selectedTestCycleTreeItem);
         if (!projectKeyOfCycle) {
             logger.error("Project key of cycle is unidentified for test generation process.");
             throw new Error("Project key of cycle is unidentified for test generation process.");
         }
 
-        if (typeof treeItem.label !== "string") {
+        if (typeof selectedTestCycleTreeItem.label !== "string") {
             logger.error("Invalid label type. Test generation aborted.");
             throw new Error("Invalid label type. Test generation aborted.");
         }
 
         // Start the test generation process
-        await generateTestsWithTestBenchToRobotFramework(
+        await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
             context,
-            treeItem,
-            treeItem.label,
+            selectedTestCycleTreeItem,
+            selectedTestCycleTreeItem.label,
             baseKey,
             projectKeyOfCycle,
             cycleKey,
-            workingDirectory,
+            folderNameOfTestbenchWorkingDirectory,
             undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
         );
     } catch (error: any) {
-        logger.error("Error in startTestGenerationProcessForCycle:", error.message);
+        logger.error("Error in startTestGenerationForCycle:", error.message);
         vscode.window.showErrorMessage(error.message);
     }
 }
@@ -1309,7 +1317,7 @@ export async function startTestGenerationProcessForCycle(
  * @param folderPathToStoreTb2robotConfig The folder path to store the configuration file
  * @returns {Promise<string | null>} The full path of the configuration file, or null if an error occurs
  */
-export async function saveTestbench2RobotConfigurationAsJson(
+export async function saveTestbench2RobotConfigurationAsJsonLocally(
     baseKey: string,
     folderPathToStoreTb2robotConfig: string
 ): Promise<string | null> {
@@ -1356,7 +1364,7 @@ function getConfigurationFilePath(folderPathToJsonConfig: string): string {
 }
 
 /**
- * Deletes the testbench2robotframework configuration file.
+ * Deletes the testbench2robotframework configuration file. Retries the operation in case the file is busy with small delays.
  * @param configFilePath The full path of the configuration file
  * @param maxRetries The maximum number of retries to delete the file
  * @param delay The delay in milliseconds between retries

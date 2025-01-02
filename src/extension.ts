@@ -197,7 +197,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // The connectionActive context value is used to enable or disable the login and logout buttons in the status bar,
     // which allows icon changes for login/logout buttons based on connection status.
     vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
-    logger.debug(`Context value connectionActive set to: ${connection !== null}`);
+    logger.trace(`Context value connectionActive set to: ${connection !== null}`);
 
     // The user may press the login button multiple times consecutively which may cause multiple login processes to run at the same time.
     // Aviod executing the command again if we are already inside login command.
@@ -227,7 +227,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 .finally(() => {
                     // Reset insideLogin after the login attempt is fully completed
                     insideLogin = false;
-                    logger.debug(`insideLogin flag reset after login attempt.`);
+                    logger.trace(`insideLogin flag reset after login attempt.`);
                 });
         })
     );
@@ -279,7 +279,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
                 }
 
-                await reportHandler.startTestGenerationProcessForCycle(
+                await reportHandler.startTestGenerationForCycle(
                     context,
                     item,
                     baseKey,
@@ -319,7 +319,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     await vscode.commands.executeCommand(commands.clearWorkspaceFolder.command);
                 }
 
-                await reportHandler.generateTestCasesForTestThemeOrTestCaseSet(
+                await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
                     context,
                     treeItem,
                     folderNameOfTestbenchWorkingDirectory
@@ -377,7 +377,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 logger.warn(`readRFTestResultsAndCreateReportWithResults command is called without a connection.`);
                 return;
             }
-            await reportHandler.readTestResultsAndCreateReportWithResults(
+            await reportHandler.readTestResultsAndCreateReportWithResultsWithTb2Robot(
                 context,
                 folderNameOfTestbenchWorkingDirectory
             );

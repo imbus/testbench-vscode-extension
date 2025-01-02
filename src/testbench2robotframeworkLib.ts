@@ -117,7 +117,7 @@ export class tb2robotLib {
      * @param {string} configJSONPath Path to a JSON configuration file. If not provided, a config.json will be automatically generated.
      * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
      */
-    public static async startTb2robotWrite(
+    public static async startTb2robotframeworkWrite(
         context: vscode.ExtensionContext,
         workingDirectory: string,
         reportPath: string,
