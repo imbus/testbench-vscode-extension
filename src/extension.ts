@@ -101,6 +101,12 @@ export async function activate(context: vscode.ExtensionContext) {
         clearWorkspaceFolder: {
             command: `${baseKey}.clearWorkspaceFolder`,
         },
+        toggleProjectManagementTreeViewVisibility: {
+            command: `${baseKey}.toggleProjectManagementTreeViewVisibility`,
+        },
+        toggleTestThemeTreeViewVisibility: {
+            command: `${baseKey}.toggleTestThemeTreeViewVisibility`,
+        },
     };
 
     // Initialize or update extension configuration settings
@@ -198,6 +204,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // which allows icon changes for login/logout buttons based on connection status.
     vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
     logger.trace(`Context value connectionActive set to: ${connection !== null}`);
+
+    // TODO: Add a loading bar when logging in. Sometimes, especially when VS Code is not completed its startup, the login process may take a long time.
 
     // The user may press the login button multiple times consecutively which may cause multiple login processes to run at the same time.
     // Aviod executing the command again if we are already inside login command.
@@ -365,6 +373,20 @@ export async function activate(context: vscode.ExtensionContext) {
                 connection,
                 selectedProjectKey!
             );
+        })
+    );
+
+    // Register the "Toggle project management tree view visibility" command
+    context.subscriptions.push(
+        vscode.commands.registerCommand(commands.toggleProjectManagementTreeViewVisibility.command, async () => {
+            await projectManagementTreeView.toggleProjectManagementTreeViewVisibility();
+        })
+    );
+
+    // Register the "Toggle test theme tree view visibility" command
+    context.subscriptions.push(
+        vscode.commands.registerCommand(commands.toggleTestThemeTreeViewVisibility.command, async () => {
+            await projectManagementTreeView.toggleTestThemeTreeViewVisibility();
         })
     );
 

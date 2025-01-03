@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { TestbenchTreeItem } from "./projectManagementTreeView";
+import { logger } from "./extension";
 
 export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<TestbenchTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<TestbenchTreeItem | void> =

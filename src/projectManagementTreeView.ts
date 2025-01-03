@@ -5,6 +5,11 @@ import { TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { connection, logger } from "./extension";
 import * as testBenchTypes from "./testBenchTypes";
 
+let projectManagementTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
+let projectManagementDataProvider: ProjectManagementTreeDataProvider | null = null;
+
+let testThemeTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
+
 // Project management tree view that displays projects, versions and cycles.
 // Upon clicking on a cycle element, the remaining children elements are displayed in test theme tree (test themes and test case sets).
 export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvider<TestbenchTreeItem> {
@@ -360,26 +365,27 @@ export async function initializeTreeView(
 
     const testThemeDataProvider = new TestThemeTreeDataProvider();
 
-    const testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
+    testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
         treeDataProvider: testThemeDataProvider,
     });
 
-    const projectManagementDataProvider = new ProjectManagementTreeDataProvider(
+    projectManagementDataProvider = new ProjectManagementTreeDataProvider(
         connection,
         selectedProjectKey,
         testThemeDataProvider
     );
-    const projectManagementTreeView = vscode.window.createTreeView("projectManagementTree", {
+
+    projectManagementTreeView = vscode.window.createTreeView("projectManagementTree", {
         treeDataProvider: projectManagementDataProvider,
     });
 
     // Handle expansion and collapse events to update icons dynamically
     projectManagementTreeView.onDidExpandElement(async (event) => {
-        await projectManagementDataProvider.handleExpansion(event.element, true);
+        await projectManagementDataProvider!.handleExpansion(event.element, true);
     });
 
     projectManagementTreeView.onDidCollapseElement(async (event) => {
-        await projectManagementDataProvider.handleExpansion(event.element, false);
+        await projectManagementDataProvider!.handleExpansion(event.element, false);
     });
 
     // Handle click events to trigger test theme tree initialization on test cycle click
@@ -387,7 +393,7 @@ export async function initializeTreeView(
         //  Retrieve the currently selected element in the tree view
         const selectedElement = event.selection[0];
         if (selectedElement && selectedElement.contextValue === "Cycle") {
-            await projectManagementDataProvider.handleTestCycleClick(selectedElement);
+            await projectManagementDataProvider!.handleTestCycleClick(selectedElement);
         }
     });
 
@@ -395,4 +401,44 @@ export async function initializeTreeView(
     testThemeDataProvider.refresh();
 
     return [projectManagementDataProvider, testThemeDataProvider];
+}
+
+// Function to toggle the visibility of the project management tree view
+export async function toggleProjectManagementTreeViewVisibility(): Promise<void> {
+    logger.debug("Toggling project tree view visibility.");
+    if (projectManagementTreeView) {
+        if (projectManagementTreeView.visible) {
+            logger.trace("Project Tree view is visible. Hiding tree view.");
+
+            await vscode.commands.executeCommand("projectManagementTree.removeView"); // projectManagementTree is the ID of the tree view in package.json
+
+            logger.trace("Project tree view is hidden now.");
+        } else {
+            logger.trace("Project tree view is hidden. Revealing tree view.");
+
+            await vscode.commands.executeCommand("projectManagementTree.focus"); // There is no reveal function after using removeView, so I found this hack which displays the tree view again
+
+            logger.trace("Project tree view is displayed now.");
+        }
+    }
+}
+
+// Function to toggle the visibility of the test theme tree view
+export async function toggleTestThemeTreeViewVisibility(): Promise<void> {
+    logger.debug("Toggling test theme tree view visibility.");
+    if (testThemeTreeView) {
+        if (testThemeTreeView.visible) {
+            logger.trace("Test theme tree view is visible. Hiding tree view.");
+
+            await vscode.commands.executeCommand("testThemeTree.removeView"); // testThemeTree is the ID of the tree view in package.json
+
+            logger.trace("Test theme tree view is hidden now.");
+        } else {
+            logger.trace("Test theme tree view is hidden. Revealing tree view.");
+
+            await vscode.commands.executeCommand("testThemeTree.focus");
+
+            logger.trace("Test theme tree view is displayed now.");
+        }
+    }
 }
