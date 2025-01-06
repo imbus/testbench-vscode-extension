@@ -353,7 +353,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            const selectedProjectKey: string | null = await connection.selectProjectKeyFromProjectList(projectList);
+            const selectedProjectKey: string | null = await connection.getProjectKeyFromProjectListQuickPickSelection(projectList);
 
             if (!selectedProjectKey) {
                 // vscode.window.showErrorMessage("No project selected..");

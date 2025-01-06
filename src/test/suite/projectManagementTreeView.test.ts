@@ -123,7 +123,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
                 },
             ],
         };
-        connectionStub.fetchCycleStructure.resolves(cycleData);
+        connectionStub.fetchCycleStructureOfCycleInProject.resolves(cycleData);
 
         await treeDataProvider.handleTestCycleClick(cycleElement);
 

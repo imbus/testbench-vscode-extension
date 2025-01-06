@@ -123,7 +123,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return [];
         }
 
-        const cycleData: testBenchTypes.CycleStructure | undefined = await connection.fetchCycleStructure(
+        const cycleData: testBenchTypes.CycleStructure | null = await connection.fetchCycleStructureOfCycleInProject(
             projectKey,
             cycleKey
         );
