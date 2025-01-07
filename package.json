@@ -14,275 +14,297 @@
     "activationEvents": [],
     "main": "./dist/extension.js",
     "contributes": {
-        "configuration": {
-            "title": "TestBench",
-            "properties": {
-                "testbenchExtension.serverName": {
-                    "type": "string",
-                    "default": "testbench",
-                    "description": "The hostname or IP address of the TestBench server that the extension will connect to.",
-                    "order": 1,
-                    "scope": "resource"
-                },
-                "testbenchExtension.portNumber": {
-                    "type": "number",
-                    "default": 9445,
-                    "description": "The port number on which the TestBench server is listening for incoming connections.",
-                    "order": 2,
-                    "scope": "resource"
-                },
-                "testbenchExtension.username": {
-                    "type": "string",
-                    "description": "The username used for authentication when connecting to the TestBench server.",
-                    "order": 3,
-                    "scope": "resource"
-                },
-                "testbenchExtension.storePasswordAfterLogin": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "If enabled, the extension will securely store the user's password after the first login to facilitate automatic login in future sessions without prompting for credentials.",
-                    "order": 4,
-                    "scope": "resource"
-                },
-                "testbenchExtension.workspaceLocation": {
-                    "type": "string",
-                    "description": "The path to the workspace or project directory on the local machine for storing local files.",
-                    "order": 5,
-                    "scope": "resource"
-                },
-                "testbenchExtension.useDefaultValuesForTestbench2robotframework": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Use default values for the testbench2robotframework configuration.",
-                    "order": 6,
-                    "scope": "resource"
-                },
-                "testbenchExtension.testbench2robotframeworkConfig": {
-                    "type": "object",
-                    "default": {
-                        "rfLibraryRoots": [
-                            "Interactions",
-                            "RF-Library"
-                        ],
-                        "rfResourceRoots": [
-                            "RF-Resource"
-                        ],
-                        "fullyQualified": true,
-                        "generationDirectory": "{root}/Generated",
-                        "createOutputZip": true,
-                        "resourceDirectory": "{root}/Resources",
-                        "clearGenerationDirectory": true,
-                        "logSuiteNumbering": true,
-                        "logCompoundInteractions": true,
-                        "subdivisionsMapping": {
-                            "libraries": {
-                                "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
-                                "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
-                            },
-                            "resources": {
-                                "MyKeywords": "{root}/../MyKeywords.resource",
-                                "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
-                            }
-                        },
-                        "forcedImport": {
-                            "libraries": [],
-                            "resources": [],
-                            "variables": []
-                        },
-                        "testCaseSplitPathRegEx": "^StopWithRestart\\..*",
-                        "loggingConfiguration": {
-                            "console": {
-                                "logLevel": "info"
-                            }
-                        }
+        "configuration": [
+            {
+                "title": "Login",
+                "properties": {
+                    "testbenchExtension.serverName": {
+                        "type": "string",
+                        "default": "testbench",
+                        "description": "The hostname or IP address of the TestBench server that the extension will connect to.",
+                        "order": 1,
+                        "scope": "resource"
                     },
-                    "description": "Configuration settings for the generation process.",
-                    "properties": {
-                        "rfLibraryRoots": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "default": [
+                    "testbenchExtension.portNumber": {
+                        "type": "number",
+                        "default": 9445,
+                        "description": "The port number on which the TestBench server is listening for incoming connections.",
+                        "order": 2,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.username": {
+                        "type": "string",
+                        "description": "The username used for authentication when connecting to the TestBench server.",
+                        "order": 3,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.storePasswordAfterLogin": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "If enabled, the extension will securely store the user's password after the first login to facilitate automatic login in future sessions without prompting for credentials.",
+                        "order": 4,
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
+                "title": "Workspace",
+                "properties": {
+                    "testbenchExtension.workspaceLocation": {
+                        "type": "string",
+                        "description": "The path to the workspace or project directory on the local machine for storing local files during test generation.",
+                        "order": 5,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Delete all files inside the working directory excluding the logs before generating tests.",
+                        "order": 6,
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
+                "title": "Testbench2robotframework",
+                "properties": {
+                    "testbenchExtension.useDefaultValuesForTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Use default values for the testbench2robotframework configuration.",
+                        "order": 7,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.testbench2robotframeworkConfig": {
+                        "type": "object",
+                        "default": {
+                            "rfLibraryRoots": [
                                 "Interactions",
                                 "RF-Library"
                             ],
-                            "description": "List of Robot Framework library root directories."
-                        },
-                        "rfResourceRoots": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "default": [
+                            "rfResourceRoots": [
                                 "RF-Resource"
                             ],
-                            "description": "List of Robot Framework resource root directories."
-                        },
-                        "fullyQualified": {
-                            "type": "boolean",
-                            "default": true,
-                            "description": "Use fully qualified names."
-                        },
-                        "generationDirectory": {
-                            "type": "string",
-                            "default": "{root}/Generated",
-                            "description": "Directory where files will be generated."
-                        },
-                        "createOutputZip": {
-                            "type": "boolean",
-                            "default": true,
-                            "description": "Create a ZIP file of the output."
-                        },
-                        "resourceDirectory": {
-                            "type": "string",
-                            "default": "{root}/Resources",
-                            "description": "Directory for resources."
-                        },
-                        "clearGenerationDirectory": {
-                            "type": "boolean",
-                            "default": true,
-                            "description": "Clear the generation directory before generating new files."
-                        },
-                        "logSuiteNumbering": {
-                            "type": "boolean",
-                            "default": true,
-                            "description": "Log suite numbering."
-                        },
-                        "logCompoundInteractions": {
-                            "type": "boolean",
-                            "default": true,
-                            "description": "Log compound interactions."
-                        },
-                        "subdivisionsMapping": {
-                            "type": "object",
-                            "description": "Mappings for subdivisions.",
-                            "properties": {
+                            "fullyQualified": true,
+                            "generationDirectory": "{root}/Generated",
+                            "createOutputZip": true,
+                            "resourceDirectory": "{root}/Resources",
+                            "clearGenerationDirectory": true,
+                            "logSuiteNumbering": true,
+                            "logCompoundInteractions": true,
+                            "subdivisionsMapping": {
                                 "libraries": {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "default": {
-                                        "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
-                                        "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
-                                    },
-                                    "description": "Library mappings."
+                                    "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
+                                    "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
                                 },
                                 "resources": {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "default": {
-                                        "MyKeywords": "{root}/../MyKeywords.resource",
-                                        "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
-                                    },
-                                    "description": "Resource mappings."
+                                    "MyKeywords": "{root}/../MyKeywords.resource",
+                                    "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
                                 }
-                            }
-                        },
-                        "forcedImport": {
-                            "type": "object",
-                            "description": "Forced imports configuration.",
-                            "properties": {
-                                "libraries": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "default": [],
-                                    "description": "List of libraries to force import."
-                                },
-                                "resources": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "default": [],
-                                    "description": "List of resources to force import."
-                                },
-                                "variables": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "default": [],
-                                    "description": "List of variables to force import."
-                                }
-                            }
-                        },
-                        "testCaseSplitPathRegEx": {
-                            "type": "string",
-                            "default": "^StopWithRestart\\..*",
-                            "description": "Regex pattern to split test cases."
-                        },
-                        "loggingConfiguration": {
-                            "type": "object",
-                            "description": "Logging configuration settings.",
-                            "properties": {
+                            },
+                            "forcedImport": {
+                                "libraries": [],
+                                "resources": [],
+                                "variables": []
+                            },
+                            "testCaseSplitPathRegEx": "^StopWithRestart\\..*",
+                            "loggingConfiguration": {
                                 "console": {
-                                    "type": "object",
-                                    "description": "Console logging configuration.",
-                                    "properties": {
-                                        "logLevel": {
-                                            "type": "string",
-                                            "default": "info",
-                                            "description": "Log level for console output."
+                                    "logLevel": "info"
+                                }
+                            }
+                        },
+                        "description": "Configuration settings for the testbench2robotframework library.",
+                        "properties": {
+                            "rfLibraryRoots": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "default": [
+                                    "Interactions",
+                                    "RF-Library"
+                                ],
+                                "description": "List of Robot Framework library root directories."
+                            },
+                            "rfResourceRoots": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "default": [
+                                    "RF-Resource"
+                                ],
+                                "description": "List of Robot Framework resource root directories."
+                            },
+                            "fullyQualified": {
+                                "type": "boolean",
+                                "default": true,
+                                "description": "Use fully qualified names."
+                            },
+                            "generationDirectory": {
+                                "type": "string",
+                                "default": "{root}/Generated",
+                                "description": "Directory where files will be generated."
+                            },
+                            "createOutputZip": {
+                                "type": "boolean",
+                                "default": true,
+                                "description": "Create a ZIP file of the output."
+                            },
+                            "resourceDirectory": {
+                                "type": "string",
+                                "default": "{root}/Resources",
+                                "description": "Directory for resources."
+                            },
+                            "clearGenerationDirectory": {
+                                "type": "boolean",
+                                "default": true,
+                                "description": "Clear the generation directory before generating new files."
+                            },
+                            "logSuiteNumbering": {
+                                "type": "boolean",
+                                "default": true,
+                                "description": "Log suite numbering."
+                            },
+                            "logCompoundInteractions": {
+                                "type": "boolean",
+                                "default": true,
+                                "description": "Log compound interactions."
+                            },
+                            "subdivisionsMapping": {
+                                "type": "object",
+                                "description": "Mappings for subdivisions.",
+                                "properties": {
+                                    "libraries": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        },
+                                        "default": {
+                                            "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
+                                            "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
+                                        },
+                                        "description": "Library mappings."
+                                    },
+                                    "resources": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        },
+                                        "default": {
+                                            "MyKeywords": "{root}/../MyKeywords.resource",
+                                            "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
+                                        },
+                                        "description": "Resource mappings."
+                                    }
+                                }
+                            },
+                            "forcedImport": {
+                                "type": "object",
+                                "description": "Forced imports configuration.",
+                                "properties": {
+                                    "libraries": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "default": [],
+                                        "description": "List of libraries to force import."
+                                    },
+                                    "resources": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "default": [],
+                                        "description": "List of resources to force import."
+                                    },
+                                    "variables": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "default": [],
+                                        "description": "List of variables to force import."
+                                    }
+                                }
+                            },
+                            "testCaseSplitPathRegEx": {
+                                "type": "string",
+                                "default": "^StopWithRestart\\..*",
+                                "description": "Regex pattern to split test cases."
+                            },
+                            "loggingConfiguration": {
+                                "type": "object",
+                                "description": "Logging configuration settings.",
+                                "properties": {
+                                    "console": {
+                                        "type": "object",
+                                        "description": "Console logging configuration.",
+                                        "properties": {
+                                            "logLevel": {
+                                                "type": "string",
+                                                "default": "info",
+                                                "description": "Log level for console output."
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
+                        },
+                        "order": 8,
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
+                "title": "Logger",
+                "properties": {
+                    "testbenchExtension.testBenchLogger": {
+                        "type": "string",
+                        "description": "Set the minimum log level. Log file is stored under the name testBenchExtension.log inside the workspace location.",
+                        "default": "No logging",
+                        "order": 9,
+                        "enum": [
+                            "No logging",
+                            "Trace",
+                            "Debug",
+                            "Info",
+                            "Warn",
+                            "Error"
+                        ],
+                        "enumDescriptions": [
+                            "Disable logging",
+                            "Most detailed information",
+                            "Detailed information",
+                            "Information messages",
+                            "Warning messages",
+                            "Error messages"
+                        ],
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
+                "title": "Other",
+                "properties": {
+                    "testbenchExtension.clearReportAfterProcessing": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Remove the report file automatically after processing it.",
+                        "order": 10,
+                        "scope": "resource"
                     },
-                    "order": 7,
-                    "scope": "resource"
-                },
-                "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Delete all files inside the working directory excluding the logs before generating tests.",
-                    "order": 8,
-                    "scope": "resource"
-                },
-                "testbenchExtension.clearReportAfterProcessing": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Remove report file after processing.",
-                    "order": 9,
-                    "scope": "resource"
-                },
-                "testbenchExtension.outputXMLPath": {
-                    "type": "string",
-                    "description": "The path to the output XML file where robotframework test results are stored.",
-                    "order": 10,
-                    "scope": "resource"
-                },
-                "testbenchExtension.testBenchLogger": {
-                    "type": "string",
-                    "description": "Set the minimum log level. Log file is stored within the workspace location.",
-                    "default": "No logging",
-                    "order": 11,
-                    "enum": [
-                        "No logging",
-                        "Trace",
-                        "Debug",
-                        "Info",
-                        "Warn",
-                        "Error"
-                    ],
-                    "enumDescriptions": [
-                        "Disable logging",
-                        "Most detailed information",
-                        "Detailed information",
-                        "Information messages",
-                        "Warning messages",
-                        "Error messages"
-                    ],
-                    "scope": "resource"
+                    "testbenchExtension.outputXMLPath": {
+                        "type": "string",
+                        "description": "The path to the output XML file where robotframework test results are stored.",
+                        "order": 11,
+                        "scope": "resource"
+                    }
                 }
             }
-        },
+        ],
         "commands": [
             {
                 "command": "testbenchExtension.login",
