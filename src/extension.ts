@@ -6,8 +6,9 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as fsPromises from "fs/promises";
 import path from "path";
 import { TestBenchLogger, folderNameOfLogs } from "./testBenchLogger";
+import * as loginWebView from "./loginWebView";
 
-// FIXME: Sometimes robot framework tests fails on some tests (No matching Keyword problem?) and uploading the report fails. Clearing the working directory and restarting the process did not work.
+// FIXME: Sometimes robot framework tests fails on some tests ("No matching Keyword" problem?) and uploading the report fails.
 
 export const baseKey: string = "testbenchExtension"; // Prefix of the commands in package.json
 export let logger: TestBenchLogger;
@@ -107,6 +108,9 @@ export async function activate(context: vscode.ExtensionContext) {
         toggleTestThemeTreeViewVisibility: {
             command: `${baseKey}.toggleTestThemeTreeViewVisibility`,
         },
+        toggleWebViewVisibility: {
+            command: `${baseKey}.toggleWebViewVisibility`,
+        },
     };
 
     // Initialize or update extension configuration settings
@@ -152,6 +156,22 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+
+    // Register login webview view provider
+    const loginWebViewProvider = new loginWebView.LoginWebViewProvider();
+    const loginWebViewDisposable = vscode.window.registerWebviewViewProvider(
+        loginWebView.LoginWebViewProvider.viewId,
+        loginWebViewProvider
+    );
+    context.subscriptions.push(loginWebViewDisposable);
+
+    // Register the "ToggleLogin Webview visibility" command
+    const toggleWebViewVisibilityCommand = vscode.commands.registerCommand(
+        commands.toggleWebViewVisibility.command,
+        loginWebView.toggleWebViewVisibility
+    );
+    context.subscriptions.push(toggleWebViewVisibilityCommand);
+    await vscode.commands.executeCommand("testbenchExtension.webView.removeView");  // By default, hide the login webview at start
 
     // Prompts the user to select a workspace folder and returns its path
     async function promptForWorkspaceLocation(): Promise<string | undefined> {
@@ -353,7 +373,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            const selectedProjectKey: string | null = await connection.getProjectKeyFromProjectListQuickPickSelection(projectList);
+            const selectedProjectKey: string | null = await connection.getProjectKeyFromProjectListQuickPickSelection(
+                projectList
+            );
 
             if (!selectedProjectKey) {
                 // vscode.window.showErrorMessage("No project selected..");

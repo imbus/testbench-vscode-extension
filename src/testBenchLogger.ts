@@ -98,12 +98,7 @@ export class TestBenchLogger {
     // Log messages with optional details and output to terminal
     public async log(level: string, message: string, details?: any | any[], outputToTerminal?: boolean) {
         const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-        const configuredLogLevel: string = config.get("testBenchLogger", "No logging");
-
-        console.log(`Configured log level: ${configuredLogLevel}`);
-        console.log(`Current log level: ${level}`);
-        console.log(`this.levels[level]: ${this.levels[level]}`);
-        console.log(`this.levels[configuredLogLevel]: ${this.levels[configuredLogLevel]}`);
+        const configuredLogLevel: string = config.get("testBenchLogger", "No logging");        
 
         // Implement no logging if log level is set to 0
         /*

@@ -307,6 +307,10 @@
         ],
         "commands": [
             {
+                "command": "testbenchExtension.toggleWebViewVisibility",
+                "title": "Testbench: Toggle Login Web View Visibility"
+            },
+            {
                 "command": "testbenchExtension.login",
                 "title": "Testbench: Login",
                 "icon": {
@@ -447,6 +451,11 @@
         ],
         "views": {
             "testBenchExplorer": [
+                {
+                    "type": "webview",
+                    "id": "testbenchExtension.webView",
+                    "name": "Login to TestBench"
+                },
                 {
                     "id": "projectManagementTree",
                     "name": "Project Management Tree"
