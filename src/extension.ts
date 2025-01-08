@@ -8,6 +8,10 @@ import path from "path";
 import { TestBenchLogger, folderNameOfLogs } from "./testBenchLogger";
 import * as loginWebView from "./loginWebView";
 
+// TODO: Add loading bar for fetching project tree, fetching cycle structure.
+// TODO: Initially hide the tree views and dont create them and hide it afterwards when the extension starts.
+// TODO: Successful login should update the webview html content.
+// FIXME: Sometimes VS Code wont load up fully and triggering extension functions in this state may cause errors such as logging in twice if you press the login button multiple times.
 // FIXME: Sometimes robot framework tests fails on some tests ("No matching Keyword" problem?) and uploading the report fails.
 
 export const baseKey: string = "testbenchExtension"; // Prefix of the commands in package.json
@@ -158,7 +162,13 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Register login webview view provider
-    const loginWebViewProvider = new loginWebView.LoginWebViewProvider();
+    const loginWebViewProvider = new loginWebView.LoginWebViewProvider(
+        context,
+        config.get<string>("serverName", ""), // Get the stored server name from the configuration
+        config.get<string>("portNumber", ""), // Get the stored port number from the configuration
+        config.get<string>("username", ""), // Get the stored username from the configuration
+        await context.secrets.get("password") // Get the stored password from the secrets
+    );
     const loginWebViewDisposable = vscode.window.registerWebviewViewProvider(
         loginWebView.LoginWebViewProvider.viewId,
         loginWebViewProvider
@@ -171,7 +181,12 @@ export async function activate(context: vscode.ExtensionContext) {
         loginWebView.toggleWebViewVisibility
     );
     context.subscriptions.push(toggleWebViewVisibilityCommand);
-    await vscode.commands.executeCommand("testbenchExtension.webView.removeView");  // By default, hide the login webview at start
+    // Hide or show the login webview based on the stored visibility state on extension activation
+    await loginWebView.updateWebViewDisplay();
+
+    // Hide tree views when login webview is visible
+    await vscode.commands.executeCommand("projectManagementTree.removeView");
+    await vscode.commands.executeCommand("testThemeTree.removeView");
 
     // Prompts the user to select a workspace folder and returns its path
     async function promptForWorkspaceLocation(): Promise<string | undefined> {
@@ -261,7 +276,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Register the "Logout" command.
-    // Performs the logout process and clears the connection object.
+    // Performs the logout process, clears the connection object and shows the login webview.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.logout.command, async () => {
             if (!connection) {
@@ -271,6 +286,10 @@ export async function activate(context: vscode.ExtensionContext) {
             }
 
             await connection.logoutUser(projectManagementTreeDataProvider!);
+
+            loginWebView.displayWebView();
+            projectManagementTreeView.hideProjectManagementTreeView();
+            projectManagementTreeView.hideTestThemeTreeView();
         })
     );
 
@@ -390,7 +409,8 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.createTreeView("projectManagementTree", {
                 treeDataProvider: projectManagementTreeDataProvider,
             });
-            [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeView(
+            // Initializes and displays the project management tree view with the selected project
+            [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeViews(
                 context,
                 connection,
                 selectedProjectKey!
@@ -466,7 +486,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.refreshProjectTreeView.command, async () => {
             projectManagementTreeDataProvider?.clearTree();
-            [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeView(
+            [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeViews(
                 context,
                 connection!,
                 projectManagementTreeDataProvider?.currentProjectKeyInView!
@@ -604,12 +624,13 @@ export async function clearWorkspaceFolder(
             }
         }
 
-        vscode.window.showInformationMessage("Workspace folder cleared successfully.");
-        logger.debug(`Workspace folder cleared successfully.`);
+        const clearWorkspaceFolderSuccessMessage = `Workspace folder cleared successfully: ${workspaceLocation}`;
+        // vscode.window.showInformationMessage(clearWorkspaceFolderSuccessMessage);
+        logger.debug(clearWorkspaceFolderSuccessMessage);
     } catch (error: any) {
-        // Log and display error messages
-        vscode.window.showErrorMessage(`An error occurred while clearing the workspace folder: ${error.message}`);
-        logger.error(`An error occurred while clearing the workspace folder: ${error.message}`);
+        const clearWorkspaceFolderErrorMessage = `An error occurred while clearing the workspace folder: ${error.message}`;
+        vscode.window.showErrorMessage(clearWorkspaceFolderErrorMessage);
+        logger.error(clearWorkspaceFolderErrorMessage);
     }
 }
 

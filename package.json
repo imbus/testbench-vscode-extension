@@ -506,7 +506,7 @@
                 {
                     "command": "testbenchExtension.showExtensionSettings",
                     "group": "navigation@7",
-                    "when": "view == projectManagementTree"
+                    "when": "view == projectManagementTree || view == testbenchExtension.webView"
                 }
             ],
             "view/item/context": [

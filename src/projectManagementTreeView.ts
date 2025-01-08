@@ -181,6 +181,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         const rootKey: string = cycleData.root.base.key;
         const children: TestbenchTreeItem[] = buildTree(rootKey); // Build the tree starting from the root key
         element.children = children; // Assign the built children to the current element
+        // Display the test theme tree view if not already displayed
+        await vscode.commands.executeCommand("testThemeTree.focus");
         return children;
     }
 
@@ -353,7 +355,8 @@ export class TestbenchTreeItem extends vscode.TreeItem {
     }
 }
 
-export async function initializeTreeView(
+// TODO: Refactor this function
+export async function initializeTreeViews(
     context: vscode.ExtensionContext,
     connection: PlayServerConnection | null,
     selectedProjectKey?: string
@@ -400,7 +403,29 @@ export async function initializeTreeView(
     context.subscriptions.push(testThemeTreeView);
     testThemeDataProvider.refresh();
 
+    await vscode.commands.executeCommand("projectManagementTree.focus"); // Display the project management tree view if not displayed already
+
     return [projectManagementDataProvider, testThemeDataProvider];
+}
+
+// Hide the project management tree view
+export async function hideProjectManagementTreeView(): Promise<void> {
+    await vscode.commands.executeCommand("projectManagementTree.removeView"); // projectManagementTree is the ID of the tree view in package.json
+}
+
+// Display the project management tree view
+async function displayProjectManagementTreeView(): Promise<void> {
+    await vscode.commands.executeCommand("projectManagementTree.focus");
+}
+
+// Hide the test theme tree view
+export async function hideTestThemeTreeView(): Promise<void> {
+    await vscode.commands.executeCommand("testThemeTree.removeView"); // testThemeTree is the ID of the tree view in package.json
+}
+
+// Display the test theme tree view
+async function displayTestThemeTreeView(): Promise<void> {
+    await vscode.commands.executeCommand("testThemeTree.focus");
 }
 
 // Function to toggle the visibility of the project management tree view
@@ -410,13 +435,13 @@ export async function toggleProjectManagementTreeViewVisibility(): Promise<void>
         if (projectManagementTreeView.visible) {
             logger.trace("Project Tree view is visible. Hiding tree view.");
 
-            await vscode.commands.executeCommand("projectManagementTree.removeView"); // projectManagementTree is the ID of the tree view in package.json
+            await hideProjectManagementTreeView();
 
             logger.trace("Project tree view is hidden now.");
         } else {
             logger.trace("Project tree view is hidden. Revealing tree view.");
 
-            await vscode.commands.executeCommand("projectManagementTree.focus"); // There is no reveal function after using removeView, so I found this hack which displays the tree view again
+            await displayProjectManagementTreeView();
 
             logger.trace("Project tree view is displayed now.");
         }
@@ -430,13 +455,13 @@ export async function toggleTestThemeTreeViewVisibility(): Promise<void> {
         if (testThemeTreeView.visible) {
             logger.trace("Test theme tree view is visible. Hiding tree view.");
 
-            await vscode.commands.executeCommand("testThemeTree.removeView"); // testThemeTree is the ID of the tree view in package.json
+            await hideTestThemeTreeView();
 
             logger.trace("Test theme tree view is hidden now.");
         } else {
             logger.trace("Test theme tree view is hidden. Revealing tree view.");
 
-            await vscode.commands.executeCommand("testThemeTree.focus");
+            await displayTestThemeTreeView();
 
             logger.trace("Test theme tree view is displayed now.");
         }

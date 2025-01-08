@@ -342,7 +342,10 @@ export class PlayServerConnection {
      * @returns {Promise<string>} A promise that resolves when the upload is successful.
      * @throws Error if the upload fails.
      */
-    public async uploadExecutionResultsAndReturnUploadedFileName(projectKey: number, zipFilePath: string): Promise<string> {
+    public async uploadExecutionResultsAndReturnUploadedFileName(
+        projectKey: number,
+        zipFilePath: string
+    ): Promise<string> {
         const uploadResultZipURL: string = `/projects/${projectKey}/executionResults/v1`;
 
         try {
@@ -374,13 +377,15 @@ export class PlayServerConnection {
                         "Forbidden: You do not have permission to perform this action (Upload execution results).";
                     logger.error(uploadForbiddenMessage);
                     throw new Error(uploadForbiddenMessage);
-                
+
                 case 404:
-                    const uploadNotFoundMessage: string = "Not Found: The requested project was not found (Upload execution results).";
+                    const uploadNotFoundMessage: string =
+                        "Not Found: The requested project was not found (Upload execution results).";
                     logger.error(uploadNotFoundMessage);
                     throw new Error(uploadNotFoundMessage);
                 case 422:
-                    const uploadUnprocessableEntityMessage: string = "Unprocessable Entity: The uploaded file is invalid (Upload execution results).";
+                    const uploadUnprocessableEntityMessage: string =
+                        "Unprocessable Entity: The uploaded file is invalid (Upload execution results).";
                     logger.error(uploadUnprocessableEntityMessage);
                     throw new Error(uploadUnprocessableEntityMessage);
                 default:
@@ -432,24 +437,29 @@ export class PlayServerConnection {
                         logger.debug(`Import initiated successfully. Job ID: ${jobID}`);
                         return jobID;
                     } else {
-                        const importJobIDNotFoundMessage: string = "Success response received but no jobID found in the response (Import execution results).";
+                        const importJobIDNotFoundMessage: string =
+                            "Success response received but no jobID found in the response (Import execution results).";
                         logger.error(importJobIDNotFoundMessage);
                         throw new Error(importJobIDNotFoundMessage);
                     }
                 case 400:
-                    const importBadRequestMessage: string = "Bad Request: The request body structure is wrong (Import execution results).";
+                    const importBadRequestMessage: string =
+                        "Bad Request: The request body structure is wrong (Import execution results).";
                     logger.error(importBadRequestMessage);
                     throw new Error(importBadRequestMessage);
                 case 403:
-                    const importForbiddenMessage: string = "Forbidden: You do not have permission to perform this action (Import execution results).";
+                    const importForbiddenMessage: string =
+                        "Forbidden: You do not have permission to perform this action (Import execution results).";
                     logger.error(importForbiddenMessage);
                     throw new Error(importForbiddenMessage);
                 case 404:
-                    const importNotFoundMessage: string = "Not Found: Project or test cycle not found (Import execution results).";
+                    const importNotFoundMessage: string =
+                        "Not Found: Project or test cycle not found (Import execution results).";
                     logger.error(importNotFoundMessage);
                     throw new Error(importNotFoundMessage);
                 case 422:
-                    const importUnprocessableEntityMessage: string = "Unprocessable Entity: The server cannot process the request (Import execution results).";
+                    const importUnprocessableEntityMessage: string =
+                        "Unprocessable Entity: The server cannot process the request (Import execution results).";
                     logger.error(importUnprocessableEntityMessage);
                     throw new Error(importUnprocessableEntityMessage);
                 default:
@@ -488,7 +498,7 @@ export class PlayServerConnection {
         logger.trace("Keep-alive started.");
     }
 
-    // Stops the keep-alive process.    
+    // Stops the keep-alive process.
     private stopKeepAlive(): void {
         if (this.keepAliveIntervalId) {
             clearInterval(this.keepAliveIntervalId);
@@ -517,7 +527,7 @@ export class PlayServerConnection {
 }
 
 /**
- * A generalized method to prompt for any user input in VS Code input box with live validation. 
+ * A generalized method to prompt for any user input in VS Code input box with live validation.
  * The function loops until the user provides a valid input or cancels the prompt. The prompt also quits by typing "quit".
  * @param promptMessage The prompt message to display to the user.
  * @param inputCanBeEmpty Whether the input can be empty or not.
@@ -596,7 +606,7 @@ export async function performLogin(
         if (userHasStoredCredentialsAndCanAutoLogin && !promptForNewCredentials) {
             const choice: string | undefined = await vscode.window.showInformationMessage(
                 "Do you want to login using your previous credentials?",
-                { modal: true }, // Modal dialog is used so that the input box wont disappear, which forces the user to choose an option. Without it, login may be locked.            
+                { modal: true }, // Modal dialog is used so that the input box wont disappear, which forces the user to choose an option. Without it, login may be locked.
                 "Yes",
                 "No"
             );
@@ -646,9 +656,6 @@ export async function performLogin(
         );
 
         if (newConnection) {
-            // Set the connectionActive context value for changing the login icon to logout icon based on this value
-            vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
-            setConnection(newConnection);
             return newConnection;
         } else {
             // Login may fail due to a server problem or incorrect credentials.
@@ -758,7 +765,7 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
  * @param baseKey The base key for the configuration settings
  * @returns {Promise<PlayServerConnection | null>} A promise that resolves with the connection object if the login is successful, otherwise null.
  */
-async function loginToNewPlayServerAndInitSessionToken(
+export async function loginToNewPlayServerAndInitSessionToken(
     context: vscode.ExtensionContext,
     serverName: string,
     portNumber: number,
@@ -771,51 +778,74 @@ async function loginToNewPlayServerAndInitSessionToken(
         password: password,
         force: true,
     };
-
     try {
-        const baseURL: string = `https://${serverName}:${portNumber}/api`;
-        const loginURL: string = `${baseURL}/login/session/v1`;
-
-        // console.log("Sending Login POST request to:", loginURL);
-
-        const response: AxiosResponse<testBenchTypes.LoginResponse> = await axios.post(loginURL, requestBody, {
-            headers: {
-                accept: "application/vnd.testbench+json",
-                "Content-Type": "application/vnd.testbench+json",
+        const connection = await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: "Logging in",
+                cancellable: true,
             },
-            httpsAgent: new https.Agent({
-                rejectUnauthorized: false,
-            }),
-        });
+            async (progress, token) => {
+                const baseURL: string = `https://${serverName}:${portNumber}/api`;
+                const loginURL: string = `${baseURL}/login/session/v1`;
 
-        if (response.status === 201) {
-            // Store password in secret storage after succesfull login if the user chooses to
-            const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-            const storePassword: boolean = config.get<boolean>("storePasswordAfterLogin", false);
-            if (storePassword) {
-                await context.secrets.store("password", password);
-                logger.trace("Password stored securely in secret storage.");
-            }
+                logger.trace("Sending Login request to:", loginURL);
+                progress.report({ message: "Sending login request..." });
 
-            // This starts keep alive in the constructor
-            const connection: PlayServerConnection = new PlayServerConnection(
-                context,
-                serverName,
-                portNumber,
-                response.data.sessionToken
-            );
-            if (connection) {
-                logger.debug("Login successful.");
-                vscode.window.showInformationMessage("Login successful.");
-                return connection;
+                const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await axios.post(
+                    loginURL,
+                    requestBody,
+                    {
+                        headers: {
+                            accept: "application/vnd.testbench+json",
+                            "Content-Type": "application/vnd.testbench+json",
+                        },
+                        httpsAgent: new https.Agent({
+                            rejectUnauthorized: false,
+                        }),
+                    }
+                );
+
+                // An exception is thrown automatically if the status code is not 2xx
+                if (loginResponse.status === 201) {
+                    // Store password in secret storage after succesfull login if the user chooses to
+                    const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
+                    const storePassword: boolean = config.get<boolean>("storePasswordAfterLogin", false);
+                    if (storePassword) {
+                        await context.secrets.store("password", password);
+                        logger.trace("Password stored securely in secret storage.");
+                    }
+
+                    // This starts keep alive in the constructor
+                    const newConnection: PlayServerConnection = new PlayServerConnection(
+                        context,
+                        serverName,
+                        portNumber,
+                        loginResponse.data.sessionToken
+                    );
+                    setConnection(newConnection); // Set the global connection object, it can be null in case the login fails
+                    if (newConnection) {
+                        // Set the connectionActive context value for changing the login icon to logout icon based on this value
+                        vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
+                        const loginSuccessfulMessage: string = "Login successful.";
+                        logger.debug(loginSuccessfulMessage);
+                        vscode.window.showInformationMessage(loginSuccessfulMessage);
+                        return newConnection;
+                    }
+                    logger.error("Connection object is null after successful login.");
+                    return null;
+                } else {
+                    const loginFailedMessage: string = "Login failed. Unexpected status code: " + loginResponse.status;
+                    logger.error(loginFailedMessage);
+                    vscode.window.showInformationMessage(loginFailedMessage);
+                    return null;
+                }
             }
-            return null;
-        } else {
-            logger.error("Login failed. Unexpected status code:", response.status);
-            return null;
-        }
+        );
+        return connection;
     } catch (error) {
         logger.error("Error during login:", error);
+        vscode.window.showInformationMessage("Error during login.");
         return null;
     }
 }
@@ -848,14 +878,17 @@ async function fetchServerVersions(
         const serverVersionsURL: string = `${baseURL}/api/serverVersions/v1`;
 
         logger.debug("Fetching server versions with URL:", serverVersionsURL);
-        const serverVersionsResponse: AxiosResponse<testBenchTypes.ServerVersionsResponse> = await axios.get(serverVersionsURL, {
-            headers: {
-                Accept: "application/vnd.testbench+json",
-            },
-            httpsAgent: new https.Agent({
-                rejectUnauthorized: false, // TODO: Should be true in production
-            }),
-        });
+        const serverVersionsResponse: AxiosResponse<testBenchTypes.ServerVersionsResponse> = await axios.get(
+            serverVersionsURL,
+            {
+                headers: {
+                    Accept: "application/vnd.testbench+json",
+                },
+                httpsAgent: new https.Agent({
+                    rejectUnauthorized: false, // TODO: Should be true in production
+                }),
+            }
+        );
 
         // vscode.window.showInformationMessage(`TestBench Release Version: ${response.data.releaseVersion}, Database Version: ${response.data.databaseVersion}, Revision: ${response.data.revision}`);
         logger.debug(
@@ -970,7 +1003,8 @@ export async function importReportWithResultsToTestbench(
         const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReport(resultZipFilePath);
 
         if (!uniqueID || !projectKey || !cycleNameOfProject) {
-            const extractDataErrorMessage: string = "Error extracting project key, cycle name and unique ID from the zip file.";
+            const extractDataErrorMessage: string =
+                "Error extracting project key, cycle name and unique ID from the zip file.";
             vscode.window.showErrorMessage(extractDataErrorMessage);
             logger.error(extractDataErrorMessage);
             return;
@@ -1166,7 +1200,7 @@ async function extractDataFromReport(zipFilePath: string): Promise<ExtractedData
         const cycleNameOfProject: string | null = projectJson?.projectContext?.cycleName || null;
 
         logger.debug(
-            `Extracted data from zip file ${zipFilePath}: uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleNameOfProject = ${cycleNameOfProject}`  
+            `Extracted data from zip file ${zipFilePath}: uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleNameOfProject = ${cycleNameOfProject}`
         );
 
         return { uniqueID, projectKey, cycleNameOfProject };
