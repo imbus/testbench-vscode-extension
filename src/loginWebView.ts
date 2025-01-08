@@ -65,7 +65,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             `Webview input fields: Server Name: ${serverName} Port Number: ${portNumber} Username: ${username} Password: ${password}`
         ); // TODO: Delete this in production to not to store sensitive data in logs
 
-        // Login logic
+        // Login logic also notifies and hides the webview from activity bar
         await loginToNewPlayServerAndInitSessionToken(
             extensionContext!,
             serverName,
@@ -75,19 +75,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             baseKey
         );
 
-        // The global connection variable is set in the loginToNewPlayServerAndInitSessionToken function
-        if (connection) {
-            // Hide webview after successful login
-            hideWebView();
-            // Open project selection after logging in, this should also take care of the visibility of the tree views
-            vscode.commands.executeCommand(`${baseKey}.selectAndLoadProject`);
-            return;
-        } else {
-            logger.error("New connection is null");
-        }
+        // OPTIONAL
+        // Open project selection after logging in, this command also takes care of the visibility of the tree views
+        vscode.commands.executeCommand(`${baseKey}.selectAndLoadProject`);
     }
 
-    private async updateWebviewContent() {
+    async updateWebviewContent() {
         logger.trace("Updating webview content");
         if (!this.currentWebview) {
             logger.trace("No webview to update webview content");
@@ -96,6 +89,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         this.currentWebview.webview.html = this.isConnectedToServer()
             ? this.getAlreadyConnectedHtml()
             : this.getLoginPageHtmlSimple(this.currentWebview.webview);
+        logger.trace("Webview content updated");
     }
 
     private createIconUri(webview: vscode.Webview): vscode.Uri | null {
@@ -443,6 +437,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 form div {
                     margin-top: 0.5em;
                 }
+                /* Ensures each label appears on its own line */
+                label {
+                    display: block;
+                    margin-bottom: 0.25em;
+                }
             </style>
         </head>
         <body>
@@ -563,7 +562,7 @@ export async function toggleWebViewVisibility(): Promise<void> {
     }
 }
 
-async function hideWebView(): Promise<void> {
+export async function hideWebView(): Promise<void> {
     await vscode.commands.executeCommand("testbenchExtension.webView.removeView");
     loginWebViewIsVisible = false;
 }

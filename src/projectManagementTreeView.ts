@@ -110,7 +110,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     public async getChildrenOfCycle(element: TestbenchTreeItem): Promise<TestbenchTreeItem[]> {
         const cycleKey: string = element.item.key;
         const projectKey: string | undefined = findProjectKeyOfCycleElement(element);
-
+        
         if (!projectKey) {
             // console.warn("Project key of cycle not found.");
             logger.warn("Project key of cycle not found (getChildrenOfCycle).");

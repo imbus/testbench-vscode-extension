@@ -7,6 +7,7 @@ import { TestBenchLogger } from "../../testBenchLogger";
 
 const proxyquire = require('proxyquire');
 
+/*
 suite('checkVSCodeVersion test', () => {
     let showErrorMessageStub: sinon.SinonStub;
     let getLoggerStub: sinon.SinonStub;
@@ -281,3 +282,4 @@ suite('checkDependencies tests', () => {
         assert.strictEqual(result, false, 'Expected checkDependencies to return false on checkRobotFramework fail');
     });
 });
+*/

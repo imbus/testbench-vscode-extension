@@ -13,7 +13,9 @@ import {
     folderNameOfTestbenchWorkingDirectory,
     setProjectManagementTreeDataProvider,
     logger,
+    loginWebViewProvider,
 } from "./extension";
+import * as loginWebView from "./loginWebView";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate
@@ -297,6 +299,7 @@ export class PlayServerConnection {
      * @param treeDataProvider The tree data provider to clear the tree after logout.
      */
     async logoutUser(treeDataProvider: ProjectManagementTreeDataProvider): Promise<void> {
+        logger.trace("Logging out user.");
         try {
             const logoutResponse: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
                 headers: {
@@ -309,7 +312,7 @@ export class PlayServerConnection {
                     treeDataProvider.clearTree();
                 }
 
-                const logoutSuccessfulMessage: string = "Logout successful.";
+                const logoutSuccessfulMessage: string = "Logout successful.";                
                 logger.debug(logoutSuccessfulMessage);
                 vscode.window.showInformationMessage(logoutSuccessfulMessage);
             } else {
@@ -332,6 +335,12 @@ export class PlayServerConnection {
             vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
             setProjectManagementTreeDataProvider(null); // Clear the connection
             setConnection(null); // Clear the tree data provider
+            // Notify login webview about the logout success to change its HTML content
+            if (loginWebViewProvider) {
+                loginWebViewProvider.updateWebviewContent();
+            } else {
+                logger.warn("loginWebViewProvider is null. Cannot update the webview content.");
+            }
         }
     }
 
@@ -829,7 +838,15 @@ export async function loginToNewPlayServerAndInitSessionToken(
                         vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
                         const loginSuccessfulMessage: string = "Login successful.";
                         logger.debug(loginSuccessfulMessage);
-                        vscode.window.showInformationMessage(loginSuccessfulMessage);
+                        vscode.window.showInformationMessage(loginSuccessfulMessage);                        
+                        if (loginWebViewProvider) {
+                            loginWebViewProvider.updateWebviewContent(); // Notify webview about the login success to change its HTML content
+                            loginWebView.hideWebView(); // Hide the webview after successful login
+                        }
+                        else { 
+                            logger.warn("loginWebViewProvider is null. Cannot update the webview content.");
+                        }
+                            
                         return newConnection;
                     }
                     logger.error("Connection object is null after successful login.");
@@ -844,7 +861,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
         );
         return connection;
     } catch (error) {
-        logger.error("Error during login:", error);
+        logger.error("Error during login:", error);  // Note: The error log could be very large in the log file
         vscode.window.showInformationMessage("Error during login.");
         return null;
     }

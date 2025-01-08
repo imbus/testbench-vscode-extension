@@ -9,8 +9,6 @@ import { TestBenchLogger, folderNameOfLogs } from "./testBenchLogger";
 import * as loginWebView from "./loginWebView";
 
 // TODO: Add loading bar for fetching project tree, fetching cycle structure.
-// TODO: Initially hide the tree views and dont create them and hide it afterwards when the extension starts.
-// TODO: Successful login should update the webview html content.
 // FIXME: Sometimes VS Code wont load up fully and triggering extension functions in this state may cause errors such as logging in twice if you press the login button multiple times.
 // FIXME: Sometimes robot framework tests fails on some tests ("No matching Keyword" problem?) and uploading the report fails.
 
@@ -38,6 +36,8 @@ export let lastGeneratedReportParams: testBenchTypes.LastGeneratedReportParams =
     cycleKey: undefined,
     UID: undefined,
 };
+
+export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null; // Webview provider for the login webview
 
 export async function activate(context: vscode.ExtensionContext) {
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
@@ -162,7 +162,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Register login webview view provider
-    const loginWebViewProvider = new loginWebView.LoginWebViewProvider(
+    loginWebViewProvider = new loginWebView.LoginWebViewProvider(
         context,
         config.get<string>("serverName", ""), // Get the stored server name from the configuration
         config.get<string>("portNumber", ""), // Get the stored port number from the configuration
@@ -272,6 +272,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     insideLogin = false;
                     logger.trace(`insideLogin flag reset after login attempt.`);
                 });
+            // OPTIONAL
+            // Open project selection after logging in, this command also takes care of the visibility of the tree views
+            vscode.commands.executeCommand(`${baseKey}.selectAndLoadProject`);
         })
     );
 
@@ -287,6 +290,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
             await connection.logoutUser(projectManagementTreeDataProvider!);
 
+            // Display the login webview and hide the tree views after logging out
             loginWebView.displayWebView();
             projectManagementTreeView.hideProjectManagementTreeView();
             projectManagementTreeView.hideTestThemeTreeView();
