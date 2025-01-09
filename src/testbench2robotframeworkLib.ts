@@ -7,13 +7,13 @@ export class tb2robotLib {
     /**
      * Generates Robot Framework Testsuites.
      * @param {vscode.ExtensionContext} context - The ExtensionContext.
-     * @param {string} workingDirectory - Directory in which the command is to be executed.
+     * @param {string} commandExecutionDirectory - Directory in which the command is to be executed.
      * @param {string} reportPath - Path to a folder or ZIP file containing TestBench JSON reports.
      * @param {string} configJSONPath - Path to a JSON file, for the configuration of the output. If not provided, a config.json will be automatically generated.
      */
     public static tb2robotWrite(
         context: vscode.ExtensionContext,
-        workingDirectory: string,
+        commandExecutionDirectory: string,
         reportPath: string,
         configJSONPath?: string
     ): Promise<void> {
@@ -27,7 +27,7 @@ export class tb2robotLib {
 
             logger.debug(`Executing command: ${command}`);
 
-            exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
+            exec(command, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
                 if (error) {
                     reject(stderr || stdout || "An unknown Error occurred.");
                     logger.error("Error while executing command:", error);
@@ -42,14 +42,14 @@ export class tb2robotLib {
     /**
      * Writes XML test results back to the TestBench Json report.
      * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
-     * @param {string} workingDirectory - Directory in which the command is to be executed.
-     * @param {string} outputXmlPath - Path to a Robot Framework XML resultfile.
-     * @param {string} reportWithoutResultsPath - Path to a folder or ZIP file containing TestBench JSON reports (without results).
+     * @param {string} commandExecutionDirectory - Directory in which the command is to be executed.
+     * @param {string} outputXmlPath - Absolute path to a Robot Framework XML result file.
+     * @param {string} reportWithoutResultsPath - Absolute path to a folder or ZIP file containing TestBench JSON reports (without results).
      * @param {string} resultPath - Path to a folder or ZIP file to save the results to. If not provided, reports provided in reportPath will be overritten.
      */
     public static tb2robotRead(
         context: vscode.ExtensionContext,
-        workingDirectory: string,
+        commandExecutionDirectory: string,
         outputXmlPath: string,
         reportWithoutResultsPath: string,
         resultPath?: string,
@@ -71,8 +71,13 @@ export class tb2robotLib {
                 command = `${commandBase} read -c ${configJSONPath} -o ${outputXmlPath} -r ${resultPath} ${reportWithoutResultsPath}`;
             }
 
-            logger.debug(`Executing command: ${command}`);
-            exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
+            logger.debug(`Executing command inside ${commandExecutionDirectory}: ${command}`);
+
+            // Execute the command inside the working directory.
+            // TODO: Check if the command execution causes problems when run in working directory.
+            // { cwd: workingDirectory } sets the current working directory of the child process to workingDirectory.
+            // It will be as if you changed directories into workingDirectory before executing the command.
+            exec(command, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
                 if (error) {
                     reject(stderr || stdout || "An unknown Error occurred.");
                     return;
@@ -83,49 +88,25 @@ export class tb2robotLib {
     }
 
     /**
-     * Runs robotframework tests and generates output XML results.
-     * @param {string} workingDirectory - Directory in which the command is to be executed.
-     * @param {string} outputResultDir - Directory in which the result is to be stored..
-     * @param {string} robotFilesPath - Path to a folder containing the robotframework tests.
-     * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
-     */
-    public static robotGenerateXMLResults(
-        workingDirectory: string,
-        outputResultDir: string,
-        robotFilesPath: string
-    ): Promise<boolean> {
-        return new Promise(async (resolve, reject) => {
-            const commandBase: string = await pyCommandBuilder.buildRobotCommand();
-
-            let command: string = `${commandBase} -d ${outputResultDir} --dryrun ${robotFilesPath}`;
-
-            exec(command, { cwd: workingDirectory }, (error, stdout, stderr) => {
-                if (error) {
-                    reject(stderr || stdout || "An unknown Error occurred.");
-                    resolve(false);
-                }
-                resolve(true);
-            });
-        });
-    }
-
-    /**
      * Entry point for the Testbench2Robotframework write command.
      * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
-     * @param {string} workingDirectory The directory in which the command is to be executed.
+     * @param {string} commandExecutionDirectory The directory in which the command is to be executed.
      * @param {string} reportPath Path to a folder or ZIP file containing TestBench JSON reports.
      * @param {string} configJSONPath Path to a JSON configuration file. If not provided, a config.json will be automatically generated.
      * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
      */
     public static async startTb2robotframeworkWrite(
         context: vscode.ExtensionContext,
-        workingDirectory: string,
+        commandExecutionDirectory: string,
         reportPath: string,
         configJSONPath?: string
     ): Promise<boolean> {
+        logger.debug(
+            `Calling testbench2robotframework write command with working directory ${commandExecutionDirectory}, report path ${reportPath}, JSON config path ${configJSONPath}.`
+        );
         let isWriteCommandSuccessful: boolean = true;
 
-        await this.tb2robotWrite(context, workingDirectory, reportPath, configJSONPath)
+        await this.tb2robotWrite(context, commandExecutionDirectory, reportPath, configJSONPath)
             .then(() => {
                 let config = "no";
                 if (configJSONPath) {
@@ -140,13 +121,16 @@ export class tb2robotLib {
                 isWriteCommandSuccessful = false;
             });
 
+        logger.debug(
+            `testbench2robotframework write command executed with success variable: ${isWriteCommandSuccessful}`
+        );
         return isWriteCommandSuccessful;
     }
 
     /**
      * Entry point for the Testbench2Robotframework read command.
      * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
-     * @param {string} workingDirectory The directory in which the command is to be executed.
+     * @param {string} commandExecutionDirectory The directory in which the command is to be executed.
      * @param {string} outputXmlPath Path to a Robot Framework XML resultfile.
      * @param {string} reportPath Path to a folder or ZIP file containing TestBench JSON reports. *
      * @param {string} resultPath  Path to a folder or ZIP file to save the results to. If not provided, reports provided in reportPath will be overritten.
@@ -154,15 +138,16 @@ export class tb2robotLib {
      */
     public static async startTb2robotRead(
         context: vscode.ExtensionContext,
-        workingDirectory: string,
+        commandExecutionDirectory: string,
         outputXmlPath: string,
         reportPath: string,
         resultPath?: string,
         configJSONPath?: string
     ): Promise<boolean> {
+        logger.debug("Calling startTb2robotRead.");
         let isReadCommandSuccessful: boolean = true;
 
-        await this.tb2robotRead(context, workingDirectory, outputXmlPath, reportPath, resultPath, configJSONPath)
+        await this.tb2robotRead(context, commandExecutionDirectory, outputXmlPath, reportPath, resultPath, configJSONPath)
             .then(() => {
                 let providedPath = "none";
                 let providedConfig = "";
@@ -183,6 +168,7 @@ export class tb2robotLib {
                 isReadCommandSuccessful = false;
             });
 
+        logger.debug(`startTb2robotRead executed with success variable: ${isReadCommandSuccessful}`);
         return isReadCommandSuccessful;
     }
 }

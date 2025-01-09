@@ -111,6 +111,7 @@ export class PlayServerConnection {
         });
 
         if (!selectedProjectName) {
+            logger.error("Selected project name nout found.");
             return null;
         }
 

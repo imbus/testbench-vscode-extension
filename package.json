@@ -11,7 +11,9 @@
     "categories": [
         "Other"
     ],
-    "activationEvents": [],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
     "main": "./dist/extension.js",
     "contributes": {
         "configuration": [
@@ -52,14 +54,14 @@
                 "properties": {
                     "testbenchExtension.workspaceLocation": {
                         "type": "string",
-                        "description": "The path to the workspace or project directory on the local machine for storing local files during test generation.",
+                        "description": "The absolute path to the workspace or project directory on the local machine for storing local files during test generation inside a directory called .testbench.",
                         "order": 5,
                         "scope": "resource"
                     },
                     "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Delete all files inside the working directory excluding the logs before generating tests.",
+                        "description": "Delete all files inside the working directory excluding the log files before generating tests.",
                         "order": 6,
                         "scope": "resource"
                     }
@@ -298,7 +300,7 @@
                     },
                     "testbenchExtension.outputXMLPath": {
                         "type": "string",
-                        "description": "The path to the output XML file where robotframework test results are stored.",
+                        "description": "The absolute folder path where the output XML file (Robotframework test results) is stored",
                         "order": 11,
                         "scope": "resource"
                     }
