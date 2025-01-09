@@ -7,11 +7,11 @@ import * as testBenchTypes from "./testBenchTypes";
 
 let projectManagementTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
 let projectManagementDataProvider: ProjectManagementTreeDataProvider | null = null;
-
 let testThemeTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
 
-// Project management tree view that displays projects, versions and cycles.
-// Upon clicking on a cycle element, the remaining children elements are displayed in test theme tree (test themes and test case sets).
+// Project management tree view that displays the selected project and the test object versions and cycles under this project.
+// Upon clicking on a test cycle element, a test theme view is created under the project tree view 
+// and the children elements (test themes and test case sets) are displayed in the test theme tree.
 export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvider<TestbenchTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<TestbenchTreeItem | void> =
         new vscode.EventEmitter<TestbenchTreeItem | void>();
@@ -41,6 +41,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         return element.parent;
     }
 
+    // Initialize a tree item from the data of the element
     private createTreeItem(
         data: any,
         parent: TestbenchTreeItem | null,
@@ -49,12 +50,13 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         if (!data) {
             return null;
         }
-
-        const contextValue: string = data.nodeType; // Project, Version, Cycle, testthemenode, TestCaseSetNode, TestCaseNode
+        // contextValue can be one of these types, which can be found in the response from the server: 
+        // Project, Version, Cycle, TestThemeNode, TestCaseSetNode, TestCaseNode
+        const contextValue: string = data.nodeType;
         const collapsibleState: vscode.TreeItemCollapsibleState =
             contextValue === "Cycle"
-                ? vscode.TreeItemCollapsibleState.None // Test cycles are set to none to be non expandable, the user can click on it to see the test themes
-                : vscode.TreeItemCollapsibleState.Collapsed; // Set collapsibleState to Collapsed to make items clickable to trigger getChildren when expanded
+                ? vscode.TreeItemCollapsibleState.None // Test cycles are set to none to be non expandable, since its children are displayed in the test theme tree
+                : vscode.TreeItemCollapsibleState.Collapsed; // Set collapsibleState to Collapsed to make items clickable to trigger getChildren function when expanded
         const treeItem: TestbenchTreeItem = new TestbenchTreeItem(
             data.name,
             contextValue,
@@ -65,6 +67,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         return treeItem;
     }
 
+    // Called when the tree view is first loaded or refreshed. Returns the children of the root item (project)    
     async getChildren(element?: TestbenchTreeItem): Promise<TestbenchTreeItem[]> {
         if (!connection) {
             // vscode.window.showWarningMessage("No connection available for tree view.");
@@ -86,9 +89,9 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         }
 
         if (element.contextValue === "Cycle") {
-            // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
+            // Clear the test theme tree when a cycle is clicked so that clicking on a new test cycle will not show the old test themes
             this.testThemeDataProvider.clearTree();
-            // Offload the children of the cycle to the Test Theme Tree
+            // Offload the children of the cycle to the Test Theme Tree View
             this.testThemeDataProvider.setRoots(await this.getChildrenOfCycle(element));
 
             return []; // Return an empty array to prevent expansion in the Project Management Tree
@@ -128,6 +131,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             cycleKey
         );
 
+        // If the cycle has no sub-elements, return an empty array
         if (!cycleData || !cycleData.nodes?.length) {
             // console.warn("Cycle has no sub-elements.");
             logger.warn("Cycle has no sub-elements (getChildrenOfCycle).");
@@ -141,12 +145,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             elementsByKey.set(data.base.key, data);
         });
 
-        // Recursively builds the tree structure starting from a given parent key.
-        const buildTree = (parentKey: string): TestbenchTreeItem[] => {
+        // Recursively builds the tree structure starting from a given parent cycle key.
+        const buildTestThemeTree = (cycleKey: string): TestbenchTreeItem[] => {
             return (
                 Array.from(elementsByKey.values())
                     // Filter elements that have the current parentKey and are not TestCaseNode elements
-                    .filter((data) => data.base.parentKey === parentKey && data.elementType !== "TestCaseNode")
+                    .filter((data) => data.base.parentKey === cycleKey && data.elementType !== "TestCaseNode")
                     // Filter out not executable elements and elements that are locked by the system
                     .filter((data) => data.exec?.status !== "NotPlanned" && data.exec?.locker?.key !== "-2")
                     .map((data) => {
@@ -170,7 +174,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
                         // If the current element has children, recursively build their tree items
                         if (hasChildren) {
-                            treeItem.children = buildTree(data.base.key);
+                            treeItem.children = buildTestThemeTree(data.base.key);
                         }
 
                         return treeItem;
@@ -178,12 +182,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             );
         };
 
-        const rootKey: string = cycleData.root.base.key;
-        const children: TestbenchTreeItem[] = buildTree(rootKey); // Build the tree starting from the root key
-        element.children = children; // Assign the built children to the current element
+        const rootCycleKey: string = cycleData.root.base.key;
+        const childrenOfCycle: TestbenchTreeItem[] = buildTestThemeTree(rootCycleKey); // Build the tree starting from the root key
+        element.children = childrenOfCycle; // Assign the built children to the current element
         // Display the test theme tree view if not already displayed
         await vscode.commands.executeCommand("testThemeTree.focus");
-        return children;
+        return childrenOfCycle;
     }
 
     getTreeItem(element: TestbenchTreeItem): vscode.TreeItem {

@@ -300,7 +300,7 @@
                     },
                     "testbenchExtension.outputXMLPath": {
                         "type": "string",
-                        "description": "The absolute folder path where the output XML file (Robotframework test results) is stored",
+                        "description": "The absolute folder path where the output XML file (Robotframework test results) is stored. The extension will look for the file in this folder recursively. If there are multiple XML files in this folder, the extension will use the first one found.",
                         "order": 11,
                         "scope": "resource"
                     }

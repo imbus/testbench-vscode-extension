@@ -12,6 +12,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     // Store the reference to the WebviewView
     private currentWebview?: vscode.WebviewView;
 
+    private isLoginProcessAlreadyRunning: boolean = false;  // Prevent multiple login processes by spamming submit button
+
     // Private fields to hold our username/password
     constructor(
         private readonly extensionContext?: vscode.ExtensionContext | undefined,
@@ -25,6 +27,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * Called when the view is loaded by VS Code.
      */
     resolveWebviewView(webviewView: vscode.WebviewView) {
+        logger.trace("Resolving webview view");
         this.currentWebview = webviewView; // Store reference to the WebviewView
         // Enable scripts in our webview
         webviewView.webview.options = {
@@ -56,6 +59,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         username: string,
         password: string
     ) {
+        if (this.isLoginProcessAlreadyRunning) {
+            logger.trace("Login process for the login webview is already running, ignoring the submit button.");
+            return;
+        }
+        this.isLoginProcessAlreadyRunning = true;
         logger.trace("Handling login command from webview");
         if (this.isConnectedToServer()) {
             vscode.window.showInformationMessage("You are already connected to a server.");
@@ -75,26 +83,27 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             baseKey
         );
 
-        // OPTIONAL
         // Open project selection after logging in, this command also takes care of the visibility of the tree views
         vscode.commands.executeCommand(`${baseKey}.selectAndLoadProject`);
+
+        this.isLoginProcessAlreadyRunning = false;
     }
 
     async updateWebviewContent() {
-        logger.trace("Updating webview content");
+        logger.trace("Updating webview content.");
         if (!this.currentWebview) {
-            logger.trace("No webview to update webview content");
+            logger.trace("No webview to update webview content.");
             return;
         }
         this.currentWebview.webview.html = this.isConnectedToServer()
             ? this.getAlreadyConnectedHtml()
             : this.getLoginPageHtmlSimple(this.currentWebview.webview);
-        logger.trace("Webview content updated");
+        logger.trace("Webview content updated.");
     }
 
     private createIconUri(webview: vscode.Webview): vscode.Uri | null {
         if (!this.extensionContext) {
-            logger.error("Extension context is not defined, cannot get the URI for the icon");
+            logger.error("Extension context is not defined, cannot get the URI for the icon.");
             return null;
         }
         // Generate the URI for testbench icon
@@ -405,7 +414,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * Return an HTML string with two text fields and a Submit button.
      */
     private getLoginPageHtmlSimple(webview: vscode.Webview): string {
-        logger.trace("Getting login page HTML");
+        logger.trace("Getting login page HTML.");
 
         const imageUri = this.createIconUri(webview);
 

@@ -11,8 +11,6 @@ import * as loginWebView from "./loginWebView";
 // TODO: Returning null vs undefined vs "" vs throwing an exception (vs Result/Either object?), especially in reportHandler functions.
 // Exceptions for only important failures, where you cant continue. undefined is often used to mean “not yet defined” whereas null is “defined as empty.”
 // Many style guides prefer null over undefined when a function is intentionally returning “no result.”
-
-// TODO: Add loading bar for fetching cycle structure.
 // TODO: When clicking on a cycle on project tree for the first time, the test theme tree appears. And since we have now 2 views in activity bar,
 // a new bar appears at the top where you can manage the views, that bar moves the views to the bottom a little bit. Not a big issue but a little bit annoying.
 // FIXME: Sometimes VS Code wont load up fully and triggering extension functions in this state may cause errors such as logging in twice if you press the login button multiple times.
@@ -260,23 +258,23 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // The user may press the login button multiple times consecutively which may cause multiple login processes to run at the same time.
     // Aviod executing the command again if we are already inside login command.
-    let insideLogin: boolean = false;
+    let isLoginProcessAlreadyRunning: boolean = false;
     // Register the "Login" command.
     // Perform the login process and store the connection object.
     context.subscriptions.push(
         vscode.commands.registerCommand(commands.login.command, async () => {
             logger.debug(`Login command called.`);
-            if (insideLogin) {
+            if (isLoginProcessAlreadyRunning) {
                 logger.debug(`Login process is already running.`);
 
-                // If (somehow) login flag is stuck and set to true, reset the insideLogin flag after 10 seconds to avoid blocking the login process.
+                // If (somehow) login flag is stuck and set to true, reset the isLoginProcessAlreadyRunning flag after 10 seconds to avoid blocking the login process.
                 setTimeout(() => {
-                    insideLogin = false;
-                    logger.trace(`insideLogin flag reset after 10 seconds.`);
+                    isLoginProcessAlreadyRunning = false;
+                    logger.trace(`isLoginProcessAlreadyRunning flag reset after 10 seconds.`);
                 }, 5 * 1000);
                 return;
             }
-            insideLogin = true;
+            isLoginProcessAlreadyRunning = true;
 
             // Only execute the finally block after the login attempt is fully completed to avoid multiple login prompts after clicking login multiple times.
             await testBenchConnection
@@ -285,8 +283,8 @@ export async function activate(context: vscode.ExtensionContext) {
                     logger.error(`Login process failed: ${error}`);
                 })
                 .finally(() => {
-                    // Reset insideLogin after the login attempt is fully completed
-                    insideLogin = false;
+                    // Reset isLoginProcessAlreadyRunning after the login attempt is fully completed
+                    isLoginProcessAlreadyRunning = false;
                     logger.trace(`insideLogin flag reset after login attempt.`);
                 });
             // OPTIONAL
