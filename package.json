@@ -50,7 +50,7 @@
                     "testbenchExtension.automaticLoginAfterExtensionActivation": {
                         "type": "boolean",
                         "default": false,
-                        "description": "If enabled, the extension will automatically attempt to log in to the TestBench server using the stored credentials.",
+                        "description": "If enabled, the extension will automatically attempt to log in to the TestBench server using the stored credentials after the extension is activated.",
                         "order": 5,
                         "scope": "resource"
                     }

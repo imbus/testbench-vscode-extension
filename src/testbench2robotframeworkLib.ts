@@ -11,7 +11,7 @@ export class tb2robotLib {
      * @param {string} reportPath - Path to a folder or ZIP file containing TestBench JSON reports.
      * @param {string} configJSONPath - Path to a JSON file, for the configuration of the output. If not provided, a config.json will be automatically generated.
      */
-    public static tb2robotWrite(
+    public static executeTb2robotWriteCommand(
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string,
         reportPath: string,
@@ -47,7 +47,7 @@ export class tb2robotLib {
      * @param {string} reportWithoutResultsPath - Absolute path to a folder or ZIP file containing TestBench JSON reports (without results).
      * @param {string} resultPath - Path to a folder or ZIP file to save the results to. If not provided, reports provided in reportPath will be overritten.
      */
-    public static tb2robotRead(
+    public static executeTb2robotReadCommand(
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string,
         outputXmlPath: string,
@@ -74,7 +74,6 @@ export class tb2robotLib {
             logger.debug(`Executing command inside ${commandExecutionDirectory}: ${command}`);
 
             // Execute the command inside the working directory.
-            // TODO: Check if the command execution causes problems when run in working directory.
             // { cwd: workingDirectory } sets the current working directory of the child process to workingDirectory.
             // It will be as if you changed directories into workingDirectory before executing the command.
             exec(command, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
@@ -106,7 +105,7 @@ export class tb2robotLib {
         );
         let isWriteCommandSuccessful: boolean = true;
 
-        await this.tb2robotWrite(context, commandExecutionDirectory, reportPath, configJSONPath)
+        await this.executeTb2robotWriteCommand(context, commandExecutionDirectory, reportPath, configJSONPath)
             .then(() => {
                 let config = "no";
                 if (configJSONPath) {
@@ -147,7 +146,7 @@ export class tb2robotLib {
         logger.debug("Calling startTb2robotRead.");
         let isReadCommandSuccessful: boolean = true;
 
-        await this.tb2robotRead(
+        await this.executeTb2robotReadCommand(
             context,
             commandExecutionDirectory,
             outputXmlPath,

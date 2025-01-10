@@ -6,8 +6,17 @@ import * as testBenchTypes from "./testBenchTypes";
 import axios, { AxiosResponse } from "axios";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
-import { getConfig, connection, baseKeyOfExtension, lastGeneratedReportParams, logger } from "./extension";
+import { getConfig, connection, baseKeyOfExtension, logger } from "./extension";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
+
+// Store the last fethed report parameters to be able to use it without the user selecting it again while uploading the report.
+// Initialize the object with undefined values before test generation.
+export let lastGeneratedReportParams: testBenchTypes.LastGeneratedReportParams = {
+    executionBased: undefined,
+    projectKey: undefined,
+    cycleKey: undefined,
+    UID: undefined,
+};
 
 /**
  * Prompt the user to select the export report method in quick pick format (Execution based or Specification based).

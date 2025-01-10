@@ -4,9 +4,9 @@ import * as testBenchConnection from "./testBenchConnection";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testBenchTypes from "./testBenchTypes";
 import * as fsPromises from "fs/promises";
-import path from "path";
-import { TestBenchLogger, folderNameOfLogs } from "./testBenchLogger";
 import * as loginWebView from "./loginWebView";
+import * as testBenchLogger from "./testBenchLogger";
+import path from "path";
 
 // TODO: When the user inputs wrong credentials in extension settings, but then corrects it in the login form, 
 // should we update the extension settings with the new credentials if the login was successful?
@@ -99,12 +99,12 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     },
 };
 
-// Folder to create under the working directory to download and process files
+// Folder to create inside the workspace / project directory (Which is set in the extension settings) to store and process files
 export const folderNameOfTestbenchWorkingDirectory: string = ".testbench"; 
 
-export let logger: TestBenchLogger;
+export let logger: testBenchLogger.TestBenchLogger;
 
-// Store the tree data provider to be able to access it from other files
+// Store the project management tree data provider to be able to access it from other files
 export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null; 
 export function setProjectManagementTreeDataProvider(
     newProjectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null
@@ -112,19 +112,11 @@ export function setProjectManagementTreeDataProvider(
     projectManagementTreeDataProvider = newProjectManagementTreeDataProvider;
 }
 
-// Store the connection to server
+// Store the connection to testbench server
 export let connection: testBenchConnection.PlayServerConnection | null = null; 
 export function setConnection(newConnection: testBenchConnection.PlayServerConnection | null) {
     connection = newConnection;
 }
-
-// Store the last fethed report parameters to be able to use it while uploading the report
-export let lastGeneratedReportParams: testBenchTypes.LastGeneratedReportParams = {
-    executionBased: undefined,
-    projectKey: undefined,
-    cycleKey: undefined,
-    UID: undefined,
-};
 
 // Webview provider for the login webview
 export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null; 
@@ -133,7 +125,7 @@ export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null
 // In package.json, "activationEvents": ["onStartupFinished"] is used to activate the extension after the startup of VS Code
 // because the extension needs to be fully loaded to work smoothly.
 export async function activate(context: vscode.ExtensionContext) {    
-    logger = new TestBenchLogger();
+    logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
     // Initialize the tree data provider to avoid displaying the default text of VS Code saying that the data provider is not initialized.
@@ -145,6 +137,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize or update extension configuration settings
     async function loadConfiguration() {
 
+        // Update the configuration object with the latest values.
         // Without this, the configuration changes may not be updated and old values may be used.
         config = vscode.workspace.getConfiguration(baseKeyOfExtension);
 
@@ -637,7 +630,7 @@ export async function activate(context: vscode.ExtensionContext) {
             );
             await clearWorkspaceFolder(
                 testbenchWorkingDirectoryPath,
-                [folderNameOfLogs],
+                [testBenchLogger.folderNameOfLogs],
                 !config.get<boolean>("clearWorkingDirectoryBeforeTestGeneration")
             );
             logger.trace(`End of Clear Workspace Folder command.`);
