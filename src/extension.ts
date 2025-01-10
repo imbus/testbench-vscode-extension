@@ -169,6 +169,9 @@ export async function activate(context: vscode.ExtensionContext) {
             await config.update("testbench2robotframeworkConfig", defaultTestbench2robotframeworkConfig);
             logger.debug("Updated testbench2robotframeworkConfig with default values.");
         }
+
+        // Update the webview input fields after extension settings are changed to reflect the changes in the webview live
+        loginWebViewProvider?.updateWebviewContent();
     }
 
     // Load initial configuration of the extension
