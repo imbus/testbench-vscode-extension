@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { promisify } from "util";
-import { baseKey, folderNameOfTestbenchWorkingDirectory } from "./extension";
+import { getConfig, baseKeyOfExtension, folderNameOfTestbenchWorkingDirectory } from "./extension";
 
 export const folderNameOfLogs = "logs";
 
@@ -41,9 +41,8 @@ export class TestBenchLogger {
     }
 
     constructor(outputToTerminal?: boolean) {
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
         // If workspaceLocation is not set, use the extension directory, and create a logs folder
-        const workspaceFolder = config.get<string>("workspaceLocation");
+        const workspaceFolder = getConfig().get<string>("workspaceLocation");
         // Example path: workspaceFolder/.testbench/logs/testBenchExtension.log
         if (workspaceFolder) {
             this.logFolderPath = path.join(
@@ -97,8 +96,7 @@ export class TestBenchLogger {
 
     // Log messages with optional details and output to terminal
     public async log(level: string, message: string, details?: any | any[], outputToTerminal?: boolean) {
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-        const configuredLogLevel: string = config.get("testBenchLogger", "No logging");
+        const configuredLogLevel: string = getConfig().get("testBenchLogger", "No logging");
 
         // Implement no logging if log level is set to 0
         /*

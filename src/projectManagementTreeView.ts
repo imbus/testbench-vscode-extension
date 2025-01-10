@@ -415,7 +415,7 @@ export async function hideProjectManagementTreeView(): Promise<void> {
 }
 
 // Display the project management tree view
-async function displayProjectManagementTreeView(): Promise<void> {
+export async function displayProjectManagementTreeView(): Promise<void> {
     await vscode.commands.executeCommand("projectManagementTree.focus");
 }
 

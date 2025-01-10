@@ -46,6 +46,13 @@
                         "description": "If enabled, the extension will securely store the user's password after the first login to facilitate automatic login in future sessions without prompting for credentials.",
                         "order": 4,
                         "scope": "resource"
+                    },
+                    "testbenchExtension.automaticLoginAfterExtensionActivation": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "If enabled, the extension will automatically attempt to log in to the TestBench server using the stored credentials.",
+                        "order": 5,
+                        "scope": "resource"
                     }
                 }
             },
@@ -55,14 +62,14 @@
                     "testbenchExtension.workspaceLocation": {
                         "type": "string",
                         "description": "The absolute path to the workspace or project directory on the local machine for storing local files during test generation inside a directory called .testbench.",
-                        "order": 5,
+                        "order": 6,
                         "scope": "resource"
                     },
                     "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
                         "description": "Delete all files inside the working directory excluding the log files before generating tests.",
-                        "order": 6,
+                        "order": 7,
                         "scope": "resource"
                     }
                 }
@@ -74,7 +81,7 @@
                         "type": "boolean",
                         "default": false,
                         "description": "Use default values for the testbench2robotframework configuration.",
-                        "order": 7,
+                        "order": 8,
                         "scope": "resource"
                     },
                     "testbenchExtension.testbench2robotframeworkConfig": {
@@ -255,7 +262,7 @@
                                 }
                             }
                         },
-                        "order": 8,
+                        "order": 9,
                         "scope": "resource"
                     }
                 }
@@ -267,7 +274,7 @@
                         "type": "string",
                         "description": "Set the minimum log level. Log file is stored under the name testBenchExtension.log inside the workspace location.",
                         "default": "No logging",
-                        "order": 9,
+                        "order": 10,
                         "enum": [
                             "No logging",
                             "Trace",
@@ -295,13 +302,13 @@
                         "type": "boolean",
                         "default": true,
                         "description": "Remove the report file automatically after processing it.",
-                        "order": 10,
+                        "order": 11,
                         "scope": "resource"
                     },
                     "testbenchExtension.outputXMLPath": {
                         "type": "string",
                         "description": "The absolute folder path where the output XML file (Robotframework test results) is stored. The extension will look for the file in this folder recursively. If there are multiple XML files in this folder, the extension will use the first one found.",
-                        "order": 11,
+                        "order": 12,
                         "scope": "resource"
                     }
                 }

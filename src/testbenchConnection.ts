@@ -8,8 +8,9 @@ import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { ProjectManagementTreeDataProvider } from "./projectManagementTreeView";
 import path from "path";
 import {
+    getConfig,
     setConnection,
-    baseKey,
+    baseKeyOfExtension,
     folderNameOfTestbenchWorkingDirectory,
     setProjectManagementTreeDataProvider,
     logger,
@@ -111,7 +112,7 @@ export class PlayServerConnection {
         });
 
         if (!selectedProjectName) {
-            logger.error("Selected project name nout found.");
+            logger.error("Selected project name not found.");
             return null;
         }
 
@@ -596,13 +597,13 @@ async function promptForInputAndValidate(
 export async function performLogin(
     context: vscode.ExtensionContext,
     baseKey: string,
-    promptForNewCredentials: boolean = false
+    promptForNewCredentials: boolean = false,
+    performAutoLoginWithStoredCredentialsWithoutPrompting?: boolean
 ): Promise<PlayServerConnection | null> {
     // Loop until the user successfully logs in or cancels the login process
     while (true) {
         // Retrieve the stored credentials if they exist
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-        let storePasswordAfterSuccessfulLogin: boolean = config.get<boolean>("storePasswordAfterLogin", false);
+        let storePasswordAfterSuccessfulLogin: boolean = getConfig().get<boolean>("storePasswordAfterLogin", false);
         let password: string | undefined;
 
         // Only retrieve the password if the user has choosen to store it
@@ -610,14 +611,17 @@ export async function performLogin(
             password = await context.secrets.get("password");
         }
         const userHasStoredCredentialsAndCanAutoLogin: boolean = !!(
-            config.get<string>("serverName") &&
-            config.get<string>("username") &&
+            getConfig().get<string>("serverName") &&
+            getConfig().get<string>("username") &&
             password &&
             storePasswordAfterSuccessfulLogin
         );
 
         let useStoredCredentials: boolean = false;
-        if (userHasStoredCredentialsAndCanAutoLogin && !promptForNewCredentials) {
+        // If the user has stored credentials and can auto-login, 
+        // and the user has not chosen to prompt for new credentials, 
+        // and the user has not chosen to auto-login without prompting, then auto-login
+        if (userHasStoredCredentialsAndCanAutoLogin && !promptForNewCredentials && !performAutoLoginWithStoredCredentialsWithoutPrompting) {
             const choice: string | undefined = await vscode.window.showInformationMessage(
                 "Do you want to login using your previous credentials?",
                 { modal: true }, // Modal dialog is used so that the input box wont disappear, which forces the user to choose an option. Without it, login may be locked.
@@ -634,6 +638,10 @@ export async function performLogin(
             }
             // Continue the function in case of "No"
         }
+        else {
+            // Convert undefined value to false with !! if the optional parameter is not provided
+            useStoredCredentials = !!performAutoLoginWithStoredCredentialsWithoutPrompting;
+        }
 
         let serverName: string | undefined;
         let portNumber: number | undefined;
@@ -641,9 +649,9 @@ export async function performLogin(
 
         // If the user has stored credentials and wants to use them, retrieve them from the configuration, else prompt the user for new credentials
         if (useStoredCredentials) {
-            serverName = config.get<string>("serverName")!;
-            portNumber = config.get<number>("portNumber")!;
-            username = config.get<string>("username")!;
+            serverName = getConfig().get<string>("serverName")!;
+            portNumber = getConfig().get<number>("portNumber")!;
+            username = getConfig().get<string>("username")!;
         } else {
             const credentials: {
                 serverName: string;
@@ -701,10 +709,8 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
     username: string;
     password: string;
 } | null> {
-    const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-
     // Get server name from configuration
-    const serverNameInConfig: string = config.get<string>("serverName", "testbench");
+    const serverNameInConfig: string = getConfig().get<string>("serverName", "testbench");
     // Prompt user for server name, showing the default value only if it exists
     const serverNameInput: string | null = await promptForInputAndValidate(
         `Enter the server name${serverNameInConfig ? ` (Default: ${serverNameInConfig})` : ""}`,
@@ -721,7 +727,7 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
     const serverName: string = serverNameInput || serverNameInConfig;
 
     // Get port number from configuration (default: 9445)
-    const portInConfig: number = config.get<number>("portNumber", 9445);
+    const portInConfig: number = getConfig().get<number>("portNumber", 9445);
     // Prompt user for port number, only showing the default if it's configured
     const portInputAsString: string | null = await promptForInputAndValidate(
         `Enter the port number${portInConfig ? ` (Default: ${portInConfig})` : ""}`,
@@ -755,14 +761,14 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
     }
 
     const usernameInput: string | null = await promptForInputAndValidate(
-        `Enter your login name (Default: ${config.get<string>("username", "undefined")})`,
+        `Enter your login name (Default: ${getConfig().get<string>("username", "undefined")})`,
         true
     );
     if (!usernameInput) {
         logger.trace("Login process aborted while entering username.");
         return null;
     }
-    const username: string = usernameInput || config.get<string>("username", "undefined");
+    const username: string = usernameInput || getConfig().get<string>("username", "undefined");
 
     // Prompt for password
     const password: string | null = await promptForInputAndValidate("Enter your password", false, true);
@@ -828,8 +834,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                 // An exception is thrown automatically if the status code is not 2xx
                 if (loginResponse.status === 201) {
                     // Store password in secret storage after succesfull login if the user chooses to
-                    const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-                    const storePassword: boolean = config.get<boolean>("storePasswordAfterLogin", false);
+                    const storePassword: boolean = getConfig().get<boolean>("storePasswordAfterLogin", false);
                     if (storePassword) {
                         await context.secrets.store("password", password);
                         logger.trace("Password stored securely in secret storage.");
@@ -946,8 +951,7 @@ async function fetchServerVersions(
  */
 async function promptForReportZipFileWithResults(): Promise<string | null> {
     try {
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-        const workspaceLocation: string | undefined = config.get<string>("workspaceLocation");
+        const workspaceLocation: string | undefined = getConfig().get<string>("workspaceLocation");
         const workingDirectoryPath: string = path.join(workspaceLocation!, folderNameOfTestbenchWorkingDirectory);
 
         const options: vscode.OpenDialogOptions = {
@@ -1176,8 +1180,7 @@ export async function selectReportWithResultsAndImportToTestbench(
                     increment: 30,
                 });
             }
-            const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-            if (config.get<boolean>("clearReportAfterProcessing")) {
+            if (getConfig().get<boolean>("clearReportAfterProcessing")) {
                 // Remove the report zip file after usage
                 await reportHandler.removeReportZipFile(resultZipFilePath);
             }

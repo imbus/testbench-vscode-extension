@@ -1,12 +1,12 @@
 import * as vscode from "vscode";
-import { logger, connection, baseKey, setConnection } from "./extension";
-import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
+import { logger, connection, baseKeyOfExtension, allExtensionCommands, getConfig } from "./extension";
+import { loginToNewPlayServerAndInitSessionToken } from "./testBenchConnection";
+import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 
 // TODO: Hide tree views when the login webview is visible
 
 // Keep track of whether our login webview is visible or not to be able to toggle its visibility
 export let loginWebViewIsVisible: boolean = true; // Initially display the view when the extension starts
-
 export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewId = "testbenchExtension.webView";
     // Store the reference to the WebviewView
@@ -16,11 +16,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
     // Private fields to hold our username/password
     constructor(
-        private readonly extensionContext?: vscode.ExtensionContext | undefined,
-        private readonly serverName?: string,
-        private readonly portNumber?: string,
-        private readonly username?: string,
-        private readonly password?: string
+        private extensionContext?: vscode.ExtensionContext | undefined
     ) {}
 
     /**
@@ -74,18 +70,26 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         ); // TODO: Delete this in production to not to store sensitive data in logs
 
         // Login logic also notifies and hides the webview from activity bar
-        await loginToNewPlayServerAndInitSessionToken(
+        const loginResult = await loginToNewPlayServerAndInitSessionToken(
             extensionContext!,
             serverName,
             portNumber,
             username,
             password!,
-            baseKey
+            baseKeyOfExtension
         );
 
-        // Open project selection after logging in, this command also takes care of the visibility of the tree views
-        vscode.commands.executeCommand(`${baseKey}.selectAndLoadProject`);
+        // If login was successful, open project selection and display project tree view
+        if (loginResult) {
+            // Open project selection after logging in, this command also takes care of the visibility of the tree views
+            vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
 
+            // When the user wont select a project and clicks away, there wont be any view in activity bar.
+            // Add project view to activity bar so that he can choose project again.
+            displayProjectManagementTreeView();
+        }       
+
+        // Release the lock
         this.isLoginProcessAlreadyRunning = false;
     }
 
@@ -97,7 +101,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         }
         this.currentWebview.webview.html = this.isConnectedToServer()
             ? this.getAlreadyConnectedHtml()
-            : this.getLoginPageHtmlSimple(this.currentWebview.webview);
+            : await this.getLoginPageHtmlSimple(this.currentWebview.webview);
         logger.trace("Webview content updated.");
     }
 
@@ -116,7 +120,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     /**
      * Return an HTML string with two text fields and a Submit button.
      */
-    private getLoginPageHtmlComplex(webview: vscode.Webview): string {
+    private async getLoginPageHtmlComplex(webview: vscode.Webview): Promise<string> {
         logger.trace("Getting login page HTML");
 
         const imageUri = this.createIconUri(webview);
@@ -233,19 +237,30 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             </div>
                 <div class="form-group">
                     <label for="serverName">Server Name:</label>
-                    <input id="serverName" type="text" placeholder="Server Name" value="${this.serverName}" required />
+                    <input id="serverName" type="text" placeholder="Server Name" value="${getConfig().get<string>(
+                        "serverName",
+                        ""
+                    )}" required />
                 </div>
                 <div class="form-group">
                     <label for="portNumber">Port Number:</label>
-                    <input id="portNumber" type="text" placeholder="Port Number" value="${this.portNumber}" required />
+                    <input id="portNumber" type="text" placeholder="Port Number" value="${getConfig().get<string>(
+                        "portNumber",
+                        ""
+                    )}" required />
                 </div>
                 <div class="form-group">
                     <label for="username">Username:</label>
-                    <input id="username" type="text" placeholder="Username" value="${this.username}" required />
+                    <input id="username" type="text" placeholder="Username" value="${getConfig().get<string>(
+                        "username",
+                        ""
+                    )}" required />
                 </div>
                 <div class="form-group">
                     <label for="password">Password:</label>
-                    <input id="password" type="password" placeholder="Password" value="${this.password}" required />
+                    <input id="password" type="password" placeholder="Password" value="${await this.extensionContext?.secrets.get(
+                        "password"
+                    )}" required />
                 </div>
                 <button id="submitBtn" type="submit">Submit</button>
             </form>
@@ -286,7 +301,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     /**
      * Return an HTML string with two text fields and a Submit button.
      */
-    private getLoginPageHtmlComplex2(webview: vscode.Webview): string {
+    private async getLoginPageHtmlComplex2(webview: vscode.Webview): Promise<string> {
         logger.trace("Getting login page HTML");
 
         const imageUri = this.createIconUri(webview);
@@ -358,19 +373,30 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
                 <div>
                     <label for="serverName">Server Name:</label>
-                    <input id="serverName" type="text" placeholder="Server Name" value="${this.serverName}" required/>
+                    <input id="serverName" type="text" placeholder="Server Name" value="${getConfig().get<string>(
+                        "serverName",
+                        ""
+                    )}" required/>
                 </div>
                 <div>
                     <label for="portNumber">Port Number:</label>
-                    <input id="portNumber" type="text" placeholder="Port Number" value="${this.portNumber}" required/>
+                    <input id="portNumber" type="text" placeholder="Port Number" value="${getConfig().get<string>(
+                        "portNumber",
+                        ""
+                    )}" required/>
                 </div>
                 <div>
                     <label for="username">Username:</label>
-                    <input id="username" type="text" placeholder="Username" value="${this.username}" required/>
+                    <input id="username" type="text" placeholder="Username" value="${getConfig().get<string>(
+                        "username",
+                        ""
+                    )}" required/>
                 </div>
                 <div>
                     <label for="password">Password:</label>
-                    <input id="password" type="password" placeholder="Password" value="${this.password}" required/>
+                    <input id="password" type="password" placeholder="Password" value="${await this.extensionContext?.secrets.get(
+                        "password"
+                    )}" required/>
                 </div>
                 <div style="margin-top: 1em;">
                     <button id="submitBtn" type="submit">Submit</button>
@@ -413,11 +439,17 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     /**
      * Return an HTML string with two text fields and a Submit button.
      */
-    private getLoginPageHtmlSimple(webview: vscode.Webview): string {
+    private async getLoginPageHtmlSimple(webview: vscode.Webview): Promise<string> {
         logger.trace("Getting login page HTML.");
-
+        logger.trace(
+            `Credentials for login page: ${getConfig().get<string>("serverName", "")}, ${getConfig().get<string>(
+                "portNumber",
+                ""
+            )}, ${getConfig().get<string>("username", "")}`
+        ); 
+  
         const imageUri = this.createIconUri(webview);
-
+ 
         return `
         <!DOCTYPE html>
         <html lang="en">
@@ -461,19 +493,30 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
                 <div>
                     <label for="serverName">Server Name:</label>
-                    <input id="serverName" type="text" placeholder="Server Name" value="${this.serverName}" required/>
+                    <input id="serverName" type="text" placeholder="Server Name" value="${getConfig().get<string>(
+                        "serverName",
+                        ""
+                    )}" required/>
                 </div>
                 <div>
                     <label for="portNumber">Port Number:</label>
-                    <input id="portNumber" type="text" placeholder="Port Number" value="${this.portNumber}" required/>
+                    <input id="portNumber" type="text" placeholder="Port Number" value="${getConfig().get<string>(
+                        "portNumber",
+                        ""
+                    )}" required/>
                 </div>
                 <div>
                     <label for="username">Username:</label>
-                    <input id="username" type="text" placeholder="Username" value="${this.username}" required/>
+                    <input id="username" type="text" placeholder="Username" value="${getConfig().get<string>(
+                        "username",
+                        ""
+                    )}" required/>
                 </div>
                 <div>
                     <label for="password">Password:</label>
-                    <input id="password" type="password" placeholder="Password" value="${this.password}" required/>
+                    <input id="password" type="password" placeholder="Password" value="${await this.extensionContext?.secrets.get(
+                        "password"
+                    )}" required/>
                 </div>
                 <div style="margin-top: 1em;">
                     <button id="submitBtn" type="submit">Submit</button>

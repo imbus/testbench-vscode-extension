@@ -6,7 +6,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import axios, { AxiosResponse } from "axios";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
-import { connection, baseKey, lastGeneratedReportParams, logger } from "./extension";
+import { getConfig, connection, baseKeyOfExtension, lastGeneratedReportParams, logger } from "./extension";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
 
 /**
@@ -90,7 +90,6 @@ export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): 
  * 2. Get the job status of that job ID (Polling until the job is completed)
  * 3. Download the report zip file when the job is complete.
  *
- * @param baseKey The base key of the extension
  * @param projectKey The project key
  * @param cycleKey The cycle key
  * @param progress Progress bar to show the poll attempts to the user
@@ -100,7 +99,6 @@ export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): 
  * @returns {Promise<string | null>} The path of the downloaded zip file if the download was successful, otherwise null
  */
 export async function fetchReportZipFromServer(
-    baseKey: string,
     projectKey: string,
     cycleKey: string,
     folderNameToDownloadReport: string,
@@ -145,7 +143,6 @@ export async function fetchReportZipFromServer(
         logger.debug(`Report name to download: ${fileNameToDownload}`);
 
         const pathOfDownloadedZipFile: string | null = await downloadReport(
-            baseKey,
             projectKey,
             fileNameToDownload,
             folderNameToDownloadReport
@@ -368,14 +365,12 @@ export async function getJobStatus(
 
 /**
  * Downloads the report zip file from the server to local storage and returns the path of the downloaded file.
- * @param baseKey The base key of the extension
  * @param projectKey The project key
  * @param fileNameToDownload The name of the report file to download
  * @param folderNameToDownloadReport The folder name to save the downloaded report
  * @returns {Promise<string | undefined>} The absolute path of the downloaded zip file if successful, otherwise undefined
  */
 export async function downloadReport(
-    baseKey: string,
     projectKey: string,
     fileNameToDownload: string,
     folderNameToDownloadReport: string
@@ -408,8 +403,7 @@ export async function downloadReport(
         }
 
         // Get the workspace configuration
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-        const workspaceLocationInExtensionSettings: string | undefined = config.get<string>("workspaceLocation");
+        const workspaceLocationInExtensionSettings: string | undefined = getConfig().get<string>("workspaceLocation");
 
         if (workspaceLocationInExtensionSettings && fs.existsSync(workspaceLocationInExtensionSettings)) {
             // Save report file to the specified workspace location and return the path of downloaded file
@@ -632,7 +626,6 @@ export async function fetchReportForTreeElement(
 
                 // Fetch the ZIP file, handle potential cancellation
                 const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
-                    baseKey,
                     projectKeyOfProjectInView,
                     cycleKey,
                     workingDirectoryToStoreReport,
@@ -679,7 +672,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         context,
         selectedTreeItem,
         typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : "", // Label might be undefined
-        baseKey,
+        baseKeyOfExtension,
         projectKey,
         cycleKey,
         folderNameOfTestbenchWorkingDirectory,
@@ -743,7 +736,6 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             async (progress, cancellationToken) => {
                 await runRobotFrameworkTestGenerationProcess(
                     context,
-                    baseKey,
                     projectKey,
                     cycleKey,
                     isReportGenerationExecutionBased,
@@ -827,7 +819,6 @@ function findAllTestThemeNodesOfTreeItem(
 /**
  * Run the test generation process with progress and cancellation support.
  * @param context - VS Code extension context
- * @param baseKey - The base key of the extension
  * @param projectKey - The project key
  * @param cycleKey - The cycle key
  * @param folderNameOfTestbenchWorkingDirectory - The working directory path
@@ -839,7 +830,6 @@ function findAllTestThemeNodesOfTreeItem(
  */
 async function runRobotFrameworkTestGenerationProcess(
     context: vscode.ExtensionContext,
-    baseKey: string,
     projectKey: string,
     cycleKey: string,
     isReportGenerationExecutionBased: boolean,
@@ -852,7 +842,6 @@ async function runRobotFrameworkTestGenerationProcess(
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
 
     const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
-        baseKey,
         projectKey,
         cycleKey,
         folderNameOfTestbenchWorkingDirectory, // The (.testbench) folder name we process files in
@@ -869,14 +858,13 @@ async function runRobotFrameworkTestGenerationProcess(
     progress.report({ increment: 30, message: "Generating robot framework tests with testbench2robotframework." });
 
     // Workspace location is the folder we are working in, workingDirectoryPath is the (.testbench) folder path we process files in.
-    const workspaceLocation: string = vscode.workspace.getConfiguration(baseKey).get<string>("workspaceLocation")!;
+    const workspaceLocation: string = getConfig().get<string>("workspaceLocation")!;
     const testbenchWorkingDirectoryInsideWorkspace: string = path.join(
         workspaceLocation,
         folderNameOfTestbenchWorkingDirectory
     );
 
     const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJsonLocally(
-        baseKey,
         testbenchWorkingDirectoryInsideWorkspace
     );
     if (!tb2robotConfigFilePath) {
@@ -892,7 +880,7 @@ async function runRobotFrameworkTestGenerationProcess(
             tb2robotConfigFilePath
         );
 
-    await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, downloadedReportZipFilePath, baseKey);
+    await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, downloadedReportZipFilePath);
 
     if (!isTb2RobotframeworkWriteCommandSuccessful) {
         const testGenerationFailedMessage: string =
@@ -935,18 +923,16 @@ function updateLastGeneratedReportParams(
  * Clean up the testbench2robotframework configuration file after processing, and remove the report ZIP file if configured.
  * @param tb2robotConfigFilePath The path of the testbench2robotframework configuration file
  * @param reportZipFilePath The path of the report ZIP file
- * @param baseKey The base key of the extension
  */
 async function cleanUpTb2robotConfigAndReportFiles(
     tb2robotConfigFilePath: string,
-    reportZipFilePath: string,
-    baseKey: string
+    reportZipFilePath: string
 ): Promise<void> {
     logger.debug("Cleaning up testbench2robotframework configuration and report files.");
     await deleteTb2RobotConfigurationFile(tb2robotConfigFilePath);
 
     // Only remove the report ZIP file if configured in extension settings
-    if (vscode.workspace.getConfiguration(baseKey).get<boolean>("clearReportAfterProcessing")) {
+    if (getConfig().get<boolean>("clearReportAfterProcessing")) {
         await removeReportZipFile(reportZipFilePath);
     }
     logger.debug("Cleanup of testbench2robotframework config and report files are done.");
@@ -1057,8 +1043,7 @@ export async function findFileRecursivelyInDirectory(
 async function chooseRobotOutputXMLFile(workingDirectoryPath: string): Promise<string | null> {
     logger.debug(`Choosing output XML file with working directory path ${workingDirectoryPath}.`);
     // Open file selection dialog to select the output xml file, display only XML files in the selection.
-    const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-    let outputXMLFolderPathInExtensionSettings: string | undefined = config.get<string>("outputXMLPath");
+    let outputXMLFolderPathInExtensionSettings: string | undefined = getConfig().get<string>("outputXMLPath");
     if (!outputXMLFolderPathInExtensionSettings) {
         logger.warn("Output XML path is not configured in extension settings.");
     } else {
@@ -1150,8 +1135,8 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             reportProgress(`Choosing result XML file.`, reportIncrement);
 
             const reportFileWithResultsZipName: string = `ReportWithResults_${Date.now()}.zip`; // Add a timestamp to the report name
-            const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-            const workspaceLocationInExtensionSettings: string | undefined = config.get<string>("workspaceLocation");
+            const workspaceLocationInExtensionSettings: string | undefined =
+                getConfig().get<string>("workspaceLocation");
             if (!workspaceLocationInExtensionSettings) {
                 const workspaceLocationNotConfiguredMessage: string = "Workspace location is not configured.";
                 logger.error(workspaceLocationNotConfiguredMessage);
@@ -1193,7 +1178,6 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             };
 
             const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
-                baseKey,
                 lastGeneratedReportParams.projectKey,
                 lastGeneratedReportParams.cycleKey,
                 folderNameOfTestbenchWorkingDirectory,
@@ -1214,7 +1198,6 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             reportProgress(`Preparing configuration for testbench2robotframework.`, reportIncrement / 2);
 
             const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJsonLocally(
-                baseKey,
                 testbenchWorkingDirectoryPath
             );
             if (!tb2robotConfigFilePath) {
@@ -1235,7 +1218,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
                     tb2robotConfigFilePath
                 );
 
-            await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, reportWithResultsZipFilePath, baseKey);
+            await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, reportWithResultsZipFilePath);
 
             if (!isTb2RobotReadExecutionSuccessful) {
                 const importErrorMessage: string =
@@ -1339,8 +1322,7 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
                 increment: 25,
             });
 
-            const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-            if (config.get<boolean>("clearReportAfterProcessing")) {
+            if (getConfig().get<boolean>("clearReportAfterProcessing")) {
                 // Remove the report zip file after usage
                 await removeReportZipFile(pathOfCreatedReportWithResults);
             }
@@ -1409,17 +1391,14 @@ export async function startTestGenerationForCycle(
 
 /**
  * Writes the testbench2robotframework configuration to a JSON file in workspace folder.
- * @param baseKey The base key of the extension
  * @param folderPathToStoreTb2robotConfig The folder path to store the configuration file
  * @returns {Promise<string | null>} The full path of the configuration file, or null if an error occurs
  */
 export async function saveTestbench2RobotConfigurationAsJsonLocally(
-    baseKey: string,
     folderPathToStoreTb2robotConfig: string
 ): Promise<string | null> {
     try {
-        const config = vscode.workspace.getConfiguration(baseKey);
-        const generationConfig = config.get<testBenchTypes.Testbench2robotframeworkConfiguration>(
+        const generationConfig = getConfig().get<testBenchTypes.Testbench2robotframeworkConfiguration>(
             "testbench2robotframeworkConfig"
         );
         if (!generationConfig) {
