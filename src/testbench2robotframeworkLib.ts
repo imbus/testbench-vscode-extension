@@ -147,7 +147,14 @@ export class tb2robotLib {
         logger.debug("Calling startTb2robotRead.");
         let isReadCommandSuccessful: boolean = true;
 
-        await this.tb2robotRead(context, commandExecutionDirectory, outputXmlPath, reportPath, resultPath, configJSONPath)
+        await this.tb2robotRead(
+            context,
+            commandExecutionDirectory,
+            outputXmlPath,
+            reportPath,
+            resultPath,
+            configJSONPath
+        )
             .then(() => {
                 let providedPath = "none";
                 let providedConfig = "";

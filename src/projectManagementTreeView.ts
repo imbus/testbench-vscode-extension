@@ -10,7 +10,7 @@ let projectManagementDataProvider: ProjectManagementTreeDataProvider | null = nu
 let testThemeTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
 
 // Project management tree view that displays the selected project and the test object versions and cycles under this project.
-// Upon clicking on a test cycle element, a test theme view is created under the project tree view 
+// Upon clicking on a test cycle element, a test theme view is created under the project tree view
 // and the children elements (test themes and test case sets) are displayed in the test theme tree.
 export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvider<TestbenchTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<TestbenchTreeItem | void> =
@@ -50,7 +50,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         if (!data) {
             return null;
         }
-        // contextValue can be one of these types, which can be found in the response from the server: 
+        // contextValue can be one of these types, which can be found in the response from the server:
         // Project, Version, Cycle, TestThemeNode, TestCaseSetNode, TestCaseNode
         const contextValue: string = data.nodeType;
         const collapsibleState: vscode.TreeItemCollapsibleState =
@@ -67,7 +67,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         return treeItem;
     }
 
-    // Called when the tree view is first loaded or refreshed. Returns the children of the root item (project)    
+    // Called when the tree view is first loaded or refreshed. Returns the children of the root item (project)
     async getChildren(element?: TestbenchTreeItem): Promise<TestbenchTreeItem[]> {
         if (!connection) {
             // vscode.window.showWarningMessage("No connection available for tree view.");
@@ -112,8 +112,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     // Fetches the sub-elements of a cycle element and builds the tree structure
     public async getChildrenOfCycle(element: TestbenchTreeItem): Promise<TestbenchTreeItem[]> {
         const cycleKey: string = element.item.key;
-        const projectKey: string | undefined = findProjectKeyOfCycleElement(element);
-        
+        const projectKey: string | null = findProjectKeyOfCycleElement(element);
+
         if (!projectKey) {
             // console.warn("Project key of cycle not found.");
             logger.warn("Project key of cycle not found (getChildrenOfCycle).");
@@ -232,11 +232,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 }
 
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
-export function findProjectKeyOfCycleElement(element: TestbenchTreeItem): string | undefined {
+export function findProjectKeyOfCycleElement(element: TestbenchTreeItem): string | null {
     if (element.contextValue !== "Cycle") {
-        // console.error("Element is not a cycle.");
-        logger.error("Element is not a cycle (findProjectKeyOfCycleElement).");
-        return undefined;
+        logger.error("Cannot find project key of element, element is not a cycle.");
+        return null;
     }
     let currentElement: TestbenchTreeItem | null = element;
     while (currentElement) {
@@ -245,17 +244,16 @@ export function findProjectKeyOfCycleElement(element: TestbenchTreeItem): string
         }
         currentElement = currentElement.parent;
     }
-    // console.error("Project key not found.");
-    logger.error("Project key not found (findProjectKeyOfCycleElement).");
-    return undefined;
+    logger.error("Error finding project key of cycle element.");
+    return null;
 }
 
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
-export function findCycleKeyOfTreeElement(element: TestbenchTreeItem): string | undefined {
+export function findCycleKeyOfTreeElement(element: TestbenchTreeItem): string | null {
     /*
     if ((element.contextValue !== "TestThemeNode") && (element.contextValue !== "TestCaseSetNode")) {
         console.error("Invalid tree element type.");
-        return undefined;
+        return null;
     }*/
     let currentElement: TestbenchTreeItem | null = element;
     while (currentElement) {
@@ -264,9 +262,8 @@ export function findCycleKeyOfTreeElement(element: TestbenchTreeItem): string | 
         }
         currentElement = currentElement?.parent;
     }
-    // console.error("Cycle key not found.");
-    logger.error("Cycle key not found (findCycleKeyOfTreeElement).");
-    return undefined;
+    logger.error("Cycle key of tree element not found.");
+    return null;
 }
 
 // Represents a tree item (Project, TOV, Cycle, etc) in the tree view

@@ -97,7 +97,7 @@ export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): 
  * @param folderNameToDownloadReport The folder name to save the downloaded report
  * @param requestParameters Optional request parameters (exec/spec based, root UID) for the job ID request
  * @param cancellationToken Cancellation token to be able to cancel the polling by clicking cancel button
- * @returns {Promise<string | undefined>} The path of the downloaded zip file if the download was successful, otherwise undefined
+ * @returns {Promise<string | null>} The path of the downloaded zip file if the download was successful, otherwise null
  */
 export async function fetchReportZipFromServer(
     baseKey: string,
@@ -107,11 +107,11 @@ export async function fetchReportZipFromServer(
     requestParameters?: testBenchTypes.OptionalJobIDRequestParameter,
     progress?: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken?: vscode.CancellationToken
-): Promise<string | undefined> {
+): Promise<string | null> {
     try {
         if (!connection) {
             logger.error("Connection object is missing, can't fetch report zip from server.");
-            return undefined;
+            return null;
         }
 
         logger.debug(
@@ -122,7 +122,7 @@ export async function fetchReportZipFromServer(
         const jobId: string | null = await getJobId(projectKey, cycleKey, requestParameters);
         if (!jobId) {
             console.warn("Job ID not received from server.");
-            return undefined;
+            return null;
         }
         logger.debug(`Job ID (${jobId}) fetched from server successfully.`);
 
@@ -138,7 +138,7 @@ export async function fetchReportZipFromServer(
             const reportGenerationUnsuccesfullWarningMessage: string = "Report generation was unsuccessful.";
             logger.warn(reportGenerationUnsuccesfullWarningMessage);
             vscode.window.showErrorMessage(reportGenerationUnsuccesfullWarningMessage);
-            return undefined;
+            return null;
         }
 
         const fileNameToDownload: string = jobStatus.completion.result.ReportingSuccess!.reportName;
@@ -155,21 +155,22 @@ export async function fetchReportZipFromServer(
             return pathOfDownloadedZipFile;
         } else {
             logger.warn("Download canceled or failed.");
+            return null;
         }
     } catch (error) {
         if (error instanceof vscode.CancellationError) {
             const operationCancelledMessage: string = "Fetch report operation cancelled by the user.";
             logger.debug(operationCancelledMessage);
             vscode.window.showInformationMessage(operationCancelledMessage);
-            return undefined;
+            return null;
         } else {
             if (axios.isAxiosError(error) && error.response?.status === 404) {
-                throw new Error("Resource not found.");
+                return null;
             } else {
                 logger.error(
                     `Error fetching the report with project key ${projectKey} and cycle key ${cycleKey}: ${error}`
                 );
-                throw error;
+                return null;
             }
         }
     }
@@ -320,7 +321,7 @@ export async function getJobId(
     if (jobIdResponse.status !== 200) {
         const jobIdFetchFailedMessage: string = `Failed to fetch job ID, status code: ${jobIdResponse.status}`;
         logger.error(jobIdFetchFailedMessage);
-        return null
+        return null;
     }
 
     return jobIdResponse.data.jobID;
@@ -528,7 +529,6 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         await vscode.workspace.fs.writeFile(zipUri, new Uint8Array(downloadResponse.data));
         logger.debug(`Report downloaded successfully to ${zipUri.fsPath}`);
         return zipUri.fsPath;
-
     } catch (error) {
         const saveReportToFileErrorMessage: string = `Failed to save report to file: ${(error as Error).message}`;
         logger.error(saveReportToFileErrorMessage);
@@ -548,12 +548,13 @@ export function delay(milliseconds: number): Promise<void> {
  * @param selectedProjectManagementTreeItem - The selected tree item in the project management tree.
  * @param projectManagementTreeViewOfExtension - The project management tree data provider.
  * @param workingDirectoryToStoreReport - The directory where the ZIP file should be downloaded.
+ * @returns {Promise<void | null>} - Resolves when the report is successfully downloaded, otherwise null
  */
 export async function fetchReportForTreeElement(
     selectedProjectManagementTreeItem: projectManagementTreeView.TestbenchTreeItem,
     projectManagementTreeViewOfExtension: projectManagementTreeView.ProjectManagementTreeDataProvider | null,
     workingDirectoryToStoreReport: string
-): Promise<void> {
+): Promise<void | null> {
     // Show progress in VS Code
     logger.debug(`Fetch Report called for ${selectedProjectManagementTreeItem.label}.`);
     await vscode.window.withProgress(
@@ -573,7 +574,7 @@ export async function fetchReportForTreeElement(
                     const connectionMissingErrorMessage: string =
                         "No connection available, cannot fetch report. (callFetchReportForTreeElement)";
                     logger.warn(connectionMissingErrorMessage);
-                    throw new Error(connectionMissingErrorMessage);
+                    return null;
                 }
 
                 // Validate the project management tree view
@@ -581,7 +582,7 @@ export async function fetchReportForTreeElement(
                     const projectManagementTreeViewMissingErrorMessage: string =
                         "Project management tree is not initialized, cannot fetch report. (callFetchReportForTreeElement)";
                     logger.warn(projectManagementTreeViewMissingErrorMessage);
-                    throw new Error(projectManagementTreeViewMissingErrorMessage);
+                    return null;
                 }
 
                 // Get the key of the current project that is displayed in the project managemement tree view
@@ -591,18 +592,18 @@ export async function fetchReportForTreeElement(
                     const projectKeyMissingErrorMessage: string =
                         "No project selected, cannot fetch report. (callFetchReportForTreeElement)";
                     logger.warn(projectKeyMissingErrorMessage);
-                    throw new Error(projectKeyMissingErrorMessage);
+                    return null;
                 }
 
                 // Find the cycle key associated with the selected tree item to fetch the report
-                const cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(
+                const cycleKey: string | null = projectManagementTreeView.findCycleKeyOfTreeElement(
                     selectedProjectManagementTreeItem
                 );
                 if (!cycleKey) {
                     const cycleKeyMissingErrorMessage: string =
                         "Cycle key for the selected tree element not found, cannot fetch report. (callFetchReportForTreeElement)";
                     logger.warn(cycleKeyMissingErrorMessage);
-                    throw new Error(cycleKeyMissingErrorMessage);
+                    return null;
                 }
 
                 // Get the unique ID of the tree element
@@ -612,7 +613,7 @@ export async function fetchReportForTreeElement(
                 const executionBased: boolean = true; // await isExecutionBasedReportSelected();  // TODO: Using execution based for QS day by default.
                 if (executionBased === null) {
                     logger.debug("Export method is not selected. Fetching report for the selected tree item.");
-                    return;
+                    return null;
                 }
 
                 // Set up the request parameters
@@ -630,7 +631,7 @@ export async function fetchReportForTreeElement(
                 progress?.report({ increment: 30, message: "Fetching report." });
 
                 // Fetch the ZIP file, handle potential cancellation
-                const downloadedReportZipFilePath: string | undefined = await fetchReportZipFromServer(
+                const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
                     baseKey,
                     projectKeyOfProjectInView,
                     cycleKey,
@@ -643,6 +644,7 @@ export async function fetchReportForTreeElement(
                 // Handle errors and show an error message to the user
                 vscode.window.showErrorMessage((error as Error).message);
                 console.error("Error fetching report:", error);
+                return null;
             }
         }
     );
@@ -653,25 +655,24 @@ export async function fetchReportForTreeElement(
  * @param context VS Code extension context
  * @param selectedTreeItem The selected tree item
  * @param folderNameOfTestbenchWorkingDirectory The folder name of the testbench working directory
+ * @returns {Promise<void | null>} Resolves when the tests are generated successfully, otherwise null
  */
 export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
     selectedTreeItem: projectManagementTreeView.TestbenchTreeItem,
     folderNameOfTestbenchWorkingDirectory: string
-): Promise<void> {
+): Promise<void | null> {
     logger.trace("Generating tests for non cycle element:", selectedTreeItem);
 
     let treeElementUniqueID: string | undefined = selectedTreeItem.item?.base?.uniqueID;
-    let cycleKey: string | undefined = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
-    let projectKey: string | undefined = projectManagementTreeView.findProjectKeyOfCycleElement(
-        selectedTreeItem.parent!
-    );
+    let cycleKey: string | null = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
+    let projectKey: string | null = projectManagementTreeView.findProjectKeyOfCycleElement(selectedTreeItem.parent!);
 
     if (!projectKey || !cycleKey || !treeElementUniqueID) {
         logger.error(
             `Project key (${projectKey}), cycle key (${cycleKey}) or unique ID (${treeElementUniqueID}) not found for the selected tree item.`
         );
-        return;
+        return null;
     }
 
     await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
@@ -696,6 +697,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  * @param cycleKey - The cycle key
  * @param folderNameOfTestbenchWorkingDirectory - The path to save the downloaded report
  * @param UIDofTestThemeElementToGenerateTestsFor - (Optional) The unique ID of the clicked TestThemeNode element to generate tests for
+ * @returns {Promise<void | null>} - Resolves when the tests are generated successfully, otherwise null
  */
 export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
     context: vscode.ExtensionContext,
@@ -706,22 +708,23 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     cycleKey: string,
     folderNameOfTestbenchWorkingDirectory: string,
     UIDofTestThemeElementToGenerateTestsFor?: string
-): Promise<void> {
+): Promise<void | null> {
     try {
         const isReportGenerationExecutionBased: boolean = true; // await isExecutionBasedReportSelected();  // TODO: For QS day, use true for this value.
         if (isReportGenerationExecutionBased === null) {
             const testGenerationAbortedMessage: string = `Test generation method is invalid (${isReportGenerationExecutionBased}). Test generation aborted.`;
             vscode.window.showInformationMessage(testGenerationAbortedMessage);
             logger.debug(testGenerationAbortedMessage);
-            return;
+            return null;
         }
 
         // Prompt the user to select a TestThemeNode and get its UID if the unique ID is not provided already. Can be "Generate all" as well.
         const UIDofSelectedTreeElement: string | undefined =
-            UIDofTestThemeElementToGenerateTestsFor || (await promptForTestThemeNodeSelectionAndReturnUIDOfNode(selectedTreeItem));
+            UIDofTestThemeElementToGenerateTestsFor ||
+            (await promptForTestThemeNodeSelectionAndReturnUIDOfNode(selectedTreeItem));
         if (!UIDofSelectedTreeElement) {
             logger.error("Test theme selection was empty while generating tests.");
-            return;
+            return null;
         }
 
         // Set up the request parameters for the cycle report
@@ -757,9 +760,11 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             const testGenerationCancelledByUserMessage: string = "Test generation process cancelled by the user.";
             logger.debug(testGenerationCancelledByUserMessage);
             vscode.window.showInformationMessage(testGenerationCancelledByUserMessage);
+            return null;
         } else {
             logger.error("An error occurred:", error);
             vscode.window.showErrorMessage(`An error occurred: ${error.message || error}`);
+            return null;
         }
     }
 }
@@ -830,6 +835,7 @@ function findAllTestThemeNodesOfTreeItem(
  * @param cycleStructureOptionsRequestParameters - Request parameters for cycle structure
  * @param progress - VS Code progress reporter
  * @param cancellationToken - VS Code cancellation token
+ * @returns {Promise<void | null>} Resolves when the test generation process is completed, otherwise null
  */
 async function runRobotFrameworkTestGenerationProcess(
     context: vscode.ExtensionContext,
@@ -842,10 +848,10 @@ async function runRobotFrameworkTestGenerationProcess(
     cycleStructureOptionsRequestParameters: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
-): Promise<void> {
+): Promise<void | null> {
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
 
-    const downloadedReportZipFilePath: string | undefined = await fetchReportZipFromServer(
+    const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
         baseKey,
         projectKey,
         cycleKey,
@@ -857,7 +863,7 @@ async function runRobotFrameworkTestGenerationProcess(
 
     if (!downloadedReportZipFilePath) {
         logger.warn("Download cancelled or failed.");
-        return;
+        return null;
     }
 
     progress.report({ increment: 30, message: "Generating robot framework tests with testbench2robotframework." });
@@ -875,13 +881,13 @@ async function runRobotFrameworkTestGenerationProcess(
     );
     if (!tb2robotConfigFilePath) {
         logger.error("Failed to save configuration file.");
-        return;
+        return null;
     }
 
     const isTb2RobotframeworkWriteCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkWrite(
             context,
-            testbenchWorkingDirectoryInsideWorkspace,  // The command will be executed in this folder
+            testbenchWorkingDirectoryInsideWorkspace, // The command will be executed in this folder
             downloadedReportZipFilePath,
             tb2robotConfigFilePath
         );
@@ -893,7 +899,7 @@ async function runRobotFrameworkTestGenerationProcess(
             "Test generation failed. Please make sure that your tests can be automated.";
         logger.error(testGenerationFailedMessage);
         vscode.window.showErrorMessage(testGenerationFailedMessage);
-        return;
+        return null;
     }
 
     // If write command is successful, update the last generated report parameters to use in the next operations
@@ -1000,12 +1006,12 @@ export async function removeReportZipFile(
  * Recursively searches for a file within a directory.
  * @param {string} directoryToSearchInside - The directory to search in.
  * @param {string} fileNametoSearch - The name of the file to search for.
- * @returns {string | undefined} The full path of the file if found, otherwise undefined.
+ * @returns {string | null} The full path of the file if found, otherwise null.
  */
 export async function findFileRecursivelyInDirectory(
     directoryToSearchInside: string,
     fileNametoSearch: string
-): Promise<string | undefined> {
+): Promise<string | null> {
     try {
         logger.debug(`Searching for ${fileNametoSearch} in ${directoryToSearchInside} recursively`);
 
@@ -1020,7 +1026,7 @@ export async function findFileRecursivelyInDirectory(
 
             // Recursively search in subdirectories
             if (stat.isDirectory()) {
-                const searchResult: string | undefined = await findFileRecursivelyInDirectory(
+                const searchResult: string | null = await findFileRecursivelyInDirectory(
                     pathOfCurrentFile,
                     fileNametoSearch
                 );
@@ -1038,7 +1044,7 @@ export async function findFileRecursivelyInDirectory(
         logger.error(`Error searching for file: ${error instanceof Error ? error.message : String(error)}`);
     }
     logger.warn(`XML File ${fileNametoSearch} not found in ${directoryToSearchInside}`);
-    return undefined;
+    return null;
 }
 
 /**
@@ -1046,9 +1052,9 @@ export async function findFileRecursivelyInDirectory(
  * Note: If multiple output XML files are present, the first one found will be returned.
  * If the wrong file is selected automatically, the upload process will fail. To avoid this, set the output XML path in the settings correctly
  * @param workingDirectoryPath The full (absolute) path of the working directory.
- * @returns {Promise<string | undefined>} The full (absolute) path of the selected output XML file, or undefined if no file is selected.
+ * @returns {Promise<string | null>} The full (absolute) path of the selected output XML file, or undefined if no file is selected.
  */
-async function chooseRobotOutputXMLFile(workingDirectoryPath: string): Promise<string | undefined> {
+async function chooseRobotOutputXMLFile(workingDirectoryPath: string): Promise<string | null> {
     logger.debug(`Choosing output XML file with working directory path ${workingDirectoryPath}.`);
     // Open file selection dialog to select the output xml file, display only XML files in the selection.
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
@@ -1058,7 +1064,7 @@ async function chooseRobotOutputXMLFile(workingDirectoryPath: string): Promise<s
     } else {
         const fileNameToSearchFor = "output.xml";
         logger.debug(`Searching for ${fileNameToSearchFor} in ${outputXMLFolderPathInExtensionSettings}`);
-        const outputXmlFilePath: string | undefined = await findFileRecursivelyInDirectory(
+        const outputXmlFilePath: string | null = await findFileRecursivelyInDirectory(
             outputXMLFolderPathInExtensionSettings,
             fileNameToSearchFor
         );
@@ -1084,16 +1090,16 @@ async function chooseRobotOutputXMLFile(workingDirectoryPath: string): Promise<s
         logger.debug(`Found output XML file at location: ${selectedFiles[0].fsPath}`);
         return selectedFiles[0].fsPath;
     }
-    logger.error(`No output XML file selected, returning undefined.`);
-    return undefined;
+    logger.error(`No output XML file selected, returning null.`);
+    return null;
 }
 
 /**
  * Opens a file selection dialog for the user to choose the report zip file that doesn't contain test results.
  * @param workingDirectoryPath The full path of the working directory.
- * @returns {Promise<string | undefined>} The full path of the selected report zip file, or undefined if no file is selected.
+ * @returns {Promise<string | null>} The full path of the selected report zip file, or null if no file is selected.
  */
-async function chooseReportWithouResultsZipFile(workingDirectoryPath: string): Promise<string | undefined> {
+async function chooseReportWithouResultsZipFile(workingDirectoryPath: string): Promise<string | null> {
     // Open file selection dialog, filtered for XML files
     const selectedFiles: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
         defaultUri: vscode.Uri.file(workingDirectoryPath),
@@ -1108,7 +1114,7 @@ async function chooseReportWithouResultsZipFile(workingDirectoryPath: string): P
     if (selectedFiles && selectedFiles.length > 0) {
         return selectedFiles[0].fsPath;
     }
-    return undefined;
+    return null;
 }
 
 /**
@@ -1157,7 +1163,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
                 folderNameOfTestbenchWorkingDirectory
             );
 
-            const robotResultOutputXMLFilePath: string | undefined = await chooseRobotOutputXMLFile(
+            const robotResultOutputXMLFilePath: string | null = await chooseRobotOutputXMLFile(
                 workspaceLocationInExtensionSettings
             );
             if (!robotResultOutputXMLFilePath) {
@@ -1186,7 +1192,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
                 treeRootUID: lastGeneratedReportParams.UID,
             };
 
-            const downloadedReportZipFilePath: string | undefined = await fetchReportZipFromServer(
+            const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
                 baseKey,
                 lastGeneratedReportParams.projectKey,
                 lastGeneratedReportParams.cycleKey,
@@ -1197,7 +1203,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             reportProgress(`Working on report.`, reportIncrement);
 
             // Either use the downloaded report zip file or prompt the user to select one
-            const reportWithResultsZipFilePath: string | undefined =
+            const reportWithResultsZipFilePath: string | null =
                 downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(testbenchWorkingDirectoryPath));
             if (!reportWithResultsZipFilePath) {
                 throw new Error("No report file selected.");
@@ -1222,7 +1228,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             const isTb2RobotReadExecutionSuccessful: boolean =
                 await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
                     context,
-                    testbenchWorkingDirectoryPath,  // The command will be executed in this folder
+                    testbenchWorkingDirectoryPath, // The command will be executed in this folder
                     robotResultOutputXMLFilePath,
                     reportWithResultsZipFilePath,
                     pathOfReportWithResultsZip,
@@ -1277,7 +1283,7 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
     context: vscode.ExtensionContext,
     folderNameOfTestbenchWorkingDirectory: string,
     projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null
-): Promise<void> {
+): Promise<void | null> {
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -1286,15 +1292,19 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
         },
         async (progress, cancellationToken) => {
             if (!connection) {
-                vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.warn("No connection available (readTestsAndCreateResultsAndImportToTestbench).");
-                return;
+                const connectionErrorMessage: string =
+                    "No connection available. Cannot read and import report to TestBench.";
+                vscode.window.showErrorMessage(connectionErrorMessage);
+                logger.warn(connectionErrorMessage);
+                return null;
             }
 
             if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.currentProjectKeyInView) {
-                vscode.window.showErrorMessage("No project selected. Please select a project first.");
-                logger.warn("No project selected (readTestsAndCreateResultsAndImportToTestbench).");
-                return;
+                const projectKeyMissingMessage: string =
+                    "Project key is missing. Cannot read and import report to TestBench.";
+                vscode.window.showErrorMessage(projectKeyMissingMessage);
+                logger.warn(projectKeyMissingMessage);
+                return null;
             }
 
             progress.report({
@@ -1310,7 +1320,7 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
                 );
             if (!pathOfCreatedReportWithResults) {
                 logger.error("Error when reading test results and creating report with results.");
-                return;
+                return null;
             }
 
             progress.report({
@@ -1350,30 +1360,34 @@ export async function startTestGenerationForCycle(
     selectedTestCycleTreeItem: projectManagementTreeView.TestbenchTreeItem,
     baseKey: string,
     folderNameOfTestbenchWorkingDirectory: string
-): Promise<void> {
+): Promise<void | null> {
     try {
         if (!connection) {
-            vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.warn("No connection available (startTestGenerationForCycle).");
-            return;
+            const connectionErrorMessage: string = "No connection available. Cannot generate tests for cycle.";
+            vscode.window.showErrorMessage(connectionErrorMessage);
+            logger.warn(connectionErrorMessage);
+            return null;
         }
 
         const cycleKey: string | undefined = selectedTestCycleTreeItem.item.key;
         if (!cycleKey) {
-            logger.error("Cycle key is unidentified for test generation process.");
-            throw new Error("Cycle key is unidentified for test generation process.");
+            const cycleKeyMissingMessage: string = "Cycle key is missing for test generation process.";
+            logger.error(cycleKeyMissingMessage);
+            return null;
         }
 
-        const projectKeyOfCycle: string | undefined =
+        const projectKeyOfCycle: string | null =
             projectManagementTreeView.findProjectKeyOfCycleElement(selectedTestCycleTreeItem);
         if (!projectKeyOfCycle) {
-            logger.error("Project key of cycle is unidentified for test generation process.");
-            throw new Error("Project key of cycle is unidentified for test generation process.");
+            const projectKeyMissingMessage: string = "Project key of cycle is missing for test generation process.";
+            logger.error(projectKeyMissingMessage);
+            return null;
         }
 
         if (typeof selectedTestCycleTreeItem.label !== "string") {
-            logger.error("Invalid label type. Test generation aborted.");
-            throw new Error("Invalid label type. Test generation aborted.");
+            const invalidLabelTypeMessage: string = "Invalid label type. Test generation aborted.";
+            logger.error(invalidLabelTypeMessage);
+            return null;
         }
 
         // Start the test generation process

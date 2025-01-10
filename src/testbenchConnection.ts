@@ -298,8 +298,9 @@ export class PlayServerConnection {
     /**
      * Logs out the user from the TestBench server, clears the session data and stops the keep-alive process, clears the tree data provider which empties the tree view.
      * @param treeDataProvider The tree data provider to clear the tree after logout.
+     * @returns {Promise<void | null>} A promise that resolves when the logout is successful or null if an error occurs.
      */
-    async logoutUser(treeDataProvider: ProjectManagementTreeDataProvider): Promise<void> {
+    async logoutUser(treeDataProvider: ProjectManagementTreeDataProvider): Promise<void | null> {
         logger.trace("Logging out user.");
         try {
             const logoutResponse: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
@@ -313,21 +314,24 @@ export class PlayServerConnection {
                     treeDataProvider.clearTree();
                 }
 
-                const logoutSuccessfulMessage: string = "Logout successful.";                
+                const logoutSuccessfulMessage: string = "Logout successful.";
                 logger.debug(logoutSuccessfulMessage);
                 vscode.window.showInformationMessage(logoutSuccessfulMessage);
             } else {
                 const logoutFailedMessage: string = `Logout failed. Unexpected response status: ${logoutResponse.status}`;
                 logger.error(logoutFailedMessage);
                 vscode.window.showWarningMessage(logoutFailedMessage);
+                return null;
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 const logoutErrorMessage: string = `Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`;
                 logger.error(logoutErrorMessage);
                 vscode.window.showWarningMessage(logoutErrorMessage);
+                return null;
             } else {
                 logger.error(`An unexpected error occurred: ${error}`);
+                return null;
             }
         } finally {
             // Regardless of the outcome of logout operation, stop the keep-alive process
@@ -544,14 +548,14 @@ export class PlayServerConnection {
  * @param maskSensitiveInputData Whether the input should be hidden such as a password or not.
  * @param validateInputFunction A function to validate the input. If the input is invalid, the function should return an error message.
  * If the input is valid, the function should return null.
- * @returns {Promise<string | undefined>} A promise that resolves with the user input as a string or undefined if the user cancels the prompt.
+ * @returns {Promise<string | null>} A promise that resolves with the user input as a string or null if the user cancels the prompt.
  */
 async function promptForInputAndValidate(
     promptMessage: string,
     inputCanBeEmpty: boolean = false,
     maskSensitiveInputData: boolean = false,
     validateInputFunction?: (value: string) => string | null
-): Promise<string | undefined> {
+): Promise<string | null> {
     while (true) {
         const input: string | undefined = await vscode.window.showInputBox({
             prompt: promptMessage,
@@ -570,7 +574,7 @@ async function promptForInputAndValidate(
 
         if (input === undefined || input.toLowerCase() === "quit") {
             vscode.window.showInformationMessage("Login process aborted");
-            return undefined;
+            return null;
         }
 
         if (!validateInputFunction || validateInputFunction(input) === null) {
@@ -702,13 +706,14 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
     // Get server name from configuration
     const serverNameInConfig: string = config.get<string>("serverName", "testbench");
     // Prompt user for server name, showing the default value only if it exists
-    const serverNameInput: string | undefined = await promptForInputAndValidate(
+    const serverNameInput: string | null = await promptForInputAndValidate(
         `Enter the server name${serverNameInConfig ? ` (Default: ${serverNameInConfig})` : ""}`,
         true
     );
 
     // If user cancels the input prompt, return null to cancel the login process
     if ((!serverNameInput && !serverNameInConfig) || serverNameInput === undefined) {
+        logger.trace("Login process aborted while entering server name.");
         return null;
     }
 
@@ -718,7 +723,7 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
     // Get port number from configuration (default: 9445)
     const portInConfig: number = config.get<number>("portNumber", 9445);
     // Prompt user for port number, only showing the default if it's configured
-    const portInputAsString: string | undefined = await promptForInputAndValidate(
+    const portInputAsString: string | null = await promptForInputAndValidate(
         `Enter the port number${portInConfig ? ` (Default: ${portInConfig})` : ""}`,
         true,
         false,
@@ -731,6 +736,7 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
     );
 
     if ((!portInputAsString && !portInConfig) || portInputAsString === undefined) {
+        logger.trace("Login process aborted while etnering port number.");
         return null;
     }
 
@@ -742,23 +748,26 @@ async function promptForLoginCredentials(baseKey: string): Promise<{
         portNumber
     );
     if (!serverVersionsResponse) {
-        logger.error("Server not accessible with the provided server name and port.");
-        vscode.window.showErrorMessage("Server not accessible with the provided server name and port.");
+        const serverVersionsErrorMessage: string = "Server not accessible with the provided server name and port.";
+        logger.error(serverVersionsErrorMessage);
+        vscode.window.showErrorMessage(serverVersionsErrorMessage);
         return null;
     }
 
-    const usernameInput: string | undefined = await promptForInputAndValidate(
+    const usernameInput: string | null = await promptForInputAndValidate(
         `Enter your login name (Default: ${config.get<string>("username", "undefined")})`,
         true
     );
-    if (usernameInput === undefined) {
+    if (!usernameInput) {
+        logger.trace("Login process aborted while entering username.");
         return null;
     }
     const username: string = usernameInput || config.get<string>("username", "undefined");
 
     // Prompt for password
-    const password: string | undefined = await promptForInputAndValidate("Enter your password", false, true);
-    if (password === undefined) {
+    const password: string | null = await promptForInputAndValidate("Enter your password", false, true);
+    if (!password) {
+        logger.trace("Login process aborted while entering password.");
         return null;
     }
 
@@ -839,15 +848,14 @@ export async function loginToNewPlayServerAndInitSessionToken(
                         vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
                         const loginSuccessfulMessage: string = "Login successful.";
                         logger.debug(loginSuccessfulMessage);
-                        vscode.window.showInformationMessage(loginSuccessfulMessage);                        
+                        vscode.window.showInformationMessage(loginSuccessfulMessage);
                         if (loginWebViewProvider) {
                             loginWebViewProvider.updateWebviewContent(); // Notify webview about the login success to change its HTML content
                             loginWebView.hideWebView(); // Hide the webview after successful login
-                        }
-                        else { 
+                        } else {
                             logger.warn("loginWebViewProvider is null. Cannot update the webview content.");
                         }
-                            
+
                         return newConnection;
                     }
                     logger.error("Connection object is null after successful login.");
@@ -862,7 +870,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
         );
         return connection;
     } catch (error) {
-        logger.error("Error during login:", error);  // Note: The error log could be very large in the log file
+        logger.error("Error during login:", error); // Note: The error log could be very large in the log file
         vscode.window.showInformationMessage("Error during login.");
         return null;
     }
@@ -934,9 +942,9 @@ async function fetchServerVersions(
 
 /**
  * Opens a file select dialog for the user to select a zip file with the test results.
- * @returns {Promise<string | undefined>} A promise that resolves with the zip file path if the user selects a file, otherwise undefined.
+ * @returns {Promise<string | null>} A promise that resolves with the zip file path if the user selects a file, otherwise null.
  */
-async function promptForReportZipFileWithResults(): Promise<string | undefined> {
+async function promptForReportZipFileWithResults(): Promise<string | null> {
     try {
         const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
         const workspaceLocation: string | undefined = config.get<string>("workspaceLocation");
@@ -958,14 +966,14 @@ async function promptForReportZipFileWithResults(): Promise<string | undefined> 
         if (!fileUri || !fileUri[0]) {
             vscode.window.showErrorMessage("No file selected. Please select a valid .zip file.");
             logger.debug("No zip file selected for report selection.");
-            return undefined;
+            return null;
         }
 
         const selectedFilePath: string = fileUri[0].fsPath;
         if (!selectedFilePath.endsWith(".zip")) {
             vscode.window.showErrorMessage("Selected file is not a .zip file. Please select a valid .zip file.");
             logger.debug("Selected file is not a .zip file.");
-            return undefined;
+            return null;
         }
 
         return selectedFilePath;
@@ -973,7 +981,7 @@ async function promptForReportZipFileWithResults(): Promise<string | undefined> 
         const zipSelectionErrorMessage: string = `An error occurred while selecting the report zip file: ${error.message}`;
         vscode.window.showErrorMessage(zipSelectionErrorMessage);
         logger.error(zipSelectionErrorMessage);
-        return undefined;
+        return null;
     }
 }
 
@@ -1008,13 +1016,13 @@ function findCycleKeyFromCycleNameRecursively(treeElementsInTreeView: any[], cyc
  * @param connection The connection to the TestBench server.
  * @param projectManagementTreeDataProvider The project management tree data provider.
  * @param resultZipFilePath The file path of the zip file containing the results.
- * @returns {Promise<void>} A promise that resolves when the import is completed.
+ * @returns {Promise<void | null>} A promise that resolves when the import is completed or null if an error occurs.
  */
 export async function importReportWithResultsToTestbench(
     connection: PlayServerConnection,
     projectManagementTreeDataProvider: ProjectManagementTreeDataProvider,
     resultZipFilePath: string
-): Promise<void> {
+): Promise<void | null> {
     try {
         logger.debug("Importing report with results to TestBench server.");
 
@@ -1025,7 +1033,7 @@ export async function importReportWithResultsToTestbench(
                 "Error extracting project key, cycle name and unique ID from the zip file.";
             vscode.window.showErrorMessage(extractDataErrorMessage);
             logger.error(extractDataErrorMessage);
-            return;
+            return null;
         }
 
         /*
@@ -1041,7 +1049,7 @@ export async function importReportWithResultsToTestbench(
         if (!allTreeElementsInTreeView) {
             logger.error("Failed to load project management tree elements to import results.");
             vscode.window.showErrorMessage("Failed to load project management tree elements.");
-            return;
+            return null;
         }
         const cycleKeyOfImportedReport: string | null = findCycleKeyFromCycleNameRecursively(
             allTreeElementsInTreeView,
@@ -1051,7 +1059,7 @@ export async function importReportWithResultsToTestbench(
             const cycleNotFoundMessage: string = "Cycle not found in the project tree.";
             logger.error(cycleNotFoundMessage);
             vscode.window.showErrorMessage(cycleNotFoundMessage);
-            return;
+            return null;
         }
 
         // Upload the zip file containing the results to TestBench server
@@ -1063,7 +1071,7 @@ export async function importReportWithResultsToTestbench(
             const uploadErrorMessage: string = "Error uploading the result file to the server.";
             logger.error(uploadErrorMessage);
             vscode.window.showErrorMessage(uploadErrorMessage);
-            return;
+            return null;
         }
 
         // TODO: Chech the new data of the new branch
@@ -1107,18 +1115,18 @@ export async function importReportWithResultsToTestbench(
                 const importJobFailedMessage: string = "Import job not completed or failed.";
                 logger.warn(importJobFailedMessage);
                 vscode.window.showErrorMessage(importJobFailedMessage);
-                return undefined;
+                return null;
             } else {
                 vscode.window.showInformationMessage("Import completed successfully.");
             }
         } catch (error: any) {
             logger.error("Error:", error.message);
-            return undefined;
+            return null;
         }
     } catch (error: any) {
         logger.error("Error:", error.message);
         vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
-        return undefined;
+        return null;
     }
 }
 
@@ -1126,11 +1134,12 @@ export async function importReportWithResultsToTestbench(
  * Import the report zip file which contains the test results to TestBench server
  * @param connection The connection to the TestBench server.
  * @param projectManagementTreeDataProvider The project management tree data provider.
+ * @returns {Promise<void | null>} A promise that resolves when the import is completed or null if an error occurs.
  */
 export async function selectReportWithResultsAndImportToTestbench(
     connection: PlayServerConnection,
     projectManagementTreeDataProvider: ProjectManagementTreeDataProvider
-): Promise<void> {
+): Promise<void | null> {
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -1146,10 +1155,10 @@ export async function selectReportWithResultsAndImportToTestbench(
             }
 
             // const resultZipFileName = "ReportWithoutResultsForTb2robot.zip"; //"ReportWithResults.zip";
-            const resultZipFilePath: string | undefined = await promptForReportZipFileWithResults();
+            const resultZipFilePath: string | null = await promptForReportZipFileWithResults();
             if (!resultZipFilePath) {
-                // vscode.window.showErrorMessage("No location selected for the ReportWithResults.zip file.");
-                return;
+                logger.error("No location selected for the report zip file with results.");
+                return null;
             }
 
             if (progress) {

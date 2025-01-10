@@ -12,7 +12,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     // Store the reference to the WebviewView
     private currentWebview?: vscode.WebviewView;
 
-    private isLoginProcessAlreadyRunning: boolean = false;  // Prevent multiple login processes by spamming submit button
+    private isLoginProcessAlreadyRunning: boolean = false; // Prevent multiple login processes by spamming submit button
 
     // Private fields to hold our username/password
     constructor(
@@ -70,7 +70,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             return;
         }
         logger.trace(
-            `Webview input fields: Server Name: ${serverName} Port Number: ${portNumber} Username: ${username} Password: ${password}`
+            `Webview input fields: Server Name: ${serverName} Port Number: ${portNumber} Username: ${username}`
         ); // TODO: Delete this in production to not to store sensitive data in logs
 
         // Login logic also notifies and hides the webview from activity bar

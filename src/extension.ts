@@ -8,13 +8,10 @@ import path from "path";
 import { TestBenchLogger, folderNameOfLogs } from "./testBenchLogger";
 import * as loginWebView from "./loginWebView";
 
-// TODO: Returning null vs undefined vs "" vs throwing an exception (vs Result/Either object?), especially in reportHandler functions.
-// Exceptions for only important failures, where you cant continue. undefined is often used to mean “not yet defined” whereas null is “defined as empty.”
-// Many style guides prefer null over undefined when a function is intentionally returning “no result.”
 // TODO: When clicking on a cycle on project tree for the first time, the test theme tree appears. And since we have now 2 views in activity bar,
 // a new bar appears at the top where you can manage the views, that bar moves the views to the bottom a little bit. Not a big issue but a little bit annoying.
-// FIXME: Sometimes VS Code wont load up fully and triggering extension functions in this state may cause errors such as logging in twice if you press the login button multiple times.
 // FIXME: Sometimes robot framework tests fails on some tests ("No matching Keyword" problem?) and uploading the report fails.
+// Possible reasons: Wrong output.xml is used, existing files in the working .testbench directory from previous generations...
 
 export const baseKey: string = "testbenchExtension"; // Prefix of the commands in package.json
 export let logger: TestBenchLogger;
@@ -46,7 +43,6 @@ export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null
 // Called when the extension is activated.
 // In package.json, "activationEvents": ["onStartupFinished"] is used to activate the extension after the startup of VS Code
 // because the extension needs to be fully loaded to work smoothly.
-// (For example, clicking on login button multiple times before the extension is fully loaded may cause multiple login processes to run at the same time.)
 export async function activate(context: vscode.ExtensionContext) {
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
     logger = new TestBenchLogger();
@@ -366,12 +362,12 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(
             commands.fetchReportForSelectedTreeItem.command,
-            async (treeItem: projectManagementTreeView.TestbenchTreeItem) => {                
+            async (treeItem: projectManagementTreeView.TestbenchTreeItem) => {
                 await reportHandler.fetchReportForTreeElement(
                     treeItem,
                     projectManagementTreeDataProvider,
                     folderNameOfTestbenchWorkingDirectory
-                );                
+                );
             }
         )
     );
@@ -614,26 +610,29 @@ export async function activate(context: vscode.ExtensionContext) {
  * Deletes all contents of a workspace folder after user confirmation, excluding specified folders.
  * @param workspaceLocation - The path of the workspace folder to be cleared.
  * @param excludedFolders - A list of folder names to exclude from deletion.
+ * @returns A promise that resolves when the workspace folder is cleared successfully, or null if an error occurs.
  */
 export async function clearWorkspaceFolder(
     workspaceLocation: string,
     excludedFolders: string[] = [],
     promptForConfirmation: boolean = true
-): Promise<void> {
+): Promise<void | null> {
     logger.debug(`Clearing workspace folder: ${workspaceLocation}`);
     try {
         // Check if the workspaceLocation path exists and is a directory
         try {
             const stats = await fsPromises.stat(workspaceLocation);
-            if (!stats.isDirectory()) {                
-                vscode.window.showErrorMessage(`The path "${workspaceLocation}" is not a directory.`);
-                logger.error(`The path "${workspaceLocation}" is not a directory. (clearWorkspaceFolder)`);
-                return;
+            if (!stats.isDirectory()) {
+                const pathIsNotAFolderErorMessage = `The path "${workspaceLocation}" is not a directory. Cannot clear workspace folder.`;
+                vscode.window.showErrorMessage(pathIsNotAFolderErorMessage);
+                logger.error(pathIsNotAFolderErorMessage);
+                return null;
             }
         } catch {
-            vscode.window.showErrorMessage(`The folder at path "${workspaceLocation}" does not exist.`);
-            logger.error(`The folder at path "${workspaceLocation}" does not exist. (clearWorkspaceFolder)`);
-            return;
+            const pathDoesNotExistErrorMessage = `The folder at path "${workspaceLocation}" does not exist. Cannot clear workspace folder.`;
+            vscode.window.showErrorMessage(pathDoesNotExistErrorMessage);
+            logger.error(pathDoesNotExistErrorMessage);
+            return null;
         }
 
         if (promptForConfirmation) {
@@ -648,7 +647,7 @@ export async function clearWorkspaceFolder(
             // Exit if the user selects "No" or closes the dialog
             if (userResponse !== "Yes") {
                 logger.debug(`User cancelled the clear workspace folder operation.`);
-                return;
+                return null;
             }
         }
 
@@ -680,6 +679,7 @@ export async function clearWorkspaceFolder(
         const clearWorkspaceFolderErrorMessage = `An error occurred while clearing the workspace folder: ${error.message}`;
         vscode.window.showErrorMessage(clearWorkspaceFolderErrorMessage);
         logger.error(clearWorkspaceFolderErrorMessage);
+        return null;
     }
 }
 
@@ -688,7 +688,7 @@ export async function clearWorkspaceFolder(
  * @param dirPath - The directory path to delete.
  * @param excludedFolders - A list of folder names to exclude from deletion.
  */
-async function deleteDirectoryRecursively(dirPath: string, excludedFolders: string[]): Promise<void> {
+async function deleteDirectoryRecursively(dirPath: string, excludedFolders: string[]): Promise<void | null> {
     logger.debug(`Deleting directory recursively: ${dirPath}`);
     logger.debug(`Excluded folders while deleting recursively:`, excludedFolders);
     try {
@@ -722,7 +722,7 @@ async function deleteDirectoryRecursively(dirPath: string, excludedFolders: stri
         }
     } catch (error: any) {
         logger.error(`Failed to delete directory ${dirPath}: ${error.message} (deleteDirectoryRecursively)`);
-        throw error;
+        return null;
     }
 }
 

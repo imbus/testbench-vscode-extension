@@ -4,7 +4,7 @@ import * as path from "path";
 import { promisify } from "util";
 import { baseKey, folderNameOfTestbenchWorkingDirectory } from "./extension";
 
-export const folderNameOfLogs = "logs"; 
+export const folderNameOfLogs = "logs";
 
 const MAX_LOG_FILE_SIZE: number = 5 * 1024 * 1024; // 5 MB
 const MAX_LOG_FILES: number = 3; // Maximum number of backup log files.
@@ -24,11 +24,11 @@ export class TestBenchLogger {
     // But in the extension settings, the user can select 0 as log level to disable logging.
     private levels: { [key: string]: number } = {
         "No logging": 0,
-        "Trace": 1,
-        "Debug": 2,
-        "Info": 3,
-        "Warn": 4,
-        "Error": 5
+        Trace: 1,
+        Debug: 2,
+        Info: 3,
+        Warn: 4,
+        Error: 5,
     };
     private outputLogToTerminal: boolean = false; // Output log messages to the terminal
 
@@ -98,7 +98,7 @@ export class TestBenchLogger {
     // Log messages with optional details and output to terminal
     public async log(level: string, message: string, details?: any | any[], outputToTerminal?: boolean) {
         const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-        const configuredLogLevel: string = config.get("testBenchLogger", "No logging");        
+        const configuredLogLevel: string = config.get("testBenchLogger", "No logging");
 
         // Implement no logging if log level is set to 0
         /*
