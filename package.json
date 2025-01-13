@@ -43,7 +43,7 @@
                     "testbenchExtension.storePasswordAfterLogin": {
                         "type": "boolean",
                         "default": false,
-                        "description": "If enabled, the extension will securely store the user's password after the first login to facilitate automatic login in future sessions without prompting for credentials.",
+                        "description": "If enabled, the extension will securely store the user's password after a successful login to facilitate automatic login in future sessions without prompting for credentials.",
                         "order": 4,
                         "scope": "resource"
                     },
@@ -61,15 +61,22 @@
                 "properties": {
                     "testbenchExtension.workspaceLocation": {
                         "type": "string",
-                        "description": "The absolute path to the workspace or project directory on the local machine for storing local files during test generation inside a directory called .testbench.",
+                        "description": "Specifies the absolute path to the local workspace or project directory. This directory is used for storing and processing local files during extension operations. A `.testbench` folder will be automatically created inside this directory by the extension to manage its files.",
                         "order": 6,
                         "scope": "resource"
                     },
                     "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Delete all files inside the working directory excluding the log files before generating tests.",
+                        "description": "Delete all files inside the working directory called .tesbench excluding the log files before generating tests.",
                         "order": 7,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.clearReportAfterProcessing": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Remove the report file automatically after processing it.",
+                        "order": 8,
                         "scope": "resource"
                     }
                 }
@@ -81,7 +88,7 @@
                         "type": "boolean",
                         "default": false,
                         "description": "Use default values for the testbench2robotframework configuration.",
-                        "order": 8,
+                        "order": 9,
                         "scope": "resource"
                     },
                     "testbenchExtension.testbench2robotframeworkConfig": {
@@ -123,7 +130,7 @@
                                 }
                             }
                         },
-                        "description": "Configuration settings for the testbench2robotframework library.",
+                        "description": "Configuration setting for customizing the testbench2robotframework library options.",
                         "properties": {
                             "rfLibraryRoots": {
                                 "type": "array",
@@ -262,7 +269,7 @@
                                 }
                             }
                         },
-                        "order": 9,
+                        "order": 10,
                         "scope": "resource"
                     }
                 }
@@ -272,9 +279,9 @@
                 "properties": {
                     "testbenchExtension.testBenchLogger": {
                         "type": "string",
-                        "description": "Set the minimum log level. Log file is stored under the name testBenchExtension.log inside the workspace location.",
+                        "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
                         "default": "No logging",
-                        "order": 10,
+                        "order": 11,
                         "enum": [
                             "No logging",
                             "Trace",
@@ -298,13 +305,6 @@
             {
                 "title": "Other",
                 "properties": {
-                    "testbenchExtension.clearReportAfterProcessing": {
-                        "type": "boolean",
-                        "default": true,
-                        "description": "Remove the report file automatically after processing it.",
-                        "order": 11,
-                        "scope": "resource"
-                    },
                     "testbenchExtension.outputXMLPath": {
                         "type": "string",
                         "description": "The absolute folder path where the output XML file (Robotframework test results) is stored. The extension will look for the file in this folder recursively. If there are multiple XML files in this folder, the extension will use the first one found.",
@@ -456,6 +456,10 @@
                     "light": "resources/icons/Upload.svg",
                     "dark": "resources/icons/Upload.svg"
                 }
+            },
+            {
+                "command": "customTreeView.refresh",
+                "title": "Refresh Tree View"
             }
         ],
         "views": {
@@ -472,6 +476,10 @@
                 {
                     "id": "testThemeTree",
                     "name": "Test Theme Tree"
+                },
+                {
+                    "id": "testElementsTreeView",
+                    "name": "Test Elements Tree"
                 }
             ]
         },

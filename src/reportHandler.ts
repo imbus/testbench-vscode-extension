@@ -3,9 +3,9 @@ import * as fs from "fs";
 import * as fsPromise from "fs/promises";
 import * as path from "path";
 import * as testBenchTypes from "./testBenchTypes";
-import axios, { AxiosResponse } from "axios";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
+import axios, { AxiosResponse } from "axios";
 import { getConfig, connection, baseKeyOfExtension, logger } from "./extension";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
 

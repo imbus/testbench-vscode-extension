@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
+import * as loginWebView from "./loginWebView";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { ProjectManagementTreeDataProvider } from "./projectManagementTreeView";
@@ -16,7 +17,6 @@ import {
     logger,
     loginWebViewProvider,
 } from "./extension";
-import * as loginWebView from "./loginWebView";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate

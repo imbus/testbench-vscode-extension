@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as testBenchTypes from "./testBenchTypes";
 import { PlayServerConnection } from "./testBenchConnection";
 import { TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { connection, logger } from "./extension";
-import * as testBenchTypes from "./testBenchTypes";
 
 let projectManagementTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
 let projectManagementDataProvider: ProjectManagementTreeDataProvider | null = null;

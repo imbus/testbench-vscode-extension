@@ -27,11 +27,13 @@ The extension settings contains following configurations:
 -   Testbench server
 -   Port number
 -   Username
+-   Store credentials
 -   Automatic login option
 -   Workspace location
--   Test generation configuration
 -   Clean up option after processing reports
--   Path to execution results (output.xml)
+-   Clean up report file after processing
+-   testbench2robotframework configuration
+-   Path to execution results folder (output.xml)
 -   Log level
 
 ## Usage

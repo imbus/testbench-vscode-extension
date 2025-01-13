@@ -6,8 +6,10 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as fsPromises from "fs/promises";
 import * as loginWebView from "./loginWebView";
 import * as testBenchLogger from "./testBenchLogger";
+import * as testElementsTreeView from "./testElementsTreeView";
 import path from "path";
 
+// TODO: Add progress bar for fetching cycle structure since it can take long.
 // TODO: When the user inputs wrong credentials in extension settings, but then corrects it in the login form, 
 // should we update the extension settings with the new credentials if the login was successful?
 // TODO: Hide the tree views initially instead of creating them and then hiding them after.
@@ -128,11 +130,23 @@ export async function activate(context: vscode.ExtensionContext) {
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
-    // Initialize the tree data provider to avoid displaying the default text of VS Code saying that the data provider is not initialized.
+    // Initialize the project tree data provider to avoid displaying the default text of VS Code saying that the data provider is not initialized.
     projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(null, null!);
     vscode.window.createTreeView("projectManagementTree", {
         treeDataProvider: projectManagementTreeDataProvider,
-    });    
+    });
+
+    // TODO: Make this a global variable?
+    // Initialize the test elements tree view
+    const testElementsTreeDataProvider = new testElementsTreeView.TestElementTreeViewProvider();
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider("testElementsTreeView", testElementsTreeDataProvider),
+        vscode.commands.registerCommand("testElementsTreeView.refresh", () => testElementsTreeDataProvider.refresh())
+    );
+    vscode.window.createTreeView("testElementsTreeView", {
+        treeDataProvider: testElementsTreeDataProvider,
+    });
+    testElementsTreeView.hideTestElementsTreeView();
 
     // Initialize or update extension configuration settings
     async function loadConfiguration() {

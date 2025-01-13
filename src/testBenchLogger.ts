@@ -1,8 +1,7 @@
-import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { promisify } from "util";
-import { getConfig, baseKeyOfExtension, folderNameOfTestbenchWorkingDirectory } from "./extension";
+import { getConfig, folderNameOfTestbenchWorkingDirectory } from "./extension";
 
 export const folderNameOfLogs = "logs";
 
