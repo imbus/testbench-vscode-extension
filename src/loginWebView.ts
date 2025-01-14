@@ -13,9 +13,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     private isLoginProcessAlreadyRunning: boolean = false; // Prevent multiple login processes by spamming submit button
 
     // Private fields to hold our username/password
-    constructor(
-        private extensionContext?: vscode.ExtensionContext | undefined
-    ) {}
+    constructor(private extensionContext?: vscode.ExtensionContext | undefined) {}
 
     /**
      * Called when the view is loaded by VS Code.
@@ -85,7 +83,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             // When the user wont select a project and clicks away, there wont be any view in activity bar.
             // Add project view to activity bar so that he can choose project again.
             displayProjectManagementTreeView();
-        }       
+        }
 
         // Release the lock
         this.isLoginProcessAlreadyRunning = false;
@@ -232,35 +230,32 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         <body>
             <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
             <div class="header-container">
-            <img src="${imageUri || ''}" alt="TestBench Logo">
+            <img src="${imageUri || ""}" alt="TestBench Logo">
             <h2>Login to TestBench</h2>
             </div>
             <div class="form-group">
                 <label for="serverName">Server Name:</label>
-                <input id="serverName" type="text" placeholder="Server Name" value="${getConfig().get<string>(
-                "serverName",
-                ""
-                ) || ''}" required />
+                <input id="serverName" type="text" placeholder="Server Name" value="${
+                    getConfig().get<string>("serverName", "") || ""
+                }" required />
             </div>
             <div class="form-group">
                 <label for="portNumber">Port Number:</label>
-                <input id="portNumber" type="text" placeholder="Port Number" value="${getConfig().get<string>(
-                "portNumber",
-                ""
-                ) || ''}" required />
+                <input id="portNumber" type="text" placeholder="Port Number" value="${
+                    getConfig().get<string>("portNumber", "") || ""
+                }" required />
             </div>
             <div class="form-group">
                 <label for="username">Username:</label>
-                <input id="username" type="text" placeholder="Username" value="${getConfig().get<string>(
-                "username",
-                ""
-                ) || ''}" required />
+                <input id="username" type="text" placeholder="Username" value="${
+                    getConfig().get<string>("username", "") || ""
+                }" required />
             </div>
             <div class="form-group">
                 <label for="password">Password:</label>
-                <input id="password" type="password" placeholder="Password" value="${await this.extensionContext?.secrets.get(
-                "password"
-                ) || ''}" required />
+                <input id="password" type="password" placeholder="Password" value="${
+                    (await this.extensionContext?.secrets.get("password")) || ""
+                }" required />
             </div>
             <button id="submitBtn" type="submit">Submit</button>
             </form>
@@ -308,107 +303,134 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 "portNumber",
                 ""
             )}, ${getConfig().get<string>("username", "")}`
-        ); 
-  
+        );  // Password is not logged for security reasons
+
         const imageUri = this.createIconUri(webview);
- 
+
         return `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8"/>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Login to TestBench</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    margin: 20px;
-                }
-                .header-container {
-                    display: flex;
-                    align-items: center;
-                    margin-bottom: 1em;
-                }
-                .header-container img {
-                    width: 30px;
-                    height: 30px;
-                    margin-right: 10px;
-                }
-                .header-container h2 {
-                    margin: 0;
-                }
-                form div {
-                    margin-top: 0.5em;
-                }
-                /* Ensures each label appears on its own line */
-                label {
-                    display: block;
-                    margin-bottom: 0.25em;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="header-container">
-                <img src="${imageUri || ""}" alt="TestBench Logo">
-                <h2>Login to TestBench</h2>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login to TestBench</title>
+        <style>
+            body {
+                font-family: var(--vscode-font-family);
+                font-size: var(--vscode-font-size);
+                color: var(--vscode-foreground);
+                background-color: var(--vscode-editor-background);
+                margin: 20px;
+            }
+            .header-container {
+                display: flex;
+                align-items: center;
+                margin-bottom: 1em;
+            }
+            .header-container img {
+                width: 30px;
+                height: 30px;
+                margin-right: 10px;
+            }
+            .header-container h2 {
+                margin: 0;
+                color: var(--vscode-editor-foreground);
+            }
+            form div {
+                margin-top: 0.5em;
+            }
+            label {
+                display: block;
+                margin-bottom: 0.25em;
+                color: var(--vscode-editor-foreground);
+            }
+            input {
+                width: 100%;
+                padding: 0.5em;
+                border: 1px solid var(--vscode-input-border);
+                border-radius: 4px;
+                background-color: var(--vscode-input-background);
+                color: var(--vscode-input-foreground);
+            }
+            input:focus {
+                outline: 1px solid var(--vscode-focusBorder);
+            }
+            button {
+                margin-top: 1em;
+                padding: 0.5em 1em;
+                border: none;
+                border-radius: 4px;
+                background-color: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                cursor: pointer;
+            }
+            button:hover {
+                background-color: var(--vscode-button-hoverBackground);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header-container">
+            <img src="${imageUri || ""}" alt="TestBench Logo">
+            <h2>Login to TestBench</h2>
+        </div>
+        <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
+            <div>
+                <label for="serverName">Server Name:</label>
+                <input id="serverName" type="text" placeholder="Server Name" value="${
+                    getConfig().get<string>("serverName", "") || ""
+                }" required/>
             </div>
-            <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
-                <div>
-                    <label for="serverName">Server Name:</label>
-                    <input id="serverName" type="text" placeholder="Server Name" value="${
-                        getConfig().get<string>("serverName", "") || ""
-                    }" required/>
-                </div>
-                <div>
-                    <label for="portNumber">Port Number:</label>
-                    <input id="portNumber" type="text" placeholder="Port Number" value="${
-                        getConfig().get<string>("portNumber", "") || ""
-                    }" required/>
-                </div>
-                <div>
-                    <label for="username">Username:</label>
-                    <input id="username" type="text" placeholder="Username" value="${
-                        getConfig().get<string>("username", "") || ""
-                    }" required/>
-                </div>
-                <div>
-                    <label for="password">Password:</label>
-                    <input id="password" type="password" placeholder="Password" value="${
-                        (await this.extensionContext?.secrets.get("password")) || ""
-                    }" required/>
-                </div>
-                <div style="margin-top: 1em;">
-                    <button id="submitBtn" type="submit">Submit</button>
-                </div>
-            </form>
-            <script>
-                const vscode = acquireVsCodeApi();
+            <div>
+                <label for="portNumber">Port Number:</label>
+                <input id="portNumber" type="text" placeholder="Port Number" value="${
+                    getConfig().get<string>("portNumber", "") || ""
+                }" required/>
+            </div>
+            <div>
+                <label for="username">Username:</label>
+                <input id="username" type="text" placeholder="Username" value="${
+                    getConfig().get<string>("username", "") || ""
+                }" required/>
+            </div>
+            <div>
+                <label for="password">Password:</label>
+                <input id="password" type="password" placeholder="Password" value="${
+                    (await this.extensionContext?.secrets.get("password")) || ""
+                }" required/>
+            </div>
+            <div>
+                <button id="submitBtn" type="submit">Submit</button>
+            </div>
+        </form>
+        <script>
+            const vscode = acquireVsCodeApi();
 
-                function submitLogin() {
-                    const serverName = document.getElementById('serverName').value;
-                    const portNumber = document.getElementById('portNumber').value;
-                    const username = document.getElementById('username').value;
-                    const password = document.getElementById('password').value;
+            function submitLogin() {
+                const serverName = document.getElementById('serverName').value;
+                const portNumber = document.getElementById('portNumber').value;
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
 
-                    vscode.postMessage({
-                        command: 'login',
-                        serverName,
-                        portNumber,
-                        username,
-                        password
-                    });
-                }
-
-                window.addEventListener('message', (event) => {
-                    const message = event.data;
-                    if (message.command === 'updateContent') {
-                        document.body.innerHTML = message.html;
-                    }
+                vscode.postMessage({
+                    command: 'login',
+                    serverName,
+                    portNumber,
+                    username,
+                    password
                 });
-            </script>
-        </body>
-        </html>
-        `;
+            }
+
+            window.addEventListener('message', (event) => {
+                const message = event.data;
+                if (message.command === 'updateContent') {
+                    document.body.innerHTML = message.html;
+                }
+            });
+        </script>
+    </body>
+    </html>
+    `;
     }
 
     /**

@@ -5,6 +5,10 @@
     "description": "A Visual Studio Code extension for TestBench.",
     "icon": "resources/icons/iTB-EE-Logo-256x256.png",
     "version": "0.0.1",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/imbus/testbench-vs-code-extension"
+    },
     "engines": {
         "vscode": "^1.95.0"
     },
@@ -585,6 +589,7 @@
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
+        "@vscode-elements/elements": "^1.10.0",
         "@vscode/python-extension": "^1.0.5",
         "axios": "^1.7.7",
         "flatted": "^3.3.1",

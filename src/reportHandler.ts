@@ -1407,21 +1407,23 @@ export async function saveTestbench2RobotConfigurationAsJsonLocally(
     folderPathToStoreTb2robotConfig: string
 ): Promise<string | null> {
     try {
-        const generationConfig = getConfig().get<testBenchTypes.Testbench2robotframeworkConfiguration>(
+        const testbench2robotframeworkConfigInExtensionSettings = getConfig().get<testBenchTypes.Testbench2robotframeworkConfiguration>(
             "testbench2robotframeworkConfig"
         );
-        if (!generationConfig) {
-            logger.error("Configuration object is missing.");
+        if (!testbench2robotframeworkConfigInExtensionSettings) {
+            logger.error("testbench2robotframework configuration could not be found in extension settings.");
             return null;
         }
 
-        const jsonContent: string = JSON.stringify(generationConfig, null, 2);
+        const jsonContent: string = JSON.stringify(testbench2robotframeworkConfigInExtensionSettings, null, 2);
         const tb2robotConfigFilePath: string = getConfigurationFilePath(folderPathToStoreTb2robotConfig);
 
         // Write file, overwriting if it already exists
         await fsPromise.writeFile(tb2robotConfigFilePath, jsonContent, "utf8");
-        logger.debug(`Tb2robot configuration file created or overwritten at: ${tb2robotConfigFilePath}`);
-        logger.trace(`Tb2robot configuration file content:`, jsonContent);
+        logger.debug(
+            `testbench2robotframework configuration file created or overwritten at location: ${tb2robotConfigFilePath}`
+        );
+        logger.trace(`testbench2robotframework configuration file content:`, jsonContent);
 
         return tb2robotConfigFilePath;
     } catch (error) {
@@ -1431,7 +1433,7 @@ export async function saveTestbench2RobotConfigurationAsJsonLocally(
                 : "An unknown error occurred while writing the configuration file.";
 
         vscode.window.showErrorMessage(errorMessage);
-        logger.error("Error inside saveTestbench2RobotConfigurationAsJson:", errorMessage);
+        logger.error("Error when trying to save testbench2robotframework configuration locally:", errorMessage);
         return null;
     }
 }

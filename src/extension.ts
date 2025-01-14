@@ -9,12 +9,12 @@ import * as testBenchLogger from "./testBenchLogger";
 import * as testElementsTreeView from "./testElementsTreeView";
 import path from "path";
 
+// TODO: Adjust / test workflow file for building vsix package as artifact
 // TODO: Add progress bar for fetching cycle structure since it can take long.
-// TODO: When the user inputs wrong credentials in extension settings, but then corrects it in the login form, 
-// should we update the extension settings with the new credentials if the login was successful?
 // TODO: Hide the tree views initially instead of creating them and then hiding them after.
 // TODO: When clicking on a cycle on project tree for the first time, the test theme tree appears. And since we have now 2 views in activity bar,
 // a new bar appears at the top where you can manage the views, that bar moves the views to the bottom a little bit. Not a big issue but a little bit annoying.
+// TODO: Add license
 // FIXME: Sometimes robot framework tests fails on some tests ("No matching Keyword" problem?) and uploading the report fails.
 // Possible reasons: Wrong output.xml is used, existing files in the working .testbench directory from previous generations...
 

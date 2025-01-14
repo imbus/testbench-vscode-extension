@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 
+// TODO; Implement logic for fetching test elements from the testbench server (in testBenchConnection class).
+
 /**
  * Represents a tree element in the test element tree view.
  */

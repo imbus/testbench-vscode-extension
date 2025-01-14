@@ -201,7 +201,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     async handleExpansion(element: TestbenchTreeItem, expanded: boolean): Promise<void> {
-        // console.log(`@@ Element ${element.label} is expanded: ${expanded}`);
+        // console.log(`Element ${element.label} is expanded: ${expanded}`);
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
@@ -266,7 +266,7 @@ export function findCycleKeyOfTreeElement(element: TestbenchTreeItem): string | 
     return null;
 }
 
-// Represents a tree item (Project, TOV, Cycle, etc) in the tree view
+// Represents a tree item (Project, TOV, Cycle, Test Theme, Test Case Set) in the tree view
 export class TestbenchTreeItem extends vscode.TreeItem {
     public parent: TestbenchTreeItem | null;
     public children?: TestbenchTreeItem[];
@@ -285,12 +285,12 @@ export class TestbenchTreeItem extends vscode.TreeItem {
         this.updateIcon();
         this.statusOfTreeItem = item.exec?.status || item.status || "None"; // (Active, Planned, Finished, Closed etc.)
 
-        // Set the tooltip based on the context value
-        // Tooltip for project, TOV, cycle: Type, Name, Status, Key
+        // Set the tooltip based on the context value.
+        // Tooltip for project, TOV and cycle elements looks like this: Type, Name, Status, Key
         if (contextValue === "Project" || contextValue === "Version" || contextValue === "Cycle") {
             this.tooltip = `Type: ${contextValue}, Name: ${item.name}, Status: ${this.statusOfTreeItem}, Key: ${item.key}`;
         }
-        // Tooltip for test theme, test case set, test case: Numbering, Type, Name, Status, ID
+        // Tooltip for test theme, test case set and test case looks like this: Numbering, Type, Name, Status, ID
         else if (
             contextValue === "TestThemeNode" ||
             contextValue === "TestCaseSetNode" ||
@@ -302,6 +302,8 @@ export class TestbenchTreeItem extends vscode.TreeItem {
         }
     }
 
+    // Update the icon of the tree item based on the context value and status of the item 
+    // This is not used currently, but it allows to have different icons for different statuses of the tree items like the TestBench Client.
     private getIconPath(): string {
         const iconFolderPath: string = path.join(__dirname, "..", "resources", "icons");
         const statusOfTreeItem: string = this.item.status || "default"; // (Active, Planned, Finished, Closed etc.)
@@ -356,7 +358,8 @@ export class TestbenchTreeItem extends vscode.TreeItem {
     }
 }
 
-// TODO: Refactor this function
+// TODO: Refactor this function?
+// Initialize the project management tree view and the test theme tree view
 export async function initializeTreeViews(
     context: vscode.ExtensionContext,
     connection: PlayServerConnection | null,
@@ -406,6 +409,7 @@ export async function initializeTreeViews(
 
     await vscode.commands.executeCommand("projectManagementTree.focus"); // Display the project management tree view if not displayed already
 
+    // Return both data providers
     return [projectManagementDataProvider, testThemeDataProvider];
 }
 
