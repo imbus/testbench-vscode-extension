@@ -5,6 +5,7 @@ import * as path from "path";
 import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
+import * as os from "os";
 import axios, { AxiosResponse } from "axios";
 import { getConfig, connection, baseKeyOfExtension, logger } from "./extension";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
@@ -1052,26 +1053,34 @@ export async function findFileRecursivelyInDirectory(
 async function chooseRobotOutputXMLFile(workingDirectoryPath: string): Promise<string | null> {
     logger.debug(`Choosing output XML file with working directory path ${workingDirectoryPath}.`);
     // Open file selection dialog to select the output xml file, display only XML files in the selection.
-    let outputXMLFolderPathInExtensionSettings: string | undefined = getConfig().get<string>("outputXMLPath");
-    if (!outputXMLFolderPathInExtensionSettings) {
+    let outputXMLFilePathInExtensionSettings: string | undefined = getConfig().get<string>("outputXmlFilePath");
+    if (!outputXMLFilePathInExtensionSettings) {
         logger.warn("Output XML path is not configured in extension settings.");
     } else {
-        const fileNameToSearchFor = "output.xml";
-        logger.debug(`Searching for ${fileNameToSearchFor} in ${outputXMLFolderPathInExtensionSettings}`);
-        const outputXmlFilePath: string | null = await findFileRecursivelyInDirectory(
-            outputXMLFolderPathInExtensionSettings,
-            fileNameToSearchFor
-        );
-        if (outputXmlFilePath) {
-            return outputXmlFilePath;
+        if (await isAbsolutePathAndExists(outputXMLFilePathInExtensionSettings)) {
+            return outputXMLFilePathInExtensionSettings;
+        } else {
+            logger.warn(`Output XML path in extension settings is not valid: ${outputXMLFilePathInExtensionSettings}`);
         }
     }
 
-    // Could not find any output XML in the search. Open file selection dialog
+    logger.trace(`Prompting user to select output XML file manually.`);
+    // Get the first workspace folder path, if available
+    const firstWorkspaceFolderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    // Determine which path to use as the default URI for the file selection dialog
+    const defaultUri = firstWorkspaceFolderPath
+        ? vscode.Uri.file(firstWorkspaceFolderPath) // Try using the first workspace folder first
+        : outputXMLFilePathInExtensionSettings
+        ? vscode.Uri.file(outputXMLFilePathInExtensionSettings) // Fall back to the configured path
+        : workingDirectoryPath
+        ? vscode.Uri.file(workingDirectoryPath) // Fall back to the working directory
+                : vscode.Uri.file(os.homedir()); // Final fallback to the user's home directory if none of the above are available
+    
+    logger.trace(`Default URI for output.xml file selection dialog: ${defaultUri.fsPath}`);
+
+    // Output XML was not set in the extension settings. Open file selection dialog.
     const selectedFiles: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
-        defaultUri: outputXMLFolderPathInExtensionSettings
-            ? vscode.Uri.file(outputXMLFolderPathInExtensionSettings)
-            : vscode.Uri.file(workingDirectoryPath),
+        defaultUri: defaultUri,
         canSelectFiles: true,
         canSelectMany: false,
         title: "Select Output XML File",
@@ -1086,6 +1095,27 @@ async function chooseRobotOutputXMLFile(workingDirectoryPath: string): Promise<s
     }
     logger.error(`No output XML file selected, returning null.`);
     return null;
+}
+
+/**
+ * Checks if the given string is an absolute file path that exists on the user's system.
+ * @param filePath The file path to check
+ * @returns {Promise<boolean>} True if the file path is absolute and exists, otherwise false
+ */
+export async function isAbsolutePathAndExists(filePath: string): Promise<boolean> {
+    try {
+        logger.trace(`Checking if ${filePath} is an absolute path and exists.`);
+        if (path.isAbsolute(filePath)) {
+            await fsPromise.access(filePath);
+            logger.trace(`${filePath} is an absolute path and exists.`);
+            return true;
+        }
+        logger.trace(`${filePath} is not an absolute path or does not exist.`);
+        return false;
+    } catch {
+        logger.trace(`${filePath} is not an absolute path or does not exist.`);
+        return false;
+    }
 }
 
 /**

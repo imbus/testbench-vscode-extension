@@ -309,9 +309,9 @@
             {
                 "title": "Other",
                 "properties": {
-                    "testbenchExtension.outputXMLPath": {
+                    "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
-                        "description": "The absolute folder path where the output XML file (Robotframework test results) is stored. The extension will look for the file in this folder recursively. If there are multiple XML files in this folder, the extension will use the first one found.",
+                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server.",
                         "order": 12,
                         "scope": "resource"
                     }
