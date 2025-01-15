@@ -9,11 +9,9 @@ import * as testBenchLogger from "./testBenchLogger";
 import * as testElementsTreeView from "./testElementsTreeView";
 import path from "path";
 
-// TODO: Adjust / test workflow file for building vsix package as artifact
 // TODO: Add progress bar for fetching cycle structure since it can take long.
 // TODO: Hide the tree views initially instead of creating them and then hiding them after.
-// TODO: When clicking on a cycle on project tree for the first time, the test theme tree appears. And since we have now 2 views in activity bar,
-// a new bar appears at the top where you can manage the views, that bar moves the views to the bottom a little bit. Not a big issue but a little bit annoying.
+// TODO: Adjust / test workflow file for building vsix package as artifact
 // TODO: Add license
 // FIXME: Sometimes robot framework tests fails on some tests ("No matching Keyword" problem?) and uploading the report fails.
 // Possible reasons: Wrong output.xml is used, existing files in the working .testbench directory from previous generations...
@@ -33,9 +31,6 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     login: {
         command: `${baseKeyOfExtension}.login`,
     },
-    changeConnection: {
-        command: `${baseKeyOfExtension}.changeConnection`,
-    },
     logout: {
         command: `${baseKeyOfExtension}.logout`,
     },
@@ -50,9 +45,6 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     },
     makeRoot: {
         command: `${baseKeyOfExtension}.makeRoot`,
-    },
-    getCycleStructure: {
-        command: `${baseKeyOfExtension}.getCycleStructure`,
     },
     getServerVersions: {
         command: `${baseKeyOfExtension}.getServerVersions`,
@@ -660,28 +652,28 @@ export async function activate(context: vscode.ExtensionContext) {
 
 /**
  * Deletes all contents of a workspace folder after user confirmation, excluding specified folders.
- * @param workspaceLocation - The path of the workspace folder to be cleared.
- * @param excludedFolders - A list of folder names to exclude from deletion.
+ * @param workspaceLocationToClear - The path of the workspace folder to be cleared.
+ * @param excludedFoldersFromDeletion - A list of folder names to exclude from deletion.
  * @returns A promise that resolves when the workspace folder is cleared successfully, or null if an error occurs.
  */
 export async function clearWorkspaceFolder(
-    workspaceLocation: string,
-    excludedFolders: string[] = [],
+    workspaceLocationToClear: string,
+    excludedFoldersFromDeletion: string[] = [],
     promptForConfirmation: boolean = true
 ): Promise<void | null> {
-    logger.debug(`Clearing workspace folder: ${workspaceLocation}`);
+    logger.debug(`Clearing workspace folder: ${workspaceLocationToClear}`);
     try {
         // Check if the workspaceLocation path exists and is a directory
         try {
-            const stats = await fsPromises.stat(workspaceLocation);
+            const stats = await fsPromises.stat(workspaceLocationToClear);
             if (!stats.isDirectory()) {
-                const pathIsNotAFolderErorMessage = `The path "${workspaceLocation}" is not a directory. Cannot clear workspace folder.`;
+                const pathIsNotAFolderErorMessage = `The path "${workspaceLocationToClear}" is not a directory. Cannot clear workspace folder.`;
                 vscode.window.showErrorMessage(pathIsNotAFolderErorMessage);
                 logger.error(pathIsNotAFolderErorMessage);
                 return null;
             }
         } catch {
-            const pathDoesNotExistErrorMessage = `The folder at path "${workspaceLocation}" does not exist. Cannot clear workspace folder.`;
+            const pathDoesNotExistErrorMessage = `The folder at path "${workspaceLocationToClear}" does not exist. Cannot clear workspace folder.`;
             vscode.window.showErrorMessage(pathDoesNotExistErrorMessage);
             logger.error(pathDoesNotExistErrorMessage);
             return null;
@@ -704,12 +696,12 @@ export async function clearWorkspaceFolder(
         }
 
         // Read and process folder contents
-        const files = await fsPromises.readdir(workspaceLocation);
+        const files = await fsPromises.readdir(workspaceLocationToClear);
         for (const file of files) {
-            const filePath = path.join(workspaceLocation, file);
+            const filePath = path.join(workspaceLocationToClear, file);
 
             // Skip excluded folders
-            if (excludedFolders.includes(file)) {
+            if (excludedFoldersFromDeletion.includes(file)) {
                 // vscode.window.showInformationMessage(`Skipping excluded folder: ${file}`);
                 logger.trace(`Skipped deleting this excluded file in clear workspace command: ${file}`);
                 continue;
@@ -718,13 +710,13 @@ export async function clearWorkspaceFolder(
             // Check if it's a directory or file and delete accordingly
             const fileStats = await fsPromises.stat(filePath);
             if (fileStats.isDirectory()) {
-                await deleteDirectoryRecursively(filePath, excludedFolders);
+                await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
             } else {
                 await fsPromises.unlink(filePath);
             }
         }
 
-        const clearWorkspaceFolderSuccessMessage = `Workspace folder cleared successfully: ${workspaceLocation}`;
+        const clearWorkspaceFolderSuccessMessage = `Workspace folder cleared successfully: ${workspaceLocationToClear}`;
         // vscode.window.showInformationMessage(clearWorkspaceFolderSuccessMessage);
         logger.debug(clearWorkspaceFolderSuccessMessage);
     } catch (error: any) {
@@ -737,20 +729,20 @@ export async function clearWorkspaceFolder(
 
 /**
  * Recursively deletes a directory and its contents, excluding specified folders.
- * @param dirPath - The directory path to delete.
- * @param excludedFolders - A list of folder names to exclude from deletion.
+ * @param directoryPathToDelete - The directory path to delete.
+ * @param excludedFoldersFromDeletion - A list of folder names to exclude from deletion.
  */
-async function deleteDirectoryRecursively(dirPath: string, excludedFolders: string[]): Promise<void | null> {
-    logger.debug(`Deleting directory recursively: ${dirPath}`);
-    logger.debug(`Excluded folders while deleting recursively:`, excludedFolders);
+async function deleteDirectoryRecursively(directoryPathToDelete: string, excludedFoldersFromDeletion: string[]): Promise<void | null> {
+    logger.debug(`Deleting directory recursively: ${directoryPathToDelete}`);
+    logger.debug(`Excluded folders while deleting recursively:`, excludedFoldersFromDeletion);
     try {
-        const files = await fsPromises.readdir(dirPath);
+        const files = await fsPromises.readdir(directoryPathToDelete);
 
         for (const file of files) {
-            const currentPath = path.join(dirPath, file);
+            const currentPath = path.join(directoryPathToDelete, file);
 
             // Skip excluded folders
-            if (excludedFolders.includes(file)) {
+            if (excludedFoldersFromDeletion.includes(file)) {
                 logger.trace(`Skipped deleting this excluded file in delete directory recursively: ${file}`);
                 continue;
             }
@@ -758,7 +750,7 @@ async function deleteDirectoryRecursively(dirPath: string, excludedFolders: stri
             const fileStats = await fsPromises.stat(currentPath);
             if (fileStats.isDirectory()) {
                 // Recursively delete subdirectories
-                await deleteDirectoryRecursively(currentPath, excludedFolders);
+                await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion);
             } else {
                 // Delete files
                 logger.debug(`Deleting file: ${currentPath}`);
@@ -766,14 +758,14 @@ async function deleteDirectoryRecursively(dirPath: string, excludedFolders: stri
             }
         }
 
-        // Remove the directory itself unless it's an excluded folder
-        const folderName = path.basename(dirPath);
-        if (!excludedFolders.includes(folderName)) {
-            logger.debug(`Deleting directory: ${dirPath}`);
-            await fsPromises.rmdir(dirPath);
+        // Remove the directory itself unless it's an excluded folder.
+        const folderName = path.basename(directoryPathToDelete);  // Get the last portion of the path
+        if (!excludedFoldersFromDeletion.includes(folderName)) {
+            logger.debug(`Deleting directory: ${directoryPathToDelete}`);
+            await fsPromises.rmdir(directoryPathToDelete);
         }
     } catch (error: any) {
-        logger.error(`Failed to delete directory ${dirPath}: ${error.message} (deleteDirectoryRecursively)`);
+        logger.error(`Failed to delete directory ${directoryPathToDelete}: ${error.message} (deleteDirectoryRecursively)`);
         return null;
     }
 }

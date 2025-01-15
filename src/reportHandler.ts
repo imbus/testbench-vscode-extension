@@ -1044,13 +1044,14 @@ export async function findFileRecursivelyInDirectory(
 }
 
 /**
- * Opens a file selection dialog for the user to choose the output XML file.
- * Note: If multiple output XML files are present, the first one found will be returned.
- * If the wrong file is selected automatically, the upload process will fail. To avoid this, set the output XML path in the settings correctly
- * @param workingDirectoryPath The full (absolute) path of the working directory.
+ * Prompts the user to select the output.xml file if it is not set in the extension settings.
+ * The default URI for the file selection dialog is determined in the following order of precedence: 
+ * the first workspace folder (if available), the path specified in the extension settings (if valid), 
+ * the provided workingDirectoryPath, and finally the user's home directory as the fallback.
+ * @param workingDirectoryPath The full (absolute) path of the working directory. It will be used to set the default URI for the file selection dialog.
  * @returns {Promise<string | null>} The full (absolute) path of the selected output XML file, or undefined if no file is selected.
  */
-async function chooseRobotOutputXMLFile(workingDirectoryPath: string): Promise<string | null> {
+async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): Promise<string | null> {
     logger.debug(`Choosing output XML file with working directory path ${workingDirectoryPath}.`);
     // Open file selection dialog to select the output xml file, display only XML files in the selection.
     let outputXMLFilePathInExtensionSettings: string | undefined = getConfig().get<string>("outputXmlFilePath");
@@ -1187,7 +1188,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
                 folderNameOfTestbenchWorkingDirectory
             );
 
-            const robotResultOutputXMLFilePath: string | null = await chooseRobotOutputXMLFile(
+            const robotResultOutputXMLFilePath: string | null = await chooseRobotOutputXMLFileIfNotSet(
                 workspaceLocationInExtensionSettings
             );
             if (!robotResultOutputXMLFilePath) {

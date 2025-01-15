@@ -340,10 +340,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.changeConnection",
-                "title": "TestBench: Change Connection"
-            },
-            {
                 "command": "testbenchExtension.setWorkspaceLocation",
                 "title": "TestBench: Set Workspace Location"
             },
@@ -424,11 +420,7 @@
                     "light": "resources/icons/refresh.svg",
                     "dark": "resources/icons/refresh.svg"
                 }
-            },
-            {
-                "command": "testbenchExtension.getCycleStructure",
-                "title": "TestBench: Get Cycle Structure"
-            },
+            },            
             {
                 "command": "testbenchExtension.displayCommands",
                 "title": "TestBench: Display Commands",
