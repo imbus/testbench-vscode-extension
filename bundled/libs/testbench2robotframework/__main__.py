@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-from pathlib import Path
 
 import robot
 
 from testbench2robotframework import __version__
 
-from .config import write_default_config
+from .config import (
+    find_pyproject_toml,
+    get_testbench2robotframework_toml_dict,
+)
 from .json_reader import read_json
 from .robotframework2testbench import robot2testbench
 from .testbench2robotframework import testbench2robotframework
@@ -33,19 +35,25 @@ def run():
     if args.version:
         print_version()
         sys.exit()
-    if not Path(args.config).is_file():
-        write_default_config(args.config)
-    configuration = read_json(args.config)
-    if args.subcommand == 'write':
+    if not args.config:
+        pyproject_toml = find_pyproject_toml()
+    config_path = args.config or pyproject_toml
+    if not config_path:
+        configuration = {}
+    elif config_path.suffix == ".json":
+        configuration = read_json(args.config, False)
+    else:
+        configuration = get_testbench2robotframework_toml_dict(config_path)
+    if args.subcommand == "write":
         testbench2robotframework(args.jsonReport[0], configuration)
-    elif args.subcommand == 'read':
+    elif args.subcommand == "read":
         robot2testbench(args.jsonReport[0], args.output, args.result, configuration)
 
 
 def print_version():
     print(  # noqa: T201
-        f'TestBench2RobotFramework {__version__} with '
-        f'[Robot Framework {robot.version.get_full_version()}]'
+        f"TestBench2RobotFramework {__version__} with "
+        f"[Robot Framework {robot.version.get_full_version()}]"
     )
 
 

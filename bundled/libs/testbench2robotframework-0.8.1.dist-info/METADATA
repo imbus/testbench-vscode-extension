@@ -1,34 +1,31 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.2
 Name: testbench2robotframework
-Version: 0.8.0b21
+Version: 0.8.1
 Summary: Robot Framework Code Generator from Keyword-Driven Tests in imbus TestBench 3.0 and newer
-Home-page: https://github.com/imbus/testbench2robotframework
-Author: imbus AG
-Author-email: support@imbus.de
+Author-email: imbus AG <support@imbus.de>
 License: Apache 2.0 License
-Platform: any
+Project-URL: Repository, https://github.com/imbus/testbench2robotframework
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: robotframework (>=5.0)
+Requires-Dist: robotframework>=5.0
+Requires-Dist: tomli; python_version < "3.11"
 Provides-Extra: dev
-Requires-Dist: black ; extra == 'dev'
-Requires-Dist: flake8 ; extra == 'dev'
-Requires-Dist: pylint ; extra == 'dev'
-Requires-Dist: mypy ; extra == 'dev'
-Requires-Dist: pytest ; extra == 'dev'
-Requires-Dist: pytest-cov ; extra == 'dev'
-Requires-Dist: pytest-spec ; extra == 'dev'
-Requires-Dist: check-manifest ; extra == 'dev'
-Requires-Dist: twine ; extra == 'dev'
-Requires-Dist: wheel ; extra == 'dev'
-Requires-Dist: setuptools ; extra == 'dev'
-Requires-Dist: ruff ; extra == 'dev'
-Requires-Dist: pip-tools ; extra == 'dev'
+Requires-Dist: build; extra == "dev"
+Requires-Dist: check-manifest; extra == "dev"
+Requires-Dist: invoke; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: pylint; extra == "dev"
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: pytest-spec; extra == "dev"
+Requires-Dist: robotframework-tidy; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: twine; extra == "dev"
 
 # Installation des Robot Code Generators
 
-Voraussetzung für die Installation der Software ist eine vorhandene Python Installation. Die minimal benötigte Version ist Python 3.8. Zum Überprüfen, ob die korrekte Python Version installiert ist, kann der folgende Kommandozeilen Befehl verwendet werden:
+Voraussetzung für die Installation der Software ist eine vorhandene Python Installation. Die minimal benötigte Version ist Python 3.9. Zum Überprüfen, ob die korrekte Python Version installiert ist, kann der folgende Kommandozeilen Befehl verwendet werden:
 
 ```powershell
 python --version
@@ -44,6 +41,8 @@ Wenn die Installation durchgeführt wurde, liefert folgender Befehl die aktuell 
 ```powershell
 tb2robot --version
 ```
+## Anmerkung
+Im aktuellen TestBench-Release wird der JSON-Bericht noch nicht direkt vom Server generiert. Zur Generierung des JSON-Berichts aus einem TestBench XML-Bericht können die im Repository hinterlegten TestBench-Tools verwendet werden: [Download TestBench-Tools](https://github.com/imbus/testbench2robotframework/raw/main/testbench-tools.zip)
 
 # Verwendung des Robot Code Generators
 Nach erfolgreicher Installation des Robot Code Generators kann dieser durch den Befehl ``tb2robot`` oder ``testbench2robotframework`` ausgeführt werden.
@@ -307,6 +306,4 @@ Die möglichen Werte haben dabei die folgende Bedeutung:
 
 ## testCaseSplitPathRegEx
 Über den im Parameter ``testCaseSplitPathRegEx`` angegebenen Wert kann ein Benutzer bestimmen, ob ein Testfallsatz aus der TestBench in mehrere Robot Framework Testfälle unterteilt werden soll. Zu diesem Zweck muss der Benutzer in ``testCaseSplitPathRegEx`` den Namen einer Interaktion definieren, anhand welcher der Code Generator erkennt, dass ein Testfall an dieser Stelle unterteilt werden soll. Anschließend kann diese ``Splitting interaction`` in einem Testfallsatz zum Unterteilen von Testfällen verwendet werden.
-
-
 

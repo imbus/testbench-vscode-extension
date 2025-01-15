@@ -3,7 +3,7 @@ import sys
 from dataclasses import dataclass
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 from .log import logger
 from .model import (
@@ -19,10 +19,10 @@ TEST_STRUCTURE_TREE_FILE = "cycle_structure.json"
 @dataclass
 class TestCaseSet:
     details: TestCaseSetDetails
-    test_cases: Dict[str, TestCaseDetails]
+    test_cases: dict[str, TestCaseDetails]
 
     @property
-    def metadata(self) -> Dict[str, str]:
+    def metadata(self) -> dict[str, str]:
         return {
             "UniqueID": self.details.uniqueID,
             "Name": self.details.name,
@@ -31,11 +31,11 @@ class TestCaseSet:
 
 
 class TestBenchJsonReader:
-    def __init__(self, json_dir):
+    def __init__(self, json_dir) -> None:
         self.json_dir = json_dir
         self._test_theme_tree: Optional[TestStructureTree] = None
-        self._test_case_sets: Dict[str, TestCaseSetDetails] = {}
-        self._test_cases: Dict[str, TestCaseDetails] = {}
+        self._test_case_sets: dict[str, TestCaseSetDetails] = {}
+        self._test_cases: dict[str, TestCaseDetails] = {}
         if not json_dir:
             logger.warning("No jsonReport path given.")
             sys.exit()
@@ -51,7 +51,7 @@ class TestBenchJsonReader:
         return self._test_theme_tree
 
     @property
-    def test_case_sets(self) -> Dict[str, TestCaseSetDetails]:
+    def test_case_sets(self) -> dict[str, TestCaseSetDetails]:
         if not self._test_case_sets:
             for tcs_uid in self.get_test_case_set_uids():
                 test_case_set = self.read_test_case_set(tcs_uid)
@@ -64,7 +64,7 @@ class TestBenchJsonReader:
         return self._test_case_sets
 
     @property
-    def test_cases(self) -> Dict[str, TestCaseDetails]:
+    def test_cases(self) -> dict[str, TestCaseDetails]:
         if not self._test_cases:
             for tcs_uid in self.test_case_sets:
                 tc_uids = self.get_test_case_uids(tcs_uid)
@@ -78,16 +78,16 @@ class TestBenchJsonReader:
                 self._test_cases[tc_uid] = test_case
                 logger.debug(f"TestCaseDetails {tc_uid} loaded.")
 
-    def get_test_case_set_catalog(self):
-        tcs_catalog: Dict[str, TestCaseSet] = {}
+    def get_test_case_set_catalog(self) -> dict[str, TestCaseSet]:
+        tcs_catalog: dict[str, TestCaseSet] = {}
         for tcs_uid, tcs in self.test_case_sets.items():
-            tc_catalog: Dict[str, TestCaseDetails] = {}
+            tc_catalog: dict[str, TestCaseDetails] = {}
             for tc_uid in self.get_test_case_uids(tcs_uid):
                 tc_catalog[tc_uid] = self.test_cases[tc_uid]
             tcs_catalog[tcs_uid] = TestCaseSet(tcs, tc_catalog)
         return tcs_catalog
 
-    def get_test_case_set_uids(self) -> List[str]:
+    def get_test_case_set_uids(self) -> list[str]:
         nodes = [self.test_theme_tree.root]
         nodes.extend(self.test_theme_tree.nodes)
         return [
@@ -96,7 +96,7 @@ class TestBenchJsonReader:
             if tse.elementType == TestStructureElementType.TestCaseSetNode
         ]
 
-    def get_test_case_uids(self, test_case_set_uid: str) -> List[str]:
+    def get_test_case_uids(self, test_case_set_uid: str) -> list[str]:
         if not self._test_case_sets:
             test_case_set = self.read_test_case_set(test_case_set_uid)
             if test_case_set is None:
@@ -126,14 +126,19 @@ class TestBenchJsonReader:
         return TestStructureTree.from_dict(test_structure_tree)
 
 
-def read_json(filepath: str):  # ToDo Configure to run silent or raise
+def read_json(filepath: str, silent=True):
     try:
-        with Path(filepath).open(encoding='utf-8') as json_file:
+        with Path(filepath).open(encoding="utf-8") as json_file:
             return json.load(json_file)
     except FileNotFoundError:
-        logger.debug(f"Cannot find json file {filepath}:")
+        if not silent:
+            logger.error(f"File '{filepath}' does not exist.")
+            sys.exit(1)
+        logger.warning(f"File '{filepath}' does not exist.")
         return None
-    except JSONDecodeError as error:  # pylint: disable=broad-except
-        logger.warning(f"Cannot decode json file {filepath}:")
-        logger.warning(error)
+    except JSONDecodeError:  # pylint: disable=broad-except
+        if not silent:
+            logger.error(f"File '{filepath}' cannot be decoded.")
+            sys.exit(1)
+        logger.warning(f"File '{filepath}' cannot be decoded.")
         return None

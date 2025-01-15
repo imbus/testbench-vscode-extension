@@ -1,14 +1,17 @@
-import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { promisify } from "util";
-import { baseKey, folderNameOfTestbenchWorkingDirectory } from "./extension";
+import { getConfig, folderNameOfTestbenchWorkingDirectory } from "./extension";
 
-const MAX_LOG_FILE_SIZE: number = 5 * 1024 * 1024; // 5 MB // 1024; // 1 KB for testing.
+export const folderNameOfLogs = "logs";
+
+const MAX_LOG_FILE_SIZE: number = 5 * 1024 * 1024; // 5 MB
 const MAX_LOG_FILES: number = 3; // Maximum number of backup log files.
 
-// Async logging for performance
-// Use promisify to convert fs functions to promises
+// In total, MAX_LOG_FILE_SIZE * MAX_LOG_FILES MegaBytes of logs will be stored at maximum.
+
+// Async logging for performance.
+// Use promisify to convert fs functions to promises.
 const fsAppendFile = promisify(fs.appendFile);
 const fsStat = promisify(fs.stat);
 const fsRename = promisify(fs.rename);
@@ -19,11 +22,12 @@ export class TestBenchLogger {
     // Log levels are 1-5, with 1 being the most verbose (trace) and 5 being the least verbose (error).
     // But in the extension settings, the user can select 0 as log level to disable logging.
     private levels: { [key: string]: number } = {
-        trace: 1,
-        debug: 2,
-        info: 3,
-        warn: 4,
-        error: 5,
+        "No logging": 0,
+        Trace: 1,
+        Debug: 2,
+        Info: 3,
+        Warn: 4,
+        Error: 5,
     };
     private outputLogToTerminal: boolean = false; // Output log messages to the terminal
 
@@ -36,15 +40,14 @@ export class TestBenchLogger {
     }
 
     constructor(outputToTerminal?: boolean) {
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
         // If workspaceLocation is not set, use the extension directory, and create a logs folder
-        const workspaceFolder = config.get<string>("workspaceLocation");
+        const workspaceFolder = getConfig().get<string>("workspaceLocation");
         // Example path: workspaceFolder/.testbench/logs/testBenchExtension.log
         if (workspaceFolder) {
             this.logFolderPath = path.join(
                 workspaceFolder,
                 folderNameOfTestbenchWorkingDirectory,
-                "logs" // Create a logs folder in the workspace folder
+                folderNameOfLogs // Create a log folder with this name in the workspace folder
             );
             this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
         } else {
@@ -92,16 +95,21 @@ export class TestBenchLogger {
 
     // Log messages with optional details and output to terminal
     public async log(level: string, message: string, details?: any | any[], outputToTerminal?: boolean) {
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKey);
-        const configuredLogLevel: number = config.get("testBenchLogger", 1);
+        const configuredLogLevel: string = getConfig().get("testBenchLogger", "No logging");
+
         // Implement no logging if log level is set to 0
+        /*
         if (!level) {
-            if (configuredLogLevel === 0) {
+            if (configuredLogLevel === "No logging") {
                 return;
             }
+        }*/
+
+        if (configuredLogLevel === "No logging") {
+            return;
         }
 
-        if (this.levels[level] < configuredLogLevel) {
+        if (this.levels[level] < this.levels[configuredLogLevel]) {
             return;
         }
 
@@ -170,22 +178,22 @@ export class TestBenchLogger {
     }
 
     public trace(message: string, details?: any | any[], outputToTerminal?: boolean) {
-        this.log("trace", message, details, outputToTerminal);
+        this.log("Trace", message, details, outputToTerminal);
     }
 
     public debug(message: string, details?: any | any[], outputToTerminal?: boolean) {
-        this.log("debug", message, details, outputToTerminal);
+        this.log("Debug", message, details, outputToTerminal);
     }
 
     public info(message: string, details?: any | any[], outputToTerminal?: boolean) {
-        this.log("info", message, details, outputToTerminal);
+        this.log("Info", message, details, outputToTerminal);
     }
 
     public warn(message: string, details?: any | any[], outputToTerminal?: boolean) {
-        this.log("warn", message, details, outputToTerminal);
+        this.log("Warn", message, details, outputToTerminal);
     }
     // Log the error messages always to the terminal
     public error(message: string, details?: any | any[], outputToTerminal: boolean = true) {
-        this.log("error", message, details, outputToTerminal);
+        this.log("Error", message, details, outputToTerminal);
     }
 }

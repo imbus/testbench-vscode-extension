@@ -1,10 +1,9 @@
 import argparse
-import os
 import re
 import shutil
 import sys
 from pathlib import Path, PurePath
-from typing import Dict, Optional, Tuple
+from typing import Optional
 from zipfile import ZipFile
 
 from testbench2robotframework.model import (
@@ -30,10 +29,10 @@ with result should be saved to."""
 
 arg_parser = argparse.ArgumentParser(description=CONVERTER_DESCRIPTION)
 arg_parser.add_argument(
-    '--version',
-    '--info',
-    action='store_true',
-    help='Writes the TestBench2RobotFramework, Robot Framework and Python version to console.',
+    "--version",
+    "--info",
+    action="store_true",
+    help="Writes the TestBench2RobotFramework, Robot Framework and Python version to console.",
 )
 subparsers = arg_parser.add_subparsers(dest="subcommand")
 
@@ -42,9 +41,8 @@ write_parser.add_argument(
     "-c",
     "--config",
     help=CONFIG_ARGUMENT_HELP,
-    type=str,
+    type=Path,
     required=False,
-    default=str(Path(os.curdir, "config.json").resolve()),
 )
 
 write_parser.add_argument("jsonReport", nargs=1, type=str, help=JSON_PATH_ARGUMENT_HELP)
@@ -54,9 +52,8 @@ read_parser.add_argument(
     "-c",
     "--config",
     help=CONFIG_ARGUMENT_HELP,
-    type=str,
+    type=Path,
     required=False,
-    default=str(Path(os.curdir, "config.json").resolve()),
 )
 read_parser.add_argument(
     "-r",
@@ -65,7 +62,7 @@ read_parser.add_argument(
     type=str,
     required=False,
 )
-required_named_arguments = read_parser.add_argument_group('required named arguments')
+required_named_arguments = read_parser.add_argument_group("required named arguments")
 required_named_arguments.add_argument(
     "-o", "--output", help=ROBOT_OUTPUT_HELP, type=str, required=True
 )
@@ -77,13 +74,13 @@ class PathResolver:
     def __init__(
         self,
         test_theme_tree: TestStructureTree,
-        uids_of_existing_tcs: Tuple[str, ...],
+        uids_of_existing_tcs: tuple[str, ...],
         log_suite_numbers: bool,
     ):
-        self.tcs_catalog: Dict[str, TestStructureTreeNode] = {}
-        self.tt_catalog: Dict[str, TestStructureTreeNode] = {}
-        self.tree_dict: Dict[str, TestStructureTreeNode] = {}
-        self._last_child_indices: Dict[str, int] = {}
+        self.tcs_catalog: dict[str, TestStructureTreeNode] = {}
+        self.tt_catalog: dict[str, TestStructureTreeNode] = {}
+        self.tree_dict: dict[str, TestStructureTreeNode] = {}
+        self._last_child_indices: dict[str, int] = {}
         self._log_suite_numbers = log_suite_numbers
         self._uids_of_existing_tcs = uids_of_existing_tcs
         self._analyze_tree(test_theme_tree)
@@ -111,7 +108,7 @@ class PathResolver:
         ):
             self.tcs_catalog[tse.base.uniqueID] = tse
 
-    def _get_paths(self, tse_catalog: Dict[str, TestStructureTreeNode]) -> Dict[str, PurePath]:
+    def _get_paths(self, tse_catalog: dict[str, TestStructureTreeNode]) -> dict[str, PurePath]:
         return {uid: self._resolve_tse_path(tse) for uid, tse in tse_catalog.items()}
 
     def _resolve_tse_path(self, tse: TestStructureTreeNode) -> PurePath:
@@ -132,7 +129,7 @@ class PathResolver:
             self.tt_catalog[tse.base.uniqueID] = tse
 
     def _file_prefix(self, tse) -> str:
-        prefix_separator = '_' * self._log_suite_numbers
+        prefix_separator = "_" * self._log_suite_numbers
         return f"{self._get_padded_index(tse)}_{prefix_separator}"
 
     def _get_padded_index(self, tse) -> str:
@@ -151,10 +148,22 @@ def get_directory(json_report_path: Optional[str]) -> str:
     ext = Path(json_report_path).suffix
     filename = str(Path(json_report_path).parent / Path(json_report_path).stem)
     if ext.lower() == ".zip":
-        with ZipFile(json_report_path, 'r') as zip_ref:
+        with ZipFile(json_report_path, "r") as zip_ref:
             zip_ref.extractall(filename)
         return str(Path(filename).resolve())
     sys.exit("Error opening " + json_report_path + ". File is not a ZIP file.")
+
+
+def extract_to_working_directory(zip_file: Path, working_dir: Path) -> None:
+    ext = zip_file.suffix
+    if ext.lower() != ".zip":
+        sys.exit(f"Error opening '{zip_file.as_posix()}'. File is not a ZIP file.")
+    with ZipFile(zip_file, "r") as zip_ref:
+        zip_ref.extractall(working_dir)
+
+
+def is_zip_file(path: Path) -> bool:
+    return path.suffix.lower() == ".zip"
 
 
 def ensure_dir_exists(cli_output_dir):
@@ -172,9 +181,9 @@ def get_tse_index(tse: TestStructureTreeNode) -> str:
 
 def directory_to_zip(directory: Path, new_path: Optional[str] = None):
     if new_path:
-        shutil.make_archive(str(new_path), 'zip', str(directory))
+        shutil.make_archive(str(new_path), "zip", str(directory))
     else:
-        shutil.make_archive(str(directory), 'zip', str(directory))
+        shutil.make_archive(str(directory), "zip", str(directory))
 
 
 def get_list_item(lst, index, default: Optional[str]):
