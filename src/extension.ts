@@ -78,8 +78,8 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     refreshProjectTreeView: {
         command: `${baseKeyOfExtension}.refreshProjectTreeView`,
     },
-    refreshTestTreeView: {
-        command: `${baseKeyOfExtension}.refreshTestTreeView`,
+    refreshTestThemeTreeView: {
+        command: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
     },
     setWorkspaceLocation: {
         command: `${baseKeyOfExtension}.setWorkspaceLocation`,
@@ -583,10 +583,10 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Register the "Refresh Test Tree" command
+    // Register the "Refresh Test Theme Tree" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(allExtensionCommands.refreshTestTreeView.command, async () => {
-            logger.debug(`Refresh Test Tree command called.`);
+        vscode.commands.registerCommand(allExtensionCommands.refreshTestThemeTreeView.command, async () => {
+            logger.debug(`Refresh Test Theme Tree command called.`);
             projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
 
             let cycleElement: projectManagementTreeView.TestbenchTreeItem | undefined =

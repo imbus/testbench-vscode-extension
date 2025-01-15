@@ -115,7 +115,7 @@ export class TestElementTreeViewProvider implements vscode.TreeDataProvider<Test
         );
 
         const rootSubdivision = new TestElementTreeItem(
-            "Root Subdivision",
+            "(Mock) Root Subdivision",
             vscode.TreeItemCollapsibleState.Collapsed,
             TreeElementType.Subdivision,
             undefined,

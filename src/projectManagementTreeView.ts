@@ -34,6 +34,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     refresh(): void {
+        logger.trace("Refreshing project management tree view.");
         this._onDidChangeTreeData.fire();
     }
 
@@ -111,6 +112,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     // Fetches the sub-elements of a cycle element and builds the tree structure
     public async getChildrenOfCycle(element: TestbenchTreeItem): Promise<TestbenchTreeItem[]> {
+        logger.trace("Fetching children of cycle element:", element.label);
         const cycleKey: string = element.item.key;
         const projectKey: string | null = findProjectKeyOfCycleElement(element);
 
@@ -196,12 +198,13 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     // Set the selected item as the root and refresh the tree view
     makeRoot(treeItem: TestbenchTreeItem): void {
+        logger.trace("Setting the selected element as the root of the project management tree view:", treeItem);
         this.rootItem = treeItem;
         this.refresh();
     }
 
     async handleExpansion(element: TestbenchTreeItem, expanded: boolean): Promise<void> {
-        // console.log(`Element ${element.label} is expanded: ${expanded}`);
+        logger.trace(`Setting the expansion state of ${element.label} to ${expanded ? "expanded" : "collapsed"} in project management tree.`);
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
@@ -216,7 +219,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     // Trigger initialization of test theme tree when a test cycle is clicked
     async handleTestCycleClick(testCycleItem: TestbenchTreeItem): Promise<void> {
-        // console.log(`Element ${testCycleItem.label} is clicked.`);
+        logger.trace("Handling test cycle click:", testCycleItem.label);
         if (testCycleItem.contextValue === "Cycle") {
             // Use the existing refresh or data loading function for initializing the test theme tree
             this.testThemeDataProvider.clearTree();
@@ -225,6 +228,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     clearTree(): void {
+        logger.trace("Clearing the project management tree.");
         this.testThemeDataProvider.clearTree();
         this.rootItem = null;
         this.refresh();
@@ -233,6 +237,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
 export function findProjectKeyOfCycleElement(element: TestbenchTreeItem): string | null {
+    logger.trace("Finding project key of cycle element:", element.label);
     if (element.contextValue !== "Cycle") {
         logger.error("Cannot find project key of element, element is not a cycle.");
         return null;
@@ -250,6 +255,7 @@ export function findProjectKeyOfCycleElement(element: TestbenchTreeItem): string
 
 // Function to find the serial key of the project of a cycle element in the tree hierarchy
 export function findCycleKeyOfTreeElement(element: TestbenchTreeItem): string | null {
+    logger.trace("Finding cycle key of tree element:", element.label);
     /*
     if ((element.contextValue !== "TestThemeNode") && (element.contextValue !== "TestCaseSetNode")) {
         console.error("Invalid tree element type.");
@@ -258,6 +264,7 @@ export function findCycleKeyOfTreeElement(element: TestbenchTreeItem): string | 
     let currentElement: TestbenchTreeItem | null = element;
     while (currentElement) {
         if (currentElement.contextValue === "Cycle") {
+            logger.trace("Cycle key of tree element found:", currentElement.item.key);
             return currentElement?.item?.key;
         }
         currentElement = currentElement?.parent;
@@ -365,8 +372,11 @@ export async function initializeTreeViews(
     connection: PlayServerConnection | null,
     selectedProjectKey?: string
 ): Promise<[ProjectManagementTreeDataProvider | null, TestThemeTreeDataProvider | null]> {
+    logger.trace("Initializing project tree and test theme views.");
     if (!connection) {
-        vscode.window.showErrorMessage("No connection available. Please log in first.");
+        const noConnectionWhenInitMessage: string = "No connection available. Please log in first.";
+        vscode.window.showErrorMessage(noConnectionWhenInitMessage);
+        logger.error(noConnectionWhenInitMessage);
         return [null, null];
     }
 

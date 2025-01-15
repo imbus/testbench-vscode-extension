@@ -11,7 +11,7 @@ import path from "path";
 import {
     getConfig,
     setConnection,
-    baseKeyOfExtension,
+    allExtensionCommands,
     folderNameOfTestbenchWorkingDirectory,
     setProjectManagementTreeDataProvider,
     logger,
@@ -186,6 +186,7 @@ export class PlayServerConnection {
      * @returns {Promise<testBenchTypes.TreeNode | null>} The project tree fetched from the server or null if an error occurs.
      */
     async getProjectTreeOfProject(projectKey: string | null): Promise<testBenchTypes.TreeNode | null> {
+        logger.trace("Fetching project tree for the project key:", projectKey);
         if (!this.sessionToken) {
             logger.warn("Session token is null. Cannot fetch project tree for the project key:", projectKey);
             return null;
@@ -537,6 +538,11 @@ export class PlayServerConnection {
             logger.trace("Keep-alive request sent.");
         } catch (error) {
             logger.error("Keep-alive request failed:", error);
+            // Logout the user if the keep-alive request fails.
+            logger.trace("Logging out the user after keep-alive request failed.");
+            vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
+            // Possible reason for keep alive request fail: 
+            // The user logged in in TestBench Client with the same account he used in VS Code, and the session in VS Code is forced to logout.
         }
     }
 }

@@ -417,7 +417,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.refreshTestTreeView",
+                "command": "testbenchExtension.refreshTestThemeTreeView",
                 "title": "TestBench: Refresh Test Tree View",
                 "when": "view == testThemeTree",
                 "icon": {
@@ -506,23 +506,33 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.selectAndLoadProject",
+                    "command": "testbenchExtension.refreshProjectTreeView",
                     "group": "navigation@3",
                     "when": "view == projectManagementTree"
                 },
                 {
-                    "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
+                    "command": "testbenchExtension.selectAndLoadProject",
+                    "group": "navigation@4",
+                    "when": "view == projectManagementTree"
+                },
+                {
+                    "command": "testbenchExtension.refreshTestThemeTreeView",
                     "group": "navigation@5",
+                    "when": "view == testThemeTree"
+                },
+                {
+                    "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
+                    "group": "navigation@6",
                     "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
                     "command": "testbenchExtension.clearWorkspaceFolder",
-                    "group": "navigation@6",
+                    "group": "navigation@7",
                     "when": "view == projectManagementTree"
                 },
                 {
                     "command": "testbenchExtension.showExtensionSettings",
-                    "group": "navigation@7",
+                    "group": "navigation@8",
                     "when": "view == projectManagementTree || view == testbenchExtension.webView"
                 }
             ],
