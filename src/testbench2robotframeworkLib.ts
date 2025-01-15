@@ -40,6 +40,38 @@ export class tb2robotLib {
     }
 
     /**
+     * Prints the version of the tb2robot library in stdout.
+     * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
+     * @param {string} commandExecutionDirectory - Directory in which the command is to be executed.     
+     */
+    public static executeTb2robotVersionCommand(
+        context: vscode.ExtensionContext,
+        commandExecutionDirectory: string
+    ): Promise<void> {
+        return new Promise(async (resolve, reject) => {
+            logger.trace(`Checking the version of the tb2robot library.`);
+
+            const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
+
+            let command: string = `${commandBase} --version`;
+           
+            logger.debug(`Executing command inside ${commandExecutionDirectory}: ${command}`);
+
+            // Execute the command inside the working directory.
+            // { cwd: workingDirectory } sets the current working directory of the child process to workingDirectory.
+            // It will be as if you changed directories into workingDirectory before executing the command.
+            exec(command, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
+                if (error) {
+                    reject(stderr || stdout || "An unknown Error occurred.");
+                    return;
+                }
+                logger.debug("Output of --version command execution:", stdout || stderr);
+                resolve();
+            });
+        });
+    }
+
+    /**
      * Writes XML test results back to the TestBench Json report.
      * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
      * @param {string} commandExecutionDirectory - Directory in which the command is to be executed.

@@ -565,7 +565,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(allExtensionCommands.refreshProjectTreeView.command, async () => {
             logger.debug(`Refresh Project Tree command called.`);
-            projectManagementTreeDataProvider?.clearTree();
+            // projectManagementTreeDataProvider?.clearTree();
             [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeViews(
                 context,
                 connection!,
@@ -585,7 +585,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent!;
             if (cycleElement && cycleElement.contextValue === "Cycle") {
                 // Clear the test theme tree when a cycle is expanded so that clicking on a new test cycle will not show the old test themes
-                projectManagementTreeDataProvider?.testThemeDataProvider?.clearTree();
+                // projectManagementTreeDataProvider?.testThemeDataProvider?.clearTree();
                 // Fetch the test themes from the server
                 const children: projectManagementTreeView.TestbenchTreeItem[] =
                     (await projectManagementTreeDataProvider?.getChildrenOfCycle(cycleElement)) ?? [];

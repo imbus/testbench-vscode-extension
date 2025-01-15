@@ -12,13 +12,13 @@ jobs:
     steps:
       # Checkout the repository
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Set up Node.js
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '23' # Use the Node.js version compatible with the project
+          node-version: '23' # Use the Node.js version compatible with the project          
 
       # Install dependencies
       - name: Install Dependencies
@@ -30,7 +30,8 @@ jobs:
 
       # Upload the VSIX as an artifact
       - name: Upload VSIX Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: testbench-visual-studio-code-extension # Name of the artifact
-          path: "testbench-visual-studio-code-extension-0.0.1.vsix" # Adjust if the file is stored in a specific folder
+          path: "*.vsix" # Adjust if the file is stored in a specific folder
+          overwrite: true # Overwrite the artifact if it already exists

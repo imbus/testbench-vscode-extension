@@ -869,23 +869,23 @@ async function runRobotFrameworkTestGenerationProcess(
 
     // Workspace location is the folder we are working in, workingDirectoryPath is the (.testbench) folder path we process files in.
     const workspaceLocation: string = getConfig().get<string>("workspaceLocation")!;
-    const testbenchWorkingDirectoryInsideWorkspace: string = path.join(
+    const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
         workspaceLocation,
         folderNameOfTestbenchWorkingDirectory
     );
 
     const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJsonLocally(
-        testbenchWorkingDirectoryInsideWorkspace
+        testbenchWorkingDirectoryPathInsideWorkspace
     );
     if (!tb2robotConfigFilePath) {
         logger.error("Failed to save configuration file.");
         return null;
-    }
+    }    
 
     const isTb2RobotframeworkWriteCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkWrite(
             context,
-            testbenchWorkingDirectoryInsideWorkspace, // The command will be executed in this folder
+            testbenchWorkingDirectoryPathInsideWorkspace, // The command will be executed in this folder
             downloadedReportZipFilePath,
             tb2robotConfigFilePath
         );
@@ -1183,7 +1183,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
                 throw new Error(workspaceLocationNotConfiguredMessage);
             }
 
-            const testbenchWorkingDirectoryPath: string = path.join(
+            const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
                 workspaceLocationInExtensionSettings,
                 folderNameOfTestbenchWorkingDirectory
             );
@@ -1228,7 +1228,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             // Either use the downloaded report zip file or prompt the user to select one
             const reportWithResultsZipFilePath: string | null =
-                downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(testbenchWorkingDirectoryPath));
+                downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
             if (!reportWithResultsZipFilePath) {
                 throw new Error("No report file selected.");
             }
@@ -1238,7 +1238,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             reportProgress(`Preparing configuration for testbench2robotframework.`, reportIncrement / 2);
 
             const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJsonLocally(
-                testbenchWorkingDirectoryPath
+                testbenchWorkingDirectoryPathInsideWorkspace
             );
             if (!tb2robotConfigFilePath) {
                 throw new Error("Failed to create configuration file.");
@@ -1246,12 +1246,12 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             reportProgress(`Reading test results and creating report.`, reportIncrement / 2);
 
-            pathOfReportWithResultsZip = path.join(testbenchWorkingDirectoryPath, reportFileWithResultsZipName);
+            pathOfReportWithResultsZip = path.join(testbenchWorkingDirectoryPathInsideWorkspace, reportFileWithResultsZipName);            
 
             const isTb2RobotReadExecutionSuccessful: boolean =
                 await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
                     context,
-                    testbenchWorkingDirectoryPath, // The command will be executed in this folder
+                    testbenchWorkingDirectoryPathInsideWorkspace, // The command will be executed in this folder
                     robotResultOutputXMLFilePath,
                     reportWithResultsZipFilePath,
                     pathOfReportWithResultsZip,

@@ -24,6 +24,9 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     // The test theme tree data provider to offload the test theme tree data
     testThemeDataProvider: TestThemeTreeDataProvider;
 
+    // Store expanded node keys to restore the expansion state after refreshing the tree
+    private expandedNodes = new Set<string>();
+
     constructor(
         connection: PlayServerConnection | null,
         projectKey?: string,
@@ -35,7 +38,27 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     refresh(): void {
         logger.trace("Refreshing project management tree view.");
+
+        // 1. Store the keys of the expanded nodes
+        this.storeExpandedNodes(this.rootItem);
+
+        // 2. Reset the root item and refresh the tree
+        this.rootItem = null;
+
         this._onDidChangeTreeData.fire();
+    }
+
+    // Recursive function to store the keys of the expanded nodes
+    private storeExpandedNodes(element: TestbenchTreeItem | null) {
+        if (element) {
+            if (element.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                this.expandedNodes.add(element.item.key);
+            }
+            // Recursively check child elements
+            if (element.children) {
+                element.children.forEach((child) => this.storeExpandedNodes(child));
+            }
+        }
     }
 
     getParent(element: TestbenchTreeItem): TestbenchTreeItem | null {
@@ -58,6 +81,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             contextValue === "Cycle"
                 ? vscode.TreeItemCollapsibleState.None // Test cycles are set to none to be non expandable, since its children are displayed in the test theme tree
                 : vscode.TreeItemCollapsibleState.Collapsed; // Set collapsibleState to Collapsed to make items clickable to trigger getChildren function when expanded
+
         const treeItem: TestbenchTreeItem = new TestbenchTreeItem(
             data.name,
             contextValue,
@@ -65,6 +89,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             data,
             parent
         );
+
+        // Maintain expansion state after a refresh
+        if (this.expandedNodes.has(treeItem.item.key)) {
+            treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+        }
+
         return treeItem;
     }
 
@@ -174,6 +204,11 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                             element
                         );
 
+                        // Maintain expansion state after a refresh if the element was expanded before
+                        if (this.expandedNodes.has(treeItem.item.key)) {
+                            treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                        }
+
                         // If the current element has children, recursively build their tree items
                         if (hasChildren) {
                             treeItem.children = buildTestThemeTree(data.base.key);
@@ -204,11 +239,22 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     async handleExpansion(element: TestbenchTreeItem, expanded: boolean): Promise<void> {
-        logger.trace(`Setting the expansion state of ${element.label} to ${expanded ? "expanded" : "collapsed"} in project management tree.`);
+        logger.trace(
+            `Setting the expansion state of ${element.label} to ${
+                expanded ? "expanded" : "collapsed"
+            } in project management tree.`
+        );
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
         element.updateIcon();
+
+        // Store the expanded nodes to restore the expansion state after refreshing the tree
+        if (expanded) {
+            this.expandedNodes.add(element.item.key);
+        } else {
+            this.expandedNodes.delete(element.item.key);
+        }
 
         // The test Cycles are not expandable anymore, but this code is left to be able to switch back to expandable cycles.
         // If the element is a test cycle and expanding it, initialize the test theme tree

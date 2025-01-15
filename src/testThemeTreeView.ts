@@ -9,7 +9,15 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Testbe
 
     rootElements: TestbenchTreeItem[] = [];
 
+    private expandedNodes = new Set<string>(); // To store expanded node keys
+
     refresh(): void {
+        logger.trace("Refreshing test theme tree view.");
+
+        // Store the keys of the expanded nodes
+        this.storeExpandedNodes(this.rootElements);
+
+        // Trigger refresh
         this._onDidChangeTreeData.fire();
     }
 
@@ -44,11 +52,37 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Testbe
     }
 
     handleExpansion(element: TestbenchTreeItem, expanded: boolean): void {
-        logger.trace(`Setting the expansion state of ${element.label} to ${expanded ? "expanded" : "collapsed"} in test theme tree.`);
+        logger.trace(
+            `Setting the expansion state of ${element.label} to ${
+                expanded ? "expanded" : "collapsed"
+            } in test theme tree.`
+        );
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
+        
+        if (expanded) {
+            this.expandedNodes.add(element.item.key);
+        } else {
+            this.expandedNodes.delete(element.item.key);
+        }
+        
         element.updateIcon();
+    }
+
+    // Recursive function to store the keys of the expanded nodes
+    private storeExpandedNodes(elements: TestbenchTreeItem[] | null) {
+        if (elements) {
+            elements.forEach((element) => {
+                if (element.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                    this.expandedNodes.add(element.item.key);
+                }
+                // Recursively check child elements
+                if (element.children) {
+                    this.storeExpandedNodes(element.children);
+                }
+            });
+        }
     }
 
     // Clear the tree
