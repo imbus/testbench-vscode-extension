@@ -2,7 +2,6 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Dict
 
 from robot.parsing.model.blocks import File
 
@@ -11,7 +10,7 @@ from .log import logger
 from .utils import directory_to_zip
 
 
-def write_test_suites(test_suites: Dict[str, File], config: Configuration) -> None:
+def write_test_suites(test_suites: dict[str, File], config: Configuration) -> None:
     generation_directory = get_generation_directory(config.generationDirectory)
     if config.clearGenerationDirectory:
         clear_generation_directory(generation_directory)
@@ -29,7 +28,7 @@ def get_generation_directory(generation_directory: str) -> Path:
     return Path(
         re.sub(
             r"^{root}",
-            str(root_path).replace('\\', '\\\\'),
+            str(root_path).replace("\\", "\\\\"),
             generation_directory,
             flags=re.IGNORECASE,
         )
@@ -44,7 +43,7 @@ def clear_generation_directory(generation_dir: Path) -> None:
     Path(zip_file).unlink(missing_ok=True)
 
 
-def write_test_suite_files(test_suites: Dict[str, File], generation_directory: Path) -> None:
+def write_test_suite_files(test_suites: dict[str, File], generation_directory: Path) -> None:
     for test_suite_file in test_suites.values():
         test_suite_file.source = Path(generation_directory / f"{test_suite_file.source}.robot")
         logger.debug(f"File written to {os.path.relpath(test_suite_file.source)}")

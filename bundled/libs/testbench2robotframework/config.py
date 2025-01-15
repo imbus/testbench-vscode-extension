@@ -2,16 +2,39 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass
-from typing import Dict, List
+from pathlib import Path
 
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 from .model import StrEnum
+
+
+def find_pyproject_toml() -> Path:
+    current_dir = Path().cwd()
+    for parent in [current_dir, *list(current_dir.parents)]:
+        pyproject_path = parent / "pyproject.toml"
+        if pyproject_path.is_file():
+            return pyproject_path
+    return Path()
+
+
+def get_testbench2robotframework_toml_dict(toml_path: Path):
+    try:
+        with Path(toml_path).open("rb") as toml_file:
+            toml_dict = tomllib.load(toml_file)
+    except FileNotFoundError:
+        return {}
+    return toml_dict.get("tool", {}).get("testbench2robotframework", {})
 
 
 @dataclass
 class SubdivisionsMapping:
-    libraries: Dict
-    resources: Dict
+    libraries: dict
+    resources: dict
 
     @classmethod
     def from_dict(cls, dictionary):
@@ -22,9 +45,9 @@ class SubdivisionsMapping:
 
 @dataclass
 class ForcedImport:
-    libraries: List[str]
-    resources: List[str]
-    variables: List[str]
+    libraries: list[str]
+    resources: list[str]
+    variables: list[str]
 
     @classmethod
     def from_dict(cls, dictionary):
@@ -116,10 +139,10 @@ class AttachmentConflictBehaviour(StrEnum):
 
 @dataclass
 class Configuration:
-    rfLibraryRegex: List[str]
-    rfResourceRegex: List[str]
-    rfLibraryRoots: List[str]
-    rfResourceRoots: List[str]
+    rfLibraryRegex: list[str]
+    rfResourceRegex: list[str]
+    rfLibraryRoots: list[str]
+    rfResourceRoots: list[str]
     fullyQualified: bool
     subdivisionsMapping: SubdivisionsMapping
     forcedImport: ForcedImport
@@ -159,8 +182,8 @@ class Configuration:
                 dictionary.get("loggingConfiguration", {})
             ),
             logCompoundInteractions=dictionary.get("logCompoundInteractions", True),
-            resourceDirectory=dictionary.get("resourceDirectory", "{root}/Resources").replace(
-                '\\', '/'
+            resourceDirectory=dictionary.get("resourceDirectory", "").replace(
+                "\\", "/"
             ),
             testCaseSplitPathRegEx=dictionary.get("testCaseSplitPathRegEx", ".*StopWithRestart.*"),
             phasePattern=dictionary.get("phasePattern", "{testcase} : Phase {index}/{length}"),
@@ -174,7 +197,7 @@ class Configuration:
 
 
 def write_default_config(config_file):
-    with open(config_file, 'w', encoding='utf-8') as file:
+    with Path(config_file).open("w", encoding="utf-8") as file:
         json.dump(
             Configuration.from_dict({}).__dict__,
             file,

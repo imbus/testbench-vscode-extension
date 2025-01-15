@@ -460,10 +460,6 @@
                     "light": "resources/icons/Upload.svg",
                     "dark": "resources/icons/Upload.svg"
                 }
-            },
-            {
-                "command": "customTreeView.refresh",
-                "title": "Refresh Tree View"
             }
         ],
         "views": {

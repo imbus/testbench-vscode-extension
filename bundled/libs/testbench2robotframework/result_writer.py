@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from shutil import copytree
-from typing import Dict, List, Optional, Union
+from typing import Optional, Union
 from urllib.parse import unquote
 
 from robot.result import Keyword, ResultVisitor, TestCase, TestSuite
@@ -60,7 +60,12 @@ MEGABYTE = 1000 * 1000
 
 class ResultWriter(ResultVisitor):
     def __init__(
-        self, json_report: str, json_result: Optional[str], config: Configuration, output_xml, listener_uid=None
+        self,
+        json_report: str,
+        json_result: Optional[str],
+        config: Configuration,
+        output_xml,
+        listener_uid=None,
     ) -> None:
         self.listener_uid = listener_uid
         self.json_dir = get_directory(json_report)
@@ -84,11 +89,11 @@ class ResultWriter(ResultVisitor):
         # if self.attachments_path.exists():  TODO: RR Sollten wir löschen????
         #     shutil.rmtree(self.attachments_path)
         # os.mkdir(self.attachments_path)
-        self.test_suites: Dict[str, TestSuite] = {}
-        self.keywords: List[Keyword] = []
-        self.itb_test_case_catalog: Dict[str, TestCaseDetails] = {}
+        self.test_suites: dict[str, TestSuite] = {}
+        self.keywords: list[Keyword] = []
+        self.itb_test_case_catalog: dict[str, TestCaseDetails] = {}
         self.phase_pattern = config.phasePattern
-        self.test_chain: List[TestCase] = []
+        self.test_chain: list[TestCase] = []
         self.main_protocol = MainProtocol.from_list([])
 
     def start_suite(self, suite: TestSuite):
@@ -97,7 +102,7 @@ class ResultWriter(ResultVisitor):
         self.protocol_test_cases: list[ProtocolTestCaseExecutionSummary] = []
 
     def _get_interactions_by_type(
-        self, interactions: List[InteractionDetails], interaction_type: InteractionType
+        self, interactions: list[InteractionDetails], interaction_type: InteractionType
     ):
         for interaction in interactions:
             if interaction.interactionType == interaction_type:
@@ -127,6 +132,9 @@ class ResultWriter(ResultVisitor):
 
         test_uid = test_chain.name if test_chain else test.name
         itb_test_case = self.json_reader.read_test_case(test_uid)  # TODO What if name != UID
+        if not itb_test_case:
+            logger.warning(f"No JSON file corresponding to test '{test_uid}' found in report.")
+            return
         for interaction in itb_test_case.interactions:
             self._propergate_sequence_phase(interaction, interaction.spec.sequencePhase)
         self.protocol_test_case: ProtocolTestCaseExecutionSummary = (
@@ -167,15 +175,17 @@ class ResultWriter(ResultVisitor):
         )
 
     def _set_itb_testcase_references(
-        self, itb_test_case: TestCaseDetails, test_chain: List[TestCase]
+        self, itb_test_case: TestCaseDetails, test_chain: list[TestCase]
     ):
+        if not itb_test_case.exec:
+            return
         for test in test_chain:
             itb_references = self._get_itb_reference(test.message)
             for reference in itb_references:
                 if reference not in itb_test_case.exec.references:
                     itb_test_case.exec.references.append(reference)
 
-    def _get_itb_reference(self, test_message: str) -> List[Reference]:
+    def _get_itb_reference(self, test_message: str) -> list[Reference]:
         references = []
         for path in re.findall(r"itb-reference:\s*(\S*)", test_message):
             if path.startswith("file:///"):
@@ -194,7 +204,8 @@ class ResultWriter(ResultVisitor):
                     else:
                         logger.warning(f"Referenced file '{file_path}' does not exist.")
                     continue
-                file_size = os.path.getsize(reference_path)
+                file_size = Path.stat(reference_path).st_size
+                reference: Optional[Reference] = None
                 if file_size >= 10 * MEGABYTE:
                     logger.error(
                         f"Trying to attach file '{reference_path}'. "
@@ -240,7 +251,6 @@ class ResultWriter(ResultVisitor):
             return Reference(ReferenceType.Attachment, f"attachments/{unique_file}")
         if self.attachment_conflict_behaviour == AttachmentConflictBehaviour.ERROR:
             logger.error(f"Attachment '{filename}' does already exist.")
-            return None
         return None
 
     @staticmethod
@@ -255,7 +265,7 @@ class ResultWriter(ResultVisitor):
             counter += 1
         return attachement_path
 
-    def _set_itb_testcase_execution_comment(self, itb_test_case, test_chain: List[TestCase]):
+    def _set_itb_testcase_execution_comment(self, itb_test_case, test_chain: list[TestCase]):
         exec_comments = []
         for test in test_chain:
             message = re.sub(r"\s*itb-reference:\s*(\S*)", "", test.message)
@@ -285,9 +295,13 @@ class ResultWriter(ResultVisitor):
         self.protocol_test_case.comments = ProtocolComments(
             html=f"<html><body>{''.join(exec_comments)}</body></html>"
         )
-        end_time=test.end_time.replace(tzinfo=timezone(datetime.now(timezone.utc).astimezone().utcoffset()))
+        end_time = test.end_time.replace(
+            tzinfo=timezone(datetime.now(timezone.utc).astimezone().utcoffset())
+        )
         # self.protocol_test_case.result.timestamp = end_time.isoformat() # Isoformat currently not suported by server
-        self.protocol_test_case.result.timestamp = f"{end_time.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z"
+        self.protocol_test_case.result.timestamp = (
+            f"{end_time.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z"
+        )
         self.protocol_test_case.durationMillis = test.elapsedtime
 
     def _set_itb_testcase_execution_result(self, itb_test_case, test_chain):
@@ -309,7 +323,7 @@ class ResultWriter(ResultVisitor):
     def _get_test_phase_body(self, test_phase: TestCase) -> Body:
         return test_phase.body
 
-    def _get_test_phase_setup(self, test_phase: TestCase) -> List[Keyword]:
+    def _get_test_phase_setup(self, test_phase: TestCase) -> list[Keyword]:
         test_phase_setup = []
         if test_phase.has_setup and test_phase.setup:
             self._test_setup_passed = test_phase.setup.passed
@@ -325,7 +339,7 @@ class ResultWriter(ResultVisitor):
                 test_phase_setup = [test_phase.setup]
         return test_phase_setup
 
-    def _get_test_phase_teardown(self, test_phase: TestCase) -> List[Keyword]:
+    def _get_test_phase_teardown(self, test_phase: TestCase) -> list[Keyword]:
         test_phase_teardown = []
         if test_phase.has_teardown and test_phase.teardown:
             if test_phase.teardown.name == f"Teardown-{test_phase.name}":
@@ -341,7 +355,7 @@ class ResultWriter(ResultVisitor):
         return test_phase_teardown
 
     def _set_atomic_interactions_execution_result(
-        self, atomic_interactions: List[InteractionDetails], test_chain: List[TestCase]
+        self, atomic_interactions: list[InteractionDetails], test_chain: list[TestCase]
     ):
         self._test_setup_passed = True
         test_chain_setup = [
@@ -378,8 +392,8 @@ class ResultWriter(ResultVisitor):
 
     def _set_interaction_verdicts(
         self,
-        interaction_list: List[InteractionDetails],
-        test_chain_body: List[Keyword],
+        interaction_list: list[InteractionDetails],
+        test_chain_body: list[Keyword],
         sequence_phase: SequencePhase,
     ):
         for index, interaction in enumerate(interaction_list):
@@ -399,7 +413,9 @@ class ResultWriter(ResultVisitor):
             interaction.exec.verdict = InteractionVerdict.Undefined
 
     def _filter_atomic_interactions_by_sequence_phase(
-        self, atomic_interactions: List[InteractionDetails], sequence_phase: SequencePhase
+        self,
+        atomic_interactions: list[InteractionDetails],
+        sequence_phase: SequencePhase,
     ):
         return list(
             filter(
@@ -409,12 +425,18 @@ class ResultWriter(ResultVisitor):
         )
 
     def _get_interaction_exec_from_keyword(self, keyword: Keyword) -> InteractionExecutionSummary:
+        end_time = keyword.end_time.replace(
+            tzinfo=timezone(datetime.now(timezone.utc).astimezone().utcoffset())
+        )
+
         return InteractionExecutionSummary.from_dict(
             {
-                'verdict': self._get_interaction_result(keyword.status),
-                'time': keyword.endtime,
-                'duration': keyword.elapsedtime,
-                'comments': self.get_html_keyword_comment(keyword),
+                "verdict": self._get_interaction_result(keyword.status),
+                "time": (
+                    f"{end_time.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z"
+                ),
+                "duration": keyword.elapsedtime,
+                "comments": self.get_html_keyword_comment(keyword),
             }
         )
 
@@ -422,7 +444,7 @@ class ResultWriter(ResultVisitor):
         self, keyword: Keyword, interaction: InteractionDetails
     ) -> None:
         if not is_normalized_equal(keyword.kwname, interaction.name) and not is_normalized_equal(
-            keyword.kwname.split('.')[-1], interaction.name
+            keyword.kwname.split(".")[-1], interaction.name
         ):
             raise NameError(
                 f"Execution can not be parsed, "
@@ -440,6 +462,10 @@ class ResultWriter(ResultVisitor):
 
     def get_html_keyword_comment(self, keyword: Keyword):
         messages = list(self._get_keyword_messages(keyword))
+        unique_messages = []
+        for msg in messages:
+            if msg not in unique_messages:
+                unique_messages.append(msg)
         return (
             "<html>"
             "<body>"
@@ -454,7 +480,7 @@ class ResultWriter(ResultVisitor):
             "</pre>"
             "<table>"
             "<tr>"
-            f"{'</tr><tr>'.join(messages)}"
+            f"{'</tr><tr>'.join(unique_messages)}"
             "</tr>"
             "</table>"
             "</body>"
@@ -513,9 +539,9 @@ class ResultWriter(ResultVisitor):
         compound_interaction.exec.time = atomic_interactions[-1].exec.time
 
     @staticmethod
-    def _set_itb_test_case_status(
-        itb_test_case: TestCaseDetails, robot_status: str
-    ) -> ProtocolTestCaseResult:
+    def _set_itb_test_case_status(itb_test_case: TestCaseDetails, robot_status: str):
+        if not itb_test_case.exec:
+            return None
         robot_status = robot_status.lower()
         if robot_status == "pass":
             itb_test_case.exec.status = ActivityStatus.Performed
@@ -539,18 +565,18 @@ class ResultWriter(ResultVisitor):
         if not suite.metadata.get("uniqueID") or len(suite.suites):
             return
         test_case_set = self.json_reader.read_test_case_set(suite.metadata["uniqueID"])
-        if not test_case_set:
+        if not test_case_set or not test_case_set.exec:
             return
         test_case_set.exec.verdict = suite.status
-
         for testcase in test_case_set.testCases:
             current_itb_test_case = self.itb_test_case_catalog.get(testcase.uniqueID)
-            if current_itb_test_case is None:
+            if current_itb_test_case is None or testcase.exec is None:
                 continue
-            testcase.exec.verdict = current_itb_test_case.exec.verdict
-            testcase.exec.status = current_itb_test_case.exec.status
-            testcase.exec.execStatus = current_itb_test_case.exec.execStatus
-            testcase.exec.comments = current_itb_test_case.exec.comments
+            if current_itb_test_case.exec:
+                testcase.exec.verdict = current_itb_test_case.exec.verdict
+                testcase.exec.status = current_itb_test_case.exec.status
+                testcase.exec.execStatus = current_itb_test_case.exec.execStatus
+                testcase.exec.comments = current_itb_test_case.exec.comments
         suite_start_time = "99999999 00:00:00.000"
         suite_end_time = "00000000 00:00:00.000"
         table_content = []
@@ -569,15 +595,14 @@ class ResultWriter(ResultVisitor):
                 message = re.sub(r"\s*itb-reference:\s*(\S*)", "", test.message)
                 message = (
                     message[len("*HTML*") :]
-                    .replace('<hr>', '<br />')
-                    .replace('<br>', '<br />')
+                    .replace("<hr>", "<br />")
+                    .replace("<br>", "<br />")
                     .strip()
                     if message.startswith("*HTML*")
                     else message
                 )
             else:
                 message = self.get_isotime_from_robot_timestamp(test.endtime)
-
             table_content.append(
                 f"<td>{name}</td>"
                 f"<td>{phase}</td>"
@@ -624,18 +649,25 @@ class ResultWriter(ResultVisitor):
 
     def write_listener_mode_protocols(self):
         write_main_protocol(
-                self.json_result, self.main_protocol.protocolTestCaseSetExecutionSummary
-            )
-        os.makedirs(Path(self.json_result_path)/self.listener_uid)
-        shutil.copy(Path(self.json_result)/"protocol.json", Path(self.json_result_path)/self.listener_uid/"protocol.json")
-        shutil.copy(Path(self.json_result)/"project.json", Path(self.json_result_path)/self.listener_uid/"project.json")
+            self.json_result, self.main_protocol.protocolTestCaseSetExecutionSummary
+        )
+        Path.mkdir(Path(self.json_result_path) / self.listener_uid, parents=True)
+        shutil.copy(
+            Path(self.json_result) / "protocol.json",
+            Path(self.json_result_path) / self.listener_uid / "protocol.json",
+        )
+        shutil.copy(
+            Path(self.json_dir) / "project.json",
+            Path(self.json_result_path) / self.listener_uid / "project.json",
+        )
         for filename in os.listdir(self.json_result):
-            logger.info(filename)
             if filename.startswith(self.listener_uid) and filename.endswith(".json"):
-                shutil.copy(Path(self.json_result)/filename, Path(self.json_result_path)/self.listener_uid/filename)
-        directory_to_zip(Path(self.json_result_path)/self.listener_uid)
-        shutil.rmtree(Path(self.json_result_path)/self.listener_uid)
-
+                shutil.copy(
+                    Path(self.json_result) / filename,
+                    Path(self.json_result_path) / self.listener_uid / filename,
+                )
+        directory_to_zip(Path(self.json_result_path) / self.listener_uid)
+        shutil.rmtree(Path(self.json_result_path) / self.listener_uid)
 
     @staticmethod
     def render_status(status):
@@ -673,10 +705,13 @@ class ResultWriter(ResultVisitor):
                 copytree(self.json_dir, self.json_result_path, dirs_exist_ok=True)
                 copytree(self.json_result, self.json_result_path, dirs_exist_ok=True)
             self.tempdir.cleanup()
-        logger.info(f"Successfully wrote the robot execution results to TestBench's Json Report: '{Path(self.json_result_path).absolute()}{self.create_zip*'.zip'}'")
+        logger.info(
+            f"Successfully wrote the robot execution results to TestBench's Json Report: "
+            f"'{Path(self.json_result_path).absolute()}{self.create_zip * '.zip'}'"
+        )
 
     @staticmethod
-    def _get_execution_result(robot_status: str) -> Dict:
+    def _get_execution_result(robot_status: str) -> dict:
         robot_status = robot_status.lower()
         if robot_status == "pass":
             return {

@@ -14,4 +14,4 @@
 
 from .testbench2robotframework import testbench2robotframework  # noqa: F401
 
-__version__ = "0.8.0b21"
+__version__ = "0.8.1"
