@@ -5,7 +5,7 @@ import * as vscode from 'vscode'
 import { tb2robotLib} from '../../testbench2robotframeworkLib';
 import { pyCommandBuilder } from '../../pyCommandBuilder';
 import * as extension from '../../extension';
-import { TestBenchLogger } from "../..//testBenchLogger";
+import { TestBenchLogger } from "../../testBenchLogger";
 
 const rootPath = path.resolve(__dirname, '../../../')
 
