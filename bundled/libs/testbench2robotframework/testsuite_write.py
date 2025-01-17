@@ -46,5 +46,5 @@ def clear_generation_directory(generation_dir: Path) -> None:
 def write_test_suite_files(test_suites: dict[str, File], generation_directory: Path) -> None:
     for test_suite_file in test_suites.values():
         test_suite_file.source = Path(generation_directory / f"{test_suite_file.source}.robot")
-        logger.debug(f"File written to {os.path.relpath(test_suite_file.source)}")
         test_suite_file.save()
+        logger.debug(f"File written to {os.path.relpath(test_suite_file.source)}")

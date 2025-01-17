@@ -9,12 +9,15 @@ import * as testBenchLogger from "./testBenchLogger";
 import * as testElementsTreeView from "./testElementsTreeView";
 import path from "path";
 
+// TODO: Add progress bar for tree views when fetching elements to notify the user.
 // TODO: Add progress bar for fetching cycle structure since it can take long.
 // TODO: Hide the tree views initially instead of creating them and then hiding them after.
 // TODO: Adjust / test workflow file for building vsix package as artifact
-// TODO: Add license
-// FIXME: Sometimes robot framework tests fails on some tests ("No matching Keyword" problem?) and uploading the report fails.
-// Possible reasons: Wrong output.xml is used, existing files in the working .testbench directory from previous generations...
+
+// Before releasing the extension:
+// TODO: Add license to the extension
+// TODO: Set logger level to info or debug in production
+// TODO: In production, remove process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; in connection class.
 
 // Prefix of the extension commands in package.json
 export const baseKeyOfExtension: string = "testbenchExtension";

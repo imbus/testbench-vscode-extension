@@ -14,7 +14,6 @@ This Visual Studio Code Extension for TestBench allows you to:
 
 ## Requirements
 -  Visual Studio Code version 1.95.0 or higher.
--  Robot Framework version 7.2 or higher.
 
 ## Installation
 

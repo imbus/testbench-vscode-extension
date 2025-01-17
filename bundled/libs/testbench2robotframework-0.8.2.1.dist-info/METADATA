@@ -1,6 +1,6 @@
 Metadata-Version: 2.2
 Name: testbench2robotframework
-Version: 0.8.2
+Version: 0.8.2.1
 Summary: Robot Framework Code Generator from Keyword-Driven Tests in imbus TestBench 3.0 and newer
 Author-email: imbus AG <support@imbus.de>
 License: Apache 2.0 License

@@ -225,9 +225,9 @@ class RfTestCase:
                     interaction_call, self.config.logCompoundInteractions
                 )
                 keyword_lists[tc_index].append(compound_keyword_call)
+                if group_stack and group_stack[-1][1] >= interaction_call.indent:
+                    group_stack.pop()
                 if group_stack:
-                    if group_stack[-1][1] >= interaction_call.indent:
-                        group_stack.pop()
                     group_stack[-1][0].body.append(compound_keyword_call)
                 if self.config.logCompoundInteractions == CompoundInteractionLogging.GROUP:
                     group_stack.append((compound_keyword_call, interaction_call.indent))
