@@ -12,6 +12,10 @@ This Visual Studio Code Extension for TestBench allows you to:
 -   Generate robotframework test cases for the selected test cycle, test theme or test case set.
 -   Upload test results back to the TestBench server.
 
+## Requirements
+-  Visual Studio Code version 1.95.0 or higher.
+-  Robot Framework version 7.2 or higher.
+
 ## Installation
 
 1. Open Visual Studio Code.

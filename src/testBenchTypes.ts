@@ -17,7 +17,7 @@ export interface Testbench2robotframeworkConfiguration {
     resourceDirectory: string;
     clearGenerationDirectory: boolean;
     logSuiteNumbering: boolean;
-    logCompoundInteractions: boolean;
+    logCompoundInteractions: string; // Possible values are "GROUP", "COMMENT" oder "NONE". In Previous versions, this was a boolean.
     subdivisionsMapping: SubdivisionsMapping;
     forcedImport: ForcedImport;
     testCaseSplitPathRegEx: string;
@@ -55,7 +55,7 @@ export const defaultTestbench2robotframeworkConfig: Testbench2robotframeworkConf
     resourceDirectory: "${workspaceFolder}/resources",
     clearGenerationDirectory: true,
     logSuiteNumbering: true,
-    logCompoundInteractions: true,
+    logCompoundInteractions: "GROUP",
     subdivisionsMapping: {
         libraries: {
             SeleniumLibrary:

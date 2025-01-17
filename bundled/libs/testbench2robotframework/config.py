@@ -124,6 +124,12 @@ class LoggingConfig:
         )
 
 
+class CompoundInteractionLogging(StrEnum):
+    GROUP = "GROUP"
+    COMMENT = "COMMENT"
+    NONE = "NONE"
+
+
 class ReferenceBehaviour(StrEnum):
     ATTACHMENT = "ATTACHMENT"
     REFERENCE = "REFERENCE"
@@ -152,7 +158,7 @@ class Configuration:
     logSuiteNumbering: bool
     clearGenerationDirectory: bool
     loggingConfiguration: LoggingConfig
-    logCompoundInteractions: bool
+    logCompoundInteractions: CompoundInteractionLogging
     testCaseSplitPathRegEx: str
     phasePattern: str
     referenceBehaviour: ReferenceBehaviour
@@ -181,7 +187,7 @@ class Configuration:
             loggingConfiguration=LoggingConfig.from_dict(
                 dictionary.get("loggingConfiguration", {})
             ),
-            logCompoundInteractions=dictionary.get("logCompoundInteractions", True),
+            logCompoundInteractions=CompoundInteractionLogging(dictionary.get("logCompoundInteractions", "GROUP").upper()),
             resourceDirectory=dictionary.get("resourceDirectory", "").replace(
                 "\\", "/"
             ),
@@ -194,7 +200,6 @@ class Configuration:
                 dictionary.get("attachmentConflictBehaviour", "USE_EXISTING").upper()
             ),
         )
-
 
 def write_default_config(config_file):
     with Path(config_file).open("w", encoding="utf-8") as file:

@@ -8,7 +8,9 @@ from uuid import uuid4
 
 from robot.parsing.lexer.tokens import Token
 from robot.parsing.model.blocks import (
+    End,
     File,
+    Group,
     Keyword,
     KeywordSection,
     SettingSection,
@@ -18,6 +20,7 @@ from robot.parsing.model.blocks import (
 from robot.parsing.model.statements import (
     Comment,
     EmptyLine,
+    GroupHeader,
     KeywordCall,
     LibraryImport,
     Metadata,
@@ -36,7 +39,7 @@ try:
 except ImportError:
     from robot.parsing.model.statements import ForceTags as TestTags
 
-from .config import Configuration
+from .config import CompoundInteractionLogging, Configuration
 from .json_reader import TestCaseSet
 from .log import logger
 from .model import (
@@ -199,6 +202,7 @@ class RfTestCase:
         keyword_lists: list[list[Statement]] = [[]]
         tc_index = 0
         is_first_atomic = True
+        group_stack = []
         for interaction_call in interaction_calls:
             if interaction_call.is_atomic:
                 if (
@@ -208,9 +212,25 @@ class RfTestCase:
                     tc_index += 1
                     keyword_lists.append([])
                 is_first_atomic = False
-                keyword_lists[tc_index].append(self._create_rf_keyword(interaction_call))
-            elif not interaction_call.is_atomic and self.config.logCompoundInteractions:
-                keyword_lists[tc_index].append(self._create_rf_compound_keyword(interaction_call))
+                atomic_keyword_call = self._create_rf_keyword(interaction_call)
+                if group_stack:
+                    group_stack[-1][0].body.append(atomic_keyword_call)
+                else:
+                    keyword_lists[tc_index].append(atomic_keyword_call)
+            elif (
+                not interaction_call.is_atomic
+                and self.config.logCompoundInteractions != CompoundInteractionLogging.NONE
+            ):
+                compound_keyword_call = self._create_rf_compound_keyword(
+                    interaction_call, self.config.logCompoundInteractions
+                )
+                keyword_lists[tc_index].append(compound_keyword_call)
+                if group_stack:
+                    if group_stack[-1][1] >= interaction_call.indent:
+                        group_stack.pop()
+                    group_stack[-1][0].body.append(compound_keyword_call)
+                if self.config.logCompoundInteractions == CompoundInteractionLogging.GROUP:
+                    group_stack.append((compound_keyword_call, interaction_call.indent))
         return keyword_lists
 
     def is_splitting_ia(self, interaction_call, keyword_lists, tc_index):
@@ -399,7 +419,12 @@ class RfTestCase:
         return (self.config.fullyQualified or False) * f"{interaction.import_prefix}."
 
     def _get_interaction_indent(self, interaction: InteractionCall) -> str:
-        return SEPARATOR * interaction.indent if self.config.logCompoundInteractions else SEPARATOR
+        return (
+            SEPARATOR * interaction.indent
+            if self.config.logCompoundInteractions
+            in [CompoundInteractionLogging.GROUP, CompoundInteractionLogging.COMMENT]
+            else SEPARATOR
+        )
 
     def _create_rf_keyword(self, interaction: InteractionCall) -> KeywordCall:
         import_prefix = self._get_interaction_import_prefix(interaction)
@@ -413,8 +438,17 @@ class RfTestCase:
             indent=interaction_indent,
         )
 
-    def _create_rf_compound_keyword(self, interaction: InteractionCall) -> Comment:
+    def _create_rf_compound_keyword(
+        self,
+        interaction: InteractionCall,
+        compound_interaction_type=CompoundInteractionLogging.COMMENT,
+    ) -> Comment | Group:
         interaction_indent = " " * (interaction.indent * 4)
+        if compound_interaction_type == CompoundInteractionLogging.GROUP:
+            return Group(
+                GroupHeader.from_params(interaction.name, indent=interaction_indent),
+                end=End.from_params(interaction_indent),
+            )
         return Comment.from_params(
             comment=self._generate_compound_interaction_comment(interaction),
             indent=interaction_indent,

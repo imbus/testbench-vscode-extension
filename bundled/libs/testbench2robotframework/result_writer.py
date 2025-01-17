@@ -10,8 +10,7 @@ from shutil import copytree
 from typing import Optional, Union
 from urllib.parse import unquote
 
-from robot.result import Keyword, ResultVisitor, TestCase, TestSuite
-from robot.result.model import Body
+from robot.result import Group, Keyword, ResultVisitor, TestCase, TestSuite
 
 from .config import AttachmentConflictBehaviour, Configuration, ReferenceBehaviour
 from .json_reader import TestBenchJsonReader
@@ -320,8 +319,15 @@ class ResultWriter(ResultVisitor):
             protocol_result = self._set_itb_test_case_status(itb_test_case, "undef")
             self.protocol_test_case.result = protocol_result
 
-    def _get_test_phase_body(self, test_phase: TestCase) -> Body:
-        return test_phase.body
+    def _get_test_phase_body(self, test_phase: TestCase) -> list[Keyword]:
+        test_phase_body = []
+        for body_item in test_phase.body:
+            if isinstance(body_item, Keyword):
+                test_phase_body.append(body_item)
+                logger.info(body_item)
+            elif isinstance(body_item, Group):
+                test_phase_body.extend(self._get_test_phase_body(body_item))
+        return test_phase_body
 
     def _get_test_phase_setup(self, test_phase: TestCase) -> list[Keyword]:
         test_phase_setup = []
@@ -469,16 +475,12 @@ class ResultWriter(ResultVisitor):
         return (
             "<html>"
             "<body>"
-            "<style>"
-            "td {padding: 5px; border: none;} "
-            "table {font-family: monospace; border: none;}"
-            "</style>"
             "<pre>"
             f"Start Time:   {self.get_isotime_from_robot_timestamp(keyword.starttime)}\n"
             f"End Time:     {self.get_isotime_from_robot_timestamp(keyword.endtime)}\n"
             f"Elapsed Time: {timedelta(milliseconds=keyword.elapsedtime)!s}\n"
             "</pre>"
-            "<table>"
+            "<table style='font-family: monospace; border: none; table-layout: auto;'>"
             "<tr>"
             f"{'</tr><tr>'.join(unique_messages)}"
             "</tr>"
@@ -612,18 +614,12 @@ class ResultWriter(ResultVisitor):
 
         test_case_set.exec.comments = (
             "<html>"
-            "<head>"
-            "<style>"
-            "td {padding: 5px; border: none; white-space: pre-wrap;} "
-            "table {font-family: monospace; border: none;}"
-            "</style>"
-            "</head>"
             "<body>"
             "<pre>"
             f"Start Time:   {self.get_isotime_from_robot_timestamp(suite_start_time)}\n"
             f"End Time:     {self.get_isotime_from_robot_timestamp(suite_end_time)}\n"
             "</pre>"
-            "<table>"
+            "<table style='font-family: monospace; border: none; table-layout: auto;'>"
             "<tr>"
             f"{'</tr><tr>'.join(table_content)}"
             "</tr>"

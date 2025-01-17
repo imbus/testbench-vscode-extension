@@ -17,12 +17,14 @@ import path from "path";
 // Possible reasons: Wrong output.xml is used, existing files in the working .testbench directory from previous generations...
 
 // Prefix of the extension commands in package.json
-export const baseKeyOfExtension: string = "testbenchExtension"; 
+export const baseKeyOfExtension: string = "testbenchExtension";
 // Config variable to access the extension settings
 let config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
-export function getConfig(): vscode.WorkspaceConfiguration { return config; }
+export function getConfig(): vscode.WorkspaceConfiguration {
+    return config;
+}
 
-// All extension commands listed in package.json to avoid typos. 
+// All extension commands listed in package.json to avoid typos.
 // A description field can be added to each command if needed in future.
 export const allExtensionCommands: { [key: string]: { command: string } } = {
     displayCommand: {
@@ -94,12 +96,12 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
 };
 
 // Folder to create inside the workspace / project directory (Which is set in the extension settings) to store and process files
-export const folderNameOfTestbenchWorkingDirectory: string = ".testbench"; 
+export const folderNameOfTestbenchWorkingDirectory: string = ".testbench";
 
 export let logger: testBenchLogger.TestBenchLogger;
 
 // Store the project management tree data provider to be able to access it from other files
-export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null; 
+export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
 export function setProjectManagementTreeDataProvider(
     newProjectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null
 ) {
@@ -107,18 +109,18 @@ export function setProjectManagementTreeDataProvider(
 }
 
 // Store the connection to testbench server
-export let connection: testBenchConnection.PlayServerConnection | null = null; 
+export let connection: testBenchConnection.PlayServerConnection | null = null;
 export function setConnection(newConnection: testBenchConnection.PlayServerConnection | null) {
     connection = newConnection;
 }
 
 // Webview provider for the login webview
-export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null; 
+export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null;
 
 // Called when the extension is activated.
 // In package.json, "activationEvents": ["onStartupFinished"] is used to activate the extension after the startup of VS Code
 // because the extension needs to be fully loaded to work smoothly.
-export async function activate(context: vscode.ExtensionContext) {    
+export async function activate(context: vscode.ExtensionContext) {
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
@@ -142,7 +144,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize or update extension configuration settings
     async function loadConfiguration() {
-
         // Update the configuration object with the latest values.
         // Without this, the configuration changes may not be updated and old values may be used.
         config = vscode.workspace.getConfiguration(baseKeyOfExtension);
@@ -194,9 +195,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Register login webview view provider
-    loginWebViewProvider = new loginWebView.LoginWebViewProvider(
-        context
-    );
+    loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
     const loginWebViewDisposable = vscode.window.registerWebviewViewProvider(
         loginWebView.LoginWebViewProvider.viewId,
         loginWebViewProvider
@@ -210,6 +209,8 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     context.subscriptions.push(toggleWebViewVisibilityCommand);
     // Hide or show the login webview based on the stored visibility state in loginWebView class on extension activation
+
+    // TODO: This calls focus and opens (focuses to) our extension even when the user wont want to use our extension
     await loginWebView.updateWebViewDisplay();
 
     // Hide project tree view and test theme tree view when the extension starts and displays the login webview
@@ -292,7 +293,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 }
             }
         )
-    );    
+    );
 
     // The user may press the login button multiple times consecutively which may cause multiple login processes to run at the same time.
     // Aviod executing the command again if we are already inside login command.
@@ -492,9 +493,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register the "Toggle project management tree view visibility" command
     context.subscriptions.push(
-        vscode.commands.registerCommand(allExtensionCommands.toggleProjectManagementTreeViewVisibility.command, async () => {
-            await projectManagementTreeView.toggleProjectManagementTreeViewVisibility();
-        })
+        vscode.commands.registerCommand(
+            allExtensionCommands.toggleProjectManagementTreeViewVisibility.command,
+            async () => {
+                await projectManagementTreeView.toggleProjectManagementTreeViewVisibility();
+            }
+        )
     );
 
     // Register the "Toggle test theme tree view visibility" command
@@ -507,19 +511,22 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register the "Read Test Results" command, which is activated for a test theme or test case set element.
     // Reads the test results from the testbench working directory and creates a report with the results.
     context.subscriptions.push(
-        vscode.commands.registerCommand(allExtensionCommands.readRFTestResultsAndCreateReportWithResults.command, async () => {
-            logger.debug(`Read RF Test Results And Create Report With Results command called.`);
-            if (!connection) {
-                vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.warn(`readRFTestResultsAndCreateReportWithResults command is called without a connection.`);
-                return;
+        vscode.commands.registerCommand(
+            allExtensionCommands.readRFTestResultsAndCreateReportWithResults.command,
+            async () => {
+                logger.debug(`Read RF Test Results And Create Report With Results command called.`);
+                if (!connection) {
+                    vscode.window.showErrorMessage("No connection available. Please log in first.");
+                    logger.warn(`readRFTestResultsAndCreateReportWithResults command is called without a connection.`);
+                    return;
+                }
+                await reportHandler.readTestResultsAndCreateReportWithResultsWithTb2Robot(
+                    context,
+                    folderNameOfTestbenchWorkingDirectory
+                );
+                logger.trace(`End of Read RF Test Results And Create Report With Results command.`);
             }
-            await reportHandler.readTestResultsAndCreateReportWithResultsWithTb2Robot(
-                context,
-                folderNameOfTestbenchWorkingDirectory
-            );
-            logger.trace(`End of Read RF Test Results And Create Report With Results command.`);
-        })
+        )
     );
 
     // TODO: Only display the command icon if the user is able to import?
@@ -732,7 +739,10 @@ export async function clearWorkspaceFolder(
  * @param directoryPathToDelete - The directory path to delete.
  * @param excludedFoldersFromDeletion - A list of folder names to exclude from deletion.
  */
-async function deleteDirectoryRecursively(directoryPathToDelete: string, excludedFoldersFromDeletion: string[]): Promise<void | null> {
+async function deleteDirectoryRecursively(
+    directoryPathToDelete: string,
+    excludedFoldersFromDeletion: string[]
+): Promise<void | null> {
     logger.debug(`Deleting directory recursively: ${directoryPathToDelete}`);
     logger.debug(`Excluded folders while deleting recursively:`, excludedFoldersFromDeletion);
     try {
@@ -759,13 +769,15 @@ async function deleteDirectoryRecursively(directoryPathToDelete: string, exclude
         }
 
         // Remove the directory itself unless it's an excluded folder.
-        const folderName = path.basename(directoryPathToDelete);  // Get the last portion of the path
+        const folderName = path.basename(directoryPathToDelete); // Get the last portion of the path
         if (!excludedFoldersFromDeletion.includes(folderName)) {
             logger.debug(`Deleting directory: ${directoryPathToDelete}`);
             await fsPromises.rmdir(directoryPathToDelete);
         }
     } catch (error: any) {
-        logger.error(`Failed to delete directory ${directoryPathToDelete}: ${error.message} (deleteDirectoryRecursively)`);
+        logger.error(
+            `Failed to delete directory ${directoryPathToDelete}: ${error.message} (deleteDirectoryRecursively)`
+        );
         return null;
     }
 }

@@ -5,6 +5,7 @@ import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 
 // Keep track of whether our login webview is visible or not to be able to toggle its visibility
 export let loginWebViewIsVisible: boolean = true; // Initially display the view when the extension starts
+
 export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewId = "testbenchExtension.webView";
     // Store the reference to the WebviewView
@@ -475,6 +476,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
 // Define the function that toggles visibility
 export async function updateWebViewDisplay(): Promise<void> {
+    logger.trace(`Updating login webview visibility`);
     if (loginWebViewIsVisible) {
         await displayWebView();
         logger.trace(`Login Webview is now displayed`);
@@ -486,6 +488,7 @@ export async function updateWebViewDisplay(): Promise<void> {
 
 // Define the function that toggles visibility
 export async function toggleWebViewVisibility(): Promise<void> {
+    logger.trace(`Toggling login webview visibility`);
     if (loginWebViewIsVisible) {
         await hideWebView();
         logger.trace(`Login Webview is now hidden`);
@@ -496,11 +499,13 @@ export async function toggleWebViewVisibility(): Promise<void> {
 }
 
 export async function hideWebView(): Promise<void> {
+    logger.trace("Hiding login webview");
     await vscode.commands.executeCommand("testbenchExtension.webView.removeView");
     loginWebViewIsVisible = false;
 }
 
 export async function displayWebView(): Promise<void> {
+    logger.trace("Displaying login webview");
     await vscode.commands.executeCommand("testbenchExtension.webView.focus");
     loginWebViewIsVisible = true;
 }

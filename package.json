@@ -16,7 +16,7 @@
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished"
+        "onView:testBenchExplorer"
     ],
     "main": "./dist/extension.js",
     "contributes": {
@@ -111,7 +111,7 @@
                             "resourceDirectory": "{root}/Resources",
                             "clearGenerationDirectory": true,
                             "logSuiteNumbering": true,
-                            "logCompoundInteractions": true,
+                            "logCompoundInteractions": "GROUP",
                             "subdivisionsMapping": {
                                 "libraries": {
                                     "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
@@ -188,8 +188,8 @@
                                 "description": "Log suite numbering."
                             },
                             "logCompoundInteractions": {
-                                "type": "boolean",
-                                "default": true,
+                                "type": "string",
+                                "default": "GROUP",
                                 "description": "Log compound interactions."
                             },
                             "subdivisionsMapping": {
@@ -420,7 +420,7 @@
                     "light": "resources/icons/refresh.svg",
                     "dark": "resources/icons/refresh.svg"
                 }
-            },            
+            },
             {
                 "command": "testbenchExtension.displayCommands",
                 "title": "TestBench: Display Commands",
