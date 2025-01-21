@@ -17,8 +17,10 @@ def write_test_suites(test_suites: dict[str, File], config: Configuration) -> No
     write_test_suite_files(test_suites, generation_directory)
     if config.createOutputZip:
         directory_to_zip(generation_directory)
-    logger.info(f"Successfully wrote {len(test_suites)} robot files.")
-    logger.info(f"Path: {Path(generation_directory).resolve()!s}")
+    logger.info(
+        f"Successfully generated {len(test_suites)} Robot Framework Testsuite "
+        f"in the following directory: {Path(generation_directory).resolve()!s}"
+    )
 
 
 def get_generation_directory(generation_directory: str) -> Path:
@@ -38,7 +40,7 @@ def get_generation_directory(generation_directory: str) -> Path:
 def clear_generation_directory(generation_dir: Path) -> None:
     if generation_dir.is_dir():
         shutil.rmtree(str(generation_dir))
-        logger.info("Files in generation directory deleted.")
+        logger.debug("Generation directory has been cleared.")
     zip_file = "".join([str(generation_dir), ".zip"])
     Path(zip_file).unlink(missing_ok=True)
 

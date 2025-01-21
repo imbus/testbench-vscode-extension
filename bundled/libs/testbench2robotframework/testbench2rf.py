@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from uuid import uuid4
 
+from robot import version as robot_version
 from robot.parsing.lexer.tokens import Token
 from robot.parsing.model.blocks import (
     End,
     File,
-    Group,
     Keyword,
     KeywordSection,
     SettingSection,
@@ -20,7 +20,6 @@ from robot.parsing.model.blocks import (
 from robot.parsing.model.statements import (
     Comment,
     EmptyLine,
-    GroupHeader,
     KeywordCall,
     LibraryImport,
     Metadata,
@@ -53,6 +52,12 @@ from .model import (
     UserDefinedField,
 )
 from .utils import PathResolver
+
+try:
+    from robot.parsing.model.blocks import Group
+    from robot.parsing.model.statements import GroupHeader
+except ImportError:
+    Group = None
 
 SEPARATOR = "    "
 ROBOT_PATH_SEPARATOR = "/"
@@ -194,7 +199,9 @@ class RfTestCase:
             )
         )
         for interaction in interaction_detail.interactions:
-            self._get_interaction_calls(interaction, indent, interaction_detail.spec.sequencePhase)
+            self._get_interaction_calls(
+                interaction, indent, sequence_phase or interaction_detail.spec.sequencePhase
+            )
 
     def _create_rf_keyword_calls(
         self, interaction_calls: list[InteractionCall]
@@ -224,12 +231,16 @@ class RfTestCase:
                 compound_keyword_call = self._create_rf_compound_keyword(
                     interaction_call, self.config.logCompoundInteractions
                 )
-                keyword_lists[tc_index].append(compound_keyword_call)
-                if group_stack and group_stack[-1][1] >= interaction_call.indent:
+                while group_stack and group_stack[-1][1] >= interaction_call.indent:
                     group_stack.pop()
                 if group_stack:
                     group_stack[-1][0].body.append(compound_keyword_call)
-                if self.config.logCompoundInteractions == CompoundInteractionLogging.GROUP:
+                else:
+                    keyword_lists[tc_index].append(compound_keyword_call)
+                if (
+                    Group
+                    and self.config.logCompoundInteractions == CompoundInteractionLogging.GROUP
+                ):
                     group_stack.append((compound_keyword_call, interaction_call.indent))
         return keyword_lists
 
@@ -444,11 +455,12 @@ class RfTestCase:
         compound_interaction_type=CompoundInteractionLogging.COMMENT,
     ) -> Comment | Group:
         interaction_indent = " " * (interaction.indent * 4)
-        if compound_interaction_type == CompoundInteractionLogging.GROUP:
+        if Group and compound_interaction_type == CompoundInteractionLogging.GROUP:
             return Group(
                 GroupHeader.from_params(interaction.name, indent=interaction_indent),
                 end=End.from_params(interaction_indent),
             )
+
         return Comment.from_params(
             comment=self._generate_compound_interaction_comment(interaction),
             indent=interaction_indent,
@@ -494,6 +506,20 @@ def create_test_suites(
     path_resolver: PathResolver,
     config: Configuration,
 ) -> dict[str, File]:
+    if not Group:
+        if config.logCompoundInteractions == CompoundInteractionLogging.GROUP:
+            logger.warning(
+                f"You're using Robot Framework {robot_version.get_full_version()} "
+                "which does not support 'Robot Framework Groups'. "
+                "Compund interactions are logged as 'COMMENT'. To hide the warning "
+                "set the configuration '--logCompoundInteractions' to 'COMMENT' or 'NONE'."
+            )
+        else:
+            logger.debug(
+                f"You're using Robot Framework {robot_version.get_full_version()} "
+                "which does not support 'Robot Framework Groups'. Consider updating to "
+                "newer Robot Framework version to get enhanced logging for compound interactions."
+            )
     tcs_paths = path_resolver.tcs_paths
     test_suites = {}
     for uid, test_case_set in test_case_set_catalog.items():
@@ -714,17 +740,14 @@ class RobotSuiteFileBuilder:
             for unknown_import in unknown_imports
             if not self._is_library(root_subdivision) and not self._is_resource(root_subdivision)
         }
-        for root, subdivision_names in import_dict.items():
-            logger.debug(
-                f"{self.test_case_set.details.uniqueID} has imports {list(subdivision_names)} "
-                f"from unknown root subdivision '{root}'!"
-            )
         if unknown_imports:
             logger.warning(
                 f"{self.test_case_set.details.uniqueID} has unknown imports. "
-                f"TestBench Subdivisions which correspond to Libraries or Resources "
-                f"need to be declared in the configuration file. "
-                f"See Log for more details."
+                "TestBench Subdivisions which correspond to Libraries or Resources "
+                "must be mapped via on of the following config options: 'rfLibraryRegex', "
+                "'rfResourceRegex', 'rfLibraryRoots', 'rfResourceRoots'. "
+                "The following subdivisions could not be identified "
+                f"as library or resource: {list(unknown_imports)}."
             )
         return [
             Comment.from_params(comment=f"# UNKNOWN    {unknown}", indent="")

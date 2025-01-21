@@ -5,12 +5,20 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 if sys.version_info >= (3, 11):
     import tomllib
 else:
     import tomli as tomllib
 from .model import StrEnum
+
+DEFAULT_LIBRARY_REGEX = r"(?:.*\.)?(?P<resourceName>[^.]+?)\s*\[Robot-Library\].*"
+DEFAULT_LIBRARY_ROOTS: Final[list[str]] = ["RF", "RF-Library"]
+DEFAULT_RESOURCE_REGEX = r"(?:.*\.)?(?P<resourceName>[^.]+?)\s*\[Robot-Resource\].*"
+DEFAULT_RESOURCE_ROOTS: Final[list[str]] = ["RF-Resource"]
+DEFAULT_GENERATION_DIRECTORY = "{root}/Generated"
+
 
 
 def find_pyproject_toml() -> Path:
@@ -168,19 +176,19 @@ class Configuration:
     def from_dict(cls, dictionary) -> Configuration:
         return cls(
             rfLibraryRegex=dictionary.get(
-                "rfLibraryRegex", [r"(?:.*\.)?(?P<resourceName>[^.]+?)\s*\[Robot-Library\].*"]
+                "rfLibraryRegex", [DEFAULT_LIBRARY_REGEX]
             ),
             rfResourceRegex=dictionary.get(
-                "rfResourceRegex", [r"(?:.*\.)?(?P<resourceName>[^.]+?)\s*\[Robot-Resource\].*"]
+                "rfResourceRegex", [DEFAULT_RESOURCE_REGEX]
             ),
-            rfLibraryRoots=dictionary.get("rfLibraryRoots", ["RF", "RF-Library"]),
-            rfResourceRoots=dictionary.get("rfResourceRoots", ["RF-Resource"]),
+            rfLibraryRoots=dictionary.get("rfLibraryRoots", DEFAULT_LIBRARY_ROOTS),
+            rfResourceRoots=dictionary.get("rfResourceRoots", DEFAULT_RESOURCE_ROOTS),
             fullyQualified=dictionary.get("fullyQualified", False),
             subdivisionsMapping=SubdivisionsMapping.from_dict(
                 dictionary.get("subdivisionsMapping", {})
             ),
             forcedImport=ForcedImport.from_dict(dictionary.get("forcedImport", {})),
-            generationDirectory=dictionary.get("generationDirectory", "{root}/Generated"),
+            generationDirectory=dictionary.get("generationDirectory", DEFAULT_GENERATION_DIRECTORY),
             createOutputZip=dictionary.get("createOutputZip", False),
             logSuiteNumbering=dictionary.get("logSuiteNumbering", False),
             clearGenerationDirectory=dictionary.get("clearGenerationDirectory", True),

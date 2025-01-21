@@ -10,7 +10,7 @@ from shutil import copytree
 from typing import Optional, Union
 from urllib.parse import unquote
 
-from robot.result import Group, Keyword, ResultVisitor, TestCase, TestSuite
+from robot.result import Keyword, ResultVisitor, TestCase, TestSuite
 
 from .config import AttachmentConflictBehaviour, Configuration, ReferenceBehaviour
 from .json_reader import TestBenchJsonReader
@@ -36,6 +36,11 @@ from .model import (
     VerdictStatus,
 )
 from .utils import directory_to_zip, ensure_dir_exists, get_directory
+
+try:
+    from robot.result import Group
+except ImportError:
+    Group = None
 
 BACKGROUND_COLOR = {
     "PASS": "#04AF91",
@@ -297,7 +302,8 @@ class ResultWriter(ResultVisitor):
         end_time = test.end_time.replace(
             tzinfo=timezone(datetime.now(timezone.utc).astimezone().utcoffset())
         )
-        # self.protocol_test_case.result.timestamp = end_time.isoformat() # Isoformat currently not suported by server
+        # Isoformat currently not suported by server
+        # self.protocol_test_case.result.timestamp = end_time.isoformat()
         self.protocol_test_case.result.timestamp = (
             f"{end_time.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z"
         )
@@ -320,45 +326,28 @@ class ResultWriter(ResultVisitor):
             self.protocol_test_case.result = protocol_result
 
     def _get_test_phase_body(self, test_phase: TestCase) -> list[Keyword]:
-        test_phase_body = []
-        for body_item in test_phase.body:
-            if isinstance(body_item, Keyword):
-                test_phase_body.append(body_item)
-                logger.info(body_item)
-            elif isinstance(body_item, Group):
-                test_phase_body.extend(self._get_test_phase_body(body_item))
-        return test_phase_body
+        return self._get_keywords_from_rf_body(test_phase)
 
     def _get_test_phase_setup(self, test_phase: TestCase) -> list[Keyword]:
         test_phase_setup = []
         if test_phase.has_setup and test_phase.setup:
-            self._test_setup_passed = test_phase.setup.passed
-            if test_phase.setup.name == f"Setup-{test_phase.name}":
-                test_phase_setup = list(
-                    filter(
-                        lambda kw: isinstance(kw, Keyword)
-                        and kw.parent.name == f"Setup-{test_phase.name}",
-                        test_phase.setup.body,
-                    )
-                )
-            else:
-                test_phase_setup = [test_phase.setup]
+            test_phase_setup = self._get_keywords_from_rf_body(test_phase.setup)
         return test_phase_setup
 
     def _get_test_phase_teardown(self, test_phase: TestCase) -> list[Keyword]:
         test_phase_teardown = []
         if test_phase.has_teardown and test_phase.teardown:
-            if test_phase.teardown.name == f"Teardown-{test_phase.name}":
-                test_phase_teardown = list(
-                    filter(
-                        lambda kw: isinstance(kw, Keyword)
-                        and kw.parent.name == f"Teardown-{test_phase.name}",
-                        test_phase.teardown.body,
-                    )
-                )
-            else:
-                test_phase_teardown = [test_phase.teardown]
+            test_phase_teardown = self._get_keywords_from_rf_body(test_phase.teardown)
         return test_phase_teardown
+
+    def _get_keywords_from_rf_body(self, rf_body) -> list[Keyword]:
+        keywords = []
+        for body_item in rf_body.body:
+            if isinstance(body_item, Keyword):
+                keywords.append(body_item)
+            elif Group and isinstance(body_item, Group):
+                keywords.extend(self._get_keywords_from_rf_body(body_item))
+        return keywords
 
     def _set_atomic_interactions_execution_result(
         self, atomic_interactions: list[InteractionDetails], test_chain: list[TestCase]

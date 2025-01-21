@@ -2,15 +2,16 @@ import * as vscode from "vscode";
 import { exec } from "child_process";
 import { logger } from "./extension";
 
+// Not used in the current version of the extension. Can be used to debug / check if the required dependencies are met.
 export class dependenciesCheck {
     public static isVSCodeVersionValid(vsCodeVersion: string): boolean {
         const [major, minor] = vsCodeVersion.split(".").map(Number);
 
         if (major > 1 || (major === 1 && minor >= 86)) {
-            logger.debug(`Current version is at least 1.86.`);
+            logger.debug(`Current VS Code version is at least 1.86.`);
             return true;
         } else {
-            logger.error(`Current version is below 1.86.`);
+            logger.error(`Current VS Code version is below 1.86.`);
             vscode.window.showErrorMessage(
                 `Current VS-Code version: ${vsCodeVersion}. Required minimum version: 1.86.`
             );
@@ -20,11 +21,12 @@ export class dependenciesCheck {
 
     public static isPythonExtensionInstalled(pythonExtension: vscode.Extension<any> | undefined): boolean {
         if (pythonExtension) {
-            logger.debug(`Python Extension is installed.`);
+            logger.debug(`Python Extension is installed in VS Code.`);
             return true;
         } else {
-            logger.error(`Python Extension is not installed.`);
-            vscode.window.showErrorMessage("Python Extension is not installed.");
+            const pythonExtensionNotInstalledErrorMessage = "Python Extension is not installed in VS Code.";
+            logger.error(pythonExtensionNotInstalledErrorMessage);
+            vscode.window.showErrorMessage(pythonExtensionNotInstalledErrorMessage);
             return false;
         }
     }
@@ -33,14 +35,16 @@ export class dependenciesCheck {
         return new Promise((resolve) => {
             exec("pip show robotframework", (error, stdout, stderr) => {
                 if (error) {
-                    logger.error(`Error: ${error.message}`);
-                    vscode.window.showErrorMessage(`Robot Framework Error: ${error.message}`);
+                    const errorWhenCheckingRFMessage = `Error when checking Robot Framework installation: ${error.message}`;
+                    logger.error(errorWhenCheckingRFMessage);
+                    vscode.window.showErrorMessage(errorWhenCheckingRFMessage);
                     resolve(false);
                     return;
                 }
                 if (stderr) {
-                    logger.error(`Stderr: ${stderr}`);
-                    vscode.window.showErrorMessage(`Robot Framework Stderr: ${stderr}`);
+                    const stderrWhenCheckingRFMessage = `Stderr when checking Robot Framework installation: ${stderr}`;
+                    logger.error(stderrWhenCheckingRFMessage);
+                    vscode.window.showErrorMessage(stderrWhenCheckingRFMessage);
                     resolve(false);
                     return;
                 }
@@ -75,13 +79,12 @@ export class dependenciesCheck {
                     const [major, minor] = version.split(".").map(Number);
 
                     if (major > 3 || (major === 3 && minor >= 8)) {
-                        logger.debug("Python version is at least 3.8");
+                        logger.debug("Python version is at least 3.8: ", version);
                         resolve(true);
                     } else {
-                        logger.error("Python version is below 3.8");
-                        vscode.window.showErrorMessage(
-                            `Current Python version: ${version}. Required minimum version: 3.8.`
-                        );
+                        const pythonVersionErrorMessage = `Current Python version: ${version}. Required minimum version: 3.8.`;
+                        logger.error(pythonVersionErrorMessage);
+                        vscode.window.showErrorMessage(pythonVersionErrorMessage);
                         resolve(false);
                     }
                 }
@@ -89,29 +92,29 @@ export class dependenciesCheck {
         });
     }
 
-    public static async verifyRequiredDependencies(): Promise<boolean> {
-        let res: boolean = true;
+    public static async areRequiredDependenciesMet(): Promise<boolean> {
+        let areDependenciesMet: boolean = true;
 
         if (!this.isVSCodeVersionValid(vscode.version)) {
-            res = false;
+            areDependenciesMet = false;
         }
 
         if (!this.isPythonExtensionInstalled(vscode.extensions.getExtension("ms-python.python"))) {
-            res = false;
+            areDependenciesMet = false;
         }
 
         await this.isPythonVersionCompatible().then((successful) => {
             if (!successful) {
-                res = false;
+                areDependenciesMet = false;
             }
         });
 
         await this.isRobotFrameworkInstalled().then((successful) => {
             if (!successful) {
-                res = false;
+                areDependenciesMet = false;
             }
         });
 
-        return res;
+        return areDependenciesMet;
     }
 }
