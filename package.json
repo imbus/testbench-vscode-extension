@@ -86,41 +86,173 @@
                 }
             },
             {
+                "title": "Logger",
+                "properties": {
+                    "testbenchExtension.testBenchLogger": {
+                        "type": "string",
+                        "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
+                        "default": "Trace",
+                        "order": 9,
+                        "enum": [
+                            "No logging",
+                            "Trace",
+                            "Debug",
+                            "Info",
+                            "Warn",
+                            "Error"
+                        ],
+                        "enumDescriptions": [
+                            "Disable logging",
+                            "Most detailed information",
+                            "Detailed information",
+                            "Information messages",
+                            "Warning messages",
+                            "Error messages"
+                        ],
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
                 "title": "Testbench2robotframework",
                 "properties": {
                     "testbenchExtension.useDefaultValuesForTestbench2robotframework": {
                         "type": "boolean",
                         "default": false,
                         "description": "Use default values for the testbench2robotframework configuration.",
-                        "order": 9,
+                        "order": 10,
                         "scope": "resource"
+                    },
+                    "testbenchExtension.cleanFilesBeforeTestGenerationInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Deletes all files present in the output directory before new test suites are created.",
+                        "order": 11,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.fullyQualifiedKeywordsInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Option to call Robot Framework keywords by their fully qualified name in the generated test suites.",
+                        "order": 12,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.compoundInteractionLoggingInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Mode for logging compound interactions.",
+                        "order": 13,
+                        "default": "GROUP",
+                        "enum": [
+                            "GROUP",
+                            "COMMENT",
+                            "NONE"
+                        ],
+                        "enumDescriptions": [
+                            "Group",
+                            "Comment",
+                            "None"
+                        ],
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.logSuiteNumberingInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Enables logging of the test suite numbering.",
+                        "order": 14,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.resourceDirectoryPathInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Directory containing the Robot Framework resource files.",
+                        "order": 15,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.libraryRegexInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*"
+                        ],
+                        "order": 16
+                    },
+                    "testbenchExtension.libraryRootInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "RF",
+                            "RF-Library"
+                        ],
+                        "order": 17
+                    },
+                    "testbenchExtension.resourceRegexInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*"
+                        ],
+                        "order": 18
+                    },
+                    "testbenchExtension.resourceRootInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "RF-Resource"
+                        ],
+                        "order": 19
+                    },
+                    "testbenchExtension.libraryMappingInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Library mapping.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [],
+                        "order": 20
+                    },
+                    "testbenchExtension.resourceMappingInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Resource mapping.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [],
+                        "order": 21
                     },
                     "testbenchExtension.testbench2robotframeworkConfig": {
                         "type": "object",
                         "default": {
-                            "rfLibraryRoots": [
+                            "library-root": [
                                 "Interactions",
                                 "RF-Library"
                             ],
-                            "rfResourceRoots": [
+                            "resource-root": [
                                 "RF-Resource"
                             ],
-                            "fullyQualified": true,
-                            "generationDirectory": "{root}/Generated",
-                            "createOutputZip": true,
-                            "resourceDirectory": "{root}/Resources",
-                            "clearGenerationDirectory": true,
-                            "logSuiteNumbering": true,
-                            "logCompoundInteractions": "GROUP",
-                            "subdivisionsMapping": {
-                                "libraries": {
-                                    "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
-                                    "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
-                                },
-                                "resources": {
-                                    "MyKeywords": "{root}/../MyKeywords.resource",
-                                    "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
-                                }
+                            "fully-qualified": false,
+                            "output-directory": "{workspaceFolder}/Generated",
+                            "log-suite-numbering": true,
+                            "resource-directory": "{workspaceFolder}/Resources",
+                            "clean": true,
+                            "compound-interaction-logging": "GROUP",
+                            "library-mapping": {
+                                "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
+                                "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
+                            },
+                            "resource-mapping": {
+                                "MyKeywords": "{root}/../MyKeywords.resource",
+                                "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
                             },
                             "forcedImport": {
                                 "libraries": [],
@@ -128,13 +260,14 @@
                                 "variables": []
                             },
                             "testCaseSplitPathRegEx": "^StopWithRestart\\..*",
-                            "loggingConfiguration": {
-                                "console": {
-                                    "logLevel": "info"
-                                }
+                            "console-logging": {
+                                "logLevel": "debug"
+                            },
+                            "file-logging": {
+                                "logLevel": "info"
                             }
                         },
-                        "description": "Configuration setting for customizing the testbench2robotframework library options.",
+                        "description": "(TO BE REMOVED) Configuration setting for customizing the testbench2robotframework library options.",
                         "properties": {
                             "rfLibraryRoots": {
                                 "type": "array",
@@ -273,42 +406,9 @@
                                 }
                             }
                         },
-                        "order": 10,
-                        "scope": "resource"
-                    }
-                }
-            },
-            {
-                "title": "Logger",
-                "properties": {
-                    "testbenchExtension.testBenchLogger": {
-                        "type": "string",
-                        "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
-                        "default": "Trace",
                         "order": 11,
-                        "enum": [
-                            "No logging",
-                            "Trace",
-                            "Debug",
-                            "Info",
-                            "Warn",
-                            "Error"
-                        ],
-                        "enumDescriptions": [
-                            "Disable logging",
-                            "Most detailed information",
-                            "Detailed information",
-                            "Information messages",
-                            "Warning messages",
-                            "Error messages"
-                        ],
                         "scope": "resource"
-                    }
-                }
-            },
-            {
-                "title": "Other",
-                "properties": {
+                    },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
                         "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server.",

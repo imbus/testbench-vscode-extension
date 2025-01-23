@@ -19,11 +19,12 @@ export class tb2robotLib {
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
             const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
-            const generateTestsCommand = `generate-tests`;
+            const generateTestsCommand: string = `generate-tests`;
+            const configOptionCommand: string = `--config`; // Same as -c
 
             let command = `${commandBase} ${generateTestsCommand} ${reportPath}`;
             if (configJSONPath) {
-                command = `${commandBase} ${generateTestsCommand} -c ${configJSONPath} ${reportPath}`;
+                command = `${commandBase} ${generateTestsCommand} ${configOptionCommand} ${configJSONPath} ${reportPath}`;
             }
 
             logger.debug(`Executing command: ${command}`);
@@ -94,8 +95,6 @@ export class tb2robotLib {
             const outputDirOptionCommand: string = `--output-directory`;  // Same as -d
             const configOptionCommand: string = `--config`;  // Same as -c
 
-            // TODO: -o and -r doesnt exist anymore
-
             // Overwrite the results in the reportPath if no resultPath is provided.
             let command: string = `${commandBase} ${fetchResultsCommand} ${outputDirOptionCommand} ${outputXmlPath} ${reportWithoutResultsPath}`;
 
@@ -138,7 +137,7 @@ export class tb2robotLib {
         reportPath: string,
         configJSONPath?: string
     ): Promise<boolean> {
-        const generateTestsCommand = `generate-tests`;
+        const generateTestsCommand: string = `generate-tests`;
         logger.debug(
             `Calling testbench2robotframework ${generateTestsCommand} command with working directory ${commandExecutionDirectory}, report path ${reportPath}, JSON config path ${configJSONPath}.`
         );
@@ -184,7 +183,7 @@ export class tb2robotLib {
         resultPath?: string,
         configJSONPath?: string
     ): Promise<boolean> {
-        const fetchResultsCommand = `fetch-results`;
+        const fetchResultsCommand: string = `fetch-results`;
         logger.debug(`Calling testbench2robotframework ${fetchResultsCommand} command.`);
         let isFetchResultsCommandSuccessful: boolean = true;
 
@@ -197,8 +196,8 @@ export class tb2robotLib {
             configJSONPath
         )
             .then(() => {
-                let providedPath = "none";
-                let providedConfig = "";
+                let providedPath: string = "none";
+                let providedConfig: string = "";
                 if (resultPath) {
                     providedPath = resultPath;
                 }

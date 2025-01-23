@@ -163,6 +163,7 @@ export async function activate(context: vscode.ExtensionContext) {
             logger.debug("Workspace location was not set. Initializing it to the first workspace folder of VS Code.");
         }
 
+        // TODO: Remove default values from extension settings and the old tb2robot configuration from settings.json
         if (config.get<boolean>("useDefaultValuesForTestbench2robotframework")) {
             // For testbench2robotframework library configuration, set the generation and resource directory relative to the workspace location
             let defaultTestbench2robotframeworkConfig: testBenchTypes.Testbench2robotframeworkConfiguration =
