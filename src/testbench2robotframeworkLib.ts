@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { exec } from "child_process";
 import { pyCommandBuilder } from "./pyCommandBuilder";
-import { logger } from "./extension";
+import { getConfig, logger } from "./extension";
 
 export class tb2robotLib {
     /**
@@ -9,24 +9,22 @@ export class tb2robotLib {
      * @param {vscode.ExtensionContext} context - The ExtensionContext.
      * @param {string} commandExecutionDirectory - Directory in which the command is to be executed.
      * @param {string} reportPath - Path to a folder or ZIP file containing TestBench JSON reports.
-     * @param {string} configJSONPath - Path to a JSON file, for the configuration of the output. If not provided, a config.json will be automatically generated.
      */
     public static executeTb2robotGenerateTestsCommand(
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string,
-        reportPath: string,
-        configJSONPath?: string
+        reportPath: string
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
             const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
             const generateTestsCommand: string = `generate-tests`;
-            const configOptionCommand: string = `--config`; // Same as -c
 
-            let command = `${commandBase} ${generateTestsCommand} ${reportPath}`;
-            if (configJSONPath) {
-                command = `${commandBase} ${generateTestsCommand} ${configOptionCommand} ${configJSONPath} ${reportPath}`;
-            }
+            // Get the options from the extension settings
+            const options = this.getTb2RobotGenerateTestOptionsFromSettings();
 
+            let command = `${commandBase} ${generateTestsCommand} ${this.buildOptionsStringForTestGeneration(
+                options
+            )} ${reportPath}`;
             logger.debug(`Executing command: ${command}`);
 
             exec(command, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
@@ -44,7 +42,7 @@ export class tb2robotLib {
     /**
      * Prints the version of the tb2robot library in stdout.
      * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
-     * @param {string} commandExecutionDirectory - Directory in which the command is to be executed.     
+     * @param {string} commandExecutionDirectory - Directory in which the command is to be executed.
      */
     public static executeTb2robotVersionCommand(
         context: vscode.ExtensionContext,
@@ -56,7 +54,7 @@ export class tb2robotLib {
             const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
 
             let command: string = `${commandBase} --version`;
-           
+
             logger.debug(`Executing command inside ${commandExecutionDirectory}: ${command}`);
 
             // Execute the command inside the working directory.
@@ -86,14 +84,12 @@ export class tb2robotLib {
         commandExecutionDirectory: string,
         outputXmlPath: string,
         reportWithoutResultsPath: string,
-        resultPath?: string,
-        configJSONPath?: string
+        resultPath?: string
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
             const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
             const fetchResultsCommand: string = `fetch-results`;
-            const outputDirOptionCommand: string = `--output-directory`;  // Same as -d
-            const configOptionCommand: string = `--config`;  // Same as -c
+            const outputDirOptionCommand: string = `--output-directory`; // Same as -d
 
             // Overwrite the results in the reportPath if no resultPath is provided.
             let command: string = `${commandBase} ${fetchResultsCommand} ${outputDirOptionCommand} ${outputXmlPath} ${reportWithoutResultsPath}`;
@@ -101,11 +97,6 @@ export class tb2robotLib {
             // Write the results to the resultPath if provided.
             if (resultPath) {
                 command = `${commandBase} ${fetchResultsCommand} ${outputDirOptionCommand} ${resultPath} ${outputXmlPath} ${reportWithoutResultsPath}`;
-            }
-
-            // Use the provided config file if provided.
-            if (configJSONPath) {
-                command = `${commandBase} ${fetchResultsCommand} ${configOptionCommand} ${configJSONPath} ${outputDirOptionCommand} ${resultPath} ${outputXmlPath} ${reportWithoutResultsPath}`;
             }
 
             logger.debug(`Executing command inside ${commandExecutionDirectory}: ${command}`);
@@ -128,27 +119,22 @@ export class tb2robotLib {
      * @param @param {vscode.ExtensionContext} context - The ExtensionContext.
      * @param {string} commandExecutionDirectory The directory in which the command is to be executed.
      * @param {string} reportPath Path to a folder or ZIP file containing TestBench JSON reports.
-     * @param {string} configJSONPath Path to a JSON configuration file. If not provided, a config.json will be automatically generated.
      * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
      */
     public static async startTb2robotframeworkTestGeneration(
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string,
-        reportPath: string,
-        configJSONPath?: string
+        reportPath: string
     ): Promise<boolean> {
         const generateTestsCommand: string = `generate-tests`;
         logger.debug(
-            `Calling testbench2robotframework ${generateTestsCommand} command with working directory ${commandExecutionDirectory}, report path ${reportPath}, JSON config path ${configJSONPath}.`
+            `Calling testbench2robotframework ${generateTestsCommand} command with working directory ${commandExecutionDirectory}, report path ${reportPath}.`
         );
         let isGenerateTestsCommandSuccessful: boolean = true;
 
-        await this.executeTb2robotGenerateTestsCommand(context, commandExecutionDirectory, reportPath, configJSONPath)
+        await this.executeTb2robotGenerateTestsCommand(context, commandExecutionDirectory, reportPath)
             .then(() => {
                 let config = "no";
-                if (configJSONPath) {
-                    config = configJSONPath;
-                }
 
                 logger.debug(
                     `tb2robot ${generateTestsCommand} completed using ${reportPath}, ${config} config file provided.`
@@ -180,8 +166,7 @@ export class tb2robotLib {
         commandExecutionDirectory: string,
         outputXmlPath: string,
         reportPath: string,
-        resultPath?: string,
-        configJSONPath?: string
+        resultPath?: string
     ): Promise<boolean> {
         const fetchResultsCommand: string = `fetch-results`;
         logger.debug(`Calling testbench2robotframework ${fetchResultsCommand} command.`);
@@ -192,17 +177,13 @@ export class tb2robotLib {
             commandExecutionDirectory,
             outputXmlPath,
             reportPath,
-            resultPath,
-            configJSONPath
+            resultPath
         )
             .then(() => {
                 let providedPath: string = "none";
                 let providedConfig: string = "";
                 if (resultPath) {
                     providedPath = resultPath;
-                }
-                if (configJSONPath) {
-                    providedConfig = `, ${configJSONPath}`;
                 }
 
                 logger.debug(
@@ -217,5 +198,85 @@ export class tb2robotLib {
 
         logger.debug(`startTb2robotFetchResults executed with success variable: ${isFetchResultsCommandSuccessful}`);
         return isFetchResultsCommandSuccessful;
+    }
+
+    /**
+     * Builds a string of options for the tb2robot command.
+     * @param options The options to be added to the command.
+     * @returns A string of options for the tb2robot command.
+     */
+    public static buildOptionsStringForTestGeneration(options: { [key: string]: string | string[] | boolean }): string {
+        let optionsString: string = "";
+        for (const [key, value] of Object.entries(options)) {
+            // For boolean options, add the option without a value if true
+            optionsString += ` --${key}`;
+            if (typeof value === "string") {
+                optionsString += ` \"${value}\"`;
+            } else if (Array.isArray(value)) {
+                for (const item of value) {
+                    optionsString += ` --${key} ${item}`;
+                }
+            }
+        }
+
+        logger.trace("Built options string for tb2robot command:", optionsString);
+        return optionsString;
+    }
+
+    /**
+     * Retrieves tb2robot options from the extension settings, excluding those with default values.
+     * @returns An object containing the tb2robot options.
+     */
+    private static getTb2RobotGenerateTestOptionsFromSettings(): { [key: string]: string | string[] | boolean } {
+        const optionsInExtensionSettings: { [key: string]: string | string[] | boolean } = {};
+
+        const addBooleanOptionIfSet = (optionName: string, configKey: string, defaultValue: boolean) => {
+            const value = getConfig().get<boolean>(configKey);
+            // TODO: Removed from all ifs below: && value !== defaultValue
+            if (value !== undefined && value !== defaultValue) {
+                if (value) {
+                    // Add the option without a value if true
+                    optionsInExtensionSettings[optionName] = value;
+                }
+            }
+        };
+
+        addBooleanOptionIfSet("clean", "cleanFilesBeforeTestGenerationInTestbench2robotframework", false);
+        addBooleanOptionIfSet("fully-qualified", "fullyQualifiedKeywordsInTestbench2robotframework", false);
+        addBooleanOptionIfSet("log-suite-numbering", "logSuiteNumberingInTestbench2robotframework", false);
+
+        // Include the option only if the user has set a value different from the default
+        const addOptionIfSet = (optionName: string, configName: string, defaultValue: any) => {
+            const value = getConfig().get(configName);
+            if (value !== undefined && value !== defaultValue) {
+                optionsInExtensionSettings[optionName] = value as string | string[];
+            }
+        };
+
+        addOptionIfSet("compound-interaction-logging", "compoundInteractionLoggingInTestbench2robotframework", "GROUP");
+        addOptionIfSet("resource-directory", "resourceDirectoryPathInTestbench2robotframework", "");
+
+        // Include the option only if the user has set a value different from the default
+        const addArrayOptionIfSet = (optionName: string, configName: string, defaultValue: string[]) => {
+            const value = getConfig().get<string[]>(configName);
+            // TODO: Removed from if: && JSON.stringify(value) !== JSON.stringify(defaultValue)
+            if (value !== undefined && JSON.stringify(value) !== JSON.stringify(defaultValue)) {
+                optionsInExtensionSettings[optionName] = value;
+            }
+        };
+
+        addArrayOptionIfSet("library-regex", "libraryRegexInTestbench2robotframework", [
+            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*",
+        ]);
+        addArrayOptionIfSet("library-root", "libraryRootInTestbench2robotframework", ["RF", "RF-Library"]);
+        addArrayOptionIfSet("resource-regex", "resourceRegexInTestbench2robotframework", [
+            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*",
+        ]);
+        addArrayOptionIfSet("resource-root", "resourceRootInTestbench2robotframework", ["RF-Resource"]);
+        addArrayOptionIfSet("library-mapping", "libraryMappingInTestbench2robotframework", []);
+        addArrayOptionIfSet("resource-mapping", "resourceMappingInTestbench2robotframework", []);
+
+        logger.trace("tb2robot options in extension settings:", optionsInExtensionSettings);
+        return optionsInExtensionSettings;
     }
 }

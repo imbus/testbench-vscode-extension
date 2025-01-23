@@ -872,29 +872,20 @@ async function runRobotFrameworkTestGenerationProcess(
     const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
         workspaceLocation,
         folderNameOfTestbenchWorkingDirectory
-    );
-
-    const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJsonLocally(
-        testbenchWorkingDirectoryPathInsideWorkspace
-    );
-    if (!tb2robotConfigFilePath) {
-        logger.error("Failed to save configuration file.");
-        return null;
-    }    
+    ); 
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
             context,
             testbenchWorkingDirectoryPathInsideWorkspace, // The command will be executed in this folder
-            downloadedReportZipFilePath,
-            tb2robotConfigFilePath
+            downloadedReportZipFilePath
         );
 
-    await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, downloadedReportZipFilePath);
+    await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipFilePath);
 
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         const testGenerationFailedMessage: string =
-            "Test generation failed. Please make sure that your tests can be automated.";
+            "Test generation failed.";
         logger.error(testGenerationFailedMessage);
         vscode.window.showErrorMessage(testGenerationFailedMessage);
         return null;
@@ -930,22 +921,18 @@ function updateLastGeneratedReportParams(
 }
 
 /**
- * Clean up the testbench2robotframework configuration file after processing, and remove the report ZIP file if configured.
- * @param tb2robotConfigFilePath The path of the testbench2robotframework configuration file
+ * Remove the report ZIP file after processing if configured.
  * @param reportZipFilePath The path of the report ZIP file
  */
-async function cleanUpTb2robotConfigAndReportFiles(
-    tb2robotConfigFilePath: string,
+export async function cleanUpReportFileIfConfiguredInSettings(    
     reportZipFilePath: string
-): Promise<void> {
-    logger.debug("Cleaning up testbench2robotframework configuration and report files.");
-    await deleteTb2RobotConfigurationFile(tb2robotConfigFilePath);
-
+): Promise<void> {   
     // Only remove the report ZIP file if configured in extension settings
     if (getConfig().get<boolean>("clearReportAfterProcessing")) {
         await removeReportZipFile(reportZipFilePath);
+    } else { 
+        logger.debug("Report ZIP file cleanup skipped as per the extension settings.");
     }
-    logger.debug("Cleanup of testbench2robotframework config and report files are done.");
 }
 
 /**
@@ -1237,17 +1224,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             }
 
             logger.debug(`Report with results is saved to ${reportWithResultsZipFilePath}`);
-
-            reportProgress(`Preparing configuration for testbench2robotframework.`, reportIncrement / 2);
-
-            const tb2robotConfigFilePath: string | null = await saveTestbench2RobotConfigurationAsJsonLocally(
-                testbenchWorkingDirectoryPathInsideWorkspace
-            );
-            if (!tb2robotConfigFilePath) {
-                // Error logging is done in saveTestbench2RobotConfigurationAsJsonLocally
-                return undefined;
-            }
-
             reportProgress(`Reading test results and creating report.`, reportIncrement / 2);
 
             pathOfReportWithResultsZip = path.join(testbenchWorkingDirectoryPathInsideWorkspace, reportFileWithResultsZipName);            
@@ -1258,11 +1234,10 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     testbenchWorkingDirectoryPathInsideWorkspace, // The command will be executed in this folder
                     robotResultOutputXMLFilePath,
                     reportWithResultsZipFilePath,
-                    pathOfReportWithResultsZip,
-                    tb2robotConfigFilePath
+                    pathOfReportWithResultsZip
                 );
 
-            await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, reportWithResultsZipFilePath);
+            await cleanUpReportFileIfConfiguredInSettings(reportWithResultsZipFilePath);
 
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const importErrorMessage: string =
@@ -1367,10 +1342,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 increment: 25,
             });
 
-            if (getConfig().get<boolean>("clearReportAfterProcessing")) {
-                // Remove the report zip file after usage
-                await removeReportZipFile(pathOfCreatedReportWithResults);
-            }
+            await cleanUpReportFileIfConfiguredInSettings(pathOfCreatedReportWithResults);            
         }
     );
 }
@@ -1434,56 +1406,6 @@ export async function startTestGenerationForCycle(
     }
 }
 
-/**
- * Writes the testbench2robotframework configuration to a JSON file in workspace folder.
- * @param folderPathToStoreTb2robotConfig The folder path to store the configuration file
- * @returns {Promise<string | null>} The full path of the configuration file, or null if an error occurs
- */
-export async function saveTestbench2RobotConfigurationAsJsonLocally(
-    folderPathToStoreTb2robotConfig: string
-): Promise<string | null> {
-    try {
-        const testbench2robotframeworkConfigInExtensionSettings = getConfig().get<testBenchTypes.Testbench2robotframeworkConfiguration>(
-            "testbench2robotframeworkConfig"
-        );
-        if (!testbench2robotframeworkConfigInExtensionSettings) {
-            logger.error("testbench2robotframework configuration could not be found in extension settings.");
-            return null;
-        }
-
-        const jsonContent: string = JSON.stringify(testbench2robotframeworkConfigInExtensionSettings, null, 2);
-        const tb2robotConfigFilePath: string = getConfigurationFilePath(folderPathToStoreTb2robotConfig);
-
-        // Write file, overwriting if it already exists
-        await fsPromise.writeFile(tb2robotConfigFilePath, jsonContent, "utf8");
-        logger.debug(
-            `testbench2robotframework configuration file created or overwritten at location: ${tb2robotConfigFilePath}`
-        );
-        logger.trace(`testbench2robotframework configuration file content:`, jsonContent);
-
-        return tb2robotConfigFilePath;
-    } catch (error) {
-        const errorMessage =
-            error instanceof Error
-                ? `Failed to write configuration file: ${error.message}`
-                : "An unknown error occurred while writing the configuration file.";
-
-        vscode.window.showErrorMessage(errorMessage);
-        logger.error("Error when trying to save testbench2robotframework configuration locally:", errorMessage);
-        return null;
-    }
-}
-
-/**
- * Get the full path of the testbench2robotframework configuration file.
- * @param folderPathToJsonConfig The folder path to store the configuration file
- * @returns {string} The full path of the configuration file
- */
-function getConfigurationFilePath(folderPathToJsonConfig: string): string {
-    const fileName: string = "testbench2robotframeworkConfig.json";
-    const filePath: string = path.join(folderPathToJsonConfig, fileName);
-    return filePath;
-}
 
 /**
  * Deletes the testbench2robotframework configuration file. Retries the operation in case the file is busy with small delays.

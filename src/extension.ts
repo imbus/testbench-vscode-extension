@@ -162,25 +162,7 @@ export async function activate(context: vscode.ExtensionContext) {
             await config.update("workspaceLocation", vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
             logger.debug("Workspace location was not set. Initializing it to the first workspace folder of VS Code.");
         }
-
-        // TODO: Remove default values from extension settings and the old tb2robot configuration from settings.json
-        if (config.get<boolean>("useDefaultValuesForTestbench2robotframework")) {
-            // For testbench2robotframework library configuration, set the generation and resource directory relative to the workspace location
-            let defaultTestbench2robotframeworkConfig: testBenchTypes.Testbench2robotframeworkConfiguration =
-                testBenchTypes.defaultTestbench2robotframeworkConfig;
-            defaultTestbench2robotframeworkConfig["output-directory"] = path.join(
-                config.get<string>("workspaceLocation")!,
-                folderNameOfTestbenchWorkingDirectory,
-                "Generated"
-            );
-            defaultTestbench2robotframeworkConfig["resource-directory"] = path.join(
-                config.get<string>("workspaceLocation")!,
-                "resources"
-            );
-            await config.update("testbench2robotframeworkConfig", defaultTestbench2robotframeworkConfig);
-            logger.debug("Updated testbench2robotframeworkConfig with default values.");
-        }
-
+        
         // Update the webview input fields after extension settings are changed to reflect the changes in the webview live
         loginWebViewProvider?.updateWebviewContent();
     }

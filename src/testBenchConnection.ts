@@ -1186,10 +1186,8 @@ export async function selectReportWithResultsAndImportToTestbench(
                     increment: 30,
                 });
             }
-            if (getConfig().get<boolean>("clearReportAfterProcessing")) {
-                // Remove the report zip file after usage
-                await reportHandler.removeReportZipFile(resultZipFilePath);
-            }
+
+            await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);            
         }
     );
 }
