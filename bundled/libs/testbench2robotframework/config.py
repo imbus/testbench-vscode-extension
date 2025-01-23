@@ -153,56 +153,60 @@ class AttachmentConflictBehaviour(StrEnum):
 
 @dataclass
 class Configuration:
-    rfLibraryRegex: list[str]
-    rfResourceRegex: list[str]
-    rfLibraryRoots: list[str]
-    rfResourceRoots: list[str]
-    fullyQualified: bool
-    subdivisionsMapping: SubdivisionsMapping
-    forcedImport: ForcedImport
-    generationDirectory: str
-    createOutputZip: bool
-    resourceDirectory: str
-    logSuiteNumbering: bool
-    clearGenerationDirectory: bool
+    attachmentConflictBehaviour: AttachmentConflictBehaviour
+    clean: bool
+    compound_interaction_logging: CompoundInteractionLogging
+    forced_import: ForcedImport
+    fully_qualified: bool
+    library_regex: list[str]
+    library_root: list[str]
+    log_suite_numbering: bool
     loggingConfiguration: LoggingConfig
-    logCompoundInteractions: CompoundInteractionLogging
-    testCaseSplitPathRegEx: str
+    output_directory: str
     phasePattern: str
     referenceBehaviour: ReferenceBehaviour
-    attachmentConflictBehaviour: AttachmentConflictBehaviour
+    resource_directory: str
+    resource_regex: list[str]
+    resource_root: list[str]
+    subdivisionsMapping: SubdivisionsMapping
+    testCaseSplitPathRegEx: str
 
     @classmethod
     def from_dict(cls, dictionary) -> Configuration:
         return cls(
-            rfLibraryRegex=dictionary.get(
-                "rfLibraryRegex", [DEFAULT_LIBRARY_REGEX]
+            clean=dictionary.get("clean", True),
+            library_regex=dictionary.get(
+                "library-regex", [DEFAULT_LIBRARY_REGEX]
             ),
-            rfResourceRegex=dictionary.get(
-                "rfResourceRegex", [DEFAULT_RESOURCE_REGEX]
+            resource_regex=dictionary.get(
+                "resource-regex", [DEFAULT_RESOURCE_REGEX]
             ),
-            rfLibraryRoots=dictionary.get("rfLibraryRoots", DEFAULT_LIBRARY_ROOTS),
-            rfResourceRoots=dictionary.get("rfResourceRoots", DEFAULT_RESOURCE_ROOTS),
-            fullyQualified=dictionary.get("fullyQualified", False),
-            subdivisionsMapping=SubdivisionsMapping.from_dict(
-                dictionary.get("subdivisionsMapping", {})
-            ),
-            forcedImport=ForcedImport.from_dict(dictionary.get("forcedImport", {})),
-            generationDirectory=dictionary.get("generationDirectory", DEFAULT_GENERATION_DIRECTORY),
-            createOutputZip=dictionary.get("createOutputZip", False),
-            logSuiteNumbering=dictionary.get("logSuiteNumbering", False),
-            clearGenerationDirectory=dictionary.get("clearGenerationDirectory", True),
+            library_root=dictionary.get("library-root", DEFAULT_LIBRARY_ROOTS),
+            resource_root=dictionary.get("resource-root", DEFAULT_RESOURCE_ROOTS),
+            fully_qualified=dictionary.get("fully-qualified", False),
+            forced_import=ForcedImport.from_dict(dictionary.get("forced-import", {})),
+            output_directory=dictionary.get("output-directory", DEFAULT_GENERATION_DIRECTORY),
+            log_suite_numbering=dictionary.get("log-suite-numbering", False),
             loggingConfiguration=LoggingConfig.from_dict(
-                dictionary.get("loggingConfiguration", {})
+                {
+                    "console":dictionary.get("console-logging", {}),
+                    "file":dictionary.get("file-logging", {})
+                }
             ),
-            logCompoundInteractions=CompoundInteractionLogging(dictionary.get("logCompoundInteractions", "GROUP").upper()),
-            resourceDirectory=dictionary.get("resourceDirectory", "").replace(
+            compound_interaction_logging=CompoundInteractionLogging(dictionary.get("compound-interaction-logging", "GROUP").upper()),
+            resource_directory=dictionary.get("resource-directory", "").replace(
                 "\\", "/"
             ),
             testCaseSplitPathRegEx=dictionary.get("testCaseSplitPathRegEx", ".*StopWithRestart.*"),
             phasePattern=dictionary.get("phasePattern", "{testcase} : Phase {index}/{length}"),
             referenceBehaviour=ReferenceBehaviour(
                 dictionary.get("referenceBehaviour", "ATTACHMENT").upper()
+            ),
+            subdivisionsMapping=SubdivisionsMapping.from_dict(
+                {
+                    "libraries":dictionary.get("library-mapping", {}),
+                    "resources":dictionary.get("resource-mapping", {})
+                }
             ),
             attachmentConflictBehaviour=AttachmentConflictBehaviour(
                 dictionary.get("attachmentConflictBehaviour", "USE_EXISTING").upper()

@@ -11,7 +11,7 @@ export class tb2robotLib {
      * @param {string} reportPath - Path to a folder or ZIP file containing TestBench JSON reports.
      * @param {string} configJSONPath - Path to a JSON file, for the configuration of the output. If not provided, a config.json will be automatically generated.
      */
-    public static executeTb2robotWriteCommand(
+    public static executeTb2robotGenerateTestsCommand(
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string,
         reportPath: string,
@@ -19,10 +19,11 @@ export class tb2robotLib {
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
             const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
+            const generateTestsCommand = `generate-tests`;
 
-            let command = `${commandBase} write ${reportPath}`;
+            let command = `${commandBase} ${generateTestsCommand} ${reportPath}`;
             if (configJSONPath) {
-                command = `${commandBase} write -c ${configJSONPath} ${reportPath}`;
+                command = `${commandBase} ${generateTestsCommand} -c ${configJSONPath} ${reportPath}`;
             }
 
             logger.debug(`Executing command: ${command}`);
@@ -79,7 +80,7 @@ export class tb2robotLib {
      * @param {string} reportWithoutResultsPath - Absolute path to a folder or ZIP file containing TestBench JSON reports (without results).
      * @param {string} resultPath - Path to a folder or ZIP file to save the results to. If not provided, reports provided in reportPath will be overritten.
      */
-    public static executeTb2robotReadCommand(
+    public static executeTb2robotFetchResultsCommand(
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string,
         outputXmlPath: string,
@@ -89,18 +90,23 @@ export class tb2robotLib {
     ): Promise<void> {
         return new Promise(async (resolve, reject) => {
             const commandBase: string = await pyCommandBuilder.buildTb2RobotCommand(context);
+            const fetchResultsCommand: string = `fetch-results`;
+            const outputDirOptionCommand: string = `--output-directory`;  // Same as -d
+            const configOptionCommand: string = `--config`;  // Same as -c
+
+            // TODO: -o and -r doesnt exist anymore
 
             // Overwrite the results in the reportPath if no resultPath is provided.
-            let command: string = `${commandBase} read -o ${outputXmlPath} ${reportWithoutResultsPath}`;
+            let command: string = `${commandBase} ${fetchResultsCommand} ${outputDirOptionCommand} ${outputXmlPath} ${reportWithoutResultsPath}`;
 
             // Write the results to the resultPath if provided.
             if (resultPath) {
-                command = `${commandBase} read -o ${outputXmlPath} -r ${resultPath} ${reportWithoutResultsPath}`;
+                command = `${commandBase} ${fetchResultsCommand} ${outputDirOptionCommand} ${resultPath} ${outputXmlPath} ${reportWithoutResultsPath}`;
             }
 
             // Use the provided config file if provided.
             if (configJSONPath) {
-                command = `${commandBase} read -c ${configJSONPath} -o ${outputXmlPath} -r ${resultPath} ${reportWithoutResultsPath}`;
+                command = `${commandBase} ${fetchResultsCommand} ${configOptionCommand} ${configJSONPath} ${outputDirOptionCommand} ${resultPath} ${outputXmlPath} ${reportWithoutResultsPath}`;
             }
 
             logger.debug(`Executing command inside ${commandExecutionDirectory}: ${command}`);
@@ -126,36 +132,39 @@ export class tb2robotLib {
      * @param {string} configJSONPath Path to a JSON configuration file. If not provided, a config.json will be automatically generated.
      * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
      */
-    public static async startTb2robotframeworkWrite(
+    public static async startTb2robotframeworkTestGeneration(
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string,
         reportPath: string,
         configJSONPath?: string
     ): Promise<boolean> {
+        const generateTestsCommand = `generate-tests`;
         logger.debug(
-            `Calling testbench2robotframework write command with working directory ${commandExecutionDirectory}, report path ${reportPath}, JSON config path ${configJSONPath}.`
+            `Calling testbench2robotframework ${generateTestsCommand} command with working directory ${commandExecutionDirectory}, report path ${reportPath}, JSON config path ${configJSONPath}.`
         );
-        let isWriteCommandSuccessful: boolean = true;
+        let isGenerateTestsCommandSuccessful: boolean = true;
 
-        await this.executeTb2robotWriteCommand(context, commandExecutionDirectory, reportPath, configJSONPath)
+        await this.executeTb2robotGenerateTestsCommand(context, commandExecutionDirectory, reportPath, configJSONPath)
             .then(() => {
                 let config = "no";
                 if (configJSONPath) {
                     config = configJSONPath;
                 }
 
-                logger.debug(`tb2robot write completed using ${reportPath}, ${config} config file provided.`);
+                logger.debug(
+                    `tb2robot ${generateTestsCommand} completed using ${reportPath}, ${config} config file provided.`
+                );
             })
             .catch((err) => {
-                logger.error(`Error in testbench2robotframework write:`, err);
-                vscode.window.showErrorMessage(`Error in testbench2robotframework write: ${err}`);
-                isWriteCommandSuccessful = false;
+                logger.error(`Error in testbench2robotframework ${generateTestsCommand}:`, err);
+                vscode.window.showErrorMessage(`Error in testbench2robotframework ${generateTestsCommand}: ${err}`);
+                isGenerateTestsCommandSuccessful = false;
             });
 
         logger.debug(
-            `testbench2robotframework write command executed with success variable: ${isWriteCommandSuccessful}`
+            `testbench2robotframework ${generateTestsCommand} command executed with success variable: ${isGenerateTestsCommandSuccessful}`
         );
-        return isWriteCommandSuccessful;
+        return isGenerateTestsCommandSuccessful;
     }
 
     /**
@@ -167,7 +176,7 @@ export class tb2robotLib {
      * @param {string} resultPath  Path to a folder or ZIP file to save the results to. If not provided, reports provided in reportPath will be overritten.
      * @returns {Promise<boolean>} True if the command was executed successfully, false otherwise.
      */
-    public static async startTb2robotRead(
+    public static async startTb2robotFetchResults(
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string,
         outputXmlPath: string,
@@ -175,10 +184,11 @@ export class tb2robotLib {
         resultPath?: string,
         configJSONPath?: string
     ): Promise<boolean> {
-        logger.debug("Calling startTb2robotRead.");
-        let isReadCommandSuccessful: boolean = true;
+        const fetchResultsCommand = `fetch-results`;
+        logger.debug(`Calling testbench2robotframework ${fetchResultsCommand} command.`);
+        let isFetchResultsCommandSuccessful: boolean = true;
 
-        await this.executeTb2robotReadCommand(
+        await this.executeTb2robotFetchResultsCommand(
             context,
             commandExecutionDirectory,
             outputXmlPath,
@@ -197,16 +207,16 @@ export class tb2robotLib {
                 }
 
                 logger.debug(
-                    `tb2robot read completed using ${outputXmlPath}${providedConfig} and ${reportPath}. Provided path for results: ${providedPath}.`
+                    `tb2robot ${fetchResultsCommand} completed using ${outputXmlPath}${providedConfig} and ${reportPath}. Provided path for results: ${providedPath}.`
                 );
             })
             .catch((err) => {
-                logger.error(`Error in testbench2robotframework read:`, err);
-                vscode.window.showErrorMessage(`Error in testbench2robotframework read: ${err}`);
-                isReadCommandSuccessful = false;
+                logger.error(`Error in testbench2robotframework ${fetchResultsCommand}:`, err);
+                vscode.window.showErrorMessage(`Error in testbench2robotframework ${fetchResultsCommand}: ${err}`);
+                isFetchResultsCommandSuccessful = false;
             });
 
-        logger.debug(`startTb2robotRead executed with success variable: ${isReadCommandSuccessful}`);
-        return isReadCommandSuccessful;
+        logger.debug(`startTb2robotFetchResults executed with success variable: ${isFetchResultsCommandSuccessful}`);
+        return isFetchResultsCommandSuccessful;
     }
 }

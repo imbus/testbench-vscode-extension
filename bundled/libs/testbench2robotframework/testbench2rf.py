@@ -86,8 +86,8 @@ class RfTestCase:
         self.interaction_calls: list[InteractionCall] = []
         self.used_imports: dict[str, set[str]] = {}
         self.config = config
-        self.lib_pattern_list = [re.compile(pattern) for pattern in config.rfLibraryRegex]
-        self.res_pattern_list = [re.compile(pattern) for pattern in config.rfResourceRegex]
+        self.lib_pattern_list = [re.compile(pattern) for pattern in config.library_regex]
+        self.res_pattern_list = [re.compile(pattern) for pattern in config.resource_regex]
         for interaction in test_case_details.interactions:
             self._get_interaction_calls(interaction)
         self.rf_tags = self._get_tags(test_case_details)
@@ -173,9 +173,9 @@ class RfTestCase:
         if len(ia_path_parts) == 1:
             return UNKNOWN_IMPORT_TYPE, ia_path_parts[0]
         root_subdivision, import_prefix = ia_path_parts[:2]
-        if root_subdivision in self.config.rfLibraryRoots:
+        if root_subdivision in self.config.library_root:
             return LIBRARY_IMPORT_TYPE, import_prefix
-        if root_subdivision in self.config.rfResourceRoots:
+        if root_subdivision in self.config.resource_root:
             return RESOURCE_IMPORT_TYPE, import_prefix
 
         return root_subdivision, import_prefix
@@ -226,10 +226,10 @@ class RfTestCase:
                     keyword_lists[tc_index].append(atomic_keyword_call)
             elif (
                 not interaction_call.is_atomic
-                and self.config.logCompoundInteractions != CompoundInteractionLogging.NONE
+                and self.config.compound_interaction_logging != CompoundInteractionLogging.NONE
             ):
                 compound_keyword_call = self._create_rf_compound_keyword(
-                    interaction_call, self.config.logCompoundInteractions
+                    interaction_call, self.config.compound_interaction_logging
                 )
                 while group_stack and group_stack[-1][1] >= interaction_call.indent:
                     group_stack.pop()
@@ -239,7 +239,7 @@ class RfTestCase:
                     keyword_lists[tc_index].append(compound_keyword_call)
                 if (
                     Group
-                    and self.config.logCompoundInteractions == CompoundInteractionLogging.GROUP
+                    and self.config.compound_interaction_logging == CompoundInteractionLogging.GROUP
                 ):
                     group_stack.append((compound_keyword_call, interaction_call.indent))
         return keyword_lists
@@ -427,12 +427,12 @@ class RfTestCase:
         return cbr_parameters
 
     def _get_interaction_import_prefix(self, interaction: InteractionCall) -> str:
-        return (self.config.fullyQualified or False) * f"{interaction.import_prefix}."
+        return (self.config.fully_qualified or False) * f"{interaction.import_prefix}."
 
     def _get_interaction_indent(self, interaction: InteractionCall) -> str:
         return (
             SEPARATOR * interaction.indent
-            if self.config.logCompoundInteractions
+            if self.config.compound_interaction_logging
             in [CompoundInteractionLogging.GROUP, CompoundInteractionLogging.COMMENT]
             else SEPARATOR
         )
@@ -507,7 +507,7 @@ def create_test_suites(
     config: Configuration,
 ) -> dict[str, File]:
     if not Group:
-        if config.logCompoundInteractions == CompoundInteractionLogging.GROUP:
+        if config.compound_interaction_logging == CompoundInteractionLogging.GROUP:
             logger.warning(
                 f"You're using Robot Framework {robot_version.get_full_version()} "
                 "which does not support 'Robot Framework Groups'. "
@@ -639,7 +639,7 @@ class RobotSuiteFileBuilder:
     def _create_rf_variable_imports(self) -> list[VariablesImport]:
         return [
             VariablesImport.from_params(name=variable_file)
-            for variable_file in self.config.forcedImport.variables
+            for variable_file in self.config.forced_import.variables
         ]
 
     def _create_rf_resource_imports(self, import_dict: dict[str, set[str]]) -> list[ResourceImport]:
@@ -649,7 +649,7 @@ class RobotSuiteFileBuilder:
             for resource in resources
             if not self._is_library(resource_root) and self._is_resource(resource_root)
         }
-        resources.update(self.config.forcedImport.resources)
+        resources.update(self.config.forced_import.resources)
         resource_paths = {
             self._create_resource_path(resource) for resource in sorted(resources)
         }  # TODO Fix Paths to correct models
@@ -659,16 +659,16 @@ class RobotSuiteFileBuilder:
         subdivision_mapping = self.config.subdivisionsMapping.resources.get(resource)
         resource = re.sub(".resource", "", resource)
         if not subdivision_mapping:
-            if not self.config.resourceDirectory:
+            if not self.config.resource_directory:
                 return f"{resource}.resource"
-            if not re.match(RELATIVE_RESOURCE_INDICATOR, self.config.resourceDirectory):
-                return Path(self.config.resourceDirectory, f"{resource}.resource").as_posix()
+            if not re.match(RELATIVE_RESOURCE_INDICATOR, self.config.resource_directory):
+                return Path(self.config.resource_directory, f"{resource}.resource").as_posix()
             generation_directory = self._replace_relative_resource_indicator(
-                self.config.generationDirectory
+                self.config.output_directory
             )
             robot_file_path = Path(generation_directory) / self.tcs_path.parent
             resource_directory = self._replace_relative_resource_indicator(
-                self.config.resourceDirectory
+                self.config.resource_directory
             )
             resource_import = (
                 Path(os.path.relpath(Path(resource_directory), robot_file_path))
@@ -677,7 +677,7 @@ class RobotSuiteFileBuilder:
             return resource_import.as_posix()
         root_path = Path(os.curdir).absolute()
         subdivision_mapping = re.sub(
-            r"^{resourceDirectory}", self.config.resourceDirectory, subdivision_mapping
+            r"^{resourceDirectory}", self.config.resource_directory, subdivision_mapping
         )
         subdivision_mapping = re.sub(
             RELATIVE_RESOURCE_INDICATOR,
@@ -700,7 +700,7 @@ class RobotSuiteFileBuilder:
         return re.sub(
             RELATIVE_RESOURCE_INDICATOR,
             str(root_path).replace("\\", ROBOT_PATH_SEPARATOR),
-            self.config.resourceDirectory,
+            self.config.resource_directory,
             flags=re.IGNORECASE,
         ).replace("\\", ROBOT_PATH_SEPARATOR)
 
@@ -719,7 +719,7 @@ class RobotSuiteFileBuilder:
             for library in libraries
             if self._is_library(library_root)
         }
-        libraries.update(self.config.forcedImport.libraries)
+        libraries.update(self.config.forced_import.libraries)
         lib_imports = {
             self.config.subdivisionsMapping.libraries.get(library, library) for library in libraries
         }

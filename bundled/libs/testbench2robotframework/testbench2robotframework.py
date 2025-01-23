@@ -31,7 +31,7 @@ def testbench2robotframework(testbench_report: str, config: dict):
         path_resolver = PathResolver(
             reader.test_theme_tree,
             tuple(reader.get_test_case_set_catalog().keys()),
-            configuration.logSuiteNumbering,
+            configuration.log_suite_numbering,
         )
         test_suites = create_test_suites(
             reader.get_test_case_set_catalog(), path_resolver, configuration

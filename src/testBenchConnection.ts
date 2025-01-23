@@ -1178,7 +1178,7 @@ export async function selectReportWithResultsAndImportToTestbench(
                 });
             }
 
-            await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+            const importReportOutcome = await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
 
             if (progress) {
                 progress.report({

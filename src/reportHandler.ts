@@ -882,8 +882,8 @@ async function runRobotFrameworkTestGenerationProcess(
         return null;
     }    
 
-    const isTb2RobotframeworkWriteCommandSuccessful: boolean =
-        await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkWrite(
+    const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
+        await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
             context,
             testbenchWorkingDirectoryPathInsideWorkspace, // The command will be executed in this folder
             downloadedReportZipFilePath,
@@ -892,7 +892,7 @@ async function runRobotFrameworkTestGenerationProcess(
 
     await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, downloadedReportZipFilePath);
 
-    if (!isTb2RobotframeworkWriteCommandSuccessful) {
+    if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         const testGenerationFailedMessage: string =
             "Test generation failed. Please make sure that your tests can be automated.";
         logger.error(testGenerationFailedMessage);
@@ -900,7 +900,7 @@ async function runRobotFrameworkTestGenerationProcess(
         return null;
     }
 
-    // If write command is successful, update the last generated report parameters to use in the next operations
+    // If test generation command is successful, update the last generated report parameters to use in the next operations
     updateLastGeneratedReportParams(UIDofSelectedElement, projectKey, cycleKey, isReportGenerationExecutionBased);
 
     const testGenerationSuccessMessage: string = "Robotframework test generation is successful.";
@@ -1139,26 +1139,28 @@ async function chooseReportWithouResultsZipFile(workingDirectoryPath: string): P
     if (selectedFiles && selectedFiles.length > 0) {
         return selectedFiles[0].fsPath;
     }
+    logger.error("No report zip file selected for the results zip file, returning null.");
     return null;
 }
 
 /**
- * Reads robot framework test results and creates a report zip file with the results using testbench2robotframework library. Displays a progress bar using VS Code's progress API.
+ * Reads / fetches robot framework test results and creates a report zip file with the results using testbench2robotframework library. Displays a progress bar using VS Code's progress API.
  * lastGeneratedReportParams must be initialized before calling this function, it is initialized in the test generation process.
  * @param context - The extension context.
  * @param folderNameOfTestbenchWorkingDirectory - The folder name of the testbench working directory (.testbench).
  * @param currentProgress - Optional existing progress instance to report updates.
- * @returns {Promise<string | null>} The full path of the created report with results zip, or null if an error occurs.
+ * @returns {Promise<string | undefined>} The full path of the created report with results zip, or undefined if an error occurs. 
+ * Undefined is returned (and not null) due to the usage of VSCode progress bar.
  */
-export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
+export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
     folderNameOfTestbenchWorkingDirectory: string,
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
-): Promise<string | null> {
+): Promise<string | undefined> {
     try {
-        logger.debug("Started reading test results and creating report with results.");
+        logger.debug("Started reading / fetching test results and creating report with results.");
 
-        let pathOfReportWithResultsZip: string | null = null;
+        let pathOfReportWithResultsZip: string | undefined = undefined;
 
         // Main execution logic encapsulated in a function for use with progress
         const executeWithProgress = async (
@@ -1180,7 +1182,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             if (!workspaceLocationInExtensionSettings) {
                 const workspaceLocationNotConfiguredMessage: string = "Workspace location is not configured.";
                 logger.error(workspaceLocationNotConfiguredMessage);
-                throw new Error(workspaceLocationNotConfiguredMessage);
+                return undefined;
             }
 
             const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
@@ -1193,7 +1195,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             );
             if (!robotResultOutputXMLFilePath) {
                 // Error logging is done in chooseRobotOutputXMLFile
-                throw new Error("No XML file selected.");
+                return undefined;
             }
 
             logger.debug(`The report with result zip file will be named ${reportFileWithResultsZipName}`);
@@ -1209,7 +1211,7 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             ) {
                 const lastGeneratedReportParamsMissingMessage: string = "Last generated report parameters are missing.";
                 logger.error(lastGeneratedReportParamsMissingMessage);
-                throw new Error(lastGeneratedReportParamsMissingMessage);
+                return undefined;
             }
 
             const cycleStructureOptionsRequestParameter: testBenchTypes.OptionalJobIDRequestParameter = {
@@ -1230,7 +1232,8 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             const reportWithResultsZipFilePath: string | null =
                 downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
             if (!reportWithResultsZipFilePath) {
-                throw new Error("No report file selected.");
+                // Error logging is done in chooseReportWithouResultsZipFile
+                return undefined;
             }
 
             logger.debug(`Report with results is saved to ${reportWithResultsZipFilePath}`);
@@ -1241,15 +1244,16 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
                 testbenchWorkingDirectoryPathInsideWorkspace
             );
             if (!tb2robotConfigFilePath) {
-                throw new Error("Failed to create configuration file.");
+                // Error logging is done in saveTestbench2RobotConfigurationAsJsonLocally
+                return undefined;
             }
 
             reportProgress(`Reading test results and creating report.`, reportIncrement / 2);
 
             pathOfReportWithResultsZip = path.join(testbenchWorkingDirectoryPathInsideWorkspace, reportFileWithResultsZipName);            
 
-            const isTb2RobotReadExecutionSuccessful: boolean =
-                await testbench2robotframeworkLib.tb2robotLib.startTb2robotRead(
+            const isTb2RobotFetchResultsExecutionSuccessful: boolean =
+                await testbench2robotframeworkLib.tb2robotLib.startTb2robotFetchResults(
                     context,
                     testbenchWorkingDirectoryPathInsideWorkspace, // The command will be executed in this folder
                     robotResultOutputXMLFilePath,
@@ -1260,15 +1264,16 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             await cleanUpTb2robotConfigAndReportFiles(tb2robotConfigFilePath, reportWithResultsZipFilePath);
 
-            if (!isTb2RobotReadExecutionSuccessful) {
+            if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const importErrorMessage: string =
                     "Reading test results failed. Make sure you are using the correct output.xml file.";
                 logger.error(importErrorMessage);
                 vscode.window.showErrorMessage(importErrorMessage);
-                return;
+                return undefined;
             }
 
-            logger.debug(`tb2robot read executed successfully.`);
+            logger.debug(`tb2robot fetch-results executed successfully. returning the path of the report with results zip file: ${pathOfReportWithResultsZip}`);
+            return pathOfReportWithResultsZip;
 
             // When reading results and importing are automated together in a function, this info message is not needed.
             // vscode.window.showInformationMessage(`Test results read and report created.`);
@@ -1276,9 +1281,9 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
 
         // Use provided progress or create a new one
         if (currentProgress) {
-            await executeWithProgress(currentProgress, {} as vscode.CancellationToken);
+            return await executeWithProgress(currentProgress, {} as vscode.CancellationToken);
         } else {
-            await vscode.window.withProgress(
+            return await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: `Reading Test Results and Creating Report`,
@@ -1288,21 +1293,21 @@ export async function readTestResultsAndCreateReportWithResultsWithTb2Robot(
             );
         }
 
-        return pathOfReportWithResultsZip;
+        // return pathOfReportWithResultsZip;
     } catch (error) {
         vscode.window.showErrorMessage(`An error occurred: ${(error as Error).message}`);
-        logger.error(`Error in readTestResultsAndCreateReportWithResults:`, error);
-        return null;
+        logger.error(`Error in fetchTestResultsAndCreateReportWithResultsWithTb2Robot:`, error);
+        return undefined;
     }
 }
 
 /**
- * Executes the testbench2robotframework read command to create a report zip with results and imports it to TestBench server.
+ * Executes the testbench2robotframework fetch-results command to create a report zip with results and imports it to TestBench server.
  * @param connection - The TestBench connection
  * @param projectManagementTreeDataProvider - The project management tree data provider
  * @param reportWithResultsZipFilePath - The full path of the report with results zip file
  */
-export async function readTestsAndCreateResultsAndImportToTestbench(
+export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     context: vscode.ExtensionContext,
     folderNameOfTestbenchWorkingDirectory: string,
     projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null
@@ -1335,16 +1340,17 @@ export async function readTestsAndCreateResultsAndImportToTestbench(
                 increment: 25,
             });
 
-            let pathOfCreatedReportWithResults: string | null =
-                await readTestResultsAndCreateReportWithResultsWithTb2Robot(
+            let pathOfCreatedReportWithResults: string | undefined =
+                await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
                     folderNameOfTestbenchWorkingDirectory,
                     progress
-                );
+                );            
+            
             if (!pathOfCreatedReportWithResults) {
                 logger.error("Error when reading test results and creating report with results.");
                 return null;
-            }
+            } 
 
             progress.report({
                 message: `Importing report with results to TestBench.`,

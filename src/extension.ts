@@ -167,12 +167,12 @@ export async function activate(context: vscode.ExtensionContext) {
             // For testbench2robotframework library configuration, set the generation and resource directory relative to the workspace location
             let defaultTestbench2robotframeworkConfig: testBenchTypes.Testbench2robotframeworkConfiguration =
                 testBenchTypes.defaultTestbench2robotframeworkConfig;
-            defaultTestbench2robotframeworkConfig.generationDirectory = path.join(
+            defaultTestbench2robotframeworkConfig["output-directory"] = path.join(
                 config.get<string>("workspaceLocation")!,
                 folderNameOfTestbenchWorkingDirectory,
                 "Generated"
             );
-            defaultTestbench2robotframeworkConfig.resourceDirectory = path.join(
+            defaultTestbench2robotframeworkConfig["resource-directory"] = path.join(
                 config.get<string>("workspaceLocation")!,
                 "resources"
             );
@@ -523,7 +523,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     logger.warn(`readRFTestResultsAndCreateReportWithResults command is called without a connection.`);
                     return;
                 }
-                await reportHandler.readTestResultsAndCreateReportWithResultsWithTb2Robot(
+                await reportHandler.fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
                     folderNameOfTestbenchWorkingDirectory
                 );
@@ -562,7 +562,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(allExtensionCommands.readAndUploadTestResultsToTestbench.command, async () => {
             logger.debug(`Read And Upload Test Results To Testbench command called.`);
-            await reportHandler.readTestsAndCreateResultsAndImportToTestbench(
+            await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(
                 context,
                 folderNameOfTestbenchWorkingDirectory,
                 projectManagementTreeDataProvider
