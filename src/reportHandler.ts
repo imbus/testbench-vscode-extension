@@ -1293,7 +1293,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             );
         }
 
-        // return pathOfReportWithResultsZip;
     } catch (error) {
         vscode.window.showErrorMessage(`An error occurred: ${(error as Error).message}`);
         logger.error(`Error in fetchTestResultsAndCreateReportWithResultsWithTb2Robot:`, error);
