@@ -1111,7 +1111,7 @@ export async function isAbsolutePathAndExists(filePath: string): Promise<boolean
  * @param workingDirectoryPath The full path of the working directory.
  * @returns {Promise<string | null>} The full path of the selected report zip file, or null if no file is selected.
  */
-async function chooseReportWithouResultsZipFile(workingDirectoryPath: string): Promise<string | null> {
+async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): Promise<string | null> {
     // Open file selection dialog, filtered for XML files
     const selectedFiles: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
         defaultUri: vscode.Uri.file(workingDirectoryPath),
@@ -1216,14 +1216,14 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             reportProgress(`Working on report.`, reportIncrement);
 
             // Either use the downloaded report zip file or prompt the user to select one
-            const reportWithResultsZipFilePath: string | null =
-                downloadedReportZipFilePath ?? (await chooseReportWithouResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
-            if (!reportWithResultsZipFilePath) {
-                // Error logging is done in chooseReportWithouResultsZipFile
+            const reportWithoutResultsZipFilePath: string | null =
+                downloadedReportZipFilePath ?? (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
+            if (!reportWithoutResultsZipFilePath) {
+                // Error logging is done in chooseReportWithoutResultsZipFile
                 return undefined;
             }
 
-            logger.debug(`Report with results is saved to ${reportWithResultsZipFilePath}`);
+            logger.debug(`Report with results is saved to ${reportWithoutResultsZipFilePath}`);
             reportProgress(`Reading test results and creating report.`, reportIncrement / 2);
 
             pathOfReportWithResultsZip = path.join(testbenchWorkingDirectoryPathInsideWorkspace, reportFileWithResultsZipName);            
@@ -1233,11 +1233,11 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
                     testbenchWorkingDirectoryPathInsideWorkspace, // The command will be executed in this folder
                     robotResultOutputXMLFilePath,
-                    reportWithResultsZipFilePath,
+                    reportWithoutResultsZipFilePath,
                     pathOfReportWithResultsZip
                 );
 
-            await cleanUpReportFileIfConfiguredInSettings(reportWithResultsZipFilePath);
+            await cleanUpReportFileIfConfiguredInSettings(reportWithoutResultsZipFilePath);
 
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const importErrorMessage: string =

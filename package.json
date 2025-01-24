@@ -115,7 +115,13 @@
             },
             {
                 "title": "Testbench2robotframework",
-                "properties": {                    
+                "properties": {
+                    "testbenchExtension.configurationPathInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Path to the configuration file of testbench2robotframework library.",
+                        "order": 10,
+                        "scope": "resource"
+                    },
                     "testbenchExtension.cleanFilesBeforeTestGenerationInTestbench2robotframework": {
                         "type": "boolean",
                         "default": true,
@@ -130,10 +136,16 @@
                         "order": 12,
                         "scope": "resource"
                     },
+                    "testbenchExtension.outputDirectoryInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Directory or ZIP archive containing the generated test suites for the generate tests command.",
+                        "order": 13,
+                        "scope": "resource"
+                    },
                     "testbenchExtension.compoundInteractionLoggingInTestbench2robotframework": {
                         "type": "string",
                         "description": "Mode for logging compound interactions.",
-                        "order": 13,
+                        "order": 14,
                         "default": "GROUP",
                         "enum": [
                             "GROUP",
@@ -151,13 +163,13 @@
                         "type": "boolean",
                         "default": false,
                         "description": "Enables logging of the test suite numbering.",
-                        "order": 14,
+                        "order": 15,
                         "scope": "resource"
                     },
                     "testbenchExtension.resourceDirectoryPathInTestbench2robotframework": {
                         "type": "string",
                         "description": "Directory containing the Robot Framework resource files.",
-                        "order": 15,
+                        "order": 16,
                         "scope": "resource"
                     },
                     "testbenchExtension.libraryRegexInTestbench2robotframework": {
@@ -169,7 +181,7 @@
                         "default": [
                             "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*"
                         ],
-                        "order": 16
+                        "order": 17
                     },
                     "testbenchExtension.libraryRootInTestbench2robotframework": {
                         "type": "array",
@@ -181,7 +193,7 @@
                             "RF",
                             "RF-Library"
                         ],
-                        "order": 17
+                        "order": 18
                     },
                     "testbenchExtension.resourceRegexInTestbench2robotframework": {
                         "type": "array",
@@ -192,7 +204,7 @@
                         "default": [
                             "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*"
                         ],
-                        "order": 18
+                        "order": 19
                     },
                     "testbenchExtension.resourceRootInTestbench2robotframework": {
                         "type": "array",
@@ -203,7 +215,7 @@
                         "default": [
                             "RF-Resource"
                         ],
-                        "order": 19
+                        "order": 20
                     },
                     "testbenchExtension.libraryMappingInTestbench2robotframework": {
                         "type": "array",
@@ -212,7 +224,7 @@
                             "type": "string"
                         },
                         "default": [],
-                        "order": 20
+                        "order": 21
                     },
                     "testbenchExtension.resourceMappingInTestbench2robotframework": {
                         "type": "array",
@@ -221,12 +233,12 @@
                             "type": "string"
                         },
                         "default": [],
-                        "order": 21
-                    },                    
+                        "order": 22
+                    },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
                         "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server.",
-                        "order": 12,
+                        "order": 23,
                         "scope": "resource"
                     }
                 }
