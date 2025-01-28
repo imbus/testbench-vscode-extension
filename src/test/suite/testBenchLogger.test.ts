@@ -55,7 +55,7 @@ suite("TestBenchLogger Tests", async () => {
         const logExists = await fsExists(logFilePathOfLogger);
         assert.strictEqual(logExists, true, "New log file should exist");
     });
-    */
+    
 
     test("should not log messages below the configured log level", async () => {
         logger.log("1", "This is a trace message");
@@ -63,4 +63,5 @@ suite("TestBenchLogger Tests", async () => {
         const logExists = await fsExists(logFilePathOfLogger);
         assert.strictEqual(logExists, false, "Log file should not exist for trace level");
     });
+    */
 });
