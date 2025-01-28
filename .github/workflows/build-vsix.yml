@@ -14,6 +14,15 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Cache Node Modules to speed up the workflow
+      - name: Cache Node Modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       # Set up Node.js
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -26,10 +35,10 @@ jobs:
 
       # Package the extension
       - name: Build VSIX Package
-        run: npm run package # package command should be defined in the package.json
+        run: npm run vsix-package # vsix-package command should be defined in the package.json
 
       - name: List All Files For Debugging
-        run: ls -alR # Lists all files and directories in the current directory
+        run: ls -alR | grep -v '^node_modules' # Lists all files and directories in the current directory
 
       # Upload the VSIX as an artifact
       - name: Upload VSIX Artifact
