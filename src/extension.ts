@@ -3,10 +3,10 @@ import * as reportHandler from "./reportHandler";
 import * as testBenchConnection from "./testBenchConnection";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testBenchTypes from "./testBenchTypes";
-import * as fsPromises from "fs/promises";
 import * as loginWebView from "./loginWebView";
 import * as testBenchLogger from "./testBenchLogger";
 import * as testElementsTreeView from "./testElementsTreeView";
+import * as utils from "./utils";
 import path from "path";
 
 // TODO: Add progress bar for tree views when fetching elements to notify the user.
@@ -124,6 +124,7 @@ export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null
 // In package.json, "activationEvents": ["onStartupFinished"] is used to activate the extension after the startup of VS Code
 // because the extension needs to be fully loaded to work smoothly.
 export async function activate(context: vscode.ExtensionContext) {
+    // TODO: If workspace location is not set, logger cant start.
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
@@ -157,12 +158,15 @@ export async function activate(context: vscode.ExtensionContext) {
             await testBenchConnection.clearStoredCredentials(context);
         }
 
+        // TODO: Instead of setting a default value, leave it empty if the user wont initialize it
         // If the user wont specify a workspace location, use the first current workspace location of VS Code
+        /*
         if (!config.get<string>("workspaceLocation")) {
             await config.update("workspaceLocation", vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
             logger.debug("Workspace location was not set. Initializing it to the first workspace folder of VS Code.");
         }
-        
+        */
+
         // Update the webview input fields after extension settings are changed to reflect the changes in the webview live
         loginWebViewProvider?.updateWebviewContent();
     }
@@ -196,7 +200,8 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(toggleWebViewVisibilityCommand);
     // Hide or show the login webview based on the stored visibility state in loginWebView class on extension activation
 
-    // TODO: This calls focus and opens (focuses to) our extension even when the user wont want to use our extension
+    // This calls focus and opens (focuses to) our extension even when the user wont want to use our extension.
+    // To solve this in package.json, "activationEvents" is set to "onView:testBenchExplorer" to activate the extension only when the view is opened.
     await loginWebView.updateWebViewDisplay();
 
     // Hide project tree view and test theme tree view when the extension starts and displays the login webview
@@ -211,6 +216,7 @@ export async function activate(context: vscode.ExtensionContext) {
             openLabel: "Select Workspace Location",
             canSelectFolders: true,
             canSelectFiles: false,
+            title: "Select Workspace Location",
         };
 
         const folderUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog(options);
@@ -241,16 +247,16 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register "Show Extension Settings" command.
     // Opens the settings UI of the extension inside the settings editor.
     context.subscriptions.push(
-        vscode.commands.registerCommand(allExtensionCommands.showExtensionSettings.command, () => {
+        vscode.commands.registerCommand(allExtensionCommands.showExtensionSettings.command, async () => {
             logger.debug("Show Extension Settings command called.");
             // Open the settings UI of the extension inside the settings editor
-            vscode.commands
+            await vscode.commands
                 .executeCommand("workbench.action.openSettings2", {
                     query: "@ext:imbus.testbench-visual-studio-code-extension",
                 })
-                .then(() => {
+                .then(async () => {
                     // Open the workspace settings view (The default settings view is user settings)
-                    vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
+                    await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
                 });
             logger.trace("End of Show Extension Settings command.");
         })
@@ -258,7 +264,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // The connectionActive context value is used to enable or disable the login and logout buttons in the status bar,
     // which allows icon changes for login/logout buttons based on connection status.
-    vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
+    await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
     logger.trace(`Context value connectionActive set to: ${connection !== null}`);
 
     // Register "Automatic login" command.
@@ -271,7 +277,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     logger.debug("Automatic login command called.");
                     if (await testBenchConnection.performLogin(context, baseKeyOfExtension, false, true)) {
                         projectManagementTreeView.displayProjectManagementTreeView();
-                        vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
+                        await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
                     }
 
                     // TODO: Dont continue if perform login fails
@@ -315,7 +321,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
             // If login was successful and not null, open project selection after logging in, this command also takes care of the visibility of the tree views
             if (performLoginResult) {
-                vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
+                await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
             }
 
             logger.trace(`End of Login command.`);
@@ -614,23 +620,27 @@ export async function activate(context: vscode.ExtensionContext) {
         )
     );
 
+    // TODO: If workspace location is not set, and if we prompt the user to set it here, and the user selects no,
+    // in test generation, we check this again and the modal dialog is opened twice
+    
     // Register the "Clear Workspace Folder" command.
     // Clears the workspace folder of its contents, excluding log files.
     context.subscriptions.push(
         vscode.commands.registerCommand(allExtensionCommands.clearWorkspaceFolder.command, async () => {
             logger.debug(`Clear Workspace Folder command called.`);
-            const workspaceLocationPath = config.get<string>("workspaceLocation", "");
-            if (!workspaceLocationPath) {
-                vscode.window.showErrorMessage("No workspace location set. Please set the workspace location first.");
-                logger.warn(`Workspace location is empty. (Clear Workspace Folder Command)`);
+            const workspaceLocationInExtensionSettings = config.get<string>("workspaceLocation", "");
+            if (!workspaceLocationInExtensionSettings) {
+                const workspaceLocationNotSetError : string = "No workspace location set. Please set the workspace location first.";
+                vscode.window.showErrorMessage(workspaceLocationNotSetError);
+                logger.warn(workspaceLocationNotSetError);                
                 return;
             }
 
             const testbenchWorkingDirectoryPath = path.join(
-                workspaceLocationPath,
+                workspaceLocationInExtensionSettings,
                 folderNameOfTestbenchWorkingDirectory
             );
-            await clearWorkspaceFolder(
+            await utils.clearWorkspaceFolder(
                 testbenchWorkingDirectoryPath,
                 [testBenchLogger.folderNameOfLogs],
                 !config.get<boolean>("clearWorkingDirectoryBeforeTestGeneration")
@@ -639,133 +649,9 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // TODO: Remove?
     // Try to automatically login the user after the extension is activated if the setting is enabled
-    vscode.commands.executeCommand(`${allExtensionCommands.automaticLoginAfterExtensionActivation.command}`);
-}
-
-/**
- * Deletes all contents of a workspace folder after user confirmation, excluding specified folders.
- * @param workspaceLocationToClear - The path of the workspace folder to be cleared.
- * @param excludedFoldersFromDeletion - A list of folder names to exclude from deletion.
- * @returns A promise that resolves when the workspace folder is cleared successfully, or null if an error occurs.
- */
-export async function clearWorkspaceFolder(
-    workspaceLocationToClear: string,
-    excludedFoldersFromDeletion: string[] = [],
-    promptForConfirmation: boolean = true
-): Promise<void | null> {
-    logger.debug(`Clearing workspace folder: ${workspaceLocationToClear}`);
-    try {
-        // Check if the workspaceLocation path exists and is a directory
-        try {
-            const stats = await fsPromises.stat(workspaceLocationToClear);
-            if (!stats.isDirectory()) {
-                const pathIsNotAFolderErorMessage = `The path "${workspaceLocationToClear}" is not a directory. Cannot clear workspace folder.`;
-                vscode.window.showErrorMessage(pathIsNotAFolderErorMessage);
-                logger.error(pathIsNotAFolderErorMessage);
-                return null;
-            }
-        } catch {
-            const pathDoesNotExistErrorMessage = `The folder at path "${workspaceLocationToClear}" does not exist. Cannot clear workspace folder.`;
-            vscode.window.showErrorMessage(pathDoesNotExistErrorMessage);
-            logger.error(pathDoesNotExistErrorMessage);
-            return null;
-        }
-
-        if (promptForConfirmation) {
-            // Prompt the user for confirmation
-            const userResponse = await vscode.window.showWarningMessage(
-                "Are you sure you want to delete all contents of the testbench folder? Log files will not be deleted.",
-                { modal: true },
-                "Yes",
-                "No"
-            );
-
-            // Exit if the user selects "No" or closes the dialog
-            if (userResponse !== "Yes") {
-                logger.debug(`User cancelled the clear workspace folder operation.`);
-                return null;
-            }
-        }
-
-        // Read and process folder contents
-        const files = await fsPromises.readdir(workspaceLocationToClear);
-        for (const file of files) {
-            const filePath = path.join(workspaceLocationToClear, file);
-
-            // Skip excluded folders
-            if (excludedFoldersFromDeletion.includes(file)) {
-                // vscode.window.showInformationMessage(`Skipping excluded folder: ${file}`);
-                logger.trace(`Skipped deleting this excluded file in clear workspace command: ${file}`);
-                continue;
-            }
-
-            // Check if it's a directory or file and delete accordingly
-            const fileStats = await fsPromises.stat(filePath);
-            if (fileStats.isDirectory()) {
-                await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
-            } else {
-                await fsPromises.unlink(filePath);
-            }
-        }
-
-        const clearWorkspaceFolderSuccessMessage = `Workspace folder cleared successfully: ${workspaceLocationToClear}`;
-        // vscode.window.showInformationMessage(clearWorkspaceFolderSuccessMessage);
-        logger.debug(clearWorkspaceFolderSuccessMessage);
-    } catch (error: any) {
-        const clearWorkspaceFolderErrorMessage = `An error occurred while clearing the workspace folder: ${error.message}`;
-        vscode.window.showErrorMessage(clearWorkspaceFolderErrorMessage);
-        logger.error(clearWorkspaceFolderErrorMessage);
-        return null;
-    }
-}
-
-/**
- * Recursively deletes a directory and its contents, excluding specified folders.
- * @param directoryPathToDelete - The directory path to delete.
- * @param excludedFoldersFromDeletion - A list of folder names to exclude from deletion.
- */
-async function deleteDirectoryRecursively(
-    directoryPathToDelete: string,
-    excludedFoldersFromDeletion: string[]
-): Promise<void | null> {
-    logger.debug(`Deleting directory recursively: ${directoryPathToDelete}`);
-    logger.debug(`Excluded folders while deleting recursively:`, excludedFoldersFromDeletion);
-    try {
-        const files = await fsPromises.readdir(directoryPathToDelete);
-
-        for (const file of files) {
-            const currentPath = path.join(directoryPathToDelete, file);
-
-            // Skip excluded folders
-            if (excludedFoldersFromDeletion.includes(file)) {
-                logger.trace(`Skipped deleting this excluded file in delete directory recursively: ${file}`);
-                continue;
-            }
-
-            const fileStats = await fsPromises.stat(currentPath);
-            if (fileStats.isDirectory()) {
-                // Recursively delete subdirectories
-                await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion);
-            } else {
-                // Delete files
-                logger.debug(`Deleting file: ${currentPath}`);
-                await fsPromises.unlink(currentPath);
-            }
-        }
-
-        // Remove the directory itself unless it's an excluded folder.
-        const folderName = path.basename(directoryPathToDelete); // Get the last portion of the path
-        if (!excludedFoldersFromDeletion.includes(folderName)) {
-            logger.debug(`Deleting directory: ${directoryPathToDelete}`);
-            await fsPromises.rmdir(directoryPathToDelete);
-        }
-    } catch (error: any) {
-        logger.error(
-            `Failed to delete directory ${directoryPathToDelete}: ${error.message} (deleteDirectoryRecursively)`
-        );
-        return null;
-    }
+    await vscode.commands.executeCommand(`${allExtensionCommands.automaticLoginAfterExtensionActivation.command}`);
 }
 
 export async function deactivate() {

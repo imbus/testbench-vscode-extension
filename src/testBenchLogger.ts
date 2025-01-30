@@ -41,16 +41,18 @@ export class TestBenchLogger {
 
     constructor(outputToTerminal?: boolean) {
         // If workspaceLocation is not set, use the extension directory, and create a logs folder
-        const workspaceFolder = getConfig().get<string>("workspaceLocation");
+        const workspaceLocationInExtensionSettings = getConfig().get<string>("workspaceLocation");
+
         // Example path: workspaceFolder/.testbench/logs/testBenchExtension.log
-        if (workspaceFolder) {
+        if (workspaceLocationInExtensionSettings) {
             this.logFolderPath = path.join(
-                workspaceFolder,
+                workspaceLocationInExtensionSettings,
                 folderNameOfTestbenchWorkingDirectory,
                 folderNameOfLogs // Create a log folder with this name in the workspace folder
             );
             this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
         } else {
+            console.log("Workspace location is not set in the extension settings. Logs cannot be created.");
             this.logFolderPath = path.join(__dirname, "logs");
             this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
         }

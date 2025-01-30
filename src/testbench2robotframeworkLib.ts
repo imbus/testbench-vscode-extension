@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as utils from "./utils";
 import { exec } from "child_process";
 import { pyCommandBuilder } from "./pyCommandBuilder";
 import { getConfig, logger } from "./extension";
@@ -20,7 +21,7 @@ export class tb2robotLib {
             const generateTestsCommand: string = `generate-tests`;
 
             // Get the options from the extension settings
-            const options = this.getTb2RobotGenerateTestOptionsFromSettings();
+            const options = await this.getTb2RobotGenerateTestOptionsFromSettings();
 
             let commandToExecute = `${commandBase} ${generateTestsCommand} ${this.buildOptionsStringForTestGeneration(
                 options
@@ -91,20 +92,32 @@ export class tb2robotLib {
             const fetchResultsCommand: string = `fetch-results`;
             let commandToExecute: string = "";
 
-            const tb2robotConfigPath = getConfig().get("configurationPathInTestbench2robotframework");
-
             let options: string = "";
-            if (resultPath) { 
+
+            // TODO: TEST
+            // To use relative paths to workspace location in extension settings, we need to get the workspace location to construct the full path.            
+            const relativeTb2robotConfigPath: string | undefined = getConfig().get<string>("configurationPathInTestbench2robotframework");
+
+            if (!relativeTb2robotConfigPath) {
+                logger.warn("Relative Tb2robot Config path is not set in the extension settings.");
+            } else {
+                logger.trace(`Relative Tb2robot Config path in the extension settings: ${relativeTb2robotConfigPath}`);
+                const absoluteTb2robotConfigPath: string | null = await utils.constructAbsolutePathFromRelativePath(
+                    relativeTb2robotConfigPath, true
+                ); // Construct the absolute path of the configuration file and verify its existence.
+                if (absoluteTb2robotConfigPath) {
+                    options += ` --config ${absoluteTb2robotConfigPath}`;
+                }
+            }
+            
+            if (resultPath) {
                 options += ` --output-directory ${resultPath}`;
             }
-            if (tb2robotConfigPath) {
-                options += ` --config ${tb2robotConfigPath}`;
-            }
-            logger.trace(`Options for fetch-results command: ${options}`);
-        
-            commandToExecute = `${commandBase} ${fetchResultsCommand} ${options} ${robotOutputXmlPath} ${testbenchReportWithoutResultsPath}`;
             
-           
+            logger.trace(`Options for fetch-results command: ${options}`);
+
+            commandToExecute = `${commandBase} ${fetchResultsCommand} ${options} ${robotOutputXmlPath} ${testbenchReportWithoutResultsPath}`;
+
             logger.debug(`Executing command inside ${commandExecutionDirectory}: ${commandToExecute}`);
 
             // Execute the command inside the working directory.
@@ -233,16 +246,20 @@ export class tb2robotLib {
      * Retrieves tb2robot generate-tests options from the extension settings, excluding those with default values.
      * @returns An object containing the tb2robot generate-tests options.
      */
-    private static getTb2RobotGenerateTestOptionsFromSettings(): { [key: string]: string | string[] | boolean } {
+    private static async getTb2RobotGenerateTestOptionsFromSettings(): Promise<{ [key: string]: string | boolean | string[]; }> {
         const generateTestsSettingsOfExtension: { [key: string]: string | string[] | boolean } = {};
 
-        const addBooleanOptionIfSet = (optionName: string, configKey: string, defaultValue: boolean) => {
-            const value = getConfig().get<boolean>(configKey);
+        const addBooleanOptionIfSet = (optionName: string, configName: string, defaultValue: boolean) => {
+            const value = getConfig().get<boolean>(configName);
             if (value !== undefined && value !== defaultValue) {
                 if (value) {
                     // Add the option without a value if true
                     generateTestsSettingsOfExtension[optionName] = value;
                 }
+            } else {
+                logger.warn(
+                    `Option for ${configName} is not set in the extension settings or uses a default value. ${optionName} option will not be included.`
+                );
             }
         };
 
@@ -251,24 +268,98 @@ export class tb2robotLib {
         addBooleanOptionIfSet("log-suite-numbering", "logSuiteNumberingInTestbench2robotframework", false);
 
         // Include the option only if the user has set a value different from the default
-        const addOptionIfSet = (optionName: string, configName: string, defaultValue: any) => {
+        const addStringOptionIfSet = (optionName: string, configName: string, defaultValue: any) => {
             const value = getConfig().get(configName);
             if (value !== undefined && value !== defaultValue) {
                 generateTestsSettingsOfExtension[optionName] = value as string | string[];
+            } else {
+                logger.warn(
+                    `Option for ${configName} is not set in the extension settings or uses a default value. ${optionName} option will not be included.`
+                );
             }
         };
 
-        addOptionIfSet("compound-interaction-logging", "compoundInteractionLoggingInTestbench2robotframework", "GROUP");
-        addOptionIfSet("resource-directory", "resourceDirectoryPathInTestbench2robotframework", "");
-        addOptionIfSet("resource-directory", "resourceDirectoryPathInTestbench2robotframework", "");
-        addOptionIfSet("config", "configurationPathInTestbench2robotframework", "");
-        addOptionIfSet("output-directory", "outputDirectoryInTestbench2robotframework", "");  // Note: This option also exists in the fetch-results command with a different meaning.
+        addStringOptionIfSet(
+            "compound-interaction-logging",
+            "compoundInteractionLoggingInTestbench2robotframework",
+            "GROUP"
+        );
+
+        // Include the option only if the user has set a value different from the default
+        async function addStringOptionWithRelativePathIfSet(optionName: string, configName: string, defaultValue: any) {
+            const relativePath: string | undefined = getConfig().get(configName);
+            if (!relativePath) {
+                logger.warn(
+                    `Relative path for ${configName} is not set in the extension settings. ${optionName} option will not be included.`
+                );
+                return;
+            }
+            const absolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
+                relativePath, true
+            );
+            if (absolutePath !== null && relativePath !== defaultValue) {
+                generateTestsSettingsOfExtension[optionName] = absolutePath as string;
+                logger.trace(
+                    `Current value of generateTestsSettingsOfExtension after adding ${optionName} to options:`,
+                    generateTestsSettingsOfExtension
+                );
+            } else {
+                logger.warn(
+                    `The absolute path for ${configName} could not be constructed. ${optionName} option will not be included.`
+                );
+            }
+        }
+
+        // Include the option only if the user has set a value different from the default
+        async function addOutputDirectoryOptionWithRelativePathIfSet(optionName: string, configName: string, defaultValue: any) {
+            const relativePath: string | undefined = getConfig().get(configName);
+            if (!relativePath) {
+                logger.warn(
+                    `Relative path for ${configName} is not set in the extension settings. ${optionName} option will not be included.`
+                );
+                return;
+            }
+            const absolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
+                relativePath, false
+            );  // Dont verify existence of output directory path, since it will be created after the generate-tests command is executed.
+            if (absolutePath !== null && relativePath !== defaultValue) {
+                generateTestsSettingsOfExtension[optionName] = absolutePath as string;
+                logger.trace(
+                    `Current value of generateTestsSettingsOfExtension after adding ${optionName} to options:`,
+                    generateTestsSettingsOfExtension
+                );
+            } else {
+                logger.warn(
+                    `The absolute path for ${configName} could not be constructed. ${optionName} option will not be included.`
+                );
+            }
+        }
+
+        // To use relative paths to workspace location in extension settings,
+        // we need to get the workspace location to construct the full path of resourceDirectoryPathInTestbench2robotframework.
+        await addStringOptionWithRelativePathIfSet(
+            "resource-directory",
+            "resourceDirectoryPathInTestbench2robotframework",
+            ""
+        );
+        await addStringOptionWithRelativePathIfSet("config", "configurationPathInTestbench2robotframework", "");
+        // TODO: output directory path is not created until this point bcs generate-tests is not executed,
+        // so the isAbsolutePathAndExists check will fail and the option wont be included.
+        await addOutputDirectoryOptionWithRelativePathIfSet(
+            "output-directory",
+            "outputDirectoryInTestbench2robotframework",
+            ""
+        ); // Note: This option also exists in the fetch-results command with a different meaning.
 
         // Include the option only if the user has set a value different from the default
         const addArrayOptionIfSet = (optionName: string, configName: string, defaultValue: string[]) => {
             const value = getConfig().get<string[]>(configName);
             if (value !== undefined && JSON.stringify(value) !== JSON.stringify(defaultValue)) {
                 generateTestsSettingsOfExtension[optionName] = value;
+            } else {
+                logger.warn(
+                    `Option for ${configName} is not set in the extension settings or uses a default value. ${optionName} option will not be included.`
+                );
             }
         };
 

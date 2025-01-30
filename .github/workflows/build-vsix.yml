@@ -37,8 +37,9 @@ jobs:
       - name: Build VSIX Package
         run: npm run vsix-package # vsix-package command should be defined in the package.json
 
-      - name: List All Files For Debugging
-        run: ls -alR | grep -v '^node_modules' # Lists all files and directories in the current directory
+      # List all files for debugging
+      # - name: List All Files For Debugging
+      #   run: ls -alR | grep -v '^node_modules' # Lists all files and directories in the current directory
 
       # Upload the VSIX as an artifact
       - name: Upload VSIX Artifact

@@ -118,7 +118,7 @@
                 "properties": {
                     "testbenchExtension.configurationPathInTestbench2robotframework": {
                         "type": "string",
-                        "description": "Path to the configuration file of testbench2robotframework library.",
+                        "description": "Path to the configuration file of testbench2robotframework library. The path is relative to the workspace location.",
                         "order": 10,
                         "scope": "resource"
                     },
@@ -138,7 +138,7 @@
                     },
                     "testbenchExtension.outputDirectoryInTestbench2robotframework": {
                         "type": "string",
-                        "description": "Directory or ZIP archive containing the generated test suites for the generate tests command.",
+                        "description": "Directory or ZIP archive containing the generated test suites for the generate tests command. The path is relative to the workspace location.",
                         "order": 13,
                         "scope": "resource"
                     },
@@ -168,7 +168,7 @@
                     },
                     "testbenchExtension.resourceDirectoryPathInTestbench2robotframework": {
                         "type": "string",
-                        "description": "Directory containing the Robot Framework resource files.",
+                        "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location.",
                         "order": 16,
                         "scope": "resource"
                     },
@@ -237,7 +237,7 @@
                     },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
-                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server.",
+                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server. The path is relative to the workspace location.",
                         "order": 23,
                         "scope": "resource"
                     }
@@ -510,7 +510,7 @@
         "sinon": "^19.0.2",
         "ts-loader": "^9.5.1",
         "typescript": "^5.6.3",
-        "vsce": "^2.15.0",
+        "@vscode/vsce": "^2.15.0",
         "webpack": "^5.95.0",
         "webpack-cli": "^5.1.4"
     },

@@ -79,7 +79,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         // If login was successful, open project selection and display project tree view
         if (loginResult) {
             // Open project selection after logging in, this command also takes care of the visibility of the tree views
-            vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
+            await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
 
             // When the user wont select a project and clicks away, there wont be any view in activity bar.
             // Add project view to activity bar so that he can choose project again.

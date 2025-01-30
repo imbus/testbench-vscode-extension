@@ -339,7 +339,7 @@ export class PlayServerConnection {
             // Regardless of the outcome of logout operation, stop the keep-alive process
             this.stopKeepAlive();
             this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
-            vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
+            await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
             setProjectManagementTreeDataProvider(null); // Clear the connection
             setConnection(null); // Clear the tree data provider
             // Notify login webview about the logout success to change its HTML content
@@ -540,7 +540,7 @@ export class PlayServerConnection {
             logger.error("Keep-alive request failed:", error);
             // Logout the user if the keep-alive request fails.
             logger.trace("Logging out the user after keep-alive request failed.");
-            vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
+            await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
             // Possible reason for keep alive request fail: 
             // The user logged in in TestBench Client with the same account he used in VS Code, and the session in VS Code is forced to logout.
         }
@@ -856,7 +856,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     setConnection(newConnection); // Set the global connection object, it can be null in case the login fails
                     if (newConnection) {
                         // Set the connectionActive context value for changing the login icon to logout icon based on this value
-                        vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
+                        await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
                         const loginSuccessfulMessage: string = "Login successful.";
                         logger.debug(loginSuccessfulMessage);
                         vscode.window.showInformationMessage(loginSuccessfulMessage);
@@ -957,8 +957,15 @@ async function fetchServerVersions(
  */
 async function promptForReportZipFileWithResults(): Promise<string | null> {
     try {
-        const workspaceLocation: string | undefined = getConfig().get<string>("workspaceLocation");
-        const workingDirectoryPath: string = path.join(workspaceLocation!, folderNameOfTestbenchWorkingDirectory);
+        const workspaceLocationInExtensionSettings: string | undefined = getConfig().get<string>("workspaceLocation");
+
+        if (!workspaceLocationInExtensionSettings) {
+            vscode.window.showErrorMessage("Workspace location is not set in the configuration.");
+            logger.warn("Workspace location is not set in the configuration.");
+            return null;
+        }
+
+        const workingDirectoryPath: string = path.join(workspaceLocationInExtensionSettings!, folderNameOfTestbenchWorkingDirectory);
 
         const options: vscode.OpenDialogOptions = {
             defaultUri: vscode.Uri.file(workingDirectoryPath),

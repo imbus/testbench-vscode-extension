@@ -6,8 +6,9 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import * as os from "os";
+import * as utils from "./utils";
 import axios, { AxiosResponse } from "axios";
-import { getConfig, connection, baseKeyOfExtension, logger } from "./extension";
+import { getConfig, connection, baseKeyOfExtension, logger, allExtensionCommands } from "./extension";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
 
 // Store the last fethed report parameters to be able to use it without the user selecting it again while uploading the report.
@@ -285,7 +286,7 @@ export async function pollJobStatus(
         const elapsedTime: number = Date.now() - startTime;
         const delayMs: number = elapsedTime < 10000 ? 200 : 1000;
         // console.log(`Waiting ${delayMs} ms before next attempt.`);
-        await delay(delayMs);
+        await utils.delay(delayMs);
     }
 
     logger.trace("Job Status:", jobStatus);
@@ -423,10 +424,10 @@ export async function downloadReport(
                 fileNameToDownload,
                 downloadZipResponse
             );
-        } else if (workspaceLocationInExtensionSettings) {
-            const workspaceLocationMissingErrorMessage: string = `The configured workspace location does not exist: ${workspaceLocationInExtensionSettings}`;
+        } else {
+            const workspaceLocationMissingErrorMessage: string = `The workspace location configuration does not exist or invalid path is given: ${workspaceLocationInExtensionSettings}`;
             logger.error(workspaceLocationMissingErrorMessage);
-            vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
+            // vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
         }
 
         // If workspace location is not valid or not set, prompt the user to choose a save location to store the report
@@ -483,17 +484,18 @@ async function promptUserForSaveLocationAndSaveReportToFile(
     fileNameOfReport: string,
     downloadResponse: AxiosResponse<any>
 ): Promise<string | null> {
-    logger.debug("Prompting user to choose a save location for the report.");
+    logger.debug("Prompting user to choose a save location for the report file.");
 
     // Prompt the user to choose a save location
     const zipUri = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file(fileNameOfReport),
         filters: { "Zip Files": ["zip"] },
+        title: "Select a location to save the report file",
     });
 
     // Return if the user cancels the dialog
     if (!zipUri) {
-        logger.debug("User canceled the save report file dialog.");
+        logger.debug("User canceled the save report file selection dialog.");
         return null;
     }
 
@@ -539,12 +541,6 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         vscode.window.showErrorMessage(saveReportToFileErrorMessage);
     }
     return null;
-}
-
-// Wait for a specified number of milliseconds.
-export function delay(milliseconds: number): Promise<void> {
-    logger.trace(`Waiting for ${milliseconds} milliseconds for Job completion.`);
-    return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 /**
@@ -678,11 +674,15 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         return null;
     }
 
+    const isWorkspaceValid: boolean = await utils.ensureWorkspaceLocation()
+    if (!isWorkspaceValid) {
+        return null;
+    }
+
     await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
         context,
         selectedTreeItem,
         typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : "", // Label might be undefined
-        baseKeyOfExtension,
         projectKey,
         cycleKey,
         folderNameOfTestbenchWorkingDirectory,
@@ -706,18 +706,19 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     context: vscode.ExtensionContext,
     selectedTreeItem: projectManagementTreeView.TestbenchTreeItem,
     itemLabel: string,
-    baseKey: string,
     projectKey: string,
     cycleKey: string,
     folderNameOfTestbenchWorkingDirectory: string,
     UIDofTestThemeElementToGenerateTestsFor?: string
 ): Promise<void | null> {
     try {
+        logger.trace("Generating tests for the selected tree item:", selectedTreeItem);
+
         const isReportGenerationExecutionBased: boolean = true; // await isExecutionBasedReportSelected();  // TODO: For QS day, use true for this value.
         if (isReportGenerationExecutionBased === null) {
             const testGenerationAbortedMessage: string = `Test generation method is invalid (${isReportGenerationExecutionBased}). Test generation aborted.`;
             vscode.window.showInformationMessage(testGenerationAbortedMessage);
-            logger.debug(testGenerationAbortedMessage);
+            logger.error(testGenerationAbortedMessage);
             return null;
         }
 
@@ -867,12 +868,19 @@ async function runRobotFrameworkTestGenerationProcess(
 
     progress.report({ increment: 30, message: "Generating robot framework tests with testbench2robotframework." });
 
-    // Workspace location is the folder we are working in, workingDirectoryPath is the (.testbench) folder path we process files in.
-    const workspaceLocation: string = getConfig().get<string>("workspaceLocation")!;
+    // Check the workspace location in the extension settings again in case the user changed it during the process
+    const workspaceLocationInExtensionSettings: string | undefined = getConfig().get<string>("workspaceLocation");
+    if (!workspaceLocationInExtensionSettings) {
+        const workspaceLocationMissingErrorMessage: string = "Workspace location is not configured in the extension settings.";
+        logger.error(workspaceLocationMissingErrorMessage);
+        vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
+        return null;
+    }
+
     const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
-        workspaceLocation,
+        workspaceLocationInExtensionSettings,
         folderNameOfTestbenchWorkingDirectory
-    ); 
+    );
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
@@ -884,8 +892,7 @@ async function runRobotFrameworkTestGenerationProcess(
     await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipFilePath);
 
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
-        const testGenerationFailedMessage: string =
-            "Test generation failed.";
+        const testGenerationFailedMessage: string = "Test generation failed.";
         logger.error(testGenerationFailedMessage);
         vscode.window.showErrorMessage(testGenerationFailedMessage);
         return null;
@@ -899,7 +906,7 @@ async function runRobotFrameworkTestGenerationProcess(
     logger.debug(testGenerationSuccessMessage);
 
     // Open the Testing view of VS Code after generating the tests to be able to run them directly in VS Code testing view.
-    vscode.commands.executeCommand("workbench.view.extension.test");
+    await vscode.commands.executeCommand("workbench.view.extension.test");
 }
 
 /**
@@ -924,13 +931,11 @@ function updateLastGeneratedReportParams(
  * Remove the report ZIP file after processing if configured.
  * @param reportZipFilePath The path of the report ZIP file
  */
-export async function cleanUpReportFileIfConfiguredInSettings(    
-    reportZipFilePath: string
-): Promise<void> {   
+export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath: string): Promise<void> {
     // Only remove the report ZIP file if configured in extension settings
     if (getConfig().get<boolean>("clearReportAfterProcessing")) {
         await removeReportZipFile(reportZipFilePath);
-    } else { 
+    } else {
         logger.debug("Report ZIP file cleanup skipped as per the extension settings.");
     }
 }
@@ -1032,24 +1037,32 @@ export async function findFileRecursivelyInDirectory(
 
 /**
  * Prompts the user to select the output.xml file if it is not set in the extension settings.
- * The default URI for the file selection dialog is determined in the following order of precedence: 
- * the first workspace folder (if available), the path specified in the extension settings (if valid), 
+ * The default URI for the file selection dialog is determined in the following order of precedence:
+ * the first workspace folder (if available), the path specified in the extension settings (if valid),
  * the provided workingDirectoryPath, and finally the user's home directory as the fallback.
  * @param workingDirectoryPath The full (absolute) path of the working directory. It will be used to set the default URI for the file selection dialog.
  * @returns {Promise<string | null>} The full (absolute) path of the selected output XML file, or undefined if no file is selected.
  */
 async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): Promise<string | null> {
-    logger.debug(`Choosing output XML file with working directory path ${workingDirectoryPath}.`);
+    logger.debug(`Choosing output XML file with working directory path ${workingDirectoryPath} .`);
     // Open file selection dialog to select the output xml file, display only XML files in the selection.
-    let outputXMLFilePathInExtensionSettings: string | undefined = getConfig().get<string>("outputXmlFilePath");
-    if (!outputXMLFilePathInExtensionSettings) {
-        logger.warn("Output XML path is not configured in extension settings.");
+    // To use relative paths to workspace location in extension settings,
+    // we need to get the workspace location to construct the full path of outputXmlFilePath.
+    let outputXMLFileRelativePathInExtensionSettings: string | undefined = getConfig().get<string>("outputXmlFilePath");
+
+    if (!outputXMLFileRelativePathInExtensionSettings) {
+        logger.warn("Output XML path is not set in the extension settings.");
+    }
+
+    const outputXMLFileAbsolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
+        outputXMLFileRelativePathInExtensionSettings,
+        true
+    ); // Construct the absolute path of the configuration file and verify if it exists
+
+    if (!outputXMLFileAbsolutePath) {
+        logger.warn(`Output XML path in extension settings is not valid: ${outputXMLFileAbsolutePath}`);
     } else {
-        if (await isAbsolutePathAndExists(outputXMLFilePathInExtensionSettings)) {
-            return outputXMLFilePathInExtensionSettings;
-        } else {
-            logger.warn(`Output XML path in extension settings is not valid: ${outputXMLFilePathInExtensionSettings}`);
-        }
+        return outputXMLFileAbsolutePath;
     }
 
     logger.trace(`Prompting user to select output XML file manually.`);
@@ -1058,12 +1071,12 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     // Determine which path to use as the default URI for the file selection dialog
     const defaultUri = firstWorkspaceFolderPath
         ? vscode.Uri.file(firstWorkspaceFolderPath) // Try using the first workspace folder first
-        : outputXMLFilePathInExtensionSettings
-        ? vscode.Uri.file(outputXMLFilePathInExtensionSettings) // Fall back to the configured path
+        : outputXMLFileRelativePathInExtensionSettings
+        ? vscode.Uri.file(outputXMLFileRelativePathInExtensionSettings) // Fall back to the configured path
         : workingDirectoryPath
         ? vscode.Uri.file(workingDirectoryPath) // Fall back to the working directory
-                : vscode.Uri.file(os.homedir()); // Final fallback to the user's home directory if none of the above are available
-    
+        : vscode.Uri.file(os.homedir()); // Final fallback to the user's home directory if none of the above are available
+
     logger.trace(`Default URI for output.xml file selection dialog: ${defaultUri.fsPath}`);
 
     // Output XML was not set in the extension settings. Open file selection dialog.
@@ -1107,6 +1120,26 @@ export async function isAbsolutePathAndExists(filePath: string): Promise<boolean
 }
 
 /**
+ * Checks if the given string is an absolute file path.
+ * @param filePath The file path to check
+ * @returns {Promise<boolean>} True if the file path is absolute, otherwise false
+ */
+export async function isAbsolutePath(filePath: string): Promise<boolean> {
+    try {
+        logger.trace(`Checking if ${filePath} is an absolute path.`);
+        if (path.isAbsolute(filePath)) {
+            logger.trace(`${filePath} is an absolute path.`);
+            return true;
+        }
+        logger.trace(`${filePath} is not an absolute path.`);
+        return false;
+    } catch {
+        logger.trace(`${filePath} is not an absolute path.`);
+        return false;
+    }
+}
+
+/**
  * Opens a file selection dialog for the user to choose the report zip file that doesn't contain test results.
  * @param workingDirectoryPath The full path of the working directory.
  * @returns {Promise<string | null>} The full path of the selected report zip file, or null if no file is selected.
@@ -1136,7 +1169,7 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
  * @param context - The extension context.
  * @param folderNameOfTestbenchWorkingDirectory - The folder name of the testbench working directory (.testbench).
  * @param currentProgress - Optional existing progress instance to report updates.
- * @returns {Promise<string | undefined>} The full path of the created report with results zip, or undefined if an error occurs. 
+ * @returns {Promise<string | undefined>} The full path of the created report with results zip, or undefined if an error occurs.
  * Undefined is returned (and not null) due to the usage of VSCode progress bar.
  */
 export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
@@ -1217,7 +1250,8 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             // Either use the downloaded report zip file or prompt the user to select one
             const reportWithoutResultsZipFilePath: string | null =
-                downloadedReportZipFilePath ?? (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
+                downloadedReportZipFilePath ??
+                (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
             if (!reportWithoutResultsZipFilePath) {
                 // Error logging is done in chooseReportWithoutResultsZipFile
                 return undefined;
@@ -1226,7 +1260,10 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             logger.debug(`Report with results is saved to ${reportWithoutResultsZipFilePath}`);
             reportProgress(`Reading test results and creating report.`, reportIncrement / 2);
 
-            pathOfReportWithResultsZip = path.join(testbenchWorkingDirectoryPathInsideWorkspace, reportFileWithResultsZipName);            
+            pathOfReportWithResultsZip = path.join(
+                testbenchWorkingDirectoryPathInsideWorkspace,
+                reportFileWithResultsZipName
+            );
 
             const isTb2RobotFetchResultsExecutionSuccessful: boolean =
                 await testbench2robotframeworkLib.tb2robotLib.startTb2robotFetchResults(
@@ -1247,7 +1284,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 return undefined;
             }
 
-            logger.debug(`tb2robot fetch-results executed successfully. returning the path of the report with results zip file: ${pathOfReportWithResultsZip}`);
+            logger.debug(
+                `tb2robot fetch-results executed successfully. returning the path of the report with results zip file: ${pathOfReportWithResultsZip}`
+            );
             return pathOfReportWithResultsZip;
 
             // When reading results and importing are automated together in a function, this info message is not needed.
@@ -1267,7 +1306,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 executeWithProgress
             );
         }
-
     } catch (error) {
         vscode.window.showErrorMessage(`An error occurred: ${(error as Error).message}`);
         logger.error(`Error in fetchTestResultsAndCreateReportWithResultsWithTb2Robot:`, error);
@@ -1319,12 +1357,12 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     context,
                     folderNameOfTestbenchWorkingDirectory,
                     progress
-                );            
-            
+                );
+
             if (!pathOfCreatedReportWithResults) {
                 logger.error("Error when reading test results and creating report with results.");
                 return null;
-            } 
+            }
 
             progress.report({
                 message: `Importing report with results to TestBench.`,
@@ -1342,7 +1380,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 increment: 25,
             });
 
-            await cleanUpReportFileIfConfiguredInSettings(pathOfCreatedReportWithResults);            
+            await cleanUpReportFileIfConfiguredInSettings(pathOfCreatedReportWithResults);
         }
     );
 }
@@ -1389,12 +1427,16 @@ export async function startTestGenerationForCycle(
             return null;
         }
 
+        const isWorkspaceValid: boolean = await utils.ensureWorkspaceLocation();
+        if (!isWorkspaceValid) {
+            return null;
+        }
+
         // Start the test generation process
         await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
             context,
             selectedTestCycleTreeItem,
             selectedTestCycleTreeItem.label,
-            baseKey,
             projectKeyOfCycle,
             cycleKey,
             folderNameOfTestbenchWorkingDirectory,
@@ -1405,7 +1447,6 @@ export async function startTestGenerationForCycle(
         vscode.window.showErrorMessage(error.message);
     }
 }
-
 
 /**
  * Deletes the testbench2robotframework configuration file. Retries the operation in case the file is busy with small delays.
