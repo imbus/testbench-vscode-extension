@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
 import * as loginWebView from "./loginWebView";
+import * as base64 from "base-64"; // npm i --save-dev @types/base-64
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { ProjectManagementTreeDataProvider } from "./projectManagementTreeView";
@@ -231,6 +232,133 @@ export class PlayServerConnection {
             }
         } catch (error) {
             logger.error("Error fetching project tree:", error);
+            return null;
+        }
+    }
+    
+    // TODO: Test the old play server call, add call for new play server
+    /* New play server API:
+    +  /api/projects/{projectKey}/interactions/{interactionKey}/v1:
+    +    get:
+    +      tags:
+    +        - Interactions
+    +      summary: Returns the details of the given interaction of the given project.
+    +      description: This endpoint returns the details of the given interaction of the given project. Only application admin or user with project roles can use this call.
+    +      operationId: getInteractionDetails
+    +      security:
+    +        - SessionToken: [ ]
+    +      parameters:
+    +        - name: projectKey
+    +          in: path
+    +          description: The identifier of the project.
+    +          required: true
+    +          schema:
+    +            type: integer
+    +            format: int64
+    +        - name: interactionKey
+    +          in: path
+    +          description: The identifier of the interaction.
+    +          required: true
+    +          schema:
+    +            type: integer
+    +            format: int64
+    +      responses:
+    +        '200':
+    +          description: The interaction details have been returned.
+    +          content:
+    +            application/vnd.testbench+json:
+    +              schema:
+    +                $ref: '#/components/schemas/InteractionSummary'
+    +        '403':
+    +          description: >
+    +            Forbidden: The user is not an administrator and has no role in the given project.
+    +        '404':
+    +          description: >
+    +            Not Found
+    +              - Project not found.
+    +              - Interaction not found.
+    */
+    /**
+     * Fetches the test elements from the TestBench server using the tov key.
+     * @param tovKey The tov key as a string.
+     * @returns The test elements fetched from the server or null if an error occurs.
+     */
+    async getTestElementsWithTovKeyOldPlayServer(tovKey: string | null): Promise<null | any> {
+        logger.trace("Fetching test elements with the Test Object Version key:", tovKey);
+
+        if (!this.sessionToken) {
+            logger.warn("Session token is null. Cannot fetch test elements for the tov key:", tovKey);
+            return null;
+        }
+
+        if (!tovKey) {
+            logger.warn("Tov key is null or undefined. Cannot fetch test elements.");
+            return null;
+        }
+
+        try {
+            const oldPlayServerBaseUrl: string = `https://${this.serverName}:9443/api/1`;
+            const getTestElementsURL: string = `/tovs/${tovKey}/testElements`;
+
+            logger.trace("Creating old play server session");
+
+            // Create session for API calls to the old play server
+            let oldPlayServerSession = axios.create({
+                baseURL: oldPlayServerBaseUrl,
+                // Old play server, which runs on port 9443, uses BasicAuth.
+                // Use loginName as username, and use sessionToken as the password.
+                auth: {
+                    username: getConfig().get<string>("username")!,
+                    password: this.sessionToken,
+                },
+                headers: {
+                    // Manually encode the credentials to Base64
+                    Authorization: `Basic ${base64.encode(
+                        `${getConfig().get<string>("username")}:${this.sessionToken}`
+                    )}`,
+                    "Content-Type": "application/vnd.testbench+json; charset=utf-8",
+                },
+                // Ignore self-signed certificates
+                httpsAgent: new https.Agent({
+                    rejectUnauthorized: false, // This should only be used in a development environment
+                }),
+            });
+
+            logger.trace(`Sending get test elements request to ${getTestElementsURL} for the tov key ${tovKey}`);
+
+            const testElementsResponse: AxiosResponse = await oldPlayServerSession.get(getTestElementsURL);
+
+            logger.trace("Response status of get test elements request:", testElementsResponse.status);
+            logger.trace("Contents of the response:", testElementsResponse);
+
+            /*
+            // Save the JSON to a file for analyzing the structure
+            const savePath = await vscode.window.showSaveDialog({
+                saveLabel: "Save Test Elements",
+                filters: {
+                    "JSON Files": ["json"],
+                    "All Files": ["*"],
+                },
+            });
+            if (savePath) {
+                const filePath = savePath.fsPath;
+                saveJsonToFile(filePath, testElementsResponse.data);
+                vscode.window.showInformationMessage(`Test elements response saved to ${filePath}`);
+            } else {
+                vscode.window.showErrorMessage("No file path selected.");
+            }
+            */
+
+            if (testElementsResponse.data) {
+                logger.trace("Fetched tree elements data:", testElementsResponse.data);
+                return testElementsResponse.data;
+            } else {
+                logger.warn("Tree elements data is null or undefined.");
+                return null;
+            }
+        } catch (error) {
+            logger.error("Error fetching tree elements:", error);
+            vscode.window.showErrorMessage("Error fetching test elements. Please check the logs for details.");
             return null;
         }
     }
@@ -541,7 +669,7 @@ export class PlayServerConnection {
             // Logout the user if the keep-alive request fails.
             logger.trace("Logging out the user after keep-alive request failed.");
             await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
-            // Possible reason for keep alive request fail: 
+            // Possible reason for keep alive request fail:
             // The user logged in in TestBench Client with the same account he used in VS Code, and the session in VS Code is forced to logout.
         }
     }
@@ -624,10 +752,14 @@ export async function performLogin(
         );
 
         let useStoredCredentials: boolean = false;
-        // If the user has stored credentials and can auto-login, 
-        // and the user has not chosen to prompt for new credentials, 
+        // If the user has stored credentials and can auto-login,
+        // and the user has not chosen to prompt for new credentials,
         // and the user has not chosen to auto-login without prompting, then auto-login
-        if (userHasStoredCredentialsAndCanAutoLogin && !promptForNewCredentials && !performAutoLoginWithStoredCredentialsWithoutPrompting) {
+        if (
+            userHasStoredCredentialsAndCanAutoLogin &&
+            !promptForNewCredentials &&
+            !performAutoLoginWithStoredCredentialsWithoutPrompting
+        ) {
             const choice: string | undefined = await vscode.window.showInformationMessage(
                 "Do you want to login using your previous credentials?",
                 { modal: true }, // Modal dialog is used so that the input box wont disappear, which forces the user to choose an option. Without it, login may be locked.
@@ -643,8 +775,7 @@ export async function performLogin(
                 return null;
             }
             // Continue the function in case of "No"
-        }
-        else {
+        } else {
             // Convert undefined value to false with !! if the optional parameter is not provided
             useStoredCredentials = !!performAutoLoginWithStoredCredentialsWithoutPrompting;
         }
@@ -965,7 +1096,10 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
             return null;
         }
 
-        const workingDirectoryPath: string = path.join(workspaceLocationInExtensionSettings!, folderNameOfTestbenchWorkingDirectory);
+        const workingDirectoryPath: string = path.join(
+            workspaceLocationInExtensionSettings!,
+            folderNameOfTestbenchWorkingDirectory
+        );
 
         const options: vscode.OpenDialogOptions = {
             defaultUri: vscode.Uri.file(workingDirectoryPath),
@@ -1185,7 +1319,11 @@ export async function selectReportWithResultsAndImportToTestbench(
                 });
             }
 
-            const importReportOutcome = await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+            const importReportOutcome = await importReportWithResultsToTestbench(
+                connection,
+                projectManagementTreeDataProvider,
+                resultZipFilePath
+            );
 
             if (progress) {
                 progress.report({
@@ -1194,7 +1332,7 @@ export async function selectReportWithResultsAndImportToTestbench(
                 });
             }
 
-            await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);            
+            await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
         }
     );
 }

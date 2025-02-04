@@ -271,7 +271,7 @@
             },
             {
                 "command": "testbenchExtension.clearWorkspaceFolder",
-                "title": "TestBench: Clear Workspace Folder",
+                "title": "TestBench: Clear TestBench Folder",
                 "icon": {
                     "light": "resources/icons/clearWorkspaceFolder.svg",
                     "dark": "resources/icons/clearWorkspaceFolder.svg"
@@ -378,6 +378,22 @@
                     "light": "resources/icons/Upload.svg",
                     "dark": "resources/icons/Upload.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.getTestElementsFromOldPlayServer",
+                "title": "TestBench: Get Test Elements From Old Play Server"
+            },
+            {
+                "command": "testbenchExtension.refreshTestElementsTree",
+                "title": "Refresh Test Elements",
+                "icon": {
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.displayInteractionsForSelectedTOV",
+                "title": "Show Interactions"
             }
         ],
         "views": {
@@ -396,8 +412,8 @@
                     "name": "Test Theme Tree"
                 },
                 {
-                    "id": "testElementsTreeView",
-                    "name": "Test Elements Tree"
+                    "id": "testElementsView",
+                    "name": "Test Elements"
                 }
             ]
         },
@@ -452,6 +468,11 @@
                     "command": "testbenchExtension.showExtensionSettings",
                     "group": "navigation@8",
                     "when": "view == projectManagementTree || view == testbenchExtension.webView"
+                },
+                {
+                    "command": "testbenchExtension.refreshTestElementsTree",
+                    "when": "view == testElementsView",
+                    "group": "navigation"
                 }
             ],
             "view/item/context": [
@@ -469,6 +490,11 @@
                     "command": "testbenchExtension.makeRoot",
                     "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == tov || viewItem == Version || viewItem == TestThemeNode)",
                     "group": "navigation"
+                },
+                {
+                    "command": "testbenchExtension.displayInteractionsForSelectedTOV",
+                    "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
+                    "group": "inline@1"
                 }
             ]
         },
@@ -495,6 +521,7 @@
         "test": "node ./out/test/runTest.js"
     },
     "devDependencies": {
+        "@types/base-64": "^1.0.2",
         "@types/glob": "^8.1.0",
         "@types/mocha": "^10.0.9",
         "@types/node": "^22.7.5",
@@ -504,13 +531,13 @@
         "@typescript-eslint/parser": "^8.9.0",
         "@vscode/test-cli": "^0.0.10",
         "@vscode/test-electron": "^2.4.1",
+        "@vscode/vsce": "^2.15.0",
         "eslint": "^9.12.0",
         "mocha": "^10.7.3",
         "proxyquire": "^2.1.3",
         "sinon": "^19.0.2",
         "ts-loader": "^9.5.1",
         "typescript": "^5.6.3",
-        "@vscode/vsce": "^2.15.0",
         "webpack": "^5.95.0",
         "webpack-cli": "^5.1.4"
     },
@@ -518,6 +545,7 @@
         "@vscode-elements/elements": "^1.10.0",
         "@vscode/python-extension": "^1.0.5",
         "axios": "^1.7.7",
+        "base-64": "^1.0.0",
         "flatted": "^3.3.1",
         "jszip": "^3.10.1"
     },

@@ -275,7 +275,9 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     clearTree(): void {
         logger.trace("Clearing the project management tree.");
-        this.testThemeDataProvider.clearTree();
+        if (this.testThemeDataProvider) {
+            this.testThemeDataProvider.clearTree();
+        }
         this.rootItem = null;
         this.refresh();
     }
@@ -341,7 +343,7 @@ export class TestbenchTreeItem extends vscode.TreeItem {
         // Set the tooltip based on the context value.
         // Tooltip for project, TOV and cycle elements looks like this: Type, Name, Status, Key
         if (contextValue === "Project" || contextValue === "Version" || contextValue === "Cycle") {
-            this.tooltip = `Type: ${contextValue}, Name: ${item.name}, Status: ${this.statusOfTreeItem}, Key: ${item.key}`;
+            this.tooltip = `Type: ${contextValue}\nName: ${item.name}\nStatus: ${this.statusOfTreeItem}\nKey: ${item.key}`;
         }
         // Tooltip for test theme, test case set and test case looks like this: Numbering, Type, Name, Status, ID
         else if (
@@ -350,12 +352,12 @@ export class TestbenchTreeItem extends vscode.TreeItem {
             contextValue === "TestCaseNode"
         ) {
             if (item?.base?.numbering) {
-                this.tooltip = `Numbering: ${item.base.numbering}, Type: ${item.elementType}, Name: ${item.base.name}, Status: ${this.statusOfTreeItem}, ID: ${item.base.uniqueID}`;
+                this.tooltip = `Numbering: ${item.base.numbering}\nType: ${item.elementType}\nName: ${item.base.name}\nStatus: ${this.statusOfTreeItem}\nID: ${item.base.uniqueID}`;
             }
         }
     }
 
-    // Update the icon of the tree item based on the context value and status of the item 
+    // Update the icon of the tree item based on the context value and status of the item
     // This is not used currently, but it allows to have different icons for different statuses of the tree items like the TestBench Client.
     private getIconPath(): string {
         const iconFolderPath: string = path.join(__dirname, "..", "resources", "icons");

@@ -5,14 +5,14 @@ import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testBenchTypes from "./testBenchTypes";
 import * as loginWebView from "./loginWebView";
 import * as testBenchLogger from "./testBenchLogger";
-import * as testElementsTreeView from "./testElementsTreeView";
 import * as utils from "./utils";
 import path from "path";
+import * as testElementsTreeView from "./testElementsTreeView";
 
 // TODO: Add progress bar for tree views when fetching elements to notify the user.
 // TODO: Add progress bar for fetching cycle structure since it can take long.
 // TODO: Hide the tree views initially instead of creating them and then hiding them after.
-// TODO: Adjust / test workflow file for building vsix package as artifact
+// TODO: The user generated tests, executed the tests, and restarted he extension. Last generated test params are now invalid due to restart, and he cant import.
 
 // Before releasing the extension:
 // TODO: Add license to the extension
@@ -96,6 +96,16 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     automaticLoginAfterExtensionActivation: {
         command: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     },
+    // TODO: Delete this after implementing new play server call?
+    getTestElementsFromOldPlayServer: {
+        command: `${baseKeyOfExtension}.getTestElementsFromOldPlayServer`,
+    },
+    refreshTestElementsTree: {
+        command: `${baseKeyOfExtension}.refreshTestElementsTree`,
+    },
+    displayInteractionsForSelectedTOV: {
+        command: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`,
+    },
 };
 
 // Folder to create inside the workspace / project directory (Which is set in the extension settings) to store and process files
@@ -134,16 +144,13 @@ export async function activate(context: vscode.ExtensionContext) {
         treeDataProvider: projectManagementTreeDataProvider,
     });
 
-    // TODO: Make this a global variable?
-    // Initialize the test elements tree view
-    const testElementsTreeDataProvider = new testElementsTreeView.TestElementTreeViewProvider();
-    context.subscriptions.push(
-        vscode.window.registerTreeDataProvider("testElementsTreeView", testElementsTreeDataProvider),
-        vscode.commands.registerCommand("testElementsTreeView.refresh", () => testElementsTreeDataProvider.refresh())
-    );
-    vscode.window.createTreeView("testElementsTreeView", {
+    // Create an instance of our tree elements data provider.
+    const testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider();
+    vscode.window.createTreeView("testElementsView", {
         treeDataProvider: testElementsTreeDataProvider,
     });
+    // Register the tree view (the view ID must match the one in package.json).
+    vscode.window.registerTreeDataProvider("testElementsView", testElementsTreeDataProvider);
     testElementsTreeView.hideTestElementsTreeView();
 
     // Initialize or update extension configuration settings
@@ -622,7 +629,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // TODO: If workspace location is not set, and if we prompt the user to set it here, and the user selects no,
     // in test generation, we check this again and the modal dialog is opened twice
-    
+
     // Register the "Clear Workspace Folder" command.
     // Clears the workspace folder of its contents, excluding log files.
     context.subscriptions.push(
@@ -630,9 +637,10 @@ export async function activate(context: vscode.ExtensionContext) {
             logger.debug(`Clear Workspace Folder command called.`);
             const workspaceLocationInExtensionSettings = config.get<string>("workspaceLocation", "");
             if (!workspaceLocationInExtensionSettings) {
-                const workspaceLocationNotSetError : string = "No workspace location set. Please set the workspace location first.";
+                const workspaceLocationNotSetError: string =
+                    "No workspace location set. Please set the workspace location first.";
                 vscode.window.showErrorMessage(workspaceLocationNotSetError);
-                logger.warn(workspaceLocationNotSetError);                
+                logger.warn(workspaceLocationNotSetError);
                 return;
             }
 
@@ -647,6 +655,66 @@ export async function activate(context: vscode.ExtensionContext) {
             );
             logger.trace(`End of Clear Workspace Folder command.`);
         })
+    );
+
+    // Register the "Fetch tree elements" command.
+    context.subscriptions.push(
+        vscode.commands.registerCommand(allExtensionCommands.getTestElementsFromOldPlayServer.command, async () => {
+            logger.debug("getTestElementsFromOldPlayServer command called.");
+
+            // Prompt for inputs.
+            const inputs = await testElementsTreeView.promptForTovKeyAndFilter();
+            if (!inputs) {
+                return;
+            }
+            const { tovKey, uniqueIDFilter } = inputs;
+
+            // Store inputs for later refreshes.
+            testElementsTreeView.setCurrentTovKey(tovKey);
+            testElementsTreeView.setCurrentUniqueIDFilter(uniqueIDFilter);
+
+            // Fetch data and update the view.
+            await testElementsTreeDataProvider.fetchAndDisplayTestElements(tovKey, uniqueIDFilter);
+            logger.trace("End of getTestElementsFromOldPlayServer command.");
+        })
+    );
+
+    // Command for the refresh button in the test elements tree view title bar.
+    // Register the "Refresh Test Elements Tree" command.
+    context.subscriptions.push(
+        vscode.commands.registerCommand(allExtensionCommands.refreshTestElementsTree.command, async () => {
+            logger.trace("Refresh Test Elements Tree command called.");
+            const currentTovKey = testElementsTreeView.getCurrentTovKey();
+            if (!currentTovKey) {
+                vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
+                return;
+            }
+            await testElementsTreeDataProvider.fetchAndDisplayTestElements(
+                currentTovKey,
+                testElementsTreeView.getCurrentUniqueIDFilter()
+            );
+        })
+    );
+
+    // Register the "Display Interactions For Selected TOV" command.
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            allExtensionCommands.displayInteractionsForSelectedTOV.command,
+            async (treeItem: projectManagementTreeView.TestbenchTreeItem) => {
+                logger.debug("Display Interactions For Selected TOV command called for tree item:", treeItem);
+                // Ensure the command is executed for a TOV element.
+                if (projectManagementTreeDataProvider && treeItem.contextValue === "Version") {
+                    const tovKey: string = treeItem.item?.key?.toString();
+                    if (tovKey) {
+                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(
+                            tovKey,
+                            testElementsTreeView.getCurrentUniqueIDFilter()
+                        );
+                    }
+                }
+                logger.trace("End of Display Interactions For Selected TOV command.");
+            }
+        )
     );
 
     // TODO: Remove?
