@@ -663,18 +663,13 @@ export async function activate(context: vscode.ExtensionContext) {
             logger.debug("getTestElementsFromOldPlayServer command called.");
 
             // Prompt for inputs.
-            const inputs = await testElementsTreeView.promptForTovKeyAndFilter();
-            if (!inputs) {
+            const tovKeyInput = await testElementsTreeView.promptForTovKeyAndFilter();
+            if (!tovKeyInput) {
                 return;
             }
-            const { tovKey, uniqueIDFilter } = inputs;
-
-            // Store inputs for later refreshes.
-            testElementsTreeView.setCurrentTovKey(tovKey);
-            testElementsTreeView.setCurrentUniqueIDFilter(uniqueIDFilter);
-
+            
             // Fetch data and update the view.
-            await testElementsTreeDataProvider.fetchAndDisplayTestElements(tovKey, uniqueIDFilter);
+            await testElementsTreeDataProvider.fetchAndDisplayTestElements(tovKeyInput);
             logger.trace("End of getTestElementsFromOldPlayServer command.");
         })
     );
@@ -690,8 +685,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
             await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                currentTovKey,
-                testElementsTreeView.getCurrentUniqueIDFilter()
+                currentTovKey
             );
         })
     );
@@ -704,11 +698,10 @@ export async function activate(context: vscode.ExtensionContext) {
                 logger.debug("Display Interactions For Selected TOV command called for tree item:", treeItem);
                 // Ensure the command is executed for a TOV element.
                 if (projectManagementTreeDataProvider && treeItem.contextValue === "Version") {
-                    const tovKey: string = treeItem.item?.key?.toString();
-                    if (tovKey) {
+                    const tovKeyOfSelectedTreeElement: string = treeItem.item?.key?.toString();
+                    if (tovKeyOfSelectedTreeElement) {
                         await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                            tovKey,
-                            testElementsTreeView.getCurrentUniqueIDFilter()
+                            tovKeyOfSelectedTreeElement
                         );
                     }
                 }
