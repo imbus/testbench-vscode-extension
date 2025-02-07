@@ -330,7 +330,7 @@ export class PlayServerConnection {
             const testElementsResponse: AxiosResponse = await oldPlayServerSession.get(getTestElementsURL);
 
             logger.trace("Response status of get test elements request:", testElementsResponse.status);
-            logger.trace("Contents of the response:", testElementsResponse);
+            // logger.trace("Contents of the test elements response:", testElementsResponse);
 
             /*
             // Save the JSON to a file for analyzing the structure

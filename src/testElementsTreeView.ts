@@ -54,26 +54,25 @@ function getRegexPatterns(): RegExp[] {
     );
 
     logger.trace("Resource regex patterns in extension settings:", pythonResourceRegexPatternsInExtensionSettings);
-
-    /*
-    // Test code to convert python regex to javascript regex
-    const RegexTranslator = require("regex-translator");
-    const mediaryString: string = RegexTranslator.getMediaryStringFromRegexString("(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*", "re2");
-    logger.trace("Mediary string:", mediaryString);
-    const mediaryObject = RegexTranslator.getMediaryObjectFromRegexString("(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*", "re2");
-    logger.trace("Mediary object:", mediaryObject);
-    const javascriptRegexString: string = RegexTranslator.getRegexStringFromMediaryString(
-        mediaryObject.mediary_string,
-        "ecma"
-    );
-    logger.trace("Javascript regex string:", javascriptRegexString);
-    */
+    
+    function convertPythonRegexToJs(pythonRegex: string): string {
+        // Replace Python's named capture group syntax: (?P<name>pattern)
+        // with JavaScript's syntax: (?<name>pattern)
+        let jsRegex = pythonRegex.replace(/\(\?P<([a-zA-Z_]\w*)>/g, "(?<$1>");
+        return jsRegex;
+    }
 
     const JSlibraryRegexPatterns = pythonResourceRegexPatternsInExtensionSettings
         .map((pattern) => {
             logger.trace(`Trying to create JS regex pattern from: ${pattern}`);
+            pattern = convertPythonRegexToJs(pattern);
+            logger.trace(`Converted JS regex pattern: ${pattern}`);
             try {
-                return new RegExp(pattern, "u");
+                const regex = new RegExp(pattern, "u");
+                if (regex instanceof RegExp) {
+                    logger.trace(`Regex conversion succesful: ${regex}`);
+                }
+                return regex;
             } catch (error) {
                 logger.error(`Invalid regex pattern in settings: ${pattern}`, error);
                 return null;
@@ -84,10 +83,11 @@ function getRegexPatterns(): RegExp[] {
     logger.trace("Returning created javascript regex patterns:", JSlibraryRegexPatterns);
 
     // TODO: Conversion from python regex to javascript regex is not working as expected. Need to find a solution.
-    const manuallyCreatedJavaScriptLibraryRegex = "(?:.*.)?(?<resourceName>[^.]+?)s*Robot-Library.*";
-    logger.trace("Manually created JS regex pattern:", manuallyCreatedJavaScriptLibraryRegex);
-    return [new RegExp(manuallyCreatedJavaScriptLibraryRegex, "u")];
-    // return JSlibraryRegexPatterns;
+    // const manuallyCreatedJavaScriptLibraryRegex = "(?:.*.)?(?<resourceName>[^.]+?)s*Robot-Library.*";
+    // logger.trace("Manually created JS regex pattern:", manuallyCreatedJavaScriptLibraryRegex);
+    // return [new RegExp(manuallyCreatedJavaScriptLibraryRegex, "u")];
+
+    return JSlibraryRegexPatterns;
 }
 
 /**
@@ -98,7 +98,7 @@ function getRegexPatterns(): RegExp[] {
  */
 function matchesRegex(value: string, regexList: RegExp[]): boolean {
     let result: boolean = regexList.some((regex) => regex.test(value));
-    // logger.trace(`Result of matching value ${value} against regex patterns ${regexList}: ${result}`);
+    logger.trace(`Result of matching value ${value} against regex patterns ${regexList}: ${result}`);
     return result;
 }
 
