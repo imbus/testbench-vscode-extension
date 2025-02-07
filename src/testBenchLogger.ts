@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as utils from "./utils";
 import { promisify } from "util";
 import { getConfig, folderNameOfTestbenchWorkingDirectory } from "./extension";
 
@@ -17,8 +18,8 @@ const fsStat = promisify(fs.stat);
 const fsRename = promisify(fs.rename);
 
 export class TestBenchLogger {
-    private logFolderPath: string;
-    private logFilePath: string;
+    private logFolderPath!: string;
+    private logFilePath!: string;
     // Log levels are 1-5, with 1 being the most verbose (trace) and 5 being the least verbose (error).
     // But in the extension settings, the user can select 0 as log level to disable logging.
     private levels: { [key: string]: number } = {
@@ -40,32 +41,34 @@ export class TestBenchLogger {
     }
 
     constructor(outputToTerminal?: boolean) {
-        // If workspaceLocation is not set, use the extension directory, and create a logs folder
-        const workspaceLocationInExtensionSettings = getConfig().get<string>("workspaceLocation");
+        (async () => {
+            // If workspaceLocation is not set, use the extension directory, and create a logs folder there.
+            const workspaceLocationInExtensionSettings = await utils.validateAndReturnWorkspaceLocation(false);
 
-        // Example path: workspaceFolder/.testbench/logs/testBenchExtension.log
-        if (workspaceLocationInExtensionSettings) {
-            this.logFolderPath = path.join(
-                workspaceLocationInExtensionSettings,
-                folderNameOfTestbenchWorkingDirectory,
-                folderNameOfLogs // Create a log folder with this name in the workspace folder
-            );
-            this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
-        } else {
-            console.log("Workspace location is not set in the extension settings. Logs cannot be created.");
-            this.logFolderPath = path.join(__dirname, "logs");
-            this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
-        }
+            // Example path: workspaceFolder/.testbench/logs/testBenchExtension.log
+            if (workspaceLocationInExtensionSettings) {
+                this.logFolderPath = path.join(
+                    workspaceLocationInExtensionSettings,
+                    folderNameOfTestbenchWorkingDirectory,
+                    folderNameOfLogs
+                );
+                this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
+            } else {
+                console.log("Workspace location is not set in the extension settings. Logs cannot be created.");
+                this.logFolderPath = path.join(__dirname, "logs");
+                this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
+            }
 
-        if (outputToTerminal) {
-            this.outputLogToTerminal = outputToTerminal;
-        }
+            if (outputToTerminal) {
+                this.outputLogToTerminal = outputToTerminal;
+            }
 
-        // Ensure log directory exists
-        if (!fs.existsSync(this.logFolderPath)) {
-            fs.mkdirSync(this.logFolderPath, { recursive: true });
-        }
-    }
+            // Ensure log directory exists
+            if (!fs.existsSync(this.logFolderPath)) {
+                fs.mkdirSync(this.logFolderPath, { recursive: true });
+            }
+        })();
+    }   
 
     // Rotate logs if current log file exceeds MAX_LOG_FILE_SIZE
     // We always log to extension.log, and rename it to extension.log.0, extension.log.1, etc. when it exceeds MAX_LOG_FILE_SIZE

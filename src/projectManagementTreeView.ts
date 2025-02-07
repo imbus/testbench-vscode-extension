@@ -264,12 +264,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     // Trigger initialization of test theme tree when a test cycle is clicked
-    async handleTestCycleClick(testCycleItem: TestbenchTreeItem): Promise<void> {
-        logger.trace("Handling test cycle click:", testCycleItem.label);
-        if (testCycleItem.contextValue === "Cycle") {
+    async handleTestCycleClick(treeItem: TestbenchTreeItem): Promise<void> {
+        logger.trace("Handling click on tree item:", treeItem.label);
+        if (treeItem.contextValue === "Cycle") {
             // Use the existing refresh or data loading function for initializing the test theme tree
             this.testThemeDataProvider.clearTree();
-            this.testThemeDataProvider.setRoots(await this.getChildrenOfCycle(testCycleItem));
+            this.testThemeDataProvider.setRoots(await this.getChildrenOfCycle(treeItem));
         }
     }
 

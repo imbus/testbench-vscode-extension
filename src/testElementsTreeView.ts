@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { connection, logger, getConfig } from "./extension";
 
+// TODO: If the test element view is empty due to the filtering, show a message to the user that no elements are mathed with the regex.
+
 // Global variables to store the current parameters for the tree view
 let currentTovKeyOfInteractionsInView: string = "";
 export function getCurrentTovKey(): string {
@@ -12,13 +14,13 @@ export function setCurrentTovKey(newKey: string): void {
 }
 
 // Define the allowed element types for tree elements.
-type ElementType = 'Subdivision' | 'DataType' | 'Interaction' | 'Condition' | 'Other';
+type ElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
 /**
  * Interface representing a test element from the json response of the server.
- * 
+ *
  * @property id Unique identifier computed from the key properties.
- * @property parentId Identifier of the parent element (derived from the "parent" or, if missing, the "libraryKey").
+ * @property parentId Identifier of the parent element (derived from the "parent" or, if missing, use the "libraryKey").
  * @property name Display name.
  * @property uniqueID The uniqueID string.
  * @property libraryKey Processed libraryKey (if originally an object, its serial is used).
@@ -40,23 +42,38 @@ interface TestElement {
     directMatch: boolean;
     children?: TestElement[];
 }
+
 /**
  * Retrieves regex patterns from the extension settings and tries to create javascript RegExps from them.
  * @returns An array of valid RegExp objects.
  */
 function getRegexPatterns(): RegExp[] {
-    const resourceRegexPatternsInExtensionSettings: string[] = getConfig().get(
+    const pythonResourceRegexPatternsInExtensionSettings: string[] = getConfig().get(
         "resourceRegexInTestbench2robotframework",
         []
     );
 
-    logger.trace("Resource regex patterns in extension settings:", resourceRegexPatternsInExtensionSettings);
+    logger.trace("Resource regex patterns in extension settings:", pythonResourceRegexPatternsInExtensionSettings);
 
-    const regexPatterns = resourceRegexPatternsInExtensionSettings
+    /*
+    // Test code to convert python regex to javascript regex
+    const RegexTranslator = require("regex-translator");
+    const mediaryString: string = RegexTranslator.getMediaryStringFromRegexString("(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*", "re2");
+    logger.trace("Mediary string:", mediaryString);
+    const mediaryObject = RegexTranslator.getMediaryObjectFromRegexString("(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*", "re2");
+    logger.trace("Mediary object:", mediaryObject);
+    const javascriptRegexString: string = RegexTranslator.getRegexStringFromMediaryString(
+        mediaryObject.mediary_string,
+        "ecma"
+    );
+    logger.trace("Javascript regex string:", javascriptRegexString);
+    */
+
+    const JSlibraryRegexPatterns = pythonResourceRegexPatternsInExtensionSettings
         .map((pattern) => {
-            logger.trace(`Trying to create regex pattern from: ${pattern}`);
+            logger.trace(`Trying to create JS regex pattern from: ${pattern}`);
             try {
-                return new RegExp(pattern);
+                return new RegExp(pattern, "u");
             } catch (error) {
                 logger.error(`Invalid regex pattern in settings: ${pattern}`, error);
                 return null;
@@ -64,9 +81,13 @@ function getRegexPatterns(): RegExp[] {
         })
         .filter((regex): regex is RegExp => regex !== null);
 
-    logger.trace("Returning created regex patterns:", regexPatterns);
+    logger.trace("Returning created javascript regex patterns:", JSlibraryRegexPatterns);
 
-    return regexPatterns;
+    // TODO: Conversion from python regex to javascript regex is not working as expected. Need to find a solution.
+    const manuallyCreatedJavaScriptLibraryRegex = "(?:.*.)?(?<resourceName>[^.]+?)s*Robot-Library.*";
+    logger.trace("Manually created JS regex pattern:", manuallyCreatedJavaScriptLibraryRegex);
+    return [new RegExp(manuallyCreatedJavaScriptLibraryRegex, "u")];
+    // return JSlibraryRegexPatterns;
 }
 
 /**
@@ -77,12 +98,12 @@ function getRegexPatterns(): RegExp[] {
  */
 function matchesRegex(value: string, regexList: RegExp[]): boolean {
     let result: boolean = regexList.some((regex) => regex.test(value));
-    logger.trace(`Result of matching value ${value} against regex patterns ${regexList}: ${result}`);
+    // logger.trace(`Result of matching value ${value} against regex patterns ${regexList}: ${result}`);
     return result;
 }
 
 /**
- * Builds a hierarchical tree from a flat array of JSON objects representing test elements. 
+ * Builds a hierarchical tree from a flat array of JSON objects representing test elements.
  * @param flatElements Flat array of JSON objects from the server.
  * @returns An array of root TestElement objects forming the tree.
  */
@@ -235,7 +256,7 @@ const iconMapping: Record<ElementType, string> = {
     DataType: "dataType.svg",
     Interaction: "testStep.svg",
     Condition: "condition.svg",
-    Other: "other.svg"
+    Other: "other.svg",
 };
 
 /**
@@ -355,7 +376,7 @@ export async function displayTestElementsTreeView(): Promise<void> {
 }
 
 /**
- * Prompts the user for the TOV key and an optional uniqueID filter. 
+ * Prompts the user for the TOV key and an optional uniqueID filter.
  * @returns An object containing the TOV key and uniqueID filter, or null if input is cancelled.
  */
 export async function promptForTovKeyAndFilter(): Promise<string | null> {
@@ -374,7 +395,7 @@ export async function promptForTovKeyAndFilter(): Promise<string | null> {
     if (!tovKeyInput) {
         vscode.window.showWarningMessage("No TOV key provided.");
         return null;
-    }   
+    }
 
-    return tovKeyInput.trim()
+    return tovKeyInput.trim();
 }

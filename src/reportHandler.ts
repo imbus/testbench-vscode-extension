@@ -413,19 +413,19 @@ export async function downloadReport(
             throw new Error(downloadReportFailedMessage);
         }
 
-        // Get the workspace configuration
-        const workspaceLocationInExtensionSettings: string | undefined = getConfig().get<string>("workspaceLocation");
+        // Get the workspace configuration or set the default workspace location
+        const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
 
-        if (workspaceLocationInExtensionSettings && fs.existsSync(workspaceLocationInExtensionSettings)) {
+        if (workspaceLocation && fs.existsSync(workspaceLocation)) {
             // Save report file to the specified workspace location and return the path of downloaded file
             return await storeReportFileLocally(
-                workspaceLocationInExtensionSettings,
+                workspaceLocation,
                 folderNameToDownloadReport,
                 fileNameToDownload,
                 downloadZipResponse
             );
         } else {
-            const workspaceLocationMissingErrorMessage: string = `The workspace location configuration does not exist or invalid path is given: ${workspaceLocationInExtensionSettings}`;
+            const workspaceLocationMissingErrorMessage: string = `The workspace location configuration does not exist or invalid path is given: ${workspaceLocation}`;
             logger.error(workspaceLocationMissingErrorMessage);
             // vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
         }
@@ -674,7 +674,8 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         return null;
     }
 
-    const isWorkspaceValid: boolean = await utils.ensureWorkspaceLocation()
+    const isWorkspaceValid: string | undefined
+     = await utils.validateAndReturnWorkspaceLocation();
     if (!isWorkspaceValid) {
         return null;
     }
@@ -869,8 +870,8 @@ async function runRobotFrameworkTestGenerationProcess(
     progress.report({ increment: 30, message: "Generating robot framework tests with testbench2robotframework." });
 
     // Check the workspace location in the extension settings again in case the user changed it during the process
-    const workspaceLocationInExtensionSettings: string | undefined = getConfig().get<string>("workspaceLocation");
-    if (!workspaceLocationInExtensionSettings) {
+    const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
+    if (!workspaceLocation) {
         const workspaceLocationMissingErrorMessage: string = "Workspace location is not configured in the extension settings.";
         logger.error(workspaceLocationMissingErrorMessage);
         vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
@@ -878,7 +879,7 @@ async function runRobotFrameworkTestGenerationProcess(
     }
 
     const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
-        workspaceLocationInExtensionSettings,
+        workspaceLocation,
         folderNameOfTestbenchWorkingDirectory
     );
 
@@ -1197,21 +1198,21 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             reportProgress(`Choosing result XML file.`, reportIncrement);
 
             const reportFileWithResultsZipName: string = `ReportWithResults_${Date.now()}.zip`; // Add a timestamp to the report name
-            const workspaceLocationInExtensionSettings: string | undefined =
-                getConfig().get<string>("workspaceLocation");
-            if (!workspaceLocationInExtensionSettings) {
+            const workspaceLocation: string | undefined =
+                await utils.validateAndReturnWorkspaceLocation();
+            if (!workspaceLocation) {
                 const workspaceLocationNotConfiguredMessage: string = "Workspace location is not configured.";
                 logger.error(workspaceLocationNotConfiguredMessage);
                 return undefined;
             }
 
             const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
-                workspaceLocationInExtensionSettings,
+                workspaceLocation,
                 folderNameOfTestbenchWorkingDirectory
             );
 
             const robotResultOutputXMLFilePath: string | null = await chooseRobotOutputXMLFileIfNotSet(
-                workspaceLocationInExtensionSettings
+                workspaceLocation
             );
             if (!robotResultOutputXMLFilePath) {
                 // Error logging is done in chooseRobotOutputXMLFile
@@ -1427,7 +1428,7 @@ export async function startTestGenerationForCycle(
             return null;
         }
 
-        const isWorkspaceValid: boolean = await utils.ensureWorkspaceLocation();
+        const isWorkspaceValid: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!isWorkspaceValid) {
             return null;
         }

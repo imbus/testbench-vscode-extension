@@ -174,7 +174,7 @@
                     },
                     "testbenchExtension.libraryRegexInTestbench2robotframework": {
                         "type": "array",
-                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot.",
+                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
                         "items": {
                             "type": "string"
                         },
@@ -185,7 +185,7 @@
                     },
                     "testbenchExtension.libraryRootInTestbench2robotframework": {
                         "type": "array",
-                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework.",
+                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
                         "items": {
                             "type": "string"
                         },
@@ -197,7 +197,7 @@
                     },
                     "testbenchExtension.resourceRegexInTestbench2robotframework": {
                         "type": "array",
-                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot.",
+                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
                         "items": {
                             "type": "string"
                         },
@@ -547,7 +547,8 @@
         "axios": "^1.7.7",
         "base-64": "^1.0.0",
         "flatted": "^3.3.1",
-        "jszip": "^3.10.1"
+        "jszip": "^3.10.1",
+        "regex-translator": "^0.2.8"
     },
     "extensionDependencies": [
         "ms-python.python"

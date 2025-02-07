@@ -18,6 +18,7 @@ import {
     logger,
     loginWebViewProvider,
 } from "./extension";
+import * as utils from "./utils";
 
 // Ignore SSL certificate validation in node requests
 // TODO: Remove this in production, and use a valid certificate
@@ -1088,7 +1089,7 @@ async function fetchServerVersions(
  */
 async function promptForReportZipFileWithResults(): Promise<string | null> {
     try {
-        const workspaceLocationInExtensionSettings: string | undefined = getConfig().get<string>("workspaceLocation");
+        const workspaceLocationInExtensionSettings: string | undefined = await utils.validateAndReturnWorkspaceLocation();
 
         if (!workspaceLocationInExtensionSettings) {
             vscode.window.showErrorMessage("Workspace location is not set in the configuration.");

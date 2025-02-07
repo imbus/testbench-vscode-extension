@@ -52,7 +52,7 @@ export async function constructAbsolutePathFromRelativePath(
         return null;
     }
 
-    const workspaceLocation: string | undefined = getConfig().get<string>("workspaceLocation");
+    const workspaceLocation: string | undefined = await validateAndReturnWorkspaceLocation();
     if (!workspaceLocation) {
         logger.error("Workspace location was not set while constructing absolute path.");
         return null;
@@ -194,64 +194,69 @@ export async function clearWorkspaceFolder(
 }
 
 /**
- * Checks if the workspace location is set in the extension settings.
- * If not, prompts the user to set it.
+ * Retrieves the workspace location by checking:
+ * 1. The "workspaceLocation" setting in the extension configuration.
+ * 2. The location of the currently opened workspace folder.
+ * If neither is found, prompts the user to set a custom workspace location,
+ * saves it in the extension configuration, and returns the newly set value.
+ * Enable logging flag and logger checks are added because this function is also used in the logger constructor.
  *
- * @returns A Promise that resolves to `true` if the workspace location is valid or has been set successfully,
- *          or `false` if the user cancels the prompt, chooses not to set it, or there is an error.
+ * @param enableLogging - Determines whether to log trace information. Defaults to `true`.
+ * @returns A Promise that resolves to the workspace location string or `undefined` if the user canceled.
  */
-export async function ensureWorkspaceLocation(): Promise<boolean> {
-    try {
-        const workspaceLocationInExtensionSettings: string = getConfig().get<string>("workspaceLocation")!;
-
-        // If workspace location is not set, prompt the user
-        if (!workspaceLocationInExtensionSettings) {
-            logger.warn("Workspace location is not set in the extension settings.");
-
-            const selectedOption = await vscode.window.showInformationMessage(
-                "Invalid workspace location. Would you like to set the workspace path?",
-                { modal: true },
-                "Yes",
-                "No"
-            );
-
-            logger.trace(`User selected ${selectedOption} option for setting the workspace location.`);
-
-            switch (selectedOption) {
-                case "Yes":
-                    // Execute the command to set the workspace location
-                    await vscode.commands.executeCommand(`${allExtensionCommands.setWorkspaceLocation.command}`);
-
-                    // Note: No need to check that the workspace location is valid and exists since its a VS Code file selection dialog.
-
-                    // Check if the workspace location is now set after executing the command
-                    const newWorkspaceLocation: string = getConfig().get<string>("workspaceLocation")!;
-                    if (newWorkspaceLocation) {
-                        logger.trace("Workspace location has been set successfully to:", newWorkspaceLocation);
-                        return true;
-                    } else {
-                        logger.error("Failed to set the workspace location.");
-                        vscode.window.showErrorMessage("Failed to set the workspace location. See logs for details.");
-                        return false;
-                    }
-                case "No":
-                    // User chose not to set the location
-                    logger.warn("User chose not to set the workspace location.");
-                    return false;
-                default:
-                    // User canceled the prompt
-                    logger.trace("User canceled the prompt to set the workspace location.");
-                    return false;
-            }
-        }
-
-        // Workspace location is already set
-        logger.trace("Workspace location is valid.");
-        return true;
-    } catch (error: any) {
-        // Handle potential errors (e.g., accessing configuration)
-        logger.error(`Error checking workspace location: ${error.message}`);
-        vscode.window.showErrorMessage("Error checking workspace location. See logs for details.");
-        return false;
+export async function validateAndReturnWorkspaceLocation(enableLogging: boolean = true): Promise<string | undefined> {
+    if (logger && enableLogging) {
+        logger.trace("Validating and returning workspace location.");
     }
+
+    // Check if the user has specified a workspace location in extension settings
+    const workspaceLocationInExtensionSettings = getConfig().get<string>("workspaceLocation", "");
+    if (workspaceLocationInExtensionSettings) {
+        if (logger && enableLogging) {
+            logger.trace(
+                `Workspace location found in extension settings, returning: ${workspaceLocationInExtensionSettings}`
+            );
+        }
+        return workspaceLocationInExtensionSettings;
+    }
+
+    // If no custom location is set, fall back to the currently opened workspace (if any)
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        if (logger && enableLogging) {
+            logger.trace(
+                `Workspace location found in currently opened workspace folder, returning: ${workspaceFolders[0].uri.fsPath}`
+            );
+        }
+        return workspaceFolders[0].uri.fsPath;
+    }
+
+    if (logger && enableLogging) {
+        logger.trace(
+            "No workspace location found in extension settings or currently opened workspace folder. Prompting user to set a new location."
+        );
+    }
+
+    // If neither is available, prompt the user to set a new workspace location
+    const newWorkspaceLocation = await vscode.window.showInputBox({
+        placeHolder: "Enter the new workspace location...",
+        prompt: "No workspace location found. Please set a workspace location or press Escape to cancel.",
+    });
+
+    if (newWorkspaceLocation && newWorkspaceLocation.trim()) {
+        // Update the extension setting with the newly provided location
+        await getConfig().update("workspaceLocation", newWorkspaceLocation, vscode.ConfigurationTarget.Global);
+        if (logger && enableLogging) {
+            logger.trace(`New workspace location set to: ${newWorkspaceLocation}`);
+        }
+        return newWorkspaceLocation;
+    }
+
+    if (logger && enableLogging) {
+        logger.trace("User canceled the workspace location prompt. Returning undefined.");
+    }
+
+    // If the user canceled or entered an empty value, return undefined
+    return undefined;
 }
+

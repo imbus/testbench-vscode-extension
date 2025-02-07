@@ -95,25 +95,28 @@ export class tb2robotLib {
             let options: string = "";
 
             // TODO: TEST
-            // To use relative paths to workspace location in extension settings, we need to get the workspace location to construct the full path.            
-            const relativeTb2robotConfigPath: string | undefined = getConfig().get<string>("configurationPathInTestbench2robotframework");
+            // To use relative paths to workspace location in extension settings, we need to get the workspace location to construct the full path.
+            const relativeTb2robotConfigPath: string | undefined = getConfig().get<string>(
+                "configurationPathInTestbench2robotframework"
+            );
 
             if (!relativeTb2robotConfigPath) {
                 logger.warn("Relative Tb2robot Config path is not set in the extension settings.");
             } else {
                 logger.trace(`Relative Tb2robot Config path in the extension settings: ${relativeTb2robotConfigPath}`);
                 const absoluteTb2robotConfigPath: string | null = await utils.constructAbsolutePathFromRelativePath(
-                    relativeTb2robotConfigPath, true
+                    relativeTb2robotConfigPath,
+                    true
                 ); // Construct the absolute path of the configuration file and verify its existence.
                 if (absoluteTb2robotConfigPath) {
                     options += ` --config ${absoluteTb2robotConfigPath}`;
                 }
             }
-            
+
             if (resultPath) {
                 options += ` --output-directory ${resultPath}`;
             }
-            
+
             logger.trace(`Options for fetch-results command: ${options}`);
 
             commandToExecute = `${commandBase} ${fetchResultsCommand} ${options} ${robotOutputXmlPath} ${testbenchReportWithoutResultsPath}`;
@@ -226,14 +229,25 @@ export class tb2robotLib {
      */
     public static buildOptionsStringForTestGeneration(options: { [key: string]: string | string[] | boolean }): string {
         let optionsString: string = "";
+
         for (const [key, value] of Object.entries(options)) {
-            // For boolean options, add the option without a value if true
-            optionsString += ` --${key}`;
-            if (typeof value === "string") {
-                optionsString += ` \"${value}\"`;
-            } else if (Array.isArray(value)) {
+            // Handle booleans
+            if (typeof value === "boolean") {
+                // Only add if true
+                if (value) {
+                    optionsString += ` --${key}`;
+                }
+            }
+            // Handle single string value
+            else if (typeof value === "string") {
+                optionsString += ` --${key} "${value}"`;
+            }
+            // Handle array of strings
+            else if (Array.isArray(value)) {
                 for (const item of value) {
-                    optionsString += ` --${key} ${item}`;
+                    // Each item becomes its own --key <item> entry
+                    // Quote `item` in case it can contain spaces
+                    optionsString += ` --${key} "${item}"`;
                 }
             }
         }
@@ -246,7 +260,9 @@ export class tb2robotLib {
      * Retrieves tb2robot generate-tests options from the extension settings, excluding those with default values.
      * @returns An object containing the tb2robot generate-tests options.
      */
-    private static async getTb2RobotGenerateTestOptionsFromSettings(): Promise<{ [key: string]: string | boolean | string[]; }> {
+    private static async getTb2RobotGenerateTestOptionsFromSettings(): Promise<{
+        [key: string]: string | boolean | string[];
+    }> {
         const generateTestsSettingsOfExtension: { [key: string]: string | string[] | boolean } = {};
 
         const addBooleanOptionIfSet = (optionName: string, configName: string, defaultValue: boolean) => {
@@ -294,9 +310,7 @@ export class tb2robotLib {
                 );
                 return;
             }
-            const absolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
-                relativePath, true
-            );
+            const absolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(relativePath, true);
             if (absolutePath !== null && relativePath !== defaultValue) {
                 generateTestsSettingsOfExtension[optionName] = absolutePath as string;
                 logger.trace(
@@ -311,7 +325,11 @@ export class tb2robotLib {
         }
 
         // Include the option only if the user has set a value different from the default
-        async function addOutputDirectoryOptionWithRelativePathIfSet(optionName: string, configName: string, defaultValue: any) {
+        async function addOutputDirectoryOptionWithRelativePathIfSet(
+            optionName: string,
+            configName: string,
+            defaultValue: any
+        ) {
             const relativePath: string | undefined = getConfig().get(configName);
             if (!relativePath) {
                 logger.warn(
@@ -319,9 +337,7 @@ export class tb2robotLib {
                 );
                 return;
             }
-            const absolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
-                relativePath, false
-            );  // Dont verify existence of output directory path, since it will be created after the generate-tests command is executed.
+            const absolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(relativePath, false); // Dont verify existence of output directory path, since it will be created after the generate-tests command is executed.
             if (absolutePath !== null && relativePath !== defaultValue) {
                 generateTestsSettingsOfExtension[optionName] = absolutePath as string;
                 logger.trace(
@@ -355,10 +371,11 @@ export class tb2robotLib {
         const addArrayOptionIfSet = (optionName: string, configName: string, defaultValue: string[]) => {
             const value = getConfig().get<string[]>(configName);
             if (value !== undefined && JSON.stringify(value) !== JSON.stringify(defaultValue)) {
+                // Store the array directly, without adding the --optionName prefix here
                 generateTestsSettingsOfExtension[optionName] = value;
             } else {
                 logger.warn(
-                    `Option for ${configName} is not set in the extension settings or uses a default value. ${optionName} option will not be included.`
+                    `Option for ${configName} is not set or uses a default value. ${optionName} will not be included.`
                 );
             }
         };
@@ -399,5 +416,5 @@ export class tb2robotLib {
 
         logger.trace("Built options string for tb2robot fetch-results command:", fetchResultsOptionsString);
         return fetchResultsOptionsString;
-    }    
+    }
 }

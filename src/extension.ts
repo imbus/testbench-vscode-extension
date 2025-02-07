@@ -6,8 +6,8 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as loginWebView from "./loginWebView";
 import * as testBenchLogger from "./testBenchLogger";
 import * as utils from "./utils";
-import path from "path";
 import * as testElementsTreeView from "./testElementsTreeView";
+import path from "path";
 
 // TODO: Add progress bar for tree views when fetching elements to notify the user.
 // TODO: Add progress bar for fetching cycle structure since it can take long.
@@ -133,9 +133,8 @@ export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null
 // Called when the extension is activated.
 // In package.json, "activationEvents": ["onStartupFinished"] is used to activate the extension after the startup of VS Code
 // because the extension needs to be fully loaded to work smoothly.
-export async function activate(context: vscode.ExtensionContext) {
-    // TODO: If workspace location is not set, logger cant start.
-    logger = new testBenchLogger.TestBenchLogger();
+export async function activate(context: vscode.ExtensionContext) {    
+    logger =  new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
     // Initialize the project tree data provider to avoid displaying the default text of VS Code saying that the data provider is not initialized.
@@ -635,19 +634,12 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand(allExtensionCommands.clearWorkspaceFolder.command, async () => {
             logger.debug(`Clear Workspace Folder command called.`);
-            const workspaceLocationInExtensionSettings = config.get<string>("workspaceLocation", "");
-            if (!workspaceLocationInExtensionSettings) {
-                const workspaceLocationNotSetError: string =
-                    "No workspace location set. Please set the workspace location first.";
-                vscode.window.showErrorMessage(workspaceLocationNotSetError);
-                logger.warn(workspaceLocationNotSetError);
+
+            const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
+            if (!workspaceLocation) {
                 return;
             }
-
-            const testbenchWorkingDirectoryPath = path.join(
-                workspaceLocationInExtensionSettings,
-                folderNameOfTestbenchWorkingDirectory
-            );
+            const testbenchWorkingDirectoryPath = path.join(workspaceLocation, folderNameOfTestbenchWorkingDirectory);
             await utils.clearWorkspaceFolder(
                 testbenchWorkingDirectoryPath,
                 [testBenchLogger.folderNameOfLogs],
@@ -667,7 +659,7 @@ export async function activate(context: vscode.ExtensionContext) {
             if (!tovKeyInput) {
                 return;
             }
-            
+
             // Fetch data and update the view.
             await testElementsTreeDataProvider.fetchAndDisplayTestElements(tovKeyInput);
             logger.trace("End of getTestElementsFromOldPlayServer command.");
@@ -684,9 +676,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
                 return;
             }
-            await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                currentTovKey
-            );
+            await testElementsTreeDataProvider.fetchAndDisplayTestElements(currentTovKey);
         })
     );
 
@@ -700,9 +690,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (projectManagementTreeDataProvider && treeItem.contextValue === "Version") {
                     const tovKeyOfSelectedTreeElement: string = treeItem.item?.key?.toString();
                     if (tovKeyOfSelectedTreeElement) {
-                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                            tovKeyOfSelectedTreeElement
-                        );
+                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(tovKeyOfSelectedTreeElement);
                     }
                 }
                 logger.trace("End of Display Interactions For Selected TOV command.");
