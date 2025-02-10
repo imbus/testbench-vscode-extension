@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as utils from "./utils";
+import * as fs from "fs";
 import { connection, logger, getConfig } from "./extension";
 
 // TODO: If the test element view is empty due to the filtering, show a message to the user that no elements are mathed with the regex.
@@ -29,8 +31,8 @@ type ElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "O
  * @property directMatch Indicates whether this element directly passed the filter.
  * @property children An array of child test elements.
  * @property hierarchicalName The hierarchical name of the element (e.g., "Root/Child").
+ * @property parent The parent element
  */
-// Update the TestElement interface to include the hierarchicalName.
 export interface TestElement {
     id: string;
     parentId: string | null;
@@ -43,6 +45,7 @@ export interface TestElement {
     directMatch: boolean;
     children?: TestElement[];
     hierarchicalName?: string;
+    parent?: TestElement;
 }
 
 /**
@@ -192,7 +195,9 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
     Object.values(map).forEach((testElement) => {
         // Assign the element as a child to its parent (if it exists).
         if (testElement.parentId && map[testElement.parentId]) {
-            map[testElement.parentId].children!.push(testElement);        
+            // Assign the parent reference.
+            testElement.parent = map[testElement.parentId];
+            map[testElement.parentId].children!.push(testElement);
         } else {
             // If the element has no parent, it is a root element.
             rootsOfTestElementView.push(testElement);
@@ -418,4 +423,133 @@ export async function promptForTovKeyAndFilter(): Promise<string | null> {
     }
 
     return tovKeyInput.trim();
+}
+
+export async function handleSubdivision(testElement: TestElement, baseTargetPath: string): Promise<void> {
+    // Determine if the subdivision is final (i.e. has no child subdivision)
+    const isFinalSubdivision =
+        !testElement.children || !testElement.children.some((child) => child.elementType === "Subdivision");
+
+    logger.trace(`Subdivision '${testElement.name}' final: ${isFinalSubdivision}`);
+
+    if (isFinalSubdivision) {
+        // Final subdivision: represent as a .resource file.
+        let targetPath = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
+
+        if (!(await utils.fileExistsAsync(targetPath))) {
+            const dirName = path.dirname(targetPath);
+            await fs.promises.mkdir(dirName, { recursive: true });
+            // Create the resource file with header content.
+            const fileContentToWrite = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+            // Create resource file with header content.
+            await fs.promises.writeFile(targetPath, fileContentToWrite);
+            logger.trace(`Resource file created at ${targetPath}`);            
+        }
+        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
+        await vscode.window.showTextDocument(document);
+        await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
+    } else {
+        // Non-final subdivision: represent as a folder.
+        let folderExists = false;
+        try {
+            const stats = await fs.promises.stat(baseTargetPath);
+            folderExists = stats.isDirectory();
+        } catch (err) {
+            folderExists = false;
+        }
+        if (!folderExists) {
+            await fs.promises.mkdir(baseTargetPath, { recursive: true });
+            logger.trace(`Folder created at ${baseTargetPath}`);
+        }
+        await vscode.commands.executeCommand("workbench.view.explorer");
+    }
+}
+
+export async function handleInteraction(
+    testElement: TestElement,
+    workspaceRootPath: string
+): Promise<void> {
+    // For an interaction, open the parent's final subdivision .resource file.
+    const finalSubdivision = getFinalSubdivisionAncestor(testElement);
+    if (!finalSubdivision) {
+        logger.trace(`No final subdivision found for interaction ${testElement.uniqueID}`);
+        return;
+    }
+    // Ensure the final subdivision has a valid hierarchical name.
+    if (!finalSubdivision.hierarchicalName) {
+        finalSubdivision.hierarchicalName = computeHierarchicalName(finalSubdivision);
+        logger.trace(`Computed hierarchicalName for final subdivision: ${finalSubdivision.hierarchicalName}`);
+    }
+    const finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/")) + ".resource";
+
+    if (!(await utils.fileExistsAsync(finalTargetPath))) {
+        const dirName = path.dirname(finalTargetPath);
+        await fs.promises.mkdir(dirName, { recursive: true });
+        const fileContentToWrite = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+        await fs.promises.writeFile(finalTargetPath, fileContentToWrite);
+        logger.trace(`Resource file created at ${finalTargetPath}`);
+    }
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(finalTargetPath));
+    await vscode.window.showTextDocument(document);
+    await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
+}
+
+export async function handleFallback(targetPath: string): Promise<void> {
+    if (!(await utils.fileExistsAsync(targetPath))) {
+        const dirName = path.dirname(targetPath);
+        await fs.promises.mkdir(dirName, { recursive: true });
+        await fs.promises.writeFile(targetPath, "");
+    }
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
+    await vscode.window.showTextDocument(document);
+    await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
+}
+
+
+/**
+ * Returns true if the given subdivision element is final—that is, it has no child subdivisions.
+ * @param element The TestElement to check.
+ * @returns True if the element is a final subdivision; false otherwise.
+ */
+export function isFinalSubdivisionInTree(element: TestElement): boolean {
+    if (element.elementType !== "Subdivision") {
+        logger.trace(`Element ${element.name} is not a subdivision and is not a final subdivision.`);
+        return false;
+    }
+    if (!element.children) {
+        logger.trace(`Element ${element.name} has no children and is a final subdivison.`);
+        return true;
+    }
+    // If any child is a subdivision, then this subdivision is not final.
+    const isFinalSubdivision = !element.children.some((child) => child.elementType === "Subdivision");
+    logger.trace(`Element ${element.name } is ${isFinalSubdivision ? "" : "not "}a final subdivision.`);
+    return isFinalSubdivision;;
+}
+
+/**
+ * For an interaction element, traverse upward (using the parent property) to find the nearest final subdivision.
+ * @param element The TestElement to start from.
+ * @returns The nearest final subdivision ancestor or null if not found.
+ */
+export function getFinalSubdivisionAncestor(element: TestElement): TestElement | null {
+    logger.trace(`Finding the nearest final subdivision ancestor for element ${element.name}`);
+    let current = element.parent;
+    while (current) {
+        if (current.elementType === "Subdivision" && isFinalSubdivisionInTree(current)) {
+            logger.trace(`Found the nearest final subdivision ancestor for element ${element.name}: ${current.name}`);
+            return current;
+        }
+        current = current.parent;
+    }
+    logger.trace(`No final subdivision ancestor found for element ${element.name}`);
+    return null;
+}
+
+/*
+* Computes the hierarchical name of a test element by traversing the parent elements recursively.
+* @param element The TestElement to compute the name for.
+* @returns The hierarchical name of the element.
+*/
+export function computeHierarchicalName(element: TestElement): string {
+    return element.parent ? computeHierarchicalName(element.parent) + "/" + element.name : element.name;
 }
