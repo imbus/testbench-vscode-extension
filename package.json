@@ -394,6 +394,10 @@
             {
                 "command": "testbenchExtension.displayInteractionsForSelectedTOV",
                 "title": "Show Interactions"
+            },
+            {
+                "command": "testbenchExtension.goToTestElementFile",
+                "title": "Go To File"
             }
         ],
         "views": {
@@ -495,6 +499,11 @@
                     "command": "testbenchExtension.displayInteractionsForSelectedTOV",
                     "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
                     "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.goToTestElementFile",
+                    "when": "view == testElementsView && viewItem == testElement",
+                    "group": "navigation"
                 }
             ]
         },

@@ -7,6 +7,7 @@ import * as loginWebView from "./loginWebView";
 import * as testBenchLogger from "./testBenchLogger";
 import * as utils from "./utils";
 import * as testElementsTreeView from "./testElementsTreeView";
+import * as fs from "fs";
 import path from "path";
 
 // TODO: Add progress bar for tree views when fetching elements to notify the user.
@@ -106,6 +107,9 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     displayInteractionsForSelectedTOV: {
         command: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`,
     },
+    goToTestElementFile: {
+        command: `${baseKeyOfExtension}.goToTestElementFile`,
+    },
 };
 
 // Folder to create inside the workspace / project directory (Which is set in the extension settings) to store and process files
@@ -133,8 +137,8 @@ export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null
 // Called when the extension is activated.
 // In package.json, "activationEvents": ["onStartupFinished"] is used to activate the extension after the startup of VS Code
 // because the extension needs to be fully loaded to work smoothly.
-export async function activate(context: vscode.ExtensionContext) {    
-    logger =  new testBenchLogger.TestBenchLogger();
+export async function activate(context: vscode.ExtensionContext) {
+    logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
     // Initialize the project tree data provider to avoid displaying the default text of VS Code saying that the data provider is not initialized.
@@ -696,6 +700,85 @@ export async function activate(context: vscode.ExtensionContext) {
                 logger.trace("End of Display Interactions For Selected TOV command.");
             }
         )
+    );
+
+    // Register the "Go To Test Element File" command for a test element in test element view.
+    // Opens the file of the selected test element in the editor, or creates a new file if it does not exist.
+    context.subscriptions.push(
+        vscode.commands.registerCommand(allExtensionCommands.goToTestElementFile.command, async (treeItem: testElementsTreeView.TestElementItem) => {
+            if (!treeItem || !treeItem.element) {
+                logger.trace("Invalid tree item or element in goToTestElementFile command.");
+                return;
+            }
+            const testElement = treeItem.element;
+            const hierarchicalName = testElement.hierarchicalName;
+            if (!hierarchicalName) {
+                logger.trace("Test element does not have a valid hierarchical name.");
+                return;
+            }
+
+            const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
+
+            // Build the target path using the hierarchical name.
+            // The hierarchical name is a string with slashes separating the levels of the tree.
+            let targetPath = path.join(workspaceRootPath!, ...hierarchicalName.split("/"));
+            const targetUri = vscode.Uri.file(targetPath);
+
+            try {
+                if (testElement.elementType === "Subdivision") {
+                    // If the tree element is a Subdivision: Create (or reveal) a folder, and not a file.
+                    let folderExists = false;
+                    try {
+                        const stats = await fs.promises.stat(targetPath);
+                        folderExists = stats.isDirectory();
+                    } catch (err) {
+                        folderExists = false;
+                    }
+                    // Create the folder if it does not exist.
+                    if (!folderExists) {
+                        await fs.promises.mkdir(targetPath, { recursive: true });
+                        logger.trace(`Folder created at ${targetPath}`);
+                    }
+                    // Focus on the Explorer view in VS Code so the folder is visible.
+                    // Note: VS Code does not provide a direct API to show a folder in the Explorer.
+                    await vscode.commands.executeCommand("workbench.view.explorer");
+                } else if (testElement.elementType === "Interaction") {
+                    // If the tree element is an Interaction: Create (or open if exists) a file with header content
+                    // Append the .resource extension to the file name to be created if not already present.
+                    if (!targetPath.endsWith(".resource")) {
+                        targetPath = targetPath + ".resource";
+                    }
+
+                    let fileExists = await utils.fileExistsAsync(targetPath);
+                    if (!fileExists) {
+                        // Check if the parent directory exists.
+                        const dirName = path.dirname(targetPath);
+                        await fs.promises.mkdir(dirName, { recursive: true });
+                        // Prepare the file content.
+                        const fileContentToWrite = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+                        await fs.promises.writeFile(targetPath, fileContentToWrite);
+                    }
+                    // Open the file in the VS Code editor and reveal it in the Explorer.
+                    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
+                    await vscode.window.showTextDocument(document);
+                    await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
+                } else {
+                    // Fallback: For any other element types, treat them as simple files without content.
+                    let fileExists = await utils.fileExistsAsync(targetPath);
+                    if (!fileExists) {
+                        const dirName = path.dirname(targetPath);
+                        await fs.promises.mkdir(dirName, { recursive: true });
+                        await fs.promises.writeFile(targetPath, "");
+                    }
+                    const document = await vscode.workspace.openTextDocument(targetUri);
+                    await vscode.window.showTextDocument(document);
+                    await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
+                }
+            } catch (error: any) {
+                vscode.window.showErrorMessage("Error in goToFile command:" + error.message);
+                logger.error("Error in goToFile command:", error);
+            }
+        })
     );
 
     // TODO: Remove?

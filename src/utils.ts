@@ -2,6 +2,7 @@ import { allExtensionCommands, getConfig, logger } from "./extension";
 import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
+import * as fs from "fs";
 
 // Wait for a specified number of milliseconds.
 export function delay(milliseconds: number): Promise<void> {
@@ -260,3 +261,14 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     return undefined;
 }
 
+/**
+ * Helper function to check if a file exists.
+ */
+export async function fileExistsAsync(filePath: string): Promise<boolean> {
+    try {
+        await fs.promises.access(filePath, fs.constants.F_OK);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
