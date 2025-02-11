@@ -412,9 +412,12 @@ export class PlayServerConnection {
                 }
                 */
 
-            logger.trace("Response status of cycle structure request:", cycleStructureResponse.status);
+            logger.trace(
+                `Response status of cycle structure request with cycle key ${cycleKey}:`,
+                cycleStructureResponse.status
+            );
             if (cycleStructureResponse.data) {
-                logger.trace("Cycle Structure received:", cycleStructureResponse.data);
+                logger.trace(`Cycle Structure with cycle key ${cycleKey} received:`, cycleStructureResponse.data);
                 return cycleStructureResponse.data;
             } else {
                 logger.error(`Unexpected response code: ${cycleStructureResponse.status}`);

@@ -9,7 +9,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Testbe
 
     rootElements: TestbenchTreeItem[] = [];
 
-    private expandedNodes = new Set<string>(); // To store expanded node keys
+    private expandedNodes = new Set<string>(); // Store expanded node keys so that the refresh button can maintain the expansion state
 
     refresh(): void {
         logger.trace("Refreshing test theme tree view.");

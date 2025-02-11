@@ -92,7 +92,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
         // Maintain expansion state after a refresh
         if (this.expandedNodes.has(treeItem.item.key)) {
-            treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            // Cycles are not expandable in tree view, so only expand other elements.
+            if (contextValue !== "Cycle") {
+                treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            }
         }
 
         return treeItem;
