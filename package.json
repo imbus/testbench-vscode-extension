@@ -380,10 +380,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.getTestElementsFromOldPlayServer",
-                "title": "TestBench: Get Test Elements From Old Play Server"
-            },
-            {
                 "command": "testbenchExtension.refreshTestElementsTree",
                 "title": "Refresh Test Elements",
                 "icon": {

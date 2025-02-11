@@ -7,7 +7,6 @@ import * as loginWebView from "./loginWebView";
 import * as testBenchLogger from "./testBenchLogger";
 import * as utils from "./utils";
 import * as testElementsTreeView from "./testElementsTreeView";
-import * as fs from "fs";
 import path from "path";
 
 // TODO: Add progress bar for tree views when fetching elements to notify the user.
@@ -97,10 +96,6 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     automaticLoginAfterExtensionActivation: {
         command: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     },
-    // TODO: Delete this after implementing new play server call?
-    getTestElementsFromOldPlayServer: {
-        command: `${baseKeyOfExtension}.getTestElementsFromOldPlayServer`,
-    },
     refreshTestElementsTree: {
         command: `${baseKeyOfExtension}.refreshTestElementsTree`,
     },
@@ -134,6 +129,12 @@ export function setConnection(newConnection: testBenchConnection.PlayServerConne
 // Webview provider for the login webview
 export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null;
 
+export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementItem>;
+export let projectTreeView: vscode.TreeView<projectManagementTreeView.TestbenchTreeItem>;
+export function setProjectTreeView(newProjectTreeView: vscode.TreeView<projectManagementTreeView.TestbenchTreeItem>) {
+    projectTreeView = newProjectTreeView;
+}
+
 // Called when the extension is activated.
 // In package.json, "activationEvents": ["onStartupFinished"] is used to activate the extension after the startup of VS Code
 // because the extension needs to be fully loaded to work smoothly.
@@ -142,16 +143,17 @@ export async function activate(context: vscode.ExtensionContext) {
     logger.info("Extension activated.");
 
     // Initialize the project tree data provider to avoid displaying the default text of VS Code saying that the data provider is not initialized.
-    projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(null, null!);
-    vscode.window.createTreeView("projectManagementTree", {
+    projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(null!);
+    projectTreeView = vscode.window.createTreeView("projectManagementTree", {
         treeDataProvider: projectManagementTreeDataProvider,
     });
 
     // Create an instance of our tree elements data provider.
     const testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider();
-    vscode.window.createTreeView("testElementsView", {
+    testElementTreeView = vscode.window.createTreeView("testElementsView", {
         treeDataProvider: testElementsTreeDataProvider,
     });
+
     // Register the tree view (the view ID must match the one in package.json).
     vscode.window.registerTreeDataProvider("testElementsView", testElementsTreeDataProvider);
     testElementsTreeView.hideTestElementsTreeView();
@@ -475,10 +477,9 @@ export async function activate(context: vscode.ExtensionContext) {
             }
 
             projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(
-                connection,
                 selectedProjectKey!
             );
-            vscode.window.createTreeView("projectManagementTree", {
+            projectTreeView = vscode.window.createTreeView("projectManagementTree", {
                 treeDataProvider: projectManagementTreeDataProvider,
             });
             // Initializes and displays the project management tree view with the selected project
@@ -651,24 +652,7 @@ export async function activate(context: vscode.ExtensionContext) {
             );
             logger.trace(`End of Clear Workspace Folder command.`);
         })
-    );
-
-    // Register the "Fetch tree elements" command.
-    context.subscriptions.push(
-        vscode.commands.registerCommand(allExtensionCommands.getTestElementsFromOldPlayServer.command, async () => {
-            logger.debug("getTestElementsFromOldPlayServer command called.");
-
-            // Prompt for inputs.
-            const tovKeyInput = await testElementsTreeView.promptForTovKeyAndFilter();
-            if (!tovKeyInput) {
-                return;
-            }
-
-            // Fetch data and update the view.
-            await testElementsTreeDataProvider.fetchAndDisplayTestElements(tovKeyInput);
-            logger.trace("End of getTestElementsFromOldPlayServer command.");
-        })
-    );
+    );    
 
     // Command for the refresh button in the test elements tree view title bar.
     // Register the "Refresh Test Elements Tree" command.
@@ -694,7 +678,10 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (projectManagementTreeDataProvider && treeItem.contextValue === "Version") {
                     const tovKeyOfSelectedTreeElement: string = treeItem.item?.key?.toString();
                     if (tovKeyOfSelectedTreeElement) {
-                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(tovKeyOfSelectedTreeElement);
+                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(
+                            tovKeyOfSelectedTreeElement,
+                            typeof treeItem.label === 'string' ? treeItem.label : undefined
+                        );
                     }
                 }
                 logger.trace("End of Display Interactions For Selected TOV command.");

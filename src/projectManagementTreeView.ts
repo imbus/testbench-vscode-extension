@@ -3,11 +3,11 @@ import * as path from "path";
 import * as testBenchTypes from "./testBenchTypes";
 import { PlayServerConnection } from "./testBenchConnection";
 import { TestThemeTreeDataProvider } from "./testThemeTreeView";
-import { connection, logger } from "./extension";
+import { connection, logger, setProjectTreeView, projectTreeView } from "./extension";
 
 let projectManagementTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
 let projectManagementDataProvider: ProjectManagementTreeDataProvider | null = null;
-let testThemeTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
+export let testThemeTreeView: vscode.TreeView<TestbenchTreeItem> | null = null;
 
 // Project management tree view that displays the selected project and the test object versions and cycles under this project.
 // Upon clicking on a test cycle element, a test theme view is created under the project tree view
@@ -27,11 +27,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     // Store expanded node keys to restore the expansion state after refreshing the tree
     private expandedNodes = new Set<string>();
 
-    constructor(
-        connection: PlayServerConnection | null,
-        projectKey?: string,
-        testThemeDataProvider?: TestThemeTreeDataProvider
-    ) {
+    constructor(projectKey?: string, testThemeDataProvider?: TestThemeTreeDataProvider) {
         this.currentProjectKeyInView = projectKey ?? null;
         this.testThemeDataProvider = testThemeDataProvider!;
     }
@@ -227,6 +223,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         element.children = childrenOfCycle; // Assign the built children to the current element
         // Display the test theme tree view if not already displayed
         await vscode.commands.executeCommand("testThemeTree.focus");
+        // Update the title of the test theme tree view
+        if (testThemeTreeView) { 
+            testThemeTreeView.title = `Test Theme Tree (${element.label})`;
+        }
         return childrenOfCycle;
     }
 
@@ -331,7 +331,7 @@ export class TestbenchTreeItem extends vscode.TreeItem {
     public statusOfTreeItem: string;
 
     constructor(
-        label: string,
+        label: string, // The name of the tree item to be displayed
         contextValue: string, // The type of the tree item (Project, TOV, Cycle etc.)
         collapsibleState: vscode.TreeItemCollapsibleState,
         public item: any, // The original data of the tree item
@@ -437,27 +437,25 @@ export async function initializeTreeViews(
         treeDataProvider: testThemeDataProvider,
     });
 
-    projectManagementDataProvider = new ProjectManagementTreeDataProvider(
-        connection,
-        selectedProjectKey,
-        testThemeDataProvider
+    projectManagementDataProvider = new ProjectManagementTreeDataProvider(selectedProjectKey, testThemeDataProvider);
+
+    setProjectTreeView(
+        vscode.window.createTreeView("projectManagementTree", {
+            treeDataProvider: projectManagementDataProvider,
+        })
     );
 
-    projectManagementTreeView = vscode.window.createTreeView("projectManagementTree", {
-        treeDataProvider: projectManagementDataProvider,
-    });
-
     // Handle expansion and collapse events to update icons dynamically
-    projectManagementTreeView.onDidExpandElement(async (event) => {
+    projectTreeView.onDidExpandElement(async (event) => {
         await projectManagementDataProvider!.handleExpansion(event.element, true);
     });
 
-    projectManagementTreeView.onDidCollapseElement(async (event) => {
+    projectTreeView.onDidCollapseElement(async (event) => {
         await projectManagementDataProvider!.handleExpansion(event.element, false);
     });
 
     // Handle click events to trigger test theme tree initialization on test cycle click
-    projectManagementTreeView.onDidChangeSelection(async (event) => {
+    projectTreeView.onDidChangeSelection(async (event) => {
         //  Retrieve the currently selected element in the tree view
         const selectedElement = event.selection[0];
         if (selectedElement && selectedElement.contextValue === "Cycle") {

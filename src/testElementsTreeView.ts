@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as utils from "./utils";
 import * as fs from "fs";
-import { connection, logger, getConfig } from "./extension";
+import { connection, logger, getConfig, testElementTreeView } from "./extension";
 
 // TODO: If the test element view is empty due to the filtering, show a message to the user that no elements are mathed with the regex.
 
@@ -376,7 +376,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
      * Helper function to call the API and update the tree view.
      * @param tovKey TOV key used to fetch test elements.
      */
-    async fetchAndDisplayTestElements(tovKey: string): Promise<void> {
+    async fetchAndDisplayTestElements(tovKey: string, newTestElementsTreeViewTitle?: string): Promise<void> {
         const testElementsJsonResponseData = await connection?.getTestElementsWithTovKeyOldPlayServer(tovKey);
         if (testElementsJsonResponseData) {
             // Store inputs for later refreshes.
@@ -384,6 +384,9 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
 
             displayTestElementsTreeView();
             this.refresh(testElementsJsonResponseData);
+            if (newTestElementsTreeViewTitle) {
+                testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`; // Update the title of the test elements tree view
+            }
         } else {
             vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
         }
@@ -398,31 +401,6 @@ export async function hideTestElementsTreeView(): Promise<void> {
 // Display the Test Elements  tree view
 export async function displayTestElementsTreeView(): Promise<void> {
     await vscode.commands.executeCommand("testElementsView.focus");
-}
-
-/**
- * Prompts the user for the TOV key and an optional uniqueID filter.
- * @returns An object containing the TOV key and uniqueID filter, or null if input is cancelled.
- */
-export async function promptForTovKeyAndFilter(): Promise<string | null> {
-    const tovKeyInput = await vscode.window.showInputBox({
-        prompt: "Enter the TOV key",
-        placeHolder: "e.g. 175",
-        ignoreFocusOut: true,
-        validateInput: (value) => {
-            if (!value || value.trim() === "") {
-                return "TOV key cannot be empty";
-            }
-            return null;
-        },
-    });
-
-    if (!tovKeyInput) {
-        vscode.window.showWarningMessage("No TOV key provided.");
-        return null;
-    }
-
-    return tovKeyInput.trim();
 }
 
 export async function handleSubdivision(testElement: TestElement, baseTargetPath: string): Promise<void> {

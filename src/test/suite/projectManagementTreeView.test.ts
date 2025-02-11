@@ -21,7 +21,6 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
         connectionStub = sandbox.createStubInstance(PlayServerConnection);
         testThemeDataProviderStub = sandbox.createStubInstance(TestThemeTreeDataProvider);
         treeDataProvider = new ProjectManagementTreeDataProvider(
-            connectionStub,
             "projectKey",
             testThemeDataProviderStub
         );
@@ -32,7 +31,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     test("getChildren should return empty array when no connection is available", async () => {
-        treeDataProvider = new ProjectManagementTreeDataProvider(null, "projectKey", testThemeDataProviderStub);
+        treeDataProvider = new ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
 
         const children: TestbenchTreeItem[] = await treeDataProvider.getChildren();
 
