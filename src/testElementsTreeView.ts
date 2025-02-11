@@ -104,7 +104,7 @@ function matchesRegex(value: string, regexList: RegExp[]): boolean {
 }
 
 /**
- * Builds a hierarchical tree from a flat array of JSON objects representing test elements. The tree elements are filtered based on some rules and regex patterns.  
+ * Builds a hierarchical tree from a flat array of JSON objects representing test elements. The tree elements are filtered based on some rules and regex patterns.
  * @param flatJsonTestElements Flat array of JSON objects from the server.
  * @returns An array of root TestElement objects forming the tree.
  */
@@ -185,7 +185,7 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
             directMatch,
             children: [],
         };
-        
+
         // Store the current element in the map.
         map[id] = testElement;
     });
@@ -263,7 +263,7 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
             element.children.forEach((child) => assignHierarchicalNames(child, currentPath));
         }
     }
-    // 
+    //
     filteredRoots.forEach((root) => assignHierarchicalNames(root, ""));
 
     return filteredRoots;
@@ -432,6 +432,8 @@ export async function handleSubdivision(testElement: TestElement, baseTargetPath
 
     logger.trace(`Subdivision '${testElement.name}' final: ${isFinalSubdivision}`);
 
+    baseTargetPath = removeRobotResourceFromPathString(baseTargetPath);
+
     if (isFinalSubdivision) {
         // Final subdivision: represent as a .resource file.
         let targetPath = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
@@ -443,7 +445,7 @@ export async function handleSubdivision(testElement: TestElement, baseTargetPath
             const fileContentToWrite = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
             // Create resource file with header content.
             await fs.promises.writeFile(targetPath, fileContentToWrite);
-            logger.trace(`Resource file created at ${targetPath}`);            
+            logger.trace(`Resource file created at ${targetPath}`);
         }
         const document = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
         await vscode.window.showTextDocument(document);
@@ -465,10 +467,7 @@ export async function handleSubdivision(testElement: TestElement, baseTargetPath
     }
 }
 
-export async function handleInteraction(
-    testElement: TestElement,
-    workspaceRootPath: string
-): Promise<void> {
+export async function handleInteraction(testElement: TestElement, workspaceRootPath: string): Promise<void> {
     // For an interaction, open the parent's final subdivision .resource file.
     const finalSubdivision = getFinalSubdivisionAncestor(testElement);
     if (!finalSubdivision) {
@@ -480,7 +479,9 @@ export async function handleInteraction(
         finalSubdivision.hierarchicalName = computeHierarchicalName(finalSubdivision);
         logger.trace(`Computed hierarchicalName for final subdivision: ${finalSubdivision.hierarchicalName}`);
     }
-    const finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/")) + ".resource";
+    let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/")) + ".resource";
+
+    finalTargetPath = removeRobotResourceFromPathString(finalTargetPath);
 
     if (!(await utils.fileExistsAsync(finalTargetPath))) {
         const dirName = path.dirname(finalTargetPath);
@@ -505,7 +506,6 @@ export async function handleFallback(targetPath: string): Promise<void> {
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 }
 
-
 /**
  * Returns true if the given subdivision element is final—that is, it has no child subdivisions.
  * @param element The TestElement to check.
@@ -522,8 +522,8 @@ export function isFinalSubdivisionInTree(element: TestElement): boolean {
     }
     // If any child is a subdivision, then this subdivision is not final.
     const isFinalSubdivision = !element.children.some((child) => child.elementType === "Subdivision");
-    logger.trace(`Element ${element.name } is ${isFinalSubdivision ? "" : "not "}a final subdivision.`);
-    return isFinalSubdivision;;
+    logger.trace(`Element ${element.name} is ${isFinalSubdivision ? "" : "not "}a final subdivision.`);
+    return isFinalSubdivision;
 }
 
 /**
@@ -545,11 +545,22 @@ export function getFinalSubdivisionAncestor(element: TestElement): TestElement |
     return null;
 }
 
-/*
-* Computes the hierarchical name of a test element by traversing the parent elements recursively.
-* @param element The TestElement to compute the name for.
-* @returns The hierarchical name of the element.
-*/
+/**
+ * Computes the hierarchical name of a test element by traversing the parent elements recursively.
+ * @param element The TestElement to compute the name for.
+ * @returns The hierarchical name of the element.
+ */
 export function computeHierarchicalName(element: TestElement): string {
     return element.parent ? computeHierarchicalName(element.parent) + "/" + element.name : element.name;
+}
+
+/**
+ * Removes all occurrences of the substring "[Robot-Resource]" from the provided path string.
+ * @param path - The original path string in which to remove the "[Robot-Resource]" substring.
+ * @returns A new string with all occurrences of "[Robot-Resource]" removed.
+ */
+export function removeRobotResourceFromPathString(path: string): string {
+    const robotResourceRegexPattern = /\[Robot-Resource\]/g;
+    const cleanedPath = path.replace(robotResourceRegexPattern, "");
+    return cleanedPath;
 }
