@@ -1,21 +1,43 @@
+/**
+ * @file testElementsTreeView.ts
+ * @description Provides a VS Code TreeDataProvider implementation to display test elements
+ * retrieved from the TestBench server.
+ */
+
+// TODO: If the test element view is empty due to the filtering, show a message to the user that no elements are mathed with the regex.
+
 import * as vscode from "vscode";
 import * as path from "path";
 import * as utils from "./utils";
 import * as fs from "fs";
 import { connection, logger, getConfig, testElementTreeView } from "./extension";
 
-// TODO: If the test element view is empty due to the filtering, show a message to the user that no elements are mathed with the regex.
+/* =============================================================================
+   Global Variables and Helper Functions
+   ============================================================================= */
 
-// Global variables to store the current parameters for the tree view
+/** Stores the current TOV key used for fetching interactions. */
 let currentTovKeyOfInteractionsInView: string = "";
+
+/**
+ * Returns the current TOV key.
+ * @returns The current TOV key.
+ */
 export function getCurrentTovKey(): string {
     return currentTovKeyOfInteractionsInView;
 }
+
+/**
+ * Sets the current TOV key.
+ * @param newKey The new TOV key.
+ */
 export function setCurrentTovKey(newKey: string): void {
     currentTovKeyOfInteractionsInView = newKey;
 }
 
-// Define the allowed element types for tree elements.
+/**
+ * Allowed element types for test elements.
+ */
 type ElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
 /**
@@ -49,73 +71,60 @@ export interface TestElement {
 }
 
 /**
- * Retrieves resource regex patterns for testbench2robotframework from the extension settings and tries to create javascript RegExps from them.
- * @returns An array of valid RegExp objects.
+ * Retrieves python resource regex patterns from the extension settings and converts them into JavaScript RegExps.
+ * @returns {RegExp[]} An array of valid RegExp objects.
  */
 function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
-    const pythonResourceRegexPatternsInExtensionSettings: string[] = getConfig().get(
-        "resourceRegexInTestbench2robotframework",
-        []
-    );
+    const pythonResourceRegexPatternsInExtensionSettings: string[] = getConfig().get("resourceRegexInTestbench2robotframework", []);
+    logger.trace("Resource regex patterns from settings:", pythonResourceRegexPatternsInExtensionSettings);
 
-    logger.trace("Resource regex patterns in extension settings:", pythonResourceRegexPatternsInExtensionSettings);
-
-    // TODO: A complete conversion from python regex to javascript regex is not working as expected. If we only use simple regex patterns, we can use the existing code.
+    // Note: A complete conversion from python regex to javascript regex is not working as expected. If we only use simple regex patterns, we can use the existing code.
+    // Convert Python-style named capture groups to JavaScript syntax.
     function convertPythonRegexToJs(pythonRegex: string): string {
-        // Replace Python's named capture group syntax: (?P<name>pattern)
-        // with JavaScript's syntax: (?<name>pattern)
-        let jsRegex = pythonRegex.replace(/\(\?P<([a-zA-Z_]\w*)>/g, "(?<$1>");
-        return jsRegex;
+        return pythonRegex.replace(/\(\?P<([a-zA-Z_]\w*)>/g, "(?<$1>");
     }
 
     const JSlibraryRegexPatterns = pythonResourceRegexPatternsInExtensionSettings
         .map((pattern) => {
-            logger.trace(`Trying to create JS regex pattern from: ${pattern}`);
-            pattern = convertPythonRegexToJs(pattern);
-            logger.trace(`Converted JS regex pattern: ${pattern}`);
+            logger.trace(`Converting pattern: ${pattern}`);
+            const convertedPattern = convertPythonRegexToJs(pattern);
+            logger.trace(`Converted pattern: ${convertedPattern}`);
             try {
-                const regex = new RegExp(pattern, "u");
-                if (regex instanceof RegExp) {
-                    logger.trace(`Regex conversion succesful: ${regex}`);
-                }
+                const regex = new RegExp(convertedPattern, "u");
+                logger.trace(`Created regex: ${regex}`);
                 return regex;
             } catch (error) {
-                logger.error(`Invalid regex pattern in settings: ${pattern}`, error);
+                logger.error(`Invalid regex pattern: ${convertedPattern}`, error);
                 return null;
             }
         })
         .filter((regex): regex is RegExp => regex !== null);
 
-    logger.trace("Returning created javascript regex patterns:", JSlibraryRegexPatterns);
-
+    logger.trace("Final JS regex patterns:", JSlibraryRegexPatterns);
     return JSlibraryRegexPatterns;
 }
 
 /**
- * Checks if a given value matches any of the provided regex patterns.
- * @param value The string to test.
- * @param regexList An array of RegExp objects.
- * @returns True if any pattern matches; false otherwise.
+ * Checks if a given value matches any regex in the provided list.
+ * @param {srting} value The string to test.
+ * @param {RegExp[]} regexList An array of RegExp objects.
+ * @returns {boolean} True if any regex matches; false otherwise.
  */
 function matchesRegex(value: string, regexList: RegExp[]): boolean {
-    let result: boolean = regexList.some((regex) => regex.test(value));
-    logger.trace(`Result of matching value ${value} against regex patterns ${regexList}: ${result}`);
+    const result = regexList.some((regex) => regex.test(value));
+    logger.trace(`Value "${value}" matches regex patterns: ${result}`);
     return result;
 }
 
 /**
- * Builds a hierarchical tree from a flat array of JSON objects representing test elements. The tree elements are filtered based on some rules and regex patterns.
+ * Builds a hierarchical tree from a flat array of JSON objects representing test elements.
+ * Applies filtering based on element type and regex matching.
  * @param flatJsonTestElements Flat array of JSON objects from the server.
- * @returns An array of root TestElement objects forming the tree.
+ * @returns {TestElement[]} An array of root TestElement objects forming the tree.
  */
 function buildTree(flatJsonTestElements: any[]): TestElement[] {
-    // Retrieve regex patterns from extension settings.
     const resourceRegexPatternsInExtensionSettings = getResourceRegexPatternsFromExtensionSettings();
-
-    logger.trace(
-        "Building test elements tree with resourceRegexPatternsInExtensionSettings:",
-        resourceRegexPatternsInExtensionSettings
-    );
+    logger.trace("Building tree with regex patterns:", resourceRegexPatternsInExtensionSettings);
 
     // Build a map for all elements without filtering.
     // This map is used to assign children to their respective parents.
@@ -140,16 +149,18 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
         let id: string = "";
         if (item.Subdivision_key && item.Subdivision_key.serial) {
             testElementType = "Subdivision";
-            id = item.Subdivision_key.serial;
+            // TODO: Test this fix
+            // Append the uniqueID to ensure uniqueness even for subdivisions with identical serials
+            id = `${item.Subdivision_key.serial}_${item.uniqueID}`;
         } else if (item.Interaction_key && item.Interaction_key.serial) {
             testElementType = "Interaction";
-            id = item.Interaction_key.serial;
+            id = `${item.Interaction_key.serial}_${item.uniqueID}`;
         } else if (item.Condition_key && item.Condition_key.serial) {
             testElementType = "Condition";
-            id = item.Condition_key.serial;
+            id = `${item.Condition_key.serial}_${item.uniqueID}`;
         } else if (item.DataType_key && item.DataType_key.serial) {
             testElementType = "DataType";
-            id = item.DataType_key.serial;
+            id = `${item.DataType_key.serial}_${item.uniqueID}`;
         } else {
             testElementType = "Other";
             // Fallback: use uniqueID as the identifier if no key-specific id is found.
@@ -159,7 +170,9 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
         // Determine the parent ID of the element.
         // Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
         let parentId: string | null = null;
-        if (item.parent && item.parent.serial && item.parent.serial !== "0") {
+        if (item.parent && item.parent.serial) {
+            // Use the parent's serial here. During tree linking we match composite ids (which start with parent's serial)
+            // "serial_uniqueID" is used for uniqueness even for elements with identical serials.
             parentId = item.parent.serial;
         } else if (libraryKey) {
             parentId = libraryKey;
@@ -167,7 +180,7 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
 
         // Compute whether this element directly matches the regex filter.
         // If resouce regex patterns exist in the extension settings, use them. Otherwise, include all elements without filtering.
-        const directMatch: boolean =
+        const directMatch =
             resourceRegexPatternsInExtensionSettings.length > 0
                 ? matchesRegex(item.name, resourceRegexPatternsInExtensionSettings)
                 : true;
@@ -193,11 +206,16 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
     // Build the full tree structure by assigning children to their respective parents.
     const rootsOfTestElementView: TestElement[] = [];
     Object.values(map).forEach((testElement) => {
-        // Assign the element as a child to its parent (if it exists).
-        if (testElement.parentId && map[testElement.parentId]) {
-            // Assign the parent reference.
-            testElement.parent = map[testElement.parentId];
-            map[testElement.parentId].children!.push(testElement);
+        if (testElement.parentId) {
+            // Find the parent by matching a composite id ("serial_uniqueID") that starts with the stored parent's serial plus an underscore
+            const parent = Object.values(map).find((p) => p.id.startsWith(`${testElement.parentId}_`));
+            if (parent) {
+                testElement.parent = parent;
+                parent.children!.push(testElement);
+            } else {
+                // If the element has no parent, it is a root element.
+                rootsOfTestElementView.push(testElement);
+            }
         } else {
             // If the element has no parent, it is a root element.
             rootsOfTestElementView.push(testElement);
@@ -205,15 +223,12 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
     });
 
     /**
-     * Recursively filters the tree elements based on:
-     * Regex matching: If the element directly matches or inherits a match from its parent, include it.
-     * Exclude subdivisions if they have no children after filtering (empty subdivisions).
-     * Exclude elements of type DataType and Condition (and only display non empty subdivisions and interactions).
-     * @param testElement The TestElement to process.
-     * @param inherited Flag indicating whether the inclusion is inherited from a parent match.
-     * @returns The filtered TestElement or null if it should be excluded.
+     * Recursively filters the tree based on element type and regex matching.
+     * @param {TestElement} testElement The element to filter.
+     * @param {boolean} inherited True if the element inherits a match from a parent.
+     * @returns {TestElement | null} The filtered element or null if excluded.
      */
-    function filterTree(testElement: TestElement, inherited: boolean): TestElement | null {
+    function filterTestElementsTree(testElement: TestElement, inherited: boolean): TestElement | null {
         // Filter out elements of type DataType or Condition.
         if (testElement.elementType === "DataType" || testElement.elementType === "Condition") {
             return null;
@@ -226,7 +241,7 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
             // If the current element directly matches or is already inherited, mark children as inherited.
             const childrenInherited = inherited || testElement.directMatch;
             filteredChildren = testElement.children
-                .map((child) => filterTree(child, childrenInherited))
+                .map((child) => filterTestElementsTree(child, childrenInherited))
                 .filter((child) => child !== null) as TestElement[];
         }
 
@@ -237,25 +252,25 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
 
         // Regex filtering logic:
         // If the inclusion flag is set (inherited) or the element directly matches, include it along with its filtered children.
-        if (inherited || testElement.directMatch) {
+        if (inherited || testElement.directMatch || filteredChildren.length > 0) {
             return { ...testElement, children: filteredChildren };
         } else {
-            // If the element does not directly match but has some matching descendants, promote the element to include them.
-            if (filteredChildren.length > 0) {
-                return { ...testElement, children: filteredChildren };
-            }
             // Exclude the element if it neither directly matches nor has any matching descendants.
             return null;
         }
     }
 
     // Apply filtering to each root and return only non-null elements.
-    const filteredRoots: TestElement[] = rootsOfTestElementView
-        .map((root) => filterTree(root, false))
+    const filteredRoots = rootsOfTestElementView
+        .map((root) => filterTestElementsTree(root, false))
         .filter((node): node is TestElement => node !== null);
 
-    // Recursively assign hierarchical names to each element, which is the full path from the root.
-    function assignHierarchicalNames(element: TestElement, parentPath: string) {
+    /**
+     * Recursively assigns hierarchical names (full paths) to each element.
+     * @param element The element.
+     * @param parentPath The accumulated parent path.
+     */
+    function assignHierarchicalNames(element: TestElement, parentPath: string): void {
         // Compute the current hierarchical path.
         const currentPath = parentPath ? `${parentPath}/${element.name}` : element.name;
         element.hierarchicalName = currentPath;
@@ -263,14 +278,13 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
             element.children.forEach((child) => assignHierarchicalNames(child, currentPath));
         }
     }
-    //
     filteredRoots.forEach((root) => assignHierarchicalNames(root, ""));
 
     return filteredRoots;
 }
 
 /**
- * Maps an element type to its corresponding icon file name.
+ * Mapping from element types to icon file names.
  */
 const iconMapping: Record<ElementType, string> = {
     Subdivision: "dataset.svg",
@@ -281,22 +295,28 @@ const iconMapping: Record<ElementType, string> = {
 };
 
 /**
- * Returns a URI for the given element type's icon.
- * Assumes that icons are stored in the "resources/icons" folder.
- * @param elementType The type of the element.
- * @returns A vscode.Uri pointing to the icon.
+ * Returns a vscode.Uri for the icon corresponding to an element type.
+ * @param {ElementType} elementType The element type.
+ * @returns The URI of the icon.
  */
 function getIconUri(elementType: ElementType): vscode.Uri {
-    // __dirname is assumed to be within the compiled output folder.
     return vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", iconMapping[elementType]));
 }
 
+/* =============================================================================
+   TestElementItem Class and TestElementsTreeDataProvider
+   ============================================================================= */
+
 /**
- * TestElementItem class representing a test element in the VS Code tree view.
+ * TestElementItem represents a test element in the VS Code tree view.
  */
 export class TestElementItem extends vscode.TreeItem {
     public readonly element: TestElement;
 
+    /**
+     * Constructs a new TestElementItem.
+     * @param element The test element.
+     */
     constructor(element: TestElement) {
         // Set the label to the element's name.
         // Determine collapsibility based on whether the element has children.
@@ -306,9 +326,7 @@ export class TestElementItem extends vscode.TreeItem {
                 ? vscode.TreeItemCollapsibleState.Collapsed
                 : vscode.TreeItemCollapsibleState.None
         );
-
         this.element = element;
-
         // Set the context value to enable context menu contributions.
         this.contextValue = "testElement"; // This value is used in package.json to enable context menu contributions.
 
@@ -325,12 +343,14 @@ export class TestElementItem extends vscode.TreeItem {
         }
 
         // Append the original JSON representation (Useful for debugging).
-        // tooltip += `\nJSON Representation:\n${element.jsonString}`;
+        if (element.jsonString) {
+            tooltip += `\n\nJSON Data:\n${element.jsonString}`;
+        }
 
         this.tooltip = tooltip;
+
         // Display the uniqueID as a description next to the label.
         this.description = element.uniqueID || "";
-
         // Set the icon based on the element type.
         this.iconPath = {
             light: getIconUri(element.elementType),
@@ -339,12 +359,14 @@ export class TestElementItem extends vscode.TreeItem {
     }
 }
 
+/**
+ * TestElementsTreeDataProvider implements the VS Code TreeDataProvider interface for test elements.
+ */
 export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<TestElementItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<TestElementItem | undefined> = new vscode.EventEmitter<
         TestElementItem | undefined
     >();
     readonly onDidChangeTreeData: vscode.Event<TestElementItem | undefined> = this._onDidChangeTreeData.event;
-
     private treeData: TestElement[] = [];
 
     getTreeItem(element: TestElementItem): vscode.TreeItem {
@@ -352,8 +374,9 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     }
 
     /**
-     * Returns the children for a given TreeItem.
-     * If no element is provided, returns the root elements.
+     * Returns the children for a given test element.
+     * @param {TestElementItem} element Optional parent TestElementItem.
+     * @returns A promise resolving to an array of TestElementItems.
      */
     getChildren(element?: TestElementItem): Thenable<TestElementItem[]> {
         if (element) {
@@ -364,8 +387,8 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     }
 
     /**
-     * Refreshes the tree view with new data and an optional uniqueID filter.
-     * @param flatJsonData Flat array of JSON objects representing test elements.
+     * Refreshes the tree view with new data.
+     * @param flatJsonData A flat array of JSON objects representing test elements.
      */
     refresh(flatJsonData: any[]): void {
         this.treeData = buildTree(flatJsonData);
@@ -373,19 +396,18 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     }
 
     /**
-     * Helper function to call the API and update the tree view.
-     * @param tovKey TOV key used to fetch test elements.
+     * Fetches test elements using a TOV key and updates the tree view.
+     * @param {string} tovKey The TOV key.
+     * @param {string} newTestElementsTreeViewTitle Optional new title for the tree view.
      */
     async fetchAndDisplayTestElements(tovKey: string, newTestElementsTreeViewTitle?: string): Promise<void> {
-        const testElementsJsonResponseData = await connection?.getTestElementsWithTovKeyOldPlayServer(tovKey);
-        if (testElementsJsonResponseData) {
-            // Store inputs for later refreshes.
+        const jsonData = await connection?.getTestElementsWithTovKeyOldPlayServer(tovKey);
+        if (jsonData) {
             setCurrentTovKey(tovKey);
-
             displayTestElementsTreeView();
-            this.refresh(testElementsJsonResponseData);
+            this.refresh(jsonData);
             if (newTestElementsTreeViewTitle) {
-                testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`; // Update the title of the test elements tree view
+                testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
             }
         } else {
             vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
@@ -393,36 +415,47 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     }
 }
 
-// Hide the Test Elements tree view
+/* =============================================================================
+   View Management Functions
+   ============================================================================= */
+
+/**
+ * Hides the Test Elements tree view.
+ */
 export async function hideTestElementsTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testElementsView.removeView"); // testElementsView is the ID of the tree view in package.json
+    await vscode.commands.executeCommand("testElementsView.removeView");
 }
 
-// Display the Test Elements  tree view
+/**
+ * Displays the Test Elements tree view.
+ */
 export async function displayTestElementsTreeView(): Promise<void> {
     await vscode.commands.executeCommand("testElementsView.focus");
 }
 
+/* =============================================================================
+   Test Element File Handling Functions
+   ============================================================================= */
+
+/**
+ * Handles a subdivision element by opening its resource file or folder.
+ * @param {TestElement} testElement The test element representing a subdivision.
+ * @param {string} baseTargetPath The base target path.
+ */
 export async function handleSubdivision(testElement: TestElement, baseTargetPath: string): Promise<void> {
     // Determine if the subdivision is final (i.e. has no child subdivision)
-    const isFinalSubdivision =
-        !testElement.children || !testElement.children.some((child) => child.elementType === "Subdivision");
-
-    logger.trace(`Subdivision '${testElement.name}' final: ${isFinalSubdivision}`);
-
+    const isFinalSubdivision = !testElement.children || !testElement.children.some((child) => child.elementType === "Subdivision");
+    logger.trace(`Subdivision '${testElement.name}' is ${isFinalSubdivision ? "final" : "not final"}.`);
     baseTargetPath = removeRobotResourceFromPathString(baseTargetPath);
-
     if (isFinalSubdivision) {
-        // Final subdivision: represent as a .resource file.
         let targetPath = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
-
         if (!(await utils.fileExistsAsync(targetPath))) {
             const dirName = path.dirname(targetPath);
             await fs.promises.mkdir(dirName, { recursive: true });
             // Create the resource file with header content.
-            const fileContentToWrite = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+            const fileContent = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
             // Create resource file with header content.
-            await fs.promises.writeFile(targetPath, fileContentToWrite);
+            await fs.promises.writeFile(targetPath, fileContent);
             logger.trace(`Resource file created at ${targetPath}`);
         }
         const document = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
@@ -445,6 +478,11 @@ export async function handleSubdivision(testElement: TestElement, baseTargetPath
     }
 }
 
+/**
+ * Handles an interaction element by opening the resource file of its nearest final subdivision.
+ * @param {TestElement} testElement The test element representing an interaction.
+ * @param {string} workspaceRootPath The root path of the workspace.
+ */
 export async function handleInteraction(testElement: TestElement, workspaceRootPath: string): Promise<void> {
     // For an interaction, open the parent's final subdivision .resource file.
     const finalSubdivision = getFinalSubdivisionAncestor(testElement);
@@ -452,20 +490,17 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
         logger.trace(`No final subdivision found for interaction ${testElement.uniqueID}`);
         return;
     }
-    // Ensure the final subdivision has a valid hierarchical name.
     if (!finalSubdivision.hierarchicalName) {
         finalSubdivision.hierarchicalName = computeHierarchicalName(finalSubdivision);
-        logger.trace(`Computed hierarchicalName for final subdivision: ${finalSubdivision.hierarchicalName}`);
+        logger.trace(`Computed hierarchical name for final subdivision: ${finalSubdivision.hierarchicalName}`);
     }
     let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/")) + ".resource";
-
     finalTargetPath = removeRobotResourceFromPathString(finalTargetPath);
-
     if (!(await utils.fileExistsAsync(finalTargetPath))) {
         const dirName = path.dirname(finalTargetPath);
         await fs.promises.mkdir(dirName, { recursive: true });
-        const fileContentToWrite = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
-        await fs.promises.writeFile(finalTargetPath, fileContentToWrite);
+        const fileContent = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+        await fs.promises.writeFile(finalTargetPath, fileContent);
         logger.trace(`Resource file created at ${finalTargetPath}`);
     }
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(finalTargetPath));
@@ -473,6 +508,10 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 }
 
+/**
+ * Handles fallback for opening a test element file.
+ * @param targetPath The target file path.
+ */
 export async function handleFallback(targetPath: string): Promise<void> {
     if (!(await utils.fileExistsAsync(targetPath))) {
         const dirName = path.dirname(targetPath);
@@ -484,18 +523,22 @@ export async function handleFallback(targetPath: string): Promise<void> {
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 }
 
+/* =============================================================================
+   Test Element Filtering and Hierarchy Functions
+   ============================================================================= */
+
 /**
- * Returns true if the given subdivision element is final—that is, it has no child subdivisions.
- * @param element The TestElement to check.
+ * Determines if a subdivision element is final (has no child subdivisions).
+ * @param element The test element to check.
  * @returns True if the element is a final subdivision; false otherwise.
  */
 export function isFinalSubdivisionInTree(element: TestElement): boolean {
     if (element.elementType !== "Subdivision") {
-        logger.trace(`Element ${element.name} is not a subdivision and is not a final subdivision.`);
+        logger.trace(`Element ${element.name} is not a subdivision.`);
         return false;
     }
     if (!element.children) {
-        logger.trace(`Element ${element.name} has no children and is a final subdivison.`);
+        logger.trace(`Element ${element.name} has no children and is final.`);
         return true;
     }
     // If any child is a subdivision, then this subdivision is not final.
@@ -505,16 +548,16 @@ export function isFinalSubdivisionInTree(element: TestElement): boolean {
 }
 
 /**
- * For an interaction element, traverse upward (using the parent property) to find the nearest final subdivision.
- * @param element The TestElement to start from.
- * @returns The nearest final subdivision ancestor or null if not found.
+ * Traverses upward from an interaction element to find the nearest final subdivision.
+ * @param {TestElement} element The test element representing an interaction.
+ * @returns {TestElement | null} The nearest final subdivision ancestor, or null if not found.
  */
 export function getFinalSubdivisionAncestor(element: TestElement): TestElement | null {
-    logger.trace(`Finding the nearest final subdivision ancestor for element ${element.name}`);
+    logger.trace(`Finding final subdivision ancestor for element ${element.name}`);
     let current = element.parent;
     while (current) {
         if (current.elementType === "Subdivision" && isFinalSubdivisionInTree(current)) {
-            logger.trace(`Found the nearest final subdivision ancestor for element ${element.name}: ${current.name}`);
+            logger.trace(`Found final subdivision ancestor for element ${element.name}: ${current.name}`);
             return current;
         }
         current = current.parent;
@@ -524,21 +567,19 @@ export function getFinalSubdivisionAncestor(element: TestElement): TestElement |
 }
 
 /**
- * Computes the hierarchical name of a test element by traversing the parent elements recursively.
- * @param element The TestElement to compute the name for.
- * @returns The hierarchical name of the element.
+ * Computes the hierarchical name of a test element by concatenating parent names.
+ * @param {TestElement} element The test element.
+ * @returns {string} The hierarchical name (e.g., "Root/Child").
  */
 export function computeHierarchicalName(element: TestElement): string {
     return element.parent ? computeHierarchicalName(element.parent) + "/" + element.name : element.name;
 }
 
 /**
- * Removes all occurrences of the substring "[Robot-Resource]" from the provided path string.
- * @param path - The original path string in which to remove the "[Robot-Resource]" substring.
- * @returns A new string with all occurrences of "[Robot-Resource]" removed.
+ * Removes all occurrences of "[Robot-Resource]" from a given path string.
+ * @param {string} pathStr The original path string.
+ * @returns {string} The cleaned path string.
  */
-export function removeRobotResourceFromPathString(path: string): string {
-    const robotResourceRegexPattern = /\[Robot-Resource\]/g;
-    const cleanedPath = path.replace(robotResourceRegexPattern, "");
-    return cleanedPath;
+export function removeRobotResourceFromPathString(pathStr: string): string {
+    return pathStr.replace(/\[Robot-Resource\]/g, "");
 }

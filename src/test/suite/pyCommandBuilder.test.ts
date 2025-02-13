@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { pyCommandBuilder } from '../../pyCommandBuilder';
+import { PyCommandBuilder } from '../../pyCommandBuilder';
 import * as sinon from 'sinon';
 import { PythonExtension, EnvironmentPath, ResolvedEnvironment } from '@vscode/python-extension';
 import * as extension from '../../extension';
@@ -27,7 +27,7 @@ suite('getActiveWorkspaceFolder tests', () => {
     test('Should return undefined when no workspace is open', async () => {
         workspaceFoldersStub.value([]);
 
-        const workspaceFolder = pyCommandBuilder.getActiveWorkspaceFolder();
+        const workspaceFolder = PyCommandBuilder.getActiveWorkspaceFolder();
         assert.strictEqual(workspaceFolder, undefined, 'Expected no active workspace folder');
     });
 
@@ -40,7 +40,7 @@ suite('getActiveWorkspaceFolder tests', () => {
 
         workspaceFoldersStub.value([workspaceFolder1]);
 
-        const workspaceFolder = pyCommandBuilder.getActiveWorkspaceFolder();
+        const workspaceFolder = PyCommandBuilder.getActiveWorkspaceFolder();
         assert.strictEqual(workspaceFolder, workspaceFolder1, 'Expected to return workspaceFolder1');
     });
 
@@ -73,7 +73,7 @@ suite('getActiveWorkspaceFolder tests', () => {
             } as unknown as vscode.TextEditor;
         });
 
-        const workspaceFolder = pyCommandBuilder.getActiveWorkspaceFolder();
+        const workspaceFolder = PyCommandBuilder.getActiveWorkspaceFolder();
         assert.strictEqual(workspaceFolder, workspaceFolder2, 'Expected to return workspaceFolder2Stub');
     });
 });
@@ -108,7 +108,7 @@ suite('getPythonEnviromentExe tests', () => {
         const resolveEnvironmentStub = sinon.stub(pythonApiStub.environments, 'resolveEnvironment');
         resolveEnvironmentStub.withArgs(mockEnvironmentPath).resolves(mockEnvironment);
 
-        const result = await pyCommandBuilder.getPythonEnviromentExe(mockWorkspace);
+        const result = await PyCommandBuilder.getPythonEnvironmentExe(mockWorkspace);
         assert.strictEqual(result, 'pythonPath', 'Expected getPythonEnviromentExe to return pythonPath');
     });
 
@@ -123,14 +123,14 @@ suite('getPythonEnviromentExe tests', () => {
         const resolveEnvironmentStub = sinon.stub(pythonApiStub.environments, 'resolveEnvironment');
         resolveEnvironmentStub.withArgs(mockEnvironmentPath).resolves(mockEnvironment);
 
-        const result = await pyCommandBuilder.getPythonEnviromentExe(undefined);
+        const result = await PyCommandBuilder.getPythonEnvironmentExe(undefined);
         assert.strictEqual(result, 'pythonPath', 'Expected getPythonEnviromentExe to return pythonPath');
     });
 
     test('Should return undefined if pythonApi is undefined', async () => {
         sinon.stub(PythonExtension, 'api').resolves(undefined);
 
-        const result = await pyCommandBuilder.getPythonEnviromentExe(undefined);
+        const result = await PyCommandBuilder.getPythonEnvironmentExe(undefined);
         assert.strictEqual(result, undefined, 'Expected getPythonEnviromentExe to return undefined when no environment path is found');
     });
 
@@ -144,7 +144,7 @@ suite('getPythonEnviromentExe tests', () => {
         const resolveEnvironmentStub = sinon.stub(pythonApiStub.environments, 'resolveEnvironment');
         resolveEnvironmentStub.withArgs(mockEnvironmentPath).resolves(undefined);
 
-        const result = await pyCommandBuilder.getPythonEnviromentExe(undefined);
+        const result = await PyCommandBuilder.getPythonEnvironmentExe(undefined);
         assert.strictEqual(result, undefined, 'Expected getPythonEnviromentExe to return undefined when environment resolution fails');
     });
 });
@@ -186,47 +186,18 @@ suite('buildTb2RobotCommand tests', function () {
     });
 
     test('Should return commandBase if getPythonEnviromentExe resolves defined', async () => {
-        const getPythonEnviromentExeStub = sinon.stub(pyCommandBuilder, 'getPythonEnviromentExe');
+        const getPythonEnviromentExeStub = sinon.stub(PyCommandBuilder, "getPythonEnvironmentExe");
         getPythonEnviromentExeStub.resolves('pythonpath');
 
-        const result = await pyCommandBuilder.buildTb2RobotCommand(context);
+        const result = await PyCommandBuilder.buildTb2RobotCommand(context);
         assert.strictEqual(result, 'pythonpath -u rootPath\\bundled\\tools\\tb2robot\\__main__.py', 'Expected buildTb2RobotCommand to return correct base command');
     });
 
     test('Should return empty string if getPythonEnviromentExe resolves undefined', async () => {
-        const getPythonEnviromentExeStub = sinon.stub(pyCommandBuilder, 'getPythonEnviromentExe');
+        const getPythonEnviromentExeStub = sinon.stub(PyCommandBuilder, "getPythonEnvironmentExe");
         getPythonEnviromentExeStub.resolves(undefined);
 
-        const result = await pyCommandBuilder.buildTb2RobotCommand(context);
+        const result = await PyCommandBuilder.buildTb2RobotCommand(context);
         assert.strictEqual(result, '', 'Expected buildTb2RobotCommand to return empty string');
-    });
-});
-
-suite('buildRobotCommand tests', function () {
-    let getLoggerStub: sinon.SinonStub;
-    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
-    this.timeout(5000);
-
-    setup(() => {
-    });
-
-    teardown(() => {
-        sinon.restore();
-    });
-
-    test('Should return commandBase if getPythonEnviromentExe resolves defined', async () => {
-        const getPythonEnviromentExeStub = sinon.stub(pyCommandBuilder, 'getPythonEnviromentExe');
-        getPythonEnviromentExeStub.resolves('pythonpath');
-
-        const result = await pyCommandBuilder.buildRobotCommand();
-        assert.strictEqual(result, 'pythonpath -m robot', 'Expected buildRobotCommand to return correct base command');
-    });
-
-    test('Should return empty string if getPythonEnviromentExe resolves undefined', async () => {
-        const getPythonEnviromentExeStub = sinon.stub(pyCommandBuilder, 'getPythonEnviromentExe');
-        getPythonEnviromentExeStub.resolves(undefined);
-
-        const result = await pyCommandBuilder.buildRobotCommand();
-        assert.strictEqual(result, '', 'Expected buildRobotCommand to return empty string');
     });
 });

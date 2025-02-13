@@ -3,7 +3,7 @@ import * as sinon from "sinon";
 import * as vscode from "vscode";
 import {
     ProjectManagementTreeDataProvider,
-    TestbenchTreeItem,
+    ProjectManagementTreeItem,
     findProjectKeyOfCycleElement,
 } from "../../projectManagementTreeView";
 import { PlayServerConnection } from "../../testBenchConnection";
@@ -33,7 +33,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     test("getChildren should return empty array when no connection is available", async () => {
         treeDataProvider = new ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
 
-        const children: TestbenchTreeItem[] = await treeDataProvider.getChildren();
+        const children: ProjectManagementTreeItem[] = await treeDataProvider.getChildren();
 
         assert.strictEqual(children.length, 0);
     });
@@ -71,10 +71,10 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     */
 
     test("findProjectKeyOfCycle should return project key of a cycle element", () => {
-        const projectElement = new TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
+        const projectElement = new ProjectManagementTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
             key: "projectKey",
         });
-        const cycleElement = new TestbenchTreeItem(
+        const cycleElement = new ProjectManagementTreeItem(
             "Cycle",
             "Cycle",
             vscode.TreeItemCollapsibleState.Collapsed,
@@ -88,7 +88,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     test("handleTestCycleClick should initialize test theme tree", async () => {
-        const cycleElement = new TestbenchTreeItem("Cycle Label", "Cycle", vscode.TreeItemCollapsibleState.None, {
+        const cycleElement = new ProjectManagementTreeItem("Cycle Label", "Cycle", vscode.TreeItemCollapsibleState.None, {
             key: "cycleKey",
         });
         const cycleData: testBenchTypes.CycleStructure = {

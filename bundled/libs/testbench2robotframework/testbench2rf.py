@@ -220,6 +220,8 @@ class RfTestCase:
                     keyword_lists.append([])
                 is_first_atomic = False
                 atomic_keyword_call = self._create_rf_keyword(interaction_call)
+                while group_stack and group_stack[-1][1] >= interaction_call.indent:
+                    group_stack.pop()
                 if group_stack:
                     group_stack[-1][0].body.append(atomic_keyword_call)
                 else:

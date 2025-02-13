@@ -3,7 +3,7 @@ import * as sinon from 'sinon';
 import * as assert from 'assert';
 import * as vscode from 'vscode'
 import { tb2robotLib} from '../../testbench2robotframeworkLib';
-import { pyCommandBuilder } from '../../pyCommandBuilder';
+import { PyCommandBuilder } from '../../pyCommandBuilder';
 import * as extension from '../../extension';
 import { TestBenchLogger } from "../../testBenchLogger";
 
