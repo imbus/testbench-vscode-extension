@@ -5,7 +5,7 @@
  */
 
 import * as vscode from "vscode";
-import { logger, connection, baseKeyOfExtension, allExtensionCommands, getConfig } from "./extension";
+import { logger, connection, allExtensionCommands, getConfig } from "./extension";
 import { loginToNewPlayServerAndInitSessionToken } from "./testBenchConnection";
 import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 

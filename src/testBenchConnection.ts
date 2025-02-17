@@ -301,11 +301,10 @@ export class PlayServerConnection {
 
             logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
             const testElementsResponse: AxiosResponse = await oldPlayServerSession.get(getTestElementsURL);
-
-            /*
+            
             // Save the JSON to a file for analyzing the structure
             const savePath = await vscode.window.showSaveDialog({
-                saveLabel: "Save Test Elements",
+                saveLabel: "Save Test Elements JSON Response From Server",
                 filters: {
                     "JSON Files": ["json"],
                     "All Files": ["*"],
@@ -318,7 +317,7 @@ export class PlayServerConnection {
             } else {
                 vscode.window.showErrorMessage("No file path selected.");
             }
-            */
+            
 
             logger.trace("Response status of get test elements request:", testElementsResponse.status);
             if (testElementsResponse.data) {

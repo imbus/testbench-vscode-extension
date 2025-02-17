@@ -4,10 +4,8 @@
  */
 
 import * as vscode from "vscode";
-import { ProjectManagementTreeItem, testThemeTreeView } from "./projectManagementTreeView";
-import { logger, setProjectTreeView, projectTreeView } from "./extension";
-import * as testBenchConnection from "./testBenchConnection";
-import * as projectManagementTreeView from "./projectManagementTreeView";
+import { ProjectManagementTreeItem } from "./projectManagementTreeView";
+import { logger } from "./extension";7
 
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display

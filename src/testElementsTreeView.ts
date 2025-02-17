@@ -50,7 +50,7 @@ type ElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "O
  * @property jsonString Pretty-printed JSON representation.
  * @property details The original JSON object.
  * @property elementType The computed type of the element.
- * @property directMatch Indicates whether this element directly passed the filter.
+ * @property directRegexMatch Indicates whether this element directly passed the regex filter.
  * @property children An array of child test elements.
  * @property hierarchicalName The hierarchical name of the element (e.g., "Root/Child").
  * @property parent The parent element
@@ -64,7 +64,7 @@ export interface TestElement {
     jsonString: string;
     details: any;
     elementType: ElementType;
-    directMatch: boolean;
+    directRegexMatch: boolean;
     children?: TestElement[];
     hierarchicalName?: string;
     parent?: TestElement;
@@ -117,6 +117,61 @@ function matchesRegex(value: string, regexList: RegExp[]): boolean {
 }
 
 /**
+ * Determines the type of a test element based on its properties.
+ * 
+ * @param {any} item The test element object.
+ * @returns {ElementType} The type of the test element.
+ */
+function getTestElementItemType(item: any): ElementType {
+    if (item.Subdivision_key && item.Subdivision_key.serial) return "Subdivision";
+    if (item.Interaction_key && item.Interaction_key.serial) return "Interaction";
+    if (item.Condition_key && item.Condition_key.serial) return "Condition";
+    if (item.DataType_key && item.DataType_key.serial) return "DataType";
+    return "Other";
+}
+
+/**
+ * Generates a unique ID for a test element, handling different element types.
+ * 
+ * @param {any} item The test element object.
+ * @param {ElementType} elementType The type of the test element.
+ * @param {string} uniqueID The unique ID string.
+ * @returns {string} The unique ID of the test element.
+ */
+function generateTestElementItemId(item: any, elementType: ElementType, uniqueID: string): string {
+    switch (elementType) {
+        case "Subdivision":
+        case "Interaction":
+        case "Condition":
+        case "DataType":
+            // Use a consistent ID format for all keyed elements.
+            return `${item[`${elementType}_key`].serial}_${uniqueID}`;
+        default:
+            // Fallback: use uniqueID as the identifier if no key-specific id is found.
+            return uniqueID;
+    }
+}
+
+/**
+ * Determines the parent ID of a test element.
+ * 
+ * @param {any} item The test element object.
+ * @param {string | null | undefined} libraryKey The library key.
+ * @returns {string | null} The parent ID of the test element.
+ */
+function getItemParentId(item: any, libraryKey: string | null | undefined): string | null {
+    // Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
+    if (item.parent && item.parent.serial) {
+        // Use both the parent's serial and uniqueID to create the composite parentId.
+        // During tree linking we match composite ids (which start with parent's serial)
+        // "serial_uniqueID" is used for uniqueness even for elements with identical serials.
+        return item.parent.uniqueID ? `${item.parent.serial}_${item.parent.uniqueID}` : item.parent.serial;
+    }
+    // If the element has no parent, use the libraryKey as the parent.
+    return libraryKey ? String(libraryKey) : null;
+}
+
+/**
  * Builds a hierarchical tree from a flat array of JSON objects representing test elements.
  * Applies filtering based on element type and regex matching.
  * @param flatJsonTestElements Flat array of JSON objects from the server.
@@ -144,50 +199,22 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
         }
 
         // Determine the element type and compute the id of the element.
+        const testElementType: ElementType = getTestElementItemType(item);
         // Each element type has a unique key property that is used as the identifier.
-        let testElementType: ElementType;
-        let id: string = "";
-        if (item.Subdivision_key && item.Subdivision_key.serial) {
-            testElementType = "Subdivision";
-            // TODO: Test this fix
-            // Append the uniqueID to ensure uniqueness even for subdivisions with identical serials
-            id = `${item.Subdivision_key.serial}_${item.uniqueID}`;
-        } else if (item.Interaction_key && item.Interaction_key.serial) {
-            testElementType = "Interaction";
-            id = `${item.Interaction_key.serial}_${item.uniqueID}`;
-        } else if (item.Condition_key && item.Condition_key.serial) {
-            testElementType = "Condition";
-            id = `${item.Condition_key.serial}_${item.uniqueID}`;
-        } else if (item.DataType_key && item.DataType_key.serial) {
-            testElementType = "DataType";
-            id = `${item.DataType_key.serial}_${item.uniqueID}`;
-        } else {
-            testElementType = "Other";
-            // Fallback: use uniqueID as the identifier if no key-specific id is found.
-            id = item.uniqueID;
-        }
-
-        // Determine the parent ID of the element.
-        // Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
-        let parentId: string | null = null;
-        if (item.parent && item.parent.serial) {
-            // Use the parent's serial here. During tree linking we match composite ids (which start with parent's serial)
-            // "serial_uniqueID" is used for uniqueness even for elements with identical serials.
-            parentId = item.parent.serial;
-        } else if (libraryKey) {
-            parentId = libraryKey;
-        }
+        const IDOfTestElement: string = generateTestElementItemId(item, testElementType, item.uniqueID);       
+        // Determine the parent ID of the element. Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
+        const parentId: string | null = getItemParentId(item, libraryKey);
 
         // Compute whether this element directly matches the regex filter.
         // If resouce regex patterns exist in the extension settings, use them. Otherwise, include all elements without filtering.
-        const directMatch =
+        const directRegexMatch =
             resourceRegexPatternsInExtensionSettings.length > 0
                 ? matchesRegex(item.name, resourceRegexPatternsInExtensionSettings)
                 : true;
 
         // Create the TestElement object.
         const testElement: TestElement = {
-            id,
+            id: IDOfTestElement,
             parentId,
             name: item.name,
             uniqueID: item.uniqueID,
@@ -195,19 +222,19 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
             jsonString: JSON.stringify(item, null, 2),
             details: item,
             elementType: testElementType,
-            directMatch,
+            directRegexMatch: directRegexMatch,
             children: [],
         };
 
         // Store the current element in the map.
-        map[id] = testElement;
+        map[IDOfTestElement] = testElement;
     });
 
     // Build the full tree structure by assigning children to their respective parents.
     const rootsOfTestElementView: TestElement[] = [];
     Object.values(map).forEach((testElement) => {
         if (testElement.parentId) {
-            // Find the parent by matching a composite id ("serial_uniqueID") that starts with the stored parent's serial plus an underscore
+            // Find the parent by matching a composite id (parent's serial + uniqueID).
             const parent = Object.values(map).find((p) => p.id.startsWith(`${testElement.parentId}_`));
             if (parent) {
                 testElement.parent = parent;
@@ -224,6 +251,8 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
 
     /**
      * Recursively filters the tree based on element type and regex matching.
+     * Filtered elements become null and are removed from the tree.
+     * 
      * @param {TestElement} testElement The element to filter.
      * @param {boolean} inherited True if the element inherits a match from a parent.
      * @returns {TestElement | null} The filtered element or null if excluded.
@@ -234,25 +263,30 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
             return null;
         }
 
-        // Process and filter children recursively.
+        // Process and filter children recursively before filtering the current (parent) element.
         let filteredChildren: TestElement[] = [];
         if (testElement.children) {
             // Determine if the children should inherit inclusion:
-            // If the current element directly matches or is already inherited, mark children as inherited.
-            const childrenInherited = inherited || testElement.directMatch;
+            // If the current element directly matches the regex or is already inherited, mark children as inherited.
+            const childrenInherited = inherited || testElement.directRegexMatch;
+            // Store the result of filtering the children, which will be used to determine if the current element should be included.
             filteredChildren = testElement.children
                 .map((child) => filterTestElementsTree(child, childrenInherited))
                 .filter((child) => child !== null) as TestElement[];
         }
 
-        // For subdivisions, filter out the subdivision element if it has no children.
-        if (testElement.elementType === "Subdivision" && filteredChildren.length === 0) {
-            return null;
+        // For subdivisions, filter out the subdivision element if it has no children that match the regex.
+        if (testElement.elementType === "Subdivision") {
+            if (filteredChildren.length === 0) {
+                return null;
+            }
         }
 
-        // Regex filtering logic:
-        // If the inclusion flag is set (inherited) or the element directly matches, include it along with its filtered children.
-        if (inherited || testElement.directMatch || filteredChildren.length > 0) {
+        // Include the current element if it
+        // 1- Inherits a match from a parent
+        // 2- Directly matches the regex
+        // 3- Has at least one regex matching child
+        if (inherited || testElement.directRegexMatch || filteredChildren.length > 0) {
             return { ...testElement, children: filteredChildren };
         } else {
             // Exclude the element if it neither directly matches nor has any matching descendants.
@@ -342,6 +376,7 @@ export class TestElementItem extends vscode.TreeItem {
             tooltip += `\nStatus: ${element.details.status}`;
         }
 
+        // TODO: Remove this in production
         // Append the original JSON representation (Useful for debugging).
         if (element.jsonString) {
             tooltip += `\n\nJSON Data:\n${element.jsonString}`;
@@ -487,22 +522,29 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
     // For an interaction, open the parent's final subdivision .resource file.
     const finalSubdivision = getFinalSubdivisionAncestor(testElement);
     if (!finalSubdivision) {
-        logger.trace(`No final subdivision found for interaction ${testElement.uniqueID}`);
+        logger.trace(`No final subdivision found for the interaction with unique ID: ${testElement.uniqueID}`);
         return;
     }
+    // Compute the hierarchical name if not already done.
     if (!finalSubdivision.hierarchicalName) {
         finalSubdivision.hierarchicalName = computeHierarchicalName(finalSubdivision);
         logger.trace(`Computed hierarchical name for final subdivision: ${finalSubdivision.hierarchicalName}`);
     }
+    // Construct the target path for the final subdivision.
     let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/")) + ".resource";
     finalTargetPath = removeRobotResourceFromPathString(finalTargetPath);
+    // If the resource file does not exist, create it with a header.
     if (!(await utils.fileExistsAsync(finalTargetPath))) {
-        const dirName = path.dirname(finalTargetPath);
+        const dirName = path.dirname(finalTargetPath);        
         await fs.promises.mkdir(dirName, { recursive: true });
         const fileContent = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
         await fs.promises.writeFile(finalTargetPath, fileContent);
         logger.trace(`Resource file created at ${finalTargetPath}`);
     }
+    else { 
+        logger.trace(`Skipping creation of resource file at ${finalTargetPath} as it already exists.`);
+    }
+    // Open the final subdivision resource file in the VS Code editor.
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(finalTargetPath));
     await vscode.window.showTextDocument(document);
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");

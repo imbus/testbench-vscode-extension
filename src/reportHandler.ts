@@ -14,7 +14,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import * as utils from "./utils";
-import { getConfig, connection, baseKeyOfExtension, logger, allExtensionCommands } from "./extension";
+import { getConfig, connection, logger } from "./extension";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
 
 /** 
