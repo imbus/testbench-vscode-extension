@@ -276,7 +276,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
         // Update the title of the test theme tree view
         if (testThemeTreeView) {
-            testThemeTreeView.title = `Test Theme Tree (${element.label})`;
+            testThemeTreeView.title = `Test Themes (${element.label})`;
         }
         return childrenOfCycle;
     }

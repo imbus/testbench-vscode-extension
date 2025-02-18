@@ -405,11 +405,11 @@
                 },
                 {
                     "id": "projectManagementTree",
-                    "name": "Project Management Tree"
+                    "name": "Projects"
                 },
                 {
                     "id": "testThemeTree",
-                    "name": "Test Theme Tree"
+                    "name": "Test Themes"
                 },
                 {
                     "id": "testElementsView",

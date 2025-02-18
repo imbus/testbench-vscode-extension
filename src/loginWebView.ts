@@ -94,6 +94,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         // TODO: In production, don't log sensitive data.
         logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
 
+        // TODO: This can be updated dynamically after the checkbox value is changed.
         // After the user presses login, update extension settings with the checkbox values
         await getConfig().update("automaticLoginAfterExtensionActivation", autoLogin);
         await getConfig().update("storePasswordAfterLogin", savePassword);
@@ -161,7 +162,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise resolving to an HTML string.
      */
     private async getLoginHtmlPage(webview: vscode.Webview): Promise<string> {
-        logger.trace("Generating login HTML page.");
+        logger.trace("Returning login HTML page for Webview.");
 
         if (!this.extensionContext) {
             logger.warn("Extension context is undefined; cannot get stored settings.");
@@ -169,7 +170,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         // TODO: In production, don't log sensitive data.
         logger.trace(
-            `Using stored settings: ServerName: ${getConfig().get<string>(
+            `Login Webview is using stored extension settings: ServerName: ${getConfig().get<string>(
                 "serverName",
                 ""
             )}, Port: ${getConfig().get<string>("portNumber", "")}, Username: ${getConfig().get<string>(
@@ -356,7 +357,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             logger.trace("Connection is active.");
             return true;
         } else {
-            logger.trace("No active connection found.");
+            logger.trace("Connection is not active.");
             return false;
         }
     }
@@ -373,10 +374,8 @@ export async function updateWebViewDisplay(): Promise<void> {
     logger.trace("Updating login webview display.");
     if (loginWebViewIsVisible) {
         await displayWebView();
-        logger.trace("Login webview is displayed.");
     } else {
         await hideWebView();
-        logger.trace("Login webview is hidden.");
     }
 }
 
@@ -387,10 +386,8 @@ export async function toggleWebViewVisibility(): Promise<void> {
     logger.trace("Toggling login webview visibility.");
     if (loginWebViewIsVisible) {
         await hideWebView();
-        logger.trace("Login webview is now hidden.");
     } else {
         await displayWebView();
-        logger.trace("Login webview is now displayed.");
     }
 }
 
@@ -407,7 +404,7 @@ export async function hideWebView(): Promise<void> {
  * Displays the login webview.
  */
 export async function displayWebView(): Promise<void> {
-    logger.trace("Displaying login webview.");
+    logger.trace("Displaying (focusing on) login webview.");
     await vscode.commands.executeCommand("testbenchExtension.webView.focus");
     loginWebViewIsVisible = true;
 }

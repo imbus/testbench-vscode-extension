@@ -39,7 +39,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     /*
-    // TODO: getChildren returns [] when connection is null.
+    // getChildren returns [] when connection is null.
     test("getChildren should return children of the provided element", async () => {
         const element = new TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
             children: [{ name: "Version", nodeType: "Version" }],

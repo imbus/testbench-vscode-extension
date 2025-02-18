@@ -1171,7 +1171,7 @@ export async function importReportWithResultsToTestbench(
             return null;
         }
 
-        // TODO: Chech the new data of the new branch
+        // TODO: Check the new data of the new branch
         // Import the results to TestBench server
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,

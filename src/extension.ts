@@ -269,7 +269,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
             }
         } else {
-            logger.warn("Automatic login is disabled or password is not stored.");
+            logger.trace("Automatic login is disabled or password is not stored.");
         }
     });
 
