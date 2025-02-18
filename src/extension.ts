@@ -188,8 +188,8 @@ async function loadConfiguration(context: vscode.ExtensionContext): Promise<void
 
     // If storePassword is set to false, delete the stored password immediately.
     // If storePassword is set to true, the password is only stored after a successful login.
-    if (!config.get<boolean>("storePasswordAfterLogin", false)) {
-        await testBenchConnection.clearStoredCredentials(context);
+    if (config?.get<boolean>("storePasswordAfterLogin", false)) {
+        await testBenchConnection?.clearStoredCredentials(context);
     }
 
     // Update the webview input fields after extension settings are changed to reflect the changes in the webview live
@@ -257,14 +257,20 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
     // --- Command: Automatic Login After Activation ---
     registerSafeCommand(context, allExtensionCommands.automaticLoginAfterExtensionActivation.command, async () => {
-        if (config.get<boolean>("automaticLoginAfterExtensionActivation", false)) {
+        // If auto login is active and the password is stored in the secrets, perform the login automatically.
+        if (
+            config.get<boolean>("automaticLoginAfterExtensionActivation", false) &&
+            config.get<boolean>("storePasswordAfterLogin", false) &&
+            (await context.secrets.get("password"))
+        ) {
             logger.debug("Performing automatic login.");
-            if (await testBenchConnection.performLogin(context, baseKeyOfExtension, false, true)) {
+            if (await testBenchConnection?.performLogin(context, baseKeyOfExtension, false, true)) {
                 // If login was successful, display project selection dialog and the project management tree view.
-                projectManagementTreeView.displayProjectManagementTreeView();
+                projectManagementTreeView?.displayProjectManagementTreeView();
                 await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
             }
-            // TODO: Consider aborting if login fails.
+        } else {
+            logger.error("Automatic login is disabled or password is not stored.");
         }
     });
 
@@ -349,11 +355,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 const children = (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
                 projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
             }
-            await reportHandler.startTestGenerationForCycle(
-                context,
-                item,
-                folderNameOfTestbenchWorkingDirectory
-            );
+            await reportHandler.startTestGenerationForCycle(context, item, folderNameOfTestbenchWorkingDirectory);
             logger.trace("End of Generate Test Cases For Cycle command.");
         }
     );
@@ -641,12 +643,12 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
  * @param context The extension context.
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    // Load initial configuration and register a listener for configuration changes.
-    await loadConfiguration(context);
-
     // Initialize logger.
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
+
+    // Load initial configuration and register a listener for configuration changes.
+    await loadConfiguration(context);
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {

@@ -75,7 +75,10 @@ export interface TestElement {
  * @returns {RegExp[]} An array of valid RegExp objects.
  */
 function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
-    const pythonResourceRegexPatternsInExtensionSettings: string[] = getConfig().get("resourceRegexInTestbench2robotframework", []);
+    const pythonResourceRegexPatternsInExtensionSettings: string[] = getConfig().get(
+        "resourceRegexInTestbench2robotframework",
+        []
+    );
     logger.trace("Resource regex patterns from settings:", pythonResourceRegexPatternsInExtensionSettings);
 
     // Note: A complete conversion from python regex to javascript regex is not working as expected. If we only use simple regex patterns, we can use the existing code.
@@ -118,7 +121,7 @@ function matchesRegex(value: string, regexList: RegExp[]): boolean {
 
 /**
  * Determines the type of a test element based on its properties.
- * 
+ *
  * @param {any} item The test element object.
  * @returns {ElementType} The type of the test element.
  */
@@ -132,7 +135,7 @@ function getTestElementItemType(item: any): ElementType {
 
 /**
  * Generates a unique ID for a test element, handling different element types.
- * 
+ *
  * @param {any} item The test element object.
  * @param {ElementType} elementType The type of the test element.
  * @param {string} uniqueID The unique ID string.
@@ -154,7 +157,7 @@ function generateTestElementItemId(item: any, elementType: ElementType, uniqueID
 
 /**
  * Determines the parent ID of a test element.
- * 
+ *
  * @param {any} item The test element object.
  * @param {string | null | undefined} libraryKey The library key.
  * @returns {string | null} The parent ID of the test element.
@@ -201,7 +204,7 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
         // Determine the element type and compute the id of the element.
         const testElementType: ElementType = getTestElementItemType(item);
         // Each element type has a unique key property that is used as the identifier.
-        const IDOfTestElement: string = generateTestElementItemId(item, testElementType, item.uniqueID);       
+        const IDOfTestElement: string = generateTestElementItemId(item, testElementType, item.uniqueID);
         // Determine the parent ID of the element. Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
         const parentId: string | null = getItemParentId(item, libraryKey);
 
@@ -252,17 +255,12 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
     /**
      * Recursively filters the tree based on element type and regex matching.
      * Filtered elements become null and are removed from the tree.
-     * 
+     *
      * @param {TestElement} testElement The element to filter.
      * @param {boolean} inherited True if the element inherits a match from a parent.
      * @returns {TestElement | null} The filtered element or null if excluded.
      */
     function filterTestElementsTree(testElement: TestElement, inherited: boolean): TestElement | null {
-        // Filter out elements of type DataType or Condition.
-        if (testElement.elementType === "DataType" || testElement.elementType === "Condition") {
-            return null;
-        }
-
         // Process and filter children recursively before filtering the current (parent) element.
         let filteredChildren: TestElement[] = [];
         if (testElement.children) {
@@ -275,7 +273,13 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
                 .filter((child) => child !== null) as TestElement[];
         }
 
+        // Filter out elements of type DataType or Condition.
+        if (testElement.elementType === "DataType" || testElement.elementType === "Condition") {
+            return null;
+        }
+
         // For subdivisions, filter out the subdivision element if it has no children that match the regex.
+        // Note: This also removes empty subdivisions that matches the regex?
         if (testElement.elementType === "Subdivision") {
             if (filteredChildren.length === 0) {
                 return null;
@@ -423,10 +427,10 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
 
     /**
      * Refreshes the tree view with new data.
-     * @param flatJsonData A flat array of JSON objects representing test elements.
+     * @param flatTestElementsJsonData A flat array of JSON objects representing test elements.
      */
-    refresh(flatJsonData: any[]): void {
-        this.treeData = buildTree(flatJsonData);
+    refresh(flatTestElementsJsonData: any[]): void {
+        this.treeData = buildTree(flatTestElementsJsonData);
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -436,11 +440,16 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
      * @param {string} newTestElementsTreeViewTitle Optional new title for the tree view.
      */
     async fetchAndDisplayTestElements(tovKey: string, newTestElementsTreeViewTitle?: string): Promise<void> {
-        const jsonData = await connection?.getTestElementsWithTovKeyOldPlayServer(tovKey);
-        if (jsonData) {
+        // For testing with a local JSON file.
+        // const jsonPath = "PATH-TO-JSON-FILE";
+        // const testElementsJsonData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+
+        // Commented out for debugging purposes
+        const testElementsJsonData = await connection?.getTestElementsWithTovKeyOldPlayServer(tovKey);
+        if (testElementsJsonData) {
             setCurrentTovKey(tovKey);
             displayTestElementsTreeView();
-            this.refresh(jsonData);
+            this.refresh(testElementsJsonData);
             if (newTestElementsTreeViewTitle) {
                 testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
             }
@@ -479,7 +488,8 @@ export async function displayTestElementsTreeView(): Promise<void> {
  */
 export async function handleSubdivision(testElement: TestElement, baseTargetPath: string): Promise<void> {
     // Determine if the subdivision is final (i.e. has no child subdivision)
-    const isFinalSubdivision = !testElement.children || !testElement.children.some((child) => child.elementType === "Subdivision");
+    const isFinalSubdivision =
+        !testElement.children || !testElement.children.some((child) => child.elementType === "Subdivision");
     logger.trace(`Subdivision '${testElement.name}' is ${isFinalSubdivision ? "final" : "not final"}.`);
     baseTargetPath = removeRobotResourceFromPathString(baseTargetPath);
     if (isFinalSubdivision) {
@@ -535,13 +545,12 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
     finalTargetPath = removeRobotResourceFromPathString(finalTargetPath);
     // If the resource file does not exist, create it with a header.
     if (!(await utils.fileExistsAsync(finalTargetPath))) {
-        const dirName = path.dirname(finalTargetPath);        
+        const dirName = path.dirname(finalTargetPath);
         await fs.promises.mkdir(dirName, { recursive: true });
         const fileContent = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
         await fs.promises.writeFile(finalTargetPath, fileContent);
         logger.trace(`Resource file created at ${finalTargetPath}`);
-    }
-    else { 
+    } else {
         logger.trace(`Skipping creation of resource file at ${finalTargetPath} as it already exists.`);
     }
     // Open the final subdivision resource file in the VS Code editor.

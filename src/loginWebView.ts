@@ -52,7 +52,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     message.serverName,
                     parseInt(message.portNumber, 10), // Port number is an integer
                     message.username,
-                    message.password
+                    message.password,
+                    message.autoLogin,
+                    message.savePassword
                 );
             }
         });
@@ -72,7 +74,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         serverName: string,
         portNumber: number,
         username: string,
-        password: string
+        password: string,
+        autoLogin: boolean,
+        savePassword: boolean
     ): Promise<void> {
         if (this.isLoginProcessAlreadyRunning) {
             logger.trace("Login process already running; ignoring duplicate submit.");
@@ -89,6 +93,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         // TODO: In production, don't log sensitive data.
         logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
+
+        // After the user presses login, update extension settings with the checkbox values
+        await getConfig().update("automaticLoginAfterExtensionActivation", autoLogin);
+        await getConfig().update("storePasswordAfterLogin", savePassword);
 
         // Attempt to log in. Successfull login will update and hide the webview automatically.
         const loginResult = await loginToNewPlayServerAndInitSessionToken(
@@ -115,15 +123,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * Updates the HTML content of the webview based on the connection status.
      */
     async updateWebviewContent(): Promise<void> {
-        logger.trace("Updating login webview content.");
+        logger?.trace("Updating login webview content.");
         if (!this.currentWebview) {
-            logger.trace("No webview instance available for updating content.");
+            logger?.trace("No webview instance available for updating content.");
             return;
         }
         this.currentWebview.webview.html = this.isConnectedToServer()
             ? this.getAlreadyConnectedHtml()
             : await this.getLoginHtmlPage(this.currentWebview.webview);
-        logger.trace("Login webview content updated.");
+        logger?.trace("Login webview content updated.");
     }
 
     /**
@@ -142,6 +150,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         );
     }
 
+    /**
+     * Returns a simple login HTML page with VS Code styling.
+     * @param webview The webview instance.
+     * @returns A promise resolving to an HTML string.
+     */
     /**
      * Returns a simple login HTML page with VS Code styling.
      * @param webview The webview instance.
@@ -197,7 +210,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                   margin-bottom: 0.25em;
                   color: var(--vscode-editor-foreground);
               }
-              input {
+              input[type="text"],
+              input[type="password"] {
                   width: 100%;
                   padding: 0.5em;
                   border: 1px solid var(--vscode-input-border);
@@ -219,6 +233,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
               }
               button:hover {
                   background-color: var(--vscode-button-hoverBackground);
+              }
+              /* Optional styling for checkboxes */
+              .checkbox-container {
+                  display: flex;
+                  align-items: center;
+              }
+              .checkbox-container input {
+                  margin-right: 0.5em;
               }
           </style>
       </head>
@@ -252,6 +274,18 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                       (await this.extensionContext?.secrets.get("password")) || ""
                   }" required/>
               </div>
+              <div class="checkbox-container">
+                  <input id="autoLogin" type="checkbox" ${
+                      getConfig().get<boolean>("automaticLoginAfterExtensionActivation", false) ? "checked" : ""
+                  }/>
+                  <label for="autoLogin">Auto Login</label>
+              </div>
+              <div class="checkbox-container">
+                  <input id="savePassword" type="checkbox" ${
+                      getConfig().get<boolean>("storePasswordAfterLogin", false) ? "checked" : ""
+                  }/>
+                  <label for="savePassword">Save Password</label>
+              </div>
               <div>
                   <button id="submitBtn" type="submit">Submit</button>
               </div>
@@ -263,7 +297,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                   const portNumber = document.getElementById('portNumber').value;
                   const username = document.getElementById('username').value;
                   const password = document.getElementById('password').value;
-                  vscode.postMessage({ command: 'login', serverName, portNumber, username, password });
+                  const autoLogin = document.getElementById('autoLogin').checked;
+                  const savePassword = document.getElementById('savePassword').checked;
+                  vscode.postMessage({ command: 'login', serverName, portNumber, username, password, autoLogin, savePassword });
               }
               window.addEventListener('message', (event) => {
                   const message = event.data;
