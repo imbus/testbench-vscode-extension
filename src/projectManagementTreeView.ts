@@ -111,14 +111,9 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      *
      * @param jsonData The raw JSON data.
      * @param parent The parent tree item.
-     * @param isRoot Indicates if this item is the root.
      * @returns A new TestbenchTreeItem or null.
      */
-    private createTreeItem(
-        jsonData: any,
-        parent: ProjectManagementTreeItem | null,
-        isRoot: boolean = false
-    ): ProjectManagementTreeItem | null {
+    private createTreeItem(jsonData: any, parent: ProjectManagementTreeItem | null): ProjectManagementTreeItem | null {
         if (!jsonData) {
             return null;
         }
@@ -169,7 +164,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             const projectTree: testBenchTypes.TreeNode | null = await connection.getProjectTreeOfProject(
                 this.currentProjectKeyInView
             );
-            const rootItem: ProjectManagementTreeItem | null = this.createTreeItem(projectTree, null, true);
+            const rootItem: ProjectManagementTreeItem | null = this.createTreeItem(projectTree, null);
             return rootItem ? [rootItem] : [];
         }
         if (element.contextValue === "Cycle") {
@@ -247,8 +242,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                             data.elementType === "TestCaseSetNode"
                                 ? vscode.TreeItemCollapsibleState.None
                                 : hasChildren
-                                ? vscode.TreeItemCollapsibleState.Collapsed
-                                : vscode.TreeItemCollapsibleState.None,
+                                  ? vscode.TreeItemCollapsibleState.Collapsed
+                                  : vscode.TreeItemCollapsibleState.None,
                             data,
                             element
                         );
@@ -461,34 +456,34 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
                 planned: "projects.svg",
                 finished: "projects.svg",
                 closed: "projects.svg",
-                default: "projects.svg",
+                default: "projects.svg"
             },
             Version: {
                 active: "TOV-specification.svg",
                 planned: "TOV-specification.svg",
                 finished: "TOV-specification.svg",
                 closed: "TOV-specification.svg",
-                default: "TOV-specification.svg",
+                default: "TOV-specification.svg"
             },
             Cycle: {
                 active: "Cycle-execution.svg",
                 planned: "Cycle-execution.svg",
                 finished: "Cycle-execution.svg",
                 closed: "Cycle-execution.svg",
-                default: "Cycle-execution.svg",
+                default: "Cycle-execution.svg"
             },
             TestThemeNode: {
-                default: "TestThemeOriginal.svg",
+                default: "TestThemeOriginal.svg"
             },
             TestCaseSetNode: {
-                default: "TestCaseSetOriginal.svg",
+                default: "TestCaseSetOriginal.svg"
             },
             TestCaseNode: {
-                default: "TestCase.svg",
+                default: "TestCase.svg"
             },
             default: {
-                default: "TBU_Logo_cropped.svg",
-            },
+                default: "TBU_Logo_cropped.svg"
+            }
         };
         const typeIcons: Record<string, string> = iconMap[type as keyof typeof iconMap] || iconMap["default"];
         const iconFileName: string = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
@@ -527,14 +522,14 @@ export async function initializeTreeViews(
     const testThemeDataProvider = new TestThemeTreeDataProvider();
 
     testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
-        treeDataProvider: testThemeDataProvider,
+        treeDataProvider: testThemeDataProvider
     });
 
     projectManagementDataProvider = new ProjectManagementTreeDataProvider(selectedProjectKey, testThemeDataProvider);
 
     setProjectTreeView(
         vscode.window.createTreeView("projectManagementTree", {
-            treeDataProvider: projectManagementDataProvider,
+            treeDataProvider: projectManagementDataProvider
         })
     );
 
@@ -577,7 +572,7 @@ export async function hideProjectManagementTreeView(): Promise<void> {
 /**
  * Displays the project management tree view.
  */
-export async function displayProjectManagementTreeView(): Promise<void> {    
+export async function displayProjectManagementTreeView(): Promise<void> {
     await vscode.commands.executeCommand("projectManagementTree.focus");
 }
 

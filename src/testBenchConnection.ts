@@ -21,14 +21,12 @@ import {
     folderNameOfTestbenchWorkingDirectory,
     setProjectManagementTreeDataProvider,
     logger,
-    loginWebViewProvider,
+    loginWebViewProvider
 } from "./extension";
 import * as utils from "./utils";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
-
 
 /**
  * Class representing a connection to the new TestBench Play server.
@@ -62,8 +60,8 @@ export class PlayServerConnection {
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
             httpsAgent: new https.Agent({
-                rejectUnauthorized: false, // TODO: Use true in production.
-            }),
+                rejectUnauthorized: false // TODO: Use true in production.
+            })
         });
 
         // Start the keep-alive process immediately to prevent session timeout after 5 minutes
@@ -120,7 +118,7 @@ export class PlayServerConnection {
     ): Promise<string | null> {
         const projectNames: string[] = projectsData.map((project) => project.name);
         const selectedProjectName: string | undefined = await vscode.window.showQuickPick(projectNames, {
-            placeHolder: "Select a project",
+            placeHolder: "Select a project"
         });
 
         if (!selectedProjectName) {
@@ -151,7 +149,7 @@ export class PlayServerConnection {
         try {
             const projectsURL = `/projects/v1`;
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await this.apiClient.get(projectsURL, {
-                headers: { accept: "application/vnd.testbench+json" },
+                headers: { accept: "application/vnd.testbench+json" }
             });
 
             // Save the response from server to a file for analyzing the structure
@@ -270,19 +268,19 @@ export class PlayServerConnection {
                 // Use loginName as username, and use sessionToken as the password
                 auth: {
                     username: getConfig().get<string>("username")!,
-                    password: this.sessionToken,
+                    password: this.sessionToken
                 },
                 headers: {
                     // Manually encode the credentials to Base64
                     Authorization: `Basic ${base64.encode(
                         `${getConfig().get<string>("username")}:${this.sessionToken}`
                     )}`,
-                    "Content-Type": "application/vnd.testbench+json; charset=utf-8",
+                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
                 // Ignore self-signed certificates
                 httpsAgent: new https.Agent({
-                    rejectUnauthorized: false, //TODO: This should only be used in a development environment
-                }),
+                    rejectUnauthorized: false //TODO: This should only be used in a development environment
+                })
             });
 
             logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
@@ -338,7 +336,7 @@ export class PlayServerConnection {
             suppressFilteredData: false,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
-            filters: [],
+            filters: []
         };
 
         try {
@@ -348,8 +346,8 @@ export class PlayServerConnection {
                 {
                     headers: {
                         accept: "application/json",
-                        "Content-Type": "application/json",
-                    },
+                        "Content-Type": "application/json"
+                    }
                 }
             );
 
@@ -397,7 +395,7 @@ export class PlayServerConnection {
         logger.trace("Logging out user.");
         try {
             const logoutResponse: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" },
+                headers: { accept: "application/vnd.testbench+json" }
             });
 
             if (logoutResponse.status === 204) {
@@ -463,10 +461,10 @@ export class PlayServerConnection {
             const uploadZipResponse: AxiosResponse = await this.apiClient.post(uploadResultZipURL, zipFileData, {
                 headers: {
                     "Content-Type": "application/zip",
-                    accept: "application/json",
+                    accept: "application/json"
                 },
                 // Use this when you want to handle all status codes manually, otherwise Axios will throw an error for non-2xx status codes
-                validateStatus: () => true,
+                validateStatus: () => true
             });
 
             switch (uploadZipResponse.status) {
@@ -536,9 +534,9 @@ export class PlayServerConnection {
             const importJobIDResponse: AxiosResponse = await this.apiClient.post(getJobIDOfImportUrl, importData, {
                 headers: {
                     "Content-Type": "application/json",
-                    accept: "application/json",
+                    accept: "application/json"
                 },
-                validateStatus: () => true,
+                validateStatus: () => true
             });
 
             switch (importJobIDResponse.status) {
@@ -603,9 +601,12 @@ export class PlayServerConnection {
      */
     private startKeepAlive(): void {
         this.stopKeepAlive(); // Prevent multiple intervals.
-        this.keepAliveIntervalId = setInterval(() => {
-            this.sendKeepAliveRequest();
-        }, 4 * 60 * 1000); // Every 4 minutes
+        this.keepAliveIntervalId = setInterval(
+            () => {
+                this.sendKeepAliveRequest();
+            },
+            4 * 60 * 1000
+        ); // Every 4 minutes
         // Send an immediate keep-alive request.
         this.sendKeepAliveRequest();
         logger.trace("Keep-alive started.");
@@ -631,7 +632,7 @@ export class PlayServerConnection {
         }
         try {
             await this.apiClient.get(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" },
+                headers: { accept: "application/vnd.testbench+json" }
             });
             logger.trace("Keep-alive request sent.");
         } catch (error) {
@@ -674,7 +675,7 @@ async function promptForInputAndValidate(
                     return validateInputFunction(value);
                 }
                 return null;
-            },
+            }
         });
 
         if (input === undefined || input.toLowerCase() === "quit") {
@@ -763,7 +764,7 @@ export async function performLogin(
             portNumber = getConfig().get<number>("portNumber")!;
             username = getConfig().get<string>("username")!;
         } else {
-            const credentials = await promptForLoginCredentials(baseKey);
+            const credentials = await promptForLoginCredentials();
             if (!credentials) {
                 vscode.window.showInformationMessage("Login process aborted.");
                 logger.debug("Login process aborted.");
@@ -803,11 +804,10 @@ export async function performLogin(
 /**
  * Prompts the user for login credentials.
  *
- * @param baseKey - The base key for configuration.
  * @returns {Promise<{ serverName: string; portNumber: number; username: string; password: string } | null>}
  * An object containing serverName, portNumber, username, and password or null if aborted.
  */
-async function promptForLoginCredentials(baseKey: string): Promise<{
+async function promptForLoginCredentials(): Promise<{
     serverName: string;
     portNumber: number;
     username: string;
@@ -893,14 +893,14 @@ export async function loginToNewPlayServerAndInitSessionToken(
     const requestBody: testBenchTypes.LoginRequestBody = {
         login: username,
         password: password,
-        force: true,
+        force: true
     };
     try {
         const connection = await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
                 title: "Logging in",
-                cancellable: true,
+                cancellable: true
             },
             async (progress) => {
                 const baseURL = `https://${serverName}:${portNumber}/api`;
@@ -915,11 +915,11 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     {
                         headers: {
                             accept: "application/vnd.testbench+json",
-                            "Content-Type": "application/vnd.testbench+json",
+                            "Content-Type": "application/vnd.testbench+json"
                         },
                         httpsAgent: new https.Agent({
-                            rejectUnauthorized: false,
-                        }),
+                            rejectUnauthorized: false
+                        })
                     }
                 );
 
@@ -929,8 +929,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
                         await context.secrets.store("password", password);
                         logger.trace("Password stored securely.");
-                    }
-                    else {
+                    } else {
                         logger.trace("@@@@ User chose not to store password.");
                     }
                     // Starts keep alive in the constructor of PlayServerConnection
@@ -1006,7 +1005,7 @@ async function fetchServerVersions(
             serverVersionsURL,
             {
                 headers: { Accept: "application/vnd.testbench+json" },
-                httpsAgent: new https.Agent({ rejectUnauthorized: false }), // TODO: true in production
+                httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: true in production
             }
         );
 
@@ -1056,7 +1055,7 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
             canSelectMany: false,
             canSelectFiles: true,
             canSelectFolders: false,
-            filters: { "Zip Files": ["zip"] },
+            filters: { "Zip Files": ["zip"] }
         };
 
         const fileUri = await vscode.window.showOpenDialog(options);
@@ -1100,7 +1099,9 @@ function findCycleKeyFromCycleNameRecursively(treeElements: any[], cycleName: st
         const children: any[] = element.item?.children || element.children;
         if (children && children.length > 0) {
             const foundCycleKey = findCycleKeyFromCycleNameRecursively(children, cycleName);
-            if (foundCycleKey) return foundCycleKey;
+            if (foundCycleKey) {
+                return foundCycleKey;
+            }
         }
     }
     return null;
@@ -1189,7 +1190,7 @@ export async function importReportWithResultsToTestbench(
                     testThemeUID: "themeUID456",
                 },
                 */
-            ],
+            ]
         };
 
         try {
@@ -1239,7 +1240,7 @@ export async function selectReportWithResultsAndImportToTestbench(
         {
             location: vscode.ProgressLocation.Notification,
             title: `Importing results to TestBench server`,
-            cancellable: true,
+            cancellable: true
         },
         async (progress) => {
             progress.report({ message: "Selecting report file with results.", increment: 30 });
@@ -1249,11 +1250,7 @@ export async function selectReportWithResultsAndImportToTestbench(
                 return null;
             }
             progress.report({ message: "Importing report file.", increment: 30 });
-            const importReportOutcome = await importReportWithResultsToTestbench(
-                connection,
-                projectManagementTreeDataProvider,
-                resultZipFilePath
-            );
+            await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
             progress.report({ message: "Cleaning up.", increment: 30 });
             await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
         }
@@ -1300,5 +1297,3 @@ async function extractDataFromReport(zipFilePath: string): Promise<{
         return { uniqueID: null, projectKey: null, cycleNameOfProject: null };
     }
 }
-
-

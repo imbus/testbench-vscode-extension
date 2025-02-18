@@ -244,7 +244,7 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     // Prompt the user to enter a new workspace location.
     const newWorkspaceLocation = await vscode.window.showInputBox({
         placeHolder: "Enter the new workspace location...",
-        prompt: "No workspace location found. Please set a workspace location or press Escape to cancel.",
+        prompt: "No workspace location found. Please set a workspace location or press Escape to cancel."
     });
 
     if (newWorkspaceLocation && newWorkspaceLocation.trim()) {
@@ -287,9 +287,9 @@ export async function fileExistsAsync(filePath: string): Promise<boolean> {
 export function saveJsonDataToFile(filePath: string, data: any): void {
     try {
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-        // logger.trace(`JSON data saved to ${filePath}`);
+        logger.trace(`JSON data saved to file: ${filePath}`);
     } catch (error: any) {
-        // logger.error(`Error saving JSON data to ${filePath}: ${error.message}`);
+        logger.error(`Error saving JSON data to ${filePath}: ${error.message}`);
     }
 }
 

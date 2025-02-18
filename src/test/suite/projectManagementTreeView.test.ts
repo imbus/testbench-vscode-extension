@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import {
     ProjectManagementTreeDataProvider,
     ProjectManagementTreeItem,
-    findProjectKeyOfCycleElement,
+    findProjectKeyOfCycleElement
 } from "../../projectManagementTreeView";
 import { PlayServerConnection } from "../../testBenchConnection";
 import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
@@ -20,10 +20,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
         sandbox = sinon.createSandbox();
         connectionStub = sandbox.createStubInstance(PlayServerConnection);
         testThemeDataProviderStub = sandbox.createStubInstance(TestThemeTreeDataProvider);
-        treeDataProvider = new ProjectManagementTreeDataProvider(
-            "projectKey",
-            testThemeDataProviderStub
-        );
+        treeDataProvider = new ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
     });
 
     teardown(() => {
@@ -71,9 +68,14 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     */
 
     test("findProjectKeyOfCycle should return project key of a cycle element", () => {
-        const projectElement = new ProjectManagementTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
-            key: "projectKey",
-        });
+        const projectElement = new ProjectManagementTreeItem(
+            "Project",
+            "Project",
+            vscode.TreeItemCollapsibleState.Collapsed,
+            {
+                key: "projectKey"
+            }
+        );
         const cycleElement = new ProjectManagementTreeItem(
             "Cycle",
             "Cycle",
@@ -88,9 +90,14 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     test("handleTestCycleClick should initialize test theme tree", async () => {
-        const cycleElement = new ProjectManagementTreeItem("Cycle Label", "Cycle", vscode.TreeItemCollapsibleState.None, {
-            key: "cycleKey",
-        });
+        const cycleElement = new ProjectManagementTreeItem(
+            "Cycle Label",
+            "Cycle",
+            vscode.TreeItemCollapsibleState.None,
+            {
+                key: "cycleKey"
+            }
+        );
         const cycleData: testBenchTypes.CycleStructure = {
             root: {
                 base: {
@@ -99,10 +106,10 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
                     parentKey: "parentKey",
                     name: "Root Name",
                     uniqueID: "uniqueID",
-                    matchesFilter: true,
+                    matchesFilter: true
                 },
                 filters: [],
-                elementType: "RootElementType",
+                elementType: "RootElementType"
             },
             nodes: [
                 {
@@ -112,15 +119,15 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
                         numbering: "1",
                         name: "Test Theme",
                         uniqueID: "uniqueID",
-                        matchesFilter: true,
+                        matchesFilter: true
                     },
                     elementType: "TestThemeNode",
                     spec: { key: "specKey", locker: null, status: "active" },
                     aut: { key: "autKey", locker: null, status: "active" },
                     exec: { key: "execKey", locker: null, status: "active", execStatus: "pending", verdict: "none" },
-                    filters: [],
-                },
-            ],
+                    filters: []
+                }
+            ]
         };
         connectionStub.fetchCycleStructureOfCycleInProject.resolves(cycleData);
 

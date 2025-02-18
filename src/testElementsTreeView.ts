@@ -126,10 +126,18 @@ function matchesRegex(value: string, regexList: RegExp[]): boolean {
  * @returns {ElementType} The type of the test element.
  */
 function getTestElementItemType(item: any): ElementType {
-    if (item.Subdivision_key && item.Subdivision_key.serial) return "Subdivision";
-    if (item.Interaction_key && item.Interaction_key.serial) return "Interaction";
-    if (item.Condition_key && item.Condition_key.serial) return "Condition";
-    if (item.DataType_key && item.DataType_key.serial) return "DataType";
+    if (item.Subdivision_key && item.Subdivision_key.serial) {
+        return "Subdivision";
+    }
+    if (item.Interaction_key && item.Interaction_key.serial) {
+        return "Interaction";
+    }
+    if (item.Condition_key && item.Condition_key.serial) {
+        return "Condition";
+    }
+    if (item.DataType_key && item.DataType_key.serial) {
+        return "DataType";
+    }
     return "Other";
 }
 
@@ -226,7 +234,7 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
             details: item,
             elementType: testElementType,
             directRegexMatch: directRegexMatch,
-            children: [],
+            children: []
         };
 
         // Store the current element in the map.
@@ -329,7 +337,7 @@ const iconMapping: Record<ElementType, string> = {
     DataType: "dataType.svg",
     Interaction: "testStep.svg",
     Condition: "condition.svg",
-    Other: "other.svg",
+    Other: "other.svg"
 };
 
 /**
@@ -393,7 +401,7 @@ export class TestElementItem extends vscode.TreeItem {
         // Set the icon based on the element type.
         this.iconPath = {
             light: getIconUri(element.elementType),
-            dark: getIconUri(element.elementType),
+            dark: getIconUri(element.elementType)
         };
     }
 }
@@ -493,7 +501,7 @@ export async function handleSubdivision(testElement: TestElement, baseTargetPath
     logger.trace(`Subdivision '${testElement.name}' is ${isFinalSubdivision ? "final" : "not final"}.`);
     baseTargetPath = removeRobotResourceFromPathString(baseTargetPath);
     if (isFinalSubdivision) {
-        let targetPath = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
+        const targetPath = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
         if (!(await utils.fileExistsAsync(targetPath))) {
             const dirName = path.dirname(targetPath);
             await fs.promises.mkdir(dirName, { recursive: true });
@@ -512,7 +520,8 @@ export async function handleSubdivision(testElement: TestElement, baseTargetPath
         try {
             const stats = await fs.promises.stat(baseTargetPath);
             folderExists = stats.isDirectory();
-        } catch (err) {
+        } catch {
+            // No need to specify the catched error since we don't use it.
             folderExists = false;
         }
         if (!folderExists) {

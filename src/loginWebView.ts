@@ -37,7 +37,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         // Enable scripts in the webview.
         webviewView.webview.options = {
-            enableScripts: true,
+            enableScripts: true
         };
 
         // Set initial HTML content based on connection status.

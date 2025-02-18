@@ -1,4 +1,3 @@
-import { strict as assert } from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { TestBenchLogger } from "../../testBenchLogger";
@@ -12,7 +11,6 @@ suite("TestBenchLogger Tests", async () => {
 
     const logger = new TestBenchLogger();
     const logFilePathOfLogger = logger.getLogFilePath();
-    const logFolderPathOfLogger = logger.getLogFolderPath();
 
     setup(async () => {
         // Ensure the log directory is clean before each test

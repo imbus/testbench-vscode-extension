@@ -34,7 +34,7 @@ suite("Extension Test Suite", () => {
         getConfigurationStub = sandbox.stub(vscode.workspace, "getConfiguration") as sinon.SinonStub;
         getConfigurationStub.returns({
             get: sandbox.stub().returns("defaultValue"),
-            update: sandbox.stub().resolves(),
+            update: sandbox.stub().resolves()
         } as unknown as vscode.WorkspaceConfiguration);
 
         // Mock the ExtensionContext
@@ -43,8 +43,8 @@ suite("Extension Test Suite", () => {
             secrets: {
                 get: sandbox.stub().resolves("storedPassword"),
                 store: sandbox.stub().resolves(),
-                delete: sandbox.stub().resolves(),
-            },
+                delete: sandbox.stub().resolves()
+            }
         } as unknown as vscode.ExtensionContext;
 
         // Mock the logger
@@ -61,7 +61,7 @@ suite("Extension Test Suite", () => {
         // Stub the VS Code API
         sandbox.stub(vscode.workspace, "getConfiguration").returns({
             get: sandbox.stub().returns("defaultValue"),
-            update: sandbox.stub().resolves(),
+            update: sandbox.stub().resolves()
         } as unknown as vscode.WorkspaceConfiguration);
 
         sandbox.stub(vscode.window, "showErrorMessage").resolves();
@@ -101,18 +101,18 @@ suite("Extension Test Suite", () => {
 
         await safeHandler();
 
-        assert.ok(loggerStub.error.calledWith("Error executing command:", error), "Error should be logged");        
+        assert.ok(loggerStub.error.calledWith("Error executing command:", error), "Error should be logged");
     });
 
     test("promptForWorkspaceLocation should prompt the user and return the selected path", async () => {
-        const path = await promptForWorkspaceLocation();        
+        const path = await promptForWorkspaceLocation();
         assert.strictEqual(path, "/fake/path", "Selected path should be returned");
     });
 
     test("loadConfiguration should update the configuration", async () => {
         await loadConfiguration(context);
 
-        assert.ok(getConfigurationStub.calledWith(baseKeyOfExtension), "Configuration should be loaded");        
+        assert.ok(getConfigurationStub.calledWith(baseKeyOfExtension), "Configuration should be loaded");
     });
 
     test("initializeTreeViews should initialize the tree views", () => {

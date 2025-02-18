@@ -45,24 +45,24 @@ export const defaultTestbench2robotframeworkConfig: Testbench2robotframeworkConf
     "compound-interaction-logging": "GROUP",
     "library-mapping": {
         SeleniumLibrary: "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
-        SuperRemoteLibrary: "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary",
+        SuperRemoteLibrary: "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
     },
     "resource-mapping": {
         MyKeywords: "{root}/../MyKeywords.resource",
-        MyOtherKeywords: "{resourceDirectory}/subdir/MyOtherKeywords.resource",
+        MyOtherKeywords: "{resourceDirectory}/subdir/MyOtherKeywords.resource"
     },
     forcedImport: {
         libraries: [],
         resources: [],
-        variables: [],
+        variables: []
     },
     testCaseSplitPathRegEx: "^StopWithRestart\\..*",
     "console-logging": {
-        logLevel: "debug",
+        logLevel: "debug"
     },
     "file-logging": {
-        logLevel: "info",
-    },
+        logLevel: "info"
+    }
 };
 
 // Store the last successfully generated report parameters for test generation to be able to fetch the report again for read command

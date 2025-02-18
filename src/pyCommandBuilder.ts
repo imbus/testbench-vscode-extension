@@ -55,9 +55,8 @@ export class PyCommandBuilder {
                 : pythonApi.environments.getActiveEnvironmentPath();
 
             // Resolve the environment details.
-            const environment: ResolvedEnvironment | undefined = await pythonApi.environments.resolveEnvironment(
-                environmentPath
-            );
+            const environment: ResolvedEnvironment | undefined =
+                await pythonApi.environments.resolveEnvironment(environmentPath);
             const pythonExecutablePath = environment?.executable.uri?.fsPath;
             if (!pythonExecutablePath) {
                 logger.error("Failed to resolve Python executable path from the active environment.");
@@ -94,5 +93,5 @@ export class PyCommandBuilder {
         const commandString = `${pythonExe} -u ${tb2RobotMainFile}`;
         logger.trace(`Built tb2robot command: ${commandString}`);
         return commandString;
-    }    
+    }
 }

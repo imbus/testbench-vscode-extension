@@ -27,33 +27,34 @@ export class tb2robotLib {
         commandExecutionDirectory: string,
         reportPath: string
     ): Promise<void> {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const commandBase: string = await PyCommandBuilder.buildTb2RobotCommand(context);
-                const generateTestsCommand: string = `generate-tests`;
+        return new Promise((resolve, reject) => {
+            (async () => {
+                try {
+                    const commandBase: string = await PyCommandBuilder.buildTb2RobotCommand(context);
+                    const generateTestsCommand: string = `generate-tests`;
 
-                // Get the options from extension settings.
-                const options = await this.getTb2RobotGenerateTestOptionsFromSettings();
+                    // Get the options from extension settings.
+                    const options = await this.getTb2RobotGenerateTestOptionsFromSettings();
 
-                const optionsString = this.buildOptionsStringForTestGeneration(options);
-                const commandToExecute = `${commandBase} ${generateTestsCommand} ${optionsString} ${reportPath}`;
-                logger.debug(`Executing generate-tests command: ${commandToExecute}`);
+                    const optionsString = this.buildOptionsStringForTestGeneration(options);
+                    const commandToExecute = `${commandBase} ${generateTestsCommand} ${optionsString} ${reportPath}`;
+                    logger.debug(`Executing generate-tests command: ${commandToExecute}`);
 
-                // { cwd: commandExecutionDirectory } sets the current working directory of the child process to commandExecutionDirectory.
-                // It will be as if you changed directories into commandExecutionDirectory before executing the command.
-                exec(commandToExecute, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
-                    if (error) {
-                        logger.error("Error while executing generate-tests command:", error);
-                        reject(stderr || stdout || "An unknown error occurred.");
-                        return;
-                    }
-                    logger.debug("Output of generate-tests command:", stdout || stderr);
-                    resolve();
-                });
-            } catch (error) {
-                logger.error("Exception in executeTb2robotGenerateTestsCommand:", error);
-                reject(error);
-            }
+                    // { cwd: commandExecutionDirectory } sets the current working directory of the child process to commandExecutionDirectory.
+                    // It will be as if you changed directories into commandExecutionDirectory before executing the command.
+                    exec(commandToExecute, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
+                        if (error) {
+                            logger.error("Error while executing generate-tests command:", error);
+                            reject(stderr || stdout || "An unknown error occurred.");
+                            return;
+                        }
+                        resolve();
+                    });
+                } catch (error) {
+                    logger.error("Exception in executeTb2robotGenerateTestsCommand:", error);
+                    reject(error);
+                }
+            })();
         });
     }
 
@@ -68,26 +69,28 @@ export class tb2robotLib {
         context: vscode.ExtensionContext,
         commandExecutionDirectory: string
     ): Promise<void> {
-        return new Promise(async (resolve, reject) => {
-            try {
-                logger.trace("Checking the version of the tb2robot library.");
-                const commandBase: string = await PyCommandBuilder.buildTb2RobotCommand(context);
-                const commandToExecute: string = `${commandBase} --version`;
+        return new Promise((resolve, reject) => {
+            (async () => {
+                try {
+                    logger.trace("Checking the version of the tb2robot library.");
+                    const commandBase: string = await PyCommandBuilder.buildTb2RobotCommand(context);
+                    const commandToExecute: string = `${commandBase} --version`;
 
-                logger.debug(`Executing version command in ${commandExecutionDirectory}: ${commandToExecute}`);
+                    logger.debug(`Executing version command in ${commandExecutionDirectory}: ${commandToExecute}`);
 
-                exec(commandToExecute, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
-                    if (error) {
-                        reject(stderr || stdout || "An unknown error occurred.");
-                        return;
-                    }
-                    logger.debug("Output of --version command:", stdout || stderr);
-                    resolve();
-                });
-            } catch (error) {
-                logger.error("Exception in executeTb2robotVersionCommand:", error);
-                reject(error);
-            }
+                    exec(commandToExecute, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
+                        if (error) {
+                            reject(stderr || stdout || "An unknown error occurred.");
+                            return;
+                        }
+                        logger.debug("Output of --version command:", stdout || stderr);
+                        resolve();
+                    });
+                } catch (error) {
+                    logger.error("Exception in executeTb2robotVersionCommand:", error);
+                    reject(error);
+                }
+            })();
         });
     }
 
@@ -108,50 +111,52 @@ export class tb2robotLib {
         testbenchReportWithoutResultsPath: string,
         resultPath?: string // Name of the result file will be already generated by calling function, no need to use --output-directory option
     ): Promise<void> {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const commandBase: string = await PyCommandBuilder.buildTb2RobotCommand(context);
-                const fetchResultsCommand: string = `fetch-results`;
-                let options = "";
+        return new Promise((resolve, reject) => {
+            (async () => {
+                try {
+                    const commandBase: string = await PyCommandBuilder.buildTb2RobotCommand(context);
+                    const fetchResultsCommand: string = `fetch-results`;
+                    let options = "";
 
-                // To use relative paths to workspace location in extension settings, we need to get the workspace location to construct the full path.
-                const relativeTb2robotConfigPath: string | undefined = getConfig().get<string>(
-                    "configurationPathInTestbench2robotframework"
-                );
-                if (!relativeTb2robotConfigPath) {
-                    logger.warn("Relative Tb2robot Config path is not set in extension settings.");
-                } else {
-                    logger.trace(`Relative Tb2robot Config path: ${relativeTb2robotConfigPath}`);
-                    const absoluteTb2robotConfigPath: string | null = await utils.constructAbsolutePathFromRelativePath(
-                        relativeTb2robotConfigPath,
-                        true
+                    // To use relative paths to workspace location in extension settings, we need to get the workspace location to construct the full path.
+                    const relativeTb2robotConfigPath: string | undefined = getConfig().get<string>(
+                        "configurationPathInTestbench2robotframework"
                     );
-                    // Construct the absolute path of the configuration file and verify its existence.
-                    if (absoluteTb2robotConfigPath) {
-                        options += ` --config ${absoluteTb2robotConfigPath}`;
+                    if (!relativeTb2robotConfigPath) {
+                        logger.warn("Relative Tb2robot Config path is not set in extension settings.");
+                    } else {
+                        logger.trace(`Relative Tb2robot Config path: ${relativeTb2robotConfigPath}`);
+                        const absoluteTb2robotConfigPath: string | null =
+                            await utils.constructAbsolutePathFromRelativePath(relativeTb2robotConfigPath, true);
+                        // Construct the absolute path of the configuration file and verify its existence.
+                        if (absoluteTb2robotConfigPath) {
+                            options += ` --config ${absoluteTb2robotConfigPath}`;
+                        }
                     }
-                }
 
-                if (resultPath) {
-                    options += ` --output-directory ${resultPath}`;
-                }
-
-                logger.trace(`Options for fetch-results command: ${options}`);
-
-                const commandToExecute = `${commandBase} ${fetchResultsCommand} ${options} ${robotOutputXmlPath} ${testbenchReportWithoutResultsPath}`;
-                logger.debug(`Executing fetch-results command in ${commandExecutionDirectory}: ${commandToExecute}`);
-
-                exec(commandToExecute, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
-                    if (error) {
-                        reject(stderr || stdout || "An unknown error occurred.");
-                        return;
+                    if (resultPath) {
+                        options += ` --output-directory ${resultPath}`;
                     }
-                    resolve();
-                });
-            } catch (error) {
-                logger.error("Exception in executeTb2robotFetchResultsCommand:", error);
-                reject(error);
-            }
+
+                    logger.trace(`Options for fetch-results command: ${options}`);
+
+                    const commandToExecute = `${commandBase} ${fetchResultsCommand} ${options} ${robotOutputXmlPath} ${testbenchReportWithoutResultsPath}`;
+                    logger.debug(
+                        `Executing fetch-results command in ${commandExecutionDirectory}: ${commandToExecute}`
+                    );
+
+                    exec(commandToExecute, { cwd: commandExecutionDirectory }, (error, stdout, stderr) => {
+                        if (error) {
+                            reject(stderr || stdout || "An unknown error occurred.");
+                            return;
+                        }
+                        resolve();
+                    });
+                } catch (error) {
+                    logger.error("Exception in executeTb2robotFetchResultsCommand:", error);
+                    reject(error);
+                }
+            })();
         });
     }
 
@@ -367,11 +372,11 @@ export class tb2robotLib {
         };
 
         addArrayOptionIfSet("library-regex", "libraryRegexInTestbench2robotframework", [
-            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*",
+            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*"
         ]);
         addArrayOptionIfSet("library-root", "libraryRootInTestbench2robotframework", ["RF", "RF-Library"]);
         addArrayOptionIfSet("resource-regex", "resourceRegexInTestbench2robotframework", [
-            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*",
+            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*"
         ]);
         addArrayOptionIfSet("resource-root", "resourceRootInTestbench2robotframework", ["RF-Resource"]);
         addArrayOptionIfSet("library-mapping", "libraryMappingInTestbench2robotframework", []);

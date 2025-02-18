@@ -5,7 +5,7 @@
 
 import * as vscode from "vscode";
 import { ProjectManagementTreeItem } from "./projectManagementTreeView";
-import { logger } from "./extension";7
+import { logger } from "./extension";
 
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display
@@ -68,7 +68,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
      * @param roots An array of TestbenchTreeItems to set as roots.
      */
     setRoots(roots: ProjectManagementTreeItem[]): void {
-        logger.trace("Setting root elements of the test theme tree to:", roots);
+        // Output of roots is circular and large, so it is commented out.
+        // logger.trace("Setting root elements of the test theme tree to:", roots);
         this.rootElements = roots;
         this.refresh();
     }

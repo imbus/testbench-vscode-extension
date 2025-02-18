@@ -1,576 +1,577 @@
 {
-  "name": "testbench-visual-studio-code-extension",
-  "publisher": "imbus",
-  "displayName": "TestBench Visual Studio Code Extension",
-  "description": "A Visual Studio Code extension for TestBench.",
-  "icon": "resources/icons/iTB-EE-Logo-256x256.png",
-  "version": "0.0.1",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/imbus/testbench-vs-code-extension"
-  },
-  "engines": {
-    "vscode": "^1.95.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onView:testBenchExplorer"
-  ],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "configuration": [
-      {
-        "title": "Login",
-        "properties": {
-          "testbenchExtension.serverName": {
-            "type": "string",
-            "default": "testbench",
-            "description": "The hostname or IP address of the TestBench server that the extension will connect to.",
-            "order": 1,
-            "scope": "resource"
-          },
-          "testbenchExtension.portNumber": {
-            "type": "number",
-            "default": 9445,
-            "description": "The port number on which the TestBench server is listening for incoming connections.",
-            "order": 2,
-            "scope": "resource"
-          },
-          "testbenchExtension.username": {
-            "type": "string",
-            "description": "The username used for authentication when connecting to the TestBench server.",
-            "order": 3,
-            "scope": "resource"
-          },
-          "testbenchExtension.storePasswordAfterLogin": {
-            "type": "boolean",
-            "default": false,
-            "description": "If enabled, the extension will securely store the user's password after a successful login to facilitate automatic login in future sessions without prompting for credentials.",
-            "order": 4,
-            "scope": "resource"
-          },
-          "testbenchExtension.automaticLoginAfterExtensionActivation": {
-            "type": "boolean",
-            "default": false,
-            "description": "If enabled, the extension will automatically attempt to log in to the TestBench server using the stored credentials after the extension is activated.",
-            "order": 5,
-            "scope": "resource"
-          }
-        }
-      },
-      {
-        "title": "Workspace",
-        "properties": {
-          "testbenchExtension.workspaceLocation": {
-            "type": "string",
-            "description": "Specifies the absolute path to the local workspace or project directory. This directory is used for storing and processing local files during extension operations. A `.testbench` folder will be automatically created inside this directory by the extension to manage its files.",
-            "order": 6,
-            "scope": "resource"
-          },
-          "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
-            "type": "boolean",
-            "default": false,
-            "description": "Delete all files inside the working directory called .tesbench excluding the log files before generating tests.",
-            "order": 7,
-            "scope": "resource"
-          },
-          "testbenchExtension.clearReportAfterProcessing": {
-            "type": "boolean",
-            "default": true,
-            "description": "Remove the report file automatically after processing it.",
-            "order": 8,
-            "scope": "resource"
-          }
-        }
-      },
-      {
-        "title": "Logger",
-        "properties": {
-          "testbenchExtension.testBenchLogger": {
-            "type": "string",
-            "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
-            "default": "Trace",
-            "order": 9,
-            "enum": [
-              "No logging",
-              "Trace",
-              "Debug",
-              "Info",
-              "Warn",
-              "Error"
-            ],
-            "enumDescriptions": [
-              "Disable logging",
-              "Most detailed information",
-              "Detailed information",
-              "Information messages",
-              "Warning messages",
-              "Error messages"
-            ],
-            "scope": "resource"
-          }
-        }
-      },
-      {
-        "title": "Testbench2robotframework",
-        "properties": {
-          "testbenchExtension.configurationPathInTestbench2robotframework": {
-            "type": "string",
-            "description": "Path to the configuration file of testbench2robotframework library. The path is relative to the workspace location.",
-            "order": 10,
-            "scope": "resource"
-          },
-          "testbenchExtension.cleanFilesBeforeTestGenerationInTestbench2robotframework": {
-            "type": "boolean",
-            "default": true,
-            "description": "Deletes all files present in the output directory before new test suites are created.",
-            "order": 11,
-            "scope": "resource"
-          },
-          "testbenchExtension.fullyQualifiedKeywordsInTestbench2robotframework": {
-            "type": "boolean",
-            "default": false,
-            "description": "Option to call Robot Framework keywords by their fully qualified name in the generated test suites.",
-            "order": 12,
-            "scope": "resource"
-          },
-          "testbenchExtension.outputDirectoryInTestbench2robotframework": {
-            "type": "string",
-            "description": "Directory or ZIP archive containing the generated test suites for the generate tests command. The path is relative to the workspace location.",
-            "order": 13,
-            "scope": "resource"
-          },
-          "testbenchExtension.compoundInteractionLoggingInTestbench2robotframework": {
-            "type": "string",
-            "description": "Mode for logging compound interactions.",
-            "order": 14,
-            "default": "GROUP",
-            "enum": [
-              "GROUP",
-              "COMMENT",
-              "NONE"
-            ],
-            "enumDescriptions": [
-              "Group",
-              "Comment",
-              "None"
-            ],
-            "scope": "resource"
-          },
-          "testbenchExtension.logSuiteNumberingInTestbench2robotframework": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enables logging of the test suite numbering.",
-            "order": 15,
-            "scope": "resource"
-          },
-          "testbenchExtension.resourceDirectoryPathInTestbench2robotframework": {
-            "type": "string",
-            "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location.",
-            "order": 16,
-            "scope": "resource"
-          },
-          "testbenchExtension.libraryRegexInTestbench2robotframework": {
-            "type": "array",
-            "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*"
-            ],
-            "order": 17
-          },
-          "testbenchExtension.libraryRootInTestbench2robotframework": {
-            "type": "array",
-            "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "RF",
-              "RF-Library"
-            ],
-            "order": 18
-          },
-          "testbenchExtension.resourceRegexInTestbench2robotframework": {
-            "type": "array",
-            "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*"
-            ],
-            "order": 19
-          },
-          "testbenchExtension.resourceRootInTestbench2robotframework": {
-            "type": "array",
-            "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "RF-Resource"
-            ],
-            "order": 20
-          },
-          "testbenchExtension.libraryMappingInTestbench2robotframework": {
-            "type": "array",
-            "description": "Library mapping.",
-            "items": {
-              "type": "string"
-            },
-            "default": [],
-            "order": 21
-          },
-          "testbenchExtension.resourceMappingInTestbench2robotframework": {
-            "type": "array",
-            "description": "Resource mapping.",
-            "items": {
-              "type": "string"
-            },
-            "default": [],
-            "order": 22
-          },
-          "testbenchExtension.outputXmlFilePath": {
-            "type": "string",
-            "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server. The path is relative to the workspace location.",
-            "order": 23,
-            "scope": "resource"
-          }
-        }
-      }
-    ],
-    "commands": [
-      {
-        "command": "testbenchExtension.toggleWebViewVisibility",
-        "title": "Testbench: Toggle Login Web View Visibility"
-      },
-      {
-        "command": "testbenchExtension.login",
-        "title": "Testbench: Login",
-        "icon": {
-          "light": "resources/icons/login.svg",
-          "dark": "resources/icons/login.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.logout",
-        "title": "Testbench: Logout",
-        "icon": {
-          "light": "resources/icons/logout.svg",
-          "dark": "resources/icons/logout.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.setWorkspaceLocation",
-        "title": "TestBench: Set Workspace Location"
-      },
-      {
-        "command": "testbenchExtension.clearWorkspaceFolder",
-        "title": "TestBench: Clear TestBench Folder",
-        "icon": {
-          "light": "resources/icons/clearWorkspaceFolder.svg",
-          "dark": "resources/icons/clearWorkspaceFolder.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.toggleProjectManagementTreeViewVisibility",
-        "title": "TestBench: Toggle Project Tree View Visibility"
-      },
-      {
-        "command": "testbenchExtension.toggleTestThemeTreeViewVisibility",
-        "title": "TestBench: Toggle Test Theme Tree View Visibility"
-      },
-      {
-        "command": "testbenchExtension.generateTestCasesForCycle",
-        "title": "Generate Tests",
-        "icon": {
-          "light": "resources/icons/robot_dark.svg",
-          "dark": "resources/icons/robot_dark.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-        "title": "Generate Tests",
-        "icon": {
-          "light": "resources/icons/robot_dark.svg",
-          "dark": "resources/icons/robot_dark.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.fetchReportForSelectedTreeItem",
-        "title": "Fetch Report",
-        "icon": {
-          "light": "resources/icons/download.svg",
-          "dark": "resources/icons/download.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.makeRoot",
-        "title": "TestBench: Make root"
-      },
-      {
-        "command": "testbenchExtension.selectAndLoadProject",
-        "title": "TestBench: Display Projects List",
-        "icon": {
-          "light": "resources/icons/menu.svg",
-          "dark": "resources/icons/menu.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.readRFTestResultsAndCreateReportWithResults",
-        "title": "TestBench: Read Test Results & Create Report With Results",
-        "icon": {
-          "light": "resources/icons/read.svg",
-          "dark": "resources/icons/read.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.refreshProjectTreeView",
-        "title": "TestBench: Refresh Project Tree View",
-        "when": "view == projectManagementTree",
-        "icon": {
-          "light": "resources/icons/refresh.svg",
-          "dark": "resources/icons/refresh.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.refreshTestThemeTreeView",
-        "title": "TestBench: Refresh Test Tree View",
-        "when": "view == testThemeTree",
-        "icon": {
-          "light": "resources/icons/refresh.svg",
-          "dark": "resources/icons/refresh.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.displayCommands",
-        "title": "TestBench: Display Commands",
-        "icon": {
-          "light": "resources/icons/more.svg",
-          "dark": "resources/icons/more.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.showExtensionSettings",
-        "title": "TestBench: Show Extension Settings",
-        "icon": {
-          "light": "resources/icons/settings.svg",
-          "dark": "resources/icons/settings.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
-        "title": "TestBench: Read Tests & Upload Results To Testbench",
-        "icon": {
-          "light": "resources/icons/Upload.svg",
-          "dark": "resources/icons/Upload.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.uploadTestResultsToTestbench",
-        "title": "TestBench: Upload Test Results To Testbench",
-        "icon": {
-          "light": "resources/icons/Upload.svg",
-          "dark": "resources/icons/Upload.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.refreshTestElementsTree",
-        "title": "Refresh Test Elements",
-        "icon": {
-          "light": "resources/icons/refresh.svg",
-          "dark": "resources/icons/refresh.svg"
-        }
-      },
-      {
-        "command": "testbenchExtension.displayInteractionsForSelectedTOV",
-        "title": "Show Interactions"
-      },
-      {
-        "command": "testbenchExtension.goToTestElementFile",
-        "title": "Go To File"
-      }
-    ],
-    "views": {
-      "testBenchExplorer": [
-        {
-          "type": "webview",
-          "id": "testbenchExtension.webView",
-          "name": "Login to TestBench"
-        },
-        {
-          "id": "projectManagementTree",
-          "name": "Projects"
-        },
-        {
-          "id": "testThemeTree",
-          "name": "Test Themes"
-        },
-        {
-          "id": "testElementsView",
-          "name": "Test Elements"
-        }
-      ]
+    "name": "testbench-visual-studio-code-extension",
+    "publisher": "imbus",
+    "displayName": "TestBench Visual Studio Code Extension",
+    "description": "A Visual Studio Code extension for TestBench.",
+    "icon": "resources/icons/iTB-EE-Logo-256x256.png",
+    "version": "0.0.1",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/imbus/testbench-vs-code-extension"
     },
-    "menus": {
-      "view/title": [
-        {
-          "command": "testbenchExtension.login",
-          "group": "navigation@1",
-          "title": "Testbench: Login",
-          "when": "!testbenchExtension.connectionActive && (view == projectManagementTree)",
-          "icon": {
-            "light": "resources/icons/login.svg",
-            "dark": "resources/icons/login.svg"
-          }
-        },
-        {
-          "command": "testbenchExtension.logout",
-          "group": "navigation@2",
-          "title": "Testbench: Logout",
-          "when": "testbenchExtension.connectionActive && (view == projectManagementTree)",
-          "icon": {
-            "light": "resources/icons/logout.svg",
-            "dark": "resources/icons/logout.svg"
-          }
-        },
-        {
-          "command": "testbenchExtension.refreshProjectTreeView",
-          "group": "navigation@3",
-          "when": "view == projectManagementTree"
-        },
-        {
-          "command": "testbenchExtension.selectAndLoadProject",
-          "group": "navigation@4",
-          "when": "view == projectManagementTree"
-        },
-        {
-          "command": "testbenchExtension.refreshTestThemeTreeView",
-          "group": "navigation@5",
-          "when": "view == testThemeTree"
-        },
-        {
-          "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
-          "group": "navigation@6",
-          "when": "view == projectManagementTree || view == testThemeTree"
-        },
-        {
-          "command": "testbenchExtension.clearWorkspaceFolder",
-          "group": "navigation@7",
-          "when": "view == projectManagementTree"
-        },
-        {
-          "command": "testbenchExtension.showExtensionSettings",
-          "group": "navigation@8",
-          "when": "view == projectManagementTree || view == testbenchExtension.webView"
-        },
-        {
-          "command": "testbenchExtension.refreshTestElementsTree",
-          "when": "view == testElementsView",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "testbenchExtension.generateTestCasesForCycle",
-          "when": "view == projectManagementTree && viewItem == Cycle",
-          "group": "inline@1"
-        },
-        {
-          "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-          "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode)",
-          "group": "inline@2"
-        },
-        {
-          "command": "testbenchExtension.makeRoot",
-          "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == tov || viewItem == Version || viewItem == TestThemeNode)",
-          "group": "navigation"
-        },
-        {
-          "command": "testbenchExtension.displayInteractionsForSelectedTOV",
-          "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
-          "group": "inline@1"
-        },
-        {
-          "command": "testbenchExtension.goToTestElementFile",
-          "when": "view == testElementsView && viewItem == testElement",
-          "group": "navigation"
-        }
-      ]
+    "engines": {
+        "vscode": "^1.95.0"
     },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "testBenchExplorer",
-          "title": "TestBench",
-          "icon": "resources/icons/TBU_Logo_cropped.svg"
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onView:testBenchExplorer"
+    ],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "configuration": [
+            {
+                "title": "Login",
+                "properties": {
+                    "testbenchExtension.serverName": {
+                        "type": "string",
+                        "default": "testbench",
+                        "description": "The hostname or IP address of the TestBench server that the extension will connect to.",
+                        "order": 1,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.portNumber": {
+                        "type": "number",
+                        "default": 9445,
+                        "description": "The port number on which the TestBench server is listening for incoming connections.",
+                        "order": 2,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.username": {
+                        "type": "string",
+                        "description": "The username used for authentication when connecting to the TestBench server.",
+                        "order": 3,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.storePasswordAfterLogin": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "If enabled, the extension will securely store the user's password after a successful login to facilitate automatic login in future sessions without prompting for credentials.",
+                        "order": 4,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.automaticLoginAfterExtensionActivation": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "If enabled, the extension will automatically attempt to log in to the TestBench server using the stored credentials after the extension is activated.",
+                        "order": 5,
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
+                "title": "Workspace",
+                "properties": {
+                    "testbenchExtension.workspaceLocation": {
+                        "type": "string",
+                        "description": "Specifies the absolute path to the local workspace or project directory. This directory is used for storing and processing local files during extension operations. A `.testbench` folder will be automatically created inside this directory by the extension to manage its files.",
+                        "order": 6,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Delete all files inside the working directory called .tesbench excluding the log files before generating tests.",
+                        "order": 7,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.clearReportAfterProcessing": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Remove the report file automatically after processing it.",
+                        "order": 8,
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
+                "title": "Logger",
+                "properties": {
+                    "testbenchExtension.testBenchLogger": {
+                        "type": "string",
+                        "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
+                        "default": "Trace",
+                        "order": 9,
+                        "enum": [
+                            "No logging",
+                            "Trace",
+                            "Debug",
+                            "Info",
+                            "Warn",
+                            "Error"
+                        ],
+                        "enumDescriptions": [
+                            "Disable logging",
+                            "Most detailed information",
+                            "Detailed information",
+                            "Information messages",
+                            "Warning messages",
+                            "Error messages"
+                        ],
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
+                "title": "Testbench2robotframework",
+                "properties": {
+                    "testbenchExtension.configurationPathInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Path to the configuration file of testbench2robotframework library. The path is relative to the workspace location.",
+                        "order": 10,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.cleanFilesBeforeTestGenerationInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Deletes all files present in the output directory before new test suites are created.",
+                        "order": 11,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.fullyQualifiedKeywordsInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Option to call Robot Framework keywords by their fully qualified name in the generated test suites.",
+                        "order": 12,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.outputDirectoryInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Directory or ZIP archive containing the generated test suites for the generate tests command. The path is relative to the workspace location.",
+                        "order": 13,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.compoundInteractionLoggingInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Mode for logging compound interactions.",
+                        "order": 14,
+                        "default": "GROUP",
+                        "enum": [
+                            "GROUP",
+                            "COMMENT",
+                            "NONE"
+                        ],
+                        "enumDescriptions": [
+                            "Group",
+                            "Comment",
+                            "None"
+                        ],
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.logSuiteNumberingInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Enables logging of the test suite numbering.",
+                        "order": 15,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.resourceDirectoryPathInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location.",
+                        "order": 16,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.libraryRegexInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*"
+                        ],
+                        "order": 17
+                    },
+                    "testbenchExtension.libraryRootInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "RF",
+                            "RF-Library"
+                        ],
+                        "order": 18
+                    },
+                    "testbenchExtension.resourceRegexInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*"
+                        ],
+                        "order": 19
+                    },
+                    "testbenchExtension.resourceRootInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "RF-Resource"
+                        ],
+                        "order": 20
+                    },
+                    "testbenchExtension.libraryMappingInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Library mapping.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [],
+                        "order": 21
+                    },
+                    "testbenchExtension.resourceMappingInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Resource mapping.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [],
+                        "order": 22
+                    },
+                    "testbenchExtension.outputXmlFilePath": {
+                        "type": "string",
+                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server. The path is relative to the workspace location.",
+                        "order": 23,
+                        "scope": "resource"
+                    }
+                }
+            }
+        ],
+        "commands": [
+            {
+                "command": "testbenchExtension.toggleWebViewVisibility",
+                "title": "Testbench: Toggle Login Web View Visibility"
+            },
+            {
+                "command": "testbenchExtension.login",
+                "title": "Testbench: Login",
+                "icon": {
+                    "light": "resources/icons/login.svg",
+                    "dark": "resources/icons/login.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.logout",
+                "title": "Testbench: Logout",
+                "icon": {
+                    "light": "resources/icons/logout.svg",
+                    "dark": "resources/icons/logout.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.setWorkspaceLocation",
+                "title": "TestBench: Set Workspace Location"
+            },
+            {
+                "command": "testbenchExtension.clearWorkspaceFolder",
+                "title": "TestBench: Clear TestBench Folder",
+                "icon": {
+                    "light": "resources/icons/clearWorkspaceFolder.svg",
+                    "dark": "resources/icons/clearWorkspaceFolder.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.toggleProjectManagementTreeViewVisibility",
+                "title": "TestBench: Toggle Project Tree View Visibility"
+            },
+            {
+                "command": "testbenchExtension.toggleTestThemeTreeViewVisibility",
+                "title": "TestBench: Toggle Test Theme Tree View Visibility"
+            },
+            {
+                "command": "testbenchExtension.generateTestCasesForCycle",
+                "title": "Generate Tests",
+                "icon": {
+                    "light": "resources/icons/robot_dark.svg",
+                    "dark": "resources/icons/robot_dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
+                "title": "Generate Tests",
+                "icon": {
+                    "light": "resources/icons/robot_dark.svg",
+                    "dark": "resources/icons/robot_dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.fetchReportForSelectedTreeItem",
+                "title": "Fetch Report",
+                "icon": {
+                    "light": "resources/icons/download.svg",
+                    "dark": "resources/icons/download.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.makeRoot",
+                "title": "TestBench: Make root"
+            },
+            {
+                "command": "testbenchExtension.selectAndLoadProject",
+                "title": "TestBench: Display Projects List",
+                "icon": {
+                    "light": "resources/icons/menu.svg",
+                    "dark": "resources/icons/menu.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.readRFTestResultsAndCreateReportWithResults",
+                "title": "TestBench: Read Test Results & Create Report With Results",
+                "icon": {
+                    "light": "resources/icons/read.svg",
+                    "dark": "resources/icons/read.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.refreshProjectTreeView",
+                "title": "TestBench: Refresh Project Tree View",
+                "when": "view == projectManagementTree",
+                "icon": {
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.refreshTestThemeTreeView",
+                "title": "TestBench: Refresh Test Tree View",
+                "when": "view == testThemeTree",
+                "icon": {
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.displayCommands",
+                "title": "TestBench: Display Commands",
+                "icon": {
+                    "light": "resources/icons/more.svg",
+                    "dark": "resources/icons/more.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.showExtensionSettings",
+                "title": "TestBench: Show Extension Settings",
+                "icon": {
+                    "light": "resources/icons/settings.svg",
+                    "dark": "resources/icons/settings.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
+                "title": "TestBench: Read Tests & Upload Results To Testbench",
+                "icon": {
+                    "light": "resources/icons/Upload.svg",
+                    "dark": "resources/icons/Upload.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.uploadTestResultsToTestbench",
+                "title": "TestBench: Upload Test Results To Testbench",
+                "icon": {
+                    "light": "resources/icons/Upload.svg",
+                    "dark": "resources/icons/Upload.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.refreshTestElementsTree",
+                "title": "Refresh Test Elements",
+                "icon": {
+                    "light": "resources/icons/refresh.svg",
+                    "dark": "resources/icons/refresh.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.displayInteractionsForSelectedTOV",
+                "title": "Show Interactions"
+            },
+            {
+                "command": "testbenchExtension.goToTestElementFile",
+                "title": "Go To File"
+            }
+        ],
+        "views": {
+            "testBenchExplorer": [
+                {
+                    "type": "webview",
+                    "id": "testbenchExtension.webView",
+                    "name": "Login to TestBench"
+                },
+                {
+                    "id": "projectManagementTree",
+                    "name": "Projects"
+                },
+                {
+                    "id": "testThemeTree",
+                    "name": "Test Themes"
+                },
+                {
+                    "id": "testElementsView",
+                    "name": "Test Elements"
+                }
+            ]
+        },
+        "menus": {
+            "view/title": [
+                {
+                    "command": "testbenchExtension.login",
+                    "group": "navigation@1",
+                    "title": "Testbench: Login",
+                    "when": "!testbenchExtension.connectionActive && (view == projectManagementTree)",
+                    "icon": {
+                        "light": "resources/icons/login.svg",
+                        "dark": "resources/icons/login.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.logout",
+                    "group": "navigation@2",
+                    "title": "Testbench: Logout",
+                    "when": "testbenchExtension.connectionActive && (view == projectManagementTree)",
+                    "icon": {
+                        "light": "resources/icons/logout.svg",
+                        "dark": "resources/icons/logout.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.refreshProjectTreeView",
+                    "group": "navigation@3",
+                    "when": "view == projectManagementTree"
+                },
+                {
+                    "command": "testbenchExtension.selectAndLoadProject",
+                    "group": "navigation@4",
+                    "when": "view == projectManagementTree"
+                },
+                {
+                    "command": "testbenchExtension.refreshTestThemeTreeView",
+                    "group": "navigation@5",
+                    "when": "view == testThemeTree"
+                },
+                {
+                    "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
+                    "group": "navigation@6",
+                    "when": "view == projectManagementTree || view == testThemeTree"
+                },
+                {
+                    "command": "testbenchExtension.clearWorkspaceFolder",
+                    "group": "navigation@7",
+                    "when": "view == projectManagementTree"
+                },
+                {
+                    "command": "testbenchExtension.showExtensionSettings",
+                    "group": "navigation@8",
+                    "when": "view == projectManagementTree || view == testbenchExtension.webView"
+                },
+                {
+                    "command": "testbenchExtension.refreshTestElementsTree",
+                    "when": "view == testElementsView",
+                    "group": "navigation"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "testbenchExtension.generateTestCasesForCycle",
+                    "when": "view == projectManagementTree && viewItem == Cycle",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
+                    "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode)",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "testbenchExtension.makeRoot",
+                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == tov || viewItem == Version || viewItem == TestThemeNode)",
+                    "group": "navigation"
+                },
+                {
+                    "command": "testbenchExtension.displayInteractionsForSelectedTOV",
+                    "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.goToTestElementFile",
+                    "when": "view == testElementsView && viewItem == testElement",
+                    "group": "navigation"
+                }
+            ]
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "testBenchExplorer",
+                    "title": "TestBench",
+                    "icon": "resources/icons/TBU_Logo_cropped.svg"
+                }
+            ]
         }
-      ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run package",
+        "compile": "webpack",
+        "watch": "webpack --watch",
+        "package": "webpack --mode production --devtool hidden-source-map",
+        "vsix-package": "vsce package",
+        "compile-tests": "tsc -p . --outDir out --incremental",
+        "watch-tests": "tsc -p . -w --outDir out --incremental",
+        "pretest": "npm run compile-tests && npm run compile && npm run lint",
+        "prettier-format": "prettier --config .prettierrc 'src/**/*.ts' --write",
+        "lint": "eslint --config eslint.config.mjs .",
+        "test": "node ./out/test/runTest.js",
+        "prepare": "husky"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.20.0",
+        "@types/base-64": "^1.0.2",
+        "@types/glob": "^8.1.0",
+        "@types/mocha": "^10.0.9",
+        "@types/node": "^22.7.5",
+        "@types/sinon": "^17.0.3",
+        "@types/vscode": "^1.95.0",
+        "@typescript-eslint/eslint-plugin": "^8.9.0",
+        "@typescript-eslint/parser": "^8.9.0",
+        "@vscode/test-cli": "^0.0.10",
+        "@vscode/test-electron": "^2.4.1",
+        "@vscode/vsce": "^2.15.0",
+        "eslint": "^9.20.1",
+        "globals": "^15.15.0",
+        "husky": "^9.1.7",
+        "mocha": "^10.7.3",
+        "prettier": "^3.5.1",
+        "proxyquire": "^2.1.3",
+        "sinon": "^19.0.2",
+        "ts-loader": "^9.5.1",
+        "typescript": "^5.6.3",
+        "typescript-eslint": "^8.24.1",
+        "webpack": "^5.95.0",
+        "webpack-cli": "^5.1.4"
+    },
+    "dependencies": {
+        "@vscode-elements/elements": "^1.10.0",
+        "@vscode/python-extension": "^1.0.5",
+        "axios": "^1.7.7",
+        "base-64": "^1.0.0",
+        "flatted": "^3.3.1",
+        "jszip": "^3.10.1",
+        "regex-translator": "^0.2.8"
+    },
+    "extensionDependencies": [
+        "ms-python.python"
+    ],
+    "husky": {
+        "hooks": {
+            "pre-commit": "npx lint-staged"
+        }
+    },
+    "lint-staged": {
+        "**/*": "prettier --write --ignore-unknown",
+        "*.ts": "npx tslint"
     }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
-    "vsix-package": "vsce package",
-    "compile-tests": "tsc -p . --outDir out --incremental",
-    "watch-tests": "tsc -p . -w --outDir out --incremental",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint --config eslint.config.mjs .",
-    "test": "node ./out/test/runTest.js",
-    "prepare": "husky"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.20.0",
-    "@types/base-64": "^1.0.2",
-    "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.9",
-    "@types/node": "^22.7.5",
-    "@types/sinon": "^17.0.3",
-    "@types/vscode": "^1.95.0",
-    "@typescript-eslint/eslint-plugin": "^8.9.0",
-    "@typescript-eslint/parser": "^8.9.0",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
-    "@vscode/vsce": "^2.15.0",
-    "eslint": "^9.20.1",
-    "globals": "^15.15.0",
-    "husky": "^9.1.7",
-    "mocha": "^10.7.3",
-    "prettier": "^3.5.1",
-    "proxyquire": "^2.1.3",
-    "sinon": "^19.0.2",
-    "ts-loader": "^9.5.1",
-    "typescript": "^5.6.3",
-    "typescript-eslint": "^8.24.1",
-    "webpack": "^5.95.0",
-    "webpack-cli": "^5.1.4"
-  },
-  "dependencies": {
-    "@vscode-elements/elements": "^1.10.0",
-    "@vscode/python-extension": "^1.0.5",
-    "axios": "^1.7.7",
-    "base-64": "^1.0.0",
-    "flatted": "^3.3.1",
-    "jszip": "^3.10.1",
-    "regex-translator": "^0.2.8"
-  },
-  "extensionDependencies": [
-    "ms-python.python"
-  ],
-  "husky": {
-    "hooks": {
-      "pre-commit": "npx lint-staged"
-    }
-  },
-  "lint-staged": {
-    "**/*": "prettier --write --ignore-unknown",
-    "*.ts": "npx tslint"
-  }
 }

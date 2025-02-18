@@ -21,7 +21,7 @@ suite("reportHandler Tests", () => {
             secrets: {
                 get: sinon.stub().resolves("mockSessionToken"),
                 store: sinon.stub().resolves(),
-                delete: sinon.stub().resolves(),
+                delete: sinon.stub().resolves()
             },
             subscriptions: [],
             workspaceState: {} as any,
@@ -37,7 +37,7 @@ suite("reportHandler Tests", () => {
             globalStorageUri: {} as any,
             logLevel: vscode.LogLevel.Info,
             extensionMode: vscode.ExtensionMode.Test,
-            asAbsolutePath: (relativePath: string) => relativePath,
+            asAbsolutePath: (relativePath: string) => relativePath
         } as unknown as vscode.ExtensionContext;
     });
 
@@ -52,10 +52,10 @@ suite("reportHandler Tests", () => {
             completion: {
                 result: {
                     ReportingSuccess: {
-                        reportName: "report.zip",
-                    },
-                },
-            },
+                        reportName: "report.zip"
+                    }
+                }
+            }
         } as any;
 
         const result: boolean = jsonReportHandler.isReportJobCompletedSuccessfully(jobStatus);
@@ -65,8 +65,8 @@ suite("reportHandler Tests", () => {
     test("isReportJobCompletedSuccessfully should return false for unsuccessful report job", () => {
         const jobStatus: testBenchTypes.JobStatusResponse = {
             completion: {
-                result: {},
-            },
+                result: {}
+            }
         } as any;
 
         const result: boolean = jsonReportHandler.isReportJobCompletedSuccessfully(jobStatus);
