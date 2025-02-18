@@ -8,6 +8,7 @@ import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import * as fs from "fs";
+import JSZip from "jszip";
 
 /**
  * Delays execution for a given number of milliseconds.
@@ -273,5 +274,38 @@ export async function fileExistsAsync(filePath: string): Promise<boolean> {
         return true;
     } catch {
         return false;
+    }
+}
+
+/**
+ * Saves JSON data to a file.
+ * Useful for analyzing server responses.
+ *
+ * @param filePath - The file path to save the JSON data.
+ * @param data - The JSON data to save.
+ */
+export function saveJsonDataToFile(filePath: string, data: any): void {
+    try {
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+        // logger.trace(`JSON data saved to ${filePath}`);
+    } catch (error: any) {
+        // logger.error(`Error saving JSON data to ${filePath}: ${error.message}`);
+    }
+}
+
+/**
+ * Extracts and parses JSON content from a zip file.
+ *
+ * @param {JSZip} zipContents - The loaded JSZip object.
+ * @param {string} fileName - The file name to extract.
+ * @returns {Promise<any>} The parsed JSON content, or null if an error occurs.
+ */
+export async function extractAndParseJsonContent(zipContents: JSZip, fileName: string): Promise<any> {
+    try {
+        const fileData = await zipContents.file(fileName)?.async("string");
+        return fileData ? JSON.parse(fileData) : null;
+    } catch (error) {
+        logger.error(`Error reading or parsing ${fileName}:`, error);
+        return null;
     }
 }

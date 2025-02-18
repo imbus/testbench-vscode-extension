@@ -441,7 +441,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
      */
     async fetchAndDisplayTestElements(tovKey: string, newTestElementsTreeViewTitle?: string): Promise<void> {
         // For testing with a local JSON file.
-        // const jsonPath = "PATH-TO-JSON-FILE";
+        // const jsonPath = "ABSOLUTE-PATH-TO-JSON-FILE";
         // const testElementsJsonData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
 
         // Commented out for debugging purposes

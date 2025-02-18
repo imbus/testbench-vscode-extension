@@ -28,21 +28,7 @@ import * as utils from "./utils";
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-/**
- * Saves JSON data to a file.
- * Useful for analyzing server responses.
- *
- * @param filePath - The file path to save the JSON data.
- * @param data - The JSON data to save.
- */
-function saveJsonToFile(filePath: string, data: any): void {
-    try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-        // logger.trace(`JSON data saved to ${filePath}`);
-    } catch (error: any) {
-        // logger.error(`Error saving JSON data to ${filePath}: ${error.message}`);
-    }
-}
+
 
 /**
  * Class representing a connection to the new TestBench Play server.
@@ -138,7 +124,7 @@ export class PlayServerConnection {
         });
 
         if (!selectedProjectName) {
-            logger.error("Selected project name not found.");
+            logger.warn("Selected project name not found.");
             return null;
         }
 
@@ -179,7 +165,7 @@ export class PlayServerConnection {
             });
             if (savePath) {
                 const filePath = savePath.fsPath;
-                saveJsonToFile(filePath, projectsResponse.data);
+                utils.saveJsonDataToFile(filePath, projectsResponse.data);
             } else {
                 vscode.window.showErrorMessage("No file path selected.");
             }
@@ -234,7 +220,7 @@ export class PlayServerConnection {
             });
             if (savePath) {
                 const filePath = savePath.fsPath;
-                saveJsonToFile(filePath, projectTreeResponse.data);
+                utils.saveJsonDataToFile(filePath, projectTreeResponse.data);
             } else {
                 vscode.window.showErrorMessage("No file path selected.");
             }
@@ -313,7 +299,7 @@ export class PlayServerConnection {
             });
             if (savePath) {
                 const filePath = savePath.fsPath;
-                saveJsonToFile(filePath, testElementsResponse.data);
+                utils.saveJsonDataToFile(filePath, testElementsResponse.data);
                 vscode.window.showInformationMessage(`Test elements response saved to ${filePath}`);
             } else {
                 vscode.window.showErrorMessage("No file path selected.");
@@ -378,7 +364,7 @@ export class PlayServerConnection {
             });
             if (savePath) {
                 const filePath = savePath.fsPath;
-                saveJsonToFile(filePath, response.data);
+                utils.saveJsonDataToFile(filePath, response.data);
             } else {
                 vscode.window.showErrorMessage("No file path selected.");
             }
@@ -402,11 +388,11 @@ export class PlayServerConnection {
      * Logs out the user from the TestBench server.
      * Clears session data, stops the keep-alive process, clears the tree data provider which empties the tree view.
      *
-     * @param treeDataProvider - The project management tree data provider.
+     * @param projectTreeDataProvider - The project management tree data provider.
      * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
      */
     async logoutUser(
-        treeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider
+        projectTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider
     ): Promise<void | null> {
         logger.trace("Logging out user.");
         try {
@@ -415,7 +401,13 @@ export class PlayServerConnection {
             });
 
             if (logoutResponse.status === 204) {
-                treeDataProvider.clearTree();
+                if (projectTreeDataProvider) {
+                    projectTreeDataProvider.clearTree();
+                } else {
+                    // Note: When deactivating the extension or closing VS Code, the tree data provider may be null and this warning is expected.
+                    logger.warn("Tree data provider is not defined. Cannot clear the tree.");
+                }
+
                 const logoutSuccessfulMessage = "Logout successful.";
                 logger.debug(logoutSuccessfulMessage);
                 vscode.window.showInformationMessage(logoutSuccessfulMessage);
@@ -934,10 +926,12 @@ export async function loginToNewPlayServerAndInitSessionToken(
                 // An exception is thrown automatically if the status code is not 2xx
                 if (loginResponse.status === 201) {
                     // Store password in secret storage after succesfull login if the user chooses to
-                    const storePassword: boolean = getConfig().get<boolean>("storePasswordAfterLogin", false);
-                    if (storePassword) {
+                    if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
                         await context.secrets.store("password", password);
                         logger.trace("Password stored securely.");
+                    }
+                    else {
+                        logger.trace("@@@@ User chose not to store password.");
                     }
                     // Starts keep alive in the constructor of PlayServerConnection
                     const newConnection = new PlayServerConnection(
@@ -1136,13 +1130,6 @@ export async function importReportWithResultsToTestbench(
             return null;
         }
 
-        /*
-        // Save the contents of the variable to a file called allTreeElements.json
-        const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
-        saveJsonToFile(allTreeElementsPath, allTreeElements);
-        console.log(`allTreeElements saved to ${allTreeElementsPath}`);
-        */
-
         // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
         // Later, we should fetch the project tree from the server and search for the cycle key there.
 
@@ -1154,6 +1141,14 @@ export async function importReportWithResultsToTestbench(
             vscode.window.showErrorMessage("Failed to load project management tree elements.");
             return null;
         }
+
+        /*
+        // For debugging, save the tree elements to a file called allTreeElements.json
+        const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
+        utils.saveJsonDataToFile(allTreeElementsPath, allTreeElementsInTreeView);
+        console.log(`allTreeElements saved to ${allTreeElementsPath}`);
+        */
+
         const cycleKeyOfImportedReport = findCycleKeyFromCycleNameRecursively(
             allTreeElementsInTreeView,
             cycleNameOfProject
@@ -1288,8 +1283,8 @@ async function extractDataFromReport(zipFilePath: string): Promise<{
         const projectFileName: string = "project.json";
 
         // Extract JSON content
-        const cycleStructureJson = await extractAndParseJsonContent(zipContents, cycleStructureFileName);
-        const projectJson = await extractAndParseJsonContent(zipContents, projectFileName);
+        const cycleStructureJson = await utils.extractAndParseJsonContent(zipContents, cycleStructureFileName);
+        const projectJson = await utils.extractAndParseJsonContent(zipContents, projectFileName);
 
         // Parse JSON and extract required fields
         const uniqueID: string | null = cycleStructureJson?.root?.base?.uniqueID || null;
@@ -1306,19 +1301,4 @@ async function extractDataFromReport(zipFilePath: string): Promise<{
     }
 }
 
-/**
- * Extracts and parses JSON content from a zip file.
- *
- * @param {JSZip} zipContents - The loaded JSZip object.
- * @param {string} fileName - The file name to extract.
- * @returns {Promise<any>} The parsed JSON content, or null if an error occurs.
- */
-async function extractAndParseJsonContent(zipContents: JSZip, fileName: string): Promise<any> {
-    try {
-        const fileData = await zipContents.file(fileName)?.async("string");
-        return fileData ? JSON.parse(fileData) : null;
-    } catch (error) {
-        logger.error(`Error reading or parsing ${fileName}:`, error);
-        return null;
-    }
-}
+

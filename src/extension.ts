@@ -14,14 +14,14 @@
 // TODO: In production, remove process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; in connection class.
 
 import * as vscode from "vscode";
-import * as reportHandler from "./reportHandler";
-import * as testBenchConnection from "./testBenchConnection";
-import * as projectManagementTreeView from "./projectManagementTreeView";
-import * as testBenchTypes from "./testBenchTypes";
-import * as loginWebView from "./loginWebView";
 import * as testBenchLogger from "./testBenchLogger";
-import * as utils from "./utils";
+import * as testBenchTypes from "./testBenchTypes";
+import * as testBenchConnection from "./testBenchConnection";
+import * as reportHandler from "./reportHandler";
+import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testElementsTreeView from "./testElementsTreeView";
+import * as loginWebView from "./loginWebView";
+import * as utils from "./utils";
 import path from "path";
 
 /* =============================================================================
@@ -124,7 +124,7 @@ export let testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDa
  * @param handler The async function to execute.
  * @returns A new async function that wraps the handler with try/catch.
  */
-function safeCommandHandler(handler: (...args: any[]) => any): (...args: any[]) => Promise<void> {
+export function safeCommandHandler(handler: (...args: any[]) => any): (...args: any[]) => Promise<void> {
     return async (...args: any[]) => {
         try {
             await handler(...args);
@@ -157,7 +157,7 @@ function registerSafeCommand(
  *
  * @returns The selected folder path, or undefined if none selected.
  */
-async function promptForWorkspaceLocation(): Promise<string | undefined> {
+export async function promptForWorkspaceLocation(): Promise<string | undefined> {
     logger.debug("Prompting user to select a workspace location.");
     const options: vscode.OpenDialogOptions = {
         canSelectMany: false,
@@ -181,14 +181,14 @@ async function promptForWorkspaceLocation(): Promise<string | undefined> {
  *
  * @param context The extension context.
  */
-async function loadConfiguration(context: vscode.ExtensionContext): Promise<void> {
+export async function loadConfiguration(context: vscode.ExtensionContext): Promise<void> {
     // Update the configuration object with the latest values.
     // Without this, the configuration changes may not be updated and old values may be used.
     config = vscode.workspace.getConfiguration(baseKeyOfExtension);
 
     // If storePassword is set to false, delete the stored password immediately.
     // If storePassword is set to true, the password is only stored after a successful login.
-    if (config?.get<boolean>("storePasswordAfterLogin", false)) {
+    if (!config.get<boolean>("storePasswordAfterLogin", false)) {        
         await testBenchConnection?.clearStoredCredentials(context);
     }
 
@@ -197,11 +197,9 @@ async function loadConfiguration(context: vscode.ExtensionContext): Promise<void
 }
 
 /**
- * Initializes the tree views used by the extension.
- *
- * @param context The extension context.
+ * Initializes the tree views used by the extension. 
  */
-function initializeTreeViews(context: vscode.ExtensionContext): void {
+export function initializeTreeViews(): void {
     // Initialize project management tree view.
     projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(null!);
     projectTreeView = vscode.window.createTreeView("projectManagementTree", {
@@ -214,6 +212,7 @@ function initializeTreeViews(context: vscode.ExtensionContext): void {
         treeDataProvider: testElementsTreeDataProvider,
     });
     vscode.window.registerTreeDataProvider("testElementsView", testElementsTreeDataProvider);
+    // Hide the test elements tree view initially.
     testElementsTreeView.hideTestElementsTreeView();
 }
 
@@ -261,7 +260,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         if (
             config.get<boolean>("automaticLoginAfterExtensionActivation", false) &&
             config.get<boolean>("storePasswordAfterLogin", false) &&
-            (await context.secrets.get("password"))
+            (await context.secrets.get("password") !== undefined)
         ) {
             logger.debug("Performing automatic login.");
             if (await testBenchConnection?.performLogin(context, baseKeyOfExtension, false, true)) {
@@ -270,7 +269,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
             }
         } else {
-            logger.error("Automatic login is disabled or password is not stored.");
+            logger.warn("Automatic login is disabled or password is not stored.");
         }
     });
 
@@ -321,6 +320,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         loginWebView.displayWebView();
         projectManagementTreeView.hideProjectManagementTreeView();
         projectManagementTreeView.hideTestThemeTreeView();
+        testElementsTreeView.hideTestElementsTreeView();
         logger.trace("End of Logout command.");
     });
 
@@ -647,9 +647,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
-    // Load initial configuration and register a listener for configuration changes.
-    await loadConfiguration(context);
-
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (e.affectsConfiguration(baseKeyOfExtension)) {
@@ -659,7 +656,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    initializeTreeViews(context);
+    // Load initial configuration and register a listener for configuration changes.
+    await loadConfiguration(context);    
+
+    initializeTreeViews();
 
     // Register the login webview provider.
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
@@ -671,7 +671,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerExtensionCommands(context);
 
     // Display the login webview display.
-    // This calls focuses and opens (focuses to) our extension even when the user wont want to use our extension.
+    // This calls focuses and opens our extension even when the user wont want to use our extension.
     // To solve this in package.json, "activationEvents" is set to "onView:testBenchExplorer" to activate the extension only when the extension view is opened.
     await loginWebView.updateWebViewDisplay();
     // Hide all tree views on activation, so that only login webview is visible.

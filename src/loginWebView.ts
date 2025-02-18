@@ -162,6 +162,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      */
     private async getLoginHtmlPage(webview: vscode.Webview): Promise<string> {
         logger.trace("Generating login HTML page.");
+
+        if (!this.extensionContext) {
+            logger.warn("Extension context is undefined; cannot get stored settings.");
+        }
+
         // TODO: In production, don't log sensitive data.
         logger.trace(
             `Using stored settings: ServerName: ${getConfig().get<string>(
@@ -406,19 +411,3 @@ export async function displayWebView(): Promise<void> {
     await vscode.commands.executeCommand("testbenchExtension.webView.focus");
     loginWebViewIsVisible = true;
 }
-
-/* 
-// Example usage for updating webview content from another file:
-this.currentWebview.webview.postMessage({
-    command: "updateContent",
-    html: `<h1>Connected to server</h1>`,
-});
-
-// When reinitializing content after webview recreation:
-if (isConnected) {
-    this.currentWebview.webview.postMessage({
-        command: 'updateContent',
-        html: this.getConnectedHtml(),
-    });
-}
-*/
