@@ -389,7 +389,11 @@
             },
             {
                 "command": "testbenchExtension.displayInteractionsForSelectedTOV",
-                "title": "Show Robotframework Resources"
+                "title": "Show Robotframework Resources",
+                "icon": {
+                    "light": "resources/icons/key.svg",
+                    "dark": "resources/icons/key.svg"
+                }
             },
             {
                 "command": "testbenchExtension.goToTestElementFile",

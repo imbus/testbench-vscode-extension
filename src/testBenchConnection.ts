@@ -601,13 +601,13 @@ export class PlayServerConnection {
      * If the keep-alive process is already running and it is triggered again, the previous one is stopped before starting a new one.
      */
     private startKeepAlive(): void {
-        this.stopKeepAlive(); // Prevent multiple intervals.
+        this.stopKeepAlive(); // Prevent multiple intervals if previously started.
         this.keepAliveIntervalId = setInterval(
             () => {
                 this.sendKeepAliveRequest();
             },
-            4 * 60 * 1000
-        ); // Every 4 minutes
+            4 * 60 * 1000 // Every 4 minutes
+        );
         // Send an immediate keep-alive request.
         this.sendKeepAliveRequest();
         logger.trace("Keep-alive started.");
@@ -624,7 +624,7 @@ export class PlayServerConnection {
 
     /**
      * Sends a GET request to the server to keep the session alive, which normally times out after 5 minutes.
-     * Note: If the keep alive request fails, the user is logged out automatically.
+     * Note: If the keep alive request fails, the user is logged out automatically, since the session will be timed out later anyway.
      */
     private async sendKeepAliveRequest(): Promise<void> {
         if (!this.sessionToken) {

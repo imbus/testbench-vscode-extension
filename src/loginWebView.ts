@@ -281,17 +281,17 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                   }" required/>
               </div>
               <div class="checkbox-container">
-                  <input id="autoLogin" type="checkbox" ${
-                      getConfig().get<boolean>("automaticLoginAfterExtensionActivation", false) ? "checked" : ""
-                  }/>
-                  <label for="autoLogin">Auto Login</label>
-              </div>
-              <div class="checkbox-container">
                   <input id="savePassword" type="checkbox" ${
                       getConfig().get<boolean>("storePasswordAfterLogin", false) ? "checked" : ""
                   }/>
                   <label for="savePassword">Save Password</label>
               </div>
+              <div class="checkbox-container">
+                  <input id="autoLogin" type="checkbox" ${
+                      getConfig().get<boolean>("automaticLoginAfterExtensionActivation", false) ? "checked" : ""
+                  }/>
+                  <label for="autoLogin">Auto Login</label>
+              </div>              
               <div>
                   <button id="submitBtn" type="submit">Submit</button>
               </div>
