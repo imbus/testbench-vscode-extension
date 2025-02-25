@@ -147,6 +147,7 @@ export class PlayServerConnection {
             return null;
         }
         try {
+            logger.debug("Fetching projects list.");
             const projectsURL = `/projects/v1`;
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await this.apiClient.get(projectsURL, {
                 headers: { accept: "application/vnd.testbench+json" }
@@ -245,7 +246,7 @@ export class PlayServerConnection {
      * @returns The test elements data fetched from the server or null if an error occurs.
      */
     async getTestElementsWithTovKeyOldPlayServer(tovKey: string | null): Promise<any | null> {
-        logger.trace("Fetching test elements with TOV key:", tovKey);
+        logger.debug("Fetching test elements with TOV key:", tovKey);
         if (!this.sessionToken) {
             logger.warn("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
             return null;
@@ -392,7 +393,7 @@ export class PlayServerConnection {
     async logoutUser(
         projectTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider
     ): Promise<void | null> {
-        logger.trace("Logging out user.");
+        logger.debug("Logging out user.");
         try {
             const logoutResponse: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
                 headers: { accept: "application/vnd.testbench+json" }
@@ -638,7 +639,7 @@ export class PlayServerConnection {
         } catch (error) {
             logger.error("Keep-alive request failed:", error);
             // Logout the user if the keep-alive request fails.
-            logger.trace("Logging out the user after keep-alive failure.");
+            logger.warn("Logging out the user after keep-alive failure.");
             await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
             // Possible reason for keep alive request fail:
             // The user logged in in TestBench Client with the same account he used in VS Code, and the session in VS Code is forced to logout.
@@ -930,7 +931,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                         await context.secrets.store("password", password);
                         logger.trace("Password stored securely.");
                     } else {
-                        logger.trace("@@@@ User chose not to store password.");
+                        logger.trace("User chose not to store password.");
                     }
                     // Starts keep alive in the constructor of PlayServerConnection
                     const newConnection = new PlayServerConnection(

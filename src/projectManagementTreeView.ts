@@ -72,7 +72,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * Refreshes the tree view.
      */
     refresh(): void {
-        logger.trace("Refreshing project management tree view.");
+        logger.debug("Refreshing project management tree view.");
         this.storeExpandedTreeItems(this.rootItem);
         this.rootItem = null;
         this._onDidChangeTreeData.fire();
@@ -292,7 +292,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @param treeItem The tree item to set as root.
      */
     makeRoot(treeItem: ProjectManagementTreeItem): void {
-        logger.trace("Setting selected element as root:", treeItem);
+        logger.debug("Setting selected element as root:", treeItem);
         this.rootItem = treeItem;
         this.refresh();
     }
@@ -511,7 +511,7 @@ export async function initializeTreeViews(
     connection: PlayServerConnection | null,
     selectedProjectKey?: string
 ): Promise<[ProjectManagementTreeDataProvider | null, TestThemeTreeDataProvider | null]> {
-    logger.trace("Initializing project management and test theme tree views.");
+    logger.debug("Initializing project management and test theme tree views.");
     if (!connection) {
         const msg = "No connection available. Please log in first.";
         vscode.window.showErrorMessage(msg);

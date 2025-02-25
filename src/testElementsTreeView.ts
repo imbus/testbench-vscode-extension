@@ -541,7 +541,6 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
     // For an interaction, open the parent's final subdivision .resource file.
     const finalSubdivision = getFinalSubdivisionAncestor(testElement);
     if (!finalSubdivision) {
-        logger.trace(`No final subdivision found for the interaction with unique ID: ${testElement.uniqueID}`);
         return;
     }
     // Compute the hierarchical name if not already done.
@@ -609,20 +608,22 @@ export function isFinalSubdivisionInTree(element: TestElement): boolean {
 
 /**
  * Traverses upward from an interaction element to find the nearest final subdivision.
- * @param {TestElement} element The test element representing an interaction.
+ * @param {TestElement} testElement The test element representing an interaction.
  * @returns {TestElement | null} The nearest final subdivision ancestor, or null if not found.
  */
-export function getFinalSubdivisionAncestor(element: TestElement): TestElement | null {
-    logger.trace(`Finding final subdivision ancestor for element ${element.name}`);
-    let current = element.parent;
+export function getFinalSubdivisionAncestor(testElement: TestElement): TestElement | null {
+    logger.trace(`Searching final subdivision ancestor for test element ${testElement.name}`);
+    let current = testElement.parent;
     while (current) {
         if (current.elementType === "Subdivision" && isFinalSubdivisionInTree(current)) {
-            logger.trace(`Found final subdivision ancestor for element ${element.name}: ${current.name}`);
+            logger.trace(`Found final subdivision ancestor for test element ${testElement.name}: ${current.name}`);
             return current;
         }
         current = current.parent;
     }
-    logger.trace(`No final subdivision ancestor found for element ${element.name}`);
+    logger.trace(
+        `No final subdivision ancestor found for test element ${testElement.name} with unique ID: ${testElement.uniqueID}`
+    );
     return null;
 }
 

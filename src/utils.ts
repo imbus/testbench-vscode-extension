@@ -222,7 +222,7 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     const workspaceLocationInSettings = getConfig().get<string>("workspaceLocation", "");
     if (workspaceLocationInSettings) {
         if (logger && enableLogging) {
-            logger.trace(`Workspace location found in settings: "${workspaceLocationInSettings}"`);
+            logger.trace(`Returning workspace location found in settings: "${workspaceLocationInSettings}"`);
         }
         return workspaceLocationInSettings;
     }

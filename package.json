@@ -389,7 +389,7 @@
             },
             {
                 "command": "testbenchExtension.displayInteractionsForSelectedTOV",
-                "title": "Show Interactions"
+                "title": "Show Robotframework Resources"
             },
             {
                 "command": "testbenchExtension.goToTestElementFile",

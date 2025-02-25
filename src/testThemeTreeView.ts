@@ -26,7 +26,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
      * Refreshes the test theme tree view.
      */
     refresh(): void {
-        logger.trace("Refreshing test theme tree view.");
+        logger.debug("Refreshing test theme tree view.");
         // Store the keys of the expanded items to preserve state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
         this._onDidChangeTreeData.fire();
@@ -79,7 +79,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
      * @param element The TestbenchTreeItem to set as root.
      */
     makeRoot(element: ProjectManagementTreeItem): void {
-        logger.trace("Setting the selected element as the root of the test theme tree view:", element);
+        logger.debug("Setting the selected element as the root of the test theme tree view:", element);
         this.rootElements = [element];
         this.refresh();
     }

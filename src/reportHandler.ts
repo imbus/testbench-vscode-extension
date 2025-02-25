@@ -583,7 +583,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     selectedTreeItem: projectManagementTreeView.ProjectManagementTreeItem,
     folderNameOfTestbenchWorkingDirectory: string
 ): Promise<void | null> {
-    logger.trace("Generating tests for non-cycle element:", selectedTreeItem);
+    logger.debug("Generating tests for non-cycle element:", selectedTreeItem);
     const treeElementUID = selectedTreeItem.item?.base?.uniqueID;
     const cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
     const projectKey = projectManagementTreeView.findProjectKeyOfCycleElement(selectedTreeItem.parent!);
@@ -631,7 +631,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     UIDofTestThemeElementToGenerateTestsFor?: string
 ): Promise<void | null> {
     try {
-        logger.trace("Generating tests for:", selectedTreeItem);
+        logger.debug("Generating tests for:", selectedTreeItem);
         const isReportGenerationExecutionBased = true; // Defaulting to execution based for now.
         const UIDofSelectedTreeElement =
             UIDofTestThemeElementToGenerateTestsFor ||

@@ -531,7 +531,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeViews(
             context,
             connection!,
-            projectManagementTreeDataProvider?.currentProjectKeyInView!
+            projectManagementTreeDataProvider?.currentProjectKeyInView ?? undefined // Instead of null, return undefined
         );
         logger.trace("End of Refresh Project Tree command.");
     });
@@ -590,7 +590,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // --- Command: Refresh Test Elements Tree ---
     // Refreshes the test elements tree view with the latest test elements for the selected TOV.
     registerSafeCommand(context, allExtensionCommands.refreshTestElementsTree.command, async () => {
-        logger.trace("Refresh Test Elements Tree command called.");
+        logger.debug("Refresh Test Elements Tree command called.");
         const currentTovKey = testElementsTreeView.getCurrentTovKey();
         if (!currentTovKey) {
             vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
