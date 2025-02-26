@@ -82,28 +82,45 @@ function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
     logger.trace("Resource regex patterns from settings:", pythonResourceRegexPatternsInExtensionSettings);
 
     // Note: A complete conversion from python regex to javascript regex is not working as expected. If we only use simple regex patterns, we can use the existing code.
-    // Convert Python-style named capture groups to JavaScript syntax.
+    // Convert Python-style named capture groups to JavaScript syntax, and handle other differences such as escaping.
     function convertPythonRegexToJs(pythonRegex: string): string {
-        return pythonRegex.replace(/\(\?P<([a-zA-Z_]\w*)>/g, "(?<$1>");
+        // Replace named capture group syntax ( Transform (?P<name>... into (?<name>... )
+        let javascriptRegex = pythonRegex.replace(/\(\?P<([^>]+)>([^)]+)\)/g, "(?<$1>$2)");
+
+        // Replace \s* with \s* (already correct in this case, but still execute)
+        javascriptRegex = javascriptRegex.replace(/\\s\*/g, "\\s*");
+
+        // Replace [Robot-Resource] with \[Robot-Resource\]
+        javascriptRegex = javascriptRegex.replace(/\[Robot-Resource\]/g, "\\[Robot-Resource\\]");
+
+        // Replace .* with .* (already correct in this case, but still execute)
+        javascriptRegex = javascriptRegex.replace(/\.\*/g, "\\.*");
+
+        // Replace . with \. when needed
+        javascriptRegex = javascriptRegex.replace(/(?<!\\)\./g, "\\.");
+
+        return javascriptRegex;
+
+        // return pythonRegex.replace(/\(\?P<([a-zA-Z_]\w*)>/g, "(?<$1>");  // OLD
     }
 
     const JSlibraryRegexPatterns = pythonResourceRegexPatternsInExtensionSettings
-        .map((pattern) => {
-            logger.trace(`Converting pattern: ${pattern}`);
-            const convertedPattern = convertPythonRegexToJs(pattern);
-            logger.trace(`Converted pattern: ${convertedPattern}`);
+        .map((pythonRegexPattern) => {
+            logger.trace(`Converting pythong regex pattern: ${pythonRegexPattern}`);
+            const convertedJSPattern = convertPythonRegexToJs(pythonRegexPattern);
+            logger.trace(`Converted to javascript regex pattern: ${convertedJSPattern}`);
             try {
-                const regex = new RegExp(convertedPattern, "u");
-                logger.trace(`Created regex: ${regex}`);
+                const regex = new RegExp(convertedJSPattern, "u");
+                logger.trace(`Created JS regex: ${regex}`);
                 return regex;
             } catch (error) {
-                logger.error(`Invalid regex pattern: ${convertedPattern}`, error);
+                logger.error(`Invalid JS regex pattern: ${convertedJSPattern}`, error);
                 return null;
             }
         })
         .filter((regex): regex is RegExp => regex !== null);
 
-    logger.trace("Final JS regex patterns:", JSlibraryRegexPatterns);
+    logger.trace("Final JS regex patterns to use:", JSlibraryRegexPatterns);
     return JSlibraryRegexPatterns;
 }
 
