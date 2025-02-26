@@ -287,9 +287,9 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
         }
 
         // For subdivisions, filter out the subdivision element if it has no children that match the regex.
-        // Note: This also removes empty subdivisions that matches the regex?
+        // Display the empty subdivision if it directly matches the regex.
         if (testElement.elementType === "Subdivision") {
-            if (filteredChildren.length === 0) {
+            if (filteredChildren.length === 0 && !testElement.directRegexMatch) {
                 return null;
             }
         }
@@ -490,18 +490,35 @@ export async function displayTestElementsTreeView(): Promise<void> {
    ============================================================================= */
 
 /**
+ * Normalizes a given base target path by making sure it ends with ".resource" and removing any
+ * whitespace immediately preceding ".resource" as well as any trailing whitespace.
+ *
+ * @param baseTargetPath - The input path string to normalize.
+ * @returns The normalized path string ending with ".resource" without extraneous whitespace.
+ */
+function appendResourceExtensionAndRemoveWhitespaceBeforeIt(baseTargetPath: string): string {
+    // Append ".resource" if it is not already present at the end of the string.
+    let targetPath: string = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
+
+    // Remove any whitespace that appears immediately before ".resource" and trim trailing whitespace.
+    targetPath = targetPath.replace(/\s+(\.resource)$/, "$1").replace(/\s+$/, "");
+
+    return targetPath;
+}
+
+/**
  * Handles a subdivision element by opening its resource file or folder.
  * @param {TestElement} testElement The test element representing a subdivision.
  * @param {string} baseTargetPath The base target path.
  */
 export async function handleSubdivision(testElement: TestElement, baseTargetPath: string): Promise<void> {
     // Determine if the subdivision is final (i.e. has no child subdivision)
-    const isFinalSubdivision =
+    const isFinalSubdivision: boolean =
         !testElement.children || !testElement.children.some((child) => child.elementType === "Subdivision");
     logger.trace(`Subdivision '${testElement.name}' is ${isFinalSubdivision ? "final" : "not final"}.`);
     baseTargetPath = removeRobotResourceFromPathString(baseTargetPath);
     if (isFinalSubdivision) {
-        const targetPath = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
+        const targetPath: string = appendResourceExtensionAndRemoveWhitespaceBeforeIt(baseTargetPath);
         if (!(await utils.fileExistsAsync(targetPath))) {
             const dirName = path.dirname(targetPath);
             await fs.promises.mkdir(dirName, { recursive: true });
@@ -549,8 +566,10 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
         logger.trace(`Computed hierarchical name for final subdivision: ${finalSubdivision.hierarchicalName}`);
     }
     // Construct the target path for the final subdivision.
-    let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/")) + ".resource";
+    let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/"));
     finalTargetPath = removeRobotResourceFromPathString(finalTargetPath);
+    finalTargetPath = appendResourceExtensionAndRemoveWhitespaceBeforeIt(finalTargetPath);
+
     // If the resource file does not exist, create it with a header.
     if (!(await utils.fileExistsAsync(finalTargetPath))) {
         const dirName = path.dirname(finalTargetPath);
