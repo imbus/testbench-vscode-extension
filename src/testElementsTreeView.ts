@@ -96,12 +96,10 @@ function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
         // Replace .* with .* (already correct in this case, but still execute)
         javascriptRegex = javascriptRegex.replace(/\.\*/g, "\\.*");
 
-        // Replace . with \. when needed
+        // Replace . with \.
         javascriptRegex = javascriptRegex.replace(/(?<!\\)\./g, "\\.");
 
         return javascriptRegex;
-
-        // return pythonRegex.replace(/\(\?P<([a-zA-Z_]\w*)>/g, "(?<$1>");  // OLD
     }
 
     const JSlibraryRegexPatterns = pythonResourceRegexPatternsInExtensionSettings
@@ -513,12 +511,19 @@ export async function displayTestElementsTreeView(): Promise<void> {
  * @param baseTargetPath - The input path string to normalize.
  * @returns The normalized path string ending with ".resource" without extraneous whitespace.
  */
-function appendResourceExtensionAndRemoveWhitespaceBeforeIt(baseTargetPath: string): string {
+function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
+    logger.trace(`Adding .resource extension and trimming path: ${baseTargetPath}`);
+
     // Append ".resource" if it is not already present at the end of the string.
     let targetPath: string = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
 
     // Remove any whitespace that appears immediately before ".resource" and trim trailing whitespace.
     targetPath = targetPath.replace(/\s+(\.resource)$/, "$1").replace(/\s+$/, "");
+
+    // Remove any (one or more) whitespaces from the beginning of the string.
+    targetPath = targetPath.replace(/^\s+/, "");
+
+    logger.trace(`Normalized path: ${targetPath}`);
 
     return targetPath;
 }
@@ -535,7 +540,7 @@ export async function handleSubdivision(testElement: TestElement, baseTargetPath
     logger.trace(`Subdivision '${testElement.name}' is ${isFinalSubdivision ? "final" : "not final"}.`);
     baseTargetPath = removeRobotResourceFromPathString(baseTargetPath);
     if (isFinalSubdivision) {
-        const targetPath: string = appendResourceExtensionAndRemoveWhitespaceBeforeIt(baseTargetPath);
+        const targetPath: string = appendResourceExtensionAndTrimPath(baseTargetPath);
         if (!(await utils.fileExistsAsync(targetPath))) {
             const dirName = path.dirname(targetPath);
             await fs.promises.mkdir(dirName, { recursive: true });
@@ -585,7 +590,7 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
     // Construct the target path for the final subdivision.
     let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/"));
     finalTargetPath = removeRobotResourceFromPathString(finalTargetPath);
-    finalTargetPath = appendResourceExtensionAndRemoveWhitespaceBeforeIt(finalTargetPath);
+    finalTargetPath = appendResourceExtensionAndTrimPath(finalTargetPath);
 
     // If the resource file does not exist, create it with a header.
     if (!(await utils.fileExistsAsync(finalTargetPath))) {
