@@ -8,7 +8,6 @@
 
 import * as vscode from "vscode";
 import * as path from "path";
-import * as utils from "./utils";
 import * as fs from "fs";
 import { connection, logger, getConfig, testElementTreeView } from "./extension";
 
@@ -29,10 +28,10 @@ export function getCurrentTovKey(): string {
 
 /**
  * Sets the current TOV key.
- * @param newKey The new TOV key.
+ * @param {string} newTovKey The new TOV key.
  */
-export function setCurrentTovKey(newKey: string): void {
-    currentTovKeyOfInteractionsInView = newKey;
+export function setCurrentTovKey(newTovKey: string): void {
+    currentTovKeyOfInteractionsInView = newTovKey;
 }
 
 /**
@@ -85,7 +84,7 @@ function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
     // Convert Python-style named capture groups to JavaScript syntax, and handle other differences such as escaping.
     function convertPythonRegexToJs(pythonRegex: string): string {
         // Replace named capture group syntax ( Transform (?P<name>... into (?<name>... )
-        let javascriptRegex = pythonRegex.replace(/\(\?P<([^>]+)>([^)]+)\)/g, "(?<$1>$2)");
+        let javascriptRegex: string = pythonRegex.replace(/\(\?P<([^>]+)>([^)]+)\)/g, "(?<$1>$2)");
 
         // Replace \s* with \s* (already correct in this case, but still execute)
         javascriptRegex = javascriptRegex.replace(/\\s\*/g, "\\s*");
@@ -129,7 +128,7 @@ function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
  * @returns {boolean} True if any regex matches; false otherwise.
  */
 function matchesRegex(value: string, regexList: RegExp[]): boolean {
-    const result = regexList.some((regex) => regex.test(value));
+    const result: boolean = regexList.some((regex) => regex.test(value));
     logger.trace(`Value "${value}" matches regex patterns: ${result}`);
     return result;
 }
@@ -204,7 +203,7 @@ function getItemParentId(item: any, libraryKey: string | null | undefined): stri
  * @returns {TestElement[]} An array of root TestElement objects forming the tree.
  */
 function buildTree(flatJsonTestElements: any[]): TestElement[] {
-    const resourceRegexPatternsInExtensionSettings = getResourceRegexPatternsFromExtensionSettings();
+    const resourceRegexPatternsInExtensionSettings: RegExp[] = getResourceRegexPatternsFromExtensionSettings();
     logger.trace("Building tree with regex patterns:", resourceRegexPatternsInExtensionSettings);
 
     // Build a map for all elements without filtering.
@@ -233,7 +232,7 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
 
         // Compute whether this element directly matches the regex filter.
         // If resouce regex patterns exist in the extension settings, use them. Otherwise, include all elements without filtering.
-        const directRegexMatch =
+        const directRegexMatch: boolean =
             resourceRegexPatternsInExtensionSettings.length > 0
                 ? matchesRegex(item.name, resourceRegexPatternsInExtensionSettings)
                 : true;
@@ -289,7 +288,7 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
         if (testElement.children) {
             // Determine if the children should inherit inclusion:
             // If the current element directly matches the regex or is already inherited, mark children as inherited.
-            const childrenInherited = inherited || testElement.directRegexMatch;
+            const childrenInherited: boolean = inherited || testElement.directRegexMatch;
             // Store the result of filtering the children, which will be used to determine if the current element should be included.
             filteredChildren = testElement.children
                 .map((child) => filterTestElementsTree(child, childrenInherited))
@@ -328,12 +327,12 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
 
     /**
      * Recursively assigns hierarchical names (full paths) to each element.
-     * @param element The element.
-     * @param parentPath The accumulated parent path.
+     * @param {TestElement} element The element.
+     * @param {string} parentPath The accumulated parent path.
      */
     function assignHierarchicalNames(element: TestElement, parentPath: string): void {
         // Compute the current hierarchical path.
-        const currentPath = parentPath ? `${parentPath}/${element.name}` : element.name;
+        const currentPath: string = parentPath ? `${parentPath}/${element.name}` : element.name;
         element.hierarchicalName = currentPath;
         if (element.children && element.children.length > 0) {
             element.children.forEach((child) => assignHierarchicalNames(child, currentPath));
@@ -438,7 +437,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     /**
      * Returns the children for a given test element.
      * @param {TestElementItem} element Optional parent TestElementItem.
-     * @returns A promise resolving to an array of TestElementItems.
+     * @returns {Thenable<TestElementItem[]>} A promise resolving to an array of TestElementItems.
      */
     getChildren(element?: TestElementItem): Thenable<TestElementItem[]> {
         if (element) {
@@ -450,7 +449,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
 
     /**
      * Refreshes the tree view with new data.
-     * @param flatTestElementsJsonData A flat array of JSON objects representing test elements.
+     * @param {any} flatTestElementsJsonData A flat array of JSON objects representing test elements.
      */
     refresh(flatTestElementsJsonData: any[]): void {
         this.treeData = buildTree(flatTestElementsJsonData);
@@ -508,8 +507,8 @@ export async function displayTestElementsTreeView(): Promise<void> {
  * Normalizes a given base target path by making sure it ends with ".resource" and removing any
  * whitespace immediately preceding ".resource" as well as any trailing whitespace.
  *
- * @param baseTargetPath - The input path string to normalize.
- * @returns The normalized path string ending with ".resource" without extraneous whitespace.
+ * @param {string} baseTargetPath - The input path string to normalize.
+ * @returns {string} The normalized path string ending with ".resource" without extraneous whitespace.
  */
 function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
     logger.trace(`Adding .resource extension and trimming path: ${baseTargetPath}`);
@@ -529,44 +528,130 @@ function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
 }
 
 /**
+ * Checks if a file (or folder) exists, with an option for a case-sensitive or case-insensitive check.
+ * For a case-sensitive check, every folder in the path hierarchy is verified to match exactly.
+ * @param filePath The full path to the file (or folder).
+ * @param caseSensitiveCheck Optional flag to perform a case-sensitive check (true by default).
+ * @returns A promise that resolves to true if the entire path exists with exact casing, false otherwise.
+ */
+async function isFilePresentCaseSensitive(filePath: string, caseSensitiveCheck: boolean = true): Promise<boolean> {
+    logger.trace(`@@@@ Checking if file exists: ${filePath}`);
+    if (!caseSensitiveCheck) {
+        // Case-insensitive check: simply use stat.
+        try {
+            await fs.promises.stat(filePath);
+            logger.trace(`@@@@ File exists with case-insensitive check: ${filePath}`);
+            return true;
+        } catch (err: any) {
+            if (err.code === "ENOENT") {
+                logger.trace(`@@@@ File does not exist: ${filePath}`);
+                return false;
+            }
+            throw err;
+        }
+    }
+
+    // For a case-sensitive check on the entire path hierarchy:
+    // Resolve the absolute path.
+    const resolvedPath: string = path.resolve(filePath);
+    // Split the path into its parts. Filtering out any empty strings (e.g., due to leading separators).
+    const parts: string[] = resolvedPath.split(path.sep).filter((part) => part !== "");
+
+    logger.trace(`@@@@ Resolved path: ${resolvedPath}`);
+
+    // Determine the starting point (the root)
+    let currentPath: string;
+    if (path.isAbsolute(resolvedPath)) {
+        if (process.platform === "win32") {
+            // On Windows, the first part is typically the drive letter (e.g., "C:")
+            currentPath = parts[0] + path.sep;
+            parts.shift(); // Remove the drive letter from the parts.
+        } else {
+            currentPath = path.sep;
+        }
+    } else {
+        // For relative paths, start with an empty string.
+        currentPath = "";
+    }
+
+    // Walk through each part and verify that it exists with the exact case.
+    for (const part of parts) {
+        let entries: string[];
+        try {
+            entries = await fs.promises.readdir(currentPath);
+            logger.trace(`@@@@ Entries in ${currentPath}: ${entries}`);
+        } catch (err: any) {
+            if (err.code === "ENOENT") {
+                logger.trace(`@@@@ Path does not exist: ${currentPath}`);
+                return false;
+            }
+            throw err;
+        }
+        // Check if the current part exactly matches one of the entries.
+        if (!entries.includes(part)) {
+            logger.trace(`@@@@ Returning false, part ${part} not found in ${currentPath}`);
+            return false;
+        }
+        logger.trace(`@@@@ Part ${part} found in ${currentPath}`);
+        currentPath = path.join(currentPath, part);
+    }
+
+    logger.trace(`@@@@ File exists with exact case, returning true: ${resolvedPath}`);
+    return true;
+}
+
+/**
  * Handles a subdivision element by opening its resource file or folder.
  * @param {TestElement} testElement The test element representing a subdivision.
- * @param {string} baseTargetPath The base target path.
+ * @param {string} absolutePathOfTestElement The absolute path of the test element.
  */
-export async function handleSubdivision(testElement: TestElement, baseTargetPath: string): Promise<void> {
+export async function handleSubdivision(testElement: TestElement, absolutePathOfTestElement: string): Promise<void> {
     // Determine if the subdivision is final (i.e. has no child subdivision)
     const isFinalSubdivision: boolean =
         !testElement.children || !testElement.children.some((child) => child.elementType === "Subdivision");
     logger.trace(`Subdivision '${testElement.name}' is ${isFinalSubdivision ? "final" : "not final"}.`);
-    baseTargetPath = removeRobotResourceFromPathString(baseTargetPath);
+    absolutePathOfTestElement = removeRobotResourceFromPathString(absolutePathOfTestElement);
+    // If the subdivision is final, open the resource file. Else, represent it as a folder.
     if (isFinalSubdivision) {
-        const targetPath: string = appendResourceExtensionAndTrimPath(baseTargetPath);
-        if (!(await utils.fileExistsAsync(targetPath))) {
-            const dirName = path.dirname(targetPath);
+        const processedTestElementPath: string = appendResourceExtensionAndTrimPath(absolutePathOfTestElement);
+        // If the resource file does not exist, create it with a header.
+        if (!(await isFilePresentCaseSensitive(processedTestElementPath))) {
+            const dirName: string = path.dirname(processedTestElementPath);
+            // Note: Windows won't create case sensitive directories.
+            // If there are already directories with the same name but different case, they will be used and no new directory will be created.
+            logger.trace(`Creating directory to process subdivision click: ${dirName}`);
             await fs.promises.mkdir(dirName, { recursive: true });
+
             // Create the resource file with header content.
-            const fileContent = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+            const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+
             // Create resource file with header content.
-            await fs.promises.writeFile(targetPath, fileContent);
-            logger.trace(`Resource file created at ${targetPath}`);
+            await fs.promises.writeFile(processedTestElementPath, fileContent);
+            logger.trace(`Resource file created at ${processedTestElementPath}`);
         }
-        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
+        // Open the resource file in the VS Code editor.
+        const document: vscode.TextDocument = await vscode.workspace.openTextDocument(
+            vscode.Uri.file(processedTestElementPath)
+        );
         await vscode.window.showTextDocument(document);
         await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
     } else {
         // Non-final subdivision: represent as a folder.
-        let folderExists = false;
+        let folderExists: boolean = false;
         try {
-            const stats = await fs.promises.stat(baseTargetPath);
+            const stats: fs.Stats = await fs.promises.stat(absolutePathOfTestElement);
             folderExists = stats.isDirectory();
         } catch {
             // No need to specify the catched error since we don't use it.
             folderExists = false;
         }
         if (!folderExists) {
-            await fs.promises.mkdir(baseTargetPath, { recursive: true });
-            logger.trace(`Folder created at ${baseTargetPath}`);
+            await fs.promises.mkdir(absolutePathOfTestElement, { recursive: true });
+            logger.trace(`Folder created at ${absolutePathOfTestElement}`);
+        } else {
+            logger.trace(`Subdivision folder already exists at ${absolutePathOfTestElement}`);
         }
+        // Open VS Code explorer.
         await vscode.commands.executeCommand("workbench.view.explorer");
     }
 }
@@ -578,25 +663,50 @@ export async function handleSubdivision(testElement: TestElement, baseTargetPath
  */
 export async function handleInteraction(testElement: TestElement, workspaceRootPath: string): Promise<void> {
     // For an interaction, open the parent's final subdivision .resource file.
-    const finalSubdivision = getFinalSubdivisionAncestor(testElement);
-    if (!finalSubdivision) {
-        return;
+    const finalSubdivisionAncestor: TestElement | null = getFinalSubdivisionAncestor(testElement);
+    if (!finalSubdivisionAncestor) {
+        // If no final subdivision is found: handle the case as if its parent subdivision is clicked.
+        const subdivisionAncestor: TestElement | null = getSubdivisionAncestor(testElement);
+        if (subdivisionAncestor) {
+            logger.trace(`Subdivision Ancestor of ${testElement.uniqueID}: `, subdivisionAncestor);
+            // Construct the target path based on the hierarchical name of the test element.
+            const pathOfParentSubdivision = path.join(
+                workspaceRootPath,
+                ...(testElement.hierarchicalName ? testElement.hierarchicalName.split("/") : [])
+            );
+            logger.trace(`Path of parent subdivision of ${testElement.uniqueID}: `, pathOfParentSubdivision);
+
+            // Remove the last part of the path and go one level up to find the parent subdivision path
+            const subdivisionPath: string = path.dirname(pathOfParentSubdivision);
+            logger.trace(`Subdivision path of ${testElement.uniqueID}: `, subdivisionPath);
+            handleSubdivision(subdivisionAncestor, subdivisionPath);
+            return;
+        } else {
+            return; // If no subdivision ancestor is found, do nothing.
+        }
     }
+
     // Compute the hierarchical name if not already done.
-    if (!finalSubdivision.hierarchicalName) {
-        finalSubdivision.hierarchicalName = computeHierarchicalName(finalSubdivision);
-        logger.trace(`Computed hierarchical name for final subdivision: ${finalSubdivision.hierarchicalName}`);
+    if (!finalSubdivisionAncestor.hierarchicalName) {
+        finalSubdivisionAncestor.hierarchicalName = computeHierarchicalName(finalSubdivisionAncestor);
+        logger.trace(`Computed hierarchical name for final subdivision: ${finalSubdivisionAncestor.hierarchicalName}`);
     }
     // Construct the target path for the final subdivision.
-    let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivision.hierarchicalName.split("/"));
+    let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivisionAncestor.hierarchicalName.split("/"));
     finalTargetPath = removeRobotResourceFromPathString(finalTargetPath);
     finalTargetPath = appendResourceExtensionAndTrimPath(finalTargetPath);
 
     // If the resource file does not exist, create it with a header.
-    if (!(await utils.fileExistsAsync(finalTargetPath))) {
-        const dirName = path.dirname(finalTargetPath);
+    if (!(await isFilePresentCaseSensitive(finalTargetPath))) {
+        const dirName: string = path.dirname(finalTargetPath);
         await fs.promises.mkdir(dirName, { recursive: true });
-        const fileContent = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+
+        // Try to create a new one with the exact casing.
+        // await ensureDirectoryWithExactCasing(dirName);
+
+        // Create the resource file with header content.
+        const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+
         await fs.promises.writeFile(finalTargetPath, fileContent);
         logger.trace(`Resource file created at ${finalTargetPath}`);
     } else {
@@ -610,15 +720,15 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
 
 /**
  * Handles fallback for opening a test element file.
- * @param targetPath The target file path.
+ * @param {string} targetPath The target file path.
  */
 export async function handleFallback(targetPath: string): Promise<void> {
-    if (!(await utils.fileExistsAsync(targetPath))) {
-        const dirName = path.dirname(targetPath);
+    if (!(await isFilePresentCaseSensitive(targetPath))) {
+        const dirName: string = path.dirname(targetPath);
         await fs.promises.mkdir(dirName, { recursive: true });
         await fs.promises.writeFile(targetPath, "");
     }
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
+    const document: vscode.TextDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
     await vscode.window.showTextDocument(document);
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 }
@@ -664,6 +774,27 @@ export function getFinalSubdivisionAncestor(testElement: TestElement): TestEleme
     }
     logger.trace(
         `No final subdivision ancestor found for test element ${testElement.name} with unique ID: ${testElement.uniqueID}`
+    );
+    return null;
+}
+
+/**
+ * Traverses upward from an interaction element to find the nearest parent subdivision.
+ * @param {TestElement} testElement The test element representing an interaction.
+ * @returns {TestElement | null} The nearest subdivision ancestor, or null if not found.
+ */
+export function getSubdivisionAncestor(testElement: TestElement): TestElement | null {
+    logger.trace(`Searching subdivision ancestor for test element ${testElement.name}`);
+    let current = testElement.parent;
+    while (current) {
+        if (current.elementType === "Subdivision") {
+            logger.trace(`Found subdivision ancestor for test element ${testElement.name}: ${current.name}`);
+            return current;
+        }
+        current = current.parent;
+    }
+    logger.trace(
+        `No subdivision ancestor found for test element ${testElement.name} with unique ID: ${testElement.uniqueID}`
     );
     return null;
 }

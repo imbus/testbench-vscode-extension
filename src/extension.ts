@@ -639,17 +639,17 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 return;
             }
             // Construct the target path based on the hierarchical name of the test element.
-            const baseTargetPath = path.join(workspaceRootPath, ...testElement.hierarchicalName.split("/"));
+            const absolutePathOfTestElement = path.join(workspaceRootPath, ...testElement.hierarchicalName.split("/"));
             try {
                 switch (testElement.elementType) {
                     case "Subdivision":
-                        await testElementsTreeView.handleSubdivision(testElement, baseTargetPath);
+                        await testElementsTreeView.handleSubdivision(testElement, absolutePathOfTestElement);
                         break;
                     case "Interaction":
                         await testElementsTreeView.handleInteraction(testElement, workspaceRootPath);
                         break;
                     default:
-                        await testElementsTreeView.handleFallback(baseTargetPath);
+                        await testElementsTreeView.handleFallback(absolutePathOfTestElement);
                 }
             } catch (error: any) {
                 vscode.window.showErrorMessage("Error in goToFile command: " + error.message);

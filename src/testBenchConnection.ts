@@ -624,25 +624,38 @@ export class PlayServerConnection {
 
     /**
      * Sends a GET request to the server to keep the session alive, which normally times out after 5 minutes.
-     * Note: If the keep alive request fails, the user is logged out automatically, since the session will be timed out later anyway.
+     * The keep-alive process is started automatically when the PlayServerConnection object is created, and it runs every 4 minutes.
+     * If the request fails, retries are attempted up to 3 times with a delay of 1 second between each attempt.
+     * If the keep alive request fails, the user is logged out automatically, since the session will be timed out later anyway.
      */
     private async sendKeepAliveRequest(): Promise<void> {
         if (!this.sessionToken) {
             logger.warn("Session token is null. Cannot send keep-alive request.");
             return;
         }
-        try {
-            await this.apiClient.get(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" }
-            });
-            logger.trace("Keep-alive request sent.");
-        } catch (error) {
-            logger.error("Keep-alive request failed:", error);
-            // Logout the user if the keep-alive request fails.
-            logger.warn("Logging out the user after keep-alive failure.");
-            await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
-            // Possible reason for keep alive request fail:
-            // The user logged in in TestBench Client with the same account he used in VS Code, and the session in VS Code is forced to logout.
+
+        const maxRetries = 3; // Number of retry attempts
+        const delayMs = 1000; // Delay between retries in milliseconds
+        let retryKeepAliveCount = 0;
+
+        while (retryKeepAliveCount <= maxRetries) {
+            try {
+                await this.apiClient.get(`/login/session/v1`, {
+                    headers: { accept: "application/vnd.testbench+json" }
+                });
+                logger.trace("Keep-alive request sent.");
+                return; // If successful, exit the function
+            } catch (error) {
+                retryKeepAliveCount++;
+                if (retryKeepAliveCount <= maxRetries) {
+                    logger.warn(`Keep-alive attempt ${retryKeepAliveCount} failed. Retrying in ${delayMs}ms...`, error);
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
+                } else {
+                    logger.error("Keep-alive request failed after all retries:", error);
+                    logger.warn("Logging out the user after keep-alive failure.");
+                    await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
+                }
+            }
         }
     }
 }
