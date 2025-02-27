@@ -402,11 +402,12 @@ export class TestElementItem extends vscode.TreeItem {
             tooltip += `\nStatus: ${element.details.status}`;
         }
 
-        // TODO: Remove this in production
         // Append the original JSON representation (Useful for debugging).
+        /*
         if (element.jsonString) {
             tooltip += `\n\nJSON Data:\n${element.jsonString}`;
         }
+        */
 
         this.tooltip = tooltip;
 

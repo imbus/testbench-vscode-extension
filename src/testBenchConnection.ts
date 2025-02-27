@@ -149,9 +149,15 @@ export class PlayServerConnection {
         try {
             logger.debug("Fetching projects list.");
             const projectsURL = `/projects/v1`;
-            const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await this.apiClient.get(projectsURL, {
-                headers: { accept: "application/vnd.testbench+json" }
-            });
+            // Wrap the project list get request in the withRetry helper.
+            const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
+                () =>
+                    this.apiClient.get(projectsURL, {
+                        headers: { accept: "application/vnd.testbench+json" }
+                    }),
+                3, // maxRetries: try 3 additional times
+                1000 // delayMs: wait 1000ms between attempts
+            );
 
             // Save the response from server to a file for analyzing the structure
             /*
@@ -203,9 +209,13 @@ export class PlayServerConnection {
         }
         try {
             const projectTreeURL = `/projects/${projectKey}/tree/v1`;
-            const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await this.apiClient.get(
-                projectTreeURL,
-                { headers: { accept: "application/vnd.testbench+json" } }
+            const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await withRetry(
+                () =>
+                    this.apiClient.get(projectTreeURL, {
+                        headers: { accept: "application/vnd.testbench+json" }
+                    }),
+                3, // maxRetries: try 3 additional times
+                1000 // delayMs: wait 1000ms between attempts
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -285,7 +295,11 @@ export class PlayServerConnection {
             });
 
             logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
-            const testElementsResponse: AxiosResponse = await oldPlayServerSession.get(getTestElementsURL);
+            const testElementsResponse: AxiosResponse = await withRetry(
+                () => oldPlayServerSession.get(getTestElementsURL),
+                3, // maxRetries: try 3 additional times
+                1000 // delayMs: wait 1000ms between attempts
+            );
 
             // Save the JSON to a file for analyzing the structure
             /*
@@ -341,15 +355,16 @@ export class PlayServerConnection {
         };
 
         try {
-            const cycleStructureResponse: AxiosResponse<testBenchTypes.CycleStructure> = await this.apiClient.post(
-                cycleStructureUrl,
-                requestBody,
-                {
-                    headers: {
-                        accept: "application/json",
-                        "Content-Type": "application/json"
-                    }
-                }
+            const cycleStructureResponse: AxiosResponse<testBenchTypes.CycleStructure> = await withRetry(
+                () =>
+                    this.apiClient.post(cycleStructureUrl, requestBody, {
+                        headers: {
+                            accept: "application/json",
+                            "Content-Type": "application/json"
+                        }
+                    }),
+                3, // maxRetries: try 3 additional times
+                1000 // delayMs: wait 1000ms between attempts
             );
 
             // User selects a file path for saving the JSON
@@ -395,9 +410,14 @@ export class PlayServerConnection {
     ): Promise<void | null> {
         logger.debug("Logging out user.");
         try {
-            const logoutResponse: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" }
-            });
+            const logoutResponse: AxiosResponse = await withRetry(
+                () =>
+                    this.apiClient.delete(`/login/session/v1`, {
+                        headers: { accept: "application/vnd.testbench+json" }
+                    }),
+                3, // maxRetries: try 3 additional times
+                1000 // delayMs: wait 1000ms between attempts
+            );
 
             if (logoutResponse.status === 204) {
                 if (projectTreeDataProvider) {
@@ -459,14 +479,19 @@ export class PlayServerConnection {
         try {
             const zipFileData: Buffer = fs.readFileSync(zipFilePath);
             logger.debug(`Uploading zip file "${zipFilePath}" to ${uploadResultZipURL}`);
-            const uploadZipResponse: AxiosResponse = await this.apiClient.post(uploadResultZipURL, zipFileData, {
-                headers: {
-                    "Content-Type": "application/zip",
-                    accept: "application/json"
-                },
-                // Use this when you want to handle all status codes manually, otherwise Axios will throw an error for non-2xx status codes
-                validateStatus: () => true
-            });
+            const uploadZipResponse: AxiosResponse = await withRetry(
+                () =>
+                    this.apiClient.post(uploadResultZipURL, zipFileData, {
+                        headers: {
+                            "Content-Type": "application/zip",
+                            accept: "application/json"
+                        },
+                        // Handle all status codes manually
+                        validateStatus: () => true
+                    }),
+                3, // maxRetries: try 3 additional times
+                1000 // delayMs: wait 1000ms between attempts
+            );
 
             switch (uploadZipResponse.status) {
                 case 201: {
@@ -532,13 +557,18 @@ export class PlayServerConnection {
         const getJobIDOfImportUrl = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
 
         try {
-            const importJobIDResponse: AxiosResponse = await this.apiClient.post(getJobIDOfImportUrl, importData, {
-                headers: {
-                    "Content-Type": "application/json",
-                    accept: "application/json"
-                },
-                validateStatus: () => true
-            });
+            const importJobIDResponse: AxiosResponse = await withRetry(
+                () =>
+                    this.apiClient.post(getJobIDOfImportUrl, importData, {
+                        headers: {
+                            "Content-Type": "application/json",
+                            accept: "application/json"
+                        },
+                        validateStatus: () => true
+                    }),
+                3, // maxRetries: try 3 additional times
+                1000 // delayMs: wait 1000ms between attempts
+            );
 
             switch (importJobIDResponse.status) {
                 case 200: {
@@ -634,28 +664,54 @@ export class PlayServerConnection {
             return;
         }
 
-        const maxRetries = 3; // Number of retry attempts
-        const delayMs = 1000; // Delay between retries in milliseconds
-        let retryKeepAliveCount = 0;
+        try {
+            await withRetry(
+                () =>
+                    this.apiClient.get(`/login/session/v1`, {
+                        headers: { accept: "application/vnd.testbench+json" }
+                    }),
+                3, // maxRetries: try 3 additional times
+                1000 // delayMs: wait 1000ms between attempts
+            );
+            logger.trace("Keep-alive request sent.");
+        } catch (error) {
+            logger.error("Keep-alive request failed after retries:", error);
+            logger.warn("Logging out the user after keep-alive failure.");
+            await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
+        }
+    }
+}
 
-        while (retryKeepAliveCount <= maxRetries) {
-            try {
-                await this.apiClient.get(`/login/session/v1`, {
-                    headers: { accept: "application/vnd.testbench+json" }
-                });
-                logger.trace("Keep-alive request sent.");
-                return; // If successful, exit the function
-            } catch (error) {
-                retryKeepAliveCount++;
-                if (retryKeepAliveCount <= maxRetries) {
-                    logger.warn(`Keep-alive attempt ${retryKeepAliveCount} failed. Retrying in ${delayMs}ms...`, error);
-                    await new Promise((resolve) => setTimeout(resolve, delayMs));
-                } else {
-                    logger.error("Keep-alive request failed after all retries:", error);
-                    logger.warn("Logging out the user after keep-alive failure.");
-                    await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
-                }
+/**
+ * Executes an asynchronous function with retry logic in case of failure.
+ * Used to retry API calls in case of network errors. To disable retries for an API call, set maxRetries to 0.
+ *
+ * @template T - The type returned by the asynchronous function.
+ * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
+ * @param {number} maxRetries - Maximum number of retry attempts (default is 3).
+ * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
+ * @returns {Promise<T>} A promise resolving to the function's return value.
+ * @throws The error from the last failed attempt if all retries fail.
+ */
+async function withRetry<T>(
+    asyncFunction: () => Promise<T>,
+    maxRetries: number = 3,
+    delayMs: number = 1000
+): Promise<T> {
+    let attempt: number = 0;
+    while (true) {
+        try {
+            return await asyncFunction();
+        } catch (error) {
+            attempt++;
+            if (attempt > maxRetries) {
+                // If we've exceeded maxRetries, rethrow the error.
+                logger.error(`Attempt ${attempt} failed. Maximum retries reached, request failed.`, error);
+                throw error;
             }
+            // Log the retry attempt and delay before retrying.
+            console.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`, error);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
     }
 }
@@ -923,18 +979,19 @@ export async function loginToNewPlayServerAndInitSessionToken(
                 logger.trace("Sending login request to:", loginURL);
                 progress.report({ message: "Sending login request..." });
 
-                const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await axios.post(
-                    loginURL,
-                    requestBody,
-                    {
-                        headers: {
-                            accept: "application/vnd.testbench+json",
-                            "Content-Type": "application/vnd.testbench+json"
-                        },
-                        httpsAgent: new https.Agent({
-                            rejectUnauthorized: false
-                        })
-                    }
+                const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await withRetry(
+                    () =>
+                        axios.post(loginURL, requestBody, {
+                            headers: {
+                                accept: "application/vnd.testbench+json",
+                                "Content-Type": "application/vnd.testbench+json"
+                            },
+                            httpsAgent: new https.Agent({
+                                rejectUnauthorized: false
+                            })
+                        }),
+                    3, // maxRetries: try 3 additional times
+                    1000 // delayMs: wait 1000ms between attempts
                 );
 
                 // An exception is thrown automatically if the status code is not 2xx
@@ -1015,12 +1072,14 @@ async function fetchServerVersions(
         const serverVersionsURL = `${baseURL}/api/serverVersions/v1`;
 
         logger.debug("Fetching server versions from URL:", serverVersionsURL);
-        const serverVersionsResponse: AxiosResponse<testBenchTypes.ServerVersionsResponse> = await axios.get(
-            serverVersionsURL,
-            {
-                headers: { Accept: "application/vnd.testbench+json" },
-                httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: true in production
-            }
+        const serverVersionsResponse: AxiosResponse<testBenchTypes.ServerVersionsResponse> = await withRetry(
+            () =>
+                axios.get(serverVersionsURL, {
+                    headers: { Accept: "application/vnd.testbench+json" },
+                    httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: set to true in production
+                }),
+            3, // maxRetries: try 3 additional times
+            1000 // delayMs: wait 1000ms between attempts
         );
 
         logger.debug(
