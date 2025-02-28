@@ -706,11 +706,12 @@ async function withRetry<T>(
             attempt++;
             if (attempt > maxRetries) {
                 // If we've exceeded maxRetries, rethrow the error.
-                logger.error(`Attempt ${attempt} failed. Maximum retries reached, request failed.`, error);
+                // Note: Error message contains sensitive information, do not log it.
+                logger.error(`Attempt ${attempt} failed. Maximum retries reached, request failed.`);
                 throw error;
             }
             // Log the retry attempt and delay before retrying.
-            console.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`, error);
+            logger.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`);
             await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
     }

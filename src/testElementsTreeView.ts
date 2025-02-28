@@ -276,6 +276,8 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
 
     /**
      * Recursively filters the tree based on element type and regex matching.
+     * Also, if a robot resource (directRegexMatch true) is nested under another robot resource,
+     * it is filtered out and a warning message is recorded.
      * Filtered elements become null and are removed from the tree.
      *
      * @param {TestElement} testElement The element to filter.
@@ -339,6 +341,41 @@ function buildTree(flatJsonTestElements: any[]): TestElement[] {
         }
     }
     filteredRoots.forEach((root) => assignHierarchicalNames(root, ""));
+
+    // Identify nested robot resources, which is not allowed, and warn the user if found.
+    const nestedRobotResources: string[] = [];
+    /**
+     * Recursively checks for nested robot resources.
+     * If a robot resource is found under another robot resource, raise a warning.
+     * @param {TestElement} testElement The element to check.
+     */
+    function checkForNestedRobotResources(testElement: TestElement): void {
+        if (testElement.directRegexMatch) {
+            // Check each child: if any child is also a robot resource, raise a warning.
+            for (const child of testElement.children || []) {
+                if (child.directRegexMatch) {
+                    // Instead of storing the test elements, store a warning message.
+                    nestedRobotResources.push(
+                        `Robot resource '${testElement.name}' contains another robot resource '${child.name}'.`
+                    );
+                }
+                // Continue checking children recursively.
+                checkForNestedRobotResources(child);
+            }
+        } else {
+            // If current element is not a robot resource, still check its children.
+            for (const child of testElement.children || []) {
+                checkForNestedRobotResources(child);
+            }
+        }
+    }
+
+    filteredRoots.forEach((root) => checkForNestedRobotResources(root));
+    if (nestedRobotResources.length > 0) {
+        vscode.window.showWarningMessage(
+            `Warning: Nested robot resources found. Please review the test elements view in TestBench Client.`
+        );
+    }
 
     return filteredRoots;
 }
