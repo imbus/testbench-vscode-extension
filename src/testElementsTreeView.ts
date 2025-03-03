@@ -103,7 +103,7 @@ function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
 
     const JSlibraryRegexPatterns = pythonResourceRegexPatternsInExtensionSettings
         .map((pythonRegexPattern) => {
-            logger.trace(`Converting pythong regex pattern: ${pythonRegexPattern}`);
+            logger.trace(`Converting python regex pattern: ${pythonRegexPattern}`);
             const convertedJSPattern = convertPythonRegexToJs(pythonRegexPattern);
             logger.trace(`Converted to javascript regex pattern: ${convertedJSPattern}`);
             try {

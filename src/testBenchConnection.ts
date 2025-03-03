@@ -298,7 +298,17 @@ export class PlayServerConnection {
             const testElementsResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getTestElementsURL),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                1000, // delayMs: wait 1000ms between attempts
+                (error) => {
+                    if (axios.isAxiosError(error) && error.response) {
+                        // Do not retry if the error is due to authentication or if the resource is not found.
+                        const nonRetryableStatusCodes = [401, 404];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -364,7 +374,17 @@ export class PlayServerConnection {
                         }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                1000, // delayMs: wait 1000ms between attempts
+                (error) => {
+                    if (axios.isAxiosError(error) && error.response) {
+                        // Do not retry if the error is due to a bad request, missing resource, or unprocessable data.
+                        const nonRetryableStatusCodes = [400, 404, 422];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
             );
 
             // User selects a file path for saving the JSON
@@ -490,7 +510,17 @@ export class PlayServerConnection {
                         validateStatus: () => true
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                1000, // delayMs: wait 1000ms between attempts
+                (error) => {
+                    // Do not retry if the error is due to a non-transient condition
+                    if (axios.isAxiosError(error) && error.response) {
+                        const nonRetryableStatusCodes = [403, 404, 422];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
             );
 
             switch (uploadZipResponse.status) {
@@ -567,7 +597,17 @@ export class PlayServerConnection {
                         validateStatus: () => true
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                1000, // delayMs: wait 1000ms between attempts
+                (error) => {
+                    // Do not retry if the error has a non-transient status code.
+                    if (axios.isAxiosError(error) && error.response) {
+                        const nonRetryableStatusCodes = [400, 403, 404, 422];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
             );
 
             switch (importJobIDResponse.status) {
@@ -1093,7 +1133,18 @@ async function fetchServerVersions(
                     httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: set to true in production
                 }),
             3, // maxRetries: try 3 additional times
-            1000 // delayMs: wait 1000ms between attempts
+            1000, // delayMs: wait 1000ms between attempts
+            // Retry only if the error is due to a non-transient condition
+            (error) => {
+                if (axios.isAxiosError(error) && error.response) {
+                    // Do not retry if a 404 is received
+                    const nonRetryableStatusCodes = [404];
+                    if (nonRetryableStatusCodes.includes(error.response.status)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
         );
 
         logger.debug(
