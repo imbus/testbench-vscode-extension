@@ -690,19 +690,26 @@ export class PlayServerConnection {
  * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
  * @param {number} maxRetries - Maximum number of retry attempts (default is 3).
  * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
+ * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
 async function withRetry<T>(
     asyncFunction: () => Promise<T>,
     maxRetries: number = 3,
-    delayMs: number = 1000
+    delayMs: number = 1000,
+    shouldRetry?: (error: any) => boolean
 ): Promise<T> {
     let attempt: number = 0;
     while (true) {
         try {
             return await asyncFunction();
         } catch (error) {
+            // Check if we should not retry based on the error type/condition.
+            if (shouldRetry && !shouldRetry(error)) {
+                logger.warn(`Error is not retryable. Aborting further retry attempts.`);
+                throw error;
+            }
             attempt++;
             if (attempt > maxRetries) {
                 // If we've exceeded maxRetries, rethrow the error.
@@ -987,12 +994,17 @@ export async function loginToNewPlayServerAndInitSessionToken(
                                 accept: "application/vnd.testbench+json",
                                 "Content-Type": "application/vnd.testbench+json"
                             },
-                            httpsAgent: new https.Agent({
-                                rejectUnauthorized: false
-                            })
+                            httpsAgent: new https.Agent({ rejectUnauthorized: false })
                         }),
-                    3, // maxRetries: try 3 additional times
-                    1000 // delayMs: wait 1000ms between attempts
+                    3, // maxRetries
+                    1000, // delayMs
+                    (error) => {
+                        // Do not retry if the error is due to invalid credentials (HTTP 401)
+                        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+                            return false;
+                        }
+                        return true;
+                    }
                 );
 
                 // An exception is thrown automatically if the status code is not 2xx
@@ -1035,8 +1047,9 @@ export async function loginToNewPlayServerAndInitSessionToken(
             }
         );
         return connection;
-    } catch (error) {
-        logger.error("Error during login:", error);
+    } catch {
+        // Note: error contains sensitive information, do not catch and log the error object.
+        logger.error("Error during login");
         vscode.window.showInformationMessage("Error during login.");
         return null;
     }
