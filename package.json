@@ -391,7 +391,7 @@
             },
             {
                 "command": "testbenchExtension.goToTestElementFile",
-                "title": "Go To File"
+                "title": "Go to Robot Resource"
             }
         ],
         "views": {

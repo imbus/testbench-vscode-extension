@@ -79,7 +79,7 @@ The extension settings contains following configurations:
     Once you’ve executed the generated Robot Framework tests (for example via [RobotCode](https://robotcode.io/)), you can click the **Upload** button to send the test results back to the TestBench server. The extension automatically locates the output.xml file that stores the Robot Framework test results inside your working directory, where you can set the working directory path in the extension settings. During the creation process of the results, a report file named `ReportWithResults_<TIMESTAMP>.zip` with a timestamp at the end of the file will be created, containing the test results. If you choose to clear the report file after processing in the extension settings, this report file will be deleted automatically after the upload process.
 
 - **Display Test Elements Tree**
-  Upon clicking on **"Show Robotframework Resources"** button for a version element in the project management tree, the extension will display the test elements tree in a separate view, where you view the robotframework resource files and open them in the editor by right-clicking on the resource file and selecting "Go To File".
+  Upon clicking on **"Show Robotframework Resources"** button for a version element in the project management tree, the extension will display the test elements tree in a separate view, where you view the robotframework resource files and open them in the editor by right-clicking on the resource file and selecting "Go to Robot Resource".
 
 ## Contributing
 

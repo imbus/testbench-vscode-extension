@@ -568,21 +568,21 @@ function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
 /**
  * Checks if a file (or folder) exists, with an option for a case-sensitive or case-insensitive check.
  * For a case-sensitive check, every folder in the path hierarchy is verified to match exactly.
- * @param filePath The full path to the file (or folder).
- * @param caseSensitiveCheck Optional flag to perform a case-sensitive check (true by default).
+ * @param {string} filePath The full path to the file (or folder).
+ * @param {boolean} caseSensitiveCheck Optional flag to perform a case-sensitive check (true by default).
  * @returns A promise that resolves to true if the entire path exists with exact casing, false otherwise.
  */
-async function isFilePresentCaseSensitive(filePath: string, caseSensitiveCheck: boolean = true): Promise<boolean> {
-    logger.trace(`@@@@ Checking if file exists: ${filePath}`);
+async function isFilePresentCaseSensitive(filePath: string, caseSensitiveCheck: boolean = false): Promise<boolean> {
+    logger.trace(`Checking if file exists: ${filePath}`);
     if (!caseSensitiveCheck) {
         // Case-insensitive check: simply use stat.
         try {
             await fs.promises.stat(filePath);
-            logger.trace(`@@@@ File exists with case-insensitive check: ${filePath}`);
+            logger.trace(`File exists with case-insensitive check: ${filePath}`);
             return true;
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                logger.trace(`@@@@ File does not exist: ${filePath}`);
+                logger.trace(`File does not exist: ${filePath}`);
                 return false;
             }
             throw err;
@@ -595,7 +595,7 @@ async function isFilePresentCaseSensitive(filePath: string, caseSensitiveCheck: 
     // Split the path into its parts. Filtering out any empty strings (e.g., due to leading separators).
     const parts: string[] = resolvedPath.split(path.sep).filter((part) => part !== "");
 
-    logger.trace(`@@@@ Resolved path: ${resolvedPath}`);
+    logger.trace(`Resolved path: ${resolvedPath}`);
 
     // Determine the starting point (the root)
     let currentPath: string;
@@ -617,24 +617,24 @@ async function isFilePresentCaseSensitive(filePath: string, caseSensitiveCheck: 
         let entries: string[];
         try {
             entries = await fs.promises.readdir(currentPath);
-            logger.trace(`@@@@ Entries in ${currentPath}: ${entries}`);
+            // logger.trace(`Entries in ${currentPath}: ${entries}`);
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                logger.trace(`@@@@ Path does not exist: ${currentPath}`);
+                logger.trace(`Path does not exist: ${currentPath}`);
                 return false;
             }
             throw err;
         }
         // Check if the current part exactly matches one of the entries.
         if (!entries.includes(part)) {
-            logger.trace(`@@@@ Returning false, part ${part} not found in ${currentPath}`);
+            logger.trace(`Returning false, part ${part} not found in ${currentPath}`);
             return false;
         }
-        logger.trace(`@@@@ Part ${part} found in ${currentPath}`);
+        logger.trace(`Part ${part} found in ${currentPath}`);
         currentPath = path.join(currentPath, part);
     }
 
-    logger.trace(`@@@@ File exists with exact case, returning true: ${resolvedPath}`);
+    logger.trace(`File exists with exact case, returning true: ${resolvedPath}`);
     return true;
 }
 
@@ -666,6 +666,8 @@ export async function handleSubdivision(testElement: TestElement, absolutePathOf
             // Create resource file with header content.
             await fs.promises.writeFile(processedTestElementPath, fileContent);
             logger.trace(`Resource file created at ${processedTestElementPath}`);
+        } else {
+            logger.trace(`Resource file already exists at ${processedTestElementPath}, skipping creation.`);
         }
         // Open the resource file in the VS Code editor.
         const document: vscode.TextDocument = await vscode.workspace.openTextDocument(
@@ -689,6 +691,19 @@ export async function handleSubdivision(testElement: TestElement, absolutePathOf
         } else {
             logger.trace(`Subdivision folder already exists at ${absolutePathOfTestElement}`);
         }
+
+        // Recursively handle all final subdivisions under this non-final subdivision.
+        if (testElement.children) {
+            logger.trace(`Handling children of subdivision '${testElement.name}'`);
+            for (const child of testElement.children) {
+                if (child.elementType === "Subdivision") {
+                    const childPath = path.join(absolutePathOfTestElement, child.name);
+                    await handleSubdivision(child, childPath);
+                }
+            }
+            logger.trace(`Finished handling children of subdivision '${testElement.name}'`);
+        }
+
         // Open VS Code explorer.
         await vscode.commands.executeCommand("workbench.view.explorer");
     }

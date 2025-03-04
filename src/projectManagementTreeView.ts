@@ -331,25 +331,40 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     async handleTestCycleClick(projectsTreeViewItem: ProjectManagementTreeItem): Promise<void> {
         logger.trace("Handling tree item click for:", projectsTreeViewItem.label);
         if (projectsTreeViewItem.contextValue === "Cycle") {
-            logger.trace("Clicked tree item is a cycle. Creating test theme tree view.");
-            this.testThemeDataProvider.clearTree();
-            this.testThemeDataProvider.setRoots(await this.getChildrenOfCycle(projectsTreeViewItem));
+            // Display a progress bar since this operation may take some time.
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Fetching Data From Server",
+                    cancellable: false
+                },
+                async (progress) => {
+                    logger.trace("Clicked tree item is a cycle. Creating test theme tree view.");
+                    progress.report({ increment: 0, message: "Fetching test themes..." });
 
-            // logger.trace("Clicked cycles parent data:", projectsTreeViewItem.parent?.item);
-            if (projectsTreeViewItem.parent?.item?.nodeType === "Version") {
-                const tovKeyOfSelectedCycleElement = projectsTreeViewItem.parent?.item?.key;
-                logger.trace(
-                    `Clicked cycle item has a parent TOV with the key: ${tovKeyOfSelectedCycleElement}. Creating test elements view using the TOV.`
-                );
-                // Fetch and display the test elements of TOV, which is the parent of the selected cycle element.
-                await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                    tovKeyOfSelectedCycleElement,
-                    // Use the parent TOV's name in the title of the test elements tree view
-                    typeof projectsTreeViewItem.parent?.label === "string"
-                        ? projectsTreeViewItem.parent.label
-                        : undefined
-                );
-            }
+                    // Clear and set up the test theme tree view.
+                    this.testThemeDataProvider.clearTree();
+                    const children = await this.getChildrenOfCycle(projectsTreeViewItem);
+                    this.testThemeDataProvider.setRoots(children);
+
+                    progress.report({ increment: 50, message: "Fetching test elements..." });
+
+                    // If the cycle has a parent of type "Version", fetch and display test elements.
+                    if (projectsTreeViewItem.parent?.item?.nodeType === "Version") {
+                        const tovKeyOfSelectedCycleElement = projectsTreeViewItem.parent?.item?.key;
+                        logger.trace(
+                            `Clicked cycle item has a parent TOV with the key: ${tovKeyOfSelectedCycleElement}. Creating test elements view using the TOV.`
+                        );
+                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(
+                            tovKeyOfSelectedCycleElement,
+                            typeof projectsTreeViewItem.parent?.label === "string"
+                                ? projectsTreeViewItem.parent.label
+                                : undefined
+                        );
+                    }
+                    progress.report({ increment: 100, message: "Processing complete." });
+                }
+            );
         }
     }
 
