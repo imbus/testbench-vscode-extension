@@ -288,18 +288,12 @@
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
                 "title": "Generate Tests",
-                "icon": {
-                    "light": "resources/icons/robot_dark.svg",
-                    "dark": "resources/icons/robot_dark.svg"
-                }
+                "icon": "$(robotcode-robot)"
             },
             {
                 "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
                 "title": "Generate Tests",
-                "icon": {
-                    "light": "resources/icons/robot_dark.svg",
-                    "dark": "resources/icons/robot_dark.svg"
-                }
+                "icon": "$(robotcode-robot)"
             },
             {
                 "command": "testbenchExtension.fetchReportForSelectedTreeItem",
@@ -567,7 +561,8 @@
         "regex-translator": "^0.2.8"
     },
     "extensionDependencies": [
-        "ms-python.python"
+        "ms-python.python",
+        "d-biehl.robotcode"
     ],
     "husky": {
         "hooks": {
