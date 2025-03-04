@@ -743,7 +743,7 @@ export async function handleInteraction(testElement: TestElement, workspaceRootP
         // await ensureDirectoryWithExactCasing(dirName);
 
         // Create the resource file with header content.
-        const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+        const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${finalSubdivisionAncestor.uniqueID}\n`;
 
         await fs.promises.writeFile(finalTargetPath, fileContent);
         logger.trace(`Resource file created at ${finalTargetPath}`);
