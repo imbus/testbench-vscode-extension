@@ -72,7 +72,7 @@
                     "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Delete all files inside the working directory called .tesbench excluding the log files before generating tests.",
+                        "description": "Delete all files inside the working directory called .testbench excluding the log files before generating tests.",
                         "order": 7,
                         "scope": "resource"
                     },
@@ -271,7 +271,7 @@
             },
             {
                 "command": "testbenchExtension.clearWorkspaceFolder",
-                "title": "TestBench: Clear TestBench Folder",
+                "title": "TestBench: Clear Temporary Files",
                 "icon": {
                     "light": "resources/icons/clearWorkspaceFolder.svg",
                     "dark": "resources/icons/clearWorkspaceFolder.svg"

@@ -131,7 +131,7 @@ export function setConnection(newConnection: testBenchConnection.PlayServerConne
 export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null;
 
 /** Global tree views. */
-export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementItem>;
+export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementTreeItem>;
 export let projectTreeView: vscode.TreeView<projectManagementTreeView.ProjectManagementTreeItem>;
 export function setProjectTreeView(
     newProjectTreeView: vscode.TreeView<projectManagementTreeView.ProjectManagementTreeItem>
@@ -624,12 +624,12 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(
         context,
         allExtensionCommands.goToTestElementFile.command,
-        async (treeItem: testElementsTreeView.TestElementItem) => {
-            if (!treeItem || !treeItem.element) {
+        async (treeItem: testElementsTreeView.TestElementTreeItem) => {
+            if (!treeItem || !treeItem.testElementData) {
                 logger.trace("Invalid tree item or element in goToTestElementFile command.");
                 return;
             }
-            const testElement = treeItem.element;
+            const testElement = treeItem.testElementData;
             if (!testElement.hierarchicalName) {
                 logger.trace("Test element does not have a valid hierarchical name.");
                 return;
