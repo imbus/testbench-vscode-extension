@@ -104,7 +104,7 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     displayInteractionsForSelectedTOV: {
         command: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`
     },
-    goToTestElementFile: { command: `${baseKeyOfExtension}.goToTestElementFile` }
+    openRobotResourceFile: { command: `${baseKeyOfExtension}.openRobotResourceFile` }
 };
 
 /** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
@@ -144,6 +144,9 @@ export function setProjectTreeView(
  * Declared here so it can be referenced from command handlers.
  */
 export let testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDataProvider;
+export function getTestElementsTreeDataProvider(): testElementsTreeView.TestElementsTreeDataProvider {
+    return testElementsTreeDataProvider;
+}
 
 /* =============================================================================
    Helper Functions
@@ -619,41 +622,40 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         }
     );
 
-    // --- Command: Go To Test Element File ---
+    // --- Command: Open Robot Resource File ---
     // Opens or creates the file in the workspace corresponding to the selected test element.
     registerSafeCommand(
         context,
-        allExtensionCommands.goToTestElementFile.command,
+        allExtensionCommands.openRobotResourceFile.command,
         async (treeItem: testElementsTreeView.TestElementTreeItem) => {
             if (!treeItem || !treeItem.testElementData) {
-                logger.trace("Invalid tree item or element in goToTestElementFile command.");
+                logger.trace("Invalid tree item or element in Open Robot Resource File command.");
                 return;
             }
-            const testElement = treeItem.testElementData;
-            if (!testElement.hierarchicalName) {
-                logger.trace("Test element does not have a valid hierarchical name.");
-                return;
-            }
-            const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
-            if (!workspaceRootPath) {
-                return;
-            }
+
             // Construct the target path based on the hierarchical name of the test element.
-            const absolutePathOfTestElement = path.join(workspaceRootPath, ...testElement.hierarchicalName.split("/"));
+            const absolutePathOfTestElement = await testElementsTreeView.constructAbsolutePathForTestElement(treeItem);
+            if (!absolutePathOfTestElement) {
+                return;
+            }
+
+            logger.trace(
+                `@@@@@ Open Robot Resource File command created absolutePathOfTestElement: ${absolutePathOfTestElement}`
+            );
             try {
-                switch (testElement.elementType) {
+                switch (treeItem.testElementData.elementType) {
                     case "Subdivision":
-                        await testElementsTreeView.handleSubdivision(testElement, absolutePathOfTestElement);
+                        await testElementsTreeView.handleSubdivision(treeItem);
                         break;
                     case "Interaction":
-                        await testElementsTreeView.handleInteraction(testElement, workspaceRootPath);
+                        await testElementsTreeView.handleInteraction(treeItem);
                         break;
                     default:
                         await testElementsTreeView.handleFallback(absolutePathOfTestElement);
                 }
             } catch (error: any) {
-                vscode.window.showErrorMessage("Error in goToFile command: " + error.message);
-                logger.error("Error in goToFile command:", error);
+                vscode.window.showErrorMessage("Error in Open Robot Resource File command: " + error.message);
+                logger.error("Error in Open Robot Resource File command:", error);
             }
         }
     );

@@ -390,7 +390,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.goToTestElementFile",
+                "command": "testbenchExtension.openRobotResourceFile",
                 "title": "Go to Robot Resource"
             }
         ],
@@ -495,7 +495,7 @@
                     "group": "inline@1"
                 },
                 {
-                    "command": "testbenchExtension.goToTestElementFile",
+                    "command": "testbenchExtension.openRobotResourceFile",
                     "when": "view == testElementsView && viewItem == testElement",
                     "group": "navigation"
                 }

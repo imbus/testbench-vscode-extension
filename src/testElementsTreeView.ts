@@ -4,13 +4,13 @@
  * retrieved from the TestBench server.
  */
 
-// TODO: If the test element view is empty due to the filtering, show a message to the user that no elements are mathed with the regex.
+// TODO: If the test element view is empty due to the filtering, show a message to the user that no elements are mathed with the regex?
 
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as utils from "./utils";
-import { connection, logger, getConfig, testElementTreeView } from "./extension";
+import { connection, logger, getConfig, testElementTreeView, getTestElementsTreeDataProvider } from "./extension";
 
 /* =============================================================================
    Global Variables and Helper Functions
@@ -340,7 +340,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
         const currentPath: string = parentPath ? `${parentPath}/${element.name}` : element.name;
         element.hierarchicalName = currentPath;
         if (element.children && element.children.length > 0) {
-            element.children.forEach((child) => assignHierarchicalNames(child, currentPath));
+            element.children.forEach((child: any) => assignHierarchicalNames(child, currentPath));
         }
     }
     filteredRoots.forEach((root) => assignHierarchicalNames(root, ""));
@@ -398,13 +398,15 @@ const iconMapping: Record<string, string> = {
 
 /**
  * Returns a vscode.Uri for the icon corresponding to an element type.
- * @param {string} elementType The element type.
+ * @param {TestElementTreeItem} treeItem The element type.
  * @returns {vscode.Uri} The URI of the icon.
  */
-function getIconUri(elementType: string): vscode.Uri {
-    logger.trace(`Getting icon URI for element type: ${elementType}: ${iconMapping[elementType]}`);
+function getIconUriForElementType(treeItem: TestElementTreeItem): vscode.Uri {
+    logger.trace(
+        `@@ Getting icon URI for element ${treeItem.testElementData.name} type: ${treeItem.testElementData.elementType}: ${iconMapping[treeItem.testElementData.elementType]}`
+    );
     const iconUri: vscode.Uri = vscode.Uri.file(
-        path.join(__dirname, "..", "resources", "icons", iconMapping[elementType])
+        path.join(__dirname, "..", "resources", "icons", iconMapping[treeItem.testElementData.elementType])
     );
     return iconUri;
 }
@@ -421,31 +423,31 @@ export class TestElementTreeItem extends vscode.TreeItem {
 
     /**
      * Constructs a new TestElementTreeItem.
-     * @param element The test element.
+     * @param elementData The test element.
      */
-    constructor(element: TestElementData) {
+    constructor(elementData: TestElementData) {
         // Set the label to the element's name.
         // Determine collapsibility based on whether the element has children.
         super(
-            element.name,
-            element.children && element.children.length > 0
+            elementData.name,
+            elementData.children && elementData.children.length > 0
                 ? vscode.TreeItemCollapsibleState.Collapsed
                 : vscode.TreeItemCollapsibleState.None
         );
-        this.testElementData = element;
+        this.testElementData = elementData;
         // Set the context value to enable context menu contributions.
         this.contextValue = "testElement"; // This value is used in package.json to enable context menu contributions.
 
         // Build a tooltip string with detailed information about the element.
-        let tooltip = `Type: ${element.elementType}\nName: ${element.name}\nUniqueID: ${element.uniqueID}`;
-        if (element.libraryKey) {
-            tooltip += `\nLibraryKey: ${element.libraryKey}`;
+        let tooltip = `Type: ${elementData.elementType}\nName: ${elementData.name}\nUniqueID: ${elementData.uniqueID}`;
+        if (elementData.libraryKey) {
+            tooltip += `\nLibraryKey: ${elementData.libraryKey}`;
         }
-        if (element.details.hasVersion !== undefined) {
-            tooltip += `\nHas Version: ${element.details.hasVersion}`;
+        if (elementData.details.hasVersion !== undefined) {
+            tooltip += `\nHas Version: ${elementData.details.hasVersion}`;
         }
-        if (element.details.status !== undefined) {
-            tooltip += `\nStatus: ${element.details.status}`;
+        if (elementData.details.status !== undefined) {
+            tooltip += `\nStatus: ${elementData.details.status}`;
         }
 
         // Append the original JSON representation (Useful for debugging).
@@ -458,10 +460,10 @@ export class TestElementTreeItem extends vscode.TreeItem {
         this.tooltip = tooltip;
 
         // Display the uniqueID as a description next to the label.
-        this.description = element.uniqueID || "";
+        this.description = elementData.uniqueID || "";
 
         // Set the initial icon based on the element type.
-        this.setIcon(getIconUri(element.elementType));
+        this.setIcon(getIconUriForElementType(this));
     }
 
     public setIcon(newIconPath: vscode.Uri | { light: vscode.Uri; dark: vscode.Uri }): void {
@@ -470,38 +472,84 @@ export class TestElementTreeItem extends vscode.TreeItem {
 }
 
 /**
+ * Constructs the absolute path for a test element based on the workspace root and hierarchical name.
+ *
+ * @param {TestElementTreeItem} testElementTreeItem The test element tree item.
+ * @returns {Promise<string | undefined>} The absolute path of the test element, or undefined if not found.
+ */
+export async function constructAbsolutePathForTestElement(
+    testElementTreeItem: TestElementTreeItem
+): Promise<string | undefined> {
+    const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
+    if (!workspaceRootPath) {
+        logger.trace(
+            `No workspace root path found while constructing absolute path for test element: ${testElementTreeItem.testElementData.name}`
+        );
+        return undefined;
+    }
+
+    // Construct the target path based on the hierarchical name of the test element.
+    const absolutePathOfTestElement = path.join(
+        workspaceRootPath,
+        ...(testElementTreeItem.testElementData.hierarchicalName || "").split("/")
+    );
+
+    if (!absolutePathOfTestElement) {
+        logger.trace(
+            `No absolute path found while constructing absolute path for test element: ${testElementTreeItem.testElementData.name}`
+        );
+        return undefined;
+    }
+
+    return absolutePathOfTestElement;
+}
+
+/**
  * Updates the icon of a Subdivision based on whether it is locally available or not.
  * @param {TestElementTreeItem} testElementTreeItem The TestElementTreeItem to update.
  * @returns {Promise<void>} A promise that resolves when the icon is updated.
  */
-export async function updateTestElementIcon(
-    testElementTreeItem: TestElementTreeItem,
-    absolutePathOfTestElement: string
-): Promise<void> {
-    // logger.trace(`Updating icon for test element: ${testElementTreeItem.testElementData.name}`);
+export async function updateTestElementIcon(testElementTreeItem: TestElementTreeItem): Promise<void> {
+    const absolutePathOfTestElement = await constructAbsolutePathForTestElement(testElementTreeItem);
+    if (!absolutePathOfTestElement) {
+        return;
+    }
+
+    logger.trace(
+        `@@@@ Updating icon for test element: ${testElementTreeItem.testElementData.name} with absolute path ${absolutePathOfTestElement}`
+    );
     if (testElementTreeItem.testElementData.elementType !== "Subdivision") {
         testElementTreeItem.setIcon({
-            light: getIconUri(testElementTreeItem.testElementData.elementType),
-            dark: getIconUri(testElementTreeItem.testElementData.elementType)
+            light: getIconUriForElementType(testElementTreeItem),
+            dark: getIconUriForElementType(testElementTreeItem)
         });
     } else {
         logger.trace(`Updating icon for subdivision: ${testElementTreeItem.testElementData.name}`);
-        const isLocal: boolean = await isSubdivisionLocallyAvailable(
-            testElementTreeItem.testElementData,
-            absolutePathOfTestElement
-        );
+        const isLocal: boolean = await isSubdivisionLocallyAvailable(testElementTreeItem, absolutePathOfTestElement);
 
-        testElementTreeItem.setIcon(
-            isLocal
-                ? {
-                      light: getIconUri("LocalSubdivision"),
-                      dark: getIconUri("LocalSubdivision")
-                  }
-                : {
-                      light: getIconUri("MissingSubdivision"),
-                      dark: getIconUri("MissingSubdivision")
-                  }
-        );
+        if (isLocal) {
+            const localIconUri = vscode.Uri.file(
+                path.join(__dirname, "..", "resources", "icons", iconMapping["LocalSubdivision"])
+            );
+            logger.trace(
+                `@@@@@ SETTING ICON FOR LOCAL Subdivision '${testElementTreeItem.testElementData.name}' TO ${iconMapping["LocalSubdivision"]} : ${localIconUri}`
+            );
+            testElementTreeItem.setIcon({
+                light: localIconUri,
+                dark: localIconUri
+            });
+        } else {
+            const missingIconUri = vscode.Uri.file(
+                path.join(__dirname, "..", "resources", "icons", iconMapping["MissingSubdivision"])
+            );
+            logger.trace(
+                `@@@@@ SETTING ICON FOR MISSING Subdivision '${testElementTreeItem.testElementData.name}' TO ${iconMapping["MissingSubdivision"]} : ${missingIconUri}`
+            );
+            testElementTreeItem.setIcon({
+                light: missingIconUri,
+                dark: missingIconUri
+            });
+        }
     }
 }
 
@@ -509,7 +557,7 @@ export async function updateTestElementIcon(
  * TestElementsTreeDataProvider implements the VS Code TreeDataProvider interface for test elements.
  */
 export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<TestElementTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<TestElementTreeItem | undefined> = new vscode.EventEmitter<
+    public _onDidChangeTreeData: vscode.EventEmitter<TestElementTreeItem | undefined> = new vscode.EventEmitter<
         TestElementTreeItem | undefined
     >();
     readonly onDidChangeTreeData: vscode.Event<TestElementTreeItem | undefined> = this._onDidChangeTreeData.event;
@@ -528,17 +576,9 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         if (testElementTreeItem) {
             const children = testElementTreeItem.testElementData.children || [];
             const childItems = await Promise.all(
-                children.map(async (child) => {
+                children.map(async (child: any) => {
                     const childItem = new TestElementTreeItem(child);
-                    // Update subdivision icons based on local availability.
-                    const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
-                    const absolutePathOfTestElement = path.join(
-                        workspaceRootPath!,
-                        ...(testElementTreeItem.testElementData.hierarchicalName
-                            ? testElementTreeItem.testElementData.hierarchicalName.split("/")
-                            : [])
-                    );
-                    await updateTestElementIcon(childItem, absolutePathOfTestElement);
+                    await updateTestElementIcon(childItem);
                     return childItem;
                 })
             );
@@ -548,13 +588,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             const rootItems = await Promise.all(
                 this.treeData.map(async (child) => {
                     const childItem = new TestElementTreeItem(child);
-                    // Update subdivision icons based on local availability.
-                    const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
-                    const absolutePathOfTestElement = path.join(
-                        workspaceRootPath!,
-                        ...(child.hierarchicalName ? child.hierarchicalName.split("/") : [])
-                    );
-                    await updateTestElementIcon(childItem, absolutePathOfTestElement);
+                    await updateTestElementIcon(childItem);
                     return childItem;
                 })
             );
@@ -627,7 +661,7 @@ export async function displayTestElementsTreeView(): Promise<void> {
  * @returns {string} The normalized path string ending with ".resource" without extraneous whitespace.
  */
 function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
-    logger.trace(`Adding .resource extension and trimming path: ${baseTargetPath}`);
+    logger.trace(`Adding .resource extension and trimming the following path: ${baseTargetPath}`);
 
     // Append ".resource" if it is not already present at the end of the string.
     let targetPath: string = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
@@ -638,7 +672,7 @@ function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
     // Remove any (one or more) whitespaces from the beginning of the string.
     targetPath = targetPath.replace(/^\s+/, "");
 
-    logger.trace(`Normalized path: ${targetPath}`);
+    logger.trace(`Normalized path after adding .resource and trimming : ${targetPath}`);
 
     return targetPath;
 }
@@ -719,67 +753,84 @@ async function isFilePresentLocally(filePath: string, caseSensitiveCheck: boolea
 /**
  * Checks if a subdivision exists locally.
  *
- * @param {TestElementData} testElement The test element representing a subdivision.
+ * @param {TestElementTreeItem} testElementTreeItem The test element tree item representing a subdivision.
  * @param {string} absolutePathOfTestElement The absolute path of the test element.
  * @returns {Promise<boolean>} A promise that resolves to true if the subdivision exists locally, false otherwise.
  */
 async function isSubdivisionLocallyAvailable(
-    testElement: TestElementData,
+    testElementTreeItem: TestElementTreeItem,
     absolutePathOfTestElement: string
 ): Promise<boolean> {
     logger.trace(`Checking if subdivision exists locally: ${absolutePathOfTestElement}`);
-    if (testElement.elementType !== "Subdivision") {
+    if (testElementTreeItem.testElementData.elementType !== "Subdivision") {
         logger.trace(`Element is not a subdivision, returning false.`);
         return false;
     }
 
     // Determine if the subdivision is final (i.e., has no child subdivisions)
-    const isFinalSubdivision: boolean = isFinalSubdivisionInTree(testElement);
+    const isFinalSubdivision: boolean = isFinalSubdivisionInTree(testElementTreeItem.testElementData);
 
     if (isFinalSubdivision) {
-        // For final subdivisions, check if the resource file exists. First remove the "Robot-Resource" part.
+        // For final subdivisions, check if the resource file exists.
+        logger.trace(
+            `Checking if the resource file for final subdivision '${testElementTreeItem.testElementData.name}' exists locally.`
+        );
+        // Remove the "Robot-Resource" part from the path.
         let processedFinalSubdivisionPath: string = removeRobotResourceFromPathString(absolutePathOfTestElement);
         // Append ".resource" and trim the path.
         processedFinalSubdivisionPath = appendResourceExtensionAndTrimPath(processedFinalSubdivisionPath);
         const isSubdivisionResourceFilePresent: boolean = await isFilePresentLocally(processedFinalSubdivisionPath);
-        logger.trace(`Final subdivision exists locally as resource file: ${isSubdivisionResourceFilePresent}`);
+        logger.trace(
+            `Final subdivision '${testElementTreeItem.testElementData.name}' exists locally as resource file: ${isSubdivisionResourceFilePresent}`
+        );
         return isSubdivisionResourceFilePresent;
     } else {
-        // For non-final subdivisions, check if the folder exists
+        // For non-final subdivisions, check if the subdivision folder exists
+        logger.trace(
+            `Checking if the non-final subdivision folder '${testElementTreeItem.testElementData.name}' exists locally.`
+        );
         const processedNonFinalSubdivisionPath: string = removeRobotResourceFromPathString(absolutePathOfTestElement);
         const isFolderPresent: boolean = await isFilePresentLocally(processedNonFinalSubdivisionPath);
-        logger.trace(`Non-Final subdivision exists locally: ${isFolderPresent}`);
+        logger.trace(
+            `Non-Final subdivision '${testElementTreeItem.testElementData.name}' exists locally: ${isFolderPresent}`
+        );
         return isFolderPresent;
     }
 }
 
 /**
- * Handles a subdivision element by opening its resource file or folder.
- * @param {TestElementData} testElement The test element representing a subdivision.
- * @param {string} absolutePathOfTestElement The absolute path of the test element.
+ * Handles the "Go To Resource File" option for a subdivision element by opening or creating its resource file or folder.
+ * @param {TestElementTreeItem} subdivisionTreeItem The test element tree item representing a subdivision.
  */
-export async function handleSubdivision(
-    testElement: TestElementData,
-    absolutePathOfTestElement: string
-): Promise<void> {
-    // Determine if the subdivision is final (i.e. has no child subdivision)
-    const isFinalSubdivision: boolean =
-        !testElement.children || !testElement.children.some((child) => child.elementType === "Subdivision");
-    logger.trace(`Subdivision '${testElement.name}' is ${isFinalSubdivision ? "final" : "not final"}.`);
-    absolutePathOfTestElement = removeRobotResourceFromPathString(absolutePathOfTestElement);
+export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem): Promise<void> {
+    // Determine if the subdivision is final (i.e., has no child subdivisions)
+    const isFinalSubdivision: boolean = isFinalSubdivisionInTree(subdivisionTreeItem.testElementData);
+
+    // Construct the target path based on the hierarchical name of the test element.
+    const absolutePathOfTestElement = await constructAbsolutePathForTestElement(subdivisionTreeItem);
+    if (!absolutePathOfTestElement) {
+        return;
+    }
+    const processedAbsolutePathOfTestElement = removeRobotResourceFromPathString(absolutePathOfTestElement);
+    logger.trace(
+        `@@@@@ Handling subdivision '${subdivisionTreeItem.testElementData.name}' with absolutePathOfTestElement: ${processedAbsolutePathOfTestElement}`
+    );
+
     // If the subdivision is final, open the resource file. Else, represent it as a folder.
     if (isFinalSubdivision) {
-        const processedTestElementPath: string = appendResourceExtensionAndTrimPath(absolutePathOfTestElement);
+        const processedTestElementPath: string = appendResourceExtensionAndTrimPath(processedAbsolutePathOfTestElement);
+
         // If the resource file does not exist, create it with a header.
         if (!(await isFilePresentLocally(processedTestElementPath))) {
             const dirName: string = path.dirname(processedTestElementPath);
-            // Note: Windows won't create case sensitive directories.
+
+            // Note: Windows won't create case-sensitive directories.
             // If there are already directories with the same name but different case, they will be used and no new directory will be created.
             logger.trace(`Creating directory to process subdivision click: ${dirName}`);
             await fs.promises.mkdir(dirName, { recursive: true });
 
             // Create the resource file with header content.
-            const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${testElement.uniqueID}\n`;
+            const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${subdivisionTreeItem.testElementData.uniqueID}\n`;
 
             // Create resource file with header content.
             await fs.promises.writeFile(processedTestElementPath, fileContent);
@@ -787,6 +838,7 @@ export async function handleSubdivision(
         } else {
             logger.trace(`Resource file already exists at ${processedTestElementPath}, skipping creation.`);
         }
+
         // Open the resource file in the VS Code editor.
         const document: vscode.TextDocument = await vscode.workspace.openTextDocument(
             vscode.Uri.file(processedTestElementPath)
@@ -797,60 +849,63 @@ export async function handleSubdivision(
         // Non-final subdivision: represent as a folder.
         let folderExists: boolean = false;
         try {
-            const stats: fs.Stats = await fs.promises.stat(absolutePathOfTestElement);
+            const stats: fs.Stats = await fs.promises.stat(processedAbsolutePathOfTestElement);
             folderExists = stats.isDirectory();
         } catch {
-            // No need to specify the catched error since we don't use it.
+            // No need to specify the caught error since we don't use it.
             folderExists = false;
         }
+
         if (!folderExists) {
-            await fs.promises.mkdir(absolutePathOfTestElement, { recursive: true });
-            logger.trace(`Folder created at ${absolutePathOfTestElement}`);
+            await fs.promises.mkdir(processedAbsolutePathOfTestElement, { recursive: true });
+            logger.trace(`Folder created at ${processedAbsolutePathOfTestElement}`);
         } else {
-            logger.trace(`Subdivision folder already exists at ${absolutePathOfTestElement}`);
+            logger.trace(`Subdivision folder already exists at ${processedAbsolutePathOfTestElement}`);
         }
 
         // Recursively handle all final subdivisions under this non-final subdivision.
-        if (testElement.children) {
-            logger.trace(`Handling children of subdivision '${testElement.name}'`);
-            for (const child of testElement.children) {
+        if (subdivisionTreeItem.testElementData.children) {
+            logger.trace(`Handling children of subdivision '${subdivisionTreeItem.testElementData.name}'`);
+            for (const child of subdivisionTreeItem.testElementData.children) {
                 if (child.elementType === "Subdivision") {
-                    const childPath = path.join(absolutePathOfTestElement, child.name);
-                    await handleSubdivision(child, childPath);
+                    await handleSubdivision(new TestElementTreeItem(child));
                 }
             }
-            logger.trace(`Finished handling children of subdivision '${testElement.name}'`);
+            logger.trace(`Finished handling children of subdivision '${subdivisionTreeItem.testElementData.name}'`);
         }
 
         // Open VS Code explorer.
         await vscode.commands.executeCommand("workbench.view.explorer");
     }
+
+    // Trigger subdivision icon update after handling the subdivision.
+    // Note: If the user deletes the resource file locally, the icon will not be updated until the next refresh.
+    await updateTestElementIcon(subdivisionTreeItem);
+    getTestElementsTreeDataProvider()._onDidChangeTreeData.fire(undefined);
 }
 
 /**
  * Handles an interaction element by opening the resource file of its nearest final subdivision.
- * @param {TestElementData} testElement The test element representing an interaction.
- * @param {string} workspaceRootPath The root path of the workspace.
+ * @param {TestElementTreeItem} treeItem The test element tree item representing an interaction.
  */
-export async function handleInteraction(testElement: TestElementData, workspaceRootPath: string): Promise<void> {
+export async function handleInteraction(treeItem: TestElementTreeItem): Promise<void> {
+    const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
+    if (!workspaceRootPath) {
+        return;
+    }
+    const testElement = treeItem.testElementData;
+
     // For an interaction, open the parent's final subdivision .resource file.
-    const finalSubdivisionAncestor: TestElementData | null = getFinalSubdivisionAncestor(testElement);
+    const finalSubdivisionAncestor: TestElementTreeItem | null = getFinalSubdivisionAncestor(treeItem);
     if (!finalSubdivisionAncestor) {
         // If no final subdivision is found: handle the case as if its parent subdivision is clicked.
-        const subdivisionAncestor: TestElementData | null = getSubdivisionAncestor(testElement);
+        const subdivisionAncestor: TestElementTreeItem | null = getSubdivisionAncestor(treeItem);
         if (subdivisionAncestor) {
-            logger.trace(`Subdivision Ancestor of ${testElement.uniqueID}: `, subdivisionAncestor);
-            // Construct the target path based on the hierarchical name of the test element.
-            const pathOfParentSubdivision = path.join(
-                workspaceRootPath,
-                ...(testElement.hierarchicalName ? testElement.hierarchicalName.split("/") : [])
+            logger.trace(
+                `Subdivision Ancestor of Interaction '${testElement.uniqueID}': `,
+                subdivisionAncestor.testElementData
             );
-            logger.trace(`Path of parent subdivision of ${testElement.uniqueID}: `, pathOfParentSubdivision);
-
-            // Remove the last part of the path and go one level up to find the parent subdivision path
-            const subdivisionPath: string = path.dirname(pathOfParentSubdivision);
-            logger.trace(`Subdivision path of ${testElement.uniqueID}: `, subdivisionPath);
-            handleSubdivision(subdivisionAncestor, subdivisionPath);
+            await handleSubdivision(subdivisionAncestor);
             return;
         } else {
             return; // If no subdivision ancestor is found, do nothing.
@@ -858,35 +913,43 @@ export async function handleInteraction(testElement: TestElementData, workspaceR
     }
 
     // Compute the hierarchical name if not already done.
-    if (!finalSubdivisionAncestor.hierarchicalName) {
-        finalSubdivisionAncestor.hierarchicalName = computeHierarchicalName(finalSubdivisionAncestor);
-        logger.trace(`Computed hierarchical name for final subdivision: ${finalSubdivisionAncestor.hierarchicalName}`);
+    if (!finalSubdivisionAncestor.testElementData.hierarchicalName) {
+        finalSubdivisionAncestor.testElementData.hierarchicalName = computeHierarchicalName(finalSubdivisionAncestor);
+        logger.trace(
+            `Computed hierarchical name for final subdivision: ${finalSubdivisionAncestor.testElementData.hierarchicalName}`
+        );
     }
     // Construct the target path for the final subdivision.
-    let finalTargetPath = path.join(workspaceRootPath, ...finalSubdivisionAncestor.hierarchicalName.split("/"));
-    finalTargetPath = removeRobotResourceFromPathString(finalTargetPath);
-    finalTargetPath = appendResourceExtensionAndTrimPath(finalTargetPath);
+    const finalSubdivisionAncestorPath = await constructAbsolutePathForTestElement(finalSubdivisionAncestor);
+    if (!finalSubdivisionAncestorPath) {
+        return;
+    }
+    // Process the final subdivision path by removing [Robot-Resource] and appending ".resource" and trimming whitespace.
+    let processedFinalSubdivisionAncestorPath = removeRobotResourceFromPathString(finalSubdivisionAncestorPath);
+    processedFinalSubdivisionAncestorPath = appendResourceExtensionAndTrimPath(processedFinalSubdivisionAncestorPath);
 
     // If the resource file does not exist, create it with a header.
-    if (!(await isFilePresentLocally(finalTargetPath))) {
-        const dirName: string = path.dirname(finalTargetPath);
+    if (!(await isFilePresentLocally(processedFinalSubdivisionAncestorPath))) {
+        const dirName: string = path.dirname(processedFinalSubdivisionAncestorPath);
         await fs.promises.mkdir(dirName, { recursive: true });
 
-        // Try to create a new one with the exact casing.
-        // await ensureDirectoryWithExactCasing(dirName);
-
         // Create the resource file with header content.
-        const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${finalSubdivisionAncestor.uniqueID}\n`;
+        const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${finalSubdivisionAncestor.testElementData.uniqueID}\n`;
 
-        await fs.promises.writeFile(finalTargetPath, fileContent);
-        logger.trace(`Resource file created at ${finalTargetPath}`);
+        await fs.promises.writeFile(processedFinalSubdivisionAncestorPath, fileContent);
+        logger.trace(`Resource file created at ${processedFinalSubdivisionAncestorPath}`);
     } else {
-        logger.trace(`Skipping creation of resource file at ${finalTargetPath} as it already exists.`);
+        logger.trace(
+            `Skipping creation of resource file at ${processedFinalSubdivisionAncestorPath} as it already exists.`
+        );
     }
     // Open the final subdivision resource file in the VS Code editor.
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(finalTargetPath));
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(processedFinalSubdivisionAncestorPath));
     await vscode.window.showTextDocument(document);
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
+
+    // Trigger subdivision icon update after handling the interaction.
+    getTestElementsTreeDataProvider()._onDidChangeTreeData.fire(undefined);
 }
 
 /**
@@ -923,7 +986,9 @@ export function isFinalSubdivisionInTree(element: TestElementData): boolean {
         return true;
     }
     // If any child is a subdivision, then this subdivision is not final.
-    const isFinalSubdivision: boolean = !element.children.some((child) => child.elementType === "Subdivision");
+    const isFinalSubdivision: boolean = !element.children.some(
+        (child: { elementType: string }) => child.elementType === "Subdivision"
+    );
 
     if (isFinalSubdivision) {
         logger.trace(`Test element ${element.name} is a final subdivision.`);
@@ -936,16 +1001,17 @@ export function isFinalSubdivisionInTree(element: TestElementData): boolean {
 
 /**
  * Traverses upward from an interaction element to find the nearest final subdivision.
- * @param {TestElementData} testElement The test element representing an interaction.
- * @returns {TestElementData | null} The nearest final subdivision ancestor, or null if not found.
+ * @param {TestElementTreeItem} treeItem The test element tree item representing an interaction.
+ * @returns {TestElementTreeItem | null} The nearest final subdivision ancestor, or null if not found.
  */
-export function getFinalSubdivisionAncestor(testElement: TestElementData): TestElementData | null {
+export function getFinalSubdivisionAncestor(treeItem: TestElementTreeItem): TestElementTreeItem | null {
+    const testElement = treeItem.testElementData;
     logger.trace(`Searching final subdivision ancestor for test element ${testElement.name}`);
     let current = testElement.parent;
     while (current) {
         if (current.elementType === "Subdivision" && isFinalSubdivisionInTree(current)) {
             logger.trace(`Found final subdivision ancestor for test element ${testElement.name}: ${current.name}`);
-            return current;
+            return new TestElementTreeItem(current);
         }
         current = current.parent;
     }
@@ -957,16 +1023,17 @@ export function getFinalSubdivisionAncestor(testElement: TestElementData): TestE
 
 /**
  * Traverses upward from an interaction element to find the nearest parent subdivision.
- * @param {TestElementData} testElement The test element representing an interaction.
- * @returns {TestElementData | null} The nearest subdivision ancestor, or null if not found.
+ * @param {TestElementTreeItem} treeItem The test element tree item representing an interaction.
+ * @returns {TestElementTreeItem | null} The nearest subdivision ancestor, or null if not found.
  */
-export function getSubdivisionAncestor(testElement: TestElementData): TestElementData | null {
+export function getSubdivisionAncestor(treeItem: TestElementTreeItem): TestElementTreeItem | null {
+    const testElement = treeItem.testElementData;
     logger.trace(`Searching subdivision ancestor for test element ${testElement.name}`);
     let current = testElement.parent;
     while (current) {
         if (current.elementType === "Subdivision") {
             logger.trace(`Found subdivision ancestor for test element ${testElement.name}: ${current.name}`);
-            return current;
+            return new TestElementTreeItem(current);
         }
         current = current.parent;
     }
@@ -978,11 +1045,14 @@ export function getSubdivisionAncestor(testElement: TestElementData): TestElemen
 
 /**
  * Computes the hierarchical name of a test element by concatenating parent names.
- * @param {TestElementData} element The test element.
+ * @param {TestElementTreeItem} treeItem The test element tree item.
  * @returns {string} The hierarchical name (e.g., "Root/Child").
  */
-export function computeHierarchicalName(element: TestElementData): string {
-    return element.parent ? computeHierarchicalName(element.parent) + "/" + element.name : element.name;
+export function computeHierarchicalName(treeItem: TestElementTreeItem): string {
+    const testElement = treeItem.testElementData;
+    return testElement.parent
+        ? computeHierarchicalName(new TestElementTreeItem(testElement.parent)) + "/" + testElement.name
+        : testElement.name;
 }
 
 /**
