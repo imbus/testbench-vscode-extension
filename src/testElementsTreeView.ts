@@ -479,7 +479,12 @@ export async function updateTestElementIcon(
     absolutePathOfTestElement: string
 ): Promise<void> {
     // logger.trace(`Updating icon for test element: ${testElementTreeItem.testElementData.name}`);
-    if (testElementTreeItem.testElementData.elementType === "Subdivision") {
+    if (testElementTreeItem.testElementData.elementType !== "Subdivision") {
+        testElementTreeItem.setIcon({
+            light: getIconUri(testElementTreeItem.testElementData.elementType),
+            dark: getIconUri(testElementTreeItem.testElementData.elementType)
+        });
+    } else {
         logger.trace(`Updating icon for subdivision: ${testElementTreeItem.testElementData.name}`);
         const isLocal: boolean = await isSubdivisionLocallyAvailable(
             testElementTreeItem.testElementData,
@@ -497,11 +502,6 @@ export async function updateTestElementIcon(
                       dark: getIconUri("MissingSubdivision")
                   }
         );
-    } else {
-        testElementTreeItem.setIcon({
-            light: getIconUri(testElementTreeItem.testElementData.elementType),
-            dark: getIconUri(testElementTreeItem.testElementData.elementType)
-        });
     }
 }
 
@@ -530,7 +530,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             const childItems = await Promise.all(
                 children.map(async (child) => {
                     const childItem = new TestElementTreeItem(child);
-                    // Await the icon update
+                    // Update subdivision icons based on local availability.
                     const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
                     const absolutePathOfTestElement = path.join(
                         workspaceRootPath!,
@@ -544,10 +544,11 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             );
             return childItems;
         } else {
+            // If no parent is provided, return the root items.
             const rootItems = await Promise.all(
                 this.treeData.map(async (child) => {
                     const childItem = new TestElementTreeItem(child);
-                    // Await the icon update
+                    // Update subdivision icons based on local availability.
                     const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
                     const absolutePathOfTestElement = path.join(
                         workspaceRootPath!,

@@ -634,7 +634,7 @@ class ParameterSummary:
                 dictionary.get("definitionType", ParameterDefinitionType.AtomicInstance)
             ),
             evaluationType=ParameterEvaluationType(
-                dictionary.get("useType", ParameterEvaluationType.CallByValue)
+                dictionary.get("evaluationType", ParameterEvaluationType.CallByValue)
             ),
             dataType=DataTypeSummary.from_dict(data_type) if data_type else None,
         )
@@ -837,7 +837,7 @@ class TestStructureTree:
     nodes: list[TestStructureTreeNode]
 
     @classmethod
-    def from_dict(cls, dictionary) -> TestStructureTree:
+    def from_dict(cls, dictionary, is_tov: bool) -> TestStructureTree:
         return cls(
             root=TestStructureTreeNode.from_dict(dictionary.get("root", {}))
             if "root" in dictionary
@@ -845,7 +845,7 @@ class TestStructureTree:
             nodes=[
                 TestStructureTreeNode.from_dict(node)
                 for node in dictionary.get("nodes", [])
-                if node.get("exec", {}).get("status") != "NotPlanned"
+                if is_tov or node.get("exec", {}).get("status") != "NotPlanned"
                 and (
                     node.get('exec', {}).get('locker') is None
                     or node.get('exec', {}).get('locker', {}).get('key', "") != '-2'

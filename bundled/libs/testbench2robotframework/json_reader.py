@@ -14,6 +14,7 @@ from .model import (
 )
 
 TEST_STRUCTURE_TREE_FILE = "cycle_structure.json"
+TEST_STRUCTURE_TREE_TOV_FILE = "tov_structure.json"
 
 
 @dataclass
@@ -40,13 +41,25 @@ class TestBenchJsonReader:
             logger.warning("No jsonReport path given.")
             sys.exit()
 
+    def get_structure_tree_path(self) -> Path:
+        cycle_path = Path(self.json_dir) / TEST_STRUCTURE_TREE_FILE
+        if cycle_path.exists():
+            return cycle_path
+        tov_path = Path(self.json_dir) / TEST_STRUCTURE_TREE_TOV_FILE
+        if not tov_path.exists():
+            sys.exit(f"Neither {cycle_path} nor {tov_path} found.")
+        return tov_path
+
     @property
     def test_theme_tree(self) -> TestStructureTree:
         if not self._test_theme_tree:
-            test_theme_path = Path(self.json_dir) / TEST_STRUCTURE_TREE_FILE
+            test_theme_path = self.get_structure_tree_path()
             logger.debug(f"Loading TestThemeTree from {test_theme_path}")
             test_structure_tree = read_json(str(test_theme_path))
-            self._test_theme_tree = TestStructureTree.from_dict(test_structure_tree)
+            self._test_theme_tree = TestStructureTree.from_dict(
+                test_structure_tree,
+                bool(str(test_theme_path).endswith(TEST_STRUCTURE_TREE_TOV_FILE)),
+            )
             logger.info(f"{len(self._test_theme_tree.nodes)} nodes from TestThemeTree loaded.")
         return self._test_theme_tree
 
