@@ -536,7 +536,6 @@ export async function updateTestElementIcon(testElementTreeItem: TestElementTree
         const isLocal: boolean = await isSubdivisionLocallyAvailable(testElementTreeItem, absolutePathOfTestElement);
 
         if (isLocal) {
-            logger.trace(`@@@@ Before accessing .light`);
             const localIconUri = {
                 light: vscode.Uri.file(
                     path.join(__dirname, "..", "resources", "icons", iconMapping["LocalSubdivision"].light)
@@ -546,9 +545,7 @@ export async function updateTestElementIcon(testElementTreeItem: TestElementTree
                 )
             };
             testElementTreeItem.setIcon(localIconUri);
-            logger.trace(`@@@@ After accessing .light`);
         } else {
-            logger.trace(`@@@@ Before accessing .light 2`);
             const missingIconUri = {
                 light: vscode.Uri.file(
                     path.join(__dirname, "..", "resources", "icons", iconMapping["MissingSubdivision"].light)
@@ -558,7 +555,6 @@ export async function updateTestElementIcon(testElementTreeItem: TestElementTree
                 )
             };
             testElementTreeItem.setIcon(missingIconUri);
-            logger.trace(`@@@@ After accessing .light 2`);
         }
     }
 }
@@ -823,7 +819,7 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
     }
     const processedAbsolutePathOfTestElement = removeRobotResourceFromPathString(absolutePathOfTestElement);
     logger.trace(
-        `@@@@@ Handling subdivision '${subdivisionTreeItem.testElementData.name}' with absolutePathOfTestElement: ${processedAbsolutePathOfTestElement}`
+        `Handling subdivision '${subdivisionTreeItem.testElementData.name}' with absolutePathOfTestElement: ${processedAbsolutePathOfTestElement}`
     );
 
     // If the subdivision is final, open the resource file. Else, represent it as a folder.

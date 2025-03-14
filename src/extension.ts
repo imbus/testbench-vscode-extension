@@ -640,7 +640,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             }
 
             logger.trace(
-                `@@@@@ Open Robot Resource File command created absolutePathOfTestElement: ${absolutePathOfTestElement}`
+                `Open Robot Resource File command created absolutePathOfTestElement: ${absolutePathOfTestElement}`
             );
             try {
                 switch (treeItem.testElementData.elementType) {
