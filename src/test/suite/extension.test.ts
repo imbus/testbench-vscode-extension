@@ -14,7 +14,6 @@ import {
 import { TestBenchLogger } from "../../testBenchLogger";
 import { PlayServerConnection } from "../../testBenchConnection";
 import { ProjectManagementTreeDataProvider } from "../../projectManagementTreeView";
-import { LoginWebViewProvider } from "../../loginWebView";
 import { TestElementsTreeDataProvider } from "../../testElementsTreeView";
 
 suite("Extension Test Suite", () => {
@@ -24,7 +23,6 @@ suite("Extension Test Suite", () => {
     let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     let connectionStub: sinon.SinonStubbedInstance<PlayServerConnection>;
     let projectManagementTreeDataProviderStub: sinon.SinonStubbedInstance<ProjectManagementTreeDataProvider>;
-    let loginWebViewProviderStub: sinon.SinonStubbedInstance<LoginWebViewProvider>;
     let testElementsTreeDataProviderStub: sinon.SinonStubbedInstance<TestElementsTreeDataProvider>;
 
     setup(() => {
@@ -55,7 +53,6 @@ suite("Extension Test Suite", () => {
 
         // Mock the tree data providers
         projectManagementTreeDataProviderStub = sandbox.createStubInstance(ProjectManagementTreeDataProvider);
-        loginWebViewProviderStub = sandbox.createStubInstance(LoginWebViewProvider);
         testElementsTreeDataProviderStub = sandbox.createStubInstance(TestElementsTreeDataProvider);
 
         // Stub the VS Code API

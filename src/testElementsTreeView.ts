@@ -384,31 +384,42 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
 }
 
 /**
- * Mapping from element types to icon file names.
+ * Mapping from element types to icon file names. *
  */
-const iconMapping: Record<string, string> = {
-    DataType: "dataType.svg",
-    Interaction: "testStep.svg",
-    Condition: "condition.svg",
-    Subdivision: "MissingSubdivision.svg",
-    MissingSubdivision: "MissingSubdivision.svg",
-    LocalSubdivision: "LocalSubdivision.svg",
-    Other: "other.svg"
+const iconMapping: Record<string, { light: string; dark: string }> = {
+    DataType: { light: "dataType-light.svg", dark: "dataType-dark.svg" },
+    Interaction: { light: "testStep-light.svg", dark: "testStep-dark.svg" },
+    Condition: { light: "condition-light.svg", dark: "condition-dark.svg" },
+    Subdivision: { light: "missingSubdivision-light.svg", dark: "missingSubdivision-dark.svg" },
+    MissingSubdivision: { light: "missingSubdivision-light.svg", dark: "missingSubdivision-dark.svg" },
+    LocalSubdivision: { light: "localSubdivision-light.svg", dark: "localSubdivision-dark.svg" },
+    Other: { light: "other-light.svg", dark: "other-dark.svg" }
 };
 
 /**
- * Returns a vscode.Uri for the icon corresponding to an element type.
- * @param {TestElementTreeItem} treeItem The element type.
- * @returns {vscode.Uri} The URI of the icon.
+ * Returns the icon URI for a given element type. Supports light and dark themes.
+ * @param {TestElementTreeItem} treeItem The test element tree item.
+ * @returns {vscode.Uri} The icon URI.
  */
-function getIconUriForElementType(treeItem: TestElementTreeItem): vscode.Uri {
-    logger.trace(
-        `@@ Getting icon URI for element ${treeItem.testElementData.name} type: ${treeItem.testElementData.elementType}: ${iconMapping[treeItem.testElementData.elementType]}`
-    );
-    const iconUri: vscode.Uri = vscode.Uri.file(
-        path.join(__dirname, "..", "resources", "icons", iconMapping[treeItem.testElementData.elementType])
-    );
-    return iconUri;
+function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscode.Uri; dark: vscode.Uri } {
+    const elementType = treeItem.testElementData.elementType;
+    logger.trace(`Getting icon for element type: ${elementType}`);
+
+    // Fallback to "Other" if the elementType is not defined or not in the iconMapping
+    const iconPaths = iconMapping[elementType] || iconMapping["Other"];
+
+    if (!iconPaths) {
+        logger.error(`No icon mapping found for element type: ${elementType}. Falling back to default icon.`);
+        const defaultIconPaths = iconMapping["Other"];
+        const lightIconUri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", defaultIconPaths.light));
+        const darkIconUri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", defaultIconPaths.dark));
+        return { light: lightIconUri, dark: darkIconUri };
+    }
+
+    const lightIconUri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", iconPaths.light));
+    const darkIconUri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", iconPaths.dark));
+
+    return { light: lightIconUri, dark: darkIconUri };
 }
 
 /* =============================================================================
@@ -466,7 +477,7 @@ export class TestElementTreeItem extends vscode.TreeItem {
         this.setIcon(getIconUriForElementType(this));
     }
 
-    public setIcon(newIconPath: vscode.Uri | { light: vscode.Uri; dark: vscode.Uri }): void {
+    public setIcon(newIconPath: { light: vscode.Uri; dark: vscode.Uri }): void {
         this.iconPath = newIconPath;
     }
 }
@@ -516,39 +527,38 @@ export async function updateTestElementIcon(testElementTreeItem: TestElementTree
     }
 
     logger.trace(
-        `@@@@ Updating icon for test element: ${testElementTreeItem.testElementData.name} with absolute path ${absolutePathOfTestElement}`
+        `Updating icon for test element: ${testElementTreeItem.testElementData.name} with absolute path ${absolutePathOfTestElement}`
     );
     if (testElementTreeItem.testElementData.elementType !== "Subdivision") {
-        testElementTreeItem.setIcon({
-            light: getIconUriForElementType(testElementTreeItem),
-            dark: getIconUriForElementType(testElementTreeItem)
-        });
+        testElementTreeItem.setIcon(getIconUriForElementType(testElementTreeItem));
     } else {
         logger.trace(`Updating icon for subdivision: ${testElementTreeItem.testElementData.name}`);
         const isLocal: boolean = await isSubdivisionLocallyAvailable(testElementTreeItem, absolutePathOfTestElement);
 
         if (isLocal) {
-            const localIconUri = vscode.Uri.file(
-                path.join(__dirname, "..", "resources", "icons", iconMapping["LocalSubdivision"])
-            );
-            logger.trace(
-                `@@@@@ SETTING ICON FOR LOCAL Subdivision '${testElementTreeItem.testElementData.name}' TO ${iconMapping["LocalSubdivision"]} : ${localIconUri}`
-            );
-            testElementTreeItem.setIcon({
-                light: localIconUri,
-                dark: localIconUri
-            });
+            logger.trace(`@@@@ Before accessing .light`);
+            const localIconUri = {
+                light: vscode.Uri.file(
+                    path.join(__dirname, "..", "resources", "icons", iconMapping["LocalSubdivision"].light)
+                ),
+                dark: vscode.Uri.file(
+                    path.join(__dirname, "..", "resources", "icons", iconMapping["LocalSubdivision"].dark)
+                )
+            };
+            testElementTreeItem.setIcon(localIconUri);
+            logger.trace(`@@@@ After accessing .light`);
         } else {
-            const missingIconUri = vscode.Uri.file(
-                path.join(__dirname, "..", "resources", "icons", iconMapping["MissingSubdivision"])
-            );
-            logger.trace(
-                `@@@@@ SETTING ICON FOR MISSING Subdivision '${testElementTreeItem.testElementData.name}' TO ${iconMapping["MissingSubdivision"]} : ${missingIconUri}`
-            );
-            testElementTreeItem.setIcon({
-                light: missingIconUri,
-                dark: missingIconUri
-            });
+            logger.trace(`@@@@ Before accessing .light 2`);
+            const missingIconUri = {
+                light: vscode.Uri.file(
+                    path.join(__dirname, "..", "resources", "icons", iconMapping["MissingSubdivision"].light)
+                ),
+                dark: vscode.Uri.file(
+                    path.join(__dirname, "..", "resources", "icons", iconMapping["MissingSubdivision"].dark)
+                )
+            };
+            testElementTreeItem.setIcon(missingIconUri);
+            logger.trace(`@@@@ After accessing .light 2`);
         }
     }
 }

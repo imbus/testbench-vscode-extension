@@ -158,6 +158,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      */
     private async getLoginHtmlPage(webview: vscode.Webview): Promise<string> {
         logger.trace("Returning login HTML page for Webview.");
+
         if (!this.extensionContext) {
             logger.warn("Extension context is undefined; cannot get stored settings.");
         }
@@ -174,143 +175,143 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         );
         const imageUri = this.createIconUri(webview);
         return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login to TestBench</title>
-    <style>
-        body {
-            font-family: var(--vscode-font-family);
-            font-size: var(--vscode-font-size);
-            color: var(--vscode-foreground);
-            background-color: var(--vscode-editor-background);
-            margin: 20px;
-        }
-        .header-container {
-            display: flex;
-            align-items: center;
-            margin-bottom: 1em;
-        }
-        .header-container img {
-            width: 30px;
-            height: 30px;
-            margin-right: 10px;
-        }
-        .header-container h2 {
-            margin: 0;
-            color: var(--vscode-editor-foreground);
-        }
-        form div {
-            margin-top: 0.5em;
-        }
-        label {
-            display: block;
-            margin-bottom: 0.25em;
-            color: var(--vscode-editor-foreground);
-        }
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 0.5em;
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
-            background-color: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-        }
-        input:focus {
-            outline: 1px solid var(--vscode-focusBorder);
-        }
-        button {
-            margin-top: 1em;
-            padding: 0.5em 1em;
-            border: none;
-            border-radius: 4px;
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
-        /* Optional styling for checkboxes */
-        .checkbox-container {
-            display: flex;
-            align-items: center;
-        }
-        .checkbox-container input {
-            margin-right: 0.5em;
-        }
-    </style>
-</head>
-<body>
-    <div class="header-container">
-        <img src="${imageUri || ""}" alt="TestBench Logo">
-        <h2>Login to TestBench</h2>
-    </div>
-    <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
-        <div>
-            <label for="serverName">Server Name:</label>
-            <input id="serverName" type="text" placeholder="Server Name" value="${
-                getConfig().get<string>("serverName", "") || ""
-            }" required/>
-        </div>
-        <div>
-            <label for="portNumber">Port Number:</label>
-            <input id="portNumber" type="text" placeholder="Port Number" value="${
-                getConfig().get<string>("portNumber", "") || ""
-            }" required/>
-        </div>
-        <div>
-            <label for="username">Username:</label>
-            <input id="username" type="text" placeholder="Username" value="${
-                getConfig().get<string>("username", "") || ""
-            }" required/>
-        </div>
-        <div>
-            <label for="password">Password:</label>
-            <input id="password" type="password" placeholder="Password" value="${
-                (await this.extensionContext?.secrets.get("password")) || ""
-            }" required/>
-        </div>
-        <div class="checkbox-container">
-            <input id="savePassword" type="checkbox" ${
-                getConfig().get<boolean>("storePasswordAfterLogin", false) ? "checked" : ""
-            }/>
-            <label for="savePassword">Save Password</label>
-        </div>
-        <div class="checkbox-container">
-            <input id="autoLogin" type="checkbox" ${
-                getConfig().get<boolean>("automaticLoginAfterExtensionActivation", false) ? "checked" : ""
-            }/>
-            <label for="autoLogin">Auto Login</label>
-        </div>              
-        <div>
-            <button id="submitBtn" type="submit">Submit</button>
-        </div>
-    </form>
-    <script>
-        const vscode = acquireVsCodeApi();
-        function submitLogin() {
-            const serverName = document.getElementById('serverName').value;
-            const portNumber = document.getElementById('portNumber').value;
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const autoLogin = document.getElementById('autoLogin').checked;
-            const savePassword = document.getElementById('savePassword').checked;
-            vscode.postMessage({ command: 'login', serverName, portNumber, username, password, autoLogin, savePassword });
-        }
-        window.addEventListener('message', (event) => {
-            const message = event.data;
-            if (message.command === 'updateContent') {
-                document.body.innerHTML = message.html;
-            }
-        });
-    </script>
-</body>
-</html>
-`;
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Login to TestBench</title>
+          <style>
+              body {
+                  font-family: var(--vscode-font-family);
+                  font-size: var(--vscode-font-size);
+                  color: var(--vscode-foreground);
+                  background-color: var(--vscode-editor-background);
+                  margin: 20px;
+              }
+              .header-container {
+                  display: flex;
+                  align-items: center;
+                  margin-bottom: 1em;
+              }
+              .header-container img {
+                  width: 30px;
+                  height: 30px;
+                  margin-right: 10px;
+              }
+              .header-container h2 {
+                  margin: 0;
+                  color: var(--vscode-editor-foreground);
+              }
+              form div {
+                  margin-top: 0.5em;
+              }
+              label {
+                  display: block;
+                  margin-bottom: 0.25em;
+                  color: var(--vscode-editor-foreground);
+              }
+              input[type="text"],
+              input[type="password"] {
+                  width: 100%;
+                  padding: 0.5em;
+                  border: 1px solid var(--vscode-input-border);
+                  border-radius: 4px;
+                  background-color: var(--vscode-input-background);
+                  color: var(--vscode-input-foreground);
+              }
+              input:focus {
+                  outline: 1px solid var(--vscode-focusBorder);
+              }
+              button {
+                  margin-top: 1em;
+                  padding: 0.5em 1em;
+                  border: none;
+                  border-radius: 4px;
+                  background-color: var(--vscode-button-background);
+                  color: var(--vscode-button-foreground);
+                  cursor: pointer;
+              }
+              button:hover {
+                  background-color: var(--vscode-button-hoverBackground);
+              }
+              /* Optional styling for checkboxes */
+              .checkbox-container {
+                  display: flex;
+                  align-items: center;
+              }
+              .checkbox-container input {
+                  margin-right: 0.5em;
+              }
+          </style>
+      </head>
+      <body>
+          <div class="header-container">
+              <img src="${imageUri || ""}" alt="TestBench Logo">
+              <h2>Login to TestBench</h2>
+          </div>
+          <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
+              <div>
+                  <label for="serverName">Server Name:</label>
+                  <input id="serverName" type="text" placeholder="Server Name" value="${
+                      getConfig().get<string>("serverName", "") || ""
+                  }" required/>
+              </div>
+              <div>
+                  <label for="portNumber">Port Number:</label>
+                  <input id="portNumber" type="text" placeholder="Port Number" value="${
+                      getConfig().get<string>("portNumber", "") || ""
+                  }" required/>
+              </div>
+              <div>
+                  <label for="username">Username:</label>
+                  <input id="username" type="text" placeholder="Username" value="${
+                      getConfig().get<string>("username", "") || ""
+                  }" required/>
+              </div>
+              <div>
+                  <label for="password">Password:</label>
+                  <input id="password" type="password" placeholder="Password" value="${
+                      (await this.extensionContext?.secrets.get("password")) || ""
+                  }" required/>
+              </div>
+              <div class="checkbox-container">
+                  <input id="savePassword" type="checkbox" ${
+                      getConfig().get<boolean>("storePasswordAfterLogin", false) ? "checked" : ""
+                  }/>
+                  <label for="savePassword">Save Password</label>
+              </div>
+              <div class="checkbox-container">
+                  <input id="autoLogin" type="checkbox" ${
+                      getConfig().get<boolean>("automaticLoginAfterExtensionActivation", false) ? "checked" : ""
+                  }/>
+                  <label for="autoLogin">Auto Login</label>
+              </div>              
+              <div>
+                  <button id="submitBtn" type="submit">Submit</button>
+              </div>
+          </form>
+          <script>
+              const vscode = acquireVsCodeApi();
+              function submitLogin() {
+                  const serverName = document.getElementById('serverName').value;
+                  const portNumber = document.getElementById('portNumber').value;
+                  const username = document.getElementById('username').value;
+                  const password = document.getElementById('password').value;
+                  const autoLogin = document.getElementById('autoLogin').checked;
+                  const savePassword = document.getElementById('savePassword').checked;
+                  vscode.postMessage({ command: 'login', serverName, portNumber, username, password, autoLogin, savePassword });
+              }
+              window.addEventListener('message', (event) => {
+                  const message = event.data;
+                  if (message.command === 'updateContent') {
+                      document.body.innerHTML = message.html;
+                  }
+              });
+          </script>
+      </body>
+      </html>
+    `;
     }
 
     /**

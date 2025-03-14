@@ -273,8 +273,8 @@
                 "command": "testbenchExtension.clearWorkspaceFolder",
                 "title": "TestBench: Clear Temporary Files",
                 "icon": {
-                    "light": "resources/icons/clearWorkspaceFolder.svg",
-                    "dark": "resources/icons/clearWorkspaceFolder.svg"
+                    "light": "resources/icons/clearWorkspaceFolder-light.svg",
+                    "dark": "resources/icons/clearWorkspaceFolder-dark.svg"
                 }
             },
             {
@@ -299,8 +299,8 @@
                 "command": "testbenchExtension.fetchReportForSelectedTreeItem",
                 "title": "Fetch Report",
                 "icon": {
-                    "light": "resources/icons/download.svg",
-                    "dark": "resources/icons/download.svg"
+                    "light": "resources/icons/download-light.svg",
+                    "dark": "resources/icons/download-dark.svg"
                 }
             },
             {
@@ -311,16 +311,16 @@
                 "command": "testbenchExtension.selectAndLoadProject",
                 "title": "TestBench: Display Projects List",
                 "icon": {
-                    "light": "resources/icons/menu.svg",
-                    "dark": "resources/icons/menu.svg"
+                    "light": "resources/icons/menu-light.svg",
+                    "dark": "resources/icons/menu-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.readRFTestResultsAndCreateReportWithResults",
                 "title": "TestBench: Read Test Results & Create Report With Results",
                 "icon": {
-                    "light": "resources/icons/read.svg",
-                    "dark": "resources/icons/read.svg"
+                    "light": "resources/icons/read-light.svg",
+                    "dark": "resources/icons/read-dark.svg"
                 }
             },
             {
@@ -328,8 +328,8 @@
                 "title": "TestBench: Refresh Project Tree View",
                 "when": "view == projectManagementTree",
                 "icon": {
-                    "light": "resources/icons/refresh.svg",
-                    "dark": "resources/icons/refresh.svg"
+                    "light": "resources/icons/refresh-light.svg",
+                    "dark": "resources/icons/refresh-dark.svg"
                 }
             },
             {
@@ -337,56 +337,56 @@
                 "title": "TestBench: Refresh Test Tree View",
                 "when": "view == testThemeTree",
                 "icon": {
-                    "light": "resources/icons/refresh.svg",
-                    "dark": "resources/icons/refresh.svg"
+                    "light": "resources/icons/refresh-light.svg",
+                    "dark": "resources/icons/refresh-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.displayCommands",
                 "title": "TestBench: Display Commands",
                 "icon": {
-                    "light": "resources/icons/more.svg",
-                    "dark": "resources/icons/more.svg"
+                    "light": "resources/icons/more-light.svg",
+                    "dark": "resources/icons/more-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.showExtensionSettings",
                 "title": "TestBench: Show Extension Settings",
                 "icon": {
-                    "light": "resources/icons/settings.svg",
-                    "dark": "resources/icons/settings.svg"
+                    "light": "resources/icons/settings-light.svg",
+                    "dark": "resources/icons/settings-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
                 "title": "TestBench: Read Tests & Upload Results To Testbench",
                 "icon": {
-                    "light": "resources/icons/Upload.svg",
-                    "dark": "resources/icons/Upload.svg"
+                    "light": "resources/icons/upload-light.svg",
+                    "dark": "resources/icons/upload-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.uploadTestResultsToTestbench",
                 "title": "TestBench: Upload Test Results To Testbench",
                 "icon": {
-                    "light": "resources/icons/Upload.svg",
-                    "dark": "resources/icons/Upload.svg"
+                    "light": "resources/icons/upload-light.svg",
+                    "dark": "resources/icons/upload-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.refreshTestElementsTree",
                 "title": "Refresh Test Elements",
                 "icon": {
-                    "light": "resources/icons/refresh.svg",
-                    "dark": "resources/icons/refresh.svg"
+                    "light": "resources/icons/refresh-light.svg",
+                    "dark": "resources/icons/refresh-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.displayInteractionsForSelectedTOV",
                 "title": "Show Robotframework Resources",
                 "icon": {
-                    "light": "resources/icons/key.svg",
-                    "dark": "resources/icons/key.svg"
+                    "light": "resources/icons/key-light.svg",
+                    "dark": "resources/icons/key-dark.svg"
                 }
             },
             {

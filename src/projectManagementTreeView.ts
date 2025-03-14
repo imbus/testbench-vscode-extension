@@ -61,8 +61,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     /**
      * Constructs a new ProjectManagementTreeDataProvider.
      *
-     * @param projectKey Optional project key.
-     * @param testThemeDataProvider Optional test theme tree data provider.
+     * @param {string} projectKey Optional project key.
+     * @param {TestThemeTreeDataProvider} testThemeDataProvider Optional test theme tree data provider.
      */
     constructor(projectKey?: string, testThemeDataProvider?: TestThemeTreeDataProvider) {
         this.currentProjectKeyInView = projectKey ?? null;
@@ -83,7 +83,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * Recursively stores the keys of expanded tree items.
      * Used to restore expansion state of collapsible elements after the refresh button is clicked.
      *
-     * @param element The tree item to store.
+     * @param {ProjectManagementTreeItem| null} element The tree item to store.
      */
     private storeExpandedTreeItems(element: ProjectManagementTreeItem | null): void {
         if (element) {
@@ -100,8 +100,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     /**
      * Returns the parent of a given tree item.
      *
-     * @param element The tree item.
-     * @returns The parent tree item or null.
+     * @param {ProjectManagementTreeItem} element The tree item.
+     * @returns {ProjectManagementTreeItem | null} The parent tree item or null.
      */
     getParent(element: ProjectManagementTreeItem): ProjectManagementTreeItem | null {
         return element.parent;
@@ -110,9 +110,9 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     /**
      * Creates a TestbenchTreeItem from raw JSON data.
      *
-     * @param jsonData The raw JSON data.
-     * @param parent The parent tree item.
-     * @returns A new TestbenchTreeItem or null.
+     * @param {any} jsonData The raw JSON data.
+     * @param {ProjectManagementTreeItem | null} parent The parent tree item.
+     * @returns {ProjectManagementTreeItem | null} A new TestbenchTreeItem or null.
      */
     private createTreeItem(jsonData: any, parent: ProjectManagementTreeItem | null): ProjectManagementTreeItem | null {
         if (!jsonData) {
@@ -149,8 +149,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * If no element is provided, it returns the root project.
      * Called when the tree view is first loaded or refreshed.
      *
-     * @param element Optional parent tree item.
-     * @returns A promise that resolves to an array of TestbenchTreeItems.
+     * @param {ProjectManagementTreeItem} element Optional parent tree item.
+     * @returns {Promise<ProjectManagementTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
      */
     async getChildren(element?: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
         if (!connection) {
@@ -189,8 +189,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     /**
      * Fetches the sub-elements of a cycle element and builds the test theme tree.
      *
-     * @param element The cycle tree item.
-     * @returns A promise that resolves to an array of TestbenchTreeItems.
+     * @param {ProjectManagementTreeItem} element The cycle tree item.
+     * @returns {Promise<ProjectManagementTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
      */
     public async getChildrenOfCycle(element: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
         logger.trace("Fetching children of cycle element:", element.label);
@@ -280,8 +280,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     /**
      * Returns a TreeItem representation for the given element.
      *
-     * @param element The tree item.
-     * @returns The tree item.
+     * @param {ProjectManagementTreeItem} element The tree item.
+     * @returns {vscode.TreeItem} The tree item.
      */
     getTreeItem(element: ProjectManagementTreeItem): vscode.TreeItem {
         return element;
@@ -290,7 +290,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     /**
      * Sets the selected tree item as the root and refreshes the tree.
      *
-     * @param treeItem The tree item to set as root.
+     * @param {ProjectManagementTreeItem} treeItem The tree item to set as root.
      */
     makeRoot(treeItem: ProjectManagementTreeItem): void {
         logger.debug("Setting selected element as root:", treeItem);
@@ -301,8 +301,9 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     /**
      * Handles expansion and collapse of a tree item.
      *
-     * @param element The tree item.
-     * @param expanded True if the item is expanded, false otherwise.
+     * @param {ProjectManagementTreeItem} element The tree item.
+     * @param {boolean} expanded True if the item is expanded, false otherwise.
+     * @returns {Promise<void>} A promise that resolves when the operation is complete.
      */
     async handleExpansion(element: ProjectManagementTreeItem, expanded: boolean): Promise<void> {
         logger.trace(`Setting expansion state of ${element.label} to ${expanded ? "expanded" : "collapsed"}.`);
@@ -326,7 +327,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     /**
      * Handles a click on a test cycle element to initialize the test theme tree and the test elements tree.
      *
-     * @param projectsTreeViewItem The clicked tree item in the projects tree view.
+     * @param {ProjectManagementTreeItem} projectsTreeViewItem The clicked tree item in the projects tree view.
+     * @returns {Promise<void>} A promise that resolves when the operation is complete.
      */
     async handleTestCycleClick(projectsTreeViewItem: ProjectManagementTreeItem): Promise<void> {
         logger.trace("Handling tree item click for:", projectsTreeViewItem.label);
@@ -384,8 +386,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 /**
  * Finds the project key (serial) for a given cycle element by traversing upward in the tree hierarchy.
  *
- * @param element The cycle tree item.
- * @returns The project key if found; otherwise null.
+ * @param {ProjectManagementTreeItem} element The cycle tree item.
+ * @returns {string | null} The project key as a string if found; otherwise null.
  */
 export function findProjectKeyOfCycleElement(element: ProjectManagementTreeItem): string | null {
     logger.trace("Finding project key for cycle element:", element.label);
@@ -407,8 +409,8 @@ export function findProjectKeyOfCycleElement(element: ProjectManagementTreeItem)
 /**
  * Finds the cycle key (serial) for a given tree element by traversing upward in the tree hierarchy.
  *
- * @param element The tree item.
- * @returns The cycle key if found; otherwise null.
+ * @param {ProjectManagementTreeItem} element The tree item.
+ * @returns {string | null} The cycle key as a string if found; otherwise null.
  */
 export function findCycleKeyOfTreeElement(element: ProjectManagementTreeItem): string | null {
     logger.trace("Finding cycle key for tree element:", element.label);
@@ -436,11 +438,11 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
     /**
      * Constructs a new TestbenchTreeItem.
      *
-     * @param label The label to display.
-     * @param contextValue The type of the tree item.
-     * @param collapsibleState The initial collapsible state.
-     * @param item The original data of the tree item.
-     * @param parent The parent tree item.
+     * @param {string} label The label to display.
+     * @param {string} contextValue The type of the tree item.
+     * @param {vscode.TreeItemCollapsibleState} collapsibleState The initial collapsible state.
+     * @param {any} item The original data of the tree item.
+     * @param {ProjectManagementTreeItem | null} parent The parent tree item.
      */
     constructor(
         label: string,
@@ -476,68 +478,80 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
      * Determines the icon path for the tree item based on its type and status.
      * Currently this is not used fully, but it allows to have different icons for different statuses of the tree items like the TestBench Client.
      *
-     * @returns The absolute path to the icon file.
+     * @returns The absolute icon path to the icon file.
      */
-    private getIconPath(): string {
+    private getIconPath(): { light: string; dark: string } {
         const iconFolderPath: string = path.join(__dirname, "..", "resources", "icons");
         const status = this.item.status || "default"; // (Active, Planned, Finished, Closed etc.)
         const type = this.contextValue; // (Project, TOV, Cycle etc.)
         // Map the context and status to the corresponding icon file name
-        const iconMap: Record<string, Record<string, string>> = {
+        const iconMap: Record<string, Record<string, { light: string; dark: string }>> = {
             Project: {
-                active: "projects.svg",
-                planned: "projects.svg",
-                finished: "projects.svg",
-                closed: "projects.svg",
-                default: "projects.svg"
+                active: { light: "projects-light.svg", dark: "projects-dark.svg" },
+                planned: { light: "projects-light.svg", dark: "projects-dark.svg" },
+                finished: { light: "projects-light.svg", dark: "projects-dark.svg" },
+                closed: { light: "projects-light.svg", dark: "projects-dark.svg" },
+                default: { light: "projects-light.svg", dark: "projects-dark.svg" }
             },
             Version: {
-                active: "TOV-specification.svg",
-                planned: "TOV-specification.svg",
-                finished: "TOV-specification.svg",
-                closed: "TOV-specification.svg",
-                default: "TOV-specification.svg"
+                active: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" },
+                planned: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" },
+                finished: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" },
+                closed: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" },
+                default: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" }
             },
             Cycle: {
-                active: "Cycle-execution.svg",
-                planned: "Cycle-execution.svg",
-                finished: "Cycle-execution.svg",
-                closed: "Cycle-execution.svg",
-                default: "Cycle-execution.svg"
+                active: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" },
+                planned: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" },
+                finished: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" },
+                closed: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" },
+                default: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" }
             },
             TestThemeNode: {
-                default: "TestThemeOriginal.svg"
+                default: { light: "TestThemeOriginal-light.svg", dark: "TestThemeOriginal-dark.svg" }
             },
             TestCaseSetNode: {
-                default: "TestCaseSetOriginal.svg"
+                default: { light: "TestCaseSetOriginal-light.svg", dark: "TestCaseSetOriginal-dark.svg" }
             },
             TestCaseNode: {
-                default: "TestCase.svg"
+                default: { light: "TestCase-light.svg", dark: "TestCase-dark.svg" }
             },
             default: {
-                default: "TBU_Logo_cropped.svg"
+                default: { light: "TBU_Logo_cropped.svg", dark: "TBU_Logo_cropped.svg" }
             }
         };
-        const typeIcons: Record<string, string> = iconMap[type as keyof typeof iconMap] || iconMap["default"];
-        const iconFileName: string = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
-        return path.join(iconFolderPath, iconFileName);
+
+        // Map the context and status to the corresponding icon file name
+        const typeIcons = iconMap[type as keyof typeof iconMap] || iconMap["default"];
+        const iconFileNames = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
+
+        // Return the full paths for light and dark mode icons
+        return {
+            light: path.join(iconFolderPath, iconFileNames.light),
+            dark: path.join(iconFolderPath, iconFileNames.dark)
+        };
     }
 
     /**
      * Updates the tree item's icon.
      */
     updateIcon(): void {
-        this.iconPath = this.getIconPath();
+        const iconPaths = this.getIconPath();
+        this.iconPath = {
+            light: vscode.Uri.file(iconPaths.light),
+            dark: vscode.Uri.file(iconPaths.dark)
+        };
     }
 }
 
 /**
  * Initializes the project management tree view and test theme tree view.
  *
- * @param context The VS Code extension context.
- * @param connection The active TestBench connection.
- * @param selectedProjectKey Optional project key.
- * @returns A promise resolving with an array containing the project management and test theme data providers.
+ * @param {vscode.ExtensionContext} context The VS Code extension context.
+ * @param {PlayServerConnection | null} connection The active TestBench connection.
+ * @param {string} selectedProjectKey Optional project key.
+ * @returns {Promise<[ProjectManagementTreeDataProvider | null, TestThemeTreeDataProvider | null]>}
+ * A promise resolving with an array containing the project management and test theme data providers.
  */
 export async function initializeTreeViews(
     context: vscode.ExtensionContext,
