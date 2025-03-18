@@ -9,8 +9,8 @@
 // TODO: The user generated tests, executed the tests, and restarted he extension. Last generated test params are now invalid due to restart, and he cant import.
 
 // Before releasing the extension:
-// TODO: Add license to the extension
-// TODO: Set logger level to info or debug in production
+// TODO: Add License.md to the extension
+// TODO: Set logger level to info or debug in production, remove too detailed logs.
 // TODO: In production, remove process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; in connection class.
 
 import * as vscode from "vscode";

@@ -181,7 +181,8 @@
                         "default": [
                             "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*"
                         ],
-                        "order": 17
+                        "order": 17,
+                        "scope": "resource"
                     },
                     "testbenchExtension.libraryRootInTestbench2robotframework": {
                         "type": "array",
@@ -193,7 +194,8 @@
                             "RF",
                             "RF-Library"
                         ],
-                        "order": 18
+                        "order": 18,
+                        "scope": "resource"
                     },
                     "testbenchExtension.resourceRegexInTestbench2robotframework": {
                         "type": "array",
@@ -204,7 +206,8 @@
                         "default": [
                             "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*"
                         ],
-                        "order": 19
+                        "order": 19,
+                        "scope": "resource"
                     },
                     "testbenchExtension.resourceRootInTestbench2robotframework": {
                         "type": "array",
@@ -215,7 +218,8 @@
                         "default": [
                             "RF-Resource"
                         ],
-                        "order": 20
+                        "order": 20,
+                        "scope": "resource"
                     },
                     "testbenchExtension.libraryMappingInTestbench2robotframework": {
                         "type": "array",
@@ -224,7 +228,8 @@
                             "type": "string"
                         },
                         "default": [],
-                        "order": 21
+                        "order": 21,
+                        "scope": "resource"
                     },
                     "testbenchExtension.resourceMappingInTestbench2robotframework": {
                         "type": "array",
@@ -233,7 +238,8 @@
                             "type": "string"
                         },
                         "default": [],
-                        "order": 22
+                        "order": 22,
+                        "scope": "resource"
                     },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
