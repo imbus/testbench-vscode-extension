@@ -837,7 +837,7 @@ class TestStructureTree:
     nodes: list[TestStructureTreeNode]
 
     @classmethod
-    def from_dict(cls, dictionary, is_tov: bool) -> TestStructureTree:
+    def from_dict(cls, dictionary, is_tov: bool=False) -> TestStructureTree:
         return cls(
             root=TestStructureTreeNode.from_dict(dictionary.get("root", {}))
             if "root" in dictionary

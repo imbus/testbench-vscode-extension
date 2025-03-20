@@ -132,11 +132,11 @@ class TestBenchJsonReader:
             # return None  # TODO: wenn nicht da dann Fehler?
         return TestCaseDetails.from_dict(tc_dict)
 
-    def read_test_theme_tree(self) -> Optional[TestStructureTree]:
+    def read_test_theme_tree(self, is_tov=False) -> Optional[TestStructureTree]:
         test_structure_tree = read_json(str(Path(self.json_dir, TEST_STRUCTURE_TREE_FILE)))
         if test_structure_tree is None:
             return None
-        return TestStructureTree.from_dict(test_structure_tree)
+        return TestStructureTree.from_dict(test_structure_tree, is_tov)
 
 
 def read_json(filepath: str, silent=True):

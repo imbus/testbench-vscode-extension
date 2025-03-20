@@ -1,6 +1,6 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.4
 Name: testbench2robotframework
-Version: 0.8.3.3
+Version: 0.8.3.6
 Summary: Robot Framework Code Generator from Keyword-Driven Tests in imbus TestBench 3.0 and newer
 Author-email: imbus AG <support@imbus.de>
 License: Apache 2.0 License
@@ -23,6 +23,7 @@ Requires-Dist: pytest-spec; extra == "dev"
 Requires-Dist: robotframework-tidy; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
 Requires-Dist: twine; extra == "dev"
+Dynamic: license-file
 
 # Installation des Robot Code Generators
 

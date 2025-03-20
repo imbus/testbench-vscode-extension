@@ -155,6 +155,11 @@ class ResultWriter(ResultVisitor):
             atomic_interactions = list(
                 self._get_interactions_by_type(itb_test_case.interactions, InteractionType.Atomic)
             )
+            # atomic_interactions.extend(
+            #     list(
+            #     self._get_interactions_by_type(itb_test_case.interactions, InteractionType.Textual)
+            # )
+            # )
             compound_interactions = list(
                 self._get_interactions_by_type(itb_test_case.interactions, InteractionType.Compound)
             )
@@ -397,9 +402,12 @@ class ResultWriter(ResultVisitor):
             if sequence_phase == SequencePhase.TestStep and not self._test_setup_passed:
                 interaction.exec.verdict = InteractionVerdict.Skipped
                 continue
+            # if interaction.interactionType == InteractionType.Textual and interaction.name.strip().startswith("#"):
+            #     continue
             if index < len(test_chain_body):
                 keyword = test_chain_body[index]
-                self._check_matching_interaction_and_keyword_name(keyword, interaction)
+                # if not interaction.interactionType == InteractionType.Textual:
+                #     self._check_matching_interaction_and_keyword_name(keyword, interaction)
                 interaction.exec = self._get_interaction_exec_from_keyword(keyword)
                 continue
             if sequence_phase == SequencePhase.Setup and not self._test_setup_passed:
@@ -508,6 +516,11 @@ class ResultWriter(ResultVisitor):
                 compound_interaction.interactions, InteractionType.Atomic
             )
         )
+        # atomic_interactions.extend(list(
+        #     self._get_interactions_by_type(
+        #         compound_interaction.interactions, InteractionType.Textual
+        #     )
+        # ))
         if compound_interaction.exec is None:
             compound_interaction.exec = InteractionExecutionSummary.from_dict({})
         compound_interaction.exec.verdict = InteractionVerdict.Skipped
@@ -636,23 +649,23 @@ class ResultWriter(ResultVisitor):
         write_main_protocol(
             self.json_result, self.main_protocol.protocolTestCaseSetExecutionSummary
         )
-        Path.mkdir(Path(self.json_result_path) / self.listener_uid, parents=True)
+        Path.mkdir(Path(self.json_result_path), parents=True)
         shutil.copy(
             Path(self.json_result) / "protocol.json",
-            Path(self.json_result_path) / self.listener_uid / "protocol.json",
+            Path(self.json_result_path) / "protocol.json",
         )
         shutil.copy(
             Path(self.json_dir) / "project.json",
-            Path(self.json_result_path) / self.listener_uid / "project.json",
+            Path(self.json_result_path) / "project.json",
         )
         for filename in os.listdir(self.json_result):
             if filename.startswith(self.listener_uid) and filename.endswith(".json"):
                 shutil.copy(
                     Path(self.json_result) / filename,
-                    Path(self.json_result_path) / self.listener_uid / filename,
+                    Path(self.json_result_path) / filename,
                 )
-        directory_to_zip(Path(self.json_result_path) / self.listener_uid)
-        shutil.rmtree(Path(self.json_result_path) / self.listener_uid)
+        directory_to_zip(Path(self.json_result_path))
+        shutil.rmtree(Path(self.json_result_path))
 
     @staticmethod
     def render_status(status):

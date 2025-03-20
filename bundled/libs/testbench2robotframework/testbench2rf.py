@@ -38,6 +38,7 @@ try:
 except ImportError:
     from robot.parsing.model.statements import ForceTags as TestTags
 
+from .html_parser import extract_text_from_html
 from .config import CompoundInteractionLogging, Configuration
 from .json_reader import TestCaseSet
 from .log import logger
@@ -115,23 +116,22 @@ class RfTestCase:
         self, interaction: InteractionDetails, indent: int = 0, sequence_phase=None
     ) -> None:
         indent += 1
-        if interaction.interactionType != InteractionType.Textual:
-            cbv_params = self._get_params_by_use_type(
-                interaction, ParameterEvaluationType.CallByValue
+        cbv_params = self._get_params_by_use_type(
+            interaction, ParameterEvaluationType.CallByValue
+        )
+        cbr_params = self._get_params_by_use_type(
+            interaction,
+            ParameterEvaluationType.CallByReference,
+            ParameterEvaluationType.CallByReferenceMandatory,
+        )
+        if interaction.interactionType == InteractionType.Compound:
+            self._append_compound_ia_and_analyze_children(
+                cbr_params, cbv_params, indent, interaction, sequence_phase
             )
-            cbr_params = self._get_params_by_use_type(
-                interaction,
-                ParameterEvaluationType.CallByReference,
-                ParameterEvaluationType.CallByReferenceMandatory,
-            )
-            if interaction.interactionType == InteractionType.Compound:
-                self._append_compound_ia_and_analyze_children(
-                    cbr_params, cbv_params, indent, interaction, sequence_phase
-                )
-            elif interaction.interactionType == InteractionType.Atomic:
-                self._append_atomic_ia(
-                    cbr_params, cbv_params, indent, interaction, sequence_phase
-                )  # TODO: Else für textuelle Interaktionen
+        elif interaction.interactionType == InteractionType.Atomic: # or InteractionType.Textual:
+            self._append_atomic_ia(
+                cbr_params, cbv_params, indent, interaction, sequence_phase
+            )  # TODO: Else für textuelle Interaktionen
 
     def _append_atomic_ia(
         self,
@@ -147,9 +147,10 @@ class RfTestCase:
             self.used_imports[resource_type] = {import_prefix}
         else:
             self.used_imports[resource_type].add(import_prefix)
+        interaction_name = interaction.name if interaction.interactionType == InteractionType.Atomic else extract_text_from_html(interaction.spec.description)
         self.interaction_calls.append(
             InteractionCall(
-                name=interaction.name,
+                name=interaction_name,
                 cbv_parameters=cbv_params,
                 cbr_parameters=cbr_params,
                 indent=indent,
