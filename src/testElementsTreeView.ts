@@ -1071,3 +1071,10 @@ export function removeRobotResourceFromPathString(pathStr: string): string {
     logger.trace(`Removed [Robot-Resource] from path ${pathStr}: ${result}`);
     return result;
 }
+
+/**
+ * Clears the test elements tree view by refreshing it with an empty array.
+ */
+export function clearTestElementsTreeView(): void {
+    getTestElementsTreeDataProvider().refresh([]);
+}

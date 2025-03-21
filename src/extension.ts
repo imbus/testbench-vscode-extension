@@ -473,6 +473,12 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             connection,
             selectedProjectKey
         );
+
+        // After selecting a (new) project, hide the test theme tree view and test elements tree view and clear the test elements tree view.
+        projectManagementTreeView.hideTestThemeTreeView();
+        testElementsTreeView.hideTestElementsTreeView();
+        testElementsTreeView.clearTestElementsTreeView();
+
         logger.trace(`Project with key ${selectedProjectKey} loaded into project management tree view.`);
     });
 
