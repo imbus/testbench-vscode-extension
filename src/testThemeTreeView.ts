@@ -34,8 +34,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Returns the parent of a given tree item.
-     * @param element The tree item.
-     * @returns The parent TestbenchTreeItem or null.
+     * @param {ProjectManagementTreeItem} element The tree item.
+     * @returns {ProjectManagementTreeItem | null} The parent TestbenchTreeItem or null.
      */
     getParent(element: ProjectManagementTreeItem): ProjectManagementTreeItem | null {
         return element.parent;
@@ -44,8 +44,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
     /**
      * Returns the children of a given tree item. If no element is provided,
      * returns the root elements.
-     * @param element Optional parent tree item.
-     * @returns A promise resolving to an array of TestbenchTreeItems.
+     * @param {ProjectManagementTreeItem} element Optional parent tree item.
+     * @returns {Promise<ProjectManagementTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
      */
     async getChildren(element?: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
         if (!element) {
@@ -56,8 +56,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Returns the TreeItem representation for a given element.
-     * @param element The TestbenchTreeItem.
-     * @returns The corresponding vscode.TreeItem.
+     * @param {ProjectManagementTreeItem[]} element The TestbenchTreeItem.
+     * @returns {vscode.TreeItem} The corresponding vscode.TreeItem.
      */
     getTreeItem(element: ProjectManagementTreeItem): vscode.TreeItem {
         return element;
@@ -65,7 +65,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Sets the root elements of the test theme tree and refreshes the view.
-     * @param roots An array of TestbenchTreeItems to set as roots.
+     * @param {ProjectManagementTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
      */
     setRoots(roots: ProjectManagementTreeItem[]): void {
         // Output of roots is circular and large, so it is commented out.
@@ -76,7 +76,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Sets the selected tree item as the sole root of the test theme tree and refreshes the view.
-     * @param element The TestbenchTreeItem to set as root.
+     * @param {ProjectManagementTreeItem} element The TestbenchTreeItem to set as root.
      */
     makeRoot(element: ProjectManagementTreeItem): void {
         logger.debug("Setting the selected element as the root of the test theme tree view:", element);
@@ -86,8 +86,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Handles expansion or collapse of a tree item and updates its icon.
-     * @param element The TestbenchTreeItem.
-     * @param expanded True if the item is expanded; false if collapsed.
+     * @param {ProjectManagementTreeItem} element The TestbenchTreeItem.
+     * @param {boolean} expanded True if the item is expanded; false if collapsed.
      */
     handleExpansion(element: ProjectManagementTreeItem, expanded: boolean): void {
         logger.trace(
@@ -110,7 +110,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Recursively stores the keys of expanded nodes.
-     * @param elements An array of TestbenchTreeItems or null.
+     * @param {ProjectManagementTreeItem[] | null} elements An array of TestbenchTreeItems or null.
      */
     private storeExpandedTreeItems(elements: ProjectManagementTreeItem[] | null): void {
         if (elements) {

@@ -140,11 +140,19 @@ export class TestBenchLogger {
                 const oldFile = `${this.logFilePath}.${i}`; // Example: extension.log.1
                 const olderFile = `${this.logFilePath}.${i - 1}`;
                 if (fs.existsSync(olderFile)) {
-                    await fsRename(olderFile, oldFile);
+                    try {
+                        await fsRename(olderFile, oldFile);
+                    } catch (error) {
+                        console.error(`Failed to rotate log file ${olderFile} to ${oldFile}:`, error);
+                    }
                 }
             }
             // After rotating all existing log files, rename the current log file to start a new one.
-            await fsRename(this.logFilePath, `${this.logFilePath}_0`);
+            try {
+                await fsRename(this.logFilePath, `${this.logFilePath}_0`);
+            } catch (error) {
+                console.error(`Failed to rename current log file to ${this.logFilePath}_0:`, error);
+            }
         } catch (error) {
             console.error(`Log rotation error: ${error}`);
         }
@@ -159,38 +167,44 @@ export class TestBenchLogger {
      * @returns {Promise<string>} A formatted string representation of the details (or an empty string if none provided).
      */
     private async formatDetails(details?: any | any[]): Promise<string> {
-        let detailString = "";
         if (details === undefined || details === null) {
-            return detailString;
+            return "";
         }
 
-        // Dynamically import "flatted" only if needed.
+        // Dynamically import the "flatted" library to handle circular references.
+        // This library is only imported if needed, reducing the initial load time.
         const { stringify } = await import("flatted");
 
-        // Check if details is an array and process each item; otherwise, handle as a single item
-        try {
-            if (Array.isArray(details)) {
-                for (const detail of details) {
-                    detailString += "\n" + (typeof detail === "object" ? JSON.stringify(detail, null, 2) : detail);
+        /**
+         * Helper function to format a single detail item.
+         * This function safely converts an object to a string, handling circular references if necessary.
+         *
+         * @param detail - The detail item to format (can be an object, array, or primitive value).
+         * @returns {string} - The formatted string representation of the detail.
+         */
+        const formatSingleDetail = (detail: any): string => {
+            try {
+                // Attempt to stringify the detail using JSON.stringify.
+                // This works for most objects and arrays, but will fail for circular references.
+                return typeof detail === "object" ? JSON.stringify(detail, null, 2) : detail;
+            } catch (error) {
+                // If JSON.stringify fails due to a circular reference, use the "flatted" library to safely stringify the object.
+                if (error instanceof TypeError && error.message.includes("Converting circular structure to JSON")) {
+                    return typeof detail === "object" ? stringify(detail) : detail;
                 }
-            } else {
-                detailString = "\n" + (typeof details === "object" ? JSON.stringify(details, null, 2) : details);
+                // If the error is not related to circular references, return a placeholder error message.
+                return "[Error formatting details]";
             }
-        } catch (error) {
-            // In case of circular references, fall back to flatted.
-            if (error instanceof TypeError && error.message.includes("Converting circular structure to JSON")) {
-                if (Array.isArray(details)) {
-                    for (const detail of details) {
-                        detailString += "\n" + (typeof detail === "object" ? stringify(detail) : detail);
-                    }
-                } else {
-                    detailString = "\n" + (typeof details === "object" ? stringify(details) : details);
-                }
-            } else {
-                detailString += "\n[Error formatting details]";
-            }
+        };
+
+        // If the details parameter is an array, format each item individually and join them with newlines.
+        if (Array.isArray(details)) {
+            // Format each detail item, then join them with newlines.
+            return details.map((detail) => `\n${formatSingleDetail(detail)}`).join("");
+        } else {
+            // If the details parameter is a single item, format it and prepend a newline.
+            return `\n${formatSingleDetail(details)}`;
         }
-        return detailString;
     }
 
     /**
@@ -208,13 +222,8 @@ export class TestBenchLogger {
         // Get the log level from extension configuration.
         const configuredLogLevel: string = getConfig().get("testBenchLogger", "No logging");
 
-        // Do not log if logging is disabled.
-        if (configuredLogLevel === "No logging") {
-            return;
-        }
-
-        // Skip messages below the configured log level.
-        if (this.levels[level] < this.levels[configuredLogLevel]) {
+        // Skip logging if disabled or log level is below the configured level.
+        if (configuredLogLevel === "No logging" || this.levels[level] < this.levels[configuredLogLevel]) {
             return;
         }
 
@@ -241,9 +250,7 @@ export class TestBenchLogger {
         if (outputToTerminal || this.outputLogToTerminal) {
             if (Array.isArray(details)) {
                 console.log(baseLogMessage);
-                for (const detail of details) {
-                    console.log(detail); // Logs each object individually for easy inspection
-                }
+                details.forEach((detail) => console.log(detail)); // Logs each object individually for easy inspection
             } else if (details) {
                 console.log(baseLogMessage, details);
             } else {

@@ -16,10 +16,10 @@ export class PyCommandBuilder {
     /**
      * Retrieves the active workspace folder.
      * If multiple workspace folders exist, returns the one associated with the active editor.
-     * @returns The active workspace folder, or undefined if none is found.
+     * @returns {vscode.WorkspaceFolder | undefined} The active workspace folder, or undefined if none is found.
      */
     public static getActiveWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
         if (workspaceFolders && workspaceFolders.length > 0) {
             if (workspaceFolders.length === 1) {
                 return workspaceFolders[0];
@@ -36,8 +36,8 @@ export class PyCommandBuilder {
     /**
      * Retrieves the Python executable path from the active Python environment.
      *
-     * @param activeWorkspace The active workspace folder.
-     * @returns A promise resolving to the full path of the Python executable, or undefined if not found.
+     * @param {vscode.WorkspaceFolder | undefined} activeWorkspace The active workspace folder.
+     * @returns {Promise<string | undefined>} A promise resolving to the full path of the Python executable, or undefined if not found.
      */
     public static async getPythonEnvironmentExe(
         activeWorkspace: vscode.WorkspaceFolder | undefined
@@ -57,7 +57,7 @@ export class PyCommandBuilder {
             // Resolve the environment details.
             const environment: ResolvedEnvironment | undefined =
                 await pythonApi.environments.resolveEnvironment(environmentPath);
-            const pythonExecutablePath = environment?.executable.uri?.fsPath;
+            const pythonExecutablePath: string | undefined = environment?.executable.uri?.fsPath;
             if (!pythonExecutablePath) {
                 logger.error("Failed to resolve Python executable path from the active environment.");
             }
@@ -71,8 +71,8 @@ export class PyCommandBuilder {
     /**
      * Builds the command string to execute the tb2robot (Testbench2Robotframework) main script.
      *
-     * @param extensionContext The extension context.
-     * @returns A promise resolving to the full command string.
+     * @param {vscode.ExtensionContext} extensionContext The extension context.
+     * @returns {Promise<string>} A promise resolving to the full command string.
      */
     public static async buildTb2RobotCommand(extensionContext: vscode.ExtensionContext): Promise<string> {
         // Construct the absolute path to the tb2robot main script.
@@ -81,8 +81,8 @@ export class PyCommandBuilder {
         );
         logger.trace("tb2robot main path set to:", tb2RobotMainFile);
 
-        const activeWorkspace = this.getActiveWorkspaceFolder();
-        const pythonExe = await this.getPythonEnvironmentExe(activeWorkspace);
+        const activeWorkspace: vscode.WorkspaceFolder | undefined = this.getActiveWorkspaceFolder();
+        const pythonExe: string | undefined = await this.getPythonEnvironmentExe(activeWorkspace);
         logger.trace(`Python executable path: ${pythonExe}`);
 
         if (!pythonExe) {
@@ -90,7 +90,7 @@ export class PyCommandBuilder {
             return "";
         }
 
-        const commandString = `${pythonExe} -u ${tb2RobotMainFile}`;
+        const commandString: string = `${pythonExe} -u ${tb2RobotMainFile}`;
         logger.trace(`Built tb2robot command: ${commandString}`);
         return commandString;
     }

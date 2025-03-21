@@ -3,7 +3,7 @@
  * @description Main entry point for the TestBench VS Code extension.
  */
 
-// TODO: Add progress bar for tree views when fetching elements to notify the user.
+// TODO: Selecting a new project from the project selection list should clear and hide other tree views.
 // TODO: Add progress bar for fetching cycle structure since it can take long.
 // TODO: If possible, hide the tree views initially instead of creating them and then hiding them after.
 // TODO: The user generated tests, executed the tests, and restarted he extension. Last generated test params are now invalid due to restart, and he cant import.
@@ -164,8 +164,9 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
         try {
             await handler(...args);
         } catch (error) {
-            logger.error("Error executing command:", error);
-            vscode.window.showErrorMessage(`An error occurred: ${error instanceof Error ? error.message : error}`);
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+            logger.error(`Error executing command: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`An error occurred: ${errorMessage}`);
         }
     };
 }
@@ -212,7 +213,8 @@ export async function promptForWorkspaceLocation(): Promise<string | undefined> 
 }
 
 /**
- * Loads the latest extension configuration.
+ * Loads the latest extension configuration and updates the global configuration object.
+ * Also handles the storage of credentials based on the configuration settings.
  *
  * @param context The extension context.
  */
@@ -231,17 +233,14 @@ export async function loadConfiguration(context: vscode.ExtensionContext): Promi
     loginWebViewProvider?.updateWebviewContent();
 }
 
-/**
- * Initializes the tree views used by the extension.
- */
-export function initializeTreeViews(): void {
-    // Initialize project management tree view.
+function initializeProjectManagementTreeView(): void {
     projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(null!);
     projectTreeView = vscode.window.createTreeView("projectManagementTree", {
         treeDataProvider: projectManagementTreeDataProvider
     });
+}
 
-    // Initialize test elements tree view.
+function initializeTestElementsTreeView(): void {
     testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider();
     testElementTreeView = vscode.window.createTreeView("testElementsView", {
         treeDataProvider: testElementsTreeDataProvider
@@ -249,6 +248,14 @@ export function initializeTreeViews(): void {
     vscode.window.registerTreeDataProvider("testElementsView", testElementsTreeDataProvider);
     // Hide the test elements tree view initially.
     testElementsTreeView.hideTestElementsTreeView();
+}
+
+/**
+ * Initializes the project tree and test elements tree.
+ */
+export function initializeTreeViews(): void {
+    initializeProjectManagementTreeView();
+    initializeTestElementsTreeView();
 }
 
 /**
@@ -299,7 +306,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             (await context.secrets.get("password")) !== undefined
         ) {
             logger.debug("Performing automatic login.");
-            if (await testBenchConnection?.performLogin(context, baseKeyOfExtension, false, true)) {
+            if (await testBenchConnection?.performLogin(context, false, true)) {
                 // If login was successful, display project selection dialog and the project management tree view.
                 projectManagementTreeView?.displayProjectManagementTreeView();
                 await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
@@ -327,7 +334,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         }
         isLoginProcessAlreadyRunning = true;
         try {
-            const performLoginResult = await testBenchConnection.performLogin(context, baseKeyOfExtension);
+            const performLoginResult = await testBenchConnection.performLogin(context);
             // If login was successful, display project selection dialog and the project management tree view.
             if (performLoginResult) {
                 await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
@@ -459,6 +466,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         projectTreeView = vscode.window.createTreeView("projectManagementTree", {
             treeDataProvider: projectManagementTreeDataProvider
         });
+
         // Initialize and display the project management tree view with the selected project.
         [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeViews(
             context,
@@ -721,7 +729,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  * Called when the extension is deactivated.
  */
 export async function deactivate(): Promise<void> {
-    // Gracefully log out the user when the extension is deactivated.
-    await connection?.logoutUser(projectManagementTreeDataProvider!);
-    logger.info("Extension deactivated.");
+    try {
+        // Gracefully log out the user when the extension is deactivated.
+        await connection?.logoutUser(projectManagementTreeDataProvider!);
+        logger.info("Extension deactivated.");
+    } catch (error) {
+        logger.error("Error during deactivation:", error);
+    }
 }

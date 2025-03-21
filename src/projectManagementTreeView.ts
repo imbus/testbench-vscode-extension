@@ -40,8 +40,8 @@ export function setTestThemeTreeView(view: vscode.TreeView<ProjectManagementTree
 }
 
 /**
- * ProjectManagementTreeDataProvider
- * Implements the VS Code TreeDataProvider interface to display the selected project and its test object versions and cycles.
+ * Provides data for the project management tree view.
+ * This tree view displays the selected project, its test object versions, and cycles.
  * When a test cycle element is clicked, its children (test themes and test case sets) are offloaded to the test theme tree view.
  */
 export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvider<ProjectManagementTreeItem> {
@@ -153,37 +153,46 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @returns {Promise<ProjectManagementTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
      */
     async getChildren(element?: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
-        if (!connection) {
+        try {
+            if (!connection) {
+                return [];
+            }
+            if (!element) {
+                // If a root item is set, return its children
+                if (this.rootItem) {
+                    return await this.getChildren(this.rootItem);
+                }
+                // No parent provided; load the root project.
+                const projectTree: testBenchTypes.TreeNode | null = await connection.getProjectTreeOfProject(
+                    this.currentProjectKeyInView
+                );
+                if (!projectTree) {
+                    return [];
+                }
+                const rootItem: ProjectManagementTreeItem | null = this.createTreeItem(projectTree, null);
+                return rootItem ? [rootItem] : [];
+            }
+            if (element.contextValue === "Cycle") {
+                // When a cycle is clicked, clear the old test theme tree and offload cycle's children to the test theme tree view.
+                this.testThemeDataProvider.clearTree();
+                const children = await this.getChildrenOfCycle(element);
+                this.testThemeDataProvider.setRoots(children);
+                return []; // Return an empty array to prevent expansion in the Project Management Tree
+            } else if (element.children) {
+                // Return children directly if they exist (for elements under Test Cycle)
+                return element.children;
+            }
+
+            const childrenData = element.item.children ?? [];
+            // Create tree items for the children of the current element
+            const children: ProjectManagementTreeItem[] = childrenData
+                .map((childData: any) => this.createTreeItem(childData, element))
+                .filter((item: any): item is ProjectManagementTreeItem => item !== null);
+            return children;
+        } catch (error) {
+            logger.error(`Error fetching children for element ${element?.label || "root"}:`, error);
             return [];
         }
-        if (!element) {
-            // If a root item is set, return its children
-            if (this.rootItem) {
-                return await this.getChildren(this.rootItem);
-            }
-            // No parent provided; load the root project.
-            const projectTree: testBenchTypes.TreeNode | null = await connection.getProjectTreeOfProject(
-                this.currentProjectKeyInView
-            );
-            const rootItem: ProjectManagementTreeItem | null = this.createTreeItem(projectTree, null);
-            return rootItem ? [rootItem] : [];
-        }
-        if (element.contextValue === "Cycle") {
-            // When a cycle is clicked, clear the old test theme tree and offload cycle's children to the test theme tree view.
-            this.testThemeDataProvider.clearTree();
-            this.testThemeDataProvider.setRoots(await this.getChildrenOfCycle(element));
-            return []; // Return an empty array to prevent expansion in the Project Management Tree
-        } else if (element.children) {
-            // Return children directly if they exist (for elements under Test Cycle)
-            return element.children;
-        }
-
-        const childrenData = element.item.children ?? [];
-        // Create tree items for the children of the current element
-        const children: ProjectManagementTreeItem[] = childrenData
-            .map((childData: any) => this.createTreeItem(childData, element))
-            .filter((item: any): item is ProjectManagementTreeItem => item !== null);
-        return children;
     }
 
     /**
@@ -223,7 +232,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             elementsByKey.set(data.base.key, data);
         });
 
-        // Recursively build the tree starting from a given parent cycle key.
+        /**
+         * Recursively builds the test theme tree starting from a given parent cycle key.
+         *
+         * @param parentCycleKey - The key of the parent cycle.
+         * @returns {ProjectManagementTreeItem[]} An array of tree items representing the test theme tree.
+         */
         const buildTestThemeTree = (parentCycleKey: string): ProjectManagementTreeItem[] => {
             return (
                 Array.from(elementsByKey.values())

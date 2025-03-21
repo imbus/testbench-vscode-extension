@@ -29,7 +29,8 @@ import * as utils from "./utils";
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 /**
- * Class representing a connection to the new TestBench Play server.
+ * Represents a connection to the TestBench Play server.
+ * Handles communication with the server, including login, logout, and API requests.
  */
 export class PlayServerConnection {
     private context: vscode.ExtensionContext;
@@ -43,10 +44,10 @@ export class PlayServerConnection {
     /**
      * Creates a new PlayServerConnection.
      *
-     * @param context - The extension context.
-     * @param serverName - The server name.
-     * @param portNumber - The port number.
-     * @param sessionToken - The session token.
+     * @param context - The VS Code extension context.
+     * @param serverName - The server name or IP address.
+     * @param portNumber - The server port number.
+     * @param sessionToken - The session token for authentication.
      */
     constructor(context: vscode.ExtensionContext, serverName: string, portNumber: number, sessionToken: string) {
         this.context = context;
@@ -116,6 +117,7 @@ export class PlayServerConnection {
     async getProjectKeyFromProjectListQuickPickSelection(
         projectsData: testBenchTypes.Project[]
     ): Promise<string | null> {
+        // Extract project names from the projects data and display them in a quick pick list
         const projectNames: string[] = projectsData.map((project) => project.name);
         const selectedProjectName: string | undefined = await vscode.window.showQuickPick(projectNames, {
             placeHolder: "Select a project"
@@ -723,14 +725,15 @@ export class PlayServerConnection {
 }
 
 /**
- * Executes an asynchronous function with retry logic in case of failure.
+ * Executes an asynchronous function with retry logic in case of failures such as temporary network problems.
  * Used to retry API calls in case of network errors. To disable retries for an API call, set maxRetries to 0.
  *
  * @template T - The type returned by the asynchronous function.
  * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
  * @param {number} maxRetries - Maximum number of retry attempts (default is 3).
  * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
- * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns
+ * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
+ * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is false).
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
@@ -738,28 +741,49 @@ async function withRetry<T>(
     asyncFunction: () => Promise<T>,
     maxRetries: number = 3,
     delayMs: number = 1000,
-    shouldRetry?: (error: any) => boolean
+    shouldRetry?: (error: any) => boolean,
+    showProgressBar: boolean = true
 ): Promise<T> {
     let attempt: number = 0;
+
     while (true) {
         try {
+            // Attempt to execute the function.
             return await asyncFunction();
         } catch (error) {
+            // Log the retry attempt and delay before retrying.
+            logger.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`);
+
             // Check if we should not retry based on the error type/condition.
             if (shouldRetry && !shouldRetry(error)) {
                 logger.warn(`Error is not retryable. Aborting further retry attempts.`);
                 throw error;
             }
+
             attempt++;
             if (attempt > maxRetries) {
                 // If we've exceeded maxRetries, rethrow the error.
-                // Note: Error message contains sensitive information, do not log it.
-                logger.error(`Attempt ${attempt} failed. Maximum retries reached, request failed.`);
+                logger.error(`Attempt ${attempt} failed. Maximum retries reached, aborting further retries.`);
                 throw error;
             }
-            // Log the retry attempt and delay before retrying.
-            logger.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`);
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+            // Show the progress bar only if retries are happening and the flag is enabled.
+            if (showProgressBar) {
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Retrying request...",
+                        cancellable: false
+                    },
+                    async (progress) => {
+                        progress.report({ message: `Attempt ${attempt} of ${maxRetries}` });
+                        await new Promise((resolve) => setTimeout(resolve, delayMs));
+                    }
+                );
+            } else {
+                // If progress bar is disabled, just wait for the delay.
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
         }
     }
 }
@@ -821,7 +845,6 @@ async function promptForInputAndValidate(
  */
 export async function performLogin(
     context: vscode.ExtensionContext,
-    baseKey: string,
     promptForNewCredentials: boolean = false,
     performAutoLoginWithStoredCredentialsWithoutPrompting?: boolean
 ): Promise<PlayServerConnection | null> {

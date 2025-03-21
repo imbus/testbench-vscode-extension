@@ -102,12 +102,12 @@ export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): 
 /**
  * Polls the server for the status of a report or import job until the job is completed successfully or failed.
  *
- * @param projectKey The project key.
- * @param jobId The job ID received from the server.
- * @param jobType The type of job ("report" or "import").
- * @param progress Optional progress reporter.
- * @param cancellationToken Optional cancellation token.
- * @param maxPollingTimeMs Optional maximum polling time in milliseconds.
+ * @param {string} projectKey The project key.
+ * @param {string} jobId The job ID received from the server.
+ * @param {"report" | "import"} jobType The type of job ("report" or "import").
+ * @param {vscode.Progress} progress Optional progress reporter.
+ * @param {vscode.CancellationToken} cancellationToken Optional cancellation token.
+ * @param {number} maxPollingTimeMs Optional maximum polling time in milliseconds.
  * @returns {Promise<testBenchTypes.JobStatusResponse | null>} The job status response if completed successfully; otherwise null.
  */
 export async function pollJobStatus(
@@ -119,15 +119,16 @@ export async function pollJobStatus(
     maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
 ): Promise<testBenchTypes.JobStatusResponse | null> {
     const startTime = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
-    let pollingAttemptAmount = 0;
+    let pollingAttemptAmount: number = 0;
     let jobStatus: testBenchTypes.JobStatusResponse | null = null;
-    let lastProgressIncrement = 0;
+    let lastProgressIncrement: number = 0;
 
     // Poll the job status until the job is completed with either success or failure.
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
-            logger.debug("Job status polling cancelled by the user.");
-            vscode.window.showInformationMessage("Job status polling cancelled by the user.");
+            const cancellationMsg = "Job status polling cancelled by the user.";
+            logger.debug(cancellationMsg);
+            vscode.window.showInformationMessage(cancellationMsg);
             throw new vscode.CancellationError();
         }
         if (!connection) {
@@ -181,8 +182,8 @@ export async function pollJobStatus(
 
         // Adjust polling interval based on elapsed time.
         // For the first 10 seconds, poll every 200 ms, then poll every 1 second.
-        const elapsedTime = Date.now() - startTime;
-        const delayMs = elapsedTime < 10000 ? 200 : 1000;
+        const elapsedTime: number = Date.now() - startTime;
+        const delayMs: number = elapsedTime < 10000 ? 200 : 1000;
         await utils.delay(delayMs);
     }
 
@@ -269,11 +270,18 @@ export async function getJobStatus(
 
 /**
  * Downloads the report zip file from the server and returns the path of the downloaded file.
+ * This function performs the following steps:
+ * 1. Validates the connection to the server.
+ * 2. Constructs the download URL using the project key and file name.
+ * 3. Sends a GET request to download the report as a binary file.
+ * 4. Validates the workspace location and saves the file locally.
+ * 5. If the workspace location is invalid, prompts the user to select a save location.
  *
- * @param projectKey The project key.
- * @param fileNameToDownload The name of the report file.
- * @param folderNameToDownloadReport The folder name where the report will be saved.
+ * @param {string} projectKey The project key.
+ * @param {string} fileNameToDownload The name of the report file.
+ * @param {string} folderNameToDownloadReport The folder name where the report will be saved.
  * @returns {Promise<string | null>} The absolute path of the downloaded file if successful, otherwise null.
+ * @throws {Error} If the download fails or the server returns a non-200 status code.
  */
 export async function downloadReport(
     projectKey: string,
@@ -282,7 +290,9 @@ export async function downloadReport(
 ): Promise<string | null> {
     try {
         if (!connection) {
-            logger.error("Connection object is missing, cannot download report.");
+            const errorMsg = "Connection object is missing, cannot download report.";
+            logger.error(errorMsg);
+            vscode.window.showErrorMessage(errorMsg);
             return null;
         }
         const downloadReportUrl = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
@@ -297,27 +307,27 @@ export async function downloadReport(
         });
 
         if (downloadZipResponse.status !== 200) {
-            const msg = `Failed to download report, status code: ${downloadZipResponse.status}`;
-            logger.error(msg);
-            throw new Error(msg);
+            const errorMsg = `Failed to download report, status code: ${downloadZipResponse.status}`;
+            logger.error(errorMsg);
+            throw new Error(errorMsg);
         }
 
         const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
-        if (workspaceLocation && fs.existsSync(workspaceLocation)) {
-            return await storeReportFileLocally(
-                workspaceLocation,
-                folderNameToDownloadReport,
-                fileNameToDownload,
-                downloadZipResponse
-            );
-        } else {
-            logger.error(`Workspace location is not valid: ${workspaceLocation}`);
+        if (!workspaceLocation || !fs.existsSync(workspaceLocation)) {
+            const errorMsg = `Workspace location is not valid: ${workspaceLocation}`;
+            logger.error(errorMsg);
             return await promptUserForSaveLocationAndSaveReportToFile(fileNameToDownload, downloadZipResponse);
         }
+        return await storeReportFileLocally(
+            workspaceLocation,
+            folderNameToDownloadReport,
+            fileNameToDownload,
+            downloadZipResponse
+        );
     } catch (error) {
-        const msg = `Failed to download report: ${(error as Error).message}`;
-        logger.error(msg);
-        vscode.window.showErrorMessage(msg);
+        const errorMsg = `Failed to download report: ${(error as Error).message}`;
+        logger.error(errorMsg);
+        vscode.window.showErrorMessage(errorMsg);
         return null;
     }
 }
@@ -325,10 +335,10 @@ export async function downloadReport(
 /**
  * Saves the downloaded report file locally.
  *
- * @param workspaceLocation The workspace location.
- * @param folderNameOfReport The folder name for saving the report.
- * @param fileNameOfReport The name of the report file.
- * @param downloadResponse The Axios response containing the file data.
+ * @param {string} workspaceLocation The workspace location.
+ * @param {string} folderNameOfReport The folder name for saving the report.
+ * @param {string} fileNameOfReport The name of the report file.
+ * @param {AxiosResponse<any>} downloadResponse The Axios response containing the file data.
  * @returns {Promise<string | null>} The absolute file path if successful, otherwise null.
  */
 async function storeReportFileLocally(
@@ -338,15 +348,15 @@ async function storeReportFileLocally(
     downloadResponse: AxiosResponse<any>
 ): Promise<string | null> {
     try {
-        const filePath = path.join(workspaceLocation, folderNameOfReport, fileNameOfReport);
+        const filePath: string = path.join(workspaceLocation, folderNameOfReport, fileNameOfReport);
         const uri = vscode.Uri.file(filePath);
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
         logger.debug(`Report saved to ${uri.fsPath}`);
         return uri.fsPath;
     } catch (error) {
-        const msg = `Failed to save report file: ${(error as Error).message}`;
-        logger.error(msg);
-        vscode.window.showErrorMessage(msg);
+        const errorMsg: string = `Failed to save report file: ${(error as Error).message}`;
+        logger.error(errorMsg);
+        vscode.window.showErrorMessage(errorMsg);
         return null;
     }
 }
@@ -354,8 +364,8 @@ async function storeReportFileLocally(
 /**
  * Prompts the user to select a save location and stores the report file.
  *
- * @param fileNameOfReport The name of the report file.
- * @param downloadResponse The Axios response containing the file data.
+ * @param {string} fileNameOfReport The name of the report file.
+ * @param {AxiosResponse<any>} downloadResponse The Axios response containing the file data.
  * @returns The absolute file path if successful, otherwise null.
  */
 async function promptUserForSaveLocationAndSaveReportToFile(
@@ -373,7 +383,7 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         return null;
     }
     try {
-        let fileExists = false;
+        let fileExists: boolean = false;
         try {
             await vscode.workspace.fs.stat(zipUri);
             fileExists = true;
@@ -394,9 +404,9 @@ async function promptUserForSaveLocationAndSaveReportToFile(
                 "Skip"
             );
             if (overwrite === "Skip") {
-                const msg = "File download skipped by the user.";
-                vscode.window.showInformationMessage(msg);
-                logger.debug(msg);
+                const skipDownloadMsg: string = "File download skipped by the user.";
+                vscode.window.showInformationMessage(skipDownloadMsg);
+                logger.debug(skipDownloadMsg);
                 return null;
             }
         }
@@ -406,9 +416,9 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         logger.debug(`Report saved to ${zipUri.fsPath}`);
         return zipUri.fsPath;
     } catch (error) {
-        const msg = `Failed to save report: ${(error as Error).message}`;
-        logger.error(msg);
-        vscode.window.showErrorMessage(msg);
+        const errorMsg: string = `Failed to save report: ${(error as Error).message}`;
+        logger.error(errorMsg);
+        vscode.window.showErrorMessage(errorMsg);
         return null;
     }
 }
@@ -424,12 +434,12 @@ async function promptUserForSaveLocationAndSaveReportToFile(
  *   2. Polls the job status until the job is completed (using pollJobStatus).
  *   3. Downloads the report zip file (using downloadReport).
  *
- * @param projectKey The project key.
- * @param cycleKey The cycle key.
- * @param folderNameToDownloadReport The folder name where the report should be saved.
- * @param requestParameters Optional request parameters (e.g. execution-based, tree root UID).
- * @param progress Optional VS Code progress reporter.
- * @param cancellationToken Optional cancellation token.
+ * @param {string} projectKey The project key.
+ * @param {string} cycleKey The cycle key.
+ * @param {string} folderNameToDownloadReport The folder name where the report should be saved.
+ * @param {testBenchTypes.OptionalJobIDRequestParameter} requestParameters Optional request parameters (e.g. execution-based, tree root UID).
+ * @param {vscode.Progress} progress Optional VS Code progress reporter.
+ * @param {vscode.CancellationToken} cancellationToken Optional cancellation token.
  * @returns {Promise<string | null>} A promise that resolves with the absolute path of the downloaded zip file or null if unsuccessful.
  */
 export async function fetchReportZipFromServer(
@@ -835,9 +845,9 @@ export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath:
 /**
  * Removes the specified zip file with retry logic.
  *
- * @param zipFileFullPath The full path of the zip file.
- * @param maxRetries Maximum number of retries.
- * @param delayMs Delay between retries in milliseconds.
+ * @param {string} zipFileFullPath The full path of the zip file.
+ * @param {number} maxRetries Maximum number of retries.
+ * @param {number} delayMs Delay between retries in milliseconds.
  * @returns {Promise<void>} A promise that resolves when the file is removed successfully, or rejects with an error.
  */
 export async function removeReportZipFile(
@@ -861,8 +871,9 @@ export async function removeReportZipFile(
             return;
         } catch (error: any) {
             if (error.code === "ENOENT") {
-                logger.error(`File not found: ${zipFileFullPath}`);
-                vscode.window.showWarningMessage(`File not found: ${zipFileFullPath}`);
+                const fileNotFoundMsg = `File not found: ${zipFileFullPath}`;
+                logger.error(fileNotFoundMsg);
+                vscode.window.showWarningMessage(fileNotFoundMsg);
                 return;
             } else if (error.code === "EBUSY" && attempt < maxRetries) {
                 logger.warn(`Attempt ${attempt} failed due to EBUSY. Retrying in ${delayMs}ms...`);
@@ -883,8 +894,8 @@ export async function removeReportZipFile(
 /**
  * Recursively searches for a file within a directory.
  *
- * @param directoryToSearchInside The directory to search.
- * @param fileNameToSearch The file name to search for.
+ * @param {string} directoryToSearchInside The directory to search.
+ * @param {string} fileNameToSearch The file name to search for.
  * @returns {string | null} The full path of the file if found, otherwise null.
  */
 export async function findFileRecursivelyInDirectory(
@@ -893,12 +904,15 @@ export async function findFileRecursivelyInDirectory(
 ): Promise<string | null> {
     try {
         logger.debug(`Searching for "${fileNameToSearch}" in "${directoryToSearchInside}" recursively.`);
-        const allFileNamesInsideDirectory = await fsPromise.readdir(directoryToSearchInside);
+        const allFileNamesInsideDirectory: string[] = await fsPromise.readdir(directoryToSearchInside);
         for (const currentFileName of allFileNamesInsideDirectory) {
-            const pathOfCurrentFile = path.join(directoryToSearchInside, currentFileName);
+            const pathOfCurrentFile: string = path.join(directoryToSearchInside, currentFileName);
             const stat = await fsPromise.stat(pathOfCurrentFile);
             if (stat.isDirectory()) {
-                const foundSearchResult = await findFileRecursivelyInDirectory(pathOfCurrentFile, fileNameToSearch);
+                const foundSearchResult: string | null = await findFileRecursivelyInDirectory(
+                    pathOfCurrentFile,
+                    fileNameToSearch
+                );
                 if (foundSearchResult) {
                     return foundSearchResult;
                 }
@@ -922,7 +936,7 @@ export async function findFileRecursivelyInDirectory(
  * the first workspace folder (if available), the path specified in the extension settings (if valid),
  * the provided workingDirectoryPath, and finally the user's home directory as the fallback.
  *
- * @param workingDirectoryPath The working directory path.
+ * @param {string} workingDirectoryPath The working directory path.
  * @returns {Promise<string | null>} The absolute path of the selected output XML file, or null if none selected.
  */
 async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): Promise<string | null> {
@@ -941,9 +955,9 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     }
     logger.trace("Prompting user to select output XML file manually.");
     // Get the first workspace folder path, if available
-    const firstWorkspaceFolderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const firstWorkspaceFolderPath: string | undefined = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     // Determine which path to use as the default URI for the file selection dialog
-    const defaultUri = firstWorkspaceFolderPath
+    const defaultUri: vscode.Uri = firstWorkspaceFolderPath
         ? vscode.Uri.file(firstWorkspaceFolderPath) // Try using the first workspace folder first
         : workingDirectoryPath
           ? vscode.Uri.file(workingDirectoryPath) // Fall back to the working directory
@@ -951,7 +965,7 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     logger.trace(`Default URI for XML selection: ${defaultUri.fsPath}`);
 
     // Output XML was not set in the extension settings. Open file selection dialog.
-    const selected = await vscode.window.showOpenDialog({
+    const selectedXMLFileUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
         defaultUri: defaultUri,
         canSelectFiles: true,
         canSelectMany: false,
@@ -960,9 +974,9 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         filters: { "XML Files": ["xml"] }
     });
     // Return the selected file path if a file was chosen
-    if (selected && selected.length > 0) {
-        logger.debug(`Output XML file selected: ${selected[0].fsPath}`);
-        return selected[0].fsPath;
+    if (selectedXMLFileUri && selectedXMLFileUri.length > 0) {
+        logger.debug(`Output XML file selected: ${selectedXMLFileUri[0].fsPath}`);
+        return selectedXMLFileUri[0].fsPath;
     }
     logger.error("No output XML file selected.");
     return null;
@@ -971,7 +985,7 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
 /**
  * Checks if the given file path is absolute and exists.
  *
- * @param filePath The file path.
+ * @param {string} filePath The file path.
  * @returns {Promise<boolean>} True if the file path is absolute and exists; otherwise false.
  */
 export async function isAbsolutePathAndExists(filePath: string): Promise<boolean> {
@@ -991,15 +1005,15 @@ export async function isAbsolutePathAndExists(filePath: string): Promise<boolean
 }
 
 /**
- * Checks if the given file path is absolute.
+ * Checks if the given file path is absolute, meaning it starts with a root element.
  *
- * @param filePath The file path.
+ * @param {string} filePath The file path to check.
  * @returns {Promise<boolean>} True if the file path is absolute; otherwise false.
  */
 export async function isAbsolutePath(filePath: string): Promise<boolean> {
     try {
         logger.trace(`Checking if "${filePath}" is absolute.`);
-        const absolute = path.isAbsolute(filePath);
+        const absolute: boolean = path.isAbsolute(filePath);
         logger.trace(`"${filePath}" is ${absolute ? "" : "not "}an absolute path.`);
         return absolute;
     } catch {
@@ -1011,7 +1025,7 @@ export async function isAbsolutePath(filePath: string): Promise<boolean> {
 /**
  * Prompts the user to select a report zip file (without test results).
  *
- * @param workingDirectoryPath The working directory.
+ * @param {string} workingDirectoryPath The working directory.
  * @returns {Promise<string | null>} The absolute path of the selected zip file, or null if none selected.
  */
 async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): Promise<string | null> {
@@ -1037,9 +1051,9 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
 /**
  * Reads test results using testbench2robotframework library and creates a report zip file.
  *
- * @param context The extension context.
- * @param folderNameOfTestbenchWorkingDirectory The testbench working directory folder name.
- * @param currentProgress Optional progress reporter.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} folderNameOfTestbenchWorkingDirectory The testbench working directory folder name.
+ * @param {vscode.Progress} currentProgress Optional progress reporter.
  * @returns {Promise<string | undefined>} The absolute path of the created report zip file, or undefined on error.
  * Undefined is returned (and not null) due to the usage of VSCode progress bar.
  */
@@ -1054,21 +1068,21 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
         const executeWithProgress = async (
             progress: vscode.Progress<{ message?: string; increment?: number }>
         ): Promise<string | undefined> => {
-            const reportIncrement = currentProgress ? 6 : 20;
+            const reportIncrement: number = currentProgress ? 6 : 20;
             const reportProgress = (msg: string, inc: number) => progress.report({ message: msg, increment: inc });
 
             reportProgress("Choosing result XML file.", reportIncrement);
-            const reportWithResultsZipName = `ReportWithResults_${Date.now()}.zip`;
-            const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
+            const reportWithResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;
+            const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
             if (!workspaceLocation) {
                 logger.error("Workspace location not configured.");
                 return undefined;
             }
-            const testbenchWorkingDirectoryPathInsideWorkspace = path.join(
+            const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
                 workspaceLocation,
                 folderNameOfTestbenchWorkingDirectory
             );
-            const outputXMLPath = await chooseRobotOutputXMLFileIfNotSet(workspaceLocation);
+            const outputXMLPath: string | null = await chooseRobotOutputXMLFileIfNotSet(workspaceLocation);
             if (!outputXMLPath) {
                 return undefined;
             }
@@ -1090,18 +1104,18 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 treeRootUID: lastGeneratedReportParams.UID
             };
 
-            const downloadedReportWithoutResultsZip = await fetchReportZipFromServer(
+            const downloadedReportWithoutResultsZip: string | null = await fetchReportZipFromServer(
                 lastGeneratedReportParams.projectKey,
                 lastGeneratedReportParams.cycleKey,
                 folderNameOfTestbenchWorkingDirectory,
                 cycleStructureOptionsRequestParams
             );
             reportProgress("Working on report.", reportIncrement / 2);
-            const reportWithResultsZipFullPath = path.join(
+            const reportWithResultsZipFullPath: string = path.join(
                 testbenchWorkingDirectoryPathInsideWorkspace,
                 reportWithResultsZipName
             );
-            const isTb2RobotFetchResultsExecutionSuccessful =
+            const isTb2RobotFetchResultsExecutionSuccessful: boolean =
                 await testbench2robotframeworkLib.tb2robotLib.startTb2robotFetchResults(
                     context,
                     testbenchWorkingDirectoryPathInsideWorkspace,
@@ -1134,8 +1148,8 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             );
         }
     } catch (error) {
-        const msg = `An error occurred: ${(error as Error).message}`;
-        vscode.window.showErrorMessage(msg);
+        const errorMsg = `An error occurred while reading test results: ${(error as Error).message}`;
+        vscode.window.showErrorMessage(errorMsg);
         logger.error("Error in fetchTestResultsAndCreateReportWithResultsWithTb2Robot:", error);
         return undefined;
     }
@@ -1144,9 +1158,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 /**
  * Reads test results, creates a report zip with results, and imports it to the TestBench server.
  *
- * @param context The extension context.
- * @param folderNameOfTestbenchWorkingDirectory The testbench working directory folder name.
- * @param projectManagementTreeDataProvider The project management tree data provider.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} folderNameOfTestbenchWorkingDirectory The testbench working directory folder name.
+ * @param {projectManagementTreeView.ProjectManagementTreeDataProvider | null} projectManagementTreeDataProvider The project management tree data provider.
  */
 export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     context: vscode.ExtensionContext,
@@ -1161,23 +1175,24 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
         },
         async (progress) => {
             if (!connection) {
-                const msg = "No connection available. Cannot import report.";
-                vscode.window.showErrorMessage(msg);
-                logger.warn(msg);
+                const noConnectionMessage: string = "No connection available. Cannot import report.";
+                vscode.window.showErrorMessage(noConnectionMessage);
+                logger.warn(noConnectionMessage);
                 return null;
             }
             if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.currentProjectKeyInView) {
-                const msg = "Project key is missing. Cannot import report.";
-                vscode.window.showErrorMessage(msg);
-                logger.warn(msg);
+                const missingProjectKeyError: string = "Project key is missing. Cannot import report.";
+                vscode.window.showErrorMessage(missingProjectKeyError);
+                logger.warn(missingProjectKeyError);
                 return null;
             }
             progress.report({ message: "Reading Test Results and Creating Report.", increment: 25 });
-            const pathOfCreatedReportWithResults = await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
-                context,
-                folderNameOfTestbenchWorkingDirectory,
-                progress
-            );
+            const pathOfCreatedReportWithResults: string | undefined =
+                await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
+                    context,
+                    folderNameOfTestbenchWorkingDirectory,
+                    progress
+                );
             if (!pathOfCreatedReportWithResults) {
                 logger.error("Error creating report with results.");
                 return null;
@@ -1195,11 +1210,11 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 }
 
 /**
- * Starts test generation for a cycle.
+ * Starts robotframework test generation for a cycle element.
  *
- * @param context The extension context.
- * @param selectedCycleTreeItem The selected cycle tree item.
- * @param baseKey The extension base key.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {projectManagementTreeView.ProjectManagementTreeItem} selectedCycleTreeItem The selected cycle tree item.
+ * @param {string} baseKey The extension base key.
  */
 export async function startTestGenerationForCycle(
     context: vscode.ExtensionContext,
@@ -1208,29 +1223,29 @@ export async function startTestGenerationForCycle(
 ): Promise<void | null> {
     try {
         if (!connection) {
-            const connectionErrorMessage = "No connection available. Cannot generate tests for cycle.";
+            const connectionErrorMessage: string = "No connection available. Cannot generate tests for cycle.";
             vscode.window.showErrorMessage(connectionErrorMessage);
             logger.warn(connectionErrorMessage);
             return null;
         }
         const cycleKey = selectedCycleTreeItem.item.key;
         if (!cycleKey) {
-            const cycleKeyMissingMessage = "Cycle key is missing for test generation.";
+            const cycleKeyMissingMessage: string = "Cycle key is missing for test generation.";
             logger.error(cycleKeyMissingMessage);
             return null;
         }
-        const projectKey = projectManagementTreeView.findProjectKeyOfCycleElement(selectedCycleTreeItem);
+        const projectKey: string | null = projectManagementTreeView.findProjectKeyOfCycleElement(selectedCycleTreeItem);
         if (!projectKey) {
             const projectKeyMissingMessage = "Project key of cycle is missing.";
             logger.error(projectKeyMissingMessage);
             return null;
         }
         if (typeof selectedCycleTreeItem.label !== "string") {
-            const invalidLabelTypeMessage = "Invalid label type. Test generation aborted.";
+            const invalidLabelTypeMessage: string = "Invalid label type. Test generation aborted.";
             logger.error(invalidLabelTypeMessage);
             return null;
         }
-        const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
+        const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
             return null;
         }
@@ -1257,9 +1272,9 @@ export async function startTestGenerationForCycle(
  * Deletes the testbench2robotframework configuration file.
  * Retries the operation in case the file is busy with small delays.
  *
- * @param configFilePath The full path of the configuration file.
- * @param maxRetries Maximum number of retries.
- * @param delayMs Delay between retries in milliseconds.
+ * @param {string} configFilePath The full path of the configuration file.
+ * @param {number} maxRetries Maximum number of retries.
+ * @param {number} delayMs Delay between retries in milliseconds.
  */
 export async function deleteTb2RobotConfigurationFile(
     configFilePath: string,

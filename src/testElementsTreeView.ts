@@ -130,7 +130,7 @@ function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
  */
 function matchesRegex(value: string, regexList: RegExp[]): boolean {
     const result: boolean = regexList.some((regex) => regex.test(value));
-    logger.trace(`Value "${value}" matches regex patterns: ${result}`);
+    // logger.trace(`Value "${value}" matches regex patterns: ${result}`);
     return result;
 }
 

@@ -6,7 +6,7 @@
 
 import * as vscode from "vscode";
 import { logger, connection, allExtensionCommands, getConfig } from "./extension";
-import { loginToNewPlayServerAndInitSessionToken } from "./testBenchConnection";
+import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
 import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 
 // Tracks whether the login webview is visible.
@@ -16,20 +16,20 @@ export let loginWebViewIsVisible: boolean = true; // Initially display the view 
  * The provider for the login webview.
  */
 export class LoginWebViewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewId = "testbenchExtension.webView";
+    public static readonly viewId: string = "testbenchExtension.webView";
     private currentWebview?: vscode.WebviewView;
     // Prevent multiple login processes by spamming the submit button.
-    private isLoginProcessAlreadyRunning = false;
+    private isLoginProcessAlreadyRunning: boolean = false;
 
     /**
      * Constructs a new LoginWebViewProvider.
-     * @param extensionContext The extension context.
+     * @param {vscode.ExtensionContext} extensionContext The extension context.
      */
     constructor(private extensionContext?: vscode.ExtensionContext) {}
 
     /**
      * Called when VS Code loads the webview.
-     * @param webviewView The webview view instance.
+     * @param {vscode.WebviewView} webviewView The webview view instance.
      */
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         logger.trace("Resolving login webview view.");
@@ -63,11 +63,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     /**
      * Handles the login process when a login message is received from the webview when the user submits the form.
      * Prevents multiple login attempts and triggers the login sequence.
-     * @param extensionContext The extension context.
-     * @param serverName The server name.
-     * @param portNumber The port number.
-     * @param username The username.
-     * @param password The password.
+     * @param {vscode.ExtensionContext | undefined} extensionContext The extension context.
+     * @param {string} serverName The server name.
+     * @param {number} portNumber The port number.
+     * @param {string} username The username.
+     * @param {string} password The password.
+     * @param {boolean} autoLogin Whether to automatically log in after extension activation.
+     * @param {boolean} savePassword Whether to save the password.
      */
     private async handleLogin(
         extensionContext: vscode.ExtensionContext | undefined,
@@ -100,7 +102,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         await getConfig().update("storePasswordAfterLogin", savePassword);
 
         // Attempt to log in. Successfull login will update and hide the webview automatically.
-        const loginResult = await loginToNewPlayServerAndInitSessionToken(
+        const connectionAfterLoginAttempt: PlayServerConnection | null = await loginToNewPlayServerAndInitSessionToken(
             extensionContext!,
             serverName,
             portNumber,
@@ -109,7 +111,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         );
 
         // If login was successful, open project selection and display project tree view
-        if (loginResult) {
+        if (connectionAfterLoginAttempt) {
             await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
             // If the user does not select a project and clicks away, there wont be any active view.
             // Add project view so that the user can choose a project.
@@ -137,8 +139,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
     /**
      * Creates a URI for the TestBench icon.
-     * @param webview The webview instance.
-     * @returns The icon URI, or null if the extension context is undefined.
+     * @param {vscode.Webview} webview The webview instance.
+     * @returns {vscode.Uri | null} The icon URI, or null if the extension context is undefined.
      */
     private createIconUri(webview: vscode.Webview): vscode.Uri | null {
         if (!this.extensionContext) {
@@ -315,7 +317,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
     /**
      * Returns HTML content for when the user is already connected.
-     * @returns The HTML string.
+     * @returns {string} The HTML string.
      */
     private getAlreadyConnectedHtml(): string {
         logger.trace("Generating already connected HTML.");
@@ -344,7 +346,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
     /**
      * Determines whether the extension is connected to a server.
-     * @returns True if connected; otherwise false.
+     * @returns {boolean} True if connected; otherwise false.
      */
     private isConnectedToServer(): boolean {
         if (connection) {

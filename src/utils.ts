@@ -13,7 +13,7 @@ import JSZip from "jszip";
 /**
  * Delays execution for a given number of milliseconds.
  *
- * @param milliseconds - The number of milliseconds to delay.
+ * @param {number} milliseconds - The number of milliseconds to delay.
  * @returns A promise that resolves after the delay.
  */
 export function delay(milliseconds: number): Promise<void> {
@@ -24,9 +24,9 @@ export function delay(milliseconds: number): Promise<void> {
 /**
  * Checks whether a given path is absolute and, optionally, whether it exists.
  *
- * @param filePath - The path to check.
- * @param verifyExistenceOfFile - If true, verifies that the path exists.
- * @returns A promise that resolves to true if the path is absolute (and exists when required), otherwise false.
+ * @param {string} filePath - The path to check.
+ * @param {boolean} verifyExistenceOfFile - If true, verifies that the path exists.
+ * @returns {Promise<boolean>} A promise that resolves to true if the path is absolute (and exists when required), otherwise false.
  */
 export async function isAbsolutePath(filePath: string, verifyExistenceOfFile = false): Promise<boolean> {
     try {
@@ -52,9 +52,9 @@ export async function isAbsolutePath(filePath: string, verifyExistenceOfFile = f
 /**
  * Constructs an absolute path from a relative path based on the workspace location.
  *
- * @param relativePath - The relative path.
- * @param verifyExistenceOfFile - If true, verifies that the constructed path exists.
- * @returns A promise that resolves to the absolute path string, or null if the relative path or workspace location is not set or invalid.
+ * @param {string | undefined} relativePath - The relative path.
+ * @param {boolean} verifyExistenceOfFile - If true, verifies that the constructed path exists.
+ * @returns {Promise<string | null>} A promise that resolves to the absolute path string, or null if the relative path or workspace location is not set or invalid.
  */
 export async function constructAbsolutePathFromRelativePath(
     relativePath: string | undefined,
@@ -84,9 +84,9 @@ export async function constructAbsolutePathFromRelativePath(
 /**
  * Recursively deletes a directory and its contents, excluding specified folders.
  *
- * @param directoryPathToDelete - The directory path to delete.
- * @param excludedFoldersFromDeletion - An array of folder names to exclude from deletion.
- * @returns A promise that resolves when deletion is complete, or null if an error occurs.
+ * @param {string} directoryPathToDelete - The directory path to delete.
+ * @param {string[]} excludedFoldersFromDeletion - An array of folder names to exclude from deletion.
+ * @returns {Promise<void | null>} A promise that resolves when deletion is complete, or null if an error occurs.
  */
 export async function deleteDirectoryRecursively(
     directoryPathToDelete: string,
@@ -99,7 +99,7 @@ export async function deleteDirectoryRecursively(
         const files = await fsPromises.readdir(directoryPathToDelete);
 
         for (const file of files) {
-            const currentPath = path.join(directoryPathToDelete, file);
+            const currentPath: string = path.join(directoryPathToDelete, file);
 
             // Skip files or folders that are excluded.
             if (excludedFoldersFromDeletion.includes(file)) {
@@ -118,7 +118,7 @@ export async function deleteDirectoryRecursively(
         }
 
         // Remove the directory itself unless it is excluded.
-        const folderName = path.basename(directoryPathToDelete);
+        const folderName: string = path.basename(directoryPathToDelete);
         if (!excludedFoldersFromDeletion.includes(folderName)) {
             logger.debug(`Deleting directory: "${directoryPathToDelete}"`);
             await fsPromises.rmdir(directoryPathToDelete);
@@ -151,13 +151,13 @@ export async function clearWorkspaceFolder(
         try {
             const stats = await fsPromises.stat(workspaceLocationToClear);
             if (!stats.isDirectory()) {
-                const notADirectoryMsg = `The path "${workspaceLocationToClear}" is not a directory. Cannot clear workspace folder.`;
+                const notADirectoryMsg: string = `The path "${workspaceLocationToClear}" is not a directory. Cannot clear workspace folder.`;
                 vscode.window.showErrorMessage(notADirectoryMsg);
                 logger.error(notADirectoryMsg);
                 return null;
             }
         } catch {
-            const folderNotExistMsg = `The folder at path "${workspaceLocationToClear}" does not exist. Cannot clear workspace folder.`;
+            const folderNotExistMsg: string = `The folder at path "${workspaceLocationToClear}" does not exist. Cannot clear workspace folder.`;
             vscode.window.showErrorMessage(folderNotExistMsg);
             logger.error(folderNotExistMsg);
             return null;
@@ -178,9 +178,9 @@ export async function clearWorkspaceFolder(
         }
 
         // Process the contents of the folder.
-        const files = await fsPromises.readdir(workspaceLocationToClear);
+        const files: string[] = await fsPromises.readdir(workspaceLocationToClear);
         for (const file of files) {
-            const filePath = path.join(workspaceLocationToClear, file);
+            const filePath: string = path.join(workspaceLocationToClear, file);
 
             if (excludedFoldersFromDeletion.includes(file)) {
                 logger.trace(`Skipped deleting excluded item: "${file}"`);
@@ -197,7 +197,7 @@ export async function clearWorkspaceFolder(
 
         logger.debug(`Workspace folder cleared successfully: "${workspaceLocationToClear}"`);
     } catch (error: any) {
-        const errorMsg = `An error occurred while clearing the workspace folder: ${error.message}`;
+        const errorMsg: string = `An error occurred while clearing the workspace folder: ${error.message}`;
         vscode.window.showErrorMessage(errorMsg);
         logger.error(errorMsg);
         return null;
@@ -210,8 +210,8 @@ export async function clearWorkspaceFolder(
  * 2. The first folder in the currently opened workspace.
  * If neither is found, prompts the user to enter a new workspace location, updates the setting, and returns the value.
  *
- * @param enableLogging - Whether to output trace logging (defaults to true).
- * @returns A promise that resolves to the workspace location string, or undefined if the user cancels.
+ * @param {boolean} enableLogging - Whether to output trace logging (defaults to true).
+ * @returns {Promise<string | undefined>} A promise that resolves to the workspace location string, or undefined if the user cancels.
  */
 export async function validateAndReturnWorkspaceLocation(enableLogging: boolean = true): Promise<string | undefined> {
     if (logger && enableLogging) {
@@ -219,7 +219,7 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     }
 
     // Check extension settings.
-    const workspaceLocationInSettings = getConfig().get<string>("workspaceLocation", "");
+    const workspaceLocationInSettings: string = getConfig().get<string>("workspaceLocation", "");
     if (workspaceLocationInSettings) {
         if (logger && enableLogging) {
             logger.trace(`Returning workspace location found in settings: "${workspaceLocationInSettings}"`);
@@ -228,9 +228,9 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     }
 
     // Fallback to the first workspace folder if available.
-    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const workspacePath = workspaceFolders[0].uri.fsPath;
+        const workspacePath: string = workspaceFolders[0].uri.fsPath;
         if (logger && enableLogging) {
             logger.trace(`Workspace location found in open workspace: "${workspacePath}"`);
         }
@@ -242,7 +242,7 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     }
 
     // Prompt the user to enter a new workspace location.
-    const newWorkspaceLocation = await vscode.window.showInputBox({
+    const newWorkspaceLocation: string | undefined = await vscode.window.showInputBox({
         placeHolder: "Enter the new workspace location...",
         prompt: "No workspace location found. Please set a workspace location or press Escape to cancel."
     });
@@ -265,8 +265,8 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
 /**
  * Checks asynchronously whether a file exists at the given path.
  *
- * @param filePath - The file path to check.
- * @returns A promise that resolves to true if the file exists, otherwise false.
+ * @param {string} filePath - The file path to check.
+ * @returns {Promise<boolean>} A promise that resolves to true if the file exists, otherwise false.
  */
 export async function fileExistsAsync(filePath: string): Promise<boolean> {
     try {
@@ -281,8 +281,8 @@ export async function fileExistsAsync(filePath: string): Promise<boolean> {
  * Saves JSON data to a file.
  * Useful for analyzing server responses.
  *
- * @param filePath - The file path to save the JSON data.
- * @param data - The JSON data to save.
+ * @param {string} filePath - The file path to save the JSON data.
+ * @param {any} data - The JSON data to save.
  */
 export function saveJsonDataToFile(filePath: string, data: any): void {
     try {
@@ -302,7 +302,7 @@ export function saveJsonDataToFile(filePath: string, data: any): void {
  */
 export async function extractAndParseJsonContent(zipContents: JSZip, fileName: string): Promise<any> {
     try {
-        const fileData = await zipContents.file(fileName)?.async("string");
+        const fileData: string | undefined = await zipContents.file(fileName)?.async("string");
         return fileData ? JSON.parse(fileData) : null;
     } catch (error) {
         logger.error(`Error reading or parsing ${fileName}:`, error);
