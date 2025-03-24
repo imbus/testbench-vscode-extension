@@ -4,11 +4,11 @@ TestBench VS Code Extension integrates TestBench with Visual Studio Code to help
 
 ## Features
 
-- Visualize your TestBench project structure inside the project management tree and navigate through test cycles, test themes, test case sets.
+- Visualize your TestBench project structure inside VS Code and navigate through the project contents.
 - Generate robotframework test cases for the selected test cycle, test theme or test case set.
 - Upload test results back to the TestBench server.
-- Display test elements tree, where you can navigate to a robotframework resource file and open it in the VS Code editor.
-- Hovering over the tree view elements will display additional information such as the status and unique ID of the element.
+- Display test elements, where you can navigate to a robotframework resource file and open it in the VS Code editor.
+- Hovering over the tree view elements will display additional information in a tooltip such as the status and unique ID of the element.
 
 ## Requirements
 
@@ -58,11 +58,11 @@ The extension settings contains following configurations:
 
 - **Login to the TestBench Server**
 
-    Log in to the TestBench server by entering your credentials in the login form. You can securely store your password by checking the **Store Password** option. If you enable **Automatic Login**, the extension will log in automatically upon activation, provided your password is stored. You can configure your credentials within the extension settings for automatic autofill. Once logged in, a project selection form will appear for you to choose a project to work with.
+    Log in to the TestBench server by entering your credentials in the login form. You can securely store your password by checking the **Store Password** option. If you enable **Automatic Login**, the extension will log in automatically upon extension activation, provided your password is stored. You can configure your credentials within the extension settings for automatic autofill. Once logged in, a project selection form will appear for you to choose a project to work with.
 
-- **Initialize the Project Management Tree**
+- **Extension Views**
 
-    After selecting a project, the **Project Management Tree** will be initialized. Navigate through the project elements by expanding or clicking on the tree items. Clicking on a test cycle in the project management tree will automatically initialize the **Test Theme Tree**, displaying the associated test themes and test case sets for that cycle. In the test theme tree, not executable elements and elements that are locked by the system are hidden. For a test version element, you can click on the **Show Robotframework Resources** button to display the test elements tree.
+    After selecting a project, the **Project Contents** will be displayed. Navigate through the project elements by expanding or clicking on the tree items. Clicking on a test cycle in the project management tree will automatically initialize the **Test Themes** and **Test Elements** views. In the test themes view, not executable elements and elements that are locked by the system are hidden. For a test object version element in the project contents view, you can click on the **Show Robotframework Resources** button to display the test elements tree for that version element.
 
 - **Generate Test Cases**
 
@@ -76,22 +76,19 @@ The extension settings contains following configurations:
 
 - **Execute and Upload Test Results**
 
-    Once you’ve executed the generated Robot Framework tests (for example via [RobotCode](https://robotcode.io/)), you can click the **Upload** button to send the test results back to the TestBench server. The extension automatically locates the output.xml file that stores the Robot Framework test results inside your working directory, where you can set the working directory path in the extension settings. During the creation process of the results, a report file named `ReportWithResults_<TIMESTAMP>.zip` with a timestamp at the end of the file will be created, containing the test results. If you choose to clear the report file after processing in the extension settings, this report file will be deleted automatically after the upload process.
+    Once you’ve executed the generated Robot Framework tests (for example via [RobotCode](https://robotcode.io/)), you can click the **Upload** button in the **Test Themes** view to send the test results back to the TestBench server. The extension locates the output.xml file that stores the Robot Framework test results inside your working directory using the path specified in the extension settings. During the creation process of the test results, a report file named `ReportWithResults_<TIMESTAMP>.zip` with a timestamp at the end of the file will be created, containing the test results. If you choose to clear the report file after processing in the extension settings, this report file will be deleted automatically after the upload process.
 
-- **Display Test Elements Tree**
-  Upon clicking on **"Show Robotframework Resources"** button for a version element in the project management tree, the extension will display the test elements tree in a separate view, where you view the robotframework resource files and open them in the editor by right-clicking on the resource file and selecting "Go to Robot Resource".
-
-## Contributing
-
-Contributions are welcome! Please read the [contributing guidelines](CONTRIBUTING.md) before submitting a pull request.
+- **Test Elements Tree**
+  Upon clicking on **"Show Robotframework Resources"** button for a version element in the project management tree, the extension will display the test elements tree in a separate view, where you view the robotframework resource files and open them in the editor by right-clicking on the resource file and selecting "Go to Robot Resource". Robot Resources that locally exist in the workspace will be displayed in a different color than the resources that are not available in the workspace.
 
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## Feedback
+## Contributing / Feedback
 
 If you encounter any issues or have suggestions for improvements, please open an issue on our [GitHub repository](https://github.com/imbus/testbench-vs-code-extension).
+Please check out our [contribution guidelines](CONTRIBUTING.md) for details on how to report issues or suggest enhancements before submitting a pull request.
 
 ## Release Notes
 

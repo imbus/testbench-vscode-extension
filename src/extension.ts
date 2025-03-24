@@ -3,8 +3,6 @@
  * @description Main entry point for the TestBench VS Code extension.
  */
 
-// TODO: Selecting a new project from the project selection list should clear and hide other tree views.
-// TODO: Add progress bar for fetching cycle structure since it can take long.
 // TODO: If possible, hide the tree views initially instead of creating them and then hiding them after.
 // TODO: The user generated tests, executed the tests, and restarted he extension. Last generated test params are now invalid due to restart, and he cant import.
 
