@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links: []
+issue_templates:
+    - name: 🐛 Bug Report
+      description: Report a bug or unexpected behavior in the extension.
+      labels: [bug]
+      file: bug_report.md
+
+    - name: 💡 Feature Request
+      description: Suggest a new idea or enhancement for the extension.
+      labels: [enhancement]
+      file: feature_request.md
