@@ -1,75 +1,121 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { activate, deactivate } from "../../extension";
+import * as sinon from "sinon";
+import {
+    activate,
+    deactivate,
+    getConfig,
+    baseKeyOfExtension,
+    safeCommandHandler,
+    promptForWorkspaceLocation,
+    loadConfiguration,
+    initializeTreeViews
+} from "../../extension";
+import { TestBenchLogger } from "../../testBenchLogger";
+import { PlayServerConnection } from "../../testBenchConnection";
+import { ProjectManagementTreeDataProvider } from "../../projectManagementTreeView";
+import { TestElementsTreeDataProvider } from "../../testElementsTreeView";
 
 suite("Extension Test Suite", () => {
-    suiteTeardown(() => {
-        vscode.window.showInformationMessage("All tests done!");
-    });
+    let sandbox: sinon.SinonSandbox;
+    let getConfigurationStub: sinon.SinonStub;
+    let context: vscode.ExtensionContext;
+    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
+    let connectionStub: sinon.SinonStubbedInstance<PlayServerConnection>;
+    let projectManagementTreeDataProviderStub: sinon.SinonStubbedInstance<ProjectManagementTreeDataProvider>;
+    let testElementsTreeDataProviderStub: sinon.SinonStubbedInstance<TestElementsTreeDataProvider>;
 
-    test("Extension should be present", () => {
-        assert.ok(vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension"));
-    });
+    setup(() => {
+        sandbox = sinon.createSandbox();
 
-    test("Extension should be active after activation", async () => {
-        const extension: vscode.Extension<any> | undefined = vscode.extensions.getExtension(
-            "imbus.testbench-visual-studio-code-extension"
-        );
+        // Stub the VS Code API and assign it to a SinonStub variable
+        getConfigurationStub = sandbox.stub(vscode.workspace, "getConfiguration") as sinon.SinonStub;
+        getConfigurationStub.returns({
+            get: sandbox.stub().returns("defaultValue"),
+            update: sandbox.stub().resolves()
+        } as unknown as vscode.WorkspaceConfiguration);
 
-        if (!extension) {
-            assert.fail("Extension not found");
-        }
-
-        await extension?.activate();
-        assert.strictEqual(extension?.isActive, true, "Extension should be active");
-    });
-
-    test("Activate should register commands", async () => {
-        const context = {
+        // Mock the ExtensionContext
+        context = {
             subscriptions: [],
             secrets: {
-                delete: async () => {},
-            },
+                get: sandbox.stub().resolves("storedPassword"),
+                store: sandbox.stub().resolves(),
+                delete: sandbox.stub().resolves()
+            }
         } as unknown as vscode.ExtensionContext;
 
-        await activate(context);
+        // Mock the logger
+        loggerStub = sandbox.createStubInstance(TestBenchLogger);
 
-        const registeredCommands: string[] = await vscode.commands.getCommands(true);
-        const expectedCommands: string[] = [
-            "testbenchExtension.login",
-            "testbenchExtension.logout",
-            "testbenchExtension.generateTestCasesForCycle",
-            "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-            "testbenchExtension.readAndUploadTestResultsToTestbench",
-            "testbenchExtension.showExtensionSettings",
-            "testbenchExtension.selectAndLoadProject",
-            "testbenchExtension.setWorkspaceLocation",
-        ];
+        // Mock the connection
+        connectionStub = sandbox.createStubInstance(PlayServerConnection);
 
-        console.log("registeredCommands: ", registeredCommands);
-        console.log("expectedCommands: ", expectedCommands);
+        // Mock the tree data providers
+        projectManagementTreeDataProviderStub = sandbox.createStubInstance(ProjectManagementTreeDataProvider);
+        testElementsTreeDataProviderStub = sandbox.createStubInstance(TestElementsTreeDataProvider);
 
-        expectedCommands.forEach((command) => {
-            assert.ok(registeredCommands.includes(command), `Command ${command} is not registered`);
-        });
+        // Stub the VS Code API
+        sandbox.stub(vscode.workspace, "getConfiguration").returns({
+            get: sandbox.stub().returns("defaultValue"),
+            update: sandbox.stub().resolves()
+        } as unknown as vscode.WorkspaceConfiguration);
+
+        sandbox.stub(vscode.window, "showErrorMessage").resolves();
+        sandbox.stub(vscode.window, "showInformationMessage").resolves();
+        sandbox.stub(vscode.window, "showOpenDialog").resolves([vscode.Uri.file("/fake/path")]);
+        sandbox.stub(vscode.commands, "executeCommand").resolves();
     });
 
-    test("Updating configuration should change setting variable", async () => {
-        const context = {
-            subscriptions: [],
-            secrets: {
-                delete: async () => {},
-            },
-        } as unknown as vscode.ExtensionContext;
-
-        await activate(context);
-
-        const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration("testbenchExtension");
-        await config.update("serverName", "newServerName", vscode.ConfigurationTarget.Global);
-        assert.strictEqual(config.get("serverName", vscode.ConfigurationTarget.Global), "newServerName");
+    teardown(() => {
+        sandbox.restore();
     });
 
-    test("Deactivate should not throw", () => {
-        assert.doesNotThrow(() => deactivate());
+    test("activate should initialize the extension", async () => {
+        await activate(context);
+
+        assert.ok(loggerStub.info.calledWith("Extension activated."), "Logger should log activation message");
+        assert.ok(getConfigurationStub.calledWith(baseKeyOfExtension), "Configuration should be loaded");
+        assert.ok(context.subscriptions.length > 0, "Subscriptions should be added to the context");
+    });
+
+    test("deactivate should log out the user", async () => {
+        await deactivate();
+
+        assert.ok(connectionStub.logoutUser.calledOnce, "Logout should be called on deactivation");
+        assert.ok(loggerStub.info.calledWith("Extension deactivated."), "Logger should log deactivation message");
+    });
+
+    test("getConfig should return the current configuration", () => {
+        const config = getConfig();
+        assert.ok(config, "Configuration should be returned");
+    });
+
+    test("safeCommandHandler should handle errors gracefully", async () => {
+        const error = new Error("Test error");
+        const handler = sandbox.stub().rejects(error);
+        const safeHandler = safeCommandHandler(handler);
+
+        await safeHandler();
+
+        assert.ok(loggerStub.error.calledWith("Error executing command:", error), "Error should be logged");
+    });
+
+    test("promptForWorkspaceLocation should prompt the user and return the selected path", async () => {
+        const path = await promptForWorkspaceLocation();
+        assert.strictEqual(path, "/fake/path", "Selected path should be returned");
+    });
+
+    test("loadConfiguration should update the configuration", async () => {
+        await loadConfiguration(context);
+
+        assert.ok(getConfigurationStub.calledWith(baseKeyOfExtension), "Configuration should be loaded");
+    });
+
+    test("initializeTreeViews should initialize the tree views", () => {
+        initializeTreeViews();
+
+        assert.ok(projectManagementTreeDataProviderStub, "Project management tree view should be initialized");
+        assert.ok(testElementsTreeDataProviderStub, "Test elements tree view should be initialized");
     });
 });

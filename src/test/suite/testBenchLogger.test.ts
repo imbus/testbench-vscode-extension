@@ -1,4 +1,3 @@
-import { strict as assert } from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { TestBenchLogger } from "../../testBenchLogger";
@@ -12,7 +11,6 @@ suite("TestBenchLogger Tests", async () => {
 
     const logger = new TestBenchLogger();
     const logFilePathOfLogger = logger.getLogFilePath();
-    const logFolderPathOfLogger = logger.getLogFolderPath();
 
     setup(async () => {
         // Ensure the log directory is clean before each test
@@ -55,7 +53,7 @@ suite("TestBenchLogger Tests", async () => {
         const logExists = await fsExists(logFilePathOfLogger);
         assert.strictEqual(logExists, true, "New log file should exist");
     });
-    */
+    
 
     test("should not log messages below the configured log level", async () => {
         logger.log("1", "This is a trace message");
@@ -63,4 +61,5 @@ suite("TestBenchLogger Tests", async () => {
         const logExists = await fsExists(logFilePathOfLogger);
         assert.strictEqual(logExists, false, "Log file should not exist for trace level");
     });
+    */
 });

@@ -16,7 +16,7 @@
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished"
+        "onView:testBenchExplorer"
     ],
     "main": "./dist/extension.js",
     "contributes": {
@@ -72,7 +72,7 @@
                     "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Delete all files inside the working directory called .tesbench excluding the log files before generating tests.",
+                        "description": "Delete all files inside the working directory called .testbench excluding the log files before generating tests.",
                         "order": 7,
                         "scope": "resource"
                     },
@@ -86,206 +86,13 @@
                 }
             },
             {
-                "title": "Testbench2robotframework",
-                "properties": {
-                    "testbenchExtension.useDefaultValuesForTestbench2robotframework": {
-                        "type": "boolean",
-                        "default": false,
-                        "description": "Use default values for the testbench2robotframework configuration.",
-                        "order": 9,
-                        "scope": "resource"
-                    },
-                    "testbenchExtension.testbench2robotframeworkConfig": {
-                        "type": "object",
-                        "default": {
-                            "rfLibraryRoots": [
-                                "Interactions",
-                                "RF-Library"
-                            ],
-                            "rfResourceRoots": [
-                                "RF-Resource"
-                            ],
-                            "fullyQualified": true,
-                            "generationDirectory": "{root}/Generated",
-                            "createOutputZip": true,
-                            "resourceDirectory": "{root}/Resources",
-                            "clearGenerationDirectory": true,
-                            "logSuiteNumbering": true,
-                            "logCompoundInteractions": true,
-                            "subdivisionsMapping": {
-                                "libraries": {
-                                    "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
-                                    "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
-                                },
-                                "resources": {
-                                    "MyKeywords": "{root}/../MyKeywords.resource",
-                                    "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
-                                }
-                            },
-                            "forcedImport": {
-                                "libraries": [],
-                                "resources": [],
-                                "variables": []
-                            },
-                            "testCaseSplitPathRegEx": "^StopWithRestart\\..*",
-                            "loggingConfiguration": {
-                                "console": {
-                                    "logLevel": "info"
-                                }
-                            }
-                        },
-                        "description": "Configuration setting for customizing the testbench2robotframework library options.",
-                        "properties": {
-                            "rfLibraryRoots": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "default": [
-                                    "Interactions",
-                                    "RF-Library"
-                                ],
-                                "description": "List of Robot Framework library root directories."
-                            },
-                            "rfResourceRoots": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "default": [
-                                    "RF-Resource"
-                                ],
-                                "description": "List of Robot Framework resource root directories."
-                            },
-                            "fullyQualified": {
-                                "type": "boolean",
-                                "default": true,
-                                "description": "Use fully qualified names."
-                            },
-                            "generationDirectory": {
-                                "type": "string",
-                                "default": "{root}/Generated",
-                                "description": "Directory where files will be generated."
-                            },
-                            "createOutputZip": {
-                                "type": "boolean",
-                                "default": true,
-                                "description": "Create a ZIP file of the output."
-                            },
-                            "resourceDirectory": {
-                                "type": "string",
-                                "default": "{root}/Resources",
-                                "description": "Directory for resources."
-                            },
-                            "clearGenerationDirectory": {
-                                "type": "boolean",
-                                "default": true,
-                                "description": "Clear the generation directory before generating new files."
-                            },
-                            "logSuiteNumbering": {
-                                "type": "boolean",
-                                "default": true,
-                                "description": "Log suite numbering."
-                            },
-                            "logCompoundInteractions": {
-                                "type": "boolean",
-                                "default": true,
-                                "description": "Log compound interactions."
-                            },
-                            "subdivisionsMapping": {
-                                "type": "object",
-                                "description": "Mappings for subdivisions.",
-                                "properties": {
-                                    "libraries": {
-                                        "type": "object",
-                                        "additionalProperties": {
-                                            "type": "string"
-                                        },
-                                        "default": {
-                                            "SeleniumLibrary": "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
-                                            "SuperRemoteLibrary": "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
-                                        },
-                                        "description": "Library mappings."
-                                    },
-                                    "resources": {
-                                        "type": "object",
-                                        "additionalProperties": {
-                                            "type": "string"
-                                        },
-                                        "default": {
-                                            "MyKeywords": "{root}/../MyKeywords.resource",
-                                            "MyOtherKeywords": "{resourceDirectory}/subdir/MyOtherKeywords.resource"
-                                        },
-                                        "description": "Resource mappings."
-                                    }
-                                }
-                            },
-                            "forcedImport": {
-                                "type": "object",
-                                "description": "Forced imports configuration.",
-                                "properties": {
-                                    "libraries": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "default": [],
-                                        "description": "List of libraries to force import."
-                                    },
-                                    "resources": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "default": [],
-                                        "description": "List of resources to force import."
-                                    },
-                                    "variables": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "default": [],
-                                        "description": "List of variables to force import."
-                                    }
-                                }
-                            },
-                            "testCaseSplitPathRegEx": {
-                                "type": "string",
-                                "default": "^StopWithRestart\\..*",
-                                "description": "Regex pattern to split test cases."
-                            },
-                            "loggingConfiguration": {
-                                "type": "object",
-                                "description": "Logging configuration settings.",
-                                "properties": {
-                                    "console": {
-                                        "type": "object",
-                                        "description": "Console logging configuration.",
-                                        "properties": {
-                                            "logLevel": {
-                                                "type": "string",
-                                                "default": "info",
-                                                "description": "Log level for console output."
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        "order": 10,
-                        "scope": "resource"
-                    }
-                }
-            },
-            {
                 "title": "Logger",
                 "properties": {
                     "testbenchExtension.testBenchLogger": {
                         "type": "string",
                         "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
-                        "default": "No logging",
-                        "order": 11,
+                        "default": "Trace",
+                        "order": 9,
                         "enum": [
                             "No logging",
                             "Trace",
@@ -307,12 +114,137 @@
                 }
             },
             {
-                "title": "Other",
+                "title": "Testbench2robotframework",
                 "properties": {
+                    "testbenchExtension.configurationPathInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Path to the configuration file of testbench2robotframework library. The path is relative to the workspace location.",
+                        "order": 10,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.cleanFilesBeforeTestGenerationInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Deletes all files present in the output directory before new test suites are created.",
+                        "order": 11,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.fullyQualifiedKeywordsInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Option to call Robot Framework keywords by their fully qualified name in the generated test suites.",
+                        "order": 12,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.outputDirectoryInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Directory or ZIP archive containing the generated test suites for the generate tests command. The path is relative to the workspace location.",
+                        "order": 13,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.compoundInteractionLoggingInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Mode for logging compound interactions.",
+                        "order": 14,
+                        "default": "GROUP",
+                        "enum": [
+                            "GROUP",
+                            "COMMENT",
+                            "NONE"
+                        ],
+                        "enumDescriptions": [
+                            "Group",
+                            "Comment",
+                            "None"
+                        ],
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.logSuiteNumberingInTestbench2robotframework": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Enables logging of the test suite numbering.",
+                        "order": 15,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.resourceDirectoryPathInTestbench2robotframework": {
+                        "type": "string",
+                        "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location.",
+                        "order": 16,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.libraryRegexInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*"
+                        ],
+                        "order": 17,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.libraryRootInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "RF",
+                            "RF-Library"
+                        ],
+                        "order": 18,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.resourceRegexInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*"
+                        ],
+                        "order": 19,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.resourceRootInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [
+                            "RF-Resource"
+                        ],
+                        "order": 20,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.libraryMappingInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Library mapping.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [],
+                        "order": 21,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.resourceMappingInTestbench2robotframework": {
+                        "type": "array",
+                        "description": "Resource mapping.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [],
+                        "order": 22,
+                        "scope": "resource"
+                    },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
-                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server.",
-                        "order": 12,
+                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
+                        "order": 23,
                         "scope": "resource"
                     }
                 }
@@ -345,10 +277,10 @@
             },
             {
                 "command": "testbenchExtension.clearWorkspaceFolder",
-                "title": "TestBench: Clear Workspace Folder",
+                "title": "TestBench: Clear Temporary Files",
                 "icon": {
-                    "light": "resources/icons/clearWorkspaceFolder.svg",
-                    "dark": "resources/icons/clearWorkspaceFolder.svg"
+                    "light": "resources/icons/clearWorkspaceFolder-light.svg",
+                    "dark": "resources/icons/clearWorkspaceFolder-dark.svg"
                 }
             },
             {
@@ -362,25 +294,19 @@
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
                 "title": "Generate Tests",
-                "icon": {
-                    "light": "resources/icons/robot_dark.svg",
-                    "dark": "resources/icons/robot_dark.svg"
-                }
+                "icon": "$(robotcode-robot)"
             },
             {
                 "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
                 "title": "Generate Tests",
-                "icon": {
-                    "light": "resources/icons/robot_dark.svg",
-                    "dark": "resources/icons/robot_dark.svg"
-                }
+                "icon": "$(robotcode-robot)"
             },
             {
                 "command": "testbenchExtension.fetchReportForSelectedTreeItem",
                 "title": "Fetch Report",
                 "icon": {
-                    "light": "resources/icons/download.svg",
-                    "dark": "resources/icons/download.svg"
+                    "light": "resources/icons/download-light.svg",
+                    "dark": "resources/icons/download-dark.svg"
                 }
             },
             {
@@ -391,16 +317,16 @@
                 "command": "testbenchExtension.selectAndLoadProject",
                 "title": "TestBench: Display Projects List",
                 "icon": {
-                    "light": "resources/icons/menu.svg",
-                    "dark": "resources/icons/menu.svg"
+                    "light": "resources/icons/menu-light.svg",
+                    "dark": "resources/icons/menu-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.readRFTestResultsAndCreateReportWithResults",
                 "title": "TestBench: Read Test Results & Create Report With Results",
                 "icon": {
-                    "light": "resources/icons/read.svg",
-                    "dark": "resources/icons/read.svg"
+                    "light": "resources/icons/read-light.svg",
+                    "dark": "resources/icons/read-dark.svg"
                 }
             },
             {
@@ -408,8 +334,8 @@
                 "title": "TestBench: Refresh Project Tree View",
                 "when": "view == projectManagementTree",
                 "icon": {
-                    "light": "resources/icons/refresh.svg",
-                    "dark": "resources/icons/refresh.svg"
+                    "light": "resources/icons/refresh-light.svg",
+                    "dark": "resources/icons/refresh-dark.svg"
                 }
             },
             {
@@ -417,41 +343,61 @@
                 "title": "TestBench: Refresh Test Tree View",
                 "when": "view == testThemeTree",
                 "icon": {
-                    "light": "resources/icons/refresh.svg",
-                    "dark": "resources/icons/refresh.svg"
+                    "light": "resources/icons/refresh-light.svg",
+                    "dark": "resources/icons/refresh-dark.svg"
                 }
-            },            
+            },
             {
                 "command": "testbenchExtension.displayCommands",
                 "title": "TestBench: Display Commands",
                 "icon": {
-                    "light": "resources/icons/more.svg",
-                    "dark": "resources/icons/more.svg"
+                    "light": "resources/icons/more-light.svg",
+                    "dark": "resources/icons/more-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.showExtensionSettings",
                 "title": "TestBench: Show Extension Settings",
                 "icon": {
-                    "light": "resources/icons/settings.svg",
-                    "dark": "resources/icons/settings.svg"
+                    "light": "resources/icons/settings-light.svg",
+                    "dark": "resources/icons/settings-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
                 "title": "TestBench: Read Tests & Upload Results To Testbench",
                 "icon": {
-                    "light": "resources/icons/Upload.svg",
-                    "dark": "resources/icons/Upload.svg"
+                    "light": "resources/icons/upload-light.svg",
+                    "dark": "resources/icons/upload-dark.svg"
                 }
             },
             {
                 "command": "testbenchExtension.uploadTestResultsToTestbench",
                 "title": "TestBench: Upload Test Results To Testbench",
                 "icon": {
-                    "light": "resources/icons/Upload.svg",
-                    "dark": "resources/icons/Upload.svg"
+                    "light": "resources/icons/upload-light.svg",
+                    "dark": "resources/icons/upload-dark.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.refreshTestElementsTree",
+                "title": "Refresh Test Elements",
+                "icon": {
+                    "light": "resources/icons/refresh-light.svg",
+                    "dark": "resources/icons/refresh-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.displayInteractionsForSelectedTOV",
+                "title": "Show Robotframework Resources",
+                "icon": {
+                    "light": "resources/icons/key-light.svg",
+                    "dark": "resources/icons/key-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.openRobotResourceFile",
+                "title": "Go to Robot Resource"
             }
         ],
         "views": {
@@ -463,15 +409,15 @@
                 },
                 {
                     "id": "projectManagementTree",
-                    "name": "Project Management Tree"
+                    "name": "Project Contents"
                 },
                 {
                     "id": "testThemeTree",
-                    "name": "Test Theme Tree"
+                    "name": "Test Themes"
                 },
                 {
-                    "id": "testElementsTreeView",
-                    "name": "Test Elements Tree"
+                    "id": "testElementsView",
+                    "name": "Test Elements"
                 }
             ]
         },
@@ -526,6 +472,11 @@
                     "command": "testbenchExtension.showExtensionSettings",
                     "group": "navigation@8",
                     "when": "view == projectManagementTree || view == testbenchExtension.webView"
+                },
+                {
+                    "command": "testbenchExtension.refreshTestElementsTree",
+                    "when": "view == testElementsView",
+                    "group": "navigation"
                 }
             ],
             "view/item/context": [
@@ -542,6 +493,16 @@
                 {
                     "command": "testbenchExtension.makeRoot",
                     "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == tov || viewItem == Version || viewItem == TestThemeNode)",
+                    "group": "navigation"
+                },
+                {
+                    "command": "testbenchExtension.displayInteractionsForSelectedTOV",
+                    "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.openRobotResourceFile",
+                    "when": "view == testElementsView && viewItem == testElement",
                     "group": "navigation"
                 }
             ]
@@ -561,39 +522,61 @@
         "compile": "webpack",
         "watch": "webpack --watch",
         "package": "webpack --mode production --devtool hidden-source-map",
+        "vsix-package": "vsce package",
         "compile-tests": "tsc -p . --outDir out --incremental",
         "watch-tests": "tsc -p . -w --outDir out --incremental",
         "pretest": "npm run compile-tests && npm run compile && npm run lint",
+        "test": "node ./out/test/runTest.js",
+        "prettier-format": "prettier --config .prettierrc 'src/**/*.ts' --write",
         "lint": "eslint --config eslint.config.mjs .",
-        "test": "node ./out/test/runTest.js"
+        "prepare": "husky"
     },
     "devDependencies": {
-        "@types/glob": "^8.1.0",
-        "@types/mocha": "^10.0.9",
-        "@types/node": "^22.7.5",
-        "@types/sinon": "^17.0.3",
-        "@types/vscode": "^1.95.0",
+        "eslint": "^9.20.1",
+        "@eslint/js": "^9.20.0",
         "@typescript-eslint/eslint-plugin": "^8.9.0",
         "@typescript-eslint/parser": "^8.9.0",
+        "typescript-eslint": "^8.24.1",
+        "prettier": "^3.5.1",
+        "@types/mocha": "^10.0.9",
+        "mocha": "^10.7.3",
+        "@types/sinon": "^17.0.3",
+        "sinon": "^19.0.2",
+        "proxyquire": "^2.1.3",
         "@vscode/test-cli": "^0.0.10",
         "@vscode/test-electron": "^2.4.1",
-        "eslint": "^9.12.0",
-        "mocha": "^10.7.3",
-        "proxyquire": "^2.1.3",
-        "sinon": "^19.0.2",
+        "@types/node": "^22.7.5",
+        "@types/vscode": "^1.95.0",
         "ts-loader": "^9.5.1",
         "typescript": "^5.6.3",
         "webpack": "^5.95.0",
-        "webpack-cli": "^5.1.4"
+        "webpack-cli": "^5.1.4",
+        "@vscode/vsce": "^2.15.0",
+        "husky": "^9.1.7",
+        "@types/base-64": "^1.0.2",
+        "@types/glob": "^8.1.0",
+        "globals": "^15.15.0"
     },
     "dependencies": {
         "@vscode-elements/elements": "^1.10.0",
         "@vscode/python-extension": "^1.0.5",
         "axios": "^1.7.7",
+        "base-64": "^1.0.0",
         "flatted": "^3.3.1",
-        "jszip": "^3.10.1"
+        "jszip": "^3.10.1",
+        "regex-translator": "^0.2.8"
     },
     "extensionDependencies": [
-        "ms-python.python"
-    ]
+        "ms-python.python",
+        "d-biehl.robotcode"
+    ],
+    "husky": {
+        "hooks": {
+            "pre-commit": "npx lint-staged"
+        }
+    },
+    "lint-staged": {
+        "**/*": "prettier --write --ignore-unknown",
+        "*.ts": "npx tslint"
+    }
 }

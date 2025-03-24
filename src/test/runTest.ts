@@ -20,7 +20,7 @@ async function main() {
         // Download VS Code, unzip it and run the integration test
         await runTests({
             extensionDevelopmentPath,
-            extensionTestsPath,
+            extensionTestsPath
             // launchArgs: [testWorkspaceFolder], // Open the test workspace
             // launchArgs: ['--disable-extensions']
         });

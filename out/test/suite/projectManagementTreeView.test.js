@@ -15,13 +15,23 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -41,13 +51,13 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
         sandbox = sinon.createSandbox();
         connectionStub = sandbox.createStubInstance(testBenchConnection_1.PlayServerConnection);
         testThemeDataProviderStub = sandbox.createStubInstance(testThemeTreeView_1.TestThemeTreeDataProvider);
-        treeDataProvider = new projectManagementTreeView_1.ProjectManagementTreeDataProvider(connectionStub, "projectKey", testThemeDataProviderStub);
+        treeDataProvider = new projectManagementTreeView_1.ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
     });
     teardown(() => {
         sandbox.restore();
     });
     test("getChildren should return empty array when no connection is available", async () => {
-        treeDataProvider = new projectManagementTreeView_1.ProjectManagementTreeDataProvider(null, "projectKey", testThemeDataProviderStub);
+        treeDataProvider = new projectManagementTreeView_1.ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
         const children = await treeDataProvider.getChildren();
         assert_1.default.strictEqual(children.length, 0);
     });
@@ -82,15 +92,15 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
     */
     test("findProjectKeyOfCycle should return project key of a cycle element", () => {
-        const projectElement = new projectManagementTreeView_1.TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
+        const projectElement = new projectManagementTreeView_1.ProjectManagementTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
             key: "projectKey",
         });
-        const cycleElement = new projectManagementTreeView_1.TestbenchTreeItem("Cycle", "Cycle", vscode.TreeItemCollapsibleState.Collapsed, { key: "cycleKey" }, projectElement);
+        const cycleElement = new projectManagementTreeView_1.ProjectManagementTreeItem("Cycle", "Cycle", vscode.TreeItemCollapsibleState.Collapsed, { key: "cycleKey" }, projectElement);
         const projectKey = (0, projectManagementTreeView_1.findProjectKeyOfCycleElement)(cycleElement);
         assert_1.default.strictEqual(projectKey, "projectKey");
     });
     test("handleTestCycleClick should initialize test theme tree", async () => {
-        const cycleElement = new projectManagementTreeView_1.TestbenchTreeItem("Cycle Label", "Cycle", vscode.TreeItemCollapsibleState.None, {
+        const cycleElement = new projectManagementTreeView_1.ProjectManagementTreeItem("Cycle Label", "Cycle", vscode.TreeItemCollapsibleState.None, {
             key: "cycleKey",
         });
         const cycleData = {
@@ -124,7 +134,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
                 },
             ],
         };
-        connectionStub.fetchCycleStructure.resolves(cycleData);
+        connectionStub.fetchCycleStructureOfCycleInProject.resolves(cycleData);
         await treeDataProvider.handleTestCycleClick(cycleElement);
         (0, assert_1.default)(testThemeDataProviderStub.clearTree.calledOnce);
         (0, assert_1.default)(testThemeDataProviderStub.setRoots.calledOnce);

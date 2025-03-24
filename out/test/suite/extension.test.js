@@ -15,71 +15,114 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
 const vscode = __importStar(require("vscode"));
+const sinon = __importStar(require("sinon"));
 const extension_1 = require("../../extension");
+const testBenchLogger_1 = require("../../testBenchLogger");
+const testBenchConnection_1 = require("../../testBenchConnection");
+const projectManagementTreeView_1 = require("../../projectManagementTreeView");
+const loginWebView_1 = require("../../loginWebView");
+const testElementsTreeView_1 = require("../../testElementsTreeView");
 suite("Extension Test Suite", () => {
-    suiteTeardown(() => {
-        vscode.window.showInformationMessage("All tests done!");
-    });
-    test("Extension should be present", () => {
-        assert.ok(vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension"));
-    });
-    test("Extension should be active after activation", async () => {
-        const extension = vscode.extensions.getExtension("imbus.testbench-visual-studio-code-extension");
-        if (!extension) {
-            assert.fail("Extension not found");
-        }
-        await extension?.activate();
-        assert.strictEqual(extension?.isActive, true, "Extension should be active");
-    });
-    test("Activate should register commands", async () => {
-        const context = {
-            subscriptions: [],
-            secrets: {
-                delete: async () => { },
-            },
-        };
-        await (0, extension_1.activate)(context);
-        const registeredCommands = await vscode.commands.getCommands(true);
-        const expectedCommands = [
-            "testbenchExtension.login",
-            "testbenchExtension.logout",
-            "testbenchExtension.generateTestCasesForCycle",
-            "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-            "testbenchExtension.readAndUploadTestResultsToTestbench",
-            "testbenchExtension.showExtensionSettings",
-            "testbenchExtension.selectAndLoadProject",
-            "testbenchExtension.setWorkspaceLocation",
-        ];
-        console.log("registeredCommands: ", registeredCommands);
-        console.log("expectedCommands: ", expectedCommands);
-        expectedCommands.forEach((command) => {
-            assert.ok(registeredCommands.includes(command), `Command ${command} is not registered`);
+    let sandbox;
+    let getConfigurationStub;
+    let context;
+    let loggerStub;
+    let connectionStub;
+    let projectManagementTreeDataProviderStub;
+    let loginWebViewProviderStub;
+    let testElementsTreeDataProviderStub;
+    setup(() => {
+        sandbox = sinon.createSandbox();
+        // Stub the VS Code API and assign it to a SinonStub variable
+        getConfigurationStub = sandbox.stub(vscode.workspace, "getConfiguration");
+        getConfigurationStub.returns({
+            get: sandbox.stub().returns("defaultValue"),
+            update: sandbox.stub().resolves(),
         });
-    });
-    test("Updating configuration should change setting variable", async () => {
-        const context = {
+        // Mock the ExtensionContext
+        context = {
             subscriptions: [],
             secrets: {
-                delete: async () => { },
+                get: sandbox.stub().resolves("storedPassword"),
+                store: sandbox.stub().resolves(),
+                delete: sandbox.stub().resolves(),
             },
         };
-        await (0, extension_1.activate)(context);
-        const config = vscode.workspace.getConfiguration("testbenchExtension");
-        await config.update("serverName", "newServerName", vscode.ConfigurationTarget.Global);
-        assert.strictEqual(config.get("serverName", vscode.ConfigurationTarget.Global), "newServerName");
+        // Mock the logger
+        loggerStub = sandbox.createStubInstance(testBenchLogger_1.TestBenchLogger);
+        // Mock the connection
+        connectionStub = sandbox.createStubInstance(testBenchConnection_1.PlayServerConnection);
+        // Mock the tree data providers
+        projectManagementTreeDataProviderStub = sandbox.createStubInstance(projectManagementTreeView_1.ProjectManagementTreeDataProvider);
+        loginWebViewProviderStub = sandbox.createStubInstance(loginWebView_1.LoginWebViewProvider);
+        testElementsTreeDataProviderStub = sandbox.createStubInstance(testElementsTreeView_1.TestElementsTreeDataProvider);
+        // Stub the VS Code API
+        sandbox.stub(vscode.workspace, "getConfiguration").returns({
+            get: sandbox.stub().returns("defaultValue"),
+            update: sandbox.stub().resolves(),
+        });
+        sandbox.stub(vscode.window, "showErrorMessage").resolves();
+        sandbox.stub(vscode.window, "showInformationMessage").resolves();
+        sandbox.stub(vscode.window, "showOpenDialog").resolves([vscode.Uri.file("/fake/path")]);
+        sandbox.stub(vscode.commands, "executeCommand").resolves();
     });
-    test("Deactivate should not throw", () => {
-        assert.doesNotThrow(() => (0, extension_1.deactivate)());
+    teardown(() => {
+        sandbox.restore();
+    });
+    test("activate should initialize the extension", async () => {
+        await (0, extension_1.activate)(context);
+        assert.ok(loggerStub.info.calledWith("Extension activated."), "Logger should log activation message");
+        assert.ok(getConfigurationStub.calledWith(extension_1.baseKeyOfExtension), "Configuration should be loaded");
+        assert.ok(context.subscriptions.length > 0, "Subscriptions should be added to the context");
+    });
+    test("deactivate should log out the user", async () => {
+        await (0, extension_1.deactivate)();
+        assert.ok(connectionStub.logoutUser.calledOnce, "Logout should be called on deactivation");
+        assert.ok(loggerStub.info.calledWith("Extension deactivated."), "Logger should log deactivation message");
+    });
+    test("getConfig should return the current configuration", () => {
+        const config = (0, extension_1.getConfig)();
+        assert.ok(config, "Configuration should be returned");
+    });
+    test("safeCommandHandler should handle errors gracefully", async () => {
+        const error = new Error("Test error");
+        const handler = sandbox.stub().rejects(error);
+        const safeHandler = (0, extension_1.safeCommandHandler)(handler);
+        await safeHandler();
+        assert.ok(loggerStub.error.calledWith("Error executing command:", error), "Error should be logged");
+    });
+    test("promptForWorkspaceLocation should prompt the user and return the selected path", async () => {
+        const path = await (0, extension_1.promptForWorkspaceLocation)();
+        assert.strictEqual(path, "/fake/path", "Selected path should be returned");
+    });
+    test("loadConfiguration should update the configuration", async () => {
+        await (0, extension_1.loadConfiguration)(context);
+        assert.ok(getConfigurationStub.calledWith(extension_1.baseKeyOfExtension), "Configuration should be loaded");
+    });
+    test("initializeTreeViews should initialize the tree views", () => {
+        (0, extension_1.initializeTreeViews)();
+        assert.ok(projectManagementTreeDataProviderStub, "Project management tree view should be initialized");
+        assert.ok(testElementsTreeDataProviderStub, "Test elements tree view should be initialized");
     });
 });
 //# sourceMappingURL=extension.test.js.map

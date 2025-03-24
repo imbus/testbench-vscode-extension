@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from uuid import uuid4
 
+from robot import version as robot_version
 from robot.parsing.lexer.tokens import Token
 from robot.parsing.model.blocks import (
+    End,
     File,
     Keyword,
     KeywordSection,
@@ -36,7 +38,8 @@ try:
 except ImportError:
     from robot.parsing.model.statements import ForceTags as TestTags
 
-from .config import Configuration
+from .html_parser import extract_text_from_html
+from .config import CompoundInteractionLogging, Configuration
 from .json_reader import TestCaseSet
 from .log import logger
 from .model import (
@@ -50,6 +53,12 @@ from .model import (
     UserDefinedField,
 )
 from .utils import PathResolver
+
+try:
+    from robot.parsing.model.blocks import Group
+    from robot.parsing.model.statements import GroupHeader
+except ImportError:
+    Group = None
 
 SEPARATOR = "    "
 ROBOT_PATH_SEPARATOR = "/"
@@ -78,8 +87,8 @@ class RfTestCase:
         self.interaction_calls: list[InteractionCall] = []
         self.used_imports: dict[str, set[str]] = {}
         self.config = config
-        self.lib_pattern_list = [re.compile(pattern) for pattern in config.rfLibraryRegex]
-        self.res_pattern_list = [re.compile(pattern) for pattern in config.rfResourceRegex]
+        self.lib_pattern_list = [re.compile(pattern) for pattern in config.library_regex]
+        self.res_pattern_list = [re.compile(pattern) for pattern in config.resource_regex]
         for interaction in test_case_details.interactions:
             self._get_interaction_calls(interaction)
         self.rf_tags = self._get_tags(test_case_details)
@@ -107,23 +116,22 @@ class RfTestCase:
         self, interaction: InteractionDetails, indent: int = 0, sequence_phase=None
     ) -> None:
         indent += 1
-        if interaction.interactionType != InteractionType.Textual:
-            cbv_params = self._get_params_by_use_type(
-                interaction, ParameterEvaluationType.CallByValue
+        cbv_params = self._get_params_by_use_type(
+            interaction, ParameterEvaluationType.CallByValue
+        )
+        cbr_params = self._get_params_by_use_type(
+            interaction,
+            ParameterEvaluationType.CallByReference,
+            ParameterEvaluationType.CallByReferenceMandatory,
+        )
+        if interaction.interactionType == InteractionType.Compound:
+            self._append_compound_ia_and_analyze_children(
+                cbr_params, cbv_params, indent, interaction, sequence_phase
             )
-            cbr_params = self._get_params_by_use_type(
-                interaction,
-                ParameterEvaluationType.CallByReference,
-                ParameterEvaluationType.CallByReferenceMandatory,
-            )
-            if interaction.interactionType == InteractionType.Compound:
-                self._append_compound_ia_and_analyze_children(
-                    cbr_params, cbv_params, indent, interaction, sequence_phase
-                )
-            elif interaction.interactionType == InteractionType.Atomic:
-                self._append_atomic_ia(
-                    cbr_params, cbv_params, indent, interaction, sequence_phase
-                )  # TODO: Else für textuelle Interaktionen
+        elif interaction.interactionType == InteractionType.Atomic: # or InteractionType.Textual:
+            self._append_atomic_ia(
+                cbr_params, cbv_params, indent, interaction, sequence_phase
+            )  # TODO: Else für textuelle Interaktionen
 
     def _append_atomic_ia(
         self,
@@ -139,9 +147,10 @@ class RfTestCase:
             self.used_imports[resource_type] = {import_prefix}
         else:
             self.used_imports[resource_type].add(import_prefix)
+        interaction_name = interaction.name if interaction.interactionType == InteractionType.Atomic else extract_text_from_html(interaction.spec.description)
         self.interaction_calls.append(
             InteractionCall(
-                name=interaction.name,
+                name=interaction_name,
                 cbv_parameters=cbv_params,
                 cbr_parameters=cbr_params,
                 indent=indent,
@@ -165,9 +174,9 @@ class RfTestCase:
         if len(ia_path_parts) == 1:
             return UNKNOWN_IMPORT_TYPE, ia_path_parts[0]
         root_subdivision, import_prefix = ia_path_parts[:2]
-        if root_subdivision in self.config.rfLibraryRoots:
+        if root_subdivision in self.config.library_root:
             return LIBRARY_IMPORT_TYPE, import_prefix
-        if root_subdivision in self.config.rfResourceRoots:
+        if root_subdivision in self.config.resource_root:
             return RESOURCE_IMPORT_TYPE, import_prefix
 
         return root_subdivision, import_prefix
@@ -191,7 +200,9 @@ class RfTestCase:
             )
         )
         for interaction in interaction_detail.interactions:
-            self._get_interaction_calls(interaction, indent, interaction_detail.spec.sequencePhase)
+            self._get_interaction_calls(
+                interaction, indent, sequence_phase or interaction_detail.spec.sequencePhase
+            )
 
     def _create_rf_keyword_calls(
         self, interaction_calls: list[InteractionCall]
@@ -199,6 +210,7 @@ class RfTestCase:
         keyword_lists: list[list[Statement]] = [[]]
         tc_index = 0
         is_first_atomic = True
+        group_stack = []
         for interaction_call in interaction_calls:
             if interaction_call.is_atomic:
                 if (
@@ -208,9 +220,31 @@ class RfTestCase:
                     tc_index += 1
                     keyword_lists.append([])
                 is_first_atomic = False
-                keyword_lists[tc_index].append(self._create_rf_keyword(interaction_call))
-            elif not interaction_call.is_atomic and self.config.logCompoundInteractions:
-                keyword_lists[tc_index].append(self._create_rf_compound_keyword(interaction_call))
+                atomic_keyword_call = self._create_rf_keyword(interaction_call)
+                while group_stack and group_stack[-1][1] >= interaction_call.indent:
+                    group_stack.pop()
+                if group_stack:
+                    group_stack[-1][0].body.append(atomic_keyword_call)
+                else:
+                    keyword_lists[tc_index].append(atomic_keyword_call)
+            elif (
+                not interaction_call.is_atomic
+                and self.config.compound_interaction_logging != CompoundInteractionLogging.NONE
+            ):
+                compound_keyword_call = self._create_rf_compound_keyword(
+                    interaction_call, self.config.compound_interaction_logging
+                )
+                while group_stack and group_stack[-1][1] >= interaction_call.indent:
+                    group_stack.pop()
+                if group_stack:
+                    group_stack[-1][0].body.append(compound_keyword_call)
+                else:
+                    keyword_lists[tc_index].append(compound_keyword_call)
+                if (
+                    Group
+                    and self.config.compound_interaction_logging == CompoundInteractionLogging.GROUP
+                ):
+                    group_stack.append((compound_keyword_call, interaction_call.indent))
         return keyword_lists
 
     def is_splitting_ia(self, interaction_call, keyword_lists, tc_index):
@@ -396,10 +430,15 @@ class RfTestCase:
         return cbr_parameters
 
     def _get_interaction_import_prefix(self, interaction: InteractionCall) -> str:
-        return (self.config.fullyQualified or False) * f"{interaction.import_prefix}."
+        return (self.config.fully_qualified or False) * f"{interaction.import_prefix}."
 
     def _get_interaction_indent(self, interaction: InteractionCall) -> str:
-        return SEPARATOR * interaction.indent if self.config.logCompoundInteractions else SEPARATOR
+        return (
+            SEPARATOR * interaction.indent
+            if self.config.compound_interaction_logging
+            in [CompoundInteractionLogging.GROUP, CompoundInteractionLogging.COMMENT]
+            else SEPARATOR
+        )
 
     def _create_rf_keyword(self, interaction: InteractionCall) -> KeywordCall:
         import_prefix = self._get_interaction_import_prefix(interaction)
@@ -413,8 +452,18 @@ class RfTestCase:
             indent=interaction_indent,
         )
 
-    def _create_rf_compound_keyword(self, interaction: InteractionCall) -> Comment:
+    def _create_rf_compound_keyword(
+        self,
+        interaction: InteractionCall,
+        compound_interaction_type=CompoundInteractionLogging.COMMENT,
+    ) -> Comment | Group:
         interaction_indent = " " * (interaction.indent * 4)
+        if Group and compound_interaction_type == CompoundInteractionLogging.GROUP:
+            return Group(
+                GroupHeader.from_params(interaction.name, indent=interaction_indent),
+                end=End.from_params(interaction_indent),
+            )
+
         return Comment.from_params(
             comment=self._generate_compound_interaction_comment(interaction),
             indent=interaction_indent,
@@ -460,6 +509,20 @@ def create_test_suites(
     path_resolver: PathResolver,
     config: Configuration,
 ) -> dict[str, File]:
+    if not Group:
+        if config.compound_interaction_logging == CompoundInteractionLogging.GROUP:
+            logger.warning(
+                f"You're using Robot Framework {robot_version.get_full_version()} "
+                "which does not support 'Robot Framework Groups'. "
+                "Compund interactions are logged as 'COMMENT'. To hide the warning "
+                "set the configuration '--logCompoundInteractions' to 'COMMENT' or 'NONE'."
+            )
+        else:
+            logger.debug(
+                f"You're using Robot Framework {robot_version.get_full_version()} "
+                "which does not support 'Robot Framework Groups'. Consider updating to "
+                "newer Robot Framework version to get enhanced logging for compound interactions."
+            )
     tcs_paths = path_resolver.tcs_paths
     test_suites = {}
     for uid, test_case_set in test_case_set_catalog.items():
@@ -579,7 +642,7 @@ class RobotSuiteFileBuilder:
     def _create_rf_variable_imports(self) -> list[VariablesImport]:
         return [
             VariablesImport.from_params(name=variable_file)
-            for variable_file in self.config.forcedImport.variables
+            for variable_file in self.config.forced_import.variables
         ]
 
     def _create_rf_resource_imports(self, import_dict: dict[str, set[str]]) -> list[ResourceImport]:
@@ -589,7 +652,7 @@ class RobotSuiteFileBuilder:
             for resource in resources
             if not self._is_library(resource_root) and self._is_resource(resource_root)
         }
-        resources.update(self.config.forcedImport.resources)
+        resources.update(self.config.forced_import.resources)
         resource_paths = {
             self._create_resource_path(resource) for resource in sorted(resources)
         }  # TODO Fix Paths to correct models
@@ -599,16 +662,16 @@ class RobotSuiteFileBuilder:
         subdivision_mapping = self.config.subdivisionsMapping.resources.get(resource)
         resource = re.sub(".resource", "", resource)
         if not subdivision_mapping:
-            if not self.config.resourceDirectory:
+            if not self.config.resource_directory:
                 return f"{resource}.resource"
-            if not re.match(RELATIVE_RESOURCE_INDICATOR, self.config.resourceDirectory):
-                return Path(self.config.resourceDirectory, f"{resource}.resource").as_posix()
+            if not re.match(RELATIVE_RESOURCE_INDICATOR, self.config.resource_directory):
+                return Path(self.config.resource_directory, f"{resource}.resource").as_posix()
             generation_directory = self._replace_relative_resource_indicator(
-                self.config.generationDirectory
+                self.config.output_directory
             )
             robot_file_path = Path(generation_directory) / self.tcs_path.parent
             resource_directory = self._replace_relative_resource_indicator(
-                self.config.resourceDirectory
+                self.config.resource_directory
             )
             resource_import = (
                 Path(os.path.relpath(Path(resource_directory), robot_file_path))
@@ -617,7 +680,7 @@ class RobotSuiteFileBuilder:
             return resource_import.as_posix()
         root_path = Path(os.curdir).absolute()
         subdivision_mapping = re.sub(
-            r"^{resourceDirectory}", self.config.resourceDirectory, subdivision_mapping
+            r"^{resourceDirectory}", self.config.resource_directory, subdivision_mapping
         )
         subdivision_mapping = re.sub(
             RELATIVE_RESOURCE_INDICATOR,
@@ -640,7 +703,7 @@ class RobotSuiteFileBuilder:
         return re.sub(
             RELATIVE_RESOURCE_INDICATOR,
             str(root_path).replace("\\", ROBOT_PATH_SEPARATOR),
-            self.config.resourceDirectory,
+            self.config.resource_directory,
             flags=re.IGNORECASE,
         ).replace("\\", ROBOT_PATH_SEPARATOR)
 
@@ -659,7 +722,7 @@ class RobotSuiteFileBuilder:
             for library in libraries
             if self._is_library(library_root)
         }
-        libraries.update(self.config.forcedImport.libraries)
+        libraries.update(self.config.forced_import.libraries)
         lib_imports = {
             self.config.subdivisionsMapping.libraries.get(library, library) for library in libraries
         }
@@ -680,17 +743,14 @@ class RobotSuiteFileBuilder:
             for unknown_import in unknown_imports
             if not self._is_library(root_subdivision) and not self._is_resource(root_subdivision)
         }
-        for root, subdivision_names in import_dict.items():
-            logger.debug(
-                f"{self.test_case_set.details.uniqueID} has imports {list(subdivision_names)} "
-                f"from unknown root subdivision '{root}'!"
-            )
         if unknown_imports:
             logger.warning(
                 f"{self.test_case_set.details.uniqueID} has unknown imports. "
-                f"TestBench Subdivisions which correspond to Libraries or Resources "
-                f"need to be declared in the configuration file. "
-                f"See Log for more details."
+                "TestBench Subdivisions which correspond to Libraries or Resources "
+                "must be mapped via on of the following config options: 'rfLibraryRegex', "
+                "'rfResourceRegex', 'rfLibraryRoots', 'rfResourceRoots'. "
+                "The following subdivisions could not be identified "
+                f"as library or resource: {list(unknown_imports)}."
             )
         return [
             Comment.from_params(comment=f"# UNKNOWN    {unknown}", indent="")

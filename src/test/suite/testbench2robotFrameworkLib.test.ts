@@ -1,13 +1,13 @@
-import * as path from 'path';
-import * as sinon from 'sinon';
-import * as assert from 'assert';
-import * as vscode from 'vscode'
-import { tb2robotLib} from '../../testbench2robotframeworkLib';
-import { pyCommandBuilder } from '../../pyCommandBuilder';
-import * as extension from '../../extension';
-import { TestBenchLogger } from "../..//testBenchLogger";
+import * as path from "path";
+import * as sinon from "sinon";
+import * as assert from "assert";
+import * as vscode from "vscode";
+import { tb2robotLib } from "../../testbench2robotframeworkLib";
+import { PyCommandBuilder } from "../../pyCommandBuilder";
+import * as extension from "../../extension";
+import { TestBenchLogger } from "../../testBenchLogger";
 
-const rootPath = path.resolve(__dirname, '../../../')
+const rootPath = path.resolve(__dirname, "../../../");
 
 /*
 suite('tb2robotWrite test', () => {

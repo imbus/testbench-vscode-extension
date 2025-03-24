@@ -12,13 +12,22 @@ jobs:
     steps:
       # Checkout the repository
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      # Cache Node Modules to speed up the workflow
+      - name: Cache Node Modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       # Set up Node.js
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '23' # Use the Node.js version compatible with the project
+          node-version: '23' # Use the Node.js version compatible with the project          
 
       # Install dependencies
       - name: Install Dependencies
@@ -26,11 +35,16 @@ jobs:
 
       # Package the extension
       - name: Build VSIX Package
-        run: npm run package # package command should be defined in the package.json
+        run: npm run vsix-package # vsix-package command should be defined in the package.json
+
+      # List all files for debugging
+      # - name: List All Files For Debugging
+      #   run: ls -alR | grep -v '^node_modules' # Lists all files and directories in the current directory
 
       # Upload the VSIX as an artifact
       - name: Upload VSIX Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: testbench-vs-code-extension # Name of the artifact
+          name: testbench-visual-studio-code-extension # Name of the artifact
           path: "*.vsix" # Adjust if the file is stored in a specific folder
+          overwrite: true # Overwrite the artifact if it already exists

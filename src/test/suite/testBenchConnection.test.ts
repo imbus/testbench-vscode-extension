@@ -14,8 +14,8 @@ suite("PlayServerConnection Tests", () => {
             secrets: {
                 get: sinon.stub().resolves("mockSessionToken"),
                 store: sinon.stub().resolves(),
-                delete: sinon.stub().resolves(),
-            },
+                delete: sinon.stub().resolves()
+            }
         } as unknown as vscode.ExtensionContext;
 
         // Mock the startKeepAlive method
@@ -26,7 +26,7 @@ suite("PlayServerConnection Tests", () => {
         axiosStub = sinon.stub(axios, "create").returns({
             get: sinon.stub(),
             post: sinon.stub(),
-            delete: sinon.stub(),
+            delete: sinon.stub()
         } as any);
     });
 

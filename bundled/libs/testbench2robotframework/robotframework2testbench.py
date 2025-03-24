@@ -21,7 +21,7 @@ def robot2testbench(
         sys.exit("Robot result xml does not exist at the given path.")
     configuration = Configuration.from_dict(config)
     setup_logger(configuration)
-    logger.debug("Config file loaded.")
+    logger.debug("Configuration loaded.")
     result = ExecutionResult(robot_result_xml)
     logger.debug("Robot framework result xml loaded.")
     result.visit(

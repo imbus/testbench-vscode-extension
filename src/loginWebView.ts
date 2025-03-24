@@ -1,35 +1,49 @@
+/**
+ * @file loginWebView.ts
+ * @description Provides the login webview for the TestBench extension. This webview enables the user to enter
+ * login credentials and triggers the login process using a HTML form.
+ */
+
 import * as vscode from "vscode";
-import { logger, connection, baseKeyOfExtension, allExtensionCommands, getConfig } from "./extension";
-import { loginToNewPlayServerAndInitSessionToken } from "./testBenchConnection";
+import { logger, connection, allExtensionCommands, getConfig } from "./extension";
+import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
 import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 
-// Keep track of whether our login webview is visible or not to be able to toggle its visibility
-export let loginWebViewIsVisible: boolean = true; // Initially display the view when the extension starts
+// Tracks whether the login webview is visible.
+export let loginWebViewIsVisible: boolean = true; // Initially display the view when the extension starts.
+
+/**
+ * The provider for the login webview.
+ */
 export class LoginWebViewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewId = "testbenchExtension.webView";
-    // Store the reference to the WebviewView
+    public static readonly viewId: string = "testbenchExtension.webView";
     private currentWebview?: vscode.WebviewView;
-
-    private isLoginProcessAlreadyRunning: boolean = false; // Prevent multiple login processes by spamming submit button
-
-    // Private fields to hold our username/password
-    constructor(private extensionContext?: vscode.ExtensionContext | undefined) {}
+    // Prevent multiple login processes by spamming the submit button.
+    private isLoginProcessAlreadyRunning: boolean = false;
 
     /**
-     * Called when the view is loaded by VS Code.
+     * Constructs a new LoginWebViewProvider.
+     * @param {vscode.ExtensionContext} extensionContext The extension context.
      */
-    resolveWebviewView(webviewView: vscode.WebviewView) {
-        logger.trace("Resolving webview view");
-        this.currentWebview = webviewView; // Store reference to the WebviewView
-        // Enable scripts in our webview
+    constructor(private extensionContext?: vscode.ExtensionContext) {}
+
+    /**
+     * Called when VS Code loads the webview.
+     * @param {vscode.WebviewView} webviewView The webview view instance.
+     */
+    resolveWebviewView(webviewView: vscode.WebviewView): void {
+        logger.trace("Resolving login webview view.");
+        this.currentWebview = webviewView;
+
+        // Enable scripts in the webview.
         webviewView.webview.options = {
-            enableScripts: true,
+            enableScripts: true
         };
 
-        // Check server connection and set initial content
+        // Set initial HTML content based on connection status.
         this.updateWebviewContent();
 
-        // Listen for messages from the webview
+        // Listen for messages from the webview to respond to user actions.
         webviewView.webview.onDidReceiveMessage((message) => {
             logger.trace(`Received message from webview: ${message.command}`);
             if (message.command === "login") {
@@ -38,487 +52,355 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     message.serverName,
                     parseInt(message.portNumber, 10), // Port number is an integer
                     message.username,
-                    message.password
+                    message.password,
+                    message.autoLogin,
+                    message.savePassword
                 );
             }
         });
     }
 
+    /**
+     * Handles the login process when a login message is received from the webview when the user submits the form.
+     * Prevents multiple login attempts and triggers the login sequence.
+     * @param {vscode.ExtensionContext | undefined} extensionContext The extension context.
+     * @param {string} serverName The server name.
+     * @param {number} portNumber The port number.
+     * @param {string} username The username.
+     * @param {string} password The password.
+     * @param {boolean} autoLogin Whether to automatically log in after extension activation.
+     * @param {boolean} savePassword Whether to save the password.
+     */
     private async handleLogin(
         extensionContext: vscode.ExtensionContext | undefined,
         serverName: string,
         portNumber: number,
         username: string,
-        password: string
-    ) {
+        password: string,
+        autoLogin: boolean,
+        savePassword: boolean
+    ): Promise<void> {
         if (this.isLoginProcessAlreadyRunning) {
-            logger.trace("Login process for the login webview is already running, ignoring the submit button.");
+            logger.trace("Login process already running; ignoring duplicate submit.");
             return;
         }
         this.isLoginProcessAlreadyRunning = true;
-        logger.trace("Handling login command from webview");
+        logger.trace("Handling login command from webview.");
+
         if (this.isConnectedToServer()) {
             vscode.window.showInformationMessage("You are already connected to a server.");
+            this.isLoginProcessAlreadyRunning = false;
             return;
         }
-        logger.trace(
-            `Webview input fields: Server Name: ${serverName} Port Number: ${portNumber} Username: ${username}`
-        ); // TODO: Delete this in production to not to store sensitive data in logs
 
-        // Login logic also notifies and hides the webview from activity bar
-        const loginResult = await loginToNewPlayServerAndInitSessionToken(
+        // TODO: In production, don't log sensitive data.
+        logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
+
+        // TODO: This can be updated dynamically after the checkbox value is changed.
+        // After the user presses login, update extension settings with the checkbox values
+        await getConfig().update("automaticLoginAfterExtensionActivation", autoLogin);
+        await getConfig().update("storePasswordAfterLogin", savePassword);
+
+        // Attempt to log in. Successfull login will update and hide the webview automatically.
+        const connectionAfterLoginAttempt: PlayServerConnection | null = await loginToNewPlayServerAndInitSessionToken(
             extensionContext!,
             serverName,
             portNumber,
             username,
-            password!,
-            baseKeyOfExtension
+            password
         );
 
         // If login was successful, open project selection and display project tree view
-        if (loginResult) {
-            // Open project selection after logging in, this command also takes care of the visibility of the tree views
-            vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
-
-            // When the user wont select a project and clicks away, there wont be any view in activity bar.
-            // Add project view to activity bar so that he can choose project again.
+        if (connectionAfterLoginAttempt) {
+            await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
+            // If the user does not select a project and clicks away, there wont be any active view.
+            // Add project view so that the user can choose a project.
             displayProjectManagementTreeView();
         }
 
-        // Release the lock
+        // Release the lock on the login process.
         this.isLoginProcessAlreadyRunning = false;
     }
 
-    // Update the HTML content of the webview based on the connection status
-    async updateWebviewContent() {
-        logger.trace("Updating webview content.");
+    /**
+     * Updates the HTML content of the webview based on the connection status.
+     */
+    async updateWebviewContent(): Promise<void> {
+        logger?.trace("Updating login webview content.");
         if (!this.currentWebview) {
-            logger.trace("No webview to update webview content.");
+            logger?.trace("No webview instance available for updating content.");
             return;
         }
         this.currentWebview.webview.html = this.isConnectedToServer()
             ? this.getAlreadyConnectedHtml()
-            : await this.getLoginPageHtmlSimple(this.currentWebview.webview);
-        logger.trace("Webview content updated.");
+            : await this.getLoginHtmlPage(this.currentWebview.webview);
+        logger?.trace("Login webview content updated.");
     }
 
-    // Create the URI for the testbench icon
+    /**
+     * Creates a URI for the TestBench icon.
+     * @param {vscode.Webview} webview The webview instance.
+     * @returns {vscode.Uri | null} The icon URI, or null if the extension context is undefined.
+     */
     private createIconUri(webview: vscode.Webview): vscode.Uri | null {
         if (!this.extensionContext) {
-            logger.error("Extension context is not defined, cannot get the URI for the icon.");
+            logger.error("Extension context is undefined; cannot create icon URI.");
             return null;
         }
-        // Generate the URI for testbench icon
-        const imageUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext!.extensionUri, "resources", "icons", "iTB-EE-Logo-256x256.png")
+        // Create the URI for testbench icon
+        return webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", "iTB-EE-Logo-256x256.png")
         );
-        return imageUri;
     }
 
     /**
-     * Return an HTML string with two text fields and a Submit button.
+     * Returns a simple login HTML page with VS Code styling.
+     * @param {vscode.Webview} webview The webview instance.
+     * @returns {Promise<string>} A promise resolving to an HTML string.
      */
-    private async getLoginPageHtmlComplex(webview: vscode.Webview): Promise<string> {
-        logger.trace("Getting login page HTML");
+    private async getLoginHtmlPage(webview: vscode.Webview): Promise<string> {
+        logger.trace("Returning login HTML page for Webview.");
+        if (!this.extensionContext) {
+            logger.warn("Extension context is undefined; cannot get stored settings.");
+        }
 
-        const imageUri = this.createIconUri(webview);
-
-        // Minimal HTML (no Content-Security-Policy for simplicity).
-        // For production, consider adding a nonce-based CSP.
-        return `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8"/>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Login to TestBench</title>
-            <style>
-            * {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-                font-family: Arial, sans-serif;
-            }
-
-            body {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                background: linear-gradient(to right, #6a11cb, #2575fc);
-                color: #fff;
-            }
-
-            img {
-                width: 40px;
-                height: 40px;
-                vertical-align: middle;
-            }
-
-            h2 {
-                margin-left: 1em;
-            }
-
-            .header-container {
-                display: flex;
-                align-items: center;
-                margin-bottom: 1em;
-            }
-
-            form {
-                background: #fff;
-                color: #333;
-                padding: 2em;
-                border-radius: 10px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                width: 100%;
-                max-width: 400px;
-            }
-
-            .form-group {
-                margin-bottom: 1em;
-            }
-
-            label {
-                display: block;
-                font-weight: bold;
-                margin-bottom: 0.5em;
-            }
-
-            input {
-                width: 100%;
-                padding: 0.8em;
-                border: 1px solid #ccc;
-                border-radius: 5px;
-                font-size: 1em;
-            }
-
-            input:focus {
-                outline: none;
-                border-color: #6a11cb;
-                box-shadow: 0 0 5px rgba(106, 17, 203, 0.5);
-            }
-
-            button {
-                width: 100%;
-                padding: 0.8em;
-                background: #6a11cb;
-                color: #fff;
-                border: none;
-                border-radius: 5px;
-                font-size: 1em;
-                font-weight: bold;
-                cursor: pointer;
-                transition: background 0.3s;
-            }
-
-            button:hover {
-                background: #2575fc;
-            }
-
-            @media (max-width: 600px) {
-                form {
-                padding: 1.5em;
-                }
-
-                h2 {
-                font-size: 1.5em;
-                }
-            }
-            </style>
-        </head>
-        <body>
-            <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
-            <div class="header-container">
-            <img src="${imageUri || ""}" alt="TestBench Logo">
-            <h2>Login to TestBench</h2>
-            </div>
-            <div class="form-group">
-                <label for="serverName">Server Name:</label>
-                <input id="serverName" type="text" placeholder="Server Name" value="${
-                    getConfig().get<string>("serverName", "") || ""
-                }" required />
-            </div>
-            <div class="form-group">
-                <label for="portNumber">Port Number:</label>
-                <input id="portNumber" type="text" placeholder="Port Number" value="${
-                    getConfig().get<string>("portNumber", "") || ""
-                }" required />
-            </div>
-            <div class="form-group">
-                <label for="username">Username:</label>
-                <input id="username" type="text" placeholder="Username" value="${
-                    getConfig().get<string>("username", "") || ""
-                }" required />
-            </div>
-            <div class="form-group">
-                <label for="password">Password:</label>
-                <input id="password" type="password" placeholder="Password" value="${
-                    (await this.extensionContext?.secrets.get("password")) || ""
-                }" required />
-            </div>
-            <button id="submitBtn" type="submit">Submit</button>
-            </form>
-            <script>
-            // VS Code API object
-            const vscode = acquireVsCodeApi();
-
-            // Function to send login data to the extension
-            function submitLogin() {
-                const serverName = document.getElementById('serverName').value;
-                const portNumber = document.getElementById('portNumber').value;
-                const username = document.getElementById('username').value;
-                const password = document.getElementById('password').value;
-
-                // Send message to the extension
-                vscode.postMessage({
-                command: 'login',
-                serverName,
-                portNumber,
-                username,
-                password
-                });
-            }
-
-            // Listen for messages from the extension to update the content dynamically
-            window.addEventListener('message', (event) => {
-                const message = event.data;
-                if (message.command === 'updateContent') {
-                document.body.innerHTML = message.html;
-                }
-            });
-            </script>
-        </body>
-        </html>
-        `;
-    }
-
-    /**
-     * Return an HTML string with two text fields and a Submit button.
-     */
-    private async getLoginPageHtmlSimple(webview: vscode.Webview): Promise<string> {
-        logger.trace("Getting login page HTML.");
+        // TODO: In production, don't log sensitive data.
         logger.trace(
-            `Credentials for login page: ${getConfig().get<string>("serverName", "")}, ${getConfig().get<string>(
-                "portNumber",
+            `Login Webview is using stored extension settings: ServerName: ${getConfig().get<string>(
+                "serverName",
                 ""
-            )}, ${getConfig().get<string>("username", "")}`
-        );  // Password is not logged for security reasons
-
+            )}, Port: ${getConfig().get<string>("portNumber", "")}, Username: ${getConfig().get<string>(
+                "username",
+                ""
+            )}`
+        );
         const imageUri = this.createIconUri(webview);
-
         return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Login to TestBench</title>
-        <style>
-            body {
-                font-family: var(--vscode-font-family);
-                font-size: var(--vscode-font-size);
-                color: var(--vscode-foreground);
-                background-color: var(--vscode-editor-background);
-                margin: 20px;
-            }
-            .header-container {
-                display: flex;
-                align-items: center;
-                margin-bottom: 1em;
-            }
-            .header-container img {
-                width: 30px;
-                height: 30px;
-                margin-right: 10px;
-            }
-            .header-container h2 {
-                margin: 0;
-                color: var(--vscode-editor-foreground);
-            }
-            form div {
-                margin-top: 0.5em;
-            }
-            label {
-                display: block;
-                margin-bottom: 0.25em;
-                color: var(--vscode-editor-foreground);
-            }
-            input {
-                width: 100%;
-                padding: 0.5em;
-                border: 1px solid var(--vscode-input-border);
-                border-radius: 4px;
-                background-color: var(--vscode-input-background);
-                color: var(--vscode-input-foreground);
-            }
-            input:focus {
-                outline: 1px solid var(--vscode-focusBorder);
-            }
-            button {
-                margin-top: 1em;
-                padding: 0.5em 1em;
-                border: none;
-                border-radius: 4px;
-                background-color: var(--vscode-button-background);
-                color: var(--vscode-button-foreground);
-                cursor: pointer;
-            }
-            button:hover {
-                background-color: var(--vscode-button-hoverBackground);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="header-container">
-            <img src="${imageUri || ""}" alt="TestBench Logo">
-            <h2>Login to TestBench</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login to TestBench</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
+            margin: 20px;
+        }
+        .header-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1em;
+        }
+        .header-container img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+        }
+        .header-container h2 {
+            margin: 0;
+            color: var(--vscode-editor-foreground);
+        }
+        form div {
+            margin-top: 0.5em;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.25em;
+            color: var(--vscode-editor-foreground);
+        }
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 0.5em;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+        }
+        input:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+        }
+        button {
+            margin-top: 1em;
+            padding: 0.5em 1em;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        /* Optional styling for checkboxes */
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+        }
+        .checkbox-container input {
+            margin-right: 0.5em;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <img src="${imageUri || ""}" alt="TestBench Logo">
+        <h2>Login to TestBench</h2>
+    </div>
+    <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
+        <div>
+            <label for="serverName">Server Name:</label>
+            <input id="serverName" type="text" placeholder="Server Name" value="${
+                getConfig().get<string>("serverName", "") || ""
+            }" required/>
         </div>
-        <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
-            <div>
-                <label for="serverName">Server Name:</label>
-                <input id="serverName" type="text" placeholder="Server Name" value="${
-                    getConfig().get<string>("serverName", "") || ""
-                }" required/>
-            </div>
-            <div>
-                <label for="portNumber">Port Number:</label>
-                <input id="portNumber" type="text" placeholder="Port Number" value="${
-                    getConfig().get<string>("portNumber", "") || ""
-                }" required/>
-            </div>
-            <div>
-                <label for="username">Username:</label>
-                <input id="username" type="text" placeholder="Username" value="${
-                    getConfig().get<string>("username", "") || ""
-                }" required/>
-            </div>
-            <div>
-                <label for="password">Password:</label>
-                <input id="password" type="password" placeholder="Password" value="${
-                    (await this.extensionContext?.secrets.get("password")) || ""
-                }" required/>
-            </div>
-            <div>
-                <button id="submitBtn" type="submit">Submit</button>
-            </div>
-        </form>
-        <script>
-            const vscode = acquireVsCodeApi();
-
-            function submitLogin() {
-                const serverName = document.getElementById('serverName').value;
-                const portNumber = document.getElementById('portNumber').value;
-                const username = document.getElementById('username').value;
-                const password = document.getElementById('password').value;
-
-                vscode.postMessage({
-                    command: 'login',
-                    serverName,
-                    portNumber,
-                    username,
-                    password
-                });
+        <div>
+            <label for="portNumber">Port Number:</label>
+            <input id="portNumber" type="text" placeholder="Port Number" value="${
+                getConfig().get<string>("portNumber", "") || ""
+            }" required/>
+        </div>
+        <div>
+            <label for="username">Username:</label>
+            <input id="username" type="text" placeholder="Username" value="${
+                getConfig().get<string>("username", "") || ""
+            }" required/>
+        </div>
+        <div>
+            <label for="password">Password:</label>
+            <input id="password" type="password" placeholder="Password" value="${
+                (await this.extensionContext?.secrets.get("password")) || ""
+            }" required/>
+        </div>
+        <div class="checkbox-container">
+            <input id="savePassword" type="checkbox" ${
+                getConfig().get<boolean>("storePasswordAfterLogin", false) ? "checked" : ""
+            }/>
+            <label for="savePassword">Save Password</label>
+        </div>
+        <div class="checkbox-container">
+            <input id="autoLogin" type="checkbox" ${
+                getConfig().get<boolean>("automaticLoginAfterExtensionActivation", false) ? "checked" : ""
+            }/>
+            <label for="autoLogin">Auto Login</label>
+        </div>              
+        <div>
+            <button id="submitBtn" type="submit">Submit</button>
+        </div>
+    </form>
+    <script>
+        const vscode = acquireVsCodeApi();
+        function submitLogin() {
+            const serverName = document.getElementById('serverName').value;
+            const portNumber = document.getElementById('portNumber').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const autoLogin = document.getElementById('autoLogin').checked;
+            const savePassword = document.getElementById('savePassword').checked;
+            vscode.postMessage({ command: 'login', serverName, portNumber, username, password, autoLogin, savePassword });
+        }
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+            if (message.command === 'updateContent') {
+                document.body.innerHTML = message.html;
             }
+        });
+    </script>
+</body>
+</html>
+`;
+    }
 
-            window.addEventListener('message', (event) => {
-                const message = event.data;
-                if (message.command === 'updateContent') {
-                    document.body.innerHTML = message.html;
-                }
-            });
-        </script>
-    </body>
-    </html>
+    /**
+     * Returns HTML content for when the user is already connected.
+     * @returns {string} The HTML string.
+     */
+    private getAlreadyConnectedHtml(): string {
+        logger.trace("Generating already connected HTML.");
+        return `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Connected</title>
+          <script>
+              window.addEventListener('message', (event) => {
+                  const message = event.data;
+                  if (message.command === 'updateContent') {
+                      document.body.innerHTML = message.html;
+                  }
+              });
+          </script>
+      </head>
+      <body>
+          <h1>Connected to server</h1>
+      </body>
+      </html>
     `;
     }
 
     /**
-     * HTML content for the connected state.
+     * Determines whether the extension is connected to a server.
+     * @returns {boolean} True if connected; otherwise false.
      */
-    private getAlreadyConnectedHtml(): string {
-        logger.trace("Getting already connected HTML");
-        return `
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Connected</title>
-                <script>
-                // Listen for messages from the extension
-                window.addEventListener('message', (event) => {
-                    const message = event.data;
-                    if (message.command === 'updateContent') {
-                        document.body.innerHTML = message.html;
-                    }
-                });
-            </script>
-            </head>
-            <body>
-                <h1>Connected to server</h1>
-            </body>
-            </html>
-        `;
-    }
-
     private isConnectedToServer(): boolean {
         if (connection) {
-            logger.trace("Connection to server is active");
+            logger.trace("Connection is active.");
             return true;
         } else {
-            logger.trace("Connection to server is not active");
+            logger.trace("Connection is not active.");
             return false;
         }
     }
 }
 
-// Define the function that toggles visibility
+/* =============================================================================
+   Webview Visibility and Update Functions
+   ============================================================================= */
+
+/**
+ * Updates the login webview display based on the current visibility flag.
+ */
 export async function updateWebViewDisplay(): Promise<void> {
+    logger.trace("Updating login webview display.");
     if (loginWebViewIsVisible) {
         await displayWebView();
-        logger.trace(`Login Webview is now displayed`);
     } else {
         await hideWebView();
-        logger.trace(`Login Webview is now hidden`);
     }
 }
 
-// Define the function that toggles visibility
+/**
+ * Toggles the visibility of the login webview.
+ */
 export async function toggleWebViewVisibility(): Promise<void> {
+    logger.trace("Toggling login webview visibility.");
     if (loginWebViewIsVisible) {
         await hideWebView();
-        logger.trace(`Login Webview is now hidden`);
     } else {
         await displayWebView();
-        logger.trace(`Login Webview is now displayed`);
     }
 }
 
+/**
+ * Hides the login webview.
+ */
 export async function hideWebView(): Promise<void> {
+    logger.trace("Hiding login webview.");
     await vscode.commands.executeCommand("testbenchExtension.webView.removeView");
     loginWebViewIsVisible = false;
 }
 
+/**
+ * Displays the login webview.
+ */
 export async function displayWebView(): Promise<void> {
+    logger.trace("Displaying (focusing on) login webview.");
     await vscode.commands.executeCommand("testbenchExtension.webView.focus");
     loginWebViewIsVisible = true;
 }
-
-/*
-// Use this code to update the content of the webview from another file
-this.currentWebview.webview.postMessage({
-    command: "updateContent",
-    html: `
-                        <h1>Connected to server</h1>
-                    `,
-});
-
-// If you need to reinitialize the content when the Webview is recreated:
-if (isConnected) {
-    this.currentWebview.webview.postMessage({
-        command: 'updateContent',
-        html: this.getConnectedHtml(),
-    });
-}
-*/

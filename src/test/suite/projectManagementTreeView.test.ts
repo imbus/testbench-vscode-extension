@@ -3,8 +3,8 @@ import * as sinon from "sinon";
 import * as vscode from "vscode";
 import {
     ProjectManagementTreeDataProvider,
-    TestbenchTreeItem,
-    findProjectKeyOfCycleElement,
+    ProjectManagementTreeItem,
+    findProjectKeyOfCycleElement
 } from "../../projectManagementTreeView";
 import { PlayServerConnection } from "../../testBenchConnection";
 import { TestThemeTreeDataProvider } from "../../testThemeTreeView";
@@ -20,11 +20,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
         sandbox = sinon.createSandbox();
         connectionStub = sandbox.createStubInstance(PlayServerConnection);
         testThemeDataProviderStub = sandbox.createStubInstance(TestThemeTreeDataProvider);
-        treeDataProvider = new ProjectManagementTreeDataProvider(
-            connectionStub,
-            "projectKey",
-            testThemeDataProviderStub
-        );
+        treeDataProvider = new ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
     });
 
     teardown(() => {
@@ -32,15 +28,15 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     test("getChildren should return empty array when no connection is available", async () => {
-        treeDataProvider = new ProjectManagementTreeDataProvider(null, "projectKey", testThemeDataProviderStub);
+        treeDataProvider = new ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
 
-        const children: TestbenchTreeItem[] = await treeDataProvider.getChildren();
+        const children: ProjectManagementTreeItem[] = await treeDataProvider.getChildren();
 
         assert.strictEqual(children.length, 0);
     });
 
     /*
-    // TODO: getChildren returns [] when connection is null.
+    // getChildren returns [] when connection is null.
     test("getChildren should return children of the provided element", async () => {
         const element = new TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
             children: [{ name: "Version", nodeType: "Version" }],
@@ -72,10 +68,15 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     */
 
     test("findProjectKeyOfCycle should return project key of a cycle element", () => {
-        const projectElement = new TestbenchTreeItem("Project", "Project", vscode.TreeItemCollapsibleState.Collapsed, {
-            key: "projectKey",
-        });
-        const cycleElement = new TestbenchTreeItem(
+        const projectElement = new ProjectManagementTreeItem(
+            "Project",
+            "Project",
+            vscode.TreeItemCollapsibleState.Collapsed,
+            {
+                key: "projectKey"
+            }
+        );
+        const cycleElement = new ProjectManagementTreeItem(
             "Cycle",
             "Cycle",
             vscode.TreeItemCollapsibleState.Collapsed,
@@ -89,9 +90,14 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     test("handleTestCycleClick should initialize test theme tree", async () => {
-        const cycleElement = new TestbenchTreeItem("Cycle Label", "Cycle", vscode.TreeItemCollapsibleState.None, {
-            key: "cycleKey",
-        });
+        const cycleElement = new ProjectManagementTreeItem(
+            "Cycle Label",
+            "Cycle",
+            vscode.TreeItemCollapsibleState.None,
+            {
+                key: "cycleKey"
+            }
+        );
         const cycleData: testBenchTypes.CycleStructure = {
             root: {
                 base: {
@@ -100,10 +106,10 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
                     parentKey: "parentKey",
                     name: "Root Name",
                     uniqueID: "uniqueID",
-                    matchesFilter: true,
+                    matchesFilter: true
                 },
                 filters: [],
-                elementType: "RootElementType",
+                elementType: "RootElementType"
             },
             nodes: [
                 {
@@ -113,15 +119,15 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
                         numbering: "1",
                         name: "Test Theme",
                         uniqueID: "uniqueID",
-                        matchesFilter: true,
+                        matchesFilter: true
                     },
                     elementType: "TestThemeNode",
                     spec: { key: "specKey", locker: null, status: "active" },
                     aut: { key: "autKey", locker: null, status: "active" },
                     exec: { key: "execKey", locker: null, status: "active", execStatus: "pending", verdict: "none" },
-                    filters: [],
-                },
-            ],
+                    filters: []
+                }
+            ]
         };
         connectionStub.fetchCycleStructureOfCycleInProject.resolves(cycleData);
 

@@ -1,4 +1,3 @@
-import argparse
 import re
 import shutil
 import sys
@@ -11,63 +10,6 @@ from testbench2robotframework.model import (
     TestStructureTree,
     TestStructureTreeNode,
 )
-
-CONVERTER_DESCRIPTION = """tB2Robot converts TestBench JSON report to Robot Framework Code
-                        and Robot Result Model to JSON full report."""
-WRITE_SUBPARSER_HELP = """Command to convert TestBench`s JSON REPORT to Robot Framework Code."""
-READ_SUBPARSER_HELP = """Command to read a robot output xml file and
-write the results to a TestBench JSON REPORT."""
-JSON_PATH_ARGUMENT_HELP = "Path to a ZIP file or directory containing TestBench JSON report files."
-CONFIG_ARGUMENT_HELP = """Path to a config json file to generate robot files
-                        based on the given configuration.
-                        If no path is given testbench2robot will search for a file
-                        named \"config.json\" in the current working directory."""
-ROBOT_OUTPUT_HELP = """Path to an XML file containing the robot results."""
-ROBOT_RESULT_HELP = """Path to the directory or ZIP File the TestBench JSON reports
-with result should be saved to."""
-
-
-arg_parser = argparse.ArgumentParser(description=CONVERTER_DESCRIPTION)
-arg_parser.add_argument(
-    "--version",
-    "--info",
-    action="store_true",
-    help="Writes the TestBench2RobotFramework, Robot Framework and Python version to console.",
-)
-subparsers = arg_parser.add_subparsers(dest="subcommand")
-
-write_parser = subparsers.add_parser("write", help=WRITE_SUBPARSER_HELP)
-write_parser.add_argument(
-    "-c",
-    "--config",
-    help=CONFIG_ARGUMENT_HELP,
-    type=Path,
-    required=False,
-)
-
-write_parser.add_argument("jsonReport", nargs=1, type=str, help=JSON_PATH_ARGUMENT_HELP)
-
-read_parser = subparsers.add_parser("read", help=READ_SUBPARSER_HELP)
-read_parser.add_argument(
-    "-c",
-    "--config",
-    help=CONFIG_ARGUMENT_HELP,
-    type=Path,
-    required=False,
-)
-read_parser.add_argument(
-    "-r",
-    "--result",
-    help=ROBOT_RESULT_HELP,
-    type=str,
-    required=False,
-)
-required_named_arguments = read_parser.add_argument_group("required named arguments")
-required_named_arguments.add_argument(
-    "-o", "--output", help=ROBOT_OUTPUT_HELP, type=str, required=True
-)
-
-read_parser.add_argument("jsonReport", nargs=1, type=str, help=JSON_PATH_ARGUMENT_HELP)
 
 
 class PathResolver:

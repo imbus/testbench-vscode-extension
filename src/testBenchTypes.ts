@@ -9,75 +9,60 @@
  */
 
 export interface Testbench2robotframeworkConfiguration {
-    rfLibraryRoots: string[];
-    rfResourceRoots: string[];
-    fullyQualified: boolean;
-    generationDirectory: string;
-    createOutputZip: boolean;
-    resourceDirectory: string;
-    clearGenerationDirectory: boolean;
-    logSuiteNumbering: boolean;
-    logCompoundInteractions: boolean;
-    subdivisionsMapping: SubdivisionsMapping;
-    forcedImport: ForcedImport;
+    "library-root": string[];
+    "resource-root": string[];
+    "fully-qualified": boolean;
+    "output-directory": string;
+    "log-suite-numbering": boolean;
+    "resource-directory": string;
+    clean: boolean;
+    "compound-interaction-logging": string;
+    "library-mapping": { [key: string]: string };
+    "resource-mapping": { [key: string]: string };
+    forcedImport: {
+        libraries: string[];
+        resources: string[];
+        variables: string[];
+    };
     testCaseSplitPathRegEx: string;
-    loggingConfiguration: LoggingConfiguration;
+    "console-logging": {
+        logLevel: string;
+    };
+    "file-logging": {
+        logLevel: string;
+    };
 }
-
-export interface SubdivisionsMapping {
-    libraries: { [key: string]: string };
-    resources: { [key: string]: string };
-}
-
-export interface ForcedImport {
-    libraries: string[];
-    resources: string[];
-    variables: string[];
-}
-
-export interface LoggingConfiguration {
-    console: ConsoleLoggingConfiguration;
-}
-
-export interface ConsoleLoggingConfiguration {
-    logLevel: LogLevel;
-}
-
-export type LogLevel = "debug" | "info" | "warn" | "error" | "fatal";
 
 // Default configuration for Testbench2robotframework
 export const defaultTestbench2robotframeworkConfig: Testbench2robotframeworkConfiguration = {
-    rfLibraryRoots: ["Interactions", "RF-Library"],
-    rfResourceRoots: ["RF-Resource"],
-    fullyQualified: true,
-    generationDirectory: "${workspaceFolder}/generated",
-    createOutputZip: true,
-    resourceDirectory: "${workspaceFolder}/resources",
-    clearGenerationDirectory: true,
-    logSuiteNumbering: true,
-    logCompoundInteractions: true,
-    subdivisionsMapping: {
-        libraries: {
-            SeleniumLibrary:
-                "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
-            SuperRemoteLibrary: "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary",
-        },
-        resources: {
-            MyKeywords: "{root}/../MyKeywords.resource",
-            MyOtherKeywords: "{resourceDirectory}/subdir/MyOtherKeywords.resource",
-        },
+    "library-root": ["Interactions", "RF-Library"],
+    "resource-root": ["RF-Resource"],
+    "fully-qualified": false,
+    "output-directory": "{workspaceFolder}/Generated",
+    "log-suite-numbering": true,
+    "resource-directory": "{workspaceFolder}/Resources",
+    clean: true,
+    "compound-interaction-logging": "GROUP",
+    "library-mapping": {
+        SeleniumLibrary: "SeleniumLibrary    timeout=10    implicit_wait=1    run_on_failure=Capture Page Screenshot",
+        SuperRemoteLibrary: "Remote    http://127.0.0.1:8270       WITH NAME    SuperRemoteLibrary"
+    },
+    "resource-mapping": {
+        MyKeywords: "{root}/../MyKeywords.resource",
+        MyOtherKeywords: "{resourceDirectory}/subdir/MyOtherKeywords.resource"
     },
     forcedImport: {
         libraries: [],
         resources: [],
-        variables: [],
+        variables: []
     },
     testCaseSplitPathRegEx: "^StopWithRestart\\..*",
-    loggingConfiguration: {
-        console: {
-            logLevel: "info",
-        },
+    "console-logging": {
+        logLevel: "debug"
     },
+    "file-logging": {
+        logLevel: "info"
+    }
 };
 
 // Store the last successfully generated report parameters for test generation to be able to fetch the report again for read command

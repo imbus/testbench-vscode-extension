@@ -13,7 +13,7 @@ from .utils import PathResolver, extract_to_working_directory, is_zip_file
 def testbench2robotframework(testbench_report: str, config: dict):
     configuration = Configuration.from_dict(config)
     setup_logger(configuration)
-    logger.debug("Config file loaded.")
+    logger.debug("Configuration loaded.")
     testbench_report = Path(testbench_report)
     try:
         if is_zip_file(testbench_report):
@@ -31,7 +31,7 @@ def testbench2robotframework(testbench_report: str, config: dict):
         path_resolver = PathResolver(
             reader.test_theme_tree,
             tuple(reader.get_test_case_set_catalog().keys()),
-            configuration.logSuiteNumbering,
+            configuration.log_suite_numbering,
         )
         test_suites = create_test_suites(
             reader.get_test_case_set_catalog(), path_resolver, configuration

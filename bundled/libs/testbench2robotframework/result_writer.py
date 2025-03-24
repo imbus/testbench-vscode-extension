@@ -11,7 +11,6 @@ from typing import Optional, Union
 from urllib.parse import unquote
 
 from robot.result import Keyword, ResultVisitor, TestCase, TestSuite
-from robot.result.model import Body
 
 from .config import AttachmentConflictBehaviour, Configuration, ReferenceBehaviour
 from .json_reader import TestBenchJsonReader
@@ -37,6 +36,11 @@ from .model import (
     VerdictStatus,
 )
 from .utils import directory_to_zip, ensure_dir_exists, get_directory
+
+try:
+    from robot.result import Group
+except ImportError:
+    Group = None
 
 BACKGROUND_COLOR = {
     "PASS": "#04AF91",
@@ -151,6 +155,11 @@ class ResultWriter(ResultVisitor):
             atomic_interactions = list(
                 self._get_interactions_by_type(itb_test_case.interactions, InteractionType.Atomic)
             )
+            # atomic_interactions.extend(
+            #     list(
+            #     self._get_interactions_by_type(itb_test_case.interactions, InteractionType.Textual)
+            # )
+            # )
             compound_interactions = list(
                 self._get_interactions_by_type(itb_test_case.interactions, InteractionType.Compound)
             )
@@ -298,7 +307,8 @@ class ResultWriter(ResultVisitor):
         end_time = test.end_time.replace(
             tzinfo=timezone(datetime.now(timezone.utc).astimezone().utcoffset())
         )
-        # self.protocol_test_case.result.timestamp = end_time.isoformat() # Isoformat currently not suported by server
+        # Isoformat currently not suported by server
+        # self.protocol_test_case.result.timestamp = end_time.isoformat()
         self.protocol_test_case.result.timestamp = (
             f"{end_time.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z"
         )
@@ -320,39 +330,29 @@ class ResultWriter(ResultVisitor):
             protocol_result = self._set_itb_test_case_status(itb_test_case, "undef")
             self.protocol_test_case.result = protocol_result
 
-    def _get_test_phase_body(self, test_phase: TestCase) -> Body:
-        return test_phase.body
+    def _get_test_phase_body(self, test_phase: TestCase) -> list[Keyword]:
+        return self._get_keywords_from_rf_body(test_phase)
 
     def _get_test_phase_setup(self, test_phase: TestCase) -> list[Keyword]:
         test_phase_setup = []
         if test_phase.has_setup and test_phase.setup:
-            self._test_setup_passed = test_phase.setup.passed
-            if test_phase.setup.name == f"Setup-{test_phase.name}":
-                test_phase_setup = list(
-                    filter(
-                        lambda kw: isinstance(kw, Keyword)
-                        and kw.parent.name == f"Setup-{test_phase.name}",
-                        test_phase.setup.body,
-                    )
-                )
-            else:
-                test_phase_setup = [test_phase.setup]
+            test_phase_setup = self._get_keywords_from_rf_body(test_phase.setup)
         return test_phase_setup
 
     def _get_test_phase_teardown(self, test_phase: TestCase) -> list[Keyword]:
         test_phase_teardown = []
         if test_phase.has_teardown and test_phase.teardown:
-            if test_phase.teardown.name == f"Teardown-{test_phase.name}":
-                test_phase_teardown = list(
-                    filter(
-                        lambda kw: isinstance(kw, Keyword)
-                        and kw.parent.name == f"Teardown-{test_phase.name}",
-                        test_phase.teardown.body,
-                    )
-                )
-            else:
-                test_phase_teardown = [test_phase.teardown]
+            test_phase_teardown = self._get_keywords_from_rf_body(test_phase.teardown)
         return test_phase_teardown
+
+    def _get_keywords_from_rf_body(self, rf_body) -> list[Keyword]:
+        keywords = []
+        for body_item in rf_body.body:
+            if isinstance(body_item, Keyword):
+                keywords.append(body_item)
+            elif Group and isinstance(body_item, Group):
+                keywords.extend(self._get_keywords_from_rf_body(body_item))
+        return keywords
 
     def _set_atomic_interactions_execution_result(
         self, atomic_interactions: list[InteractionDetails], test_chain: list[TestCase]
@@ -402,9 +402,12 @@ class ResultWriter(ResultVisitor):
             if sequence_phase == SequencePhase.TestStep and not self._test_setup_passed:
                 interaction.exec.verdict = InteractionVerdict.Skipped
                 continue
+            # if interaction.interactionType == InteractionType.Textual and interaction.name.strip().startswith("#"):
+            #     continue
             if index < len(test_chain_body):
                 keyword = test_chain_body[index]
-                self._check_matching_interaction_and_keyword_name(keyword, interaction)
+                # if not interaction.interactionType == InteractionType.Textual:
+                #     self._check_matching_interaction_and_keyword_name(keyword, interaction)
                 interaction.exec = self._get_interaction_exec_from_keyword(keyword)
                 continue
             if sequence_phase == SequencePhase.Setup and not self._test_setup_passed:
@@ -469,16 +472,12 @@ class ResultWriter(ResultVisitor):
         return (
             "<html>"
             "<body>"
-            "<style>"
-            "td {padding: 5px; border: none;} "
-            "table {font-family: monospace; border: none;}"
-            "</style>"
             "<pre>"
             f"Start Time:   {self.get_isotime_from_robot_timestamp(keyword.starttime)}\n"
             f"End Time:     {self.get_isotime_from_robot_timestamp(keyword.endtime)}\n"
             f"Elapsed Time: {timedelta(milliseconds=keyword.elapsedtime)!s}\n"
             "</pre>"
-            "<table>"
+            "<table style='font-family: monospace; border: none; table-layout: auto;'>"
             "<tr>"
             f"{'</tr><tr>'.join(unique_messages)}"
             "</tr>"
@@ -517,6 +516,11 @@ class ResultWriter(ResultVisitor):
                 compound_interaction.interactions, InteractionType.Atomic
             )
         )
+        # atomic_interactions.extend(list(
+        #     self._get_interactions_by_type(
+        #         compound_interaction.interactions, InteractionType.Textual
+        #     )
+        # ))
         if compound_interaction.exec is None:
             compound_interaction.exec = InteractionExecutionSummary.from_dict({})
         compound_interaction.exec.verdict = InteractionVerdict.Skipped
@@ -612,18 +616,12 @@ class ResultWriter(ResultVisitor):
 
         test_case_set.exec.comments = (
             "<html>"
-            "<head>"
-            "<style>"
-            "td {padding: 5px; border: none; white-space: pre-wrap;} "
-            "table {font-family: monospace; border: none;}"
-            "</style>"
-            "</head>"
             "<body>"
             "<pre>"
             f"Start Time:   {self.get_isotime_from_robot_timestamp(suite_start_time)}\n"
             f"End Time:     {self.get_isotime_from_robot_timestamp(suite_end_time)}\n"
             "</pre>"
-            "<table>"
+            "<table style='font-family: monospace; border: none; table-layout: auto;'>"
             "<tr>"
             f"{'</tr><tr>'.join(table_content)}"
             "</tr>"
@@ -651,23 +649,23 @@ class ResultWriter(ResultVisitor):
         write_main_protocol(
             self.json_result, self.main_protocol.protocolTestCaseSetExecutionSummary
         )
-        Path.mkdir(Path(self.json_result_path) / self.listener_uid, parents=True)
+        Path.mkdir(Path(self.json_result_path), parents=True)
         shutil.copy(
             Path(self.json_result) / "protocol.json",
-            Path(self.json_result_path) / self.listener_uid / "protocol.json",
+            Path(self.json_result_path) / "protocol.json",
         )
         shutil.copy(
             Path(self.json_dir) / "project.json",
-            Path(self.json_result_path) / self.listener_uid / "project.json",
+            Path(self.json_result_path) / "project.json",
         )
         for filename in os.listdir(self.json_result):
             if filename.startswith(self.listener_uid) and filename.endswith(".json"):
                 shutil.copy(
                     Path(self.json_result) / filename,
-                    Path(self.json_result_path) / self.listener_uid / filename,
+                    Path(self.json_result_path) / filename,
                 )
-        directory_to_zip(Path(self.json_result_path) / self.listener_uid)
-        shutil.rmtree(Path(self.json_result_path) / self.listener_uid)
+        directory_to_zip(Path(self.json_result_path))
+        shutil.rmtree(Path(self.json_result_path))
 
     @staticmethod
     def render_status(status):
