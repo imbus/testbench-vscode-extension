@@ -32,6 +32,25 @@ Pull requests are welcome! If you want to work on something:
 
 Please follow the coding conventions and include tests if applicable.
 
+## ✍️ Commit Message Guidelines
+
+We follow [Conventional Commits](https://www.conventionalcommits.org/). Use one of the following prefixes:
+
+- `feat`: A new feature
+- `fix`: A bug fix
+- `docs`: Documentation only changes
+- `style`: Changes that do not affect meaning (white-space, formatting)
+- `refactor`: Code changes that neither fix a bug nor add a feature
+- `perf`: Performance improvements
+- `test`: Adding missing tests or correcting existing ones
+- `chore`: Other changes that don’t modify src or test files
+
+**Examples:**
+
+- `feat: add test result upload support`
+- `fix: resolve issue with automatic login`
+- `chore: update dependencies`
+
 ---
 
 Thanks contributing!

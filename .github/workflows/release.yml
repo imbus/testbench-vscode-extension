@@ -1,0 +1,51 @@
+# Name of the workflow: Release
+name: Release
+
+# Trigger the workflow when there's a push to the 'main' branch
+on:
+    push:
+        branches:
+            - main
+
+jobs:
+    release:
+        name: Create Release
+        # Specify the virtual environment to run the job
+        runs-on: ubuntu-latest
+
+        steps:
+            # Step 1: Checkout the source code from the repository
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # Important for semantic-release to analyze all commits
+
+            # Step 2: Set up Node.js environment with the specified version
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  # Use the latest LTS Node.js version
+                  node-version: "lts/*"
+                  check-latest: true
+                  # Use the default npm registry
+                  registry-url: "https://registry.npmjs.org/"
+
+            # Step 3: Install project dependencies in a clean state
+            - name: Install dependencies
+              run: npm ci
+
+            # Step 4: Run semantic-release to handle versioning and changelog generation
+            - name: Run semantic-release
+              env:
+                  # Provide GitHub token to allow semantic-release to interact with GitHub
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: npm run release
+
+            # Step 5: Publish the extension to the Visual Studio Code Marketplace
+            #- name: Publish to VS Code Marketplace
+            #  if: steps.semantic-release.outputs.new_release_published == 'true'
+            #  run: |
+            #    npm install -g vsce
+            #    vsce publish -p ${{ secrets.VSCE_TOKEN }}
+            #  env:
+            #    VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
