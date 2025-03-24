@@ -1,50 +1,52 @@
 name: Build VSIX Package
 
 on:
-  push:
-    branches:
-      - playground # Name of the branch to trigger the workflow
+    push:
+        branches:
+            - main # Name of the branch to trigger the workflow
 
 jobs:
-  build:
-    runs-on: ubuntu-latest # Use the latest version of Ubuntu as the runner
+    build:
+        runs-on: ubuntu-latest # Use the latest version of Ubuntu as the runner
 
-    steps:
-      # Checkout the repository
-      - name: Checkout Code
-        uses: actions/checkout@v4
+        steps:
+            # Checkout the repository
+            - name: Checkout Code
+              uses: actions/checkout@v4
 
-      # Cache Node Modules to speed up the workflow
-      - name: Cache Node Modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+            # Cache Node Modules to speed up the workflow
+            - name: Cache Node Modules
+              uses: actions/cache@v4
+              with:
+                  path: ~/.npm
+                  key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node-
 
-      # Set up Node.js
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '23' # Use the Node.js version compatible with the project          
+            # Set up Node.js
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  # Use the latest LTS Node.js version
+                  node-version: "lts/*"
+                  check-latest: true
 
-      # Install dependencies
-      - name: Install Dependencies
-        run: npm ci
+            # Install dependencies
+            - name: Install Dependencies
+              run: npm ci
 
-      # Package the extension
-      - name: Build VSIX Package
-        run: npm run vsix-package # vsix-package command should be defined in the package.json
+            # Package the extension
+            - name: Build VSIX Package
+              run: npm run vsix-package # vsix-package command should be defined in the package.json
 
-      # List all files for debugging
-      # - name: List All Files For Debugging
-      #   run: ls -alR | grep -v '^node_modules' # Lists all files and directories in the current directory
+            # List all files for debugging
+            # - name: List All Files For Debugging
+            #   run: ls -alR | grep -v '^node_modules' # Lists all files and directories in the current directory
 
-      # Upload the VSIX as an artifact
-      - name: Upload VSIX Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: testbench-visual-studio-code-extension # Name of the artifact
-          path: "*.vsix" # Adjust if the file is stored in a specific folder
-          overwrite: true # Overwrite the artifact if it already exists
+            # Upload the VSIX as an artifact
+            - name: Upload VSIX Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: testbench-visual-studio-code-extension # Name of the artifact
+                  path: "*.vsix" # Adjust if the file is stored in a specific folder
+                  overwrite: true # Overwrite the artifact if it already exists
