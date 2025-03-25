@@ -4,7 +4,7 @@
     "displayName": "TestBench Visual Studio Code Extension",
     "description": "A Visual Studio Code extension for TestBench.",
     "icon": "resources/icons/iTB-EE-Logo-256x256.png",
-    "version": "0.0.0",
+    "version": "0.0.1",
     "repository": {
         "type": "git",
         "url": "https://github.com/imbus/testbench-vs-code-extension"

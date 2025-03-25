@@ -6,20 +6,16 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as utils from "./utils";
-import { promisify } from "util";
 import { getConfig, folderNameOfTestbenchWorkingDirectory } from "./extension";
+
+// Use the native promises API for filesystem operations.
+const fsp = fs.promises;
 
 // Name of the logs folder (inside the working directory)
 export const folderNameOfLogs = "logs";
 
 const MAX_LOG_FILE_SIZE: number = 5 * 1024 * 1024; // Maximum log file size (in bytes) 5 MB
 const MAX_LOG_FILES: number = 3; // Maximum number of backup log files.
-
-// Async logging for performance.
-// Promisify selected fs functions for async/await usage.
-const fsAppendFile = promisify(fs.appendFile);
-const fsStat = promisify(fs.stat);
-const fsRename = promisify(fs.rename);
 
 /**
  * A logger for the TestBench extension.
@@ -33,6 +29,9 @@ export class TestBenchLogger {
     private logFilePath: string;
     private outputLogToTerminal: boolean;
     private initPromise: Promise<void>;
+    private isRotating: boolean = false;
+    private flattedPromise: Promise<{ stringify: (obj: any) => string }> | null = null;
+    private cachedLogLevel: string;
 
     /**
      * Log levels are 0 to 5, with 1 being the most verbose (trace) and 5 being the least verbose (error).
@@ -67,13 +66,15 @@ export class TestBenchLogger {
      * @param outputToTerminal Optional flag to output log messages to the terminal.
      *
      * The constructor sets default log paths (using the extension’s directory) and then asynchronously
-     * attempts to update them based on the configured workspace location.
+     * attempts to update them based on the configured workspace location. It also caches the log level from the configuration.
      */
     constructor(outputToTerminal?: boolean) {
         // Initially set default values relative to the extension's directory.
         this.logFolderPath = path.join(__dirname, "logs");
         this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
         this.outputLogToTerminal = outputToTerminal === true;
+        // Cache the current log level configuration.
+        this.cachedLogLevel = getConfig().get("testBenchLogger", "No logging");
         // Begin asynchronous initialization.
         this.initPromise = this.initialize();
     }
@@ -107,54 +108,80 @@ export class TestBenchLogger {
             } else {
                 console.log("Workspace location is not set in the extension settings. Using default log folder.");
             }
-            // Ensure that the log folder exists.
-            if (!fs.existsSync(this.logFolderPath)) {
-                fs.mkdirSync(this.logFolderPath, { recursive: true });
-            }
+            // Ensure that the log folder exists using asynchronous mkdir.
+            await fsp.mkdir(this.logFolderPath, { recursive: true });
         } catch (error) {
             console.error("Error during logger initialization:", error);
         }
     }
 
     /**
+     * Updates the cached log level configuration.
+     * Should be called whenever the extension configuration is updated.
+     */
+    public updateCachedLogLevel(): void {
+        this.cachedLogLevel = getConfig().get("testBenchLogger", "No logging");
+    }
+
+    /**
+     * Retrieves the "flatted" module, caching it after the first dynamic import.
+     */
+    private async getFlatted() {
+        if (!this.flattedPromise) {
+            this.flattedPromise = import("flatted");
+        }
+        return this.flattedPromise;
+    }
+
+    /**
      * Rotates log files if the current log file exceeds MAX_LOG_FILE_SIZE.
      *
      * The current log file is renamed (with a _0 suffix such as testBenchExtension.log_0) and older backups are shifted.
+     * A simple mutex ensures only one rotation occurs at a time.
      */
     private async rotateLogs(): Promise<void> {
+        if (this.isRotating) {
+            return;
+        }
+        this.isRotating = true;
         try {
-            if (!fs.existsSync(this.logFilePath)) {
-                // Nothing to rotate if the log file does not exist.
+            // Check if the current log file exists and obtain its size.
+            let stats;
+            try {
+                stats = await fsp.stat(this.logFilePath);
+            } catch (error) {
+                // Log file does not exist; nothing to rotate.
+                console.error(`Log file ${this.logFilePath} does not exist.`, error);
+                return;
+            }
+            // If the log file is below the maximum size, no rotation is needed.
+            if (stats.size < MAX_LOG_FILE_SIZE) {
                 return;
             }
 
-            // Get the size of the current log file
-            const logFileSize: number = (await fsStat(this.logFilePath)).size;
-            if (logFileSize < MAX_LOG_FILE_SIZE) {
-                return;
-            }
-
-            // Shift existing backup files.
-            for (let i = MAX_LOG_FILES - 1; i > 0; i--) {
-                // Rename each previous log file by shifting its index by 1
-                const oldFile = `${this.logFilePath}.${i}`; // Example: extension.log.1
+            // Shift existing backup files using a naming scheme.
+            for (let i = MAX_LOG_FILES; i >= 2; i--) {
                 const olderFile = `${this.logFilePath}.${i - 1}`;
-                if (fs.existsSync(olderFile)) {
-                    try {
-                        await fsRename(olderFile, oldFile);
-                    } catch (error) {
-                        console.error(`Failed to rotate log file ${olderFile} to ${oldFile}:`, error);
-                    }
+                const newFile = `${this.logFilePath}.${i}`;
+                try {
+                    await fsp.access(olderFile);
+                    await fsp.rename(olderFile, newFile);
+                } catch (error) {
+                    // If the backup file doesn't exist, continue.
+                    console.error(`Failed to rotate log file ${olderFile} to ${newFile}:`, error);
                 }
             }
-            // After rotating all existing log files, rename the current log file to start a new one.
+            // Rename the current log file to the first backup.
             try {
-                await fsRename(this.logFilePath, `${this.logFilePath}_0`);
+                await fsp.rename(this.logFilePath, `${this.logFilePath}.1`);
             } catch (error) {
-                console.error(`Failed to rename current log file to ${this.logFilePath}_0:`, error);
+                console.error(`Failed to rename current log file to ${this.logFilePath}_0 after rotation:`, error);
             }
         } catch (error) {
             console.error(`Log rotation error: ${error}`);
+        } finally {
+            // Reset the mutex flag.
+            this.isRotating = false;
         }
     }
 
@@ -173,7 +200,7 @@ export class TestBenchLogger {
 
         // Dynamically import the "flatted" library to handle circular references.
         // This library is only imported if needed, reducing the initial load time.
-        const { stringify } = await import("flatted");
+        const { stringify } = await this.getFlatted();
 
         /**
          * Helper function to format a single detail item.
@@ -219,11 +246,8 @@ export class TestBenchLogger {
      * @param {boolean} outputToTerminal Optional flag to force terminal output (overrides instance setting).
      */
     public async log(level: string, message: string, details?: any | any[], outputToTerminal?: boolean): Promise<void> {
-        // Get the log level from extension configuration.
-        const configuredLogLevel: string = getConfig().get("testBenchLogger", "No logging");
-
         // Skip logging if disabled or log level is below the configured level.
-        if (configuredLogLevel === "No logging" || this.levels[level] < this.levels[configuredLogLevel]) {
+        if (this.cachedLogLevel === "No logging" || this.levels[level] < this.levels[this.cachedLogLevel]) {
             return;
         }
 
@@ -236,12 +260,15 @@ export class TestBenchLogger {
         try {
             await this.rotateLogs();
 
-            // Ensure the log file exists. If not, create an empty file.
-            if (!fs.existsSync(this.logFilePath)) {
-                fs.writeFileSync(this.logFilePath, ""); // Create an empty log file if missing
+            // Ensure the log file exists; if not, create an empty file asynchronously.
+            try {
+                await fsp.access(this.logFilePath, fs.constants.F_OK);
+            } catch (error) {
+                console.error("Log file access failed, creating new file:", error);
+                await fsp.writeFile(this.logFilePath, "");
             }
 
-            await fsAppendFile(this.logFilePath, `${fullLogMessage}\n`);
+            await fsp.appendFile(this.logFilePath, `${fullLogMessage}\n`);
         } catch (error) {
             console.error(`Logging error: ${error}`);
         }
