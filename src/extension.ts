@@ -221,6 +221,9 @@ export async function loadConfiguration(context: vscode.ExtensionContext): Promi
     // Without this, the configuration changes may not be updated and old values may be used.
     config = vscode.workspace.getConfiguration(baseKeyOfExtension);
 
+    // Update the log level based on the new configuration.
+    logger.updateCachedLogLevel();
+
     // If storePassword is set to false, delete the stored password immediately.
     // If storePassword is set to true, the password is only stored after a successful login.
     if (!config.get<boolean>("storePasswordAfterLogin", false)) {

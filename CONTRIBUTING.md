@@ -44,6 +44,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/). Use one 
 - `perf`: Performance improvements
 - `test`: Adding missing tests or correcting existing ones
 - `chore`: Other changes that don’t modify src or test files
+- `build`: Changes that affect the build system or external dependencies
 
 **Examples:**
 
