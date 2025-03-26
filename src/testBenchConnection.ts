@@ -1111,7 +1111,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
         );
         return connection;
     } catch {
-        // Note: error contains sensitive information, do not catch and log the error object.
+        // Error contains sensitive information, do not log the error object.
         logger.error("Error during login");
         vscode.window.showInformationMessage("Error during login.");
         return null;
