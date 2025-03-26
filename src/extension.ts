@@ -172,9 +172,9 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
 /**
  * Registers a command with error handling.
  *
- * @param context The extension context.
- * @param commandId The command ID.
- * @param callback The command handler.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} commandId The command ID.
+ * @param {(...args: any[]) => any} callback The command handler.
  */
 function registerSafeCommand(
     context: vscode.ExtensionContext,
@@ -189,7 +189,7 @@ function registerSafeCommand(
 /**
  * Prompts the user to select a workspace location (folder).
  *
- * @returns The selected folder path, or undefined if none selected.
+ * @returns {Promise<string | undefined>} The selected folder path, or undefined if none selected.
  */
 export async function promptForWorkspaceLocation(): Promise<string | undefined> {
     logger.debug("Prompting user to select a workspace location.");
@@ -201,7 +201,7 @@ export async function promptForWorkspaceLocation(): Promise<string | undefined> 
         title: "Select Workspace Location"
     };
 
-    const folderUris = await vscode.window.showOpenDialog(options);
+    const folderUris: vscode.Uri[] | undefined = await vscode.window.showOpenDialog(options);
     if (folderUris && folderUris[0]) {
         logger.debug(`Workspace location selected: ${folderUris[0].fsPath}`);
         return folderUris[0].fsPath;
@@ -211,15 +211,85 @@ export async function promptForWorkspaceLocation(): Promise<string | undefined> 
 }
 
 /**
+ * Returns the best configuration scope based on the current context.
+ * If a workspace folder is available, its URI is returned.
+ * If multiple workspace folders are available, the user is prompted to choose one.
+ * If no workspace folder is available, undefined is returned.
+ *
+ * @returns {Promise<vscode.Uri | undefined>} The URI of the best configuration scope, or undefined if none available.
+ */
+async function getBestConfigScope(): Promise<vscode.Uri | undefined> {
+    // Prefer active editor's folder
+    if (vscode.window.activeTextEditor) {
+        return vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)?.uri;
+    }
+
+    // For multi-root workspaces or when no editor is active
+    if (vscode.workspace.workspaceFolders?.length) {
+        // Create quick pick items for all workspace folders + global option
+        const items: vscode.QuickPickItem[] = [
+            {
+                label: "$(globe) Global Settings",
+                description: "Use user-level configuration"
+            },
+            ...vscode.workspace.workspaceFolders.map((folder) => ({
+                label: `$(folder) ${folder.name}`,
+                description: folder.uri.fsPath,
+                folder // Store reference to the actual folder
+            }))
+        ];
+
+        const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: "Select configuration scope",
+            ignoreFocusOut: true
+        });
+
+        // Return undefined for global, folder URI for workspace selection
+        return (picked as any)?.folder?.uri;
+    }
+
+    // Single folder or no folder - default to global (undefined)
+    return undefined;
+}
+
+let currentConfigScope: vscode.Uri | undefined;
+
+// Initialize status item
+const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+
+/*
+ * Updates the status bar item to display the current configuration source.
+ */
+function updateConfigSourceDisplay() {
+    const folderName: string | undefined = currentConfigScope
+        ? vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name
+        : "Global Settings";
+    statusItem.text = `TestBench Config: ${currentConfigScope ? "$(folder-active)" : "$(globe)"} ${folderName}`;
+    statusItem.tooltip = currentConfigScope
+        ? `Workspace: ${currentConfigScope.fsPath}\nClick to change configuration scope`
+        : "Using global user settings\nClick to change configuration scope";
+    statusItem.command = `${baseKeyOfExtension}.changeConfigScope`;
+    statusItem.show();
+}
+
+/**
  * Loads the latest extension configuration and updates the global configuration object.
  * Also handles the storage of credentials based on the configuration settings.
  *
- * @param context The extension context.
+ * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function loadConfiguration(context: vscode.ExtensionContext): Promise<void> {
     // Update the configuration object with the latest values.
     // Without this, the configuration changes may not be updated and old values may be used.
-    config = vscode.workspace.getConfiguration(baseKeyOfExtension);
+    config = vscode.workspace.getConfiguration(baseKeyOfExtension, currentConfigScope);
+
+    updateConfigSourceDisplay();
+
+    // Log the configuration source for debugging
+    const configSource: string = currentConfigScope
+        ? `workspace folder: ${vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name}`
+        : "global (no workspace)";
+    logger.trace(`Loading configuration from ${configSource}`);
 
     // Update the log level based on the new configuration.
     logger.updateCachedLogLevel();
@@ -265,6 +335,18 @@ export function initializeTreeViews(): void {
  * @param context The extension context.
  */
 function registerExtensionCommands(context: vscode.ExtensionContext): void {
+    // --- Command: Change Configuration Scope ---
+    registerSafeCommand(context, `${baseKeyOfExtension}.changeConfigScope`, async () => {
+        const newScope: vscode.Uri | undefined = await getBestConfigScope();
+        if (newScope !== undefined || currentConfigScope !== undefined) {
+            currentConfigScope = newScope;
+            await loadConfiguration(context);
+            vscode.window.showInformationMessage(
+                `Configuration scope updated to ${currentConfigScope ? vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name : "Global"}`
+            );
+        }
+    });
+
     // --- Command: Toggle Login Webview Visibility ---
     registerSafeCommand(
         context,
@@ -695,6 +777,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize logger.
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
+
+    // Initialize the status bar item for displaying the configuration source.
+    context.subscriptions.push(statusItem);
+
+    // Initialize with global scope by default
+    currentConfigScope = undefined;
+    updateConfigSourceDisplay();
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
