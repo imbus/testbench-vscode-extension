@@ -837,10 +837,9 @@ async function promptForInputAndValidate(
  * Performs the login process to the TestBench server by prompting the user for the server name, port number, username, and password.
  * Loops until login is successful or the user cancels.
  *
- * @param context - The extension context.
- * @param baseKey - The base key for configuration.
- * @param promptForNewCredentials - Whether to prompt for new credentials.
- * @param performAutoLoginWithStoredCredentialsWithoutPrompting - Whether to auto-login without prompting.
+ * @param {vscode.ExtensionContext} context - The extension context.
+ * @param {boolean} promptForNewCredentials - Whether to prompt for new credentials.
+ * @param {boolean} performAutoLoginWithStoredCredentialsWithoutPrompting - (Optional) Whether to auto-login without prompting.
  * @returns {Promise<PlayServerConnection | null>} A PlayServerConnection if login is successful; otherwise, null.
  */
 export async function performLogin(
@@ -1110,10 +1109,14 @@ export async function loginToNewPlayServerAndInitSessionToken(
             }
         );
         return connection;
-    } catch {
-        // Error contains sensitive information, do not log the error object.
-        logger.error("Error during login");
-        vscode.window.showInformationMessage("Error during login.");
+    } catch (error) {
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+            logger.error("Login failed: Invalid credentials.");
+            vscode.window.showInformationMessage("Login failed: Invalid credentials.");
+        } else {
+            logger.error("Error during login");
+            vscode.window.showInformationMessage("Error during login.");
+        }
         return null;
     }
 }

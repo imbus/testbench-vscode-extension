@@ -447,7 +447,24 @@ export class TestElementTreeItem extends vscode.TreeItem {
         );
         this.testElementData = elementData;
         // Set the context value to enable context menu contributions.
-        this.contextValue = "testElement"; // This value is used in package.json to enable context menu contributions.
+        // This value is used in package.json to enable context menu contributions.
+        switch (elementData.elementType) {
+            case "Subdivision":
+                this.contextValue = "subdivision";
+                break;
+            case "Interaction":
+                this.contextValue = "interaction";
+                break;
+            case "DataType":
+                this.contextValue = "dataType";
+                break;
+            case "Condition":
+                this.contextValue = "condition";
+                break;
+            default:
+                this.contextValue = "testElement";
+                break;
+        }
 
         // Build a tooltip string with detailed information about the element.
         let tooltip = `Type: ${elementData.elementType}\nName: ${elementData.name}\nUniqueID: ${elementData.uniqueID}`;
@@ -973,14 +990,81 @@ export async function handleFallback(targetPath: string): Promise<void> {
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 }
 
+/**
+ * Creates a new interaction tree item under a subdivision.
+ * @param {TestElementTreeItem} subdivisionTreeItem The subdivision tree item.
+ * @param {string} interactionName The name of the new interaction.
+ * @returns {Promise<TestElementData | null>} The created interaction data or null if failed.
+ */
+export async function createInteractionUnderSubdivision(
+    subdivisionTreeItem: TestElementTreeItem,
+    interactionName: string
+): Promise<TestElementData | null> {
+    if (subdivisionTreeItem.testElementData.elementType !== "Subdivision") {
+        vscode.window.showErrorMessage("Can only create interactions under subdivisions.");
+        return null;
+    }
+
+    if (!interactionName || interactionName.trim() === "") {
+        vscode.window.showErrorMessage("Interaction name cannot be empty.");
+        return null;
+    }
+
+    try {
+        // Create a new interaction object
+        // TODO: These details will be probably filled in backend after the API is implemented.
+        const newInteraction: any = {
+            name: interactionName,
+            elementType: "Interaction",
+            uniqueID: `new-interaction-${Date.now()}`,
+            parent: {
+                serial: subdivisionTreeItem.testElementData.id.split("_")[0], // Extract serial from parent ID
+                uniqueID: subdivisionTreeItem.testElementData.uniqueID
+            },
+            // Add other required properties for an interaction
+            Interaction_key: {
+                serial: `new-interaction-${Date.now()}`
+            }
+        };
+
+        // Create the TestElementData object for the new interaction
+        const interactionData: TestElementData = {
+            id: generateTestElementTreeItemId(newInteraction, "Interaction", newInteraction.uniqueID),
+            parentId: subdivisionTreeItem.testElementData.id,
+            name: interactionName,
+            uniqueID: newInteraction.uniqueID,
+            libraryKey: subdivisionTreeItem.testElementData.libraryKey,
+            jsonString: JSON.stringify(newInteraction, null, 2),
+            details: newInteraction,
+            elementType: "Interaction",
+            directRegexMatch: false,
+            children: [],
+            parent: subdivisionTreeItem.testElementData,
+            hierarchicalName: `${subdivisionTreeItem.testElementData.hierarchicalName}/${interactionName}`
+        };
+
+        // Add the new interaction to the parent's children
+        if (!subdivisionTreeItem.testElementData.children) {
+            subdivisionTreeItem.testElementData.children = [];
+        }
+        subdivisionTreeItem.testElementData.children.push(interactionData);
+
+        return interactionData;
+    } catch (error) {
+        logger.error("Error creating interaction tree item:", error);
+        vscode.window.showErrorMessage("Failed to create interaction: " + (error as Error).message);
+        return null;
+    }
+}
+
 /* =============================================================================
    Test Element Filtering and Hierarchy Functions
    ============================================================================= */
 
 /**
  * Determines if a subdivision element is final (has no child subdivisions).
- * @param element The test element to check.
- * @returns True if the element is a final subdivision; false otherwise.
+ * @param {TestElementData} element The test element to check.
+ * @returns {boolean} True if the element is a final subdivision; false otherwise.
  */
 export function isFinalSubdivisionInTree(element: TestElementData): boolean {
     if (element.elementType !== "Subdivision") {
