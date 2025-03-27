@@ -3,7 +3,8 @@ name: Build VSIX Package
 on:
     push:
         branches:
-            - main # Name of the branch to trigger the workflow
+            - main # Name of the branch to trigger the workflow. Multiple branches can be specified each on a new line
+            - playground
 
 jobs:
     build:
