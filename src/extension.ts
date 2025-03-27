@@ -102,7 +102,9 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     displayInteractionsForSelectedTOV: {
         command: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`
     },
-    openRobotResourceFile: { command: `${baseKeyOfExtension}.openRobotResourceFile` }
+    openRobotResourceFile: { command: `${baseKeyOfExtension}.openRobotResourceFile` },
+    changeConfigScope: { command: `${baseKeyOfExtension}.changeConfigScope` },
+    createInteractionUnderSubdivision: { command: `${baseKeyOfExtension}.createInteractionUnderSubdivision` }
 };
 
 /** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
@@ -336,7 +338,7 @@ export function initializeTreeViews(): void {
  */
 function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // --- Command: Change Configuration Scope ---
-    registerSafeCommand(context, `${baseKeyOfExtension}.changeConfigScope`, async () => {
+    registerSafeCommand(context, allExtensionCommands.changeConfigScope.command, async () => {
         const newScope: vscode.Uri | undefined = await getBestConfigScope();
         if (newScope !== undefined || currentConfigScope !== undefined) {
             currentConfigScope = newScope;
@@ -401,7 +403,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
     // --- Command: Login ---
     // Prevent multiple login processes from running simultaneously.
-    let isLoginProcessAlreadyRunning = false;
+    let isLoginProcessAlreadyRunning: boolean = false;
     // Performs the login process and stores the connection object.
     registerSafeCommand(context, allExtensionCommands.login.command, async () => {
         logger.debug("Login command called.");
@@ -417,7 +419,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         }
         isLoginProcessAlreadyRunning = true;
         try {
-            const performLoginResult = await testBenchConnection.performLogin(context);
+            const performLoginResult: testBenchConnection.PlayServerConnection | null =
+                await testBenchConnection.performLogin(context);
             // If login was successful, display project selection dialog and the project management tree view.
             if (performLoginResult) {
                 await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
@@ -640,7 +643,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(context, allExtensionCommands.refreshTestThemeTreeView.command, async () => {
         logger.debug("Refresh Test Theme Tree command called.");
         projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
-        const cycleElement =
+        const cycleElement: projectManagementTreeView.ProjectManagementTreeItem | undefined =
             projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent ?? undefined;
         if (cycleElement && cycleElement.contextValue === "Cycle") {
             // Fetch the test themes etc. from the server
@@ -691,7 +694,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // Refreshes the test elements tree view with the latest test elements for the selected TOV.
     registerSafeCommand(context, allExtensionCommands.refreshTestElementsTree.command, async () => {
         logger.debug("Refresh Test Elements Tree command called.");
-        const currentTovKey = testElementsTreeView.getCurrentTovKey();
+        const currentTovKey: string = testElementsTreeView.getCurrentTovKey();
         if (!currentTovKey) {
             vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
             return;
@@ -753,6 +756,53 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             } catch (error: any) {
                 vscode.window.showErrorMessage("Error in Open Robot Resource File command: " + error.message);
                 logger.error("Error in Open Robot Resource File command:", error);
+            }
+        }
+    );
+
+    // --- Command: Create Interaction Under Subdivision ---
+    // Creates a new interaction tree element under the selected subdivision.
+    registerSafeCommand(
+        context,
+        allExtensionCommands.createInteractionUnderSubdivision.command,
+        async (subdivisionTreeItem: testElementsTreeView.TestElementTreeItem) => {
+            logger.debug("Create Interaction Under Subdivision command called.");
+
+            if (!connection) {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
+                logger.warn("createInteractionUnderSubdivision command called without connection.");
+                return;
+            }
+
+            // Prompt user for new interaction name
+            const interactionName: string | undefined = await vscode.window.showInputBox({
+                prompt: "Enter name for the new Interaction",
+                placeHolder: "New Interaction Name",
+                validateInput: (value) => {
+                    if (!value || value.trim() === "") {
+                        return "Interaction name cannot be empty";
+                    }
+                    return null;
+                }
+            });
+
+            if (!interactionName) {
+                return; // User cancelled input box
+            }
+
+            // Create the new interaction
+            const newInteraction: testElementsTreeView.TestElementData | null =
+                await testElementsTreeView.createInteractionUnderSubdivision(subdivisionTreeItem, interactionName);
+
+            if (newInteraction) {
+                // TODO: After the API is implemented, use the API to create the interaction on the server
+                // For now, refresh the tree view to show the new interaction
+                testElementsTreeDataProvider._onDidChangeTreeData.fire(undefined);
+
+                vscode.window.showInformationMessage(`Successfully created interaction '${interactionName}'`);
+                logger.debug(
+                    `Created new interaction '${interactionName}' under subdivision '${subdivisionTreeItem.testElementData.name}'`
+                );
             }
         }
     );

@@ -398,6 +398,10 @@
             {
                 "command": "testbenchExtension.openRobotResourceFile",
                 "title": "Go to Robot Resource"
+            },
+            {
+                "command": "testbenchExtension.createInteractionUnderSubdivision",
+                "title": "Create Interaction"
             }
         ],
         "views": {
@@ -502,8 +506,13 @@
                 },
                 {
                     "command": "testbenchExtension.openRobotResourceFile",
-                    "when": "view == testElementsView && viewItem == testElement",
+                    "when": "view == testElementsView && (viewItem == subdivision || viewItem == interaction)",
                     "group": "navigation"
+                },
+                {
+                    "command": "testbenchExtension.createInteractionUnderSubdivision",
+                    "when": "view == testElementsView && viewItem == subdivision",
+                    "group": "1_modification"
                 }
             ]
         },
