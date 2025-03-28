@@ -28,35 +28,30 @@
                         "type": "string",
                         "default": "testbench",
                         "description": "The hostname or IP address of the TestBench server that the extension will connect to.",
-                        "order": 1,
-                        "scope": "resource"
+                        "order": 1
                     },
                     "testbenchExtension.portNumber": {
                         "type": "number",
                         "default": 9445,
                         "description": "The port number on which the TestBench server is listening for incoming connections.",
-                        "order": 2,
-                        "scope": "resource"
+                        "order": 2
                     },
                     "testbenchExtension.username": {
                         "type": "string",
                         "description": "The username used for authentication when connecting to the TestBench server.",
-                        "order": 3,
-                        "scope": "resource"
+                        "order": 3
                     },
                     "testbenchExtension.storePasswordAfterLogin": {
                         "type": "boolean",
                         "default": false,
                         "description": "If enabled, the extension will securely store the user's password after a successful login to facilitate automatic login in future sessions without prompting for credentials.",
-                        "order": 4,
-                        "scope": "resource"
+                        "order": 4
                     },
                     "testbenchExtension.automaticLoginAfterExtensionActivation": {
                         "type": "boolean",
                         "default": false,
                         "description": "If enabled, the extension will automatically attempt to log in to the TestBench server using the stored credentials after the extension is activated.",
-                        "order": 5,
-                        "scope": "resource"
+                        "order": 5
                     }
                 }
             },
