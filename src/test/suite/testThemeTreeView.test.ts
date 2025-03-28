@@ -51,9 +51,19 @@ suite("TestThemeTreeDataProvider Tests", () => {
     });
 
     test("getChildren should return children of the element", async () => {
-        let child1 = new ProjectManagementTreeItem("Child1", "contextValue", vscode.TreeItemCollapsibleState.None, {});
-        let child2 = new ProjectManagementTreeItem("Child2", "contextValue", vscode.TreeItemCollapsibleState.None, {});
-        let parent = new ProjectManagementTreeItem("Parent", "contextValue", vscode.TreeItemCollapsibleState.None, {
+        const child1 = new ProjectManagementTreeItem(
+            "Child1",
+            "contextValue",
+            vscode.TreeItemCollapsibleState.None,
+            {}
+        );
+        const child2 = new ProjectManagementTreeItem(
+            "Child2",
+            "contextValue",
+            vscode.TreeItemCollapsibleState.None,
+            {}
+        );
+        const parent = new ProjectManagementTreeItem("Parent", "contextValue", vscode.TreeItemCollapsibleState.None, {
             children: [child1, child2]
         });
         child1.parent = parent;

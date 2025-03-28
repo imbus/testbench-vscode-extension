@@ -45,7 +45,7 @@ async function run() {
     const mocha = new mocha_1.default({
         ui: "tdd",
         color: true,
-        timeout: 50000,
+        timeout: 50000
     });
     const testsRoot = path.resolve(__dirname, "..");
     try {

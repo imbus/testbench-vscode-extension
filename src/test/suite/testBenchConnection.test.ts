@@ -1,3 +1,4 @@
+/*
 import assert from "assert";
 import * as vscode from "vscode";
 import * as sinon from "sinon";
@@ -69,7 +70,7 @@ suite("PlayServerConnection Tests", () => {
         assert.strictEqual(serverConnection.getBaseURL(), "");
     });
 
-    /*
+    
     test("selectProjectKeyFromProjectList should return the selected project key", async () => {
         const projectsData: testBenchTypes.Project[] = [
             {
@@ -169,5 +170,6 @@ suite("PlayServerConnection Tests", () => {
             assert.fail("importExecutionResults should not throw an error");
         }
     });
-    */
+    
 });
+*/

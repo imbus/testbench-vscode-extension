@@ -45,19 +45,18 @@ exports.getConfig = getConfig;
 exports.setProjectManagementTreeDataProvider = setProjectManagementTreeDataProvider;
 exports.setConnection = setConnection;
 exports.setProjectTreeView = setProjectTreeView;
+exports.getTestElementsTreeDataProvider = getTestElementsTreeDataProvider;
 exports.safeCommandHandler = safeCommandHandler;
 exports.promptForWorkspaceLocation = promptForWorkspaceLocation;
 exports.loadConfiguration = loadConfiguration;
 exports.initializeTreeViews = initializeTreeViews;
 exports.activate = activate;
 exports.deactivate = deactivate;
-// TODO: Add progress bar for tree views when fetching elements to notify the user.
-// TODO: Add progress bar for fetching cycle structure since it can take long.
 // TODO: If possible, hide the tree views initially instead of creating them and then hiding them after.
 // TODO: The user generated tests, executed the tests, and restarted he extension. Last generated test params are now invalid due to restart, and he cant import.
 // Before releasing the extension:
-// TODO: Add license to the extension
-// TODO: Set logger level to info or debug in production
+// TODO: Add License.md to the extension
+// TODO: Set logger level to info or debug in production, remove too detailed logs.
 // TODO: In production, remove process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; in connection class.
 const vscode = __importStar(require("vscode"));
 const testBenchLogger = __importStar(require("./testBenchLogger"));
@@ -86,34 +85,69 @@ exports.allExtensionCommands = {
     displayCommand: { command: `${exports.baseKeyOfExtension}.displayCommands` },
     login: { command: `${exports.baseKeyOfExtension}.login` },
     logout: { command: `${exports.baseKeyOfExtension}.logout` },
-    generateTestCasesForCycle: { command: `${exports.baseKeyOfExtension}.generateTestCasesForCycle` },
+    generateTestCasesForCycle: {
+        command: `${exports.baseKeyOfExtension}.generateTestCasesForCycle`
+    },
     generateTestCasesForTestThemeOrTestCaseSet: {
-        command: `${exports.baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`,
+        command: `${exports.baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`
     },
     readRFTestResultsAndCreateReportWithResults: {
-        command: `${exports.baseKeyOfExtension}.readRFTestResultsAndCreateReportWithResults`,
+        command: `${exports.baseKeyOfExtension}.readRFTestResultsAndCreateReportWithResults`
     },
     makeRoot: { command: `${exports.baseKeyOfExtension}.makeRoot` },
     getServerVersions: { command: `${exports.baseKeyOfExtension}.getServerVersions` },
-    showExtensionSettings: { command: `${exports.baseKeyOfExtension}.showExtensionSettings` },
-    fetchReportForSelectedTreeItem: { command: `${exports.baseKeyOfExtension}.fetchReportForSelectedTreeItem` },
-    selectAndLoadProject: { command: `${exports.baseKeyOfExtension}.selectAndLoadProject` },
-    uploadTestResultsToTestbench: { command: `${exports.baseKeyOfExtension}.uploadTestResultsToTestbench` },
-    readAndUploadTestResultsToTestbench: { command: `${exports.baseKeyOfExtension}.readAndUploadTestResultsToTestbench` },
-    executeRobotFrameworkTests: { command: `${exports.baseKeyOfExtension}.executeRobotFrameworkTests` },
-    refreshProjectTreeView: { command: `${exports.baseKeyOfExtension}.refreshProjectTreeView` },
-    refreshTestThemeTreeView: { command: `${exports.baseKeyOfExtension}.refreshTestThemeTreeView` },
-    setWorkspaceLocation: { command: `${exports.baseKeyOfExtension}.setWorkspaceLocation` },
-    clearWorkspaceFolder: { command: `${exports.baseKeyOfExtension}.clearWorkspaceFolder` },
-    toggleProjectManagementTreeViewVisibility: {
-        command: `${exports.baseKeyOfExtension}.toggleProjectManagementTreeViewVisibility`,
+    showExtensionSettings: {
+        command: `${exports.baseKeyOfExtension}.showExtensionSettings`
     },
-    toggleTestThemeTreeViewVisibility: { command: `${exports.baseKeyOfExtension}.toggleTestThemeTreeViewVisibility` },
-    toggleWebViewVisibility: { command: `${exports.baseKeyOfExtension}.toggleWebViewVisibility` },
-    automaticLoginAfterExtensionActivation: { command: `${exports.baseKeyOfExtension}.automaticLoginAfterExtensionActivation` },
-    refreshTestElementsTree: { command: `${exports.baseKeyOfExtension}.refreshTestElementsTree` },
-    displayInteractionsForSelectedTOV: { command: `${exports.baseKeyOfExtension}.displayInteractionsForSelectedTOV` },
-    goToTestElementFile: { command: `${exports.baseKeyOfExtension}.goToTestElementFile` },
+    fetchReportForSelectedTreeItem: {
+        command: `${exports.baseKeyOfExtension}.fetchReportForSelectedTreeItem`
+    },
+    selectAndLoadProject: {
+        command: `${exports.baseKeyOfExtension}.selectAndLoadProject`
+    },
+    uploadTestResultsToTestbench: {
+        command: `${exports.baseKeyOfExtension}.uploadTestResultsToTestbench`
+    },
+    readAndUploadTestResultsToTestbench: {
+        command: `${exports.baseKeyOfExtension}.readAndUploadTestResultsToTestbench`
+    },
+    executeRobotFrameworkTests: {
+        command: `${exports.baseKeyOfExtension}.executeRobotFrameworkTests`
+    },
+    refreshProjectTreeView: {
+        command: `${exports.baseKeyOfExtension}.refreshProjectTreeView`
+    },
+    refreshTestThemeTreeView: {
+        command: `${exports.baseKeyOfExtension}.refreshTestThemeTreeView`
+    },
+    setWorkspaceLocation: {
+        command: `${exports.baseKeyOfExtension}.setWorkspaceLocation`
+    },
+    clearWorkspaceFolder: {
+        command: `${exports.baseKeyOfExtension}.clearWorkspaceFolder`
+    },
+    toggleProjectManagementTreeViewVisibility: {
+        command: `${exports.baseKeyOfExtension}.toggleProjectManagementTreeViewVisibility`
+    },
+    toggleTestThemeTreeViewVisibility: {
+        command: `${exports.baseKeyOfExtension}.toggleTestThemeTreeViewVisibility`
+    },
+    toggleWebViewVisibility: {
+        command: `${exports.baseKeyOfExtension}.toggleWebViewVisibility`
+    },
+    automaticLoginAfterExtensionActivation: {
+        command: `${exports.baseKeyOfExtension}.automaticLoginAfterExtensionActivation`
+    },
+    refreshTestElementsTree: {
+        command: `${exports.baseKeyOfExtension}.refreshTestElementsTree`
+    },
+    displayInteractionsForSelectedTOV: {
+        command: `${exports.baseKeyOfExtension}.displayInteractionsForSelectedTOV`
+    },
+    openRobotResourceFile: { command: `${exports.baseKeyOfExtension}.openRobotResourceFile` },
+    changeConfigScope: { command: `${exports.baseKeyOfExtension}.changeConfigScope` },
+    createInteractionUnderSubdivision: { command: `${exports.baseKeyOfExtension}.createInteractionUnderSubdivision` },
+    openIssueReporter: { command: `${exports.baseKeyOfExtension}.openIssueReporter` }
 };
 /** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
 exports.folderNameOfTestbenchWorkingDirectory = ".testbench";
@@ -132,6 +166,9 @@ exports.loginWebViewProvider = null;
 function setProjectTreeView(newProjectTreeView) {
     exports.projectTreeView = newProjectTreeView;
 }
+function getTestElementsTreeDataProvider() {
+    return exports.testElementsTreeDataProvider;
+}
 /* =============================================================================
    Helper Functions
    ============================================================================= */
@@ -148,17 +185,18 @@ function safeCommandHandler(handler) {
             await handler(...args);
         }
         catch (error) {
-            exports.logger.error("Error executing command:", error);
-            vscode.window.showErrorMessage(`An error occurred: ${error instanceof Error ? error.message : error}`);
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+            exports.logger.error(`Error executing command: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`An error occurred: ${errorMessage}`);
         }
     };
 }
 /**
  * Registers a command with error handling.
  *
- * @param context The extension context.
- * @param commandId The command ID.
- * @param callback The command handler.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} commandId The command ID.
+ * @param {(...args: any[]) => any} callback The command handler.
  */
 function registerSafeCommand(context, commandId, callback) {
     const disposable = vscode.commands.registerCommand(commandId, safeCommandHandler(callback));
@@ -168,7 +206,7 @@ function registerSafeCommand(context, commandId, callback) {
 /**
  * Prompts the user to select a workspace location (folder).
  *
- * @returns The selected folder path, or undefined if none selected.
+ * @returns {Promise<string | undefined>} The selected folder path, or undefined if none selected.
  */
 async function promptForWorkspaceLocation() {
     exports.logger.debug("Prompting user to select a workspace location.");
@@ -177,7 +215,7 @@ async function promptForWorkspaceLocation() {
         openLabel: "Select Workspace Location",
         canSelectFolders: true,
         canSelectFiles: false,
-        title: "Select Workspace Location",
+        title: "Select Workspace Location"
     };
     const folderUris = await vscode.window.showOpenDialog(options);
     if (folderUris && folderUris[0]) {
@@ -188,39 +226,106 @@ async function promptForWorkspaceLocation() {
     return undefined;
 }
 /**
- * Loads the latest extension configuration.
+ * Returns the best configuration scope based on the current context.
+ * If a workspace folder is available, its URI is returned.
+ * If multiple workspace folders are available, the user is prompted to choose one.
+ * If no workspace folder is available, undefined is returned.
  *
- * @param context The extension context.
+ * @returns {Promise<vscode.Uri | undefined>} The URI of the best configuration scope, or undefined if none available.
+ */
+async function getBestConfigScope() {
+    // Prefer active editor's folder
+    if (vscode.window.activeTextEditor) {
+        return vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)?.uri;
+    }
+    // For multi-root workspaces or when no editor is active
+    if (vscode.workspace.workspaceFolders?.length) {
+        // Create quick pick items for all workspace folders + global option
+        const items = [
+            {
+                label: "$(globe) Global Settings",
+                description: "Use user-level configuration"
+            },
+            ...vscode.workspace.workspaceFolders.map((folder) => ({
+                label: `$(folder) ${folder.name}`,
+                description: folder.uri.fsPath,
+                folder // Store reference to the actual folder
+            }))
+        ];
+        const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: "Select configuration scope",
+            ignoreFocusOut: true
+        });
+        // Return undefined for global, folder URI for workspace selection
+        return picked?.folder?.uri;
+    }
+    // Single folder or no folder - default to global (undefined)
+    return undefined;
+}
+let currentConfigScope;
+// Initialize status item
+const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+/*
+ * Updates the status bar item to display the current configuration source.
+ */
+function updateConfigSourceDisplay() {
+    const folderName = currentConfigScope
+        ? vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name
+        : "Global Settings";
+    statusItem.text = `TestBench Config: ${currentConfigScope ? "$(folder-active)" : "$(globe)"} ${folderName}`;
+    statusItem.tooltip = currentConfigScope
+        ? `Workspace: ${currentConfigScope.fsPath}\nClick to change configuration scope`
+        : "Using global user settings\nClick to change configuration scope";
+    statusItem.command = `${exports.baseKeyOfExtension}.changeConfigScope`;
+    statusItem.show();
+}
+/**
+ * Loads the latest extension configuration and updates the global configuration object.
+ * Also handles the storage of credentials based on the configuration settings.
+ *
+ * @param {vscode.ExtensionContext} context The extension context.
  */
 async function loadConfiguration(context) {
     // Update the configuration object with the latest values.
     // Without this, the configuration changes may not be updated and old values may be used.
-    config = vscode.workspace.getConfiguration(exports.baseKeyOfExtension);
+    config = vscode.workspace.getConfiguration(exports.baseKeyOfExtension, currentConfigScope);
+    updateConfigSourceDisplay();
+    // Log the configuration source for debugging
+    const configSource = currentConfigScope
+        ? `workspace folder: ${vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name}`
+        : "global (no workspace)";
+    exports.logger.trace(`Loading configuration from ${configSource}`);
+    // Update the log level based on the new configuration.
+    exports.logger.updateCachedLogLevel();
     // If storePassword is set to false, delete the stored password immediately.
     // If storePassword is set to true, the password is only stored after a successful login.
-    if (config?.get("storePasswordAfterLogin", false)) {
+    if (!config.get("storePasswordAfterLogin", false)) {
         await testBenchConnection?.clearStoredCredentials(context);
     }
     // Update the webview input fields after extension settings are changed to reflect the changes in the webview live
     exports.loginWebViewProvider?.updateWebviewContent();
 }
-/**
- * Initializes the tree views used by the extension.
- */
-function initializeTreeViews() {
-    // Initialize project management tree view.
+function initializeProjectManagementTreeView() {
     exports.projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(null);
     exports.projectTreeView = vscode.window.createTreeView("projectManagementTree", {
-        treeDataProvider: exports.projectManagementTreeDataProvider,
+        treeDataProvider: exports.projectManagementTreeDataProvider
     });
-    // Initialize test elements tree view.
+}
+function initializeTestElementsTreeView() {
     exports.testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider();
     exports.testElementTreeView = vscode.window.createTreeView("testElementsView", {
-        treeDataProvider: exports.testElementsTreeDataProvider,
+        treeDataProvider: exports.testElementsTreeDataProvider
     });
     vscode.window.registerTreeDataProvider("testElementsView", exports.testElementsTreeDataProvider);
     // Hide the test elements tree view initially.
     testElementsTreeView.hideTestElementsTreeView();
+}
+/**
+ * Initializes the project tree and test elements tree.
+ */
+function initializeTreeViews() {
+    initializeProjectManagementTreeView();
+    initializeTestElementsTreeView();
 }
 /**
  * Registers all the commands defined by the extension.
@@ -228,6 +333,15 @@ function initializeTreeViews() {
  * @param context The extension context.
  */
 function registerExtensionCommands(context) {
+    // --- Command: Change Configuration Scope ---
+    registerSafeCommand(context, exports.allExtensionCommands.changeConfigScope.command, async () => {
+        const newScope = await getBestConfigScope();
+        if (newScope !== undefined || currentConfigScope !== undefined) {
+            currentConfigScope = newScope;
+            await loadConfiguration(context);
+            vscode.window.showInformationMessage(`Configuration scope updated to ${currentConfigScope ? vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name : "Global"}`);
+        }
+    });
     // --- Command: Toggle Login Webview Visibility ---
     registerSafeCommand(context, exports.allExtensionCommands.toggleWebViewVisibility.command, loginWebView.toggleWebViewVisibility);
     // --- Command: Set Workspace Location ---
@@ -247,7 +361,7 @@ function registerExtensionCommands(context) {
         exports.logger.debug("Show Extension Settings command called.");
         // Open the settings with the extension filter.
         await vscode.commands.executeCommand("workbench.action.openSettings2", {
-            query: "@ext:imbus.testbench-visual-studio-code-extension",
+            query: "@ext:imbus.testbench-visual-studio-code-extension"
         });
         // Open the workspace settings view (The default settings view is user settings)
         await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
@@ -258,16 +372,17 @@ function registerExtensionCommands(context) {
         // If auto login is active and the password is stored in the secrets, perform the login automatically.
         if (config.get("automaticLoginAfterExtensionActivation", false) &&
             config.get("storePasswordAfterLogin", false) &&
-            (await context.secrets.get("password"))) {
+            (await context.secrets.get("password")) !== undefined) {
             exports.logger.debug("Performing automatic login.");
-            if (await testBenchConnection?.performLogin(context, exports.baseKeyOfExtension, false, true)) {
+            const loginResult = await testBenchConnection?.performLogin(context, false, true);
+            if (loginResult) {
                 // If login was successful, display project selection dialog and the project management tree view.
                 projectManagementTreeView?.displayProjectManagementTreeView();
-                await vscode.commands.executeCommand(exports.allExtensionCommands.selectAndLoadProject.command);
+                vscode.commands.executeCommand(exports.allExtensionCommands.selectAndLoadProject.command);
             }
         }
         else {
-            exports.logger.error("Automatic login is disabled or password is not stored.");
+            exports.logger.trace("Automatic login is disabled or password is not stored.");
         }
     });
     // --- Command: Login ---
@@ -288,7 +403,7 @@ function registerExtensionCommands(context) {
         }
         isLoginProcessAlreadyRunning = true;
         try {
-            const performLoginResult = await testBenchConnection.performLogin(context, exports.baseKeyOfExtension);
+            const performLoginResult = await testBenchConnection.performLogin(context);
             // If login was successful, display project selection dialog and the project management tree view.
             if (performLoginResult) {
                 await vscode.commands.executeCommand(exports.allExtensionCommands.selectAndLoadProject.command);
@@ -390,10 +505,14 @@ function registerExtensionCommands(context) {
         }
         exports.projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(selectedProjectKey);
         exports.projectTreeView = vscode.window.createTreeView("projectManagementTree", {
-            treeDataProvider: exports.projectManagementTreeDataProvider,
+            treeDataProvider: exports.projectManagementTreeDataProvider
         });
         // Initialize and display the project management tree view with the selected project.
         [exports.projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeViews(context, exports.connection, selectedProjectKey);
+        // After selecting a (new) project, hide the test theme tree view and test elements tree view and clear the test elements tree view.
+        projectManagementTreeView.hideTestThemeTreeView();
+        testElementsTreeView.hideTestElementsTreeView();
+        testElementsTreeView.clearTestElementsTreeView();
         exports.logger.trace(`Project with key ${selectedProjectKey} loaded into project management tree view.`);
     });
     // --- Command: Toggle Project Management Tree View Visibility ---
@@ -444,7 +563,8 @@ function registerExtensionCommands(context) {
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, exports.allExtensionCommands.refreshProjectTreeView.command, async () => {
         exports.logger.debug("Refresh Project Tree command called.");
-        [exports.projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeViews(context, exports.connection, exports.projectManagementTreeDataProvider?.currentProjectKeyInView);
+        [exports.projectManagementTreeDataProvider] = await projectManagementTreeView.initializeTreeViews(context, exports.connection, exports.projectManagementTreeDataProvider?.currentProjectKeyInView ?? undefined // Instead of null, return undefined
+        );
         exports.logger.trace("End of Refresh Project Tree command.");
     });
     // --- Command: Refresh Test Theme Tree View ---
@@ -491,7 +611,7 @@ function registerExtensionCommands(context) {
     // --- Command: Refresh Test Elements Tree ---
     // Refreshes the test elements tree view with the latest test elements for the selected TOV.
     registerSafeCommand(context, exports.allExtensionCommands.refreshTestElementsTree.command, async () => {
-        exports.logger.trace("Refresh Test Elements Tree command called.");
+        exports.logger.debug("Refresh Test Elements Tree command called.");
         const currentTovKey = testElementsTreeView.getCurrentTovKey();
         if (!currentTovKey) {
             vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
@@ -511,40 +631,74 @@ function registerExtensionCommands(context) {
         }
         exports.logger.trace("End of Display Interactions For Selected TOV command.");
     });
-    // --- Command: Go To Test Element File ---
+    // --- Command: Open Robot Resource File ---
     // Opens or creates the file in the workspace corresponding to the selected test element.
-    registerSafeCommand(context, exports.allExtensionCommands.goToTestElementFile.command, async (treeItem) => {
-        if (!treeItem || !treeItem.element) {
-            exports.logger.trace("Invalid tree item or element in goToTestElementFile command.");
-            return;
-        }
-        const testElement = treeItem.element;
-        if (!testElement.hierarchicalName) {
-            exports.logger.trace("Test element does not have a valid hierarchical name.");
-            return;
-        }
-        const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
-        if (!workspaceRootPath) {
+    registerSafeCommand(context, exports.allExtensionCommands.openRobotResourceFile.command, async (treeItem) => {
+        if (!treeItem || !treeItem.testElementData) {
+            exports.logger.trace("Invalid tree item or element in Open Robot Resource File command.");
             return;
         }
         // Construct the target path based on the hierarchical name of the test element.
-        const baseTargetPath = path_1.default.join(workspaceRootPath, ...testElement.hierarchicalName.split("/"));
+        const absolutePathOfTestElement = await testElementsTreeView.constructAbsolutePathForTestElement(treeItem);
+        if (!absolutePathOfTestElement) {
+            return;
+        }
+        exports.logger.trace(`Open Robot Resource File command created absolutePathOfTestElement: ${absolutePathOfTestElement}`);
         try {
-            switch (testElement.elementType) {
+            switch (treeItem.testElementData.elementType) {
                 case "Subdivision":
-                    await testElementsTreeView.handleSubdivision(testElement, baseTargetPath);
+                    await testElementsTreeView.handleSubdivision(treeItem);
                     break;
                 case "Interaction":
-                    await testElementsTreeView.handleInteraction(testElement, workspaceRootPath);
+                    await testElementsTreeView.handleInteraction(treeItem);
                     break;
                 default:
-                    await testElementsTreeView.handleFallback(baseTargetPath);
+                    await testElementsTreeView.handleFallback(absolutePathOfTestElement);
             }
         }
         catch (error) {
-            vscode.window.showErrorMessage("Error in goToFile command: " + error.message);
-            exports.logger.error("Error in goToFile command:", error);
+            vscode.window.showErrorMessage("Error in Open Robot Resource File command: " + error.message);
+            exports.logger.error("Error in Open Robot Resource File command:", error);
         }
+    });
+    // --- Command: Create Interaction Under Subdivision ---
+    // Creates a new interaction tree element under the selected subdivision.
+    registerSafeCommand(context, exports.allExtensionCommands.createInteractionUnderSubdivision.command, async (subdivisionTreeItem) => {
+        exports.logger.debug("Create Interaction Under Subdivision command called.");
+        if (!exports.connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.warn("createInteractionUnderSubdivision command called without connection.");
+            return;
+        }
+        // Prompt user for new interaction name
+        const interactionName = await vscode.window.showInputBox({
+            prompt: "Enter name for the new Interaction",
+            placeHolder: "New Interaction Name",
+            validateInput: (value) => {
+                if (!value || value.trim() === "") {
+                    return "Interaction name cannot be empty";
+                }
+                return null;
+            }
+        });
+        if (!interactionName) {
+            return; // User cancelled input box
+        }
+        // Create the new interaction
+        const newInteraction = await testElementsTreeView.createInteractionUnderSubdivision(subdivisionTreeItem, interactionName);
+        if (newInteraction) {
+            // TODO: After the API is implemented, use the API to create the interaction on the server
+            // For now, refresh the tree view to show the new interaction
+            exports.testElementsTreeDataProvider._onDidChangeTreeData.fire(undefined);
+            vscode.window.showInformationMessage(`Successfully created interaction '${interactionName}'`);
+            exports.logger.debug(`Created new interaction '${interactionName}' under subdivision '${subdivisionTreeItem.testElementData.name}'`);
+        }
+    });
+    // --- Command: Open Issue Reporter ---
+    registerSafeCommand(context, exports.allExtensionCommands.openIssueReporter.command, async () => {
+        vscode.commands.executeCommand("workbench.action.openIssueReporter", {
+            extensionId: "imbus.testbench-visual-studio-code-extension"
+        });
     });
     // Set context value for connectionActive.
     // Used to enable or disable the login and logout buttons in the status bar,
@@ -564,14 +718,19 @@ async function activate(context) {
     // Initialize logger.
     exports.logger = new testBenchLogger.TestBenchLogger();
     exports.logger.info("Extension activated.");
-    // Load initial configuration and register a listener for configuration changes.
-    await loadConfiguration(context);
+    // Initialize the status bar item for displaying the configuration source.
+    context.subscriptions.push(statusItem);
+    // Initialize with global scope by default
+    currentConfigScope = undefined;
+    updateConfigSourceDisplay();
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
         if (e.affectsConfiguration(exports.baseKeyOfExtension)) {
             await loadConfiguration(context);
             exports.logger.info("Configuration updated after changes were detected.");
         }
     }));
+    // Load initial configuration and register a listener for configuration changes.
+    await loadConfiguration(context);
     initializeTreeViews();
     // Register the login webview provider.
     exports.loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
@@ -579,7 +738,7 @@ async function activate(context) {
     // Register all extension commands.
     registerExtensionCommands(context);
     // Display the login webview display.
-    // This calls focuses and opens (focuses to) our extension even when the user wont want to use our extension.
+    // This calls focuses and opens our extension even when the user wont want to use our extension.
     // To solve this in package.json, "activationEvents" is set to "onView:testBenchExplorer" to activate the extension only when the extension view is opened.
     await loginWebView.updateWebViewDisplay();
     // Hide all tree views on activation, so that only login webview is visible.
@@ -587,14 +746,19 @@ async function activate(context) {
     await vscode.commands.executeCommand("testThemeTree.removeView");
     await vscode.commands.executeCommand("testElementsView.removeView");
     // Execute automatic login if the setting is enabled.
-    await vscode.commands.executeCommand(exports.allExtensionCommands.automaticLoginAfterExtensionActivation.command);
+    vscode.commands.executeCommand(exports.allExtensionCommands.automaticLoginAfterExtensionActivation.command);
 }
 /**
  * Called when the extension is deactivated.
  */
 async function deactivate() {
-    // Gracefully log out the user when the extension is deactivated.
-    await exports.connection?.logoutUser(exports.projectManagementTreeDataProvider);
-    exports.logger.info("Extension deactivated.");
+    try {
+        // Gracefully log out the user when the extension is deactivated.
+        await exports.connection?.logoutUser(exports.projectManagementTreeDataProvider);
+        exports.logger.info("Extension deactivated.");
+    }
+    catch (error) {
+        exports.logger.error("Error during deactivation:", error);
+    }
 }
 //# sourceMappingURL=extension.js.map
