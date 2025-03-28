@@ -61,17 +61,17 @@ suite("TestThemeTreeDataProvider Tests", () => {
     test("getChildren should return root elements if no element is passed", async () => {
         const rootElements = [
             new projectManagementTreeView_1.ProjectManagementTreeItem("Root1", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
-            new projectManagementTreeView_1.ProjectManagementTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
+            new projectManagementTreeView_1.ProjectManagementTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {})
         ];
         treeDataProvider.setRoots(rootElements);
         const children = await treeDataProvider.getChildren();
         assert.deepStrictEqual(children, rootElements);
     });
     test("getChildren should return children of the element", async () => {
-        let child1 = new projectManagementTreeView_1.ProjectManagementTreeItem("Child1", "contextValue", vscode.TreeItemCollapsibleState.None, {});
-        let child2 = new projectManagementTreeView_1.ProjectManagementTreeItem("Child2", "contextValue", vscode.TreeItemCollapsibleState.None, {});
-        let parent = new projectManagementTreeView_1.ProjectManagementTreeItem("Parent", "contextValue", vscode.TreeItemCollapsibleState.None, {
-            children: [child1, child2],
+        const child1 = new projectManagementTreeView_1.ProjectManagementTreeItem("Child1", "contextValue", vscode.TreeItemCollapsibleState.None, {});
+        const child2 = new projectManagementTreeView_1.ProjectManagementTreeItem("Child2", "contextValue", vscode.TreeItemCollapsibleState.None, {});
+        const parent = new projectManagementTreeView_1.ProjectManagementTreeItem("Parent", "contextValue", vscode.TreeItemCollapsibleState.None, {
+            children: [child1, child2]
         });
         child1.parent = parent;
         child2.parent = parent;
@@ -86,7 +86,7 @@ suite("TestThemeTreeDataProvider Tests", () => {
     test("setRoots should set root elements and refresh the tree", () => {
         const rootElements = [
             new projectManagementTreeView_1.ProjectManagementTreeItem("Root1", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
-            new projectManagementTreeView_1.ProjectManagementTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
+            new projectManagementTreeView_1.ProjectManagementTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {})
         ];
         const spy = sandbox.spy(treeDataProvider, "refresh");
         treeDataProvider.setRoots(rootElements);

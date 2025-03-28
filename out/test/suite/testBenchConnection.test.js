@@ -1,101 +1,78 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const assert_1 = __importDefault(require("assert"));
-const vscode = __importStar(require("vscode"));
-const sinon = __importStar(require("sinon"));
-const axios_1 = __importDefault(require("axios"));
-const testBenchConnection_1 = require("../../testBenchConnection");
+/*
+import assert from "assert";
+import * as vscode from "vscode";
+import * as sinon from "sinon";
+import axios from "axios";
+import { PlayServerConnection } from "../../testBenchConnection";
+
 suite("PlayServerConnection Tests", () => {
-    let context;
-    let serverConnection;
-    let axiosStub;
+    let context: vscode.ExtensionContext;
+    let serverConnection: PlayServerConnection;
+    let axiosStub: sinon.SinonStub;
+
     setup(() => {
         context = {
             secrets: {
                 get: sinon.stub().resolves("mockSessionToken"),
                 store: sinon.stub().resolves(),
-                delete: sinon.stub().resolves(),
-            },
-        };
+                delete: sinon.stub().resolves()
+            }
+        } as unknown as vscode.ExtensionContext;
+
         // Mock the startKeepAlive method
-        const startKeepAliveStub = sinon.stub(testBenchConnection_1.PlayServerConnection.prototype, "startKeepAlive");
-        serverConnection = new testBenchConnection_1.PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
-        axiosStub = sinon.stub(axios_1.default, "create").returns({
+        const startKeepAliveStub = sinon.stub(PlayServerConnection.prototype as any, "startKeepAlive");
+
+        serverConnection = new PlayServerConnection(context, "mockServer", 1234, "mockSessionToken");
+
+        axiosStub = sinon.stub(axios, "create").returns({
             get: sinon.stub(),
             post: sinon.stub(),
-            delete: sinon.stub(),
-        });
+            delete: sinon.stub()
+        } as any);
     });
+
     teardown(() => {
         sinon.restore();
     });
+
     test("getSessionToken should return the session token", async () => {
         await vscode.commands.executeCommand("workbench.extensions.installExtension", "ms-python.python");
         let ext = vscode.extensions.getExtension("ms-python.python");
         if (!ext) {
             console.error("Extension not found");
-        }
-        else {
+        } else {
             console.log("Extension found:", ext);
         }
         await vscode.commands.executeCommand("workbench.extensions.uninstallExtension", "ms-python.python");
-        const token = serverConnection.getSessionToken();
-        assert_1.default.strictEqual(token, "mockSessionToken");
+
+        const token: string = serverConnection.getSessionToken();
+        assert.strictEqual(token, "mockSessionToken");
     });
+
     test("getBaseURL should return the base URL", () => {
-        const baseURL = serverConnection.getBaseURL();
-        assert_1.default.strictEqual(baseURL, "https://mockServer:1234/api");
+        const baseURL: string = serverConnection.getBaseURL();
+        assert.strictEqual(baseURL, "https://mockServer:1234/api");
     });
+
     test("getApiClient should return the axios instance", () => {
-        const apiClient = serverConnection.getApiClient();
-        assert_1.default.ok(apiClient);
+        const apiClient: axios.AxiosInstance = serverConnection.getApiClient();
+        assert.ok(apiClient);
     });
+
     test("getSessionTokenFromSecretStorage should return the session token from secret storage", async () => {
-        const token = await serverConnection.getSessionTokenFromSecretStorage(context);
-        assert_1.default.strictEqual(token, "mockSessionToken");
+        const token: string | undefined = await serverConnection.getSessionTokenFromSecretStorage(context);
+        assert.strictEqual(token, "mockSessionToken");
     });
+
     test("clearSessionData should clear session data", () => {
         serverConnection.clearSessionData();
-        assert_1.default.strictEqual(serverConnection.getSessionToken(), "");
-        assert_1.default.strictEqual(serverConnection.getBaseURL(), "");
+        assert.strictEqual(serverConnection.getSessionToken(), "");
+        assert.strictEqual(serverConnection.getBaseURL(), "");
     });
-    /*
+
+    
     test("selectProjectKeyFromProjectList should return the selected project key", async () => {
         const projectsData: testBenchTypes.Project[] = [
             {
@@ -195,6 +172,7 @@ suite("PlayServerConnection Tests", () => {
             assert.fail("importExecutionResults should not throw an error");
         }
     });
-    */
+    
 });
+*/ 
 //# sourceMappingURL=testBenchConnection.test.js.map

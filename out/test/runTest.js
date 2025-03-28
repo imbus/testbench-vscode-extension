@@ -49,7 +49,7 @@ async function main() {
         // Download VS Code, unzip it and run the integration test
         await (0, test_electron_1.runTests)({
             extensionDevelopmentPath,
-            extensionTestsPath,
+            extensionTestsPath
             // launchArgs: [testWorkspaceFolder], // Open the test workspace
             // launchArgs: ['--disable-extensions']
         });

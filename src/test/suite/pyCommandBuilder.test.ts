@@ -4,12 +4,8 @@ import * as path from "path";
 import { PyCommandBuilder } from "../../pyCommandBuilder";
 import * as sinon from "sinon";
 import { PythonExtension, EnvironmentPath, ResolvedEnvironment } from "@vscode/python-extension";
-import * as extension from "../../extension";
-import { TestBenchLogger } from "../../testBenchLogger";
 
 suite("getActiveWorkspaceFolder tests", () => {
-    let getLoggerStub: sinon.SinonStub;
-    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     let workspaceFoldersStub: sinon.SinonStub;
     let workspaceFolder1: vscode.WorkspaceFolder;
     let workspaceFolder2: vscode.WorkspaceFolder;
@@ -79,8 +75,6 @@ suite("getActiveWorkspaceFolder tests", () => {
 });
 
 suite("getPythonEnviromentExe tests", () => {
-    let getLoggerStub: sinon.SinonStub;
-    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
     let pythonApiStub: sinon.SinonStubbedInstance<PythonExtension>;
 
     setup(() => {
@@ -158,10 +152,7 @@ suite("getPythonEnviromentExe tests", () => {
 });
 
 suite("buildTb2RobotCommand tests", function () {
-    let getLoggerStub: sinon.SinonStub;
-    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
-    let context: vscode.ExtensionContext;
-    context = {
+    const context: vscode.ExtensionContext = {
         secrets: {
             get: sinon.stub().resolves("mockSessionToken"),
             store: sinon.stub().resolves(),
@@ -181,7 +172,7 @@ suite("buildTb2RobotCommand tests", function () {
         globalStorageUri: {} as any,
         logLevel: vscode.LogLevel.Info,
         extensionMode: vscode.ExtensionMode.Test,
-        asAbsolutePath: (relativePath: string) => path.join("rootPath", "bundled", "tools", "tb2robot", "__main__.py")
+        asAbsolutePath: () => path.join("rootPath", "bundled", "tools", "tb2robot", "__main__.py")
     } as unknown as vscode.ExtensionContext;
 
     this.timeout(5000);

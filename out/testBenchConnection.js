@@ -60,10 +60,10 @@ const utils = __importStar(require("./utils"));
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 /**
- * Class representing a connection to the new TestBench Play server.
+ * Represents a connection to the TestBench Play server.
+ * Handles communication with the server, including login, logout, and API requests.
  */
 class PlayServerConnection {
-    context;
     serverName;
     portNumber;
     sessionToken;
@@ -73,13 +73,12 @@ class PlayServerConnection {
     /**
      * Creates a new PlayServerConnection.
      *
-     * @param context - The extension context.
-     * @param serverName - The server name.
-     * @param portNumber - The port number.
-     * @param sessionToken - The session token.
+     * @param context - The VS Code extension context.
+     * @param serverName - The server name or IP address.
+     * @param portNumber - The server port number.
+     * @param sessionToken - The session token for authentication.
      */
-    constructor(context, serverName, portNumber, sessionToken) {
-        this.context = context;
+    constructor(serverName, portNumber, sessionToken) {
         this.serverName = serverName;
         this.portNumber = portNumber;
         this.sessionToken = sessionToken;
@@ -89,8 +88,8 @@ class PlayServerConnection {
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
             httpsAgent: new https.Agent({
-                rejectUnauthorized: false, // TODO: Use true in production.
-            }),
+                rejectUnauthorized: false // TODO: Use true in production.
+            })
         });
         // Start the keep-alive process immediately to prevent session timeout after 5 minutes
         this.startKeepAlive();
@@ -136,12 +135,13 @@ class PlayServerConnection {
      * @returns {Promise<string | null>} The selected project key or null if none selected.
      */
     async getProjectKeyFromProjectListQuickPickSelection(projectsData) {
+        // Extract project names from the projects data and display them in a quick pick list
         const projectNames = projectsData.map((project) => project.name);
         const selectedProjectName = await vscode.window.showQuickPick(projectNames, {
-            placeHolder: "Select a project",
+            placeHolder: "Select a project"
         });
         if (!selectedProjectName) {
-            extension_1.logger.error("Selected project name not found.");
+            extension_1.logger.warn("Selected project name not found.");
             return null;
         }
         extension_1.logger.debug("Selected project name:", selectedProjectName);
@@ -163,10 +163,14 @@ class PlayServerConnection {
             return null;
         }
         try {
+            extension_1.logger.debug("Fetching projects list.");
             const projectsURL = `/projects/v1`;
-            const projectsResponse = await this.apiClient.get(projectsURL, {
-                headers: { accept: "application/vnd.testbench+json" },
-            });
+            // Wrap the project list get request in the withRetry helper.
+            const projectsResponse = await withRetry(() => this.apiClient.get(projectsURL, {
+                headers: { accept: "application/vnd.testbench+json" }
+            }), 3, // maxRetries: try 3 additional times
+            1000 // delayMs: wait 1000ms between attempts
+            );
             // Save the response from server to a file for analyzing the structure
             /*
             const savePath = await vscode.window.showSaveDialog({
@@ -217,7 +221,11 @@ class PlayServerConnection {
         }
         try {
             const projectTreeURL = `/projects/${projectKey}/tree/v1`;
-            const projectTreeResponse = await this.apiClient.get(projectTreeURL, { headers: { accept: "application/vnd.testbench+json" } });
+            const projectTreeResponse = await withRetry(() => this.apiClient.get(projectTreeURL, {
+                headers: { accept: "application/vnd.testbench+json" }
+            }), 3, // maxRetries: try 3 additional times
+            1000 // delayMs: wait 1000ms between attempts
+            );
             // Save the JSON to a file for analyzing the structure
             /*
             const savePath = await vscode.window.showSaveDialog({
@@ -252,11 +260,11 @@ class PlayServerConnection {
     /**
      * Fetches test elements using the Test Object Version (TOV) key from the old play server.
      *
-     * @param tovKey - The TOV key as a string.
-     * @returns The test elements data fetched from the server or null if an error occurs.
+     * @param {string | null} tovKey - The TOV key as a string.
+     * @returns {Promise<any | null>} The test elements data fetched from the server or null if an error occurs.
      */
     async getTestElementsWithTovKeyOldPlayServer(tovKey) {
-        extension_1.logger.trace("Fetching test elements with TOV key:", tovKey);
+        extension_1.logger.debug("Fetching test elements with TOV key:", tovKey);
         if (!this.sessionToken) {
             extension_1.logger.warn("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
             return null;
@@ -276,20 +284,31 @@ class PlayServerConnection {
                 // Use loginName as username, and use sessionToken as the password
                 auth: {
                     username: (0, extension_1.getConfig)().get("username"),
-                    password: this.sessionToken,
+                    password: this.sessionToken
                 },
                 headers: {
                     // Manually encode the credentials to Base64
                     Authorization: `Basic ${base64.encode(`${(0, extension_1.getConfig)().get("username")}:${this.sessionToken}`)}`,
-                    "Content-Type": "application/vnd.testbench+json; charset=utf-8",
+                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
                 // Ignore self-signed certificates
                 httpsAgent: new https.Agent({
-                    rejectUnauthorized: false, //TODO: This should only be used in a development environment
-                }),
+                    rejectUnauthorized: false //TODO: This should only be used in a development environment
+                })
             });
             extension_1.logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
-            const testElementsResponse = await oldPlayServerSession.get(getTestElementsURL);
+            const testElementsResponse = await withRetry(() => oldPlayServerSession.get(getTestElementsURL), 3, // maxRetries: try 3 additional times
+            1000, // delayMs: wait 1000ms between attempts
+            (error) => {
+                if (axios_1.default.isAxiosError(error) && error.response) {
+                    // Do not retry if the error is due to authentication or if the resource is not found.
+                    const nonRetryableStatusCodes = [401, 404];
+                    if (nonRetryableStatusCodes.includes(error.response.status)) {
+                        return false;
+                    }
+                }
+                return true;
+            });
             // Save the JSON to a file for analyzing the structure
             /*
             const savePath = await vscode.window.showSaveDialog({
@@ -326,8 +345,8 @@ class PlayServerConnection {
     /**
      * Fetches the cycle structure of a specific cycle within a project from the TestBench server.
      *
-     * @param projectKey - The project key as a string.
-     * @param cycleKey - The cycle key as a string.
+     * @param {string} projectKey - The project key as a string.
+     * @param {string} cycleKey - The cycle key as a string.
      * @returns {Promise<testBenchTypes.CycleStructure | null>} The cycle structure or null if an error occurs.
      */
     async fetchCycleStructureOfCycleInProject(projectKey, cycleKey) {
@@ -337,14 +356,25 @@ class PlayServerConnection {
             suppressFilteredData: false,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
-            filters: [],
+            filters: []
         };
         try {
-            const cycleStructureResponse = await this.apiClient.post(cycleStructureUrl, requestBody, {
+            const cycleStructureResponse = await withRetry(() => this.apiClient.post(cycleStructureUrl, requestBody, {
                 headers: {
                     accept: "application/json",
-                    "Content-Type": "application/json",
-                },
+                    "Content-Type": "application/json"
+                }
+            }), 3, // maxRetries: try 3 additional times
+            1000, // delayMs: wait 1000ms between attempts
+            (error) => {
+                if (axios_1.default.isAxiosError(error) && error.response) {
+                    // Do not retry if the error is due to a bad request, missing resource, or unprocessable data.
+                    const nonRetryableStatusCodes = [400, 404, 422];
+                    if (nonRetryableStatusCodes.includes(error.response.status)) {
+                        return false;
+                    }
+                }
+                return true;
             });
             // User selects a file path for saving the JSON
             /*
@@ -381,17 +411,25 @@ class PlayServerConnection {
      * Logs out the user from the TestBench server.
      * Clears session data, stops the keep-alive process, clears the tree data provider which empties the tree view.
      *
-     * @param treeDataProvider - The project management tree data provider.
+     * @param projectTreeDataProvider - The project management tree data provider.
      * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
      */
-    async logoutUser(treeDataProvider) {
-        extension_1.logger.trace("Logging out user.");
+    async logoutUser(projectTreeDataProvider) {
+        extension_1.logger.debug("Logging out user.");
         try {
-            const logoutResponse = await this.apiClient.delete(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" },
-            });
+            const logoutResponse = await withRetry(() => this.apiClient.delete(`/login/session/v1`, {
+                headers: { accept: "application/vnd.testbench+json" }
+            }), 3, // maxRetries: try 3 additional times
+            1000 // delayMs: wait 1000ms between attempts
+            );
             if (logoutResponse.status === 204) {
-                treeDataProvider.clearTree();
+                if (projectTreeDataProvider) {
+                    projectTreeDataProvider.clearTree();
+                }
+                else {
+                    // Note: When deactivating the extension or closing VS Code, the tree data provider may be null and this warning is expected.
+                    extension_1.logger.warn("Tree data provider is not defined. Cannot clear the tree.");
+                }
                 const logoutSuccessfulMessage = "Logout successful.";
                 extension_1.logger.debug(logoutSuccessfulMessage);
                 vscode.window.showInformationMessage(logoutSuccessfulMessage);
@@ -444,13 +482,24 @@ class PlayServerConnection {
         try {
             const zipFileData = fs.readFileSync(zipFilePath);
             extension_1.logger.debug(`Uploading zip file "${zipFilePath}" to ${uploadResultZipURL}`);
-            const uploadZipResponse = await this.apiClient.post(uploadResultZipURL, zipFileData, {
+            const uploadZipResponse = await withRetry(() => this.apiClient.post(uploadResultZipURL, zipFileData, {
                 headers: {
                     "Content-Type": "application/zip",
-                    accept: "application/json",
+                    accept: "application/json"
                 },
-                // Use this when you want to handle all status codes manually, otherwise Axios will throw an error for non-2xx status codes
-                validateStatus: () => true,
+                // Handle all status codes manually
+                validateStatus: () => true
+            }), 3, // maxRetries: try 3 additional times
+            1000, // delayMs: wait 1000ms between attempts
+            (error) => {
+                // Do not retry if the error is due to a non-transient condition
+                if (axios_1.default.isAxiosError(error) && error.response) {
+                    const nonRetryableStatusCodes = [403, 404, 422];
+                    if (nonRetryableStatusCodes.includes(error.response.status)) {
+                        return false;
+                    }
+                }
+                return true;
             });
             switch (uploadZipResponse.status) {
                 case 201: {
@@ -513,12 +562,23 @@ class PlayServerConnection {
     async getJobIDOfImportJob(projectKey, cycleKey, importData) {
         const getJobIDOfImportUrl = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
         try {
-            const importJobIDResponse = await this.apiClient.post(getJobIDOfImportUrl, importData, {
+            const importJobIDResponse = await withRetry(() => this.apiClient.post(getJobIDOfImportUrl, importData, {
                 headers: {
                     "Content-Type": "application/json",
-                    accept: "application/json",
+                    accept: "application/json"
                 },
-                validateStatus: () => true,
+                validateStatus: () => true
+            }), 3, // maxRetries: try 3 additional times
+            1000, // delayMs: wait 1000ms between attempts
+            (error) => {
+                // Do not retry if the error has a non-transient status code.
+                if (axios_1.default.isAxiosError(error) && error.response) {
+                    const nonRetryableStatusCodes = [400, 403, 404, 422];
+                    if (nonRetryableStatusCodes.includes(error.response.status)) {
+                        return false;
+                    }
+                }
+                return true;
             });
             switch (importJobIDResponse.status) {
                 case 200: {
@@ -581,10 +641,11 @@ class PlayServerConnection {
      * If the keep-alive process is already running and it is triggered again, the previous one is stopped before starting a new one.
      */
     startKeepAlive() {
-        this.stopKeepAlive(); // Prevent multiple intervals.
+        this.stopKeepAlive(); // Prevent multiple intervals if previously started.
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();
-        }, 4 * 60 * 1000); // Every 4 minutes
+        }, 4 * 60 * 1000 // Every 4 minutes
+        );
         // Send an immediate keep-alive request.
         this.sendKeepAliveRequest();
         extension_1.logger.trace("Keep-alive started.");
@@ -599,7 +660,9 @@ class PlayServerConnection {
     }
     /**
      * Sends a GET request to the server to keep the session alive, which normally times out after 5 minutes.
-     * Note: If the keep alive request fails, the user is logged out automatically.
+     * The keep-alive process is started automatically when the PlayServerConnection object is created, and it runs every 4 minutes.
+     * If the request fails, retries are attempted up to 3 times with a delay of 1 second between each attempt.
+     * If the keep alive request fails, the user is logged out automatically, since the session will be timed out later anyway.
      */
     async sendKeepAliveRequest() {
         if (!this.sessionToken) {
@@ -607,22 +670,73 @@ class PlayServerConnection {
             return;
         }
         try {
-            await this.apiClient.get(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" },
-            });
+            await withRetry(() => this.apiClient.get(`/login/session/v1`, {
+                headers: { accept: "application/vnd.testbench+json" }
+            }), 3, // maxRetries: try 3 additional times
+            1000 // delayMs: wait 1000ms between attempts
+            );
             extension_1.logger.trace("Keep-alive request sent.");
         }
         catch (error) {
-            extension_1.logger.error("Keep-alive request failed:", error);
-            // Logout the user if the keep-alive request fails.
-            extension_1.logger.trace("Logging out the user after keep-alive failure.");
+            extension_1.logger.error("Keep-alive request failed after retries:", error);
+            extension_1.logger.warn("Logging out the user after keep-alive failure.");
             await vscode.commands.executeCommand(`${extension_1.allExtensionCommands.logout.command}`);
-            // Possible reason for keep alive request fail:
-            // The user logged in in TestBench Client with the same account he used in VS Code, and the session in VS Code is forced to logout.
         }
     }
 }
 exports.PlayServerConnection = PlayServerConnection;
+/**
+ * Executes an asynchronous function with retry logic in case of failures such as temporary network problems.
+ * Used to retry API calls in case of network errors. To disable retries for an API call, set maxRetries to 0.
+ *
+ * @template T - The type returned by the asynchronous function.
+ * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
+ * @param {number} maxRetries - Maximum number of retry attempts (default is 3).
+ * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
+ * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
+ * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is false).
+ * @returns {Promise<T>} A promise resolving to the function's return value.
+ * @throws The error from the last failed attempt if all retries fail.
+ */
+async function withRetry(asyncFunction, maxRetries = 3, delayMs = 1000, shouldRetry, showProgressBar = true) {
+    let attempt = 0;
+    while (true) {
+        try {
+            // Attempt to execute the function.
+            return await asyncFunction();
+        }
+        catch (error) {
+            // Log the retry attempt and delay before retrying.
+            extension_1.logger.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`);
+            // Check if we should not retry based on the error type/condition.
+            if (shouldRetry && !shouldRetry(error)) {
+                extension_1.logger.warn(`Error is not retryable. Aborting further retry attempts.`);
+                throw error;
+            }
+            attempt++;
+            if (attempt > maxRetries) {
+                // If we've exceeded maxRetries, rethrow the error.
+                extension_1.logger.error(`Attempt ${attempt} failed. Maximum retries reached, aborting further retries.`);
+                throw error;
+            }
+            // Show the progress bar only if retries are happening and the flag is enabled.
+            if (showProgressBar) {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Retrying request...",
+                    cancellable: false
+                }, async (progress) => {
+                    progress.report({ message: `Attempt ${attempt} of ${maxRetries}` });
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
+                });
+            }
+            else {
+                // If progress bar is disabled, just wait for the delay.
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        }
+    }
+}
 /**
  * Prompts the user for general input with live validation.
  * Loops until valid input is provided, "quit" is typed, or the user cancels.
@@ -647,7 +761,7 @@ async function promptForInputAndValidate(promptMessage, inputCanBeEmpty = false,
                     return validateInputFunction(value);
                 }
                 return null;
-            },
+            }
         });
         if (input === undefined || input.toLowerCase() === "quit") {
             vscode.window.showInformationMessage("Login process aborted");
@@ -663,13 +777,12 @@ async function promptForInputAndValidate(promptMessage, inputCanBeEmpty = false,
  * Performs the login process to the TestBench server by prompting the user for the server name, port number, username, and password.
  * Loops until login is successful or the user cancels.
  *
- * @param context - The extension context.
- * @param baseKey - The base key for configuration.
- * @param promptForNewCredentials - Whether to prompt for new credentials.
- * @param performAutoLoginWithStoredCredentialsWithoutPrompting - Whether to auto-login without prompting.
+ * @param {vscode.ExtensionContext} context - The extension context.
+ * @param {boolean} promptForNewCredentials - Whether to prompt for new credentials.
+ * @param {boolean} performAutoLoginWithStoredCredentialsWithoutPrompting - (Optional) Whether to auto-login without prompting.
  * @returns {Promise<PlayServerConnection | null>} A PlayServerConnection if login is successful; otherwise, null.
  */
-async function performLogin(context, baseKey, promptForNewCredentials = false, performAutoLoginWithStoredCredentialsWithoutPrompting) {
+async function performLogin(context, promptForNewCredentials = false, performAutoLoginWithStoredCredentialsWithoutPrompting) {
     // Loop until the user successfully logs in or cancels the login process
     while (true) {
         // Retrieve the stored credentials if they exist
@@ -717,7 +830,7 @@ async function performLogin(context, baseKey, promptForNewCredentials = false, p
             username = (0, extension_1.getConfig)().get("username");
         }
         else {
-            const credentials = await promptForLoginCredentials(baseKey);
+            const credentials = await promptForLoginCredentials();
             if (!credentials) {
                 vscode.window.showInformationMessage("Login process aborted.");
                 extension_1.logger.debug("Login process aborted.");
@@ -745,11 +858,10 @@ async function performLogin(context, baseKey, promptForNewCredentials = false, p
 /**
  * Prompts the user for login credentials.
  *
- * @param baseKey - The base key for configuration.
  * @returns {Promise<{ serverName: string; portNumber: number; username: string; password: string } | null>}
  * An object containing serverName, portNumber, username, and password or null if aborted.
  */
-async function promptForLoginCredentials(baseKey) {
+async function promptForLoginCredentials() {
     const serverNameInConfig = (0, extension_1.getConfig)().get("serverName", "testbench");
     // Prompt user for server name, showing the default value only if it exists
     const serverNameInput = await promptForInputAndValidate(`Enter the server name${serverNameInConfig ? ` (Default: ${serverNameInConfig})` : ""}`, true);
@@ -803,37 +915,45 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
     const requestBody = {
         login: username,
         password: password,
-        force: true,
+        force: true
     };
     try {
         const connection = await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: "Logging in",
-            cancellable: true,
+            cancellable: true
         }, async (progress) => {
             const baseURL = `https://${serverName}:${portNumber}/api`;
             const loginURL = `${baseURL}/login/session/v1`;
             extension_1.logger.trace("Sending login request to:", loginURL);
             progress.report({ message: "Sending login request..." });
-            const loginResponse = await axios_1.default.post(loginURL, requestBody, {
+            const loginResponse = await withRetry(() => axios_1.default.post(loginURL, requestBody, {
                 headers: {
                     accept: "application/vnd.testbench+json",
-                    "Content-Type": "application/vnd.testbench+json",
+                    "Content-Type": "application/vnd.testbench+json"
                 },
-                httpsAgent: new https.Agent({
-                    rejectUnauthorized: false,
-                }),
+                httpsAgent: new https.Agent({ rejectUnauthorized: false })
+            }), 3, // maxRetries
+            1000, // delayMs
+            (error) => {
+                // Do not retry if the error is due to invalid credentials (HTTP 401)
+                if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
+                    return false;
+                }
+                return true;
             });
             // An exception is thrown automatically if the status code is not 2xx
             if (loginResponse.status === 201) {
                 // Store password in secret storage after succesfull login if the user chooses to
-                const storePassword = (0, extension_1.getConfig)().get("storePasswordAfterLogin", false);
-                if (storePassword) {
+                if ((0, extension_1.getConfig)().get("storePasswordAfterLogin", false)) {
                     await context.secrets.store("password", password);
                     extension_1.logger.trace("Password stored securely.");
                 }
+                else {
+                    extension_1.logger.trace("User chose not to store password.");
+                }
                 // Starts keep alive in the constructor of PlayServerConnection
-                const newConnection = new PlayServerConnection(context, serverName, portNumber, loginResponse.data.sessionToken);
+                const newConnection = new PlayServerConnection(serverName, portNumber, loginResponse.data.sessionToken);
                 // Set the global connection object, it can be null in case the login fails
                 (0, extension_1.setConnection)(newConnection);
                 // Set the connectionActive context value for changing the login icon to logout icon based on this value
@@ -861,8 +981,14 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
         return connection;
     }
     catch (error) {
-        extension_1.logger.error("Error during login:", error);
-        vscode.window.showInformationMessage("Error during login.");
+        if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
+            extension_1.logger.error("Login failed: Invalid credentials.");
+            vscode.window.showInformationMessage("Login failed: Invalid credentials.");
+        }
+        else {
+            extension_1.logger.error("Error during login");
+            vscode.window.showInformationMessage("Error during login.");
+        }
         return null;
     }
 }
@@ -893,9 +1019,21 @@ async function fetchServerVersions(serverName, portNumber) {
         const baseURL = `https://${serverName}:${portNumber}`;
         const serverVersionsURL = `${baseURL}/api/serverVersions/v1`;
         extension_1.logger.debug("Fetching server versions from URL:", serverVersionsURL);
-        const serverVersionsResponse = await axios_1.default.get(serverVersionsURL, {
+        const serverVersionsResponse = await withRetry(() => axios_1.default.get(serverVersionsURL, {
             headers: { Accept: "application/vnd.testbench+json" },
-            httpsAgent: new https.Agent({ rejectUnauthorized: false }), // TODO: true in production
+            httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: set to true in production
+        }), 3, // maxRetries: try 3 additional times
+        1000, // delayMs: wait 1000ms between attempts
+        // Retry only if the error is due to a non-transient condition
+        (error) => {
+            if (axios_1.default.isAxiosError(error) && error.response) {
+                // Do not retry if a 404 is received
+                const nonRetryableStatusCodes = [404];
+                if (nonRetryableStatusCodes.includes(error.response.status)) {
+                    return false;
+                }
+            }
+            return true;
         });
         extension_1.logger.debug(`TestBench Release Version: ${serverVersionsResponse.data.releaseVersion}, ` +
             `Database Version: ${serverVersionsResponse.data.databaseVersion}, ` +
@@ -943,7 +1081,7 @@ async function promptForReportZipFileWithResults() {
             canSelectMany: false,
             canSelectFiles: true,
             canSelectFolders: false,
-            filters: { "Zip Files": ["zip"] },
+            filters: { "Zip Files": ["zip"] }
         };
         const fileUri = await vscode.window.showOpenDialog(options);
         if (!fileUri || !fileUri[0]) {
@@ -983,8 +1121,9 @@ function findCycleKeyFromCycleNameRecursively(treeElements, cycleName) {
         const children = element.item?.children || element.children;
         if (children && children.length > 0) {
             const foundCycleKey = findCycleKeyFromCycleNameRecursively(children, cycleName);
-            if (foundCycleKey)
+            if (foundCycleKey) {
                 return foundCycleKey;
+            }
         }
     }
     return null;
@@ -1037,7 +1176,7 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
             vscode.window.showErrorMessage(uploadErrorMessage);
             return null;
         }
-        // TODO: Chech the new data of the new branch
+        // TODO: Check the new data of the new branch
         // Import the results to TestBench server
         const importData = {
             fileName: zipFilenameFromServer,
@@ -1055,7 +1194,7 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
                 testThemeUID: "themeUID456",
             },
             */
-            ],
+            ]
         };
         try {
             // Start the import job
@@ -1096,7 +1235,7 @@ async function selectReportWithResultsAndImportToTestbench(connection, projectMa
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `Importing results to TestBench server`,
-        cancellable: true,
+        cancellable: true
     }, async (progress) => {
         progress.report({ message: "Selecting report file with results.", increment: 30 });
         const resultZipFilePath = await promptForReportZipFileWithResults();
@@ -1105,7 +1244,7 @@ async function selectReportWithResultsAndImportToTestbench(connection, projectMa
             return null;
         }
         progress.report({ message: "Importing report file.", increment: 30 });
-        const importReportOutcome = await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+        await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
         progress.report({ message: "Cleaning up.", increment: 30 });
         await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
     });

@@ -40,7 +40,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TestThemeTreeDataProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const extension_1 = require("./extension");
-7;
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display
  * TestTheme items in the Test Theme Tree view.
@@ -56,15 +55,15 @@ class TestThemeTreeDataProvider {
      * Refreshes the test theme tree view.
      */
     refresh() {
-        extension_1.logger.trace("Refreshing test theme tree view.");
+        extension_1.logger.debug("Refreshing test theme tree view.");
         // Store the keys of the expanded items to preserve state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
         this._onDidChangeTreeData.fire();
     }
     /**
      * Returns the parent of a given tree item.
-     * @param element The tree item.
-     * @returns The parent TestbenchTreeItem or null.
+     * @param {ProjectManagementTreeItem} element The tree item.
+     * @returns {ProjectManagementTreeItem | null} The parent TestbenchTreeItem or null.
      */
     getParent(element) {
         return element.parent;
@@ -72,8 +71,8 @@ class TestThemeTreeDataProvider {
     /**
      * Returns the children of a given tree item. If no element is provided,
      * returns the root elements.
-     * @param element Optional parent tree item.
-     * @returns A promise resolving to an array of TestbenchTreeItems.
+     * @param {ProjectManagementTreeItem} element Optional parent tree item.
+     * @returns {Promise<ProjectManagementTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
      */
     async getChildren(element) {
         if (!element) {
@@ -83,34 +82,35 @@ class TestThemeTreeDataProvider {
     }
     /**
      * Returns the TreeItem representation for a given element.
-     * @param element The TestbenchTreeItem.
-     * @returns The corresponding vscode.TreeItem.
+     * @param {ProjectManagementTreeItem[]} element The TestbenchTreeItem.
+     * @returns {vscode.TreeItem} The corresponding vscode.TreeItem.
      */
     getTreeItem(element) {
         return element;
     }
     /**
      * Sets the root elements of the test theme tree and refreshes the view.
-     * @param roots An array of TestbenchTreeItems to set as roots.
+     * @param {ProjectManagementTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
      */
     setRoots(roots) {
-        extension_1.logger.trace("Setting root elements of the test theme tree to:", roots);
+        // Output of roots is circular and large, so it is commented out.
+        // logger.trace("Setting root elements of the test theme tree to:", roots);
         this.rootElements = roots;
         this.refresh();
     }
     /**
      * Sets the selected tree item as the sole root of the test theme tree and refreshes the view.
-     * @param element The TestbenchTreeItem to set as root.
+     * @param {ProjectManagementTreeItem} element The TestbenchTreeItem to set as root.
      */
     makeRoot(element) {
-        extension_1.logger.trace("Setting the selected element as the root of the test theme tree view:", element);
+        extension_1.logger.debug("Setting the selected element as the root of the test theme tree view:", element);
         this.rootElements = [element];
         this.refresh();
     }
     /**
      * Handles expansion or collapse of a tree item and updates its icon.
-     * @param element The TestbenchTreeItem.
-     * @param expanded True if the item is expanded; false if collapsed.
+     * @param {ProjectManagementTreeItem} element The TestbenchTreeItem.
+     * @param {boolean} expanded True if the item is expanded; false if collapsed.
      */
     handleExpansion(element, expanded) {
         extension_1.logger.trace(`Setting expansion state of "${element.label}" to ${expanded ? "expanded" : "collapsed"} in test theme tree.`);
@@ -127,7 +127,7 @@ class TestThemeTreeDataProvider {
     }
     /**
      * Recursively stores the keys of expanded nodes.
-     * @param elements An array of TestbenchTreeItems or null.
+     * @param {ProjectManagementTreeItem[] | null} elements An array of TestbenchTreeItems or null.
      */
     storeExpandedTreeItems(elements) {
         if (elements) {

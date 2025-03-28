@@ -40,7 +40,6 @@ const extension_1 = require("../../extension");
 const testBenchLogger_1 = require("../../testBenchLogger");
 const testBenchConnection_1 = require("../../testBenchConnection");
 const projectManagementTreeView_1 = require("../../projectManagementTreeView");
-const loginWebView_1 = require("../../loginWebView");
 const testElementsTreeView_1 = require("../../testElementsTreeView");
 suite("Extension Test Suite", () => {
     let sandbox;
@@ -49,7 +48,6 @@ suite("Extension Test Suite", () => {
     let loggerStub;
     let connectionStub;
     let projectManagementTreeDataProviderStub;
-    let loginWebViewProviderStub;
     let testElementsTreeDataProviderStub;
     setup(() => {
         sandbox = sinon.createSandbox();
@@ -57,7 +55,7 @@ suite("Extension Test Suite", () => {
         getConfigurationStub = sandbox.stub(vscode.workspace, "getConfiguration");
         getConfigurationStub.returns({
             get: sandbox.stub().returns("defaultValue"),
-            update: sandbox.stub().resolves(),
+            update: sandbox.stub().resolves()
         });
         // Mock the ExtensionContext
         context = {
@@ -65,8 +63,8 @@ suite("Extension Test Suite", () => {
             secrets: {
                 get: sandbox.stub().resolves("storedPassword"),
                 store: sandbox.stub().resolves(),
-                delete: sandbox.stub().resolves(),
-            },
+                delete: sandbox.stub().resolves()
+            }
         };
         // Mock the logger
         loggerStub = sandbox.createStubInstance(testBenchLogger_1.TestBenchLogger);
@@ -74,12 +72,11 @@ suite("Extension Test Suite", () => {
         connectionStub = sandbox.createStubInstance(testBenchConnection_1.PlayServerConnection);
         // Mock the tree data providers
         projectManagementTreeDataProviderStub = sandbox.createStubInstance(projectManagementTreeView_1.ProjectManagementTreeDataProvider);
-        loginWebViewProviderStub = sandbox.createStubInstance(loginWebView_1.LoginWebViewProvider);
         testElementsTreeDataProviderStub = sandbox.createStubInstance(testElementsTreeView_1.TestElementsTreeDataProvider);
         // Stub the VS Code API
         sandbox.stub(vscode.workspace, "getConfiguration").returns({
             get: sandbox.stub().returns("defaultValue"),
-            update: sandbox.stub().resolves(),
+            update: sandbox.stub().resolves()
         });
         sandbox.stub(vscode.window, "showErrorMessage").resolves();
         sandbox.stub(vscode.window, "showInformationMessage").resolves();

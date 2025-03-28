@@ -1,3 +1,4 @@
+/*
 import * as path from "path";
 import * as sinon from "sinon";
 import * as assert from "assert";
@@ -9,7 +10,6 @@ import { TestBenchLogger } from "../../testBenchLogger";
 
 const rootPath = path.resolve(__dirname, "../../../");
 
-/*
 suite('tb2robotWrite test', () => {
     let context: vscode.ExtensionContext;
     let execStub: sinon.SinonStub;
