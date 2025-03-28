@@ -33,7 +33,6 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
  * Handles communication with the server, including login, logout, and API requests.
  */
 export class PlayServerConnection {
-    private context: vscode.ExtensionContext;
     private serverName: string;
     private portNumber: number;
     private sessionToken: string;
@@ -49,8 +48,7 @@ export class PlayServerConnection {
      * @param portNumber - The server port number.
      * @param sessionToken - The session token for authentication.
      */
-    constructor(context: vscode.ExtensionContext, serverName: string, portNumber: number, sessionToken: string) {
-        this.context = context;
+    constructor(serverName: string, portNumber: number, sessionToken: string) {
         this.serverName = serverName;
         this.portNumber = portNumber;
         this.sessionToken = sessionToken;
@@ -254,8 +252,8 @@ export class PlayServerConnection {
     /**
      * Fetches test elements using the Test Object Version (TOV) key from the old play server.
      *
-     * @param tovKey - The TOV key as a string.
-     * @returns The test elements data fetched from the server or null if an error occurs.
+     * @param {string | null} tovKey - The TOV key as a string.
+     * @returns {Promise<any | null>} The test elements data fetched from the server or null if an error occurs.
      */
     async getTestElementsWithTovKeyOldPlayServer(tovKey: string | null): Promise<any | null> {
         logger.debug("Fetching test elements with TOV key:", tovKey);
@@ -269,13 +267,13 @@ export class PlayServerConnection {
         }
 
         try {
-            const oldPlayServerBaseUrl = `https://${this.serverName}:9443/api/1`;
-            const getTestElementsURL = `/tovs/${tovKey}/testElements`;
+            const oldPlayServerBaseUrl: string = `https://${this.serverName}:9443/api/1`;
+            const getTestElementsURL: string = `/tovs/${tovKey}/testElements`;
 
             logger.trace("Creating session for old play server.");
 
             // Create session for API calls to the old play server
-            const oldPlayServerSession = axios.create({
+            const oldPlayServerSession: axios.AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
                 // Old play server, which runs on port 9443, uses BasicAuth.
                 // Use loginName as username, and use sessionToken as the password
@@ -304,7 +302,7 @@ export class PlayServerConnection {
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
                         // Do not retry if the error is due to authentication or if the resource is not found.
-                        const nonRetryableStatusCodes = [401, 404];
+                        const nonRetryableStatusCodes: number[] = [401, 404];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
                             return false;
                         }
@@ -349,8 +347,8 @@ export class PlayServerConnection {
     /**
      * Fetches the cycle structure of a specific cycle within a project from the TestBench server.
      *
-     * @param projectKey - The project key as a string.
-     * @param cycleKey - The cycle key as a string.
+     * @param {string} projectKey - The project key as a string.
+     * @param {string} cycleKey - The cycle key as a string.
      * @returns {Promise<testBenchTypes.CycleStructure | null>} The cycle structure or null if an error occurs.
      */
     async fetchCycleStructureOfCycleInProject(
@@ -1080,7 +1078,6 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     }
                     // Starts keep alive in the constructor of PlayServerConnection
                     const newConnection: PlayServerConnection = new PlayServerConnection(
-                        context,
                         serverName,
                         portNumber,
                         loginResponse.data.sessionToken
