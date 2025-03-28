@@ -391,8 +391,8 @@
                 "command": "testbenchExtension.displayInteractionsForSelectedTOV",
                 "title": "Show Robotframework Resources",
                 "icon": {
-                    "light": "resources/icons/key-light.svg",
-                    "dark": "resources/icons/key-dark.svg"
+                    "light": "resources/icons/test-elements-light.svg",
+                    "dark": "resources/icons/test-elements-dark.svg"
                 }
             },
             {
