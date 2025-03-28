@@ -104,7 +104,8 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     },
     openRobotResourceFile: { command: `${baseKeyOfExtension}.openRobotResourceFile` },
     changeConfigScope: { command: `${baseKeyOfExtension}.changeConfigScope` },
-    createInteractionUnderSubdivision: { command: `${baseKeyOfExtension}.createInteractionUnderSubdivision` }
+    createInteractionUnderSubdivision: { command: `${baseKeyOfExtension}.createInteractionUnderSubdivision` },
+    openIssueReporter: { command: `${baseKeyOfExtension}.openIssueReporter` }
 };
 
 /** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
@@ -391,7 +392,10 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             (await context.secrets.get("password")) !== undefined
         ) {
             logger.debug("Performing automatic login.");
-            if (await testBenchConnection?.performLogin(context, false, true)) {
+
+            const loginResult: testBenchConnection.PlayServerConnection | null =
+                await testBenchConnection?.performLogin(context, false, true);
+            if (loginResult) {
                 // If login was successful, display project selection dialog and the project management tree view.
                 projectManagementTreeView?.displayProjectManagementTreeView();
                 await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
@@ -806,6 +810,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             }
         }
     );
+
+    // --- Command: Open Issue Reporter ---
+    registerSafeCommand(context, allExtensionCommands.openIssueReporter.command, async () => {
+        vscode.commands.executeCommand("workbench.action.openIssueReporter", {
+            extensionId: "imbus.testbench-visual-studio-code-extension"
+        });
+    });
 
     // Set context value for connectionActive.
     // Used to enable or disable the login and logout buttons in the status bar,
