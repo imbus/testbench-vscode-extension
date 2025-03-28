@@ -1079,7 +1079,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                         logger.trace("User chose not to store password.");
                     }
                     // Starts keep alive in the constructor of PlayServerConnection
-                    const newConnection = new PlayServerConnection(
+                    const newConnection: PlayServerConnection = new PlayServerConnection(
                         context,
                         serverName,
                         portNumber,
@@ -1089,7 +1089,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     setConnection(newConnection);
                     // Set the connectionActive context value for changing the login icon to logout icon based on this value
                     await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
-                    const loginSuccessfulMessage = "Login successful.";
+                    const loginSuccessfulMessage: string = "Login successful.";
                     logger.debug(loginSuccessfulMessage);
                     vscode.window.showInformationMessage(loginSuccessfulMessage);
                     // Upon successful login, update the login webview content and hide it.
@@ -1101,7 +1101,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     }
                     return newConnection;
                 } else {
-                    const loginFailedMessage = "Login failed. Unexpected status code: " + loginResponse.status;
+                    const loginFailedMessage: string = "Login failed. Unexpected status code: " + loginResponse.status;
                     logger.error(loginFailedMessage);
                     vscode.window.showInformationMessage(loginFailedMessage);
                     return null;

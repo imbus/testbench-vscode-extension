@@ -402,6 +402,10 @@
             {
                 "command": "testbenchExtension.createInteractionUnderSubdivision",
                 "title": "Create Interaction"
+            },
+            {
+                "command": "testbenchExtension.openIssueReporter",
+                "title": "Open Issue Reporter"
             }
         ],
         "views": {
