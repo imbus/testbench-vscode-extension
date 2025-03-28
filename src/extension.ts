@@ -398,7 +398,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             if (loginResult) {
                 // If login was successful, display project selection dialog and the project management tree view.
                 projectManagementTreeView?.displayProjectManagementTreeView();
-                await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
+                vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject.command);
             }
         } else {
             logger.trace("Automatic login is disabled or password is not stored.");
@@ -879,7 +879,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("testElementsView.removeView");
 
     // Execute automatic login if the setting is enabled.
-    await vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation.command);
+    vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation.command);
 }
 
 /**
