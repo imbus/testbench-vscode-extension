@@ -103,7 +103,6 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
         command: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`
     },
     openRobotResourceFile: { command: `${baseKeyOfExtension}.openRobotResourceFile` },
-    changeConfigScope: { command: `${baseKeyOfExtension}.changeConfigScope` },
     createInteractionUnderSubdivision: { command: `${baseKeyOfExtension}.createInteractionUnderSubdivision` },
     openIssueReporter: { command: `${baseKeyOfExtension}.openIssueReporter` }
 };
@@ -213,67 +212,9 @@ export async function promptForWorkspaceLocation(): Promise<string | undefined> 
     return undefined;
 }
 
-/**
- * Returns the best configuration scope based on the current context.
- * If a workspace folder is available, its URI is returned.
- * If multiple workspace folders are available, the user is prompted to choose one.
- * If no workspace folder is available, undefined is returned.
- *
- * @returns {Promise<vscode.Uri | undefined>} The URI of the best configuration scope, or undefined if none available.
- */
-async function getBestConfigScope(): Promise<vscode.Uri | undefined> {
-    // Prefer active editor's folder
-    if (vscode.window.activeTextEditor) {
-        return vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)?.uri;
-    }
-
-    // For multi-root workspaces or when no editor is active
-    if (vscode.workspace.workspaceFolders?.length) {
-        // Create quick pick items for all workspace folders + global option
-        const items: vscode.QuickPickItem[] = [
-            {
-                label: "$(globe) Global Settings",
-                description: "Use user-level configuration"
-            },
-            ...vscode.workspace.workspaceFolders.map((folder) => ({
-                label: `$(folder) ${folder.name}`,
-                description: folder.uri.fsPath,
-                folder // Store reference to the actual folder
-            }))
-        ];
-
-        const picked = await vscode.window.showQuickPick(items, {
-            placeHolder: "Select configuration scope",
-            ignoreFocusOut: true
-        });
-
-        // Return undefined for global, folder URI for workspace selection
-        return (picked as any)?.folder?.uri;
-    }
-
-    // Single folder or no folder - default to global (undefined)
-    return undefined;
-}
-
+// Global variable to store the current configuration scope (workspace or global).
 let currentConfigScope: vscode.Uri | undefined;
-
-// Initialize status item
-const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-
-/*
- * Updates the status bar item to display the current configuration source.
- */
-function updateConfigSourceDisplay() {
-    const folderName: string | undefined = currentConfigScope
-        ? vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name
-        : "Global Settings";
-    statusItem.text = `TestBench Config: ${currentConfigScope ? "$(folder)" : "$(globe)"} ${folderName}`;
-    statusItem.tooltip = currentConfigScope
-        ? `Workspace: ${currentConfigScope.fsPath}\nClick to change configuration scope`
-        : "Using global user settings\nClick to change configuration scope";
-    statusItem.command = `${baseKeyOfExtension}.changeConfigScope`;
-    statusItem.show();
-}
+let activeEditor: vscode.TextEditor | undefined;
 
 /**
  * Loads the latest extension configuration and updates the global configuration object.
@@ -281,12 +222,21 @@ function updateConfigSourceDisplay() {
  *
  * @param {vscode.ExtensionContext} context The extension context.
  */
-export async function loadConfiguration(context: vscode.ExtensionContext): Promise<void> {
+export async function loadConfiguration(context: vscode.ExtensionContext, newScope?: vscode.Uri): Promise<void> {
+    // If no new scope provided, determine the best scope automatically
+    if (newScope === undefined) {
+        if (activeEditor) {
+            newScope = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)?.uri;
+        } else if (vscode.workspace.workspaceFolders?.length === 1) {
+            newScope = vscode.workspace.workspaceFolders[0].uri;
+        }
+    }
+
+    currentConfigScope = newScope;
+
     // Update the configuration object with the latest values.
     // Without this, the configuration changes may not be updated and old values may be used.
     config = vscode.workspace.getConfiguration(baseKeyOfExtension, currentConfigScope);
-
-    updateConfigSourceDisplay();
 
     // Log the configuration source for debugging
     const configSource: string = currentConfigScope
@@ -338,18 +288,6 @@ export function initializeTreeViews(): void {
  * @param context The extension context.
  */
 function registerExtensionCommands(context: vscode.ExtensionContext): void {
-    // --- Command: Change Configuration Scope ---
-    registerSafeCommand(context, allExtensionCommands.changeConfigScope.command, async () => {
-        const newScope: vscode.Uri | undefined = await getBestConfigScope();
-        if (newScope !== undefined || currentConfigScope !== undefined) {
-            currentConfigScope = newScope;
-            await loadConfiguration(context);
-            vscode.window.showInformationMessage(
-                `Configuration scope updated to ${currentConfigScope ? vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name : "Global"}`
-            );
-        }
-    });
-
     // --- Command: Toggle Login Webview Visibility ---
     registerSafeCommand(
         context,
@@ -839,19 +777,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
-    // Initialize the status bar item for displaying the configuration source.
-    context.subscriptions.push(statusItem);
+    // Initialize with the best scope
+    activeEditor = vscode.window.activeTextEditor;
 
     // Initialize with global scope by default
     currentConfigScope = undefined;
-    updateConfigSourceDisplay();
 
+    // Respond to configuration changes in the extension settings.
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (e.affectsConfiguration(baseKeyOfExtension)) {
                 await loadConfiguration(context);
                 logger.info("Configuration updated after changes were detected.");
             }
+        })
+    );
+    // Respond to changes in the active text editor to automatically update the configuration scope.
+    // This is useful for multi-root workspaces where the user may switch between different folders.
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+            activeEditor = editor;
+            await loadConfiguration(context); // Automatically update config when editor changes
         })
     );
 

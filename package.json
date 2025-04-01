@@ -56,14 +56,8 @@
                 }
             },
             {
-                "title": "Workspace",
+                "title": "Working Directory",
                 "properties": {
-                    "testbenchExtension.workspaceLocation": {
-                        "type": "string",
-                        "description": "Specifies the absolute path to the local workspace or project directory. This directory is used for storing and processing local files during extension operations. A `.testbench` folder will be automatically created inside this directory by the extension to manage its files.",
-                        "order": 6,
-                        "scope": "resource"
-                    },
                     "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
