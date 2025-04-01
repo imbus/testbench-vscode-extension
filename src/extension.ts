@@ -267,7 +267,7 @@ function updateConfigSourceDisplay() {
     const folderName: string | undefined = currentConfigScope
         ? vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name
         : "Global Settings";
-    statusItem.text = `TestBench Config: ${currentConfigScope ? "$(folder-active)" : "$(globe)"} ${folderName}`;
+    statusItem.text = `TestBench Config: ${currentConfigScope ? "$(folder)" : "$(globe)"} ${folderName}`;
     statusItem.tooltip = currentConfigScope
         ? `Workspace: ${currentConfigScope.fsPath}\nClick to change configuration scope`
         : "Using global user settings\nClick to change configuration scope";
