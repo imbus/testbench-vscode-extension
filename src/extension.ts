@@ -63,11 +63,11 @@ export const allExtensionCommands: { [key: string]: { command: string } } = {
     selectAndLoadProject: {
         command: `${baseKeyOfExtension}.selectAndLoadProject`
     },
-    uploadTestResultsToTestbench: {
-        command: `${baseKeyOfExtension}.uploadTestResultsToTestbench`
+    importTestResultsToTestbench: {
+        command: `${baseKeyOfExtension}.importTestResultsToTestbench`
     },
-    readAndUploadTestResultsToTestbench: {
-        command: `${baseKeyOfExtension}.readAndUploadTestResultsToTestbench`
+    readAndImportTestResultsToTestbench: {
+        command: `${baseKeyOfExtension}.readAndImportTestResultsToTestbench`
     },
     executeRobotFrameworkTests: {
         command: `${baseKeyOfExtension}.executeRobotFrameworkTests`
@@ -537,37 +537,37 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         logger.trace("End of Read RF Test Results And Create Report With Results command.");
     });
 
-    // --- Command: Upload Test Results To Testbench ---
-    // Uploads the selected test results zip to the testbench server
-    registerSafeCommand(context, allExtensionCommands.uploadTestResultsToTestbench.command, async () => {
-        logger.debug("Upload Test Results To Testbench command called.");
+    // --- Command: Import Test Results To Testbench ---
+    // Imports the selected test results zip to the testbench server
+    registerSafeCommand(context, allExtensionCommands.importTestResultsToTestbench.command, async () => {
+        logger.debug("Import Test Results To Testbench command called.");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.warn("uploadTestResultsToTestbench command called without connection.");
+            logger.warn("importTestResultsToTestbench command called without connection.");
             return;
         }
         if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.currentProjectKeyInView) {
             vscode.window.showErrorMessage("No project selected. Please select a project first.");
-            logger.warn("uploadTestResultsToTestbench command called without a selected project.");
+            logger.warn("importTestResultsToTestbench command called without a selected project.");
             return;
         }
         await testBenchConnection.selectReportWithResultsAndImportToTestbench(
             connection,
             projectManagementTreeDataProvider
         );
-        logger.trace("End of Upload Test Results To Testbench command.");
+        logger.trace("End of Import Test Results To Testbench command.");
     });
 
-    // --- Command: Read And Upload Test Results To Testbench ---
-    // A command that combines the read and upload test results commands.
-    registerSafeCommand(context, allExtensionCommands.readAndUploadTestResultsToTestbench.command, async () => {
-        logger.debug("Read And Upload Test Results To Testbench command called.");
+    // --- Command: Read And Import Test Results To Testbench ---
+    // A command that combines the read and import test results commands.
+    registerSafeCommand(context, allExtensionCommands.readAndImportTestResultsToTestbench.command, async () => {
+        logger.debug("Read And Import Test Results To Testbench command called.");
         await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(
             context,
             folderNameOfTestbenchWorkingDirectory,
             projectManagementTreeDataProvider
         );
-        logger.trace("End of Read And Upload Test Results To Testbench command.");
+        logger.trace("End of Read And Import Test Results To Testbench command.");
     });
 
     // --- Command: Refresh Project Tree View ---
