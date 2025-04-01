@@ -151,13 +151,13 @@ suite("PlayServerConnection Tests", () => {
         assert(stopKeepAliveStub.calledOnce);
     });
 
-    test("uploadExecutionResults should handle errors gracefully", async () => {
+    test("importExecutionResults should handle errors gracefully", async () => {
         axiosStub().post.rejects(new Error("Network Error"));
 
         try {
-            await serverConnection.uploadExecutionResults(1, "path/to/zip");
+            await serverConnection.importExecutionResults(1, "path/to/zip");
         } catch (error) {
-            assert.fail("uploadExecutionResults should not throw an error");
+            assert.fail("importExecutionResults should not throw an error");
         }
     });
 

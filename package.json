@@ -232,7 +232,7 @@
                     },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
-                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when uploading results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
+                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when importing results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
                         "order": 23,
                         "scope": "resource"
                     }
@@ -353,16 +353,16 @@
                 }
             },
             {
-                "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
-                "title": "TestBench: Read Tests & Upload Results To Testbench",
+                "command": "testbenchExtension.readAndImportTestResultsToTestbench",
+                "title": "TestBench: Read Tests & Import Results To Testbench",
                 "icon": {
                     "light": "resources/icons/upload-light.svg",
                     "dark": "resources/icons/upload-dark.svg"
                 }
             },
             {
-                "command": "testbenchExtension.uploadTestResultsToTestbench",
-                "title": "TestBench: Upload Test Results To Testbench",
+                "command": "testbenchExtension.importTestResultsToTestbench",
+                "title": "TestBench: Import Test Results To Testbench",
                 "icon": {
                     "light": "resources/icons/upload-light.svg",
                     "dark": "resources/icons/upload-dark.svg"
@@ -456,7 +456,7 @@
                     "when": "view == testThemeTree"
                 },
                 {
-                    "command": "testbenchExtension.readAndUploadTestResultsToTestbench",
+                    "command": "testbenchExtension.readAndImportTestResultsToTestbench",
                     "group": "navigation@6",
                     "when": "view == projectManagementTree || view == testThemeTree"
                 },

@@ -483,25 +483,25 @@ export class PlayServerConnection {
     }
 
     /**
-     * Uploads a zip archive containing JSON-based test execution results to the TestBench server.
+     * Imports a zip archive containing JSON-based test execution results to the TestBench server.
      *
      * @param {number} projectKey - The project key.
      * @param {string} zipFilePath - The file path to the zip archive.
      * @returns {Promise<string>} The file name returned by the server.
-     * @throws An error if the upload fails.
+     * @throws An error if the import fails.
      */
-    public async uploadExecutionResultsAndReturnUploadedFileName(
+    public async importExecutionResultsAndReturnImportedFileName(
         projectKey: number,
         zipFilePath: string
     ): Promise<string> {
-        const uploadResultZipURL = `/projects/${projectKey}/executionResults/v1`;
+        const importResultZipURL: string = `/projects/${projectKey}/executionResults/v1`;
 
         try {
             const zipFileData: Buffer = fs.readFileSync(zipFilePath);
-            logger.debug(`Uploading zip file "${zipFilePath}" to ${uploadResultZipURL}`);
-            const uploadZipResponse: AxiosResponse = await withRetry(
+            logger.debug(`Importing zip file "${zipFilePath}" to ${importResultZipURL}`);
+            const importZipResponse: AxiosResponse = await withRetry(
                 () =>
-                    this.apiClient.post(uploadResultZipURL, zipFileData, {
+                    this.apiClient.post(importResultZipURL, zipFileData, {
                         headers: {
                             "Content-Type": "application/zip",
                             accept: "application/json"
@@ -523,48 +523,50 @@ export class PlayServerConnection {
                 }
             );
 
-            switch (uploadZipResponse.status) {
+            switch (importZipResponse.status) {
                 case 201: {
-                    logger.debug("Report uploaded successfully.");
+                    logger.debug("Report imported successfully.");
                     // Extract the fileName from the response and return it
-                    const fileName: string | undefined = uploadZipResponse.data?.fileName;
+                    const fileName: string | undefined = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
                     } else {
-                        const fileNameNotFoundMessage = "File name not found in server response.";
+                        const fileNameNotFoundMessage: string = "File name not found in server response.";
                         logger.error(fileNameNotFoundMessage);
                         throw new Error(fileNameNotFoundMessage);
                     }
                 }
                 case 403: {
-                    const uploadForbiddenMessage = "Forbidden: You do not have permission to upload execution results.";
-                    logger.error(uploadForbiddenMessage);
-                    throw new Error(uploadForbiddenMessage);
+                    const importForbiddenMessage: string =
+                        "Forbidden: You do not have permission to import execution results.";
+                    logger.error(importForbiddenMessage);
+                    throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const uploadNotFoundMessage = "Not Found: The requested project was not found.";
-                    logger.error(uploadNotFoundMessage);
-                    throw new Error(uploadNotFoundMessage);
+                    const importNotFoundMessage: string = "Not Found: The requested project was not found.";
+                    logger.error(importNotFoundMessage);
+                    throw new Error(importNotFoundMessage);
                 }
                 case 422: {
-                    const uploadUnprocessableEntityMessage = "Unprocessable Entity: The uploaded file is invalid.";
-                    logger.error(uploadUnprocessableEntityMessage);
-                    throw new Error(uploadUnprocessableEntityMessage);
+                    const importUnprocessableEntityMessage: string =
+                        "Unprocessable Entity: The imported file is invalid.";
+                    logger.error(importUnprocessableEntityMessage);
+                    throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const uploadUnexpectedErrorMessage = `Unexpected status code ${uploadZipResponse.status} received.`;
-                    logger.error(uploadUnexpectedErrorMessage);
-                    throw new Error(uploadUnexpectedErrorMessage);
+                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importZipResponse.status} received.`;
+                    logger.error(importUnexpectedErrorMessage);
+                    throw new Error(importUnexpectedErrorMessage);
                 }
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                logger.error("An Axios error occurred while uploading the file:", error.message);
+                logger.error("An Axios error occurred while importing the file:", error.message);
                 if (error.response) {
                     logger.error("Error response data:", error.response.data);
                 }
             } else {
-                logger.error("An unexpected error occurred while uploading the file:", error);
+                logger.error("An unexpected error occurred while importing the file:", error);
             }
             throw error;
         }
@@ -584,7 +586,7 @@ export class PlayServerConnection {
         cycleKey: number,
         importData: testBenchTypes.ImportData
     ): Promise<string> {
-        const getJobIDOfImportUrl = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+        const getJobIDOfImportUrl: string = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
 
         try {
             const importJobIDResponse: AxiosResponse = await withRetry(
@@ -617,35 +619,36 @@ export class PlayServerConnection {
                         logger.debug(`Import initiated successfully. Job ID: ${jobID}`);
                         return jobID;
                     } else {
-                        const importJobIDNotFoundMessage =
+                        const importJobIDNotFoundMessage: string =
                             "Success response received but no jobID found in the response.";
                         logger.error(importJobIDNotFoundMessage);
                         throw new Error(importJobIDNotFoundMessage);
                     }
                 }
                 case 400: {
-                    const importBadRequestMessage = "Bad Request: The request body is invalid.";
+                    const importBadRequestMessage: string = "Bad Request: The request body is invalid.";
                     logger.error(importBadRequestMessage);
                     throw new Error(importBadRequestMessage);
                 }
                 case 403: {
-                    const importForbiddenMessage = "Forbidden: You do not have permission to import execution results.";
+                    const importForbiddenMessage: string =
+                        "Forbidden: You do not have permission to import execution results.";
                     logger.error(importForbiddenMessage);
                     throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const importNotFoundMessage = "Not Found: Project or test cycle not found.";
+                    const importNotFoundMessage: string = "Not Found: Project or test cycle not found.";
                     logger.error(importNotFoundMessage);
                     throw new Error(importNotFoundMessage);
                 }
                 case 422: {
-                    const importUnprocessableEntityMessage =
+                    const importUnprocessableEntityMessage: string =
                         "Unprocessable Entity: The server cannot process the request.";
                     logger.error(importUnprocessableEntityMessage);
                     throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const importUnexpectedErrorMessage = `Unexpected status code ${importJobIDResponse.status} received.`;
+                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importJobIDResponse.status} received.`;
                     logger.error(importUnexpectedErrorMessage);
                     throw new Error(importUnexpectedErrorMessage);
                 }
@@ -790,10 +793,10 @@ async function withRetry<T>(
  * Prompts the user for general input with live validation.
  * Loops until valid input is provided, "quit" is typed, or the user cancels.
  *
- * @param promptMessage - The prompt message.
- * @param inputCanBeEmpty - Whether the input may be empty.
- * @param maskSensitiveInputData - Whether to mask the input (e.g. for passwords).
- * @param validateInputFunction - Optional validation function; should return an error message if invalid.
+ * @param {string} promptMessage - The prompt message.
+ * @param {boolean} inputCanBeEmpty - Whether the input may be empty.
+ * @param {boolean }maskSensitiveInputData - Whether to mask the input (e.g. for passwords).
+ * @param {(value: string) => string | null} validateInputFunction - Optional validation function; should return an error message if invalid.
  * @returns {Promise<string | null>} The user input as a string, or null if aborted.
  */
 async function promptForInputAndValidate(
@@ -803,7 +806,7 @@ async function promptForInputAndValidate(
     validateInputFunction?: (value: string) => string | null
 ): Promise<string | null> {
     while (true) {
-        const input = await vscode.window.showInputBox({
+        const input: string | undefined = await vscode.window.showInputBox({
             prompt: promptMessage,
             password: maskSensitiveInputData,
             ignoreFocusOut: true,
@@ -862,7 +865,7 @@ export async function performLogin(
             storePasswordAfterSuccessfulLogin
         );
 
-        let useStoredCredentials = false;
+        let useStoredCredentials: boolean = false;
         // If the user has stored credentials and can auto-login,
         // and the user has not chosen to prompt for new credentials,
         // and the user has not chosen to auto-login without prompting, then auto-login
@@ -1202,14 +1205,14 @@ async function fetchServerVersions(
  */
 async function promptForReportZipFileWithResults(): Promise<string | null> {
     try {
-        const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
+        const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
             vscode.window.showErrorMessage("Workspace location is not set in the configuration.");
             logger.warn("Workspace location is not set in the configuration.");
             return null;
         }
 
-        const workingDirectoryPath = path.join(workspaceLocation, folderNameOfTestbenchWorkingDirectory);
+        const workingDirectoryPath: string = path.join(workspaceLocation, folderNameOfTestbenchWorkingDirectory);
         const options: vscode.OpenDialogOptions = {
             defaultUri: vscode.Uri.file(workingDirectoryPath),
             openLabel: "Select Zip File with Test Results",
@@ -1219,14 +1222,14 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
             filters: { "Zip Files": ["zip"] }
         };
 
-        const fileUri = await vscode.window.showOpenDialog(options);
+        const fileUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog(options);
         if (!fileUri || !fileUri[0]) {
             vscode.window.showErrorMessage("No file selected. Please select a valid .zip file.");
             logger.debug("No zip file selected.");
             return null;
         }
 
-        const selectedFilePath = fileUri[0].fsPath;
+        const selectedFilePath: string = fileUri[0].fsPath;
         if (!selectedFilePath.endsWith(".zip")) {
             vscode.window.showErrorMessage("Selected file is not a .zip file. Please select a valid .zip file.");
             logger.debug("Selected file is not a .zip file.");
@@ -1234,7 +1237,7 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
         }
         return selectedFilePath;
     } catch (error: any) {
-        const zipSelectionErrorMessage = `An error occurred while selecting the report zip file: ${error.message}`;
+        const zipSelectionErrorMessage: string = `An error occurred while selecting the report zip file: ${error.message}`;
         vscode.window.showErrorMessage(zipSelectionErrorMessage);
         logger.error(zipSelectionErrorMessage);
         return null;
@@ -1244,8 +1247,8 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
 /**
  * Recursively searches for a cycle key matching the given cycle name.
  *
- * @param treeElements - The array of tree elements.
- * @param cycleName - The cycle name to search for.
+ * @param {any[]} treeElements - The array of tree elements.
+ * @param {string} cycleName - The cycle name to search for.
  * @returns {string | null} The cycle key if found, otherwise null.
  */
 function findCycleKeyFromCycleNameRecursively(treeElements: any[], cycleName: string): string | null {
@@ -1272,9 +1275,9 @@ function findCycleKeyFromCycleNameRecursively(treeElements: any[], cycleName: st
 /**
  * Imports a report (zip file with test results) to the TestBench server.
  *
- * @param connection - The PlayServerConnection.
- * @param projectManagementTreeDataProvider - The tree data provider.
- * @param resultZipFilePath - The file path of the zip file.
+ * @param {PlayServerConnection} connection - The PlayServerConnection.
+ * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectManagementTreeDataProvider - The tree data provider.
+ * @param {string} resultZipFilePath - The file path of the zip file.
  * @returns {Promise<void | null>} A promise that resolves when the import is complete, or null if an error occurs.
  */
 export async function importReportWithResultsToTestbench(
@@ -1286,16 +1289,18 @@ export async function importReportWithResultsToTestbench(
         logger.debug("Importing report with results to TestBench server.");
         const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReport(resultZipFilePath);
         if (!uniqueID || !projectKey || !cycleNameOfProject) {
-            const msg = "Error extracting project key, cycle name, and unique ID from the zip file.";
-            vscode.window.showErrorMessage(msg);
-            logger.error(msg);
+            const extractionErrorMsg: string =
+                "Error extracting project key, cycle name, and unique ID from the zip file.";
+            vscode.window.showErrorMessage(extractionErrorMsg);
+            logger.error(extractionErrorMsg);
             return null;
         }
 
         // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
         // Later, we should fetch the project tree from the server and search for the cycle key there.
 
-        const allTreeElementsInTreeView = await projectManagementTreeDataProvider.getChildren(undefined);
+        const allTreeElementsInTreeView: projectManagementTreeView.ProjectManagementTreeItem[] =
+            await projectManagementTreeDataProvider.getChildren(undefined);
         if (!allTreeElementsInTreeView) {
             const loadProjectTreeErrorMessage =
                 "Failed to load project management tree elements for importing results.";
@@ -1311,25 +1316,25 @@ export async function importReportWithResultsToTestbench(
         console.log(`allTreeElements saved to ${allTreeElementsPath}`);
         */
 
-        const cycleKeyOfImportedReport = findCycleKeyFromCycleNameRecursively(
+        const cycleKeyOfImportedReport: string | null = findCycleKeyFromCycleNameRecursively(
             allTreeElementsInTreeView,
             cycleNameOfProject
         );
         if (!cycleKeyOfImportedReport) {
-            const cycleNotFoundErrorMessage = "Cycle not found in the project tree.";
+            const cycleNotFoundErrorMessage: string = "Cycle not found in the project tree.";
             logger.error(cycleNotFoundErrorMessage);
             vscode.window.showErrorMessage(cycleNotFoundErrorMessage);
             return null;
         }
 
-        const zipFilenameFromServer = await connection.uploadExecutionResultsAndReturnUploadedFileName(
+        const zipFilenameFromServer: string = await connection.importExecutionResultsAndReturnImportedFileName(
             Number(projectKey),
             resultZipFilePath
         );
         if (!zipFilenameFromServer) {
-            const uploadErrorMessage = "Error uploading the result file to the server.";
-            logger.error(uploadErrorMessage);
-            vscode.window.showErrorMessage(uploadErrorMessage);
+            const importErrorMessage: string = "Error importing the result file to the server.";
+            logger.error(importErrorMessage);
+            vscode.window.showErrorMessage(importErrorMessage);
             return null;
         }
 
@@ -1357,18 +1362,22 @@ export async function importReportWithResultsToTestbench(
         try {
             // Start the import job
             logger.debug("Starting import execution results.");
-            const importJobID = await connection.getJobIDOfImportJob(
+            const importJobID: string = await connection.getJobIDOfImportJob(
                 Number(projectKey),
                 Number(cycleKeyOfImportedReport),
                 importData
             );
 
             // Poll the job status until it is completed
-            const importJobStatus = await reportHandler.pollJobStatus(projectKey.toString(), importJobID, "import");
+            const importJobStatus: testBenchTypes.JobStatusResponse | null = await reportHandler.pollJobStatus(
+                projectKey.toString(),
+                importJobID,
+                "import"
+            );
 
             // Check if the job is completed successfully
             if (!importJobStatus || reportHandler.isImportJobFailed(importJobStatus)) {
-                const importJobFailedMessage = "Import job not completed or failed.";
+                const importJobFailedMessage: string = "Import job not completed or failed.";
                 logger.warn(importJobFailedMessage);
                 vscode.window.showErrorMessage(importJobFailedMessage);
                 return null;
@@ -1405,7 +1414,7 @@ export async function selectReportWithResultsAndImportToTestbench(
         },
         async (progress) => {
             progress.report({ message: "Selecting report file with results.", increment: 30 });
-            const resultZipFilePath = await promptForReportZipFileWithResults();
+            const resultZipFilePath: string | null = await promptForReportZipFileWithResults();
             if (!resultZipFilePath) {
                 logger.error("No location selected for the report zip file with results.");
                 return null;

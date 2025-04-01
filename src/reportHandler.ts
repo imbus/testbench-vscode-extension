@@ -19,7 +19,7 @@ import { importReportWithResultsToTestbench } from "./testBenchConnection";
 
 /**
  * Global object to store parameters from the last fethed report file,
- * to be able to use the report without the user selecting the report again while uploading the report.
+ * to be able to use the report without the user selecting the report again while importing the report.
  * Declaring it as const does not prevent changing the properties of the object.
  */
 export const lastGeneratedReportParams: testBenchTypes.LastGeneratedReportParams = {
@@ -1156,7 +1156,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 }
 
 /**
- * Reads test results, creates a report zip with results, and imports it to the TestBench server.
+ * Reads test results, creates a report zip with test results, and imports it to the TestBench server.
  *
  * @param {vscode.ExtensionContext} context The extension context.
  * @param {string} folderNameOfTestbenchWorkingDirectory The testbench working directory folder name.
