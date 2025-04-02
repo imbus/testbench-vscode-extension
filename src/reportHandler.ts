@@ -539,7 +539,7 @@ export async function fetchReportForTreeElement(
                     logger.warn("Project management tree not initialized, cannot fetch report.");
                     return null;
                 }
-                const projectKeyOfProjectInView = projectManagementTreeDataProvider.currentProjectKeyInView;
+                const projectKeyOfProjectInView = projectManagementTreeDataProvider.activeProjectKeyInView;
                 if (!projectKeyOfProjectInView) {
                     logger.warn("No project selected, cannot fetch report.");
                     return null;
@@ -1174,18 +1174,6 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
             cancellable: true
         },
         async (progress) => {
-            if (!connection) {
-                const noConnectionMessage: string = "No connection available. Cannot import report.";
-                vscode.window.showErrorMessage(noConnectionMessage);
-                logger.warn(noConnectionMessage);
-                return null;
-            }
-            if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.currentProjectKeyInView) {
-                const missingProjectKeyError: string = "Project key is missing. Cannot import report.";
-                vscode.window.showErrorMessage(missingProjectKeyError);
-                logger.warn(missingProjectKeyError);
-                return null;
-            }
             progress.report({ message: "Reading Test Results and Creating Report.", increment: 25 });
             const pathOfCreatedReportWithResults: string | undefined =
                 await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
@@ -1199,8 +1187,9 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
             }
             progress.report({ message: "Importing report to TestBench.", increment: 25 });
             await importReportWithResultsToTestbench(
-                connection,
-                projectManagementTreeDataProvider,
+                // The checks if connection and projectManagementTreeDataProvider are null are done in the caller function
+                connection!,
+                projectManagementTreeDataProvider!,
                 pathOfCreatedReportWithResults
             );
             progress.report({ message: "Cleaning up.", increment: 25 });

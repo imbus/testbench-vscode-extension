@@ -52,7 +52,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     // The root item (a project) of the project management tree view.
     private rootItem: ProjectManagementTreeItem | null = null;
     // The project key currently in view.
-    currentProjectKeyInView: string | null;
+    activeProjectKeyInView: string | null;
     // The test theme tree data provider used to display test themes.
     testThemeDataProvider: TestThemeTreeDataProvider;
     // Store keys of expanded nodes to restore expansion state of collapsible elements after the refresh button is clicked.
@@ -65,7 +65,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @param {TestThemeTreeDataProvider} testThemeDataProvider Optional test theme tree data provider.
      */
     constructor(projectKey?: string, testThemeDataProvider?: TestThemeTreeDataProvider) {
-        this.currentProjectKeyInView = projectKey ?? null;
+        this.activeProjectKeyInView = projectKey ?? null;
         this.testThemeDataProvider = testThemeDataProvider!;
     }
 
@@ -164,7 +164,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                 }
                 // No parent provided; load the root project.
                 const projectTree: testBenchTypes.TreeNode | null = await connection.getProjectTreeOfProject(
-                    this.currentProjectKeyInView
+                    this.activeProjectKeyInView
                 );
                 if (!projectTree) {
                     return [];
@@ -567,21 +567,20 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
  * @returns {Promise<[ProjectManagementTreeDataProvider | null, TestThemeTreeDataProvider | null]>}
  * A promise resolving with an array containing the project management and test theme data providers.
  */
-export async function initializeTreeViews(
+export async function initializeProjectAndTestThemeTrees(
     context: vscode.ExtensionContext,
     connection: PlayServerConnection | null,
     selectedProjectKey?: string
 ): Promise<[ProjectManagementTreeDataProvider | null, TestThemeTreeDataProvider | null]> {
     logger.debug("Initializing project management and test theme tree views.");
     if (!connection) {
-        const msg = "No connection available. Please log in first.";
-        vscode.window.showErrorMessage(msg);
-        logger.error(msg);
+        const connectionErrorMessage: string = "No connection available. Please log in first.";
+        vscode.window.showErrorMessage(connectionErrorMessage);
+        logger.error(connectionErrorMessage);
         return [null, null];
     }
 
-    const testThemeDataProvider = new TestThemeTreeDataProvider();
-
+    const testThemeDataProvider: TestThemeTreeDataProvider = new TestThemeTreeDataProvider();
     testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
         treeDataProvider: testThemeDataProvider
     });
@@ -606,7 +605,7 @@ export async function initializeTreeViews(
     // Handle selection changes (click events) to trigger test theme tree initialization on cycle click.
     projectTreeView.onDidChangeSelection(async (event) => {
         //  Retrieve the currently selected element in the tree view
-        const selectedElement = event.selection[0];
+        const selectedElement: ProjectManagementTreeItem = event.selection[0];
         if (selectedElement && selectedElement.contextValue === "Cycle") {
             await projectManagementDataProvider!.handleTestCycleClick(selectedElement);
         }

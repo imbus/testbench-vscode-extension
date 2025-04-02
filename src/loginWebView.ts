@@ -18,7 +18,7 @@ export let loginWebViewIsVisible: boolean = true; // Initially display the view 
 export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewId: string = "testbenchExtension.webView";
     private currentWebview?: vscode.WebviewView;
-    // Prevent multiple login processes by spamming the submit button.
+    // Prevent multiple login processes which can be caused by spamming the login button.
     private isLoginProcessAlreadyRunning: boolean = false;
 
     /**
@@ -41,44 +41,44 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         };
 
         // Set initial HTML content based on connection status.
-        this.updateWebviewContent();
+        this.updateWebviewHTMLContent();
 
         // Listen for messages from the webview to respond to user actions.
-        webviewView.webview.onDidReceiveMessage((message) => {
+        webviewView.webview.onDidReceiveMessage(async (message) => {
             logger.trace(`Received message from webview: ${message.command}`);
-            if (message.command === "login") {
-                this.handleLogin(
-                    this.extensionContext,
-                    message.serverName,
-                    parseInt(message.portNumber, 10), // Port number is an integer
-                    message.username,
-                    message.password,
-                    message.autoLogin,
-                    message.savePassword
-                );
+            switch (message.command) {
+                case "login":
+                    this.handleLogin(
+                        this.extensionContext,
+                        message.serverName,
+                        parseInt(message.portNumber, 10), // Port number is an integer, parse it
+                        message.username,
+                        message.password
+                    );
+                    break;
+                case "updateSetting":
+                    await getConfig().update(message.key, message.value);
+                    logger.trace(`Updated setting ${message.key} to ${message.value}`);
+                    break;
             }
         });
     }
 
     /**
-     * Handles the login process when a login message is received from the webview when the user submits the form.
+     * Handles the login process when a login message is received from the webview when the user submits the login form.
      * Prevents multiple login attempts and triggers the login sequence.
      * @param {vscode.ExtensionContext | undefined} extensionContext The extension context.
      * @param {string} serverName The server name.
      * @param {number} portNumber The port number.
      * @param {string} username The username.
      * @param {string} password The password.
-     * @param {boolean} autoLogin Whether to automatically log in after extension activation.
-     * @param {boolean} savePassword Whether to save the password.
      */
     private async handleLogin(
         extensionContext: vscode.ExtensionContext | undefined,
         serverName: string,
         portNumber: number,
         username: string,
-        password: string,
-        autoLogin: boolean,
-        savePassword: boolean
+        password: string
     ): Promise<void> {
         if (this.isLoginProcessAlreadyRunning) {
             logger.trace("Login process already running; ignoring duplicate submit.");
@@ -87,19 +87,16 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         this.isLoginProcessAlreadyRunning = true;
         logger.trace("Handling login command from webview.");
 
+        // Check if the user is already connected to a server, if so, show a message and hide the webview.
         if (this.isConnectedToServer()) {
             vscode.window.showInformationMessage("You are already connected to a server.");
+            hideWebView();
             this.isLoginProcessAlreadyRunning = false;
             return;
         }
 
-        // TODO: In production, don't log sensitive data.
+        // In production, don't log sensitive data.
         logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
-
-        // TODO: This can be updated dynamically after the checkbox value is changed.
-        // After the user presses login, update extension settings with the checkbox values
-        await getConfig().update("automaticLoginAfterExtensionActivation", autoLogin);
-        await getConfig().update("storePasswordAfterLogin", savePassword);
 
         // Attempt to log in. Successfull login will update and hide the webview automatically.
         const connectionAfterLoginAttempt: PlayServerConnection | null = await loginToNewPlayServerAndInitSessionToken(
@@ -112,7 +109,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         // If login was successful, open project selection and display project tree view
         if (connectionAfterLoginAttempt) {
-            await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject.command}`);
+            await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject}`);
             // If the user does not select a project and clicks away, there wont be any active view.
             // Add project view so that the user can choose a project.
             displayProjectManagementTreeView();
@@ -125,7 +122,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     /**
      * Updates the HTML content of the webview based on the connection status.
      */
-    async updateWebviewContent(): Promise<void> {
+    async updateWebviewHTMLContent(): Promise<void> {
         logger?.trace("Updating login webview content.");
         if (!this.currentWebview) {
             logger?.trace("No webview instance available for updating content.");
@@ -303,6 +300,24 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             const savePassword = document.getElementById('savePassword').checked;
             vscode.postMessage({ command: 'login', serverName, portNumber, username, password, autoLogin, savePassword });
         }
+
+        // Add event listeners for checkbox changes
+        document.getElementById('autoLogin').addEventListener('change', function() {
+            vscode.postMessage({ 
+                command: 'updateSetting', 
+                key: 'automaticLoginAfterExtensionActivation', 
+                value: this.checked 
+            });
+        });
+        document.getElementById('savePassword').addEventListener('change', function() {
+            vscode.postMessage({ 
+                command: 'updateSetting', 
+                key: 'storePasswordAfterLogin', 
+                value: this.checked 
+            });
+        });
+
+        // Handle messages from the extension
         window.addEventListener('message', (event) => {
             const message = event.data;
             if (message.command === 'updateContent') {
