@@ -475,7 +475,7 @@ export class PlayServerConnection {
             setConnection(null);
             // Notify login webview about the logout success to change its HTML content
             if (loginWebViewProvider) {
-                loginWebViewProvider.updateWebviewContent();
+                loginWebViewProvider.updateWebviewHTMLContent();
             } else {
                 logger.warn("loginWebViewProvider is null. Cannot update webview content.");
             }
@@ -720,7 +720,7 @@ export class PlayServerConnection {
         } catch (error) {
             logger.error("Keep-alive request failed after retries:", error);
             logger.warn("Logging out the user after keep-alive failure.");
-            await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
+            await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
         }
     }
 }
@@ -851,18 +851,22 @@ export async function performLogin(
     // Loop until the user successfully logs in or cancels the login process
     while (true) {
         // Retrieve the stored credentials if they exist
-        const storePasswordAfterSuccessfulLogin: boolean = getConfig().get<boolean>("storePasswordAfterLogin", false);
         let password: string | undefined;
 
         // Only retrieve the password if the user has choosen to store it after successful login
-        if (storePasswordAfterSuccessfulLogin) {
+        if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
             password = await context.secrets.get("password");
         }
+        // If the user has not chosen to store the password, clear it from the secret storage
+        else {
+            clearStoredCredentials(context);
+        }
+
         const userHasStoredCredentials = !!(
             getConfig().get<string>("serverName") &&
             getConfig().get<string>("username") &&
             password &&
-            storePasswordAfterSuccessfulLogin
+            getConfig().get<boolean>("storePasswordAfterLogin", false)
         );
 
         let useStoredCredentials: boolean = false;
@@ -1078,6 +1082,8 @@ export async function loginToNewPlayServerAndInitSessionToken(
                         logger.trace("Password stored securely.");
                     } else {
                         logger.trace("User chose not to store password.");
+                        // Clear the password from secret storage if it was previously stored
+                        clearStoredCredentials(context);
                     }
                     // Starts keep alive in the constructor of PlayServerConnection
                     const newConnection: PlayServerConnection = new PlayServerConnection(
@@ -1094,7 +1100,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     vscode.window.showInformationMessage(loginSuccessfulMessage);
                     // Upon successful login, update the login webview content and hide it.
                     if (loginWebViewProvider) {
-                        loginWebViewProvider.updateWebviewContent();
+                        loginWebViewProvider.updateWebviewHTMLContent();
                         loginWebView.hideWebView();
                     } else {
                         logger.warn("loginWebViewProvider is null. Cannot update webview content.");
