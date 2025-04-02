@@ -216,10 +216,12 @@ export async function loadConfiguration(context: vscode.ExtensionContext, newSco
         await testBenchConnection?.clearStoredCredentials(context);
     }
 
-    // Update the webview input fields after extension settings are changed to reflect the changes in the webview live
+    // Update the webview input fields after extension settings are changed to reflect the changes in the webview live.
+    // Commented out due to the password field being empty after the extension settings are changed.
     // loginWebViewProvider?.updateWebviewHTMLContent();
 }
 
+// TODO: Code duplication with projectManagementTreeView.ts
 function initializeProjectManagementTreeView(): void {
     projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(null!);
     projectTreeView = vscode.window.createTreeView("projectManagementTree", {
@@ -447,6 +449,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             logger.warn("No project selected for selectAndLoadProject command.");
             return;
         }
+
+        // TODO: Code duplication with projectManagementTreeView.ts
         projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(
             selectedProjectKey
         );
@@ -543,19 +547,12 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshProjectTreeView, async () => {
-        logger.debug("Refresh Project Tree command called.");
-        [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeProjectAndTestThemeTrees(
-            context,
-            connection!,
-            projectManagementTreeDataProvider?.activeProjectKeyInView ?? undefined // Instead of null, return undefined
-        );
-        logger.trace("End of Refresh Project Tree command.");
+        projectManagementTreeDataProvider?.refresh();
     });
 
     // --- Command: Refresh Test Theme Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshTestThemeTreeView, async () => {
         logger.debug("Refresh Test Theme Tree command called.");
-        projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
         const cycleElement: projectManagementTreeView.ProjectManagementTreeItem | undefined =
             projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent ?? undefined;
         if (cycleElement && cycleElement.contextValue === "Cycle") {
@@ -564,6 +561,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 (await projectManagementTreeDataProvider?.getChildrenOfCycle(cycleElement)) ?? [];
             projectManagementTreeDataProvider?.testThemeDataProvider?.setRoots(children);
         }
+        projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
+
         logger.trace("End of Refresh Test Theme Tree command.");
     });
 
