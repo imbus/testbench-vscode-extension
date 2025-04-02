@@ -77,6 +77,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         this.storeExpandedTreeItems(this.rootItem);
         this.rootItem = null;
         this._onDidChangeTreeData.fire();
+        logger.trace("Project management tree view refreshed.");
     }
 
     /**
@@ -580,13 +581,14 @@ export async function initializeProjectAndTestThemeTrees(
         return [null, null];
     }
 
+    // Initialize test theme tree view
     const testThemeDataProvider: TestThemeTreeDataProvider = new TestThemeTreeDataProvider();
     testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
         treeDataProvider: testThemeDataProvider
     });
 
+    // Initialize project management tree
     projectManagementDataProvider = new ProjectManagementTreeDataProvider(selectedProjectKey, testThemeDataProvider);
-
     setProjectTreeView(
         vscode.window.createTreeView("projectManagementTree", {
             treeDataProvider: projectManagementDataProvider
