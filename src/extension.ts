@@ -64,7 +64,7 @@ export const allExtensionCommands = {
     automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
     displayInteractionsForSelectedTOV: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`,
-    openRobotResourceFile: `${baseKeyOfExtension}.openRobotResourceFile`,
+    openOrCreateRobotResourceFile: `${baseKeyOfExtension}.openOrCreateRobotResourceFile`,
     createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`
 };
@@ -591,7 +591,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // Opens or creates the robot resource file associated with the selected test element.
     registerSafeCommand(
         context,
-        allExtensionCommands.openRobotResourceFile,
+        allExtensionCommands.openOrCreateRobotResourceFile,
         async (treeItem: testElementsTreeView.TestElementTreeItem) => {
             if (!treeItem || !treeItem.testElementData) {
                 logger.trace("Invalid tree item or element in Open Robot Resource File command.");
@@ -606,7 +606,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             }
 
             logger.trace(
-                `Open Robot Resource File command created absolutePathOfTestElement: ${absolutePathOfSelectedTestElement}`
+                `Opening Robot Resource File - absolute path for test element tree item (${treeItem.testElementData.name}) resolved as: ${absolutePathOfSelectedTestElement}`
             );
             try {
                 switch (treeItem.testElementData.elementType) {
