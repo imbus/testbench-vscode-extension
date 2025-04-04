@@ -249,6 +249,14 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     if (logger && enableLogging) {
         logger.trace(`No workspace available; falling back to user's home directory: "${homeDirectory}"`);
     }
+
+    if (!homeDirectory) {
+        const workspaceLocationMissingError: string = "Unable to determine the user's home directory.";
+        logger.error(workspaceLocationMissingError);
+        vscode.window.showErrorMessage(workspaceLocationMissingError);
+        return undefined;
+    }
+
     return homeDirectory;
 }
 

@@ -381,7 +381,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.openRobotResourceFile",
+                "command": "testbenchExtension.openOrCreateRobotResourceFile",
                 "title": "Go to Robot Resource"
             },
             {
@@ -494,7 +494,7 @@
                     "group": "inline@1"
                 },
                 {
-                    "command": "testbenchExtension.openRobotResourceFile",
+                    "command": "testbenchExtension.openOrCreateRobotResourceFile",
                     "when": "view == testElementsView && (viewItem == subdivision || viewItem == interaction)",
                     "group": "navigation"
                 },
