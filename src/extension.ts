@@ -21,6 +21,7 @@ import * as testElementsTreeView from "./testElementsTreeView";
 import * as loginWebView from "./loginWebView";
 import * as utils from "./utils";
 import path from "path";
+import { initializeProjectAndTestThemeTrees } from "./projectManagementTreeView";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -92,7 +93,9 @@ export function setConnection(newConnection: testBenchConnection.PlayServerConne
 /** Global login webview provider instance. */
 export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null;
 
-/** Global tree views. */
+/** Global tree views.
+ * The generic parameter specifies the type of tree item displayed by each view.
+ */
 export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementTreeItem>;
 export let projectTreeView: vscode.TreeView<projectManagementTreeView.ProjectManagementTreeItem>;
 export function setProjectTreeView(
@@ -221,14 +224,6 @@ export async function loadConfiguration(context: vscode.ExtensionContext, newSco
     // loginWebViewProvider?.updateWebviewHTMLContent();
 }
 
-// TODO: Code duplication with projectManagementTreeView.ts
-function initializeProjectManagementTreeView(): void {
-    projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(null!);
-    projectTreeView = vscode.window.createTreeView("projectManagementTree", {
-        treeDataProvider: projectManagementTreeDataProvider
-    });
-}
-
 function initializeTestElementsTreeView(): void {
     testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider();
     testElementTreeView = vscode.window.createTreeView("testElementsView", {
@@ -241,16 +236,18 @@ function initializeTestElementsTreeView(): void {
 
 /**
  * Initializes the project tree and test elements tree.
+ *
+ * @param {vscode.ExtensionContext} context The extension context.
  */
-export function initializeTreeViews(): void {
-    initializeProjectManagementTreeView();
+export function initializeTreeViews(context: vscode.ExtensionContext): void {
+    initializeProjectAndTestThemeTrees(context);
     initializeTestElementsTreeView();
 }
 
 /**
  * Registers all the commands defined by the extension.
  *
- * @param context The extension context.
+ * @param {vscode.ExtensionContext} context The extension context.
  */
 function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // --- Command: Toggle Login Webview Visibility ---
@@ -260,7 +257,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // Prompts the user to select a workspace location and updates the workspace configuration with the selected path.
     registerSafeCommand(context, `${baseKeyOfExtension}.setWorkspaceLocation`, async () => {
         logger.debug("Set Workspace Location command called.");
-        const newWorkspaceLocation = await promptForWorkspaceLocation();
+        const newWorkspaceLocation: string | undefined = await promptForWorkspaceLocation();
         if (newWorkspaceLocation) {
             await config.update("workspaceLocation", newWorkspaceLocation);
             vscode.window.showInformationMessage(`Workspace location set to: ${newWorkspaceLocation}`);
@@ -438,11 +435,14 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             logger.warn("selectAndLoadProject command called without connection.");
             return;
         }
+
         const projectList: testBenchTypes.Project[] | null = await connection.getProjectsList();
         if (!projectList) {
             logger.warn("No projects found for selectAndLoadProject command.");
             return;
         }
+
+        // Show a quick pick dialog to select a project from the projects list.
         const selectedProjectKey: string | null =
             await connection.getProjectKeyFromProjectListQuickPickSelection(projectList);
         if (!selectedProjectKey) {
@@ -450,20 +450,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             return;
         }
 
-        // TODO: Code duplication with projectManagementTreeView.ts
-        projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(
-            selectedProjectKey
-        );
-        projectTreeView = vscode.window.createTreeView("projectManagementTree", {
-            treeDataProvider: projectManagementTreeDataProvider
-        });
-
         // Initialize and display the project management tree view with the selected project.
-        [projectManagementTreeDataProvider] = await projectManagementTreeView.initializeProjectAndTestThemeTrees(
-            context,
-            connection,
-            selectedProjectKey
-        );
+        await projectManagementTreeView.initializeProjectAndTestThemeTrees(context, selectedProjectKey);
 
         // After selecting a (new) project, hide the test theme tree view and test elements tree view and clear the test elements tree view.
         projectManagementTreeView.hideTestThemeTreeView();
@@ -774,7 +762,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Load initial configuration and register a listener for configuration changes.
     await loadConfiguration(context);
 
-    initializeTreeViews();
+    initializeTreeViews(context);
 
     // Register the login webview provider.
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
