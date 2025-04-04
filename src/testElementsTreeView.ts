@@ -508,7 +508,7 @@ export class TestElementTreeItem extends vscode.TreeItem {
 export async function constructAbsolutePathForTestElement(
     testElementTreeItem: TestElementTreeItem
 ): Promise<string | undefined> {
-    const workspaceRootPath = await utils.validateAndReturnWorkspaceLocation();
+    const workspaceRootPath: string | undefined = await utils.validateAndReturnWorkspaceLocation();
     if (!workspaceRootPath) {
         logger.trace(
             `No workspace root path found while constructing absolute path for test element: ${testElementTreeItem.testElementData.name}`

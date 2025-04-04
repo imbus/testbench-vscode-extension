@@ -58,7 +58,7 @@
             {
                 "title": "Working Directory",
                 "properties": {
-                    "testbenchExtension.clearWorkingDirectoryBeforeTestGeneration": {
+                    "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
                         "description": "Delete all files inside the working directory called .testbench excluding the log files before generating tests.",
@@ -261,15 +261,11 @@
                 }
             },
             {
-                "command": "testbenchExtension.setWorkspaceLocation",
-                "title": "TestBench: Set Workspace Location"
-            },
-            {
-                "command": "testbenchExtension.clearWorkspaceFolder",
+                "command": "testbenchExtension.clearInternalTestbenchFolder",
                 "title": "TestBench: Clear Temporary Files",
                 "icon": {
-                    "light": "resources/icons/clearWorkspaceFolder-light.svg",
-                    "dark": "resources/icons/clearWorkspaceFolder-dark.svg"
+                    "light": "resources/icons/clearInternalTestbenchFolder-light.svg",
+                    "dark": "resources/icons/clearInternalTestbenchFolder-dark.svg"
                 }
             },
             {
@@ -461,7 +457,7 @@
                     "when": "view == projectManagementTree || view == testThemeTree"
                 },
                 {
-                    "command": "testbenchExtension.clearWorkspaceFolder",
+                    "command": "testbenchExtension.clearInternalTestbenchFolder",
                     "group": "navigation@7",
                     "when": "view == projectManagementTree"
                 },

@@ -108,16 +108,12 @@ suite("Extension Test Suite", () => {
         await safeHandler();
         assert.ok(loggerStub.error.calledWith("Error executing command:", error), "Error should be logged");
     });
-    test("promptForWorkspaceLocation should prompt the user and return the selected path", async () => {
-        const path = await (0, extension_1.promptForWorkspaceLocation)();
-        assert.strictEqual(path, "/fake/path", "Selected path should be returned");
-    });
     test("loadConfiguration should update the configuration", async () => {
         await (0, extension_1.loadConfiguration)(context);
         assert.ok(getConfigurationStub.calledWith(extension_1.baseKeyOfExtension), "Configuration should be loaded");
     });
     test("initializeTreeViews should initialize the tree views", () => {
-        (0, extension_1.initializeTreeViews)();
+        (0, extension_1.initializeTreeViews)(context);
         assert.ok(projectManagementTreeDataProviderStub, "Project management tree view should be initialized");
         assert.ok(testElementsTreeDataProviderStub, "Test elements tree view should be initialized");
     });

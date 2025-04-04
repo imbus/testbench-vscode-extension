@@ -194,9 +194,9 @@ export async function pollJobStatus(
 /**
  * Retrieves the job ID from the server for a report or import job.
  *
- * @param projectKey The project key.
- * @param cycleKey The cycle key.
- * @param requestParams Optional request parameters.
+ * @param {string} projectKey The project key.
+ * @param {string} cycleKey The cycle key.
+ * @param {testBenchTypes.OptionalJobIDRequestParameter} requestParams Optional request parameters.
  * @returns {Promise<string | null>} The job ID as a string or null if not found.
  */
 export async function getJobId(
@@ -209,7 +209,7 @@ export async function getJobId(
         return null;
     }
 
-    const getJobIDUrl = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
+    const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
     logger.debug(`Fetching job ID from URL: ${getJobIDUrl}`);
     try {
         const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await axios.post(
@@ -238,9 +238,9 @@ export async function getJobId(
 /**
  * Retrieves the job status from the server.
  *
- * @param projectKey The project key.
- * @param jobId The job ID.
- * @param jobType The type of job ("report" or "import").
+ * @param {string} projectKey The project key.
+ * @param {string} jobId The job ID.
+ * @param {"report" | "import"} jobType The type of job ("report" or "import").
  * @returns {Promise<testBenchTypes.JobStatusResponse | null>} The job status response object, or throws an error if not successful.
  */
 export async function getJobStatus(
@@ -252,7 +252,7 @@ export async function getJobStatus(
         logger.error("Connection object is missing, cannot get job status.");
         return null;
     }
-    const getJobStatusUrl = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
+    const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
     logger.debug(`Checking job status at: ${getJobStatusUrl}`);
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await axios.get(getJobStatusUrl, {
         headers: {
@@ -290,12 +290,12 @@ export async function downloadReport(
 ): Promise<string | null> {
     try {
         if (!connection) {
-            const errorMsg = "Connection object is missing, cannot download report.";
-            logger.error(errorMsg);
-            vscode.window.showErrorMessage(errorMsg);
+            const missingConnectionError: string = "Connection object is missing, cannot download report.";
+            logger.error(missingConnectionError);
+            vscode.window.showErrorMessage(missingConnectionError);
             return null;
         }
-        const downloadReportUrl = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
+        const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
         logger.debug(`Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
         const downloadZipResponse: AxiosResponse<any> = await axios.get(downloadReportUrl, {
@@ -307,15 +307,15 @@ export async function downloadReport(
         });
 
         if (downloadZipResponse.status !== 200) {
-            const errorMsg = `Failed to download report, status code: ${downloadZipResponse.status}`;
-            logger.error(errorMsg);
-            throw new Error(errorMsg);
+            const downloadReportErrorMessage: string = `Failed to download report, status code: ${downloadZipResponse.status}`;
+            logger.error(downloadReportErrorMessage);
+            throw new Error(downloadReportErrorMessage);
         }
 
-        const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
+        const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation || !fs.existsSync(workspaceLocation)) {
-            const errorMsg = `Workspace location is not valid: ${workspaceLocation}`;
-            logger.error(errorMsg);
+            const invalidWorkspaceLocationError: string = `Workspace location is not valid: ${workspaceLocation}`;
+            logger.error(invalidWorkspaceLocationError);
             return await promptUserForSaveLocationAndSaveReportToFile(fileNameToDownload, downloadZipResponse);
         }
         return await storeReportFileLocally(
@@ -325,9 +325,9 @@ export async function downloadReport(
             downloadZipResponse
         );
     } catch (error) {
-        const errorMsg = `Failed to download report: ${(error as Error).message}`;
-        logger.error(errorMsg);
-        vscode.window.showErrorMessage(errorMsg);
+        const downloadReportErrorMessage: string = `Failed to download report: ${(error as Error).message}`;
+        logger.error(downloadReportErrorMessage);
+        vscode.window.showErrorMessage(downloadReportErrorMessage);
         return null;
     }
 }
@@ -354,9 +354,9 @@ async function storeReportFileLocally(
         logger.debug(`Report saved to ${uri.fsPath}`);
         return uri.fsPath;
     } catch (error) {
-        const errorMsg: string = `Failed to save report file: ${(error as Error).message}`;
-        logger.error(errorMsg);
-        vscode.window.showErrorMessage(errorMsg);
+        const failedReportSaveMessage: string = `Failed to save report file: ${(error as Error).message}`;
+        logger.error(failedReportSaveMessage);
+        vscode.window.showErrorMessage(failedReportSaveMessage);
         return null;
     }
 }
@@ -373,7 +373,7 @@ async function promptUserForSaveLocationAndSaveReportToFile(
     downloadResponse: AxiosResponse<any>
 ): Promise<string | null> {
     logger.debug("Prompting user to select a save location for the report file.");
-    const zipUri = await vscode.window.showSaveDialog({
+    const zipUri: vscode.Uri | undefined = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file(fileNameOfReport),
         filters: { "Zip Files": ["zip"] },
         title: "Select a location to save the report file"
@@ -416,9 +416,9 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         logger.debug(`Report saved to ${zipUri.fsPath}`);
         return zipUri.fsPath;
     } catch (error) {
-        const errorMsg: string = `Failed to save report: ${(error as Error).message}`;
-        logger.error(errorMsg);
-        vscode.window.showErrorMessage(errorMsg);
+        const failedReportSaveMessage: string = `Failed to save report: ${(error as Error).message}`;
+        logger.error(failedReportSaveMessage);
+        vscode.window.showErrorMessage(failedReportSaveMessage);
         return null;
     }
 }

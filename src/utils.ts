@@ -3,11 +3,12 @@
  * @description Utility functions for the TestBench VS Code extension.
  */
 
-import { getConfig, logger } from "./extension";
+import { logger } from "./extension";
 import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import * as fs from "fs";
+import * as os from "os";
 import JSZip from "jszip";
 
 /**
@@ -139,7 +140,7 @@ export async function deleteDirectoryRecursively(
  * @param promptForConfirmation - If true, prompts the user for confirmation before deletion.
  * @returns A promise that resolves when the folder is cleared, or null if an error occurs or the operation is cancelled.
  */
-export async function clearWorkspaceFolder(
+export async function clearInternalTestbenchFolder(
     workspaceLocationToClear: string,
     excludedFoldersFromDeletion: string[] = [],
     promptForConfirmation: boolean = true
@@ -205,61 +206,50 @@ export async function clearWorkspaceFolder(
 }
 
 /**
- * Retrieves the workspace location by checking:
- * 1. The "workspaceLocation" setting in the extension configuration.
- * 2. The first folder in the currently opened workspace.
- * If neither is found, prompts the user to enter a new workspace location, updates the setting, and returns the value.
+ * Validates and returns the active workspace location.
+ *
+ * If a file is active in the editor, returns the workspace folder associated with that file.
+ * Otherwise falls back to the first available workspace folder, and if still unavailable, uses the user's home directory.
  *
  * @param {boolean} enableLogging - Whether to output trace logging (defaults to true).
- * @returns {Promise<string | undefined>} A promise that resolves to the workspace location string, or undefined if the user cancels.
+ * @returns {Promise<string | undefined>} A promise that resolves to the workspace location string, or undefined if nothing is found.
  */
 export async function validateAndReturnWorkspaceLocation(enableLogging: boolean = true): Promise<string | undefined> {
     if (logger && enableLogging) {
-        logger.trace("Validating and returning workspace location.");
+        logger.trace("Validating and returning active workspace location.");
     }
 
-    // Check extension settings.
-    const workspaceLocationInSettings: string = getConfig().get<string>("workspaceLocation", "");
-    if (workspaceLocationInSettings) {
-        if (logger && enableLogging) {
-            logger.trace(`Returning workspace location found in settings: "${workspaceLocationInSettings}"`);
+    // Check for an active editor and its workspace folder.
+    const activeEditor: vscode.TextEditor | undefined = vscode.window.activeTextEditor;
+    if (activeEditor) {
+        const workspaceFolder: vscode.WorkspaceFolder | undefined = vscode.workspace.getWorkspaceFolder(
+            activeEditor.document.uri
+        );
+        if (workspaceFolder) {
+            if (logger && enableLogging) {
+                logger.trace(`Active workspace found: "${workspaceFolder.uri.fsPath}"`);
+            }
+            return workspaceFolder.uri.fsPath;
         }
-        return workspaceLocationInSettings;
     }
 
-    // Fallback to the first workspace folder if available.
+    // Fallback: use the first workspace folder in the array.
     const workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const workspacePath: string = workspaceFolders[0].uri.fsPath;
         if (logger && enableLogging) {
-            logger.trace(`Workspace location found in open workspace: "${workspacePath}"`);
+            logger.trace(
+                `No active editor; falling back to first workspace folder: "${workspaceFolders[0].uri.fsPath}"`
+            );
         }
-        return workspacePath;
+        return workspaceFolders[0].uri.fsPath;
     }
 
+    // Fallback: use the user's home directory as a safe option.
+    const homeDirectory: string = os.homedir();
     if (logger && enableLogging) {
-        logger.trace("No workspace location found. Prompting user to enter a new location.");
+        logger.trace(`No workspace available; falling back to user's home directory: "${homeDirectory}"`);
     }
-
-    // Prompt the user to enter a new workspace location.
-    const newWorkspaceLocation: string | undefined = await vscode.window.showInputBox({
-        placeHolder: "Enter the new workspace location...",
-        prompt: "No workspace location found. Please set a workspace location or press Escape to cancel."
-    });
-
-    if (newWorkspaceLocation && newWorkspaceLocation.trim()) {
-        await getConfig().update("workspaceLocation", newWorkspaceLocation, vscode.ConfigurationTarget.Global);
-        if (logger && enableLogging) {
-            logger.trace(`New workspace location set to: "${newWorkspaceLocation}"`);
-        }
-        return newWorkspaceLocation;
-    }
-
-    if (logger && enableLogging) {
-        logger.trace("User canceled the workspace location prompt.");
-    }
-
-    return undefined;
+    return homeDirectory;
 }
 
 /**

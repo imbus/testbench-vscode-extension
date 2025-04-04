@@ -57,8 +57,7 @@ export const allExtensionCommands = {
     executeRobotFrameworkTests: `${baseKeyOfExtension}.executeRobotFrameworkTests`,
     refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
-    setWorkspaceLocation: `${baseKeyOfExtension}.setWorkspaceLocation`,
-    clearWorkspaceFolder: `${baseKeyOfExtension}.clearWorkspaceFolder`,
+    clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     toggleProjectManagementTreeViewVisibility: `${baseKeyOfExtension}.toggleProjectManagementTreeViewVisibility`,
     toggleTestThemeTreeViewVisibility: `${baseKeyOfExtension}.toggleTestThemeTreeViewVisibility`,
     toggleWebViewVisibility: `${baseKeyOfExtension}.toggleWebViewVisibility`,
@@ -129,7 +128,7 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
         try {
             await handler(...args);
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+            const errorMessage: string = error instanceof Error ? error.message : "An unknown error occurred";
             logger.error(`Error executing command: ${errorMessage}`, error);
             vscode.window.showErrorMessage(`An error occurred: ${errorMessage}`);
         }
@@ -151,30 +150,6 @@ function registerSafeCommand(
     const disposable = vscode.commands.registerCommand(commandId, safeCommandHandler(callback));
     // Adding the command to the context subscriptions disposes them automatically when the extension is deactivated.
     context.subscriptions.push(disposable);
-}
-
-/**
- * Prompts the user to select a workspace location (folder).
- *
- * @returns {Promise<string | undefined>} The selected folder path, or undefined if none selected.
- */
-export async function promptForWorkspaceLocation(): Promise<string | undefined> {
-    logger.debug("Prompting user to select a workspace location.");
-    const options: vscode.OpenDialogOptions = {
-        canSelectMany: false,
-        openLabel: "Select Workspace Location",
-        canSelectFolders: true,
-        canSelectFiles: false,
-        title: "Select Workspace Location"
-    };
-
-    const folderUris: vscode.Uri[] | undefined = await vscode.window.showOpenDialog(options);
-    if (folderUris && folderUris[0]) {
-        logger.debug(`Workspace location selected: ${folderUris[0].fsPath}`);
-        return folderUris[0].fsPath;
-    }
-    logger.debug("No workspace location selected.");
-    return undefined;
 }
 
 // Global variable to store the current configuration scope (workspace or global).
@@ -252,19 +227,6 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
 function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // --- Command: Toggle Login Webview Visibility ---
     registerSafeCommand(context, allExtensionCommands.toggleWebViewVisibility, loginWebView.toggleWebViewVisibility);
-
-    // --- Command: Set Workspace Location ---
-    // Prompts the user to select a workspace location and updates the workspace configuration with the selected path.
-    registerSafeCommand(context, `${baseKeyOfExtension}.setWorkspaceLocation`, async () => {
-        logger.debug("Set Workspace Location command called.");
-        const newWorkspaceLocation: string | undefined = await promptForWorkspaceLocation();
-        if (newWorkspaceLocation) {
-            await config.update("workspaceLocation", newWorkspaceLocation);
-            vscode.window.showInformationMessage(`Workspace location set to: ${newWorkspaceLocation}`);
-            logger.debug(`Workspace location set to: ${newWorkspaceLocation}`);
-        }
-        logger.trace("End of Set Workspace Location command.");
-    });
 
     // --- Command: Show Extension Settings ---
     registerSafeCommand(context, allExtensionCommands.showExtensionSettings, async () => {
@@ -373,8 +335,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 return;
             }
             // Optionally clear the working directory before test generation.
-            if (config.get<boolean>("clearWorkingDirectoryBeforeTestGeneration")) {
-                await vscode.commands.executeCommand(allExtensionCommands.clearWorkspaceFolder);
+            if (config.get<boolean>("clearInternalTestbenchDirectoryBeforeTestGeneration")) {
+                await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
             // If the user did not clicked on a test cycle in the tree view before,
             // the test cycle wont have any initialized children so that test themes cannot be displayed in the quickpick.
@@ -414,8 +376,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 return;
             }
             // Optionally clear the working directory before test generation.
-            if (config.get<boolean>("clearWorkingDirectoryBeforeTestGeneration")) {
-                await vscode.commands.executeCommand(allExtensionCommands.clearWorkspaceFolder);
+            if (config.get<boolean>("clearInternalTestbenchDirectoryBeforeTestGeneration")) {
+                await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
             await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
                 context,
@@ -575,17 +537,20 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
     // --- Command: Clear Workspace Folder ---
     // Clears the workspace folder of its contents, excluding log files.
-    registerSafeCommand(context, allExtensionCommands.clearWorkspaceFolder, async () => {
+    registerSafeCommand(context, allExtensionCommands.clearInternalTestbenchFolder, async () => {
         logger.debug("Clear Workspace Folder command called.");
         const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
             return;
         }
-        const testbenchWorkingDirectoryPath = path.join(workspaceLocation, folderNameOfTestbenchWorkingDirectory);
-        await utils.clearWorkspaceFolder(
+        const testbenchWorkingDirectoryPath: string = path.join(
+            workspaceLocation,
+            folderNameOfTestbenchWorkingDirectory
+        );
+        await utils.clearInternalTestbenchFolder(
             testbenchWorkingDirectoryPath,
             [testBenchLogger.folderNameOfLogs], // Exclude log files from deletion
-            !config.get<boolean>("clearWorkingDirectoryBeforeTestGeneration") // Ask for confirmation if not set to clear before test generation
+            !config.get<boolean>("clearInternalTestbenchDirectoryBeforeTestGeneration") // Ask for confirmation if not set to clear before test generation
         );
         logger.trace("End of Clear Workspace Folder command.");
     });
@@ -622,8 +587,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         }
     );
 
-    // --- Command: Open Robot Resource File ---
-    // Opens or creates the file in the workspace corresponding to the selected test element.
+    // --- Command: Go To Resource File ---
+    // Opens or creates the robot resource file associated with the selected test element.
     registerSafeCommand(
         context,
         allExtensionCommands.openRobotResourceFile,
@@ -634,13 +599,14 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             }
 
             // Construct the target path based on the hierarchical name of the test element.
-            const absolutePathOfTestElement = await testElementsTreeView.constructAbsolutePathForTestElement(treeItem);
-            if (!absolutePathOfTestElement) {
+            const absolutePathOfSelectedTestElement: string | undefined =
+                await testElementsTreeView.constructAbsolutePathForTestElement(treeItem);
+            if (!absolutePathOfSelectedTestElement) {
                 return;
             }
 
             logger.trace(
-                `Open Robot Resource File command created absolutePathOfTestElement: ${absolutePathOfTestElement}`
+                `Open Robot Resource File command created absolutePathOfTestElement: ${absolutePathOfSelectedTestElement}`
             );
             try {
                 switch (treeItem.testElementData.elementType) {
@@ -651,7 +617,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                         await testElementsTreeView.handleInteraction(treeItem);
                         break;
                     default:
-                        await testElementsTreeView.handleFallback(absolutePathOfTestElement);
+                        await testElementsTreeView.handleFallback(absolutePathOfSelectedTestElement);
                 }
             } catch (error: any) {
                 vscode.window.showErrorMessage("Error in Open Robot Resource File command: " + error.message);

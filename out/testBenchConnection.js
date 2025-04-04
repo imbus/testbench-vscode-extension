@@ -462,7 +462,7 @@ class PlayServerConnection {
             (0, extension_1.setConnection)(null);
             // Notify login webview about the logout success to change its HTML content
             if (extension_1.loginWebViewProvider) {
-                extension_1.loginWebViewProvider.updateWebviewContent();
+                extension_1.loginWebViewProvider.updateWebviewHTMLContent();
             }
             else {
                 extension_1.logger.warn("loginWebViewProvider is null. Cannot update webview content.");
@@ -470,19 +470,19 @@ class PlayServerConnection {
         }
     }
     /**
-     * Uploads a zip archive containing JSON-based test execution results to the TestBench server.
+     * Imports a zip archive containing JSON-based test execution results to the TestBench server.
      *
      * @param {number} projectKey - The project key.
      * @param {string} zipFilePath - The file path to the zip archive.
      * @returns {Promise<string>} The file name returned by the server.
-     * @throws An error if the upload fails.
+     * @throws An error if the import fails.
      */
-    async uploadExecutionResultsAndReturnUploadedFileName(projectKey, zipFilePath) {
-        const uploadResultZipURL = `/projects/${projectKey}/executionResults/v1`;
+    async importExecutionResultsAndReturnImportedFileName(projectKey, zipFilePath) {
+        const importResultZipURL = `/projects/${projectKey}/executionResults/v1`;
         try {
             const zipFileData = fs.readFileSync(zipFilePath);
-            extension_1.logger.debug(`Uploading zip file "${zipFilePath}" to ${uploadResultZipURL}`);
-            const uploadZipResponse = await withRetry(() => this.apiClient.post(uploadResultZipURL, zipFileData, {
+            extension_1.logger.debug(`Importing zip file "${zipFilePath}" to ${importResultZipURL}`);
+            const importZipResponse = await withRetry(() => this.apiClient.post(importResultZipURL, zipFileData, {
                 headers: {
                     "Content-Type": "application/zip",
                     accept: "application/json"
@@ -501,11 +501,11 @@ class PlayServerConnection {
                 }
                 return true;
             });
-            switch (uploadZipResponse.status) {
+            switch (importZipResponse.status) {
                 case 201: {
-                    extension_1.logger.debug("Report uploaded successfully.");
+                    extension_1.logger.debug("Report imported successfully.");
                     // Extract the fileName from the response and return it
-                    const fileName = uploadZipResponse.data?.fileName;
+                    const fileName = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
                     }
@@ -516,36 +516,36 @@ class PlayServerConnection {
                     }
                 }
                 case 403: {
-                    const uploadForbiddenMessage = "Forbidden: You do not have permission to upload execution results.";
-                    extension_1.logger.error(uploadForbiddenMessage);
-                    throw new Error(uploadForbiddenMessage);
+                    const importForbiddenMessage = "Forbidden: You do not have permission to import execution results.";
+                    extension_1.logger.error(importForbiddenMessage);
+                    throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const uploadNotFoundMessage = "Not Found: The requested project was not found.";
-                    extension_1.logger.error(uploadNotFoundMessage);
-                    throw new Error(uploadNotFoundMessage);
+                    const importNotFoundMessage = "Not Found: The requested project was not found.";
+                    extension_1.logger.error(importNotFoundMessage);
+                    throw new Error(importNotFoundMessage);
                 }
                 case 422: {
-                    const uploadUnprocessableEntityMessage = "Unprocessable Entity: The uploaded file is invalid.";
-                    extension_1.logger.error(uploadUnprocessableEntityMessage);
-                    throw new Error(uploadUnprocessableEntityMessage);
+                    const importUnprocessableEntityMessage = "Unprocessable Entity: The imported file is invalid.";
+                    extension_1.logger.error(importUnprocessableEntityMessage);
+                    throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const uploadUnexpectedErrorMessage = `Unexpected status code ${uploadZipResponse.status} received.`;
-                    extension_1.logger.error(uploadUnexpectedErrorMessage);
-                    throw new Error(uploadUnexpectedErrorMessage);
+                    const importUnexpectedErrorMessage = `Unexpected status code ${importZipResponse.status} received.`;
+                    extension_1.logger.error(importUnexpectedErrorMessage);
+                    throw new Error(importUnexpectedErrorMessage);
                 }
             }
         }
         catch (error) {
             if (axios_1.default.isAxiosError(error)) {
-                extension_1.logger.error("An Axios error occurred while uploading the file:", error.message);
+                extension_1.logger.error("An Axios error occurred while importing the file:", error.message);
                 if (error.response) {
                     extension_1.logger.error("Error response data:", error.response.data);
                 }
             }
             else {
-                extension_1.logger.error("An unexpected error occurred while uploading the file:", error);
+                extension_1.logger.error("An unexpected error occurred while importing the file:", error);
             }
             throw error;
         }
@@ -680,7 +680,7 @@ class PlayServerConnection {
         catch (error) {
             extension_1.logger.error("Keep-alive request failed after retries:", error);
             extension_1.logger.warn("Logging out the user after keep-alive failure.");
-            await vscode.commands.executeCommand(`${extension_1.allExtensionCommands.logout.command}`);
+            await vscode.commands.executeCommand(`${extension_1.allExtensionCommands.logout}`);
         }
     }
 }
@@ -741,10 +741,10 @@ async function withRetry(asyncFunction, maxRetries = 3, delayMs = 1000, shouldRe
  * Prompts the user for general input with live validation.
  * Loops until valid input is provided, "quit" is typed, or the user cancels.
  *
- * @param promptMessage - The prompt message.
- * @param inputCanBeEmpty - Whether the input may be empty.
- * @param maskSensitiveInputData - Whether to mask the input (e.g. for passwords).
- * @param validateInputFunction - Optional validation function; should return an error message if invalid.
+ * @param {string} promptMessage - The prompt message.
+ * @param {boolean} inputCanBeEmpty - Whether the input may be empty.
+ * @param {boolean }maskSensitiveInputData - Whether to mask the input (e.g. for passwords).
+ * @param {(value: string) => string | null} validateInputFunction - Optional validation function; should return an error message if invalid.
  * @returns {Promise<string | null>} The user input as a string, or null if aborted.
  */
 async function promptForInputAndValidate(promptMessage, inputCanBeEmpty = false, maskSensitiveInputData = false, validateInputFunction) {
@@ -786,16 +786,19 @@ async function performLogin(context, promptForNewCredentials = false, performAut
     // Loop until the user successfully logs in or cancels the login process
     while (true) {
         // Retrieve the stored credentials if they exist
-        const storePasswordAfterSuccessfulLogin = (0, extension_1.getConfig)().get("storePasswordAfterLogin", false);
         let password;
         // Only retrieve the password if the user has choosen to store it after successful login
-        if (storePasswordAfterSuccessfulLogin) {
+        if ((0, extension_1.getConfig)().get("storePasswordAfterLogin", false)) {
             password = await context.secrets.get("password");
+        }
+        // If the user has not chosen to store the password, clear it from the secret storage
+        else {
+            clearStoredCredentials(context);
         }
         const userHasStoredCredentials = !!((0, extension_1.getConfig)().get("serverName") &&
             (0, extension_1.getConfig)().get("username") &&
             password &&
-            storePasswordAfterSuccessfulLogin);
+            (0, extension_1.getConfig)().get("storePasswordAfterLogin", false));
         let useStoredCredentials = false;
         // If the user has stored credentials and can auto-login,
         // and the user has not chosen to prompt for new credentials,
@@ -951,6 +954,8 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
                 }
                 else {
                     extension_1.logger.trace("User chose not to store password.");
+                    // Clear the password from secret storage if it was previously stored
+                    clearStoredCredentials(context);
                 }
                 // Starts keep alive in the constructor of PlayServerConnection
                 const newConnection = new PlayServerConnection(serverName, portNumber, loginResponse.data.sessionToken);
@@ -963,7 +968,7 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
                 vscode.window.showInformationMessage(loginSuccessfulMessage);
                 // Upon successful login, update the login webview content and hide it.
                 if (extension_1.loginWebViewProvider) {
-                    extension_1.loginWebViewProvider.updateWebviewContent();
+                    extension_1.loginWebViewProvider.updateWebviewHTMLContent();
                     loginWebView.hideWebView();
                 }
                 else {
@@ -1107,8 +1112,8 @@ async function promptForReportZipFileWithResults() {
 /**
  * Recursively searches for a cycle key matching the given cycle name.
  *
- * @param treeElements - The array of tree elements.
- * @param cycleName - The cycle name to search for.
+ * @param {any[]} treeElements - The array of tree elements.
+ * @param {string} cycleName - The cycle name to search for.
  * @returns {string | null} The cycle key if found, otherwise null.
  */
 function findCycleKeyFromCycleNameRecursively(treeElements, cycleName) {
@@ -1132,9 +1137,9 @@ function findCycleKeyFromCycleNameRecursively(treeElements, cycleName) {
 /**
  * Imports a report (zip file with test results) to the TestBench server.
  *
- * @param connection - The PlayServerConnection.
- * @param projectManagementTreeDataProvider - The tree data provider.
- * @param resultZipFilePath - The file path of the zip file.
+ * @param {PlayServerConnection} connection - The PlayServerConnection.
+ * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectManagementTreeDataProvider - The tree data provider.
+ * @param {string} resultZipFilePath - The file path of the zip file.
  * @returns {Promise<void | null>} A promise that resolves when the import is complete, or null if an error occurs.
  */
 async function importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath) {
@@ -1142,9 +1147,9 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
         extension_1.logger.debug("Importing report with results to TestBench server.");
         const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReport(resultZipFilePath);
         if (!uniqueID || !projectKey || !cycleNameOfProject) {
-            const msg = "Error extracting project key, cycle name, and unique ID from the zip file.";
-            vscode.window.showErrorMessage(msg);
-            extension_1.logger.error(msg);
+            const extractionErrorMsg = "Error extracting project key, cycle name, and unique ID from the zip file.";
+            vscode.window.showErrorMessage(extractionErrorMsg);
+            extension_1.logger.error(extractionErrorMsg);
             return null;
         }
         // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
@@ -1169,11 +1174,11 @@ async function importReportWithResultsToTestbench(connection, projectManagementT
             vscode.window.showErrorMessage(cycleNotFoundErrorMessage);
             return null;
         }
-        const zipFilenameFromServer = await connection.uploadExecutionResultsAndReturnUploadedFileName(Number(projectKey), resultZipFilePath);
+        const zipFilenameFromServer = await connection.importExecutionResultsAndReturnImportedFileName(Number(projectKey), resultZipFilePath);
         if (!zipFilenameFromServer) {
-            const uploadErrorMessage = "Error uploading the result file to the server.";
-            extension_1.logger.error(uploadErrorMessage);
-            vscode.window.showErrorMessage(uploadErrorMessage);
+            const importErrorMessage = "Error importing the result file to the server.";
+            extension_1.logger.error(importErrorMessage);
+            vscode.window.showErrorMessage(importErrorMessage);
             return null;
         }
         // TODO: Check the new data of the new branch
