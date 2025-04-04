@@ -7,7 +7,6 @@ import {
     getConfig,
     baseKeyOfExtension,
     safeCommandHandler,
-    promptForWorkspaceLocation,
     loadConfiguration,
     initializeTreeViews
 } from "../../extension";
@@ -101,11 +100,6 @@ suite("Extension Test Suite", () => {
         assert.ok(loggerStub.error.calledWith("Error executing command:", error), "Error should be logged");
     });
 
-    test("promptForWorkspaceLocation should prompt the user and return the selected path", async () => {
-        const path = await promptForWorkspaceLocation();
-        assert.strictEqual(path, "/fake/path", "Selected path should be returned");
-    });
-
     test("loadConfiguration should update the configuration", async () => {
         await loadConfiguration(context);
 
@@ -113,7 +107,7 @@ suite("Extension Test Suite", () => {
     });
 
     test("initializeTreeViews should initialize the tree views", () => {
-        initializeTreeViews();
+        initializeTreeViews(context);
 
         assert.ok(projectManagementTreeDataProviderStub, "Project management tree view should be initialized");
         assert.ok(testElementsTreeDataProviderStub, "Test elements tree view should be initialized");
