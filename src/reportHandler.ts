@@ -14,7 +14,13 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import * as utils from "./utils";
-import { getConfig, connection, logger } from "./extension";
+import {
+    getConfig,
+    connection,
+    logger,
+    folderNameOfInternalTestbenchFolder,
+    projectManagementTreeDataProvider
+} from "./extension";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
 
 /**
@@ -140,7 +146,7 @@ export async function pollJobStatus(
         try {
             jobStatus = await getJobStatus(projectKey, jobId, jobType);
             if (!jobStatus) {
-                logger.warn("Job status not received from server.");
+                logger.error("Job status not received from server.");
                 return null;
             }
 
@@ -478,9 +484,9 @@ export async function fetchReportZipFromServer(
             cancellationToken
         );
         if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
-            const msg = "Report generation was unsuccessful.";
-            logger.warn(msg);
-            vscode.window.showErrorMessage(msg);
+            const reportGenerationErrorMsg: string = "Report generation was unsuccessful.";
+            logger.error(reportGenerationErrorMsg);
+            vscode.window.showErrorMessage(reportGenerationErrorMsg);
             return null;
         }
         const reportName: string = jobStatus.completion.result.ReportingSuccess!.reportName;
@@ -532,22 +538,22 @@ export async function fetchReportForTreeElement(
 
             try {
                 if (!connection) {
-                    logger.warn("No connection available, cannot fetch report.");
+                    logger.error("No connection available, cannot fetch report.");
                     return null;
                 }
                 if (!projectManagementTreeDataProvider) {
-                    logger.warn("Project management tree not initialized, cannot fetch report.");
+                    logger.error("Project management tree not initialized, cannot fetch report.");
                     return null;
                 }
                 const projectKeyOfProjectInView = projectManagementTreeDataProvider.activeProjectKeyInView;
                 if (!projectKeyOfProjectInView) {
-                    logger.warn("No project selected, cannot fetch report.");
+                    logger.error("No project selected, cannot fetch report.");
                     return null;
                 }
                 // Find the cycle key associated with the selected tree item to fetch the report
                 const cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(selectedProjectManagementTreeItem);
                 if (!cycleKey) {
-                    logger.warn("Cycle key not found, cannot fetch report.");
+                    logger.error("Cycle key not found, cannot fetch report.");
                     return null;
                 }
                 const treeElementUID = selectedProjectManagementTreeItem.item?.base?.uniqueID;
@@ -978,7 +984,9 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         logger.debug(`Output XML file selected: ${selectedXMLFileUri[0].fsPath}`);
         return selectedXMLFileUri[0].fsPath;
     }
-    logger.error("No output XML file selected.");
+    const xmlFileNotSelectedError: string = "No output XML file selected.";
+    logger.error(xmlFileNotSelectedError);
+    vscode.window.showErrorMessage(xmlFileNotSelectedError);
     return null;
 }
 
@@ -1095,7 +1103,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 !lastGeneratedReportParams.cycleKey ||
                 !lastGeneratedReportParams.UID
             ) {
-                logger.error("Last generated report parameters are missing.");
+                const missingLastGeneratedReportError: string = "Last generated report parameters are missing.";
+                logger.error(missingLastGeneratedReportError);
+                vscode.window.showInformationMessage(missingLastGeneratedReportError);
                 return undefined;
             }
 
@@ -1159,13 +1169,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
  * Reads test results, creates a report zip with test results, and imports it to the TestBench server.
  *
  * @param {vscode.ExtensionContext} context The extension context.
- * @param {string} folderNameOfTestbenchWorkingDirectory The testbench working directory folder name.
- * @param {projectManagementTreeView.ProjectManagementTreeDataProvider | null} projectManagementTreeDataProvider The project management tree data provider.
  */
 export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
-    context: vscode.ExtensionContext,
-    folderNameOfTestbenchWorkingDirectory: string,
-    projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null
+    context: vscode.ExtensionContext
 ): Promise<void | null> {
     await vscode.window.withProgress(
         {
@@ -1178,7 +1184,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
             const pathOfCreatedReportWithResults: string | undefined =
                 await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
-                    folderNameOfTestbenchWorkingDirectory,
+                    folderNameOfInternalTestbenchFolder,
                     progress
                 );
             if (!pathOfCreatedReportWithResults) {
@@ -1214,7 +1220,7 @@ export async function startTestGenerationForCycle(
         if (!connection) {
             const connectionErrorMessage: string = "No connection available. Cannot generate tests for cycle.";
             vscode.window.showErrorMessage(connectionErrorMessage);
-            logger.warn(connectionErrorMessage);
+            logger.error(connectionErrorMessage);
             return null;
         }
         const cycleKey = selectedCycleTreeItem.item.key;

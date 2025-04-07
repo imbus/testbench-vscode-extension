@@ -70,7 +70,7 @@ export const allExtensionCommands = {
 };
 
 /** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
-export const folderNameOfTestbenchWorkingDirectory: string = ".testbench";
+export const folderNameOfInternalTestbenchFolder: string = ".testbench";
 
 /** Global logger instance. */
 export let logger: testBenchLogger.TestBenchLogger;
@@ -303,7 +303,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         logger.debug("Logout command called.");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.warn("Logout command called without connection.");
+            logger.error("Logout command called without connection.");
             return;
         }
         await connection.logoutUser(projectManagementTreeDataProvider!);
@@ -324,14 +324,14 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             logger.debug("Generate Test Cases For Cycle command called.");
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.warn("generateTestCasesForCycle command called without connection.");
+                logger.error("generateTestCasesForCycle command called without connection.");
                 return;
             }
             if (!projectManagementTreeDataProvider) {
                 vscode.window.showErrorMessage(
                     "Project management tree is not initialized. Please select a project first."
                 );
-                logger.warn("generateTestCasesForCycle command called without project data provider.");
+                logger.error("generateTestCasesForCycle command called without project data provider.");
                 return;
             }
             // Optionally clear the working directory before test generation.
@@ -346,7 +346,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 const children = (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
                 projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
             }
-            await reportHandler.startTestGenerationForCycle(context, item, folderNameOfTestbenchWorkingDirectory);
+            await reportHandler.startTestGenerationForCycle(context, item, folderNameOfInternalTestbenchFolder);
             logger.trace("End of Generate Test Cases For Cycle command.");
         }
     );
@@ -359,7 +359,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             await reportHandler.fetchReportForTreeElement(
                 treeItem,
                 projectManagementTreeDataProvider,
-                folderNameOfTestbenchWorkingDirectory
+                folderNameOfInternalTestbenchFolder
             );
         }
     );
@@ -372,7 +372,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             logger.debug("Generate Test Cases For Test Theme or Test Case Set command called.");
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.warn("generateTestCasesForTestThemeOrTestCaseSet command called without connection.");
+                logger.error("generateTestCasesForTestThemeOrTestCaseSet command called without connection.");
                 return;
             }
             // Optionally clear the working directory before test generation.
@@ -382,7 +382,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
                 context,
                 treeItem,
-                folderNameOfTestbenchWorkingDirectory
+                folderNameOfInternalTestbenchFolder
             );
             logger.trace("End of Generate Test Cases For Test Theme or Test Case Set command.");
         }
@@ -394,13 +394,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         logger.debug("Select And Load Project command called.");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.warn("selectAndLoadProject command called without connection.");
+            logger.error("selectAndLoadProject command called without connection.");
             return;
         }
 
         const projectList: testBenchTypes.Project[] | null = await connection.getProjectsList();
         if (!projectList) {
-            logger.warn("No projects found for selectAndLoadProject command.");
+            logger.error("No projects found for selectAndLoadProject command.");
             return;
         }
 
@@ -408,7 +408,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         const selectedProjectKey: string | null =
             await connection.getProjectKeyFromProjectListQuickPickSelection(projectList);
         if (!selectedProjectKey) {
-            logger.warn("No project selected for selectAndLoadProject command.");
+            logger.error("No project selected for selectAndLoadProject command.");
             return;
         }
 
@@ -440,12 +440,12 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         logger.debug("Read RF Test Results And Create Report With Results command called.");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.warn("readRFTestResultsAndCreateReportWithResults command called without connection.");
+            logger.error("readRFTestResultsAndCreateReportWithResults command called without connection.");
             return;
         }
         await reportHandler.fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             context,
-            folderNameOfTestbenchWorkingDirectory
+            folderNameOfInternalTestbenchFolder
         );
         logger.trace("End of Read RF Test Results And Create Report With Results command.");
     });
@@ -456,12 +456,12 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         logger.debug("Import Test Results To Testbench command called.");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.warn("importTestResultsToTestbench command called without connection.");
+            logger.error("importTestResultsToTestbench command called without connection.");
             return;
         }
         if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.activeProjectKeyInView) {
             vscode.window.showErrorMessage("No project selected. Please select a project first.");
-            logger.warn("importTestResultsToTestbench command called without a selected project.");
+            logger.error("importTestResultsToTestbench command called without a selected project.");
             return;
         }
         await testBenchConnection.selectReportWithResultsAndImportToTestbench(
@@ -476,22 +476,26 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(context, allExtensionCommands.readAndImportTestResultsToTestbench, async () => {
         logger.debug("Read And Import Test Results To Testbench command called.");
         if (!connection) {
-            const noConnectionMessage: string = "No connection available. Cannot import report.";
-            vscode.window.showErrorMessage(noConnectionMessage);
-            logger.warn(noConnectionMessage);
+            const noConnectionErrorMessage: string = "No connection available. Cannot import report.";
+            vscode.window.showErrorMessage(noConnectionErrorMessage);
+            logger.error(noConnectionErrorMessage);
             return null;
         }
-        if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.activeProjectKeyInView) {
-            const missingProjectKeyError: string = "Active project key is missing. Cannot import report.";
-            vscode.window.showErrorMessage(missingProjectKeyError);
-            logger.warn(missingProjectKeyError);
+        if (!projectManagementTreeDataProvider) {
+            const missingProviderErrorMessage: string =
+                "Project management tree provider is not initialized. Cannot import report.";
+            vscode.window.showErrorMessage(missingProviderErrorMessage);
+            logger.error(missingProviderErrorMessage);
             return null;
         }
-        await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(
-            context,
-            folderNameOfTestbenchWorkingDirectory,
-            projectManagementTreeDataProvider
-        );
+
+        if (!projectManagementTreeDataProvider.activeProjectKeyInView) {
+            const missingProjectKeyErrorMessage: string = "Active project key is missing. Cannot import report.";
+            vscode.window.showErrorMessage(missingProjectKeyErrorMessage);
+            logger.error(missingProjectKeyErrorMessage);
+            return null;
+        }
+        await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context);
         logger.trace("End of Read And Import Test Results To Testbench command.");
     });
 
@@ -543,10 +547,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         if (!workspaceLocation) {
             return;
         }
-        const testbenchWorkingDirectoryPath: string = path.join(
-            workspaceLocation,
-            folderNameOfTestbenchWorkingDirectory
-        );
+        const testbenchWorkingDirectoryPath: string = path.join(workspaceLocation, folderNameOfInternalTestbenchFolder);
         await utils.clearInternalTestbenchFolder(
             testbenchWorkingDirectoryPath,
             [testBenchLogger.folderNameOfLogs], // Exclude log files from deletion
@@ -636,7 +637,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.warn("createInteractionUnderSubdivision command called without connection.");
+                logger.error("createInteractionUnderSubdivision command called without connection.");
                 return;
             }
 
