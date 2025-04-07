@@ -18,7 +18,7 @@ import {
     getConfig,
     setConnection,
     allExtensionCommands,
-    folderNameOfTestbenchWorkingDirectory,
+    folderNameOfInternalTestbenchFolder,
     setProjectManagementTreeDataProvider,
     logger,
     loginWebViewProvider
@@ -122,7 +122,7 @@ export class PlayServerConnection {
         });
 
         if (!selectedProjectName) {
-            logger.warn("Selected project name not found.");
+            logger.error("Selected project name not found.");
             return null;
         }
 
@@ -143,7 +143,7 @@ export class PlayServerConnection {
      */
     async getProjectsList(): Promise<testBenchTypes.Project[] | null> {
         if (!this.sessionToken) {
-            logger.warn("Session token is null. Cannot fetch projects list.");
+            logger.error("Session token is null. Cannot fetch projects list.");
             return null;
         }
         try {
@@ -181,7 +181,7 @@ export class PlayServerConnection {
                 logger.trace("Fetched project list:", projectsResponse.data);
                 return projectsResponse.data;
             } else {
-                logger.warn("Project list data is null or undefined.");
+                logger.error("Project list data is null or undefined.");
                 return null;
             }
         } catch (error) {
@@ -200,11 +200,11 @@ export class PlayServerConnection {
     async getProjectTreeOfProject(projectKey: string | null): Promise<testBenchTypes.TreeNode | null> {
         logger.trace("Fetching project tree for project key:", projectKey);
         if (!this.sessionToken) {
-            logger.warn("Session token is null. Cannot fetch project tree for project key:", projectKey);
+            logger.error("Session token is null. Cannot fetch project tree for project key:", projectKey);
             return null;
         }
         if (!projectKey) {
-            logger.warn("Project key is null or undefined. Cannot fetch project tree.");
+            logger.error("Project key is null or undefined. Cannot fetch project tree.");
             return null;
         }
         try {
@@ -240,7 +240,7 @@ export class PlayServerConnection {
                 logger.trace("Fetched project tree:", projectTreeResponse.data);
                 return projectTreeResponse.data;
             } else {
-                logger.warn("Project tree data is null or undefined.");
+                logger.error("Project tree data is null or undefined.");
                 return null;
             }
         } catch (error) {
@@ -258,11 +258,11 @@ export class PlayServerConnection {
     async getTestElementsWithTovKeyOldPlayServer(tovKey: string | null): Promise<any | null> {
         logger.debug("Fetching test elements with TOV key:", tovKey);
         if (!this.sessionToken) {
-            logger.warn("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
+            logger.error("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
             return null;
         }
         if (!tovKey) {
-            logger.warn("TOV key is null or undefined. Cannot fetch test elements.");
+            logger.error("TOV key is null or undefined. Cannot fetch test elements.");
             return null;
         }
 
@@ -334,7 +334,7 @@ export class PlayServerConnection {
                 logger.trace("Fetched test elements data:", testElementsResponse.data);
                 return testElementsResponse.data;
             } else {
-                logger.warn("Test elements data is null or undefined.");
+                logger.error("Test elements data is null or undefined.");
                 return null;
             }
         } catch (error) {
@@ -477,7 +477,7 @@ export class PlayServerConnection {
             if (loginWebViewProvider) {
                 loginWebViewProvider.updateWebviewHTMLContent();
             } else {
-                logger.warn("loginWebViewProvider is null. Cannot update webview content.");
+                logger.error("loginWebViewProvider is null. Cannot update webview content.");
             }
         }
     }
@@ -703,7 +703,7 @@ export class PlayServerConnection {
      */
     private async sendKeepAliveRequest(): Promise<void> {
         if (!this.sessionToken) {
-            logger.warn("Session token is null. Cannot send keep-alive request.");
+            logger.error("Session token is null. Cannot send keep-alive request.");
             return;
         }
 
@@ -1103,7 +1103,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                         loginWebViewProvider.updateWebviewHTMLContent();
                         loginWebView.hideWebView();
                     } else {
-                        logger.warn("loginWebViewProvider is null. Cannot update webview content.");
+                        logger.error("loginWebViewProvider is null. Cannot update webview content.");
                     }
                     return newConnection;
                 } else {
@@ -1213,12 +1213,13 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
     try {
         const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
-            vscode.window.showErrorMessage("Workspace location is not set in the configuration.");
-            logger.warn("Workspace location is not set in the configuration.");
+            const workspaceLocationErrorMessage: string = "Workspace location could not be determined.";
+            vscode.window.showErrorMessage(workspaceLocationErrorMessage);
+            logger.warn(workspaceLocationErrorMessage);
             return null;
         }
 
-        const workingDirectoryPath: string = path.join(workspaceLocation, folderNameOfTestbenchWorkingDirectory);
+        const workingDirectoryPath: string = path.join(workspaceLocation, folderNameOfInternalTestbenchFolder);
         const options: vscode.OpenDialogOptions = {
             defaultUri: vscode.Uri.file(workingDirectoryPath),
             openLabel: "Select Zip File with Test Results",
@@ -1283,17 +1284,17 @@ function findCycleKeyFromCycleNameRecursively(treeElements: any[], cycleName: st
  *
  * @param {PlayServerConnection} connection - The PlayServerConnection.
  * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectManagementTreeDataProvider - The tree data provider.
- * @param {string} resultZipFilePath - The file path of the zip file.
+ * @param {string} reportWithResultsZipFilePath - The file path of the zip file containing the test results to import.
  * @returns {Promise<void | null>} A promise that resolves when the import is complete, or null if an error occurs.
  */
 export async function importReportWithResultsToTestbench(
     connection: PlayServerConnection,
     projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider,
-    resultZipFilePath: string
+    reportWithResultsZipFilePath: string
 ): Promise<void | null> {
     try {
         logger.debug("Importing report with results to TestBench server.");
-        const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReport(resultZipFilePath);
+        const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReport(reportWithResultsZipFilePath);
         if (!uniqueID || !projectKey || !cycleNameOfProject) {
             const extractionErrorMsg: string =
                 "Error extracting project key, cycle name, and unique ID from the zip file.";
@@ -1305,10 +1306,10 @@ export async function importReportWithResultsToTestbench(
         // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
         // Later, we should fetch the project tree from the server and search for the cycle key there.
 
-        const allTreeElementsInTreeView: projectManagementTreeView.ProjectManagementTreeItem[] =
+        const allProjectTreeItemsInView: projectManagementTreeView.ProjectManagementTreeItem[] =
             await projectManagementTreeDataProvider.getChildren(undefined);
-        if (!allTreeElementsInTreeView) {
-            const loadProjectTreeErrorMessage =
+        if (!allProjectTreeItemsInView) {
+            const loadProjectTreeErrorMessage: string =
                 "Failed to load project management tree elements for importing results.";
             logger.error(loadProjectTreeErrorMessage);
             vscode.window.showErrorMessage("Failed to load project management tree elements.");
@@ -1323,7 +1324,7 @@ export async function importReportWithResultsToTestbench(
         */
 
         const cycleKeyOfImportedReport: string | null = findCycleKeyFromCycleNameRecursively(
-            allTreeElementsInTreeView,
+            allProjectTreeItemsInView,
             cycleNameOfProject
         );
         if (!cycleKeyOfImportedReport) {
@@ -1335,7 +1336,7 @@ export async function importReportWithResultsToTestbench(
 
         const zipFilenameFromServer: string = await connection.importExecutionResultsAndReturnImportedFileName(
             Number(projectKey),
-            resultZipFilePath
+            reportWithResultsZipFilePath
         );
         if (!zipFilenameFromServer) {
             const importErrorMessage: string = "Error importing the result file to the server.";
@@ -1383,7 +1384,7 @@ export async function importReportWithResultsToTestbench(
 
             // Check if the job is completed successfully
             if (!importJobStatus || reportHandler.isImportJobFailed(importJobStatus)) {
-                const importJobFailedMessage: string = "Import job not completed or failed.";
+                const importJobFailedMessage: string = "Import job could not be completed.";
                 logger.warn(importJobFailedMessage);
                 vscode.window.showErrorMessage(importJobFailedMessage);
                 return null;

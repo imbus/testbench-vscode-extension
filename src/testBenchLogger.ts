@@ -6,7 +6,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as utils from "./utils";
-import { getConfig, folderNameOfTestbenchWorkingDirectory } from "./extension";
+import { getConfig, folderNameOfInternalTestbenchFolder } from "./extension";
 
 // Use the native promises API for filesystem operations.
 const fsp = fs.promises;
@@ -101,7 +101,7 @@ export class TestBenchLogger {
                 // Example: workspaceFolder/.testbench/logs/testBenchExtension.log
                 this.logFolderPath = path.join(
                     workspaceLocation,
-                    folderNameOfTestbenchWorkingDirectory,
+                    folderNameOfInternalTestbenchFolder,
                     folderNameOfLogs
                 );
                 this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
