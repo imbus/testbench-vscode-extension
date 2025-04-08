@@ -18,7 +18,7 @@ export class tb2robotLib {
      * Executes the "generate-tests" command to generate Robot Framework testsuites.
      * This function performs the following steps:
      * 1. Builds the base command using the PyCommandBuilder.
-     * 2. Retrieves the options from extension settings.
+     * 2. Retrieves the options for testbench2robotframework library from extension settings.
      * 3. Constructs the full command string with options and report path.
      * 4. Executes the command in the specified directory.
      * 5. Handles errors and logs the output.
@@ -42,8 +42,8 @@ export class tb2robotLib {
                     // Get the options from extension settings.
                     const options = await this.getTb2RobotGenerateTestOptionsFromSettings();
 
-                    const optionsString = this.buildOptionsStringForTestGeneration(options);
-                    const commandToExecute = `${commandBase} ${generateTestsCommand} ${optionsString} ${reportPath}`;
+                    const optionsString: string = this.buildOptionsStringForTestGeneration(options);
+                    const commandToExecute: string = `${commandBase} ${generateTestsCommand} ${optionsString} ${reportPath}`;
                     logger.debug(`Executing generate-tests command: ${commandToExecute}`);
 
                     // { cwd: commandExecutionDirectory } sets the current working directory of the child process to commandExecutionDirectory.

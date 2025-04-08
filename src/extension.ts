@@ -66,7 +66,8 @@ export const allExtensionCommands = {
     displayInteractionsForSelectedTOV: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`,
     openOrCreateRobotResourceFile: `${baseKeyOfExtension}.openOrCreateRobotResourceFile`,
     createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
-    openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`
+    openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
+    modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`
 };
 
 /** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
@@ -230,7 +231,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
     // --- Command: Show Extension Settings ---
     registerSafeCommand(context, allExtensionCommands.showExtensionSettings, async () => {
-        logger.debug("Show Extension Settings command called.");
+        logger.debug("Command Called: Show Extension Settings");
 
         // Open the settings with the extension filter.
         await vscode.commands.executeCommand("workbench.action.openSettings2", {
@@ -238,7 +239,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         });
         // Open the workspace settings view (The default settings view is user settings)
         await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
-        logger.trace("End of Show Extension Settings command.");
+        logger.trace("End of command: Show Extension Settings");
     });
 
     // --- Command: Automatic Login After Activation ---
@@ -268,7 +269,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     let isLoginProcessAlreadyRunning: boolean = false;
     // Performs the login process and stores the connection object.
     registerSafeCommand(context, allExtensionCommands.login, async () => {
-        logger.debug("Login command called.");
+        logger.debug("Command Called: Login");
         if (isLoginProcessAlreadyRunning) {
             logger.debug("Login process already running, aborting login.");
             // If (somehow) login flag is stuck and set to true,
@@ -294,13 +295,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             isLoginProcessAlreadyRunning = false;
             logger.trace("isLoginProcessAlreadyRunning flag is reset to false after login attempt.");
         }
-        logger.trace("End of Login command.");
+        logger.trace("End of command: Login");
     });
 
     // --- Command: Logout ---
     // Performs the logout process, clears the connection object and shows the login webview.
     registerSafeCommand(context, allExtensionCommands.logout, async () => {
-        logger.debug("Logout command called.");
+        logger.debug("Command Called: Logout");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
             logger.error("Logout command called without connection.");
@@ -312,7 +313,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         projectManagementTreeView.hideProjectManagementTreeView();
         projectManagementTreeView.hideTestThemeTreeView();
         testElementsTreeView.hideTestElementsTreeView();
-        logger.trace("End of Logout command.");
+        logger.trace("End of command: Logout");
     });
 
     // --- Command: Generate Test Cases For Cycle ---
@@ -321,7 +322,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.generateTestCasesForCycle,
         async (item: projectManagementTreeView.ProjectManagementTreeItem) => {
-            logger.debug("Generate Test Cases For Cycle command called.");
+            logger.debug("Command Called: Generate Test Cases For Cycle");
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
                 logger.error("generateTestCasesForCycle command called without connection.");
@@ -346,8 +347,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 const children = (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
                 projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
             }
-            await reportHandler.startTestGenerationForCycle(context, item, folderNameOfInternalTestbenchFolder);
-            logger.trace("End of Generate Test Cases For Cycle command.");
+            await reportHandler.startTestGenerationForCycle(context, item);
+            logger.trace("End of command: Generate Test Cases For Cycle");
         }
     );
 
@@ -369,7 +370,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet,
         async (treeItem: projectManagementTreeView.ProjectManagementTreeItem) => {
-            logger.debug("Generate Test Cases For Test Theme or Test Case Set command called.");
+            logger.debug("Command Called: Generate Test Cases For Test Theme or Test Case Set");
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
                 logger.error("generateTestCasesForTestThemeOrTestCaseSet command called without connection.");
@@ -379,19 +380,15 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             if (config.get<boolean>("clearInternalTestbenchDirectoryBeforeTestGeneration")) {
                 await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
-            await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
-                context,
-                treeItem,
-                folderNameOfInternalTestbenchFolder
-            );
-            logger.trace("End of Generate Test Cases For Test Theme or Test Case Set command.");
+            await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(context, treeItem);
+            logger.trace("End of command: Generate Test Cases For Test Theme or Test Case Set");
         }
     );
 
     // --- Command: Select And Load Project ---
     // Fetches the projects list from the server and prompts the user to select a project to display its contents in the tree view.
     registerSafeCommand(context, allExtensionCommands.selectAndLoadProject, async () => {
-        logger.debug("Select And Load Project command called.");
+        logger.debug("Command Called: Select And Load Project");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
             logger.error("selectAndLoadProject command called without connection.");
@@ -437,23 +434,20 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // Activated for a test theme or test case set element.
     // Reads the test results (output.xml) from the testbench working directory and creates a report zip file with the results.
     registerSafeCommand(context, allExtensionCommands.readRFTestResultsAndCreateReportWithResults, async () => {
-        logger.debug("Read RF Test Results And Create Report With Results command called.");
+        logger.debug("Command Called: Read RF Test Results And Create Report With Results");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
             logger.error("readRFTestResultsAndCreateReportWithResults command called without connection.");
             return;
         }
-        await reportHandler.fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
-            context,
-            folderNameOfInternalTestbenchFolder
-        );
-        logger.trace("End of Read RF Test Results And Create Report With Results command.");
+        await reportHandler.fetchTestResultsAndCreateReportWithResultsWithTb2Robot(context);
+        logger.trace("End of command: Read RF Test Results And Create Report With Results");
     });
 
     // --- Command: Import Test Results To Testbench ---
     // Imports the selected test results zip to the testbench server
     registerSafeCommand(context, allExtensionCommands.importTestResultsToTestbench, async () => {
-        logger.debug("Import Test Results To Testbench command called.");
+        logger.debug("Command Called: Import Test Results To Testbench");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
             logger.error("importTestResultsToTestbench command called without connection.");
@@ -468,13 +462,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             connection,
             projectManagementTreeDataProvider
         );
-        logger.trace("End of Import Test Results To Testbench command.");
+        logger.trace("End of command: Import Test Results To Testbench");
     });
 
     // --- Command: Read And Import Test Results To Testbench ---
     // A command that combines the read and import test results commands.
     registerSafeCommand(context, allExtensionCommands.readAndImportTestResultsToTestbench, async () => {
-        logger.debug("Read And Import Test Results To Testbench command called.");
+        logger.debug("Command called: Read And Import Test Results To Testbench");
         if (!connection) {
             const noConnectionErrorMessage: string = "No connection available. Cannot import report.";
             vscode.window.showErrorMessage(noConnectionErrorMessage);
@@ -496,7 +490,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             return null;
         }
         await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context);
-        logger.trace("End of Read And Import Test Results To Testbench command.");
+        logger.trace("End of Command: Read And Import Test Results To Testbench");
     });
 
     // --- Command: Refresh Project Tree View ---
@@ -506,7 +500,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
     // --- Command: Refresh Test Theme Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshTestThemeTreeView, async () => {
-        logger.debug("Refresh Test Theme Tree command called.");
+        logger.debug("Command called: Refresh Test Theme Tree");
         const cycleElement: projectManagementTreeView.ProjectManagementTreeItem | undefined =
             projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent ?? undefined;
         if (cycleElement && cycleElement.contextValue === "Cycle") {
@@ -517,7 +511,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         }
         projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
 
-        logger.trace("End of Refresh Test Theme Tree command.");
+        logger.trace("End of command: Refresh Test Theme Tree");
     });
 
     // --- Command: Make Root ---
@@ -526,7 +520,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.makeRoot,
         (treeItem: projectManagementTreeView.ProjectManagementTreeItem) => {
-            logger.debug("Make Root command called for tree item:", treeItem);
+            logger.debug("Command Called: Make Root for tree item:", treeItem);
             if (projectManagementTreeDataProvider) {
                 // Find out for which element type the make root command is called
                 if (treeItem.contextValue && ["Project", "Version", "Cycle"].includes(treeItem.contextValue)) {
@@ -542,7 +536,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // --- Command: Clear Workspace Folder ---
     // Clears the workspace folder of its contents, excluding log files.
     registerSafeCommand(context, allExtensionCommands.clearInternalTestbenchFolder, async () => {
-        logger.debug("Clear Workspace Folder command called.");
+        logger.debug("Command Called: Clear Workspace Folder");
         const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
             return;
@@ -553,13 +547,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             [testBenchLogger.folderNameOfLogs], // Exclude log files from deletion
             !config.get<boolean>("clearInternalTestbenchDirectoryBeforeTestGeneration") // Ask for confirmation if not set to clear before test generation
         );
-        logger.trace("End of Clear Workspace Folder command.");
+        logger.trace("End of Command: Clear Workspace Folder");
     });
 
     // --- Command: Refresh Test Elements Tree ---
     // Refreshes the test elements tree view with the latest test elements for the selected TOV.
     registerSafeCommand(context, allExtensionCommands.refreshTestElementsTree, async () => {
-        logger.debug("Refresh Test Elements Tree command called.");
+        logger.debug("Command Called: Refresh Test Elements Tree");
         const currentTovKey: string = testElementsTreeView.getCurrentTovKey();
         if (!currentTovKey) {
             vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
@@ -573,7 +567,10 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.displayInteractionsForSelectedTOV,
         async (treeItem: projectManagementTreeView.ProjectManagementTreeItem) => {
-            logger.debug("Display Interactions For Selected TOV command called for tree item:", treeItem);
+            logger.debug(
+                "Command Called: Display Interactions For Selected TOV command called for tree item:",
+                treeItem
+            );
             // Check if the command is executed for a TOV element.
             if (projectManagementTreeDataProvider && treeItem.contextValue === "Version") {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
@@ -584,7 +581,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                     );
                 }
             }
-            logger.trace("End of Display Interactions For Selected TOV command.");
+            logger.trace("End of Command: Display Interactions For Selected TOV");
         }
     );
 
@@ -633,7 +630,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.createInteractionUnderSubdivision,
         async (subdivisionTreeItem: testElementsTreeView.TestElementTreeItem) => {
-            logger.debug("Create Interaction Under Subdivision command called.");
+            logger.debug("Command Called: Create Interaction Under Subdivision");
 
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
@@ -675,10 +672,42 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     );
 
     // --- Command: Open Issue Reporter ---
+    // Opens the official VS Code issue reporter, where the extension is preselected.
     registerSafeCommand(context, allExtensionCommands.openIssueReporter, async () => {
         vscode.commands.executeCommand("workbench.action.openIssueReporter", {
             extensionId: "imbus.testbench-visual-studio-code-extension"
         });
+    });
+
+    // --- Command: Modify Report With Results Zip ---
+    // Allows the user to select a report zip file and create a new report by removing JSON files that were not selected in the quick pick from the original report zip.
+    registerSafeCommand(context, allExtensionCommands.modifyReportWithResultsZip, async () => {
+        logger.debug("Command called: Quick pick with multiselect");
+
+        // Prompt the user to select a report zip file with results.
+        const zipUris = await vscode.window.showOpenDialog({
+            canSelectMany: false,
+            filters: {
+                "Zip Files": ["zip"],
+                "All Files": ["*"]
+            },
+            openLabel: "Select Report Zip File"
+        });
+        if (!zipUris || zipUris.length === 0) {
+            vscode.window.showErrorMessage("No zip file selected.");
+            return;
+        }
+        const zipPath: string = zipUris[0].fsPath;
+        const quickPickItems: string[] = await reportHandler.getQuickPickItemsFromReportZipWithResults(zipPath);
+
+        // Then call your quick pick function with the retrieved items.
+        const chosenQuickPickItems: string[] = await reportHandler.showMultiSelectQuickPick(quickPickItems);
+        logger.log("Trace", "User selected following json files:", chosenQuickPickItems);
+
+        // Create a new zip file by removing JSON files that were not selected from the original report zip.
+        await reportHandler.createNewReportWithSelectedItems(zipPath, chosenQuickPickItems);
+
+        logger.trace("End of command: Quick pick with multiselect");
     });
 
     // Set context value for connectionActive.
