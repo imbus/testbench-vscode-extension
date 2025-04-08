@@ -41,6 +41,7 @@ export function getConfig(): vscode.WorkspaceConfiguration {
  * Each command can be extended later with additional metadata such as description.
  */
 export const allExtensionCommands = {
+    setWorkspace: `${baseKeyOfExtension}.setWorkspace`,
     displayCommand: `${baseKeyOfExtension}.displayCommands`,
     login: `${baseKeyOfExtension}.login`,
     logout: `${baseKeyOfExtension}.logout`,
@@ -75,6 +76,9 @@ export const folderNameOfInternalTestbenchFolder: string = ".testbench";
 
 /** Global logger instance. */
 export let logger: testBenchLogger.TestBenchLogger;
+export function setLogger(newLogger: testBenchLogger.TestBenchLogger): void {
+    logger = newLogger;
+}
 
 /** Global project management tree data provider. */
 export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
@@ -240,6 +244,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         // Open the workspace settings view (The default settings view is user settings)
         await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
         logger.trace("End of command: Show Extension Settings");
+    });
+
+    // --- Command: Set Workspace ---
+    registerSafeCommand(context, allExtensionCommands.setWorkspace, async () => {
+        logger.debug("Command Called: Set Workspace");
+        await utils.setWorkspaceLocation();
+        logger.trace("End of command: Set Workspace");
     });
 
     // --- Command: Automatic Login After Activation ---

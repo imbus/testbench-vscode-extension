@@ -395,6 +395,10 @@
             {
                 "command": "testbenchExtension.modifyReportWithResultsZip",
                 "title": "TestBench: Modify Report File"
+            },
+            {
+                "command": "testbenchExtension.setWorkspace",
+                "title": "TestBench: Set Workspace"
             }
         ],
         "views": {

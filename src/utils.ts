@@ -3,7 +3,8 @@
  * @description Utility functions for the TestBench VS Code extension.
  */
 
-import { logger } from "./extension";
+import { logger, setLogger } from "./extension";
+import * as testBenchLogger from "./testBenchLogger";
 import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -215,11 +216,17 @@ export async function clearInternalTestbenchFolder(
     }
 }
 
+// Module-level variable to cache the workspace location selection.
+let cachedWorkspaceLocation: string | undefined;
+
 /**
  * Validates and returns the active workspace location.
  *
  * If a file is active in the editor, returns the workspace folder associated with that file.
- * Otherwise falls back to the first available workspace folder, and if still unavailable, uses the user's home directory.
+ * Otherwise, if a user selection was cached from a previous prompt, returns it.
+ * If no cache exists and there are workspace folders, prompts the user to select one.
+ * If the user cancels, falls back to the first available workspace folder.
+ * Finally, if no workspaces exist, the user's home directory is used as a safe option.
  *
  * @param {boolean} enableLogging - Whether to output trace logging (defaults to true).
  * @returns {Promise<string | undefined>} A promise that resolves to the workspace location string, or undefined if nothing is found.
@@ -243,15 +250,41 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
         }
     }
 
-    // Fallback: use the first workspace folder in the array.
+    // If no active editor is available, check if we have a cached workspace location.
+    if (cachedWorkspaceLocation) {
+        if (logger && enableLogging) {
+            logger.trace(`Returning cached workspace location: "${cachedWorkspaceLocation}"`);
+        }
+        return cachedWorkspaceLocation;
+    }
+
+    // Primary fallback: if no active editor and no cached value, use the workspace folders available.
     const workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
+        // Prompt the user to select one of the workspace folders.
+        const selectedWorkspaceFolder: vscode.WorkspaceFolder | undefined = await vscode.window.showWorkspaceFolderPick(
+            {
+                placeHolder: "Select a workspace folder"
+            }
+        );
+
+        // If the user makes a selection, cache and return it.
+        if (selectedWorkspaceFolder) {
+            cachedWorkspaceLocation = selectedWorkspaceFolder.uri.fsPath;
+            if (logger && enableLogging) {
+                logger.trace(`User selected workspace: "${cachedWorkspaceLocation}"`);
+            }
+            return cachedWorkspaceLocation;
+        }
+
+        // If the user cancels, cache the first available workspace folder.
+        cachedWorkspaceLocation = workspaceFolders[0].uri.fsPath;
         if (logger && enableLogging) {
             logger.trace(
-                `No active editor; falling back to first workspace folder: "${workspaceFolders[0].uri.fsPath}"`
+                `No workspace selected; caching and using first workspace folder: "${cachedWorkspaceLocation}"`
             );
         }
-        return workspaceFolders[0].uri.fsPath;
+        return cachedWorkspaceLocation;
     }
 
     // Fallback: use the user's home directory as a safe option.
@@ -268,6 +301,48 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     }
 
     return homeDirectory;
+}
+
+/**
+ * Clears the cached workspace location and prompts the user to select a new workspace.
+ *
+ * @param {boolean} enableLogging - Whether to output trace logging (defaults to true).
+ */
+export async function setWorkspaceLocation(enableLogging: boolean = true): Promise<void> {
+    // Clear the cached value.
+    cachedWorkspaceLocation = undefined;
+    if (logger && enableLogging) {
+        // Set the logger for the new workspace location to write logs in the new workspace.
+        const logger = new testBenchLogger.TestBenchLogger();
+        setLogger(logger);
+        logger.trace("Cleared cached workspace location.");
+    }
+
+    // Prompt the user to select a new workspace folder.
+    const workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        const selectedWorkspaceFolder = await vscode.window.showWorkspaceFolderPick({
+            placeHolder: "Select a new workspace folder"
+        });
+        if (selectedWorkspaceFolder) {
+            cachedWorkspaceLocation = selectedWorkspaceFolder.uri.fsPath;
+            vscode.window.showInformationMessage(`Workspace changed to: "${cachedWorkspaceLocation}"`);
+            if (logger && enableLogging) {
+                logger.trace(`New workspace selected: "${cachedWorkspaceLocation}"`);
+            }
+        } else {
+            // Inform the user if no selection was made.
+            vscode.window.showWarningMessage("No workspace selected; workspace cache remains cleared.");
+            if (logger && enableLogging) {
+                logger.trace("User canceled new workspace selection.");
+            }
+        }
+    } else {
+        vscode.window.showErrorMessage("No workspace folders are available to select from.");
+        if (logger && enableLogging) {
+            logger.trace("No workspace folders available to choose.");
+        }
+    }
 }
 
 /**
