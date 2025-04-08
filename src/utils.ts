@@ -29,23 +29,33 @@ export function delay(milliseconds: number): Promise<void> {
  * @param {boolean} verifyExistenceOfFile - If true, verifies that the path exists.
  * @returns {Promise<boolean>} A promise that resolves to true if the path is absolute (and exists when required), otherwise false.
  */
-export async function isAbsolutePath(filePath: string, verifyExistenceOfFile = false): Promise<boolean> {
+export async function isAbsolutePath(filePath: string, verifyExistenceOfFile: boolean = false): Promise<boolean> {
     try {
-        logger.trace(`Checking if "${filePath}" is an absolute path${verifyExistenceOfFile ? " and exists" : ""}.`);
-
+        if (verifyExistenceOfFile) {
+            logger.trace(`Checking if "${filePath}" is an absolute path and verifying it exists.`);
+        } else {
+            logger.trace(`Checking if "${filePath}" is an absolute path.`);
+        }
         if (!path.isAbsolute(filePath)) {
             logger.trace(`"${filePath}" is not an absolute path.`);
             return false;
         }
-
         if (verifyExistenceOfFile) {
             await fsPromises.access(filePath);
         }
 
-        logger.trace(`"${filePath}" is an absolute path${verifyExistenceOfFile ? " and exists" : ""}.`);
+        if (verifyExistenceOfFile) {
+            logger.trace(`"${filePath}" is an absolute path and it exists.`);
+        } else {
+            logger.trace(`"${filePath}" is an absolute path.`);
+        }
         return true;
     } catch {
-        logger.trace(`"${filePath}" is not an absolute path${verifyExistenceOfFile ? " or does not exist" : ""}.`);
+        if (!verifyExistenceOfFile) {
+            logger.trace(`"${filePath}" is not an absolute path.`);
+        } else {
+            logger.trace(`"${filePath}" is not an absolute path or the file does not exist.`);
+        }
         return false;
     }
 }
@@ -59,7 +69,7 @@ export async function isAbsolutePath(filePath: string, verifyExistenceOfFile = f
  */
 export async function constructAbsolutePathFromRelativePath(
     relativePath: string | undefined,
-    verifyExistenceOfFile = false
+    verifyExistenceOfFile: boolean = false
 ): Promise<string | null> {
     if (!relativePath) {
         logger.error("Relative path is not set while constructing an absolute path.");
@@ -251,7 +261,7 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     }
 
     if (!homeDirectory) {
-        const workspaceLocationMissingError: string = "Unable to determine the user's home directory.";
+        const workspaceLocationMissingError: string = "Unable to determine workspace location or home directory.";
         logger.error(workspaceLocationMissingError);
         vscode.window.showErrorMessage(workspaceLocationMissingError);
         return undefined;

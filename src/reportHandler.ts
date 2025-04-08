@@ -545,7 +545,8 @@ export async function fetchReportForTreeElement(
                     logger.error("Project management tree not initialized, cannot fetch report.");
                     return null;
                 }
-                const projectKeyOfProjectInView = projectManagementTreeDataProvider.activeProjectKeyInView;
+                const projectKeyOfProjectInView: string | null =
+                    projectManagementTreeDataProvider.activeProjectKeyInView;
                 if (!projectKeyOfProjectInView) {
                     logger.error("No project selected, cannot fetch report.");
                     return null;
@@ -557,7 +558,7 @@ export async function fetchReportForTreeElement(
                     return null;
                 }
                 const treeElementUID = selectedProjectManagementTreeItem.item?.base?.uniqueID;
-                const executionBased = true; // For now, defaulting to execution based
+                const executionBased: boolean = true; // For now, defaulting to execution based
                 // await isExecutionBasedReportSelected();
                 const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
                     basedOnExecution: executionBased,
@@ -589,28 +590,23 @@ export async function fetchReportForTreeElement(
 /**
  * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
  *
- * @param context The VS Code extension context.
- * @param selectedTreeItem The selected tree item.
- * @param folderNameOfTestbenchWorkingDirectory The testbench working directory folder name.
+ * @param {vscode.ExtensionContext} context The VS Code extension context.
+ * @param {projectManagementTreeView.ProjectManagementTreeItem} selectedTreeItem The selected tree item.
  * @returns {Promise<void | null>} Resolves when test generation is complete, or null if errors occur.
  */
 export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
-    selectedTreeItem: projectManagementTreeView.ProjectManagementTreeItem,
-    folderNameOfTestbenchWorkingDirectory: string
+    selectedTreeItem: projectManagementTreeView.ProjectManagementTreeItem
 ): Promise<void | null> {
     logger.debug("Generating tests for non-cycle element:", selectedTreeItem);
     const treeElementUID = selectedTreeItem.item?.base?.uniqueID;
-    const cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
-    const projectKey = projectManagementTreeView.findProjectKeyOfCycleElement(selectedTreeItem.parent!);
+    const cycleKey: string | null = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
+    const projectKey: string | null = projectManagementTreeView.findProjectKeyOfCycleElement(selectedTreeItem.parent!);
 
     if (!projectKey || !cycleKey || !treeElementUID) {
-        logger.error(`Missing project key (${projectKey}), cycle key (${cycleKey}) or UID (${treeElementUID}).`);
-        return null;
-    }
-
-    const workspace = await utils.validateAndReturnWorkspaceLocation();
-    if (!workspace) {
+        logger.error(
+            `Cannot generate RF Tests. Missing project key (${projectKey}), cycle key (${cycleKey}) or UID (${treeElementUID}).`
+        );
         return null;
     }
 
@@ -620,7 +616,6 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : "", // Label might be undefined
         projectKey,
         cycleKey,
-        folderNameOfTestbenchWorkingDirectory,
         treeElementUID
     );
 }
@@ -628,13 +623,12 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
 /**
  * Generates Robot Framework tests using testbench2robotframework library.
  *
- * @param context The VS Code extension context.
- * @param selectedTreeItem The selected tree item.
- * @param itemLabel The label of the selected item.
- * @param projectKey The project key.
- * @param cycleKey The cycle key.
- * @param folderNameOfTestbenchWorkingDirectory The working directory folder name.
- * @param UIDofTestThemeElementToGenerateTestsFor Optional unique ID for the test theme element.
+ * @param {vscode.ExtensionContext} context The VS Code extension context.
+ * @param {projectManagementTreeView.ProjectManagementTreeItem} selectedTreeItem The selected tree item.
+ * @param {string} itemLabel The label of the selected item.
+ * @param {string} projectKey The project key.
+ * @param {string} cycleKey The cycle key.
+ * @param {string} UIDofTestThemeElementToGenerateTestsFor Optional unique ID for the test theme element.
  * @returns {Promise<void | null>} Resolves when tests are generated, or null if an error occurs.
  */
 export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
@@ -643,13 +637,12 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     itemLabel: string,
     projectKey: string,
     cycleKey: string,
-    folderNameOfTestbenchWorkingDirectory: string,
     UIDofTestThemeElementToGenerateTestsFor?: string
 ): Promise<void | null> {
     try {
         logger.debug("Generating tests for:", selectedTreeItem);
-        const isReportGenerationExecutionBased = true; // Defaulting to execution based for now.
-        const UIDofSelectedTreeElement =
+        const isReportGenerationExecutionBased: boolean = true; // Defaulting to execution based for now.
+        const UIDofSelectedTreeElement: string | undefined =
             UIDofTestThemeElementToGenerateTestsFor ||
             (await promptForTestThemeNodeSelectionAndReturnUIDOfNode(selectedTreeItem));
         if (!UIDofSelectedTreeElement) {
@@ -673,7 +666,6 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
                     projectKey,
                     cycleKey,
                     isReportGenerationExecutionBased,
-                    folderNameOfTestbenchWorkingDirectory,
                     UIDofSelectedTreeElement,
                     cycleReportOptionsRequestParams,
                     progress,
@@ -745,15 +737,14 @@ function findAllTestThemeNodesOfTreeItem(
 /**
  * Runs the Robot Framework test generation process with progress reporting.
  *
- * @param context The VS Code extension context.
- * @param projectKey The project key.
- * @param cycleKey The cycle key.
- * @param executionBased Whether the report is execution-based.
- * @param folderNameOfTestbenchWorkingDirectory The working directory folder name.
- * @param UID The UID of the selected element.
- * @param cycleStructureOptionsRequestParams Request parameters for the cycle report.
- * @param progress The VS Code progress reporter.
- * @param cancellationToken The cancellation token.
+ * @param {vscode.ExtensionContext} context The VS Code extension context.
+ * @param {string} projectKey The project key.
+ * @param {string} cycleKey The cycle key.
+ * @param {boolean} executionBased Whether the report is execution-based.
+ * @param {string} UID The UID of the selected element.
+ * @param {testBenchTypes.OptionalJobIDRequestParameter} cycleStructureOptionsRequestParams Request parameters for the cycle report.
+ * @param {vscode.Progress} progress The VS Code progress reporter.
+ * @param {vscode.CancellationToken} cancellationToken The cancellation token.
  * @returns {Promise<void | null>} Resolves when the process completes, or null if errors occur.
  */
 async function runRobotFrameworkTestGenerationProcess(
@@ -761,17 +752,16 @@ async function runRobotFrameworkTestGenerationProcess(
     projectKey: string,
     cycleKey: string,
     executionBased: boolean,
-    folderNameOfTestbenchWorkingDirectory: string,
     UID: string,
     cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
 ): Promise<void | null> {
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
-    const downloadedZip = await fetchReportZipFromServer(
+    const downloadedZip: string | null = await fetchReportZipFromServer(
         projectKey,
         cycleKey,
-        folderNameOfTestbenchWorkingDirectory,
+        folderNameOfInternalTestbenchFolder,
         cycleStructureOptionsRequestParams,
         progress,
         cancellationToken
@@ -780,20 +770,22 @@ async function runRobotFrameworkTestGenerationProcess(
         logger.warn("Download cancelled or failed.");
         return null;
     }
-    progress.report({ increment: 30, message: "Generating tests via testbench2robotframework." });
 
-    const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
+    progress.report({ increment: 30, message: "Generating tests via testbench2robotframework." });
+    const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
     if (!workspaceLocation) {
-        const workspaceLocationMissingErrorMessage = "Workspace location not configured.";
+        const workspaceLocationMissingErrorMessage: string = "Workspace location not configured.";
         logger.error(workspaceLocationMissingErrorMessage);
         vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
         return null;
     }
-    const testbenchWorkingDirectoryPathInsideWorkspace = path.join(
+
+    // Construct the path where the testbench2robotframework library will be executed
+    const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
         workspaceLocation,
-        folderNameOfTestbenchWorkingDirectory
+        folderNameOfInternalTestbenchFolder
     );
-    const isTb2RobotframeworkGenerateTestsCommandSuccessful =
+    const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
             context,
             testbenchWorkingDirectoryPathInsideWorkspace,
@@ -801,7 +793,7 @@ async function runRobotFrameworkTestGenerationProcess(
         );
     await cleanUpReportFileIfConfiguredInSettings(downloadedZip);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
-        const testGenerationFailedMessage = "Test generation failed.";
+        const testGenerationFailedMessage: string = "Test generation failed.";
         logger.error(testGenerationFailedMessage);
         vscode.window.showErrorMessage(testGenerationFailedMessage);
         return null;
@@ -815,10 +807,10 @@ async function runRobotFrameworkTestGenerationProcess(
 /**
  * Updates the last generated report parameters.
  *
- * @param UID The unique ID.
- * @param projectKey The project key.
- * @param cycleKey The cycle key.
- * @param executionBased Whether the report is execution-based.
+ * @param {string} UID The unique ID.
+ * @param {string} projectKey The project key.
+ * @param {string} cycleKey The cycle key.
+ * @param {boolean} executionBased Whether the report is execution-based.
  */
 function updateLastGeneratedReportParams(
     UID: string,
@@ -838,7 +830,7 @@ function updateLastGeneratedReportParams(
 /**
  * Removes the report zip file if configured in the extension settings.
  *
- * @param reportZipFilePath The path of the report zip file.
+ * @param {string} reportZipFilePath The path of the report zip file.
  */
 export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath: string): Promise<void> {
     if (getConfig().get<boolean>("clearReportAfterProcessing")) {
@@ -877,7 +869,7 @@ export async function removeReportZipFile(
             return;
         } catch (error: any) {
             if (error.code === "ENOENT") {
-                const fileNotFoundMsg = `File not found: ${zipFileFullPath}`;
+                const fileNotFoundMsg: string = `File not found: ${zipFileFullPath}`;
                 logger.error(fileNotFoundMsg);
                 vscode.window.showWarningMessage(fileNotFoundMsg);
                 return;
@@ -951,8 +943,9 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     // Open file selection dialog to select the output xml file, display only XML files in the selection.
     // To use relative paths to workspace location in extension settings,
     // we need to get the workspace location to construct the full path of outputXmlFilePath.
-    const outputXMLFileRelativePathInExtensionSettings = getConfig().get<string>("outputXmlFilePath");
-    const outputXMLFileAbsolutePath = await utils.constructAbsolutePathFromRelativePath(
+    const outputXMLFileRelativePathInExtensionSettings: string | undefined =
+        getConfig().get<string>("outputXmlFilePath");
+    const outputXMLFileAbsolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
         outputXMLFileRelativePathInExtensionSettings,
         true
     );
@@ -991,46 +984,6 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
 }
 
 /**
- * Checks if the given file path is absolute and exists.
- *
- * @param {string} filePath The file path.
- * @returns {Promise<boolean>} True if the file path is absolute and exists; otherwise false.
- */
-export async function isAbsolutePathAndExists(filePath: string): Promise<boolean> {
-    try {
-        logger.trace(`Checking if "${filePath}" is absolute and exists.`);
-        if (path.isAbsolute(filePath)) {
-            await fsPromise.access(filePath);
-            logger.trace(`"${filePath}" is absolute and exists.`);
-            return true;
-        }
-        logger.trace(`"${filePath}" is not absolute or does not exist.`);
-        return false;
-    } catch {
-        logger.trace(`"${filePath}" is not absolute or does not exist.`);
-        return false;
-    }
-}
-
-/**
- * Checks if the given file path is absolute, meaning it starts with a root element.
- *
- * @param {string} filePath The file path to check.
- * @returns {Promise<boolean>} True if the file path is absolute; otherwise false.
- */
-export async function isAbsolutePath(filePath: string): Promise<boolean> {
-    try {
-        logger.trace(`Checking if "${filePath}" is absolute.`);
-        const absolute: boolean = path.isAbsolute(filePath);
-        logger.trace(`"${filePath}" is ${absolute ? "" : "not "}an absolute path.`);
-        return absolute;
-    } catch {
-        logger.trace(`"${filePath}" is not an absolute path.`);
-        return false;
-    }
-}
-
-/**
  * Prompts the user to select a report zip file (without test results).
  *
  * @param {string} workingDirectoryPath The working directory.
@@ -1060,14 +1013,12 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
  * Reads test results using testbench2robotframework library and creates a report zip file.
  *
  * @param {vscode.ExtensionContext} context The extension context.
- * @param {string} folderNameOfTestbenchWorkingDirectory The testbench working directory folder name.
  * @param {vscode.Progress} currentProgress Optional progress reporter.
  * @returns {Promise<string | undefined>} The absolute path of the created report zip file, or undefined on error.
  * Undefined is returned (and not null) due to the usage of VSCode progress bar.
  */
 export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
-    folderNameOfTestbenchWorkingDirectory: string,
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
 ): Promise<string | undefined> {
     try {
@@ -1080,6 +1031,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             const reportProgress = (msg: string, inc: number) => progress.report({ message: msg, increment: inc });
 
             reportProgress("Choosing result XML file.", reportIncrement);
+            // Add a timestamp to the report zip file name
             const reportWithResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;
             const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
             if (!workspaceLocation) {
@@ -1088,7 +1040,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             }
             const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
                 workspaceLocation,
-                folderNameOfTestbenchWorkingDirectory
+                folderNameOfInternalTestbenchFolder
             );
             const outputXMLPath: string | null = await chooseRobotOutputXMLFileIfNotSet(workspaceLocation);
             if (!outputXMLPath) {
@@ -1097,6 +1049,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             logger.debug(`Report zip file will be named ${reportWithResultsZipName}`);
             reportProgress("Fetching report.", reportIncrement);
 
+            // TODO: Currently we are using the last generated report parameters to create the report with results,
+            // these are used to fetch the report without results from the server.
+            // Later we can make this process independent of the last generated report parameters.
             if (
                 !lastGeneratedReportParams.executionBased ||
                 !lastGeneratedReportParams.projectKey ||
@@ -1117,7 +1072,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipFromServer(
                 lastGeneratedReportParams.projectKey,
                 lastGeneratedReportParams.cycleKey,
-                folderNameOfTestbenchWorkingDirectory,
+                folderNameOfInternalTestbenchFolder,
                 cycleStructureOptionsRequestParams
             );
             reportProgress("Working on report.", reportIncrement / 2);
@@ -1141,7 +1096,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 vscode.window.showErrorMessage(testResultsImportError);
                 return undefined;
             }
-            logger.debug(`Report with results created at: ${reportWithResultsZipFullPath}`);
+            const successMessage: string = `Report with results created at: ${reportWithResultsZipFullPath}`;
+            logger.debug(successMessage);
+            vscode.window.showInformationMessage(successMessage);
             return reportWithResultsZipFullPath;
         };
 
@@ -1158,9 +1115,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             );
         }
     } catch (error) {
-        const errorMsg = `An error occurred while reading test results: ${(error as Error).message}`;
-        vscode.window.showErrorMessage(errorMsg);
-        logger.error("Error in fetchTestResultsAndCreateReportWithResultsWithTb2Robot:", error);
+        const fetchResultsErrorMessage: string = `An error occurred while fetching test results: ${(error as Error).message}`;
+        vscode.window.showErrorMessage(fetchResultsErrorMessage);
+        logger.error(`An error occurred while fetching test results: ${(error as Error).message}`);
         return undefined;
     }
 }
@@ -1182,11 +1139,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
         async (progress) => {
             progress.report({ message: "Reading Test Results and Creating Report.", increment: 25 });
             const pathOfCreatedReportWithResults: string | undefined =
-                await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
-                    context,
-                    folderNameOfInternalTestbenchFolder,
-                    progress
-                );
+                await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(context, progress);
             if (!pathOfCreatedReportWithResults) {
                 logger.error("Error creating report with results.");
                 return null;
@@ -1209,12 +1162,10 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
  *
  * @param {vscode.ExtensionContext} context The extension context.
  * @param {projectManagementTreeView.ProjectManagementTreeItem} selectedCycleTreeItem The selected cycle tree item.
- * @param {string} baseKey The extension base key.
  */
 export async function startTestGenerationForCycle(
     context: vscode.ExtensionContext,
-    selectedCycleTreeItem: projectManagementTreeView.ProjectManagementTreeItem,
-    folderName: string
+    selectedCycleTreeItem: projectManagementTreeView.ProjectManagementTreeItem
 ): Promise<void | null> {
     try {
         if (!connection) {
@@ -1250,7 +1201,6 @@ export async function startTestGenerationForCycle(
             selectedCycleTreeItem.label,
             projectKey,
             cycleKey,
-            folderName,
             undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
         );
     } catch (error) {
@@ -1301,4 +1251,286 @@ export async function deleteTb2RobotConfigurationFile(
             }
         }
     }
+}
+
+/**
+ * Displays a Quick Pick menu with multi-select options including control items "Select All" and "Clear All".
+ * All regular items are pre-selected by default.
+ *
+ * @param {string[]} regularItemLabels - An array of strings representing the labels for the regular items.
+ * @param {string} placeholder - (Optional) The placeholder text for the quick pick menu.
+ * @returns {Promise<string[]>} A promise that resolves with an array of selected regular item labels, or an empty array if cancelled or an error occurs.
+ */
+export async function showMultiSelectQuickPick(
+    regularItemLabels: string[],
+    placeholder: string = "Select items (use Select All/Clear All)"
+): Promise<string[]> {
+    // Use a Promise to handle the asynchronous nature and resolution/rejection
+    return new Promise<string[]>((resolve) => {
+        let quickPick: vscode.QuickPick<vscode.QuickPickItem> | undefined;
+        let isResolved: boolean = false; // Flag to prevent double resolution/disposal
+
+        try {
+            quickPick = vscode.window.createQuickPick();
+            quickPick.canSelectMany = true;
+            quickPick.placeholder = placeholder;
+            quickPick.ignoreFocusOut = true; // Optional: keep open if focus moves
+
+            // Select All and Clear All buttons that will be displayed above the regular items
+            // These are not selectable items, but control items to select/deselect all
+            const selectAllLabel: string = "$(check-all) Select All";
+            const clearAllLabel: string = "$(clear-all) Clear All";
+
+            // Create QuickPickItem objects for regular items
+            const regularItems: vscode.QuickPickItem[] = regularItemLabels.map((label) => ({ label }));
+
+            // Create QuickPickItem objects for control items
+            const selectAllItem: vscode.QuickPickItem = { label: selectAllLabel, alwaysShow: true };
+            const clearAllItem: vscode.QuickPickItem = { label: clearAllLabel, alwaysShow: true };
+
+            // Separator for visual grouping (optional but recommended)
+            const separator: vscode.QuickPickItem = {
+                label: "Actions",
+                kind: vscode.QuickPickItemKind.Separator
+            };
+
+            // Set the items in the Quick Pick
+            // Place actions first, then separator, then regular items
+            quickPick.items = [selectAllItem, clearAllItem, separator, ...regularItems];
+
+            // Pre-select all regular items initially
+            if (quickPick) {
+                quickPick.selectedItems = [...regularItems];
+            }
+
+            // --- Event Listeners ---
+
+            let ignoreSelectionChange: boolean = false;
+            quickPick.onDidChangeSelection((selection) => {
+                if (ignoreSelectionChange || isResolved) {
+                    return;
+                } // Prevent updates if flagged or after resolution
+
+                // Check if a control item was just selected
+                const selectedLabels: string[] = selection.map((item) => item.label);
+                const isSelectAllTriggered: boolean = selectedLabels.includes(selectAllLabel);
+                const isClearAllTriggered: boolean = selectedLabels.includes(clearAllLabel);
+
+                if (isSelectAllTriggered || isClearAllTriggered) {
+                    ignoreSelectionChange = true;
+                    if (isSelectAllTriggered) {
+                        // Select all regular items
+                        if (quickPick) {
+                            quickPick.selectedItems = [...regularItems];
+                        }
+                    } else {
+                        // Deselect all regular items
+                        if (quickPick) {
+                            quickPick.selectedItems = [];
+                        }
+                    }
+                    // Re-enable the listener after a brief moment
+                    setTimeout(() => {
+                        ignoreSelectionChange = false;
+                    }, 10);
+                }
+            });
+
+            quickPick.onDidAccept(() => {
+                if (isResolved || !quickPick) {
+                    return;
+                }
+                isResolved = true;
+                try {
+                    // Filter out control items and map to labels
+                    const selectedRegularLabels: string[] = quickPick.selectedItems
+                        .filter(
+                            (item) =>
+                                item.label !== selectAllLabel &&
+                                item.label !== clearAllLabel &&
+                                item.kind !== vscode.QuickPickItemKind.Separator
+                        )
+                        .map((item) => item.label);
+                    resolve(selectedRegularLabels);
+                } catch (err) {
+                    logger.error("Error processing Quick Pick acceptance:", err);
+                    resolve([]); // Resolve with empty on error during processing
+                } finally {
+                    quickPick.dispose(); // Dispose on accept
+                }
+            });
+
+            quickPick.onDidHide(() => {
+                // Important: onDidHide fires even after onDidAccept.
+                // The isResolved flag prevents resolving twice.
+                if (isResolved || !quickPick) {
+                    return;
+                }
+                isResolved = true;
+                resolve([]); // User cancelled
+                quickPick.dispose(); // Dispose on hide/cancel
+            });
+
+            quickPick.show();
+        } catch (error) {
+            logger.error("Error creating or displaying Quick Pick:", error);
+            if (quickPick && !isResolved) {
+                // Ensure disposal if error happens after creation but before hide/accept
+                quickPick.dispose();
+            }
+            isResolved = true;
+            resolve([]); // Resolve with empty array on error
+        }
+    });
+}
+
+import JSZip from "jszip";
+
+/**
+ * Reads a zip file and extracts unique quick pick items based on the file names.
+ *
+ * 1. Reads the zip file from disk.
+ * 2. Loads the zip file using JSZip.
+ * 3. Iterates over all file entries and checks for files with names starting with "iTB-TC-" and ending with ".json".
+ * 4. Uses a regular expression to capture the common prefix (e.g. "iTB-TC-325") from each file.
+ * 5. Adds the common identifier to a set to ensure uniqueness.
+ *
+ * @param {string} zipFilePath - The path to the zip file.
+ * @param {boolean} groupByPrefix - (Optinal) When true, related JSON files sharing the same prefix (e.g., "iTB-TC-325")
+ *                        are combined into a single quick pick item. When false, every file is
+ *                        returned as an individual item. Default is true.
+ * @returns {Promise<string[]>} A promise that resolves with an array of unique quick pick item labels.
+ */
+export async function getQuickPickItemsFromReportZipWithResults(
+    zipFilePath: string,
+    groupByPrefix: boolean = true
+): Promise<string[]> {
+    logger.trace(`Reading JSON's from zip file: ${zipFilePath}`);
+    try {
+        // Read the zip file as binary data.
+        const data: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
+        // Load the zip file using JSZip.
+        const zip = await JSZip.loadAsync(data);
+
+        if (groupByPrefix) {
+            logger.trace("Grouping JSON files by prefix.");
+            const uniqueItems: Set<string> = new Set<string>();
+            Object.keys(zip.files).forEach((fileName) => {
+                if (isCandidateJsonFile(fileName)) {
+                    const prefix: string | null = extractPrefix(fileName);
+                    if (prefix) {
+                        uniqueItems.add(prefix);
+                    }
+                }
+            });
+            logger.trace(`Unique items found: ${Array.from(uniqueItems)}`);
+            return Array.from(uniqueItems);
+        } else {
+            logger.trace("Returning all JSON files as individual items.");
+            const items: string[] = [];
+            Object.keys(zip.files).forEach((fileName) => {
+                if (isCandidateJsonFile(fileName)) {
+                    items.push(fileName);
+                }
+            });
+            logger.trace(`Items found: ${items}`);
+            return items;
+        }
+    } catch (error) {
+        logger.error("Error processing the zip file:", error);
+        return [];
+    }
+}
+
+/**
+ * Updates the zip file by removing the unselected JSON files.
+ *
+ * Only candidate JSON files (those starting with the specified prefixes and ending with ".json") are considered.
+ * When grouping is enabled, each file is removed if its extracted prefix is not among the selected items.
+ * When grouping is disabled, only files whose full names do not appear in the selected list are removed.
+ *
+ * @param {string} zipFilePath - The path to the zip file.
+ * @param {string[]} selectedItems - The array of labels representing the selected items from the quick pick.
+ *                        For grouped mode these are prefixes (e.g., "iTB-TC-325") and for non-grouped mode
+ *                        these are full file names.
+ * @param {boolean} groupByPrefix - (Optinal) Flag indicating the grouping behavior; should be the same used for the quick pick.
+ *                        Default is true.
+ */
+export async function createNewReportWithSelectedItems(
+    zipFilePath: string,
+    selectedItems: string[],
+    groupByPrefix: boolean = true
+): Promise<void> {
+    logger.trace(`Updating zip file: ${zipFilePath} with selected items: ${selectedItems}`);
+    try {
+        // Read the zip file as binary data.
+        const data: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
+        // Load the zip file using JSZip.
+        const zip: JSZip = await JSZip.loadAsync(data);
+
+        // Process each file in the zip.
+        Object.keys(zip.files).forEach((fileName) => {
+            // Only consider JSON files with the matching prefix.
+            if (isCandidateJsonFile(fileName)) {
+                if (groupByPrefix) {
+                    const prefix: string | null = extractPrefix(fileName);
+                    if (prefix && !selectedItems.includes(prefix)) {
+                        zip.remove(fileName);
+                    }
+                } else {
+                    if (!selectedItems.includes(fileName)) {
+                        zip.remove(fileName);
+                    }
+                }
+            }
+        });
+
+        // Generate a new file name with a suffix appended before the extension.
+        const filePathWithoutExtension: string = zipFilePath.substring(0, zipFilePath.lastIndexOf("."));
+        const fileExtension: string = path.extname(zipFilePath);
+        const newZipFilePath: string = `${filePathWithoutExtension}-MODIFIED${fileExtension}`;
+        // Generate the new zip archive as a Node.js buffer.
+        const newZipData: Buffer<ArrayBufferLike> = await zip.generateAsync({ type: "nodebuffer" });
+        // Write the new zip archive to the new file.
+        fs.writeFileSync(newZipFilePath, newZipData);
+
+        const zipUpdateSuccessMessage: string = `Modified report file created at: ${newZipFilePath}`;
+        logger.debug(zipUpdateSuccessMessage);
+        vscode.window.showInformationMessage(zipUpdateSuccessMessage);
+    } catch (error) {
+        logger.error("Error updating zip file:", error);
+    }
+}
+
+/**
+ * Helper function to determine if a file is a candidate JSON file based on its name.
+ *
+ * It checks (in a case-insensitive way) if the file name starts with either "itb-tc-" or "itb-tt-"
+ * and ends with ".json".
+ *
+ * @param {string} fileName - The name of the file.
+ * @returns {boolean} True if the file matches the criteria; otherwise, false.
+ */
+function isCandidateJsonFile(fileName: string): boolean {
+    const lowerFileName: string = fileName.toLowerCase();
+    return (
+        (lowerFileName.startsWith("itb-tc-") || lowerFileName.startsWith("itb-tt-")) && lowerFileName.endsWith(".json")
+    );
+}
+
+/**
+ * Helper function to extract the grouping prefix from a filename.
+ *
+ * It uses a regular expression to capture the prefix such as "itb-tc-325" or "itb-tt-325"
+ * in a case-insensitive way.
+ *
+ * @param {string} fileName - The name of the file.
+ * @returns {string | null} The extracted prefix if found; otherwise, null.
+ */
+function extractPrefix(fileName: string): string | null {
+    // This regex matches a string that starts with "itb-" followed by either "tc" or "tt",
+    // then a hyphen and one or more digits.
+    const prefixRegex: RegExp = /^(itb-(tc|tt)-\d+)/i;
+    const match: RegExpMatchArray | null = fileName.match(prefixRegex);
+    return match ? match[1] : null;
 }

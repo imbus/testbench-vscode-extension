@@ -1231,8 +1231,9 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
 
         const fileUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog(options);
         if (!fileUri || !fileUri[0]) {
-            vscode.window.showErrorMessage("No file selected. Please select a valid .zip file.");
-            logger.debug("No zip file selected.");
+            const noZipFileSelectedMessage: string = "No zip file selected. Please select a valid .zip file.";
+            vscode.window.showErrorMessage(noZipFileSelectedMessage);
+            logger.debug(noZipFileSelectedMessage);
             return null;
         }
 
@@ -1345,7 +1346,7 @@ export async function importReportWithResultsToTestbench(
             return null;
         }
 
-        // TODO: Check the new data of the new branch
+        // TODO: ignoreNonExecutedTestCases and checkPaths do not exists in feature branch
         // Import the results to TestBench server
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
@@ -1423,7 +1424,6 @@ export async function selectReportWithResultsAndImportToTestbench(
             progress.report({ message: "Selecting report file with results.", increment: 30 });
             const resultZipFilePath: string | null = await promptForReportZipFileWithResults();
             if (!resultZipFilePath) {
-                logger.error("No location selected for the report zip file with results.");
                 return null;
             }
             progress.report({ message: "Importing report file.", increment: 30 });

@@ -430,7 +430,9 @@ export function findProjectKeyOfCycleElement(element: ProjectManagementTreeItem)
         }
         current = current.parent;
     }
-    logger.error("Project key not found in tree hierarchy.");
+    const projectKeyNotFoundErrorMessage: string = `Project key not found in tree element: ${element.label}`;
+    logger.error(projectKeyNotFoundErrorMessage);
+    vscode.window.showErrorMessage(projectKeyNotFoundErrorMessage);
     return null;
 }
 
@@ -450,7 +452,9 @@ export function findCycleKeyOfTreeElement(element: ProjectManagementTreeItem): s
         }
         current = current.parent;
     }
-    logger.error("Cycle key not found in tree element.");
+    const cycleKeyNotFoundErrorMessage: string = `Cycle key not found in tree element: ${element.label}`;
+    logger.error(cycleKeyNotFoundErrorMessage);
+    vscode.window.showErrorMessage(cycleKeyNotFoundErrorMessage);
     return null;
 }
 
@@ -499,6 +503,8 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
             if (item?.base?.numbering) {
                 this.tooltip = `Numbering: ${item.base.numbering}\nType: ${item.elementType}\nName: ${item.base.name}\nStatus: ${this.statusOfTreeItem}\nID: ${item.base.uniqueID}`;
             }
+            // Display the uniqueID as a description next to the label.
+            this.description = item.base.uniqueID || "";
         }
     }
 
