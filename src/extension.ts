@@ -21,7 +21,12 @@ import * as testElementsTreeView from "./testElementsTreeView";
 import * as loginWebView from "./loginWebView";
 import * as utils from "./utils";
 import path from "path";
+import { extensions } from "vscode";
+
 import { initializeProjectAndTestThemeTrees } from "./projectManagementTreeView";
+import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
+
+let client: LanguageClient;
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -791,6 +796,100 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Execute automatic login if the setting is enabled.
     vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
+    await initializeLanguageServer(context);
+}
+
+export async function initializeLanguageServer(context: vscode.ExtensionContext): Promise<void> {
+    // language server initialization
+    let pythonPath = "";
+    const pythonExtension = extensions.getExtension("ms-python.python");
+    if (pythonExtension) {
+        await pythonExtension.activate();
+        const pythonApi = pythonExtension.exports;
+        pythonPath = pythonApi.settings.getExecutionDetails().execCommand[0];
+    }
+
+    const robotCodeExtension = extensions.getExtension("d-biehl.robotcode");
+    if (robotCodeExtension) {
+        await robotCodeExtension.activate();
+    }
+
+    const languge_server_settings = vscode.workspace.getConfiguration("testbenchExtension");
+    const server_name: string | null = languge_server_settings.get<string | null>("serverName", null);
+    const server_port: string | null = languge_server_settings.get<string | null>("portNumber", null);
+    // const username: string | null = languge_server_settings.get<string | null>("username", null);
+    const username: string | null = null;
+
+    const project: string = languge_server_settings.get<string>("project", "");
+    const tov: string = languge_server_settings.get<string>("tov", "");
+    const serverOptions: ServerOptions = {
+        run: {
+            command: pythonPath,
+            args: [
+                "-m",
+                "testbench_ls",
+                server_name || "",
+                server_port || "",
+                username || "robot",
+                "robot",
+                project,
+                tov || ""
+            ]
+        },
+        debug: {
+            command: pythonPath,
+            args: [
+                "-m",
+                "testbench_ls",
+                server_name || "",
+                server_port || "",
+                username || "robot",
+                "robot",
+                project,
+                tov || ""
+            ]
+        }
+        // debug: { command: pythonPath, args: ["-m", "testbench_ls", "--debug"] },
+    };
+
+    const clientOptions: LanguageClientOptions = {
+        documentSelector: [{ scheme: "file", language: "robotframework", pattern: "**/*.resource" }],
+        synchronize: {
+            fileEvents: [vscode.workspace.createFileSystemWatcher("**/*.resource", false, false)]
+        }
+    };
+
+    client = new LanguageClient("testbench-ls", "TestBench LS", serverOptions, clientOptions);
+    client.start();
+    client.onNotification("custom/notification", (params) => {
+        vscode.window.showInformationMessage(`${params.message}`);
+    });
+    vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("testbenchExtension.serverName")) {
+            const newServerName = vscode.workspace
+                .getConfiguration("testbenchExtension")
+                .get<string | null>("serverName", null);
+            vscode.commands.executeCommand("testbench_ls.updateServerName", newServerName);
+        } else if (event.affectsConfiguration("testbenchExtension.portNumber")) {
+            const newPortNumber = vscode.workspace
+                .getConfiguration("testbenchExtension")
+                .get<string | null>("portNumber", null);
+            vscode.commands.executeCommand("testbench_ls.updateServerPort", newPortNumber);
+        }
+        // else if (event.affectsConfiguration('testbenchExtension.username')) {
+        //   const newUsername = vscode.workspace.getConfiguration('testbenchExtension').get<string | null>("username", null);
+        //   vscode.commands.executeCommand("testbench_ls.updateLoginName", newUsername);
+        // }
+        else if (event.affectsConfiguration("testbenchExtension.project")) {
+            const newProject = vscode.workspace
+                .getConfiguration("testbenchExtension")
+                .get<string | null>("project", null);
+            vscode.commands.executeCommand("testbench_ls.updateProject", newProject);
+        } else if (event.affectsConfiguration("testbenchExtension.tov")) {
+            const newTov = vscode.workspace.getConfiguration("testbenchExtension").get<string | null>("tov", null);
+            vscode.commands.executeCommand("testbench_ls.updateTov", newTov);
+        }
+    });
 }
 
 /**

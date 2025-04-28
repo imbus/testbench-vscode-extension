@@ -52,6 +52,20 @@
                         "default": false,
                         "description": "If enabled, the extension will automatically attempt to log in to the TestBench server using the stored credentials after the extension is activated.",
                         "order": 5
+                    },
+                    "testbenchExtension.project": {
+                        "type": [
+                            "string"
+                        ],
+                        "default": null,
+                        "description": "TestBench project to sync with."
+                    },
+                    "testbenchExtension.tov": {
+                        "type": [
+                            "string"
+                        ],
+                        "default": null,
+                        "description": "TestBench tov to sync with."
                     }
                 }
             },
@@ -521,7 +535,19 @@
                     "icon": "resources/icons/TBU_Logo_cropped.svg"
                 }
             ]
-        }
+        },
+        "languages": [
+            {
+                "id": "robotframework",
+                "aliases": [
+                    "robotframework"
+                ],
+                "extensions": [
+                    ".resource"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ]
     },
     "scripts": {
         "vscode:prepublish": "npm run package",
@@ -585,6 +611,7 @@
     "dependencies": {
         "@vscode-elements/elements": "^1.10.0",
         "@vscode/python-extension": "^1.0.5",
+        "vscode-languageclient": "^9.0.1",
         "axios": "^1.7.7",
         "base-64": "^1.0.0",
         "flatted": "^3.3.1",
