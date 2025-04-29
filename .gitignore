@@ -204,3 +204,6 @@ bundled/libs/
 
 # python version
 .python-version
+
+# pyton requirements
+requirements.txt
