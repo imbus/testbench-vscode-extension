@@ -17,13 +17,13 @@ def create_resources_from_test_elements(
     server_name: str,
     server_port: str,
     login_name: str,
-    password: str,
+    session_token: str,
     project_name: str,
     tov_name: str,
 ) -> dict:
     resources: dict[str, RobotResourceFile] = {}
     testbench_api = TestBenchApi(
-        server_name, server_port, login_name, password, project_name, tov_name
+        server_name, server_port, login_name, session_token, project_name, tov_name
     )
     for test_element in testbench_api.test_elements:
         if not testbench_api.is_interaction(test_element):
@@ -58,13 +58,13 @@ def create_resource(
     server_name: str,
     server_port: str,
     login_name: str,
-    password: str,
+    session_token: str,
     project_name: str,
     tov_name: str,
     uid: str,
 ):
     testbench_api = TestBenchApi(
-        server_name, server_port, login_name, password, project_name, tov_name
+        server_name, server_port, login_name, session_token, project_name, tov_name
     )
     resource_path = None
     resource = None
@@ -103,13 +103,13 @@ def get_interaction_details(
     server_name: str,
     server_port: str,
     login_name: str,
-    password: str,
+    session_token: str,
     project_name: str,
     tov_name: str,
     interaction_uid: str,
 ) -> dict:
     testbench_api = TestBenchApi(
-        server_name, server_port, login_name, password, project_name, tov_name
+        server_name, server_port, login_name, session_token, project_name, tov_name
     )
     test_element = testbench_api.get_test_element(interaction_uid)
     interaction_key = testbench_api.get_interaction_key(test_element)
@@ -122,13 +122,13 @@ def create_keyword(
     server_name: str,
     server_port: str,
     login_name: str,
-    password: str,
+    session_token: str,
     project,
     tov,
     interaction_uid: str,
 ) -> Keyword:
     interaction_details = get_interaction_details(
-        server_name, server_port, login_name, password, project, tov, interaction_uid
+        server_name, server_port, login_name, session_token, project, tov, interaction_uid
     )
     keyword_name = interaction_details.get("name")
     keyword_arguments = [

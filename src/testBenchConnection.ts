@@ -13,7 +13,9 @@ import * as base64 from "base-64"; // npm i --save-dev @types/base-64
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
+import { initializeLanguageServer, client } from "./server";
 import * as projectManagementTreeView from "./projectManagementTreeView";
+
 import {
     getConfig,
     setConnection,
@@ -65,6 +67,16 @@ export class PlayServerConnection {
 
         // Start the keep-alive process immediately to prevent session timeout after 5 minutes
         this.startKeepAlive();
+    }
+
+    /** Returns the server name. */
+    public getServerName(): string {
+        return this.serverName;
+    }
+
+    /** Returns the server port. */
+    public getServerPort(): string {
+        return this.portNumber.toString();
     }
 
     /** Returns the current session token. */
@@ -448,6 +460,7 @@ export class PlayServerConnection {
                 }
 
                 const logoutSuccessfulMessage = "Logout successful.";
+                client.stop();
                 logger.debug(logoutSuccessfulMessage);
                 vscode.window.showInformationMessage(logoutSuccessfulMessage);
             } else {
@@ -1096,6 +1109,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     // Set the connectionActive context value for changing the login icon to logout icon based on this value
                     await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
                     const loginSuccessfulMessage: string = "Login successful.";
+                    await initializeLanguageServer();
                     logger.debug(loginSuccessfulMessage);
                     vscode.window.showInformationMessage(loginSuccessfulMessage);
                     // Upon successful login, update the login webview content and hide it.

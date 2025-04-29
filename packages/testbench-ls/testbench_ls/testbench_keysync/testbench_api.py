@@ -10,7 +10,7 @@ class TestBenchApi:
         server_name: str,
         server_port: str,
         login_name: str,
-        password: str,
+        session_token: str,
         project_name: str,
         tov_name: str,
     ):
@@ -20,7 +20,7 @@ class TestBenchApi:
         self.connection = Connection(
             f"https://{server_name}:{server_port}/api/",
             loginname=login_name,
-            password=password,
+            sessionToken=session_token,
             verify=False,
         )
         self.project_key, self.tov_key, _ = self.get_project_path_keys(project_name, tov_name, None)

@@ -10,14 +10,14 @@ from .server import start_language_server
 @click.argument("server-name")
 @click.argument("server-port")
 @click.argument("login-name")
-@click.argument("password")
+@click.argument("session-token")
 @click.argument("testbench-project")
 @click.argument("testbench-tov")
 def testbench_ls_cli(
     server_name,
     server_port,
     login_name,
-    password,
+    session_token,
     testbench_project,
     testbench_tov,
 ):
@@ -26,7 +26,7 @@ def testbench_ls_cli(
         server_name,
         server_port,
         login_name,
-        password,
+        session_token,
         testbench_project,
         testbench_tov,
     )
