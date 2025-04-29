@@ -26,6 +26,7 @@ import { LANGUAGE_SERVER_SCRIPT_PATH } from "./constants";
 
 import { initializeProjectAndTestThemeTrees } from "./projectManagementTreeView";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
+import { getInterpreterPath } from "./python";
 
 let client: LanguageClient;
 
@@ -802,12 +803,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export async function initializeLanguageServer(context: vscode.ExtensionContext): Promise<void> {
     // language server initialization
-    let pythonPath = "";
-    const pythonExtension = extensions.getExtension("ms-python.python");
-    if (pythonExtension) {
-        await pythonExtension.activate();
-        const pythonApi = pythonExtension.exports;
-        pythonPath = pythonApi.settings.getExecutionDetails().execCommand[0];
+    const pythonPath: string | undefined = await getInterpreterPath();
+    if (!pythonPath) {
+        return;
     }
 
     const robotCodeExtension = extensions.getExtension("d-biehl.robotcode");
