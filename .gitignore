@@ -198,3 +198,9 @@ cython_debug/
 
 # nodeenv
 .nenv/
+
+# libs
+bundled/libs/
+
+# python version
+.python-version
