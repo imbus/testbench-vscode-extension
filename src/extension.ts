@@ -22,6 +22,7 @@ import * as loginWebView from "./loginWebView";
 import * as utils from "./utils";
 import path from "path";
 import { extensions } from "vscode";
+import { LANGUAGE_SERVER_SCRIPT_PATH } from "./constants";
 
 import { initializeProjectAndTestThemeTrees } from "./projectManagementTreeView";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
@@ -826,8 +827,7 @@ export async function initializeLanguageServer(context: vscode.ExtensionContext)
         run: {
             command: pythonPath,
             args: [
-                "-m",
-                "testbench_ls",
+                LANGUAGE_SERVER_SCRIPT_PATH,
                 server_name || "",
                 server_port || "",
                 username || "robot",
@@ -839,8 +839,7 @@ export async function initializeLanguageServer(context: vscode.ExtensionContext)
         debug: {
             command: pythonPath,
             args: [
-                "-m",
-                "testbench_ls",
+                LANGUAGE_SERVER_SCRIPT_PATH,
                 server_name || "",
                 server_port || "",
                 username || "robot",

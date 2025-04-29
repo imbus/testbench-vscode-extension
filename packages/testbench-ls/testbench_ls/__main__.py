@@ -13,7 +13,21 @@
 # limitations under the License.
 
 
-from .cli import testbench_ls_cli
+import os
+import pathlib
+import sys
+from testbench_ls.cli import testbench_ls_cli
+def update_sys_path(path_to_add: str, strategy: str) -> None:
+    """Add given path to `sys.path`."""
+    if path_to_add not in sys.path and os.path.isdir(path_to_add):
+        if strategy == "useBundled":
+            sys.path.insert(0, path_to_add)
+        else:
+            sys.path.append(path_to_add)
+
+BUNDLE_DIR = pathlib.Path(__file__).parent.parent
+
+update_sys_path(os.fspath(BUNDLE_DIR / "libs"), "useBundled")
 
 if __name__ == "__main__":
     testbench_ls_cli()
