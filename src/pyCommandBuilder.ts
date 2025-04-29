@@ -77,7 +77,7 @@ export class PyCommandBuilder {
     public static async buildTb2RobotCommand(extensionContext: vscode.ExtensionContext): Promise<string> {
         // Construct the absolute path to the tb2robot main script.
         const tb2RobotMainFile: string = extensionContext.asAbsolutePath(
-            path.join("bundled", "tools", "tb2robot", "__main__.py")
+            path.join("bundled", "libs", "testbench2robotframework", "__main__.py")
         );
         logger.trace("tb2robot main path set to:", tb2RobotMainFile);
 
