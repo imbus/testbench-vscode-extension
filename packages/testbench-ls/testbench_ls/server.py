@@ -63,7 +63,7 @@ class TestBenchLanguageServer(LanguageServer):
         self.server_port = None
         self.project = None
         self.login_name = None
-        self.password = None
+        self.session_token = None
         self.tov = None
 
     def set_server_name(self, server_name: str):
@@ -75,8 +75,8 @@ class TestBenchLanguageServer(LanguageServer):
     def set_login_name(self, login_name: str):
         self.login_name = login_name
 
-    def set_password(self, password: str):
-        self.password = password
+    def set_session_token(self, session_token: str):
+        self.session_token = session_token
 
     def set_project(self, project: str):
         self.project = project
@@ -127,11 +127,11 @@ def update_login_name(ls: LanguageServer, args):
     ls.set_login_name(new_name)
 
 
-@testbench_ls.command("testbench_ls.updatePassword")
-def update_password(ls: LanguageServer, args):
-    """Update the password."""
-    new_password, *_ = args
-    ls.set_password(new_password)
+@testbench_ls.command("testbench_ls.updateSessionToken")
+def update_session_token(ls: LanguageServer, args):
+    """Update the session_token."""
+    new_session_token, *_ = args
+    ls.set_session_token(new_session_token)
 
 
 @testbench_ls.command("testbench_ls.updateProject")
@@ -201,12 +201,12 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
 def pull_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
-    logging.info(f"{ls.server_name} {ls.server_port}  {ls.login_name}  {ls.password}")
+    logging.info(f"{ls.server_name} {ls.server_port}  {ls.login_name}  {ls.session_token}")
     new_resource = create_resource(
         ls.server_name,
         ls.server_port,
         ls.login_name,
-        ls.password,
+        ls.session_token,
         ls.project,
         ls.tov,
         uid=subdivision_uid,
@@ -369,7 +369,7 @@ def pull_testbench_keyword(ls: LanguageServer, args):
 
     existing_keyword = resource.get_keyword(keyword_uid)
     new_keyword = create_keyword(
-        ls.server_name, ls.server_port, ls.login_name, ls.password, ls.project, ls.tov, keyword_uid
+        ls.server_name, ls.server_port, ls.login_name, ls.session_token, ls.project, ls.tov, keyword_uid
     )
     edits.extend(create_keyword_edits(existing_keyword, new_keyword, change_identifier))
     if edits:
@@ -407,7 +407,7 @@ def push_testbench_keyword(ls: LanguageServer, args):
             ls.server_name,
             ls.server_port,
             ls.login_name,
-            ls.password,
+            ls.session_token,
             ls.project,
             ls.tov,
             keyword_uid,
@@ -518,7 +518,7 @@ def start_language_server(
     server_name: str,
     server_port: str,
     login_name: str,
-    password: str,
+    session_token: str,
     project: str,
     tov: str,
 ):
@@ -526,7 +526,7 @@ def start_language_server(
     testbench_ls.set_server_name(server_name)
     testbench_ls.set_server_port(server_port)
     testbench_ls.set_login_name(login_name)
-    testbench_ls.set_password(password)
+    testbench_ls.set_session_token(session_token)
     testbench_ls.set_project(project)
     testbench_ls.set_tov(tov)
     testbench_ls.start_io()

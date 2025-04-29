@@ -793,7 +793,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Execute automatic login if the setting is enabled.
     vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
-    await initializeLanguageServer(context);
+    await initializeLanguageServer();
 }
 
 /**

@@ -3,11 +3,11 @@ import { extensions } from "vscode";
 import { LANGUAGE_SERVER_SCRIPT_PATH } from "./constants";
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
+import { connection } from "./extension";
 
-let client: LanguageClient;
+export let client: LanguageClient;
 
-export async function initializeLanguageServer(context: vscode.ExtensionContext): Promise<void> {
-    // language server initialization
+export async function initializeLanguageServer(): Promise<void> {
     const pythonPath: string | undefined = await getInterpreterPath();
     if (!pythonPath) {
         return;
@@ -16,12 +16,18 @@ export async function initializeLanguageServer(context: vscode.ExtensionContext)
     if (robotCodeExtension) {
         await robotCodeExtension.activate();
     }
+    if (!connection) {
+        return;
+    }
+    const serverName = connection.getServerName();
+    const serverPort = connection.getServerPort();
+    const sessionToken = connection.getSessionToken();
 
     const languge_server_settings = vscode.workspace.getConfiguration("testbenchExtension");
-    const server_name: string | null = languge_server_settings.get<string | null>("serverName", null);
-    const server_port: string | null = languge_server_settings.get<string | null>("portNumber", null);
-    // const username: string | null = languge_server_settings.get<string | null>("username", null);
-    const username: string | null = null;
+    // const server_name: string | null = languge_server_settings.get<string | null>("serverName", null);
+    // const server_port: string | null = languge_server_settings.get<string | null>("portNumber", null);
+    const username: string | null = languge_server_settings.get<string | null>("username", null);
+    // const username: string | null = null;
 
     const project: string = languge_server_settings.get<string>("project", "");
     const tov: string = languge_server_settings.get<string>("tov", "");
@@ -30,10 +36,10 @@ export async function initializeLanguageServer(context: vscode.ExtensionContext)
             command: pythonPath,
             args: [
                 LANGUAGE_SERVER_SCRIPT_PATH,
-                server_name || "",
-                server_port || "",
+                serverName || "",
+                serverPort || "",
                 username || "robot",
-                "robot",
+                sessionToken || "",
                 project,
                 tov || ""
             ]
@@ -42,10 +48,10 @@ export async function initializeLanguageServer(context: vscode.ExtensionContext)
             command: pythonPath,
             args: [
                 LANGUAGE_SERVER_SCRIPT_PATH,
-                server_name || "",
-                server_port || "",
+                serverName || "",
+                serverPort || "",
                 username || "robot",
-                "robot",
+                sessionToken || "",
                 project,
                 tov || ""
             ]
