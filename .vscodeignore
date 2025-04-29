@@ -20,7 +20,9 @@ vsc-extension-quickstart.md
 .env
 package-lock.json
 packages/**
-__pycache__
+**/__pycache__/**
 .python-version
 pyproject.toml
 requirements.txt
+.testbench/**
+.nox/**
