@@ -1,3 +1,0 @@
-[console_scripts]
-tb2robot = testbench2robotframework.cli:testbench2robotframework_cli
-testbench2robotframework = testbench2robotframework.cli:testbench2robotframework_cli
