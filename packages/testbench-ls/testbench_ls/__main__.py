@@ -17,6 +17,7 @@ import os
 import pathlib
 import sys
 
+
 def update_sys_path(path_to_add: str, strategy: str) -> None:
     """Add given path to `sys.path`."""
     if path_to_add not in sys.path and os.path.isdir(path_to_add):
@@ -24,6 +25,7 @@ def update_sys_path(path_to_add: str, strategy: str) -> None:
             sys.path.insert(0, path_to_add)
         else:
             sys.path.append(path_to_add)
+
 
 BUNDLE_DIR = pathlib.Path(__file__).parent.parent
 update_sys_path(os.fspath(BUNDLE_DIR), "useBundled")
