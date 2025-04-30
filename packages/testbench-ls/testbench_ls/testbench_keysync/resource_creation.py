@@ -1,9 +1,8 @@
 from robot.api.parsing import (
     Arguments,
+    Comment,
     Documentation,
     Keyword,
-    Comment,
-    KeywordCall,
     KeywordName,
     Tags,
 )

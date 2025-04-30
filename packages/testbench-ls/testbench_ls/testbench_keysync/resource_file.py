@@ -10,7 +10,6 @@ from robot.api.parsing import (
     EmptyLine,
     File,
     Keyword,
-    KeywordCall,
     KeywordName,
     KeywordSection,
     SectionHeader,
