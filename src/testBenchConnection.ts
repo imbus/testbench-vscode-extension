@@ -43,10 +43,10 @@ export class PlayServerConnection {
     /**
      * Creates a new PlayServerConnection.
      *
-     * @param context - The VS Code extension context.
-     * @param serverName - The server name or IP address.
-     * @param portNumber - The server port number.
-     * @param sessionToken - The session token for authentication.
+     * @param {vscode.ExtensionContext} context - The VS Code extension context.
+     * @param {string} serverName - The server name or IP address.
+     * @param {number} portNumber - The server port number.
+     * @param {string} sessionToken - The session token for authentication.
      */
     constructor(serverName: string, portNumber: number, sessionToken: string) {
         this.serverName = serverName;
@@ -85,8 +85,8 @@ export class PlayServerConnection {
     /**
      * Retrieves the session token from VS Code's secret storage.
      *
-     * @param context - The extension context.
-     * @returns The session token or undefined if not found.
+     * @param {vscode.ExtensionContext} context - The extension context.
+     * @returns {Promise<string | undefined>} The session token or undefined if not found.
      */
     async getSessionTokenFromSecretStorage(context: vscode.ExtensionContext): Promise<string | undefined> {
         const token: string | undefined = await context.secrets.get("sessionToken");
@@ -156,7 +156,7 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                2000 // delayMs: wait 2000ms between attempts
             );
 
             // Save the response from server to a file for analyzing the structure
@@ -194,7 +194,7 @@ export class PlayServerConnection {
     /**
      * Fetches the project tree for a specific project from the TestBench server.
      *
-     * @param projectKey - The project key as a string.
+     * @param {string | null} projectKey - The project key as a string.
      * @returns {Promise<testBenchTypes.TreeNode | null>} The project tree fetched from the server or null if an error occurs.
      */
     async getProjectTreeOfProject(projectKey: string | null): Promise<testBenchTypes.TreeNode | null> {
@@ -208,14 +208,14 @@ export class PlayServerConnection {
             return null;
         }
         try {
-            const projectTreeURL = `/projects/${projectKey}/tree/v1`;
+            const projectTreeURL: string = `/projects/${projectKey}/tree/v1`;
             const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await withRetry(
                 () =>
                     this.apiClient.get(projectTreeURL, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                2000 // delayMs: wait 2000ms between attempts
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -255,7 +255,7 @@ export class PlayServerConnection {
      * @param {string | null} tovKey - The TOV key as a string.
      * @returns {Promise<any | null>} The test elements data fetched from the server or null if an error occurs.
      */
-    async getTestElementsWithTovKeyOldPlayServer(tovKey: string | null): Promise<any | null> {
+    async getTestElementsWithTovKeyUsingOldPlayServer(tovKey: string | null): Promise<any | null> {
         logger.debug("Fetching test elements with TOV key:", tovKey);
         if (!this.sessionToken) {
             logger.error("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
@@ -298,7 +298,7 @@ export class PlayServerConnection {
             const testElementsResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getTestElementsURL),
                 3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                2000, // delayMs: wait 2000ms between attempts
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
                         // Do not retry if the error is due to authentication or if the resource is not found.
@@ -374,7 +374,7 @@ export class PlayServerConnection {
                         }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                2000, // delayMs: wait 2000ms between attempts
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
                         // Do not retry if the error is due to a bad request, missing resource, or unprocessable data.
@@ -436,7 +436,7 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                2000 // delayMs: wait 2000ms between attempts
             );
 
             if (logoutResponse.status === 204) {
@@ -510,7 +510,7 @@ export class PlayServerConnection {
                         validateStatus: () => true
                     }),
                 3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                2000, // delayMs: wait 2000ms between attempts
                 (error) => {
                     // Do not retry if the error is due to a non-transient condition
                     if (axios.isAxiosError(error) && error.response) {
@@ -599,7 +599,7 @@ export class PlayServerConnection {
                         validateStatus: () => true
                     }),
                 3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                2000, // delayMs: wait 2000ms between attempts
                 (error) => {
                     // Do not retry if the error has a non-transient status code.
                     if (axios.isAxiosError(error) && error.response) {
@@ -713,8 +713,8 @@ export class PlayServerConnection {
                     this.apiClient.get(`/login/session/v1`, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                5, // maxRetries: try 5 additional times
+                2000 // delayMs: wait 2000ms between attempts
             );
             logger.trace("Keep-alive request sent.");
         } catch (error) {
@@ -741,7 +741,7 @@ export class PlayServerConnection {
 async function withRetry<T>(
     asyncFunction: () => Promise<T>,
     maxRetries: number = 3,
-    delayMs: number = 1000,
+    delayMs: number = 2000,
     shouldRetry?: (error: any) => boolean,
     showProgressBar: boolean = true
 ): Promise<T> {
@@ -1048,8 +1048,8 @@ export async function loginToNewPlayServerAndInitSessionToken(
                 cancellable: true
             },
             async (progress) => {
-                const baseURL = `https://${serverName}:${portNumber}/api`;
-                const loginURL = `${baseURL}/login/session/v1`;
+                const baseURL: string = `https://${serverName}:${portNumber}/api`;
+                const loginURL: string = `${baseURL}/login/session/v1`;
 
                 logger.trace("Sending login request to:", loginURL);
                 progress.report({ message: "Sending login request..." });
@@ -1064,7 +1064,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                             httpsAgent: new https.Agent({ rejectUnauthorized: false })
                         }),
                     3, // maxRetries
-                    1000, // delayMs
+                    2000, // delayMs
                     (error) => {
                         // Do not retry if the error is due to invalid credentials (HTTP 401)
                         if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
@@ -1165,7 +1165,7 @@ async function fetchServerVersions(
                     httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: set to true in production
                 }),
             3, // maxRetries: try 3 additional times
-            1000, // delayMs: wait 1000ms between attempts
+            2000, // delayMs: wait 2000ms between attempts
             // Retry only if the error is due to a non-transient condition
             (error) => {
                 if (axios.isAxiosError(error) && error.response) {

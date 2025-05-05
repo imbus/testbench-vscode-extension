@@ -71,6 +71,7 @@ export interface LastGeneratedReportParams {
     projectKey: string | undefined;
     cycleKey: string | undefined;
     UID: string | undefined;
+    timestamp: number | undefined; // Timestamp of the last successful report generation for potential cleanup
 }
 
 export interface CycleStructure {
