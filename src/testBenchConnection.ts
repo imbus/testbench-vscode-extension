@@ -37,6 +37,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 export class PlayServerConnection {
     private serverName: string;
     private portNumber: number;
+    private username: string;
     private sessionToken: string;
     private baseURL: string;
     private apiClient: AxiosInstance;
@@ -50,9 +51,10 @@ export class PlayServerConnection {
      * @param portNumber - The server port number.
      * @param sessionToken - The session token for authentication.
      */
-    constructor(serverName: string, portNumber: number, sessionToken: string) {
+    constructor(serverName: string, portNumber: number, username: string, sessionToken: string) {
         this.serverName = serverName;
         this.portNumber = portNumber;
+        this.username = username;
         this.sessionToken = sessionToken;
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
 
@@ -77,6 +79,10 @@ export class PlayServerConnection {
     /** Returns the server port. */
     public getServerPort(): string {
         return this.portNumber.toString();
+    }
+
+    public getUsername(): string {
+        return this.username;
     }
 
     /** Returns the current session token. */
@@ -1102,6 +1108,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     const newConnection: PlayServerConnection = new PlayServerConnection(
                         serverName,
                         portNumber,
+                        username,
                         loginResponse.data.sessionToken
                     );
                     // Set the global connection object, it can be null in case the login fails
