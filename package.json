@@ -255,10 +255,6 @@
         ],
         "commands": [
             {
-                "command": "testbenchExtension.toggleWebViewVisibility",
-                "title": "Testbench: Toggle Login Web View Visibility"
-            },
-            {
                 "command": "testbenchExtension.login",
                 "title": "Testbench: Login",
                 "icon": {
@@ -420,19 +416,23 @@
                 {
                     "type": "webview",
                     "id": "testbenchExtension.webView",
-                    "name": "Login to TestBench"
+                    "name": "Login to TestBench",
+                    "when": "!testbenchExtension.connectionActive"
                 },
                 {
                     "id": "projectManagementTree",
-                    "name": "Project Contents"
+                    "name": "Project Contents",
+                    "when": "testbenchExtension.connectionActive"
                 },
                 {
                     "id": "testThemeTree",
-                    "name": "Test Themes"
+                    "name": "Test Themes",
+                    "when": "testbenchExtension.connectionActive"
                 },
                 {
                     "id": "testElementsView",
-                    "name": "Test Elements"
+                    "name": "Test Elements",
+                    "when": "testbenchExtension.connectionActive"
                 }
             ]
         },

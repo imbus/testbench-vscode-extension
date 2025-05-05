@@ -63,7 +63,6 @@ export const allExtensionCommands = {
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     toggleProjectManagementTreeViewVisibility: `${baseKeyOfExtension}.toggleProjectManagementTreeViewVisibility`,
     toggleTestThemeTreeViewVisibility: `${baseKeyOfExtension}.toggleTestThemeTreeViewVisibility`,
-    toggleWebViewVisibility: `${baseKeyOfExtension}.toggleWebViewVisibility`,
     automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
     displayInteractionsForSelectedTOV: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`,
@@ -232,9 +231,6 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
  * @param {vscode.ExtensionContext} context The extension context.
  */
 function registerExtensionCommands(context: vscode.ExtensionContext): void {
-    // --- Command: Toggle Login Webview Visibility ---
-    registerSafeCommand(context, allExtensionCommands.toggleWebViewVisibility, loginWebView.toggleWebViewVisibility);
-
     // --- Command: Show Extension Settings ---
     registerSafeCommand(context, allExtensionCommands.showExtensionSettings, async () => {
         logger.debug("Command Called: Show Extension Settings");
@@ -321,11 +317,6 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             return;
         }
         await connection.logoutUser(projectManagementTreeDataProvider!);
-        // Show the login webview and hide the tree views after logout.
-        loginWebView.displayWebView();
-        projectManagementTreeView.hideProjectManagementTreeView();
-        projectManagementTreeView.hideTestThemeTreeView();
-        testElementsTreeView.hideTestElementsTreeView();
         logger.trace("End of command: Logout");
     });
 
@@ -783,14 +774,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Register all extension commands.
     registerExtensionCommands(context);
 
-    // Display the login webview display.
-    // This calls focuses and opens our extension even when the user wont want to use our extension.
-    // To solve this in package.json, "activationEvents" is set to "onView:testBenchExplorer" to activate the extension only when the extension view is opened.
-    await loginWebView.updateWebViewDisplay();
-    // Hide all tree views on activation, so that only login webview is visible.
-    await vscode.commands.executeCommand("projectManagementTree.removeView");
-    await vscode.commands.executeCommand("testThemeTree.removeView");
-    await vscode.commands.executeCommand("testElementsView.removeView");
+    // Set the initial context state. Before any login attempt, connection is null.
+    // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
+    await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
+    logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
 
     // Execute automatic login if the setting is enabled.
     vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);

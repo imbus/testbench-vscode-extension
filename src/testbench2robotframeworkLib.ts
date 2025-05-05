@@ -229,29 +229,25 @@ export class tb2robotLib {
     ): Promise<boolean> {
         const fetchResultsCommand: string = `fetch-results`;
         logger.debug(`Starting tb2robot ${fetchResultsCommand} command.`);
-        let isFetchResultsCommandSuccessful = true;
+        let isFetchResultsCommandSuccessful: boolean = true;
 
-        // await this.executeTb2robotFetchResultsCommand(
-        //     context,
-        //     commandExecutionDirectory,
-        //     outputXmlPath,
-        //     reportPath,
-        //     resultPath
-        // )
-        //     .then(() => {
-        //         const providedPath = resultPath ? resultPath : "none";
-        //         logger.debug(`tb2robot ${fetchResultsCommand} completed. Provided output directory: ${providedPath}.`);
-        //     })
-        //     .catch((err) => {
-        //         logger.error(`Error in tb2robot ${fetchResultsCommand}:`, err);
-        //         vscode.window.showErrorMessage(`Error in tb2robot ${fetchResultsCommand}: ${err}`);
-        //         isFetchResultsCommandSuccessful = false;
-        //     });
-        await vscode.commands.executeCommand("testbench_ls.fetchResults", {
-            robot_result: outputXmlPath,
-            output_directory: resultPath,
-            testbench_report: reportPath
-        });
+        await this.executeTb2robotFetchResultsCommand(
+            context,
+            commandExecutionDirectory,
+            outputXmlPath,
+            reportPath,
+            resultPath
+        )
+            .then(() => {
+                const providedPath: string = resultPath ? resultPath : "none";
+                logger.debug(`tb2robot ${fetchResultsCommand} completed. Provided output directory: ${providedPath}.`);
+            })
+            .catch((err) => {
+                logger.error(`Error in tb2robot ${fetchResultsCommand}:`, err);
+                vscode.window.showErrorMessage(`Error in tb2robot ${fetchResultsCommand}: ${err}`);
+                isFetchResultsCommandSuccessful = false;
+            });
+
         logger.debug(`startTb2robotFetchResults success: ${isFetchResultsCommandSuccessful}`);
         return isFetchResultsCommandSuccessful;
     }
@@ -259,7 +255,7 @@ export class tb2robotLib {
     /**
      * Builds a string of options for the tb2robot generate-tests command.
      *
-     * @param options - An object containing options.
+     * @param {{ [key: string]: string | string[] | boolean }} options - An object containing options.
      * @returns {string} A string of command-line options.
      */
     public static buildOptionsStringForTestGeneration(options: { [key: string]: string | string[] | boolean }): string {
@@ -314,7 +310,7 @@ export class tb2robotLib {
     /**
      * Retrieves tb2robot generate-tests options from extension settings, excluding those with default values.
      *
-     * @returns An object containing the options.
+     * @returns {Promise<{[key: string]: string | boolean | string[];}>} An object containing the options.
      */
     private static async getTb2RobotGenerateTestOptionsFromSettings(): Promise<{
         [key: string]: string | boolean | string[];
@@ -438,7 +434,7 @@ export class tb2robotLib {
      * Builds a string of options for the tb2robot fetch-results command.
      *
      * @param options - An object containing options.
-     * @returns A string of command-line options.
+     * @returns {string} A string of command-line options.
      */
     public static buildOptionsStringForFetchResults(options: { [key: string]: string | string[] | boolean }): string {
         let fetchResultsOptionsString = "";

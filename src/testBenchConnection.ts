@@ -8,7 +8,6 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
-import * as loginWebView from "./loginWebView";
 import * as base64 from "base-64"; // npm i --save-dev @types/base-64
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
@@ -285,7 +284,8 @@ export class PlayServerConnection {
         }
 
         try {
-            const oldPlayServerBaseUrl: string = `https://${this.serverName}:9443/api/1`;
+            const oldPlayServerPortNumber: number = 9443;
+            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
             const getTestElementsURL: string = `/tovs/${tovKey}/testElements`;
 
             logger.trace("Creating session for old play server.");
@@ -440,7 +440,7 @@ export class PlayServerConnection {
      * Logs out the user from the TestBench server.
      * Clears session data, stops the keep-alive process, clears the tree data provider which empties the tree view.
      *
-     * @param projectTreeDataProvider - The project management tree data provider.
+     * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectTreeDataProvider - The project management tree data provider.
      * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
      */
     async logoutUser(
@@ -465,19 +465,18 @@ export class PlayServerConnection {
                     logger.warn("Tree data provider is not defined. Cannot clear the tree.");
                 }
 
-                const logoutSuccessfulMessage = "Logout successful.";
-                client.stop();
+                const logoutSuccessfulMessage: string = "Logout successful.";
                 logger.debug(logoutSuccessfulMessage);
                 vscode.window.showInformationMessage(logoutSuccessfulMessage);
             } else {
-                const logoutFailedMessage = `Logout failed. Unexpected response status: ${logoutResponse.status}`;
+                const logoutFailedMessage: string = `Logout failed. Unexpected response status: ${logoutResponse.status}`;
                 logger.error(logoutFailedMessage);
                 vscode.window.showWarningMessage(logoutFailedMessage);
                 return null;
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                const logoutErrorMessage = `Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`;
+                const logoutErrorMessage: string = `Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`;
                 logger.error(logoutErrorMessage);
                 vscode.window.showWarningMessage(logoutErrorMessage);
                 return null;
@@ -1122,7 +1121,6 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     // Upon successful login, update the login webview content and hide it.
                     if (loginWebViewProvider) {
                         loginWebViewProvider.updateWebviewHTMLContent();
-                        loginWebView.hideWebView();
                     } else {
                         logger.error("loginWebViewProvider is null. Cannot update webview content.");
                     }
@@ -1151,7 +1149,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
 /**
  * Clears stored user credentials from secret storage.
  *
- * @param context - The extension context.
+ * @param {vscode.ExtensionContext} context - The extension context.
  */
 export async function clearStoredCredentials(context: vscode.ExtensionContext): Promise<void> {
     try {

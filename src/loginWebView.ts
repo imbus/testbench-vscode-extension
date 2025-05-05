@@ -9,9 +9,6 @@ import { logger, connection, allExtensionCommands, getConfig } from "./extension
 import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
 import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 
-// Tracks whether the login webview is visible.
-export let loginWebViewIsVisible: boolean = true; // Initially display the view when the extension starts.
-
 /**
  * The provider for the login webview.
  */
@@ -19,7 +16,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewId: string = "testbenchExtension.webView";
     private currentWebview?: vscode.WebviewView;
     // Prevent multiple login processes which can be caused by spamming the login button.
-    private isLoginProcessAlreadyRunning: boolean = false;
+    private isLoginProcessAlreadyRunningAfterButtonClick: boolean = false;
 
     /**
      * Constructs a new LoginWebViewProvider.
@@ -47,6 +44,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.onDidReceiveMessage(async (message) => {
             logger.trace(`Received message from webview: ${message.command}`);
             switch (message.command) {
+                // Handle the login attempt
                 case "login":
                     this.handleLogin(
                         this.extensionContext,
@@ -56,12 +54,39 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         message.password
                     );
                     break;
+                // Handle setting updates directly from the webview checkboxes
                 case "updateSetting":
-                    await getConfig().update(message.key, message.value);
-                    logger.trace(`Updated setting ${message.key} to ${message.value}`);
+                    await this.updateSetting(message.key, message.value);
                     break;
             }
         });
+
+        // Clean up when the view is disposed (e.g., user closes the view)
+        webviewView.onDidDispose(
+            () => {
+                this.currentWebview = undefined;
+                logger.trace("Login webview disposed.");
+            },
+            null,
+            this.extensionContext?.subscriptions
+        );
+    }
+
+    /**
+     * Updates a setting in the workspace configuration.
+     * @param {string} key The setting key.
+     * @param {any} value The new value for the setting.
+     */
+    private async updateSetting(key: string, value: any): Promise<void> {
+        try {
+            await vscode.workspace
+                .getConfiguration("testbenchExtension")
+                .update(key, value, vscode.ConfigurationTarget.Workspace);
+            logger.info(`Setting '${key}' updated to '${value}' via webview.`);
+        } catch (error) {
+            logger.error(`Failed to update setting ${key} from webview:`, error);
+            vscode.window.showErrorMessage(`Failed to update setting '${key}'.`);
+        }
     }
 
     /**
@@ -80,58 +105,82 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         username: string,
         password: string
     ): Promise<void> {
-        if (this.isLoginProcessAlreadyRunning) {
+        if (this.isLoginProcessAlreadyRunningAfterButtonClick) {
             logger.trace("Login process already running; ignoring duplicate submit.");
             return;
         }
-        this.isLoginProcessAlreadyRunning = true;
+        this.isLoginProcessAlreadyRunningAfterButtonClick = true;
         logger.trace("Handling login command from webview.");
+
+        if (!extensionContext) {
+            logger.error("Extension context is missing in handleLogin.");
+            this.showLoginErrorInWebview("Internal error: Extension context missing."); // Show error in webview
+            this.isLoginProcessAlreadyRunningAfterButtonClick = false;
+            return;
+        }
 
         // Check if the user is already connected to a server, if so, show a message and hide the webview.
         if (this.isConnectedToServer()) {
             vscode.window.showInformationMessage("You are already connected to a server.");
-            hideWebView();
-            this.isLoginProcessAlreadyRunning = false;
+            this.isLoginProcessAlreadyRunningAfterButtonClick = false;
             return;
         }
 
         // In production, don't log sensitive data.
         logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
 
-        // Attempt to log in. Successfull login will update and hide the webview automatically.
-        const connectionAfterLoginAttempt: PlayServerConnection | null = await loginToNewPlayServerAndInitSessionToken(
-            extensionContext!,
-            serverName,
-            portNumber,
-            username,
-            password
-        );
+        try {
+            // Attempt to log in. Successfull login will update and hide the webview automatically.
+            const connectionAfterLoginAttempt: PlayServerConnection | null =
+                await loginToNewPlayServerAndInitSessionToken(
+                    extensionContext!,
+                    serverName,
+                    portNumber,
+                    username,
+                    password
+                );
 
-        // If login was successful, open project selection and display project tree view
-        if (connectionAfterLoginAttempt) {
-            await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject}`);
-            // If the user does not select a project and clicks away, there wont be any active view.
-            // Add project view so that the user can choose a project.
-            displayProjectManagementTreeView();
+            // If login was successful, open project selection and display project tree view
+            if (connectionAfterLoginAttempt) {
+                await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject}`);
+                // If the user does not select a project and clicks away, there wont be any active view.
+                // Add project view so that the user can choose a project.
+                displayProjectManagementTreeView();
+            } else {
+                logger.warn("Login failed via webview.");
+                this.showLoginErrorInWebview("Login failed. Please check credentials or server details.");
+            }
+        } catch (error) {
+            logger.error("Exception during login attempt from webview:", error);
+            this.showLoginErrorInWebview(`Login error: ${(error as Error).message}`);
+        } finally {
+            // Release the lock on the login process.
+            this.isLoginProcessAlreadyRunningAfterButtonClick = false;
         }
-
-        // Release the lock on the login process.
-        this.isLoginProcessAlreadyRunning = false;
     }
 
     /**
      * Updates the HTML content of the webview based on the connection status.
      */
     async updateWebviewHTMLContent(): Promise<void> {
-        logger?.trace("Updating login webview content.");
-        if (!this.currentWebview) {
-            logger?.trace("No webview instance available for updating content.");
-            return;
+        if (this.currentWebview) {
+            logger.trace("Setting/Updating login webview HTML content.");
+            // The view is only resolved when not connected, so we always show the login page.
+            this.currentWebview.webview.html = await this.getLoginHtmlPage(this.currentWebview.webview);
+        } else {
+            logger.trace("No current login webview to update content for.");
         }
-        this.currentWebview.webview.html = this.isConnectedToServer()
-            ? this.getAlreadyConnectedHtml()
-            : await this.getLoginHtmlPage(this.currentWebview.webview);
-        logger?.trace("Login webview content updated.");
+    }
+
+    /**
+     * Sends a message to the webview to display an error message.
+     * @param {string} errorMessage The error message text to display.
+     */
+    private showLoginErrorInWebview(errorMessage: string): void {
+        if (this.currentWebview) {
+            // Post a message that the webview's script can handle
+            this.currentWebview.webview.postMessage({ command: "showError", message: errorMessage });
+        }
     }
 
     /**
@@ -331,35 +380,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Returns HTML content for when the user is already connected.
-     * @returns {string} The HTML string.
-     */
-    private getAlreadyConnectedHtml(): string {
-        logger.trace("Generating already connected HTML.");
-        return `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Connected</title>
-          <script>
-              window.addEventListener('message', (event) => {
-                  const message = event.data;
-                  if (message.command === 'updateContent') {
-                      document.body.innerHTML = message.html;
-                  }
-              });
-          </script>
-      </head>
-      <body>
-          <h1>Connected to server</h1>
-      </body>
-      </html>
-    `;
-    }
-
-    /**
      * Determines whether the extension is connected to a server.
      * @returns {boolean} True if connected; otherwise false.
      */
@@ -372,50 +392,4 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             return false;
         }
     }
-}
-
-/* =============================================================================
-   Webview Visibility and Update Functions
-   ============================================================================= */
-
-/**
- * Updates the login webview display based on the current visibility flag.
- */
-export async function updateWebViewDisplay(): Promise<void> {
-    logger.trace("Updating login webview display.");
-    if (loginWebViewIsVisible) {
-        await displayWebView();
-    } else {
-        await hideWebView();
-    }
-}
-
-/**
- * Toggles the visibility of the login webview.
- */
-export async function toggleWebViewVisibility(): Promise<void> {
-    logger.trace("Toggling login webview visibility.");
-    if (loginWebViewIsVisible) {
-        await hideWebView();
-    } else {
-        await displayWebView();
-    }
-}
-
-/**
- * Hides the login webview.
- */
-export async function hideWebView(): Promise<void> {
-    logger.trace("Hiding login webview.");
-    await vscode.commands.executeCommand("testbenchExtension.webView.removeView");
-    loginWebViewIsVisible = false;
-}
-
-/**
- * Displays the login webview.
- */
-export async function displayWebView(): Promise<void> {
-    logger.trace("Displaying (focusing on) login webview.");
-    await vscode.commands.executeCommand("testbenchExtension.webView.focus");
-    loginWebViewIsVisible = true;
 }
