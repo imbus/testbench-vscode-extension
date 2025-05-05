@@ -411,8 +411,12 @@ function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscod
     if (!iconPaths) {
         logger.error(`No icon mapping found for element type: ${elementType}. Falling back to default icon.`);
         const defaultIconPaths = iconMapping["Other"];
-        const lightIconUri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", defaultIconPaths.light));
-        const darkIconUri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", defaultIconPaths.dark));
+        const lightIconUri: vscode.Uri = vscode.Uri.file(
+            path.join(__dirname, "..", "resources", "icons", defaultIconPaths.light)
+        );
+        const darkIconUri: vscode.Uri = vscode.Uri.file(
+            path.join(__dirname, "..", "resources", "icons", defaultIconPaths.dark)
+        );
         return { light: lightIconUri, dark: darkIconUri };
     }
 

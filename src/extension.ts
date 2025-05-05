@@ -208,6 +208,8 @@ function initializeTestElementsTreeView(): void {
         treeDataProvider: testElementsTreeDataProvider
     });
     vscode.window.registerTreeDataProvider("testElementsView", testElementsTreeDataProvider);
+    // Hide the test elements tree view initially.
+    testElementsTreeView.hideTestElementsTreeView();
 }
 
 /**
@@ -582,6 +584,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                         tovKeyOfSelectedTreeElement,
                         typeof treeItem.label === "string" ? treeItem.label : undefined
                     );
+                    // Hide Project Contents Tree View after displaying Test Elements Tree View.
+                    await projectManagementTreeView?.hideProjectManagementTreeView();
                 }
             }
             logger.trace("End of Command: Display Interactions For Selected TOV");
@@ -777,7 +781,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
 
-    // await initializeLanguageServer();
+    // await initializeLanguageServer();  // TODO: Uncomment this line when the language server is ready.
 
     // Execute automatic login if the setting is enabled.
     vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
