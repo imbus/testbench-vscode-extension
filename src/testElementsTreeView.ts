@@ -648,7 +648,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         // const testElementsJsonData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
 
         // Commented out for debugging purposes
-        const testElementsJsonData = await connection?.getTestElementsWithTovKeyOldPlayServer(tovKey);
+        const testElementsJsonData = await connection?.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
         if (testElementsJsonData) {
             setCurrentTovKey(tovKey);
             displayTestElementsTreeView();

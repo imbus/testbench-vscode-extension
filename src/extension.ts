@@ -357,7 +357,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             // Call getChildrenOfCycle to initialize the sub elements (Test themes etc.) of the cycle.
             // Offload the children of the cycle to the Test Theme Tree View.
             if (projectManagementTreeDataProvider?.testThemeDataProvider) {
-                const children = (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
+                const children: projectManagementTreeView.ProjectManagementTreeItem[] =
+                    (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
                 projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
             }
             await reportHandler.startTestGenerationForCycle(context, item);
