@@ -2,6 +2,7 @@ import logging
 import re
 
 import requests  # type: ignore
+from testbench2robotframework.cli import generate_tests
 from lsprotocol.types import (
     INITIALIZE,
     TEXT_DOCUMENT_CODE_ACTION,
@@ -98,6 +99,28 @@ class TestBenchLanguageServer(LanguageServer):
 
 
 testbench_ls = TestBenchLanguageServer()
+
+@testbench_ls.command("testbench_ls.generateTestSuites")
+def generate_test_suites(ls: LanguageServer, kwargs):
+    """Generate Robot Framework test suites via testbench2robotframework."""
+    kwargs, *_ = kwargs
+    logging.info(f"config {kwargs.get('config')}")
+    generate_tests.callback(
+        clean=True,
+        compound_interaction_logging="GROUP",
+        config=pathlib.Path(kwargs.get("config")),
+        fully_qualified=False,
+        library_regex=(),
+        library_root=(),
+        log_suite_numbering=False,
+        output_directory=None,
+        resource_directory=None,
+        resource_regex=(),
+        resource_root=(),
+        testbench_report=pathlib.Path(kwargs.get("testbench_report")),
+        library_mapping={},
+        resource_mapping={},
+    )
 
 
 @testbench_ls.feature(INITIALIZE)
