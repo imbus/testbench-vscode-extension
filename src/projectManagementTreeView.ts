@@ -392,6 +392,9 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                                 : undefined
                         );
                     }
+                    // Hide the project management tree view after displaying the test theme tree view.
+                    await hideProjectManagementTreeView();
+
                     progress.report({ increment: 100, message: "Processing complete." });
                 }
             );

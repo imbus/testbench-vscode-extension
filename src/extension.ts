@@ -584,6 +584,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                         tovKeyOfSelectedTreeElement,
                         typeof treeItem.label === "string" ? treeItem.label : undefined
                     );
+                    // Hide Project Contents Tree View after displaying Test Elements Tree View.
+                    await projectManagementTreeView?.hideProjectManagementTreeView();
                 }
             }
             logger.trace("End of Command: Display Interactions For Selected TOV");
@@ -778,6 +780,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
     await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
+
+    // await initializeLanguageServer();  // TODO: Uncomment this line when the language server is ready.
 
     // Execute automatic login if the setting is enabled.
     vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
