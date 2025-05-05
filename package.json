@@ -12,8 +12,22 @@
     "engines": {
         "vscode": "^1.95.0"
     },
+    "homepage": "https://github.com/imbus/testbench-vs-code-extension",
+    "bugs": {
+        "url": "https://github.com/imbus/testbench-vs-code-extension/issues",
+        "email": "egegirit@imbus.de"
+    },
+    "keywords": [
+        "TestBench",
+        "imbus",
+        "testing",
+        "test automation",
+        "robot framework"
+    ],
+    "pricing": "Free",
+    "license": "SEE LICENSE IN LICENSE.md",
     "categories": [
-        "Other"
+        "Testing"
     ],
     "activationEvents": [
         "onView:testBenchExplorer"
