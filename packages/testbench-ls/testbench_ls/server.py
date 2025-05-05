@@ -104,12 +104,11 @@ testbench_ls = TestBenchLanguageServer()
 def generate_test_suites(ls: LanguageServer, kwargs):
     """Generate Robot Framework test suites via testbench2robotframework."""
     kwargs, *_ = kwargs
-    logging.info(f"config {kwargs.get('config')}")
     generate_tests.callback(
-        clean=True,
-        compound_interaction_logging="GROUP",
-        config=pathlib.Path(kwargs.get("config")),
-        fully_qualified=False,
+        clean=None,
+        compound_interaction_logging=None,
+        config=None,
+        fully_qualified=None,
         library_regex=(),
         library_root=(),
         log_suite_numbering=False,
@@ -117,9 +116,9 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         resource_directory=None,
         resource_regex=(),
         resource_root=(),
-        testbench_report=pathlib.Path(kwargs.get("testbench_report")),
         library_mapping={},
         resource_mapping={},
+        testbench_report=pathlib.Path(kwargs.get("testbench_report")),
     )
 
 

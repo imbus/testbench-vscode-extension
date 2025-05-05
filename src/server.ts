@@ -12,21 +12,18 @@ export async function initializeLanguageServer(): Promise<void> {
     if (!pythonPath) {
         return;
     }
-    const robotCodeExtension = extensions.getExtension("d-biehl.robotcode");
-    if (robotCodeExtension) {
-        await robotCodeExtension.activate();
-    }
     if (!connection) {
         return;
     }
     const serverName = connection.getServerName();
     const serverPort = connection.getServerPort();
+    const username = connection.getUsername();
     const sessionToken = connection.getSessionToken();
 
     const languge_server_settings = vscode.workspace.getConfiguration("testbenchExtension");
     // const server_name: string | null = languge_server_settings.get<string | null>("serverName", null);
     // const server_port: string | null = languge_server_settings.get<string | null>("portNumber", null);
-    const username: string | null = languge_server_settings.get<string | null>("username", null);
+    // const username: string | null = languge_server_settings.get<string | null>("username", null);
     // const username: string | null = null;
 
     const project: string = languge_server_settings.get<string>("project", "");
@@ -38,7 +35,7 @@ export async function initializeLanguageServer(): Promise<void> {
                 LANGUAGE_SERVER_SCRIPT_PATH,
                 serverName || "",
                 serverPort || "",
-                username || "robot",
+                username || "",
                 sessionToken || "",
                 project,
                 tov || ""
