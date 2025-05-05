@@ -3,9 +3,6 @@
  * @description Main entry point for the TestBench VS Code extension.
  */
 
-// TODO: If possible, hide the tree views initially instead of creating them and then hiding them after.
-// TODO: The user generated tests, executed the tests, and restarted the extension. Last generated test params are now invalid due to restart, and he cant import. Use VS Code storage?
-
 // Before releasing the extension:
 // TODO: Add License.md to the extension
 // TODO: Set logger level to info or debug in production, remove too detailed logs.
@@ -21,7 +18,9 @@ import * as testElementsTreeView from "./testElementsTreeView";
 import * as loginWebView from "./loginWebView";
 import * as utils from "./utils";
 import path from "path";
+
 import { initializeProjectAndTestThemeTrees } from "./projectManagementTreeView";
+import { initializeLanguageServer } from "./server";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -209,8 +208,6 @@ function initializeTestElementsTreeView(): void {
         treeDataProvider: testElementsTreeDataProvider
     });
     vscode.window.registerTreeDataProvider("testElementsView", testElementsTreeDataProvider);
-    // Hide the test elements tree view initially.
-    testElementsTreeView.hideTestElementsTreeView();
 }
 
 /**
@@ -262,8 +259,11 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             const loginResult: testBenchConnection.PlayServerConnection | null =
                 await testBenchConnection?.performLogin(context, false, true);
             if (loginResult) {
-                // If login was successful, display project selection dialog and the project management tree view.
+                // Display project management tree and hide other tree views if they are open.
                 projectManagementTreeView?.displayProjectManagementTreeView();
+                await projectManagementTreeView?.hideTestThemeTreeView();
+                await testElementsTreeView?.hideTestElementsTreeView();
+                // Load the project selection dialog
                 vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject);
             }
         } else {
@@ -727,7 +727,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 /**
  * Called when the extension is activated.
  *
- * @param context The extension context.
+ * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     // Initialize logger.
@@ -776,6 +776,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
     await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
+
+    // await initializeLanguageServer();
 
     // Execute automatic login if the setting is enabled.
     vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);

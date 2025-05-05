@@ -184,23 +184,29 @@ export class tb2robotLib {
         commandExecutionDirectory: string,
         reportPath: string
     ): Promise<boolean> {
-        const generateTestsCommand: string = `generate-tests`;
-        logger.debug(
-            `Starting tb2robot ${generateTestsCommand} with directory ${commandExecutionDirectory} and report path ${reportPath}.`
-        );
-        let isGenerateTestsCommandSuccessful = true;
+        // const generateTestsCommand: string = `generate-tests`;
+        // logger.debug(
+        //     `Starting tb2robot ${generateTestsCommand} with directory ${commandExecutionDirectory} and report path ${reportPath}.`
+        // );
+        // let isGenerateTestsCommandSuccessful = true;
 
-        await this.executeTb2robotGenerateTestsCommand(context, commandExecutionDirectory, reportPath)
-            .then(() => {
-                logger.debug(`tb2robot ${generateTestsCommand} completed successfully.`);
-            })
-            .catch((err) => {
-                logger.error(`Error in tb2robot ${generateTestsCommand}:`, err);
-                vscode.window.showErrorMessage(`Error in tb2robot ${generateTestsCommand}: ${err}`);
-                isGenerateTestsCommandSuccessful = false;
-            });
+        // await this.executeTb2robotGenerateTestsCommand(context, commandExecutionDirectory, reportPath)
+        //     .then(() => {
+        //         logger.debug(`tb2robot ${generateTestsCommand} completed successfully.`);
+        //     })
+        //     .catch((err) => {
+        //         logger.error(`Error in tb2robot ${generateTestsCommand}:`, err);
+        //         vscode.window.showErrorMessage(`Error in tb2robot ${generateTestsCommand}: ${err}`);
+        //         isGenerateTestsCommandSuccessful = false;
+        //     });
 
-        logger.debug(`startTb2robotframeworkTestGeneration success: ${isGenerateTestsCommandSuccessful}`);
+        // logger.debug(`startTb2robotframeworkTestGeneration success: ${isGenerateTestsCommandSuccessful}`);
+        // return isGenerateTestsCommandSuccessful;
+
+        const isGenerateTestsCommandSuccessful: boolean = true;
+        await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
+            testbench_report: reportPath
+        });
         return isGenerateTestsCommandSuccessful;
     }
 

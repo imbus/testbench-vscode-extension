@@ -374,7 +374,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
                     // Clear and set up the test theme tree view.
                     this.testThemeDataProvider.clearTree();
-                    const children = await this.getChildrenOfCycle(projectsTreeViewItem);
+                    const children: ProjectManagementTreeItem[] = await this.getChildrenOfCycle(projectsTreeViewItem);
                     this.testThemeDataProvider.setRoots(children);
 
                     progress.report({ increment: 50, message: "Fetching test elements..." });

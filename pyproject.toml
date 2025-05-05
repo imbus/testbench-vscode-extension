@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "testbench-vscode-extension"
+authors = [
+    {name = "imbus AG", email = "support@imbus.de"},
+]
+description = ""
+requires-python = ">= 3.9"
+readme = "README.md"
+license = {text = "Apache 2.0 License"}
+dynamic = ["version"]
+dependencies = [
+  "testbench2robotframework>=0.8.0a1",
+  "testbench-ls @ file:./packages/testbench-ls"
+]
+
+[project.optional-dependencies]
+dev = [
+  "nox",
+  "invoke",
+  "pip-tools",
+]
+
+
+[tool.check-manifest]
+ignore = [
+  "config.json",
+  "*.bat",
+  "*.sh",
+  "*.zip",
+  "tests/**"
+]
+
+
+exclude = [
+  "__pycache__",
+]
+
+
+

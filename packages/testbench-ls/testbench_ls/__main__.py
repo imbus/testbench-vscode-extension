@@ -12,6 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .testbench2robotframework import testbench2robotframework  # noqa: F401
 
-__version__ = "0.8.3.6"
+import os
+import pathlib
+import sys
+
+
+def update_sys_path(path_to_add: str, strategy: str) -> None:
+    """Add given path to `sys.path`."""
+    if path_to_add not in sys.path and os.path.isdir(path_to_add):
+        if strategy == "useBundled":
+            sys.path.insert(0, path_to_add)
+        else:
+            sys.path.append(path_to_add)
+
+
+BUNDLE_DIR = pathlib.Path(__file__).parent.parent
+update_sys_path(os.fspath(BUNDLE_DIR), "useBundled")
+
+from testbench_ls.cli import testbench_ls_cli
+
+if __name__ == "__main__":
+    testbench_ls_cli()

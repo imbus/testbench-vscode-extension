@@ -13,7 +13,4 @@
 # limitations under the License.
 
 
-from .cli import testbench2robotframework_cli
-
-if __name__ == "__main__":
-    testbench2robotframework_cli()
+__version__ = "0.0.7"

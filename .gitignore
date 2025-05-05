@@ -195,3 +195,15 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# nodeenv
+.nenv/
+
+# libs
+bundled/libs/
+
+# python version
+.python-version
+
+# pyton requirements
+requirements.txt
