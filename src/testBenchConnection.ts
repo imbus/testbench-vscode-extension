@@ -165,7 +165,7 @@ export class PlayServerConnection {
         }
         try {
             logger.debug("Fetching projects list.");
-            const projectsURL = `/projects/v1`;
+            const projectsURL: string = `/projects/v1`;
             // Wrap the project list get request in the withRetry helper.
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
@@ -788,7 +788,7 @@ async function withRetry<T>(
                 await vscode.window.withProgress(
                     {
                         location: vscode.ProgressLocation.Notification,
-                        title: "Retrying request...",
+                        title: "Retrying request",
                         cancellable: false
                     },
                     async (progress) => {
