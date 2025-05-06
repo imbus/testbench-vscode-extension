@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { extensions } from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH } from "./constants";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
 import { connection } from "./extension";
@@ -21,11 +21,6 @@ export async function initializeLanguageServer(): Promise<void> {
     const sessionToken = connection.getSessionToken();
 
     const languge_server_settings = vscode.workspace.getConfiguration("testbenchExtension");
-    // const server_name: string | null = languge_server_settings.get<string | null>("serverName", null);
-    // const server_port: string | null = languge_server_settings.get<string | null>("portNumber", null);
-    // const username: string | null = languge_server_settings.get<string | null>("username", null);
-    // const username: string | null = null;
-
     const project: string = languge_server_settings.get<string>("project", "");
     const tov: string = languge_server_settings.get<string>("tov", "");
     const serverOptions: ServerOptions = {
@@ -44,10 +39,10 @@ export async function initializeLanguageServer(): Promise<void> {
         debug: {
             command: pythonPath,
             args: [
-                LANGUAGE_SERVER_SCRIPT_PATH,
+                LANGUAGE_SERVER_DEBUG_PATH,
                 serverName || "",
                 serverPort || "",
-                username || "robot",
+                username || "",
                 sessionToken || "",
                 project,
                 tov || ""
