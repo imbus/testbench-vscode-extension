@@ -288,6 +288,16 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         logger.trace("End of command: Logout");
     });
 
+    // --- Command: Handle Cycle Click ---
+    // Handles the click event on a project cycle in the project management tree view.
+    registerSafeCommand(
+        context,
+        allExtensionCommands.handleProjectCycleClick,
+        async (cycleItem: projectManagementTreeView.ProjectManagementTreeItem) => {
+            await projectManagementTreeDataProvider!.handleTestCycleClick(cycleItem);
+        }
+    );
+
     // --- Command: Generate Test Cases For Cycle ---
     // Generates test cases for the selected cycle in the project management tree view.
     registerSafeCommand(

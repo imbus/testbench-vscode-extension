@@ -18,7 +18,7 @@ import {
     setProjectManagementTreeDataProvider
 } from "./extension";
 import { testElementsTreeDataProvider } from "./extension";
-import { TreeItemContextValues } from "./constants";
+import { allExtensionCommands, TreeItemContextValues } from "./constants";
 
 // Global references to the tree views and data provider with getters and setters.
 export let projectManagementTreeView: vscode.TreeView<ProjectManagementTreeItem> | null = null;
@@ -544,6 +544,17 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
             // Display the uniqueID as a description next to the label.
             this.description = item.base?.uniqueID || "";
         }
+
+        // Set the command to be executed when the tree item is clicked.
+        // Without this command, an already clicked cycle item is not clickable again.
+        if (contextValue === TreeItemContextValues.CYCLE) {
+            this.command = {
+                command: allExtensionCommands.handleProjectCycleClick,
+                title: "Show Test Themes",
+                arguments: [this]
+            };
+        }
+
         // Set the icon path based on the context value and status.
         this.updateIcon();
     }
