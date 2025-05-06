@@ -20,7 +20,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
     rootElements: ProjectManagementTreeItem[] = [];
 
     /** Set to store keys of expanded items so that refresh can restore expansion state */
-    private expandedTreeItems = new Set<string>();
+    private expandedTreeItems: Set<string> = new Set<string>();
 
     /**
      * Refreshes the test theme tree view.

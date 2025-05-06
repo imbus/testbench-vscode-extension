@@ -5,9 +5,10 @@
  */
 
 import * as vscode from "vscode";
-import { logger, connection, allExtensionCommands, getConfig } from "./extension";
+import { logger, connection, getConfig } from "./extension";
 import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
 import { displayProjectManagementTreeView } from "./projectManagementTreeView";
+import { WebviewMessageCommands, ConfigKeys, StorageKeys, allExtensionCommands } from "./constants";
 
 /**
  * The provider for the login webview.
@@ -45,7 +46,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             logger.trace(`Received message from webview: ${message.command}`);
             switch (message.command) {
                 // Handle the login attempt
-                case "login":
+                case WebviewMessageCommands.LOGIN:
                     this.handleLogin(
                         this.extensionContext,
                         message.serverName,
@@ -55,7 +56,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     );
                     break;
                 // Handle setting updates directly from the webview checkboxes
-                case "updateSetting":
+                case WebviewMessageCommands.UPDATE_SETTING:
                     await this.updateSetting(message.key, message.value);
                     break;
             }
@@ -179,7 +180,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     private showLoginErrorInWebview(errorMessage: string): void {
         if (this.currentWebview) {
             // Post a message that the webview's script can handle
-            this.currentWebview.webview.postMessage({ command: "showError", message: errorMessage });
+            this.currentWebview.webview.postMessage({
+                command: WebviewMessageCommands.SHOW_ERROR,
+                message: errorMessage
+            });
         }
     }
 
@@ -210,17 +214,18 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             logger.warn("Extension context is undefined; cannot get stored settings.");
         }
 
-        // TODO: In production, don't log sensitive data.
-        logger.trace(
-            `Login Webview is using stored extension settings: ServerName: ${getConfig().get<string>(
-                "serverName",
-                ""
-            )}, Port: ${getConfig().get<string>("portNumber", "")}, Username: ${getConfig().get<string>(
-                "username",
-                ""
-            )}`
-        );
-        const imageUri = this.createIconUri(webview);
+        const imageUri: vscode.Uri | null = this.createIconUri(webview);
+
+        // Use constants for config keys
+        const serverNameValue: string = getConfig().get<string>(ConfigKeys.SERVER_NAME, "");
+        const portNumberValue: string = getConfig().get<string>(ConfigKeys.PORT_NUMBER, "");
+        const usernameValue: string = getConfig().get<string>(ConfigKeys.USERNAME, "");
+        const storedPasswordValue: string = (await this.extensionContext?.secrets.get(StorageKeys.PASSWORD)) || "";
+        const savePasswordChecked: string = getConfig().get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)
+            ? "checked"
+            : "";
+        const autoLoginChecked: string = getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false) ? "checked" : "";
+
         return `
 <!DOCTYPE html>
 <html lang="en">
@@ -300,38 +305,26 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
         <div>
             <label for="serverName">Server Name:</label>
-            <input id="serverName" type="text" placeholder="Server Name" value="${
-                getConfig().get<string>("serverName", "") || ""
-            }" required/>
+            <input id="serverName" type="text" placeholder="Server Name" value="${serverNameValue || ""}" required/>
         </div>
         <div>
             <label for="portNumber">Port Number:</label>
-            <input id="portNumber" type="text" placeholder="Port Number" value="${
-                getConfig().get<string>("portNumber", "") || ""
-            }" required/>
+            <input id="portNumber" type="text" placeholder="Port Number" value="${portNumberValue || ""}" required/>
         </div>
         <div>
             <label for="username">Username:</label>
-            <input id="username" type="text" placeholder="Username" value="${
-                getConfig().get<string>("username", "") || ""
-            }" required/>
+            <input id="username" type="text" placeholder="Username" value="${usernameValue || ""}" required/>
         </div>
         <div>
             <label for="password">Password:</label>
-            <input id="password" type="password" placeholder="Password" value="${
-                (await this.extensionContext?.secrets.get("password")) || ""
-            }" required/>
+            <input id="password" type="password" placeholder="Password" value="${storedPasswordValue}" required/>
         </div>
         <div class="checkbox-container">
-            <input id="savePassword" type="checkbox" ${
-                getConfig().get<boolean>("storePasswordAfterLogin", false) ? "checked" : ""
-            }/>
+            <input id="savePassword" type="checkbox" ${savePasswordChecked}/>
             <label for="savePassword">Save Password</label>
         </div>
         <div class="checkbox-container">
-            <input id="autoLogin" type="checkbox" ${
-                getConfig().get<boolean>("automaticLoginAfterExtensionActivation", false) ? "checked" : ""
-            }/>
+            <input id="autoLogin" type="checkbox" ${autoLoginChecked}/>
             <label for="autoLogin">Auto Login</label>
         </div>              
         <div>
@@ -347,21 +340,21 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             const password = document.getElementById('password').value;
             const autoLogin = document.getElementById('autoLogin').checked;
             const savePassword = document.getElementById('savePassword').checked;
-            vscode.postMessage({ command: 'login', serverName, portNumber, username, password, autoLogin, savePassword });
+            vscode.postMessage({ command: ${WebviewMessageCommands.LOGIN}, serverName, portNumber, username, password, autoLogin, savePassword });
         }
 
         // Add event listeners for checkbox changes
         document.getElementById('autoLogin').addEventListener('change', function() {
             vscode.postMessage({ 
-                command: 'updateSetting', 
-                key: 'automaticLoginAfterExtensionActivation', 
+                command: ${WebviewMessageCommands.UPDATE_SETTING}, 
+                key: ${ConfigKeys.AUTO_LOGIN}, 
                 value: this.checked 
             });
         });
         document.getElementById('savePassword').addEventListener('change', function() {
             vscode.postMessage({ 
-                command: 'updateSetting', 
-                key: 'storePasswordAfterLogin', 
+                command: ${WebviewMessageCommands.UPDATE_SETTING}, 
+                key: '${ConfigKeys.STORE_PASSWORD_AFTER_LOGIN}', 
                 value: this.checked 
             });
         });
@@ -369,8 +362,21 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         // Handle messages from the extension
         window.addEventListener('message', (event) => {
             const message = event.data;
-            if (message.command === 'updateContent') {
-                document.body.innerHTML = message.html;
+             // Keep literal string for receiving message command
+            if (message.command === '${WebviewMessageCommands.UPDATE_CONTENT}') {
+                // Potentially update parts of the page instead of innerHTML
+                if (message.html) {
+                     document.body.innerHTML = message.html;
+                }
+            }
+            // Keep literal string for receiving message command
+            if (message.command === '${WebviewMessageCommands.SHOW_ERROR}') {
+                 // Add a dedicated error display area in your HTML
+                 const errorDiv = document.getElementById('error-message');
+                 if (errorDiv && message.message) {
+                     errorDiv.textContent = message.message;
+                     errorDiv.style.display = 'block'; // Make it visible
+                 }
             }
         });
     </script>

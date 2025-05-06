@@ -11,6 +11,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as utils from "./utils";
 import { connection, logger, getConfig, testElementTreeView, getTestElementsTreeDataProvider } from "./extension";
+import { TreeItemContextValues } from "./constants";
 
 /* =============================================================================
    Global Variables and Helper Functions
@@ -454,24 +455,24 @@ export class TestElementTreeItem extends vscode.TreeItem {
         // This value is used in package.json to enable context menu contributions.
         switch (elementData.elementType) {
             case "Subdivision":
-                this.contextValue = "subdivision";
+                this.contextValue = TreeItemContextValues.SUBDIVISION;
                 break;
             case "Interaction":
-                this.contextValue = "interaction";
+                this.contextValue = TreeItemContextValues.INTERACTION;
                 break;
             case "DataType":
-                this.contextValue = "dataType";
+                this.contextValue = TreeItemContextValues.DATA_TYPE;
                 break;
             case "Condition":
-                this.contextValue = "condition";
+                this.contextValue = TreeItemContextValues.CONDITION;
                 break;
             default:
-                this.contextValue = "testElement";
+                this.contextValue = TreeItemContextValues.TEST_ELEMENT;
                 break;
         }
 
         // Build a tooltip string with detailed information about the element.
-        let tooltip = `Type: ${elementData.elementType}\nName: ${elementData.name}\nUniqueID: ${elementData.uniqueID}`;
+        let tooltip: string = `Type: ${elementData.elementType}\nName: ${elementData.name}\nUniqueID: ${elementData.uniqueID}`;
         if (elementData.libraryKey) {
             tooltip += `\nLibraryKey: ${elementData.libraryKey}`;
         }

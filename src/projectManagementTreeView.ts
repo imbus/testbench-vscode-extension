@@ -18,6 +18,7 @@ import {
     setProjectManagementTreeDataProvider
 } from "./extension";
 import { testElementsTreeDataProvider } from "./extension";
+import { TreeItemContextValues } from "./constants";
 
 // Global references to the tree views and data provider with getters and setters.
 export let projectManagementTreeView: vscode.TreeView<ProjectManagementTreeItem> | null = null;
@@ -249,26 +250,30 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         /**
          * Recursively builds the test theme tree starting from a given parent cycle key.
          *
-         * @param parentCycleKey - The key of the parent cycle.
+         * @param {string} parentCycleKey - The key of the parent cycle.
          * @returns {ProjectManagementTreeItem[]} An array of tree items representing the test theme tree.
          */
         const buildTestThemeTree = (parentCycleKey: string): ProjectManagementTreeItem[] => {
             return (
                 Array.from(elementsByKey.values())
                     // Filter elements that have the current parentKey and are not TestCaseNode elements
-                    .filter((data) => data.base.parentKey === parentCycleKey && data.elementType !== "TestCaseNode")
+                    .filter(
+                        (data) =>
+                            data.base.parentKey === parentCycleKey &&
+                            data.elementType !== TreeItemContextValues.TEST_CASE_NODE
+                    )
                     // Filter out non-executable elements and elements that are locked by the system
                     .filter((data) => data.exec?.status !== "NotPlanned" && data.exec?.locker?.key !== "-2")
                     .map((data) => {
-                        const hasChildren = Array.from(elementsByKey.values()).some(
+                        const hasChildren: boolean = Array.from(elementsByKey.values()).some(
                             (childData) => childData.base.parentKey === data.base.key
                         );
-                        const treeItem = new ProjectManagementTreeItem(
+                        const treeItem: ProjectManagementTreeItem = new ProjectManagementTreeItem(
                             `${data.base.numbering} ${data.base.name}`,
                             data.elementType,
                             // TestCaseSetNode are the last level of the tree, so they are not collapsible.
                             // Only show the expand icon if the element has children.
-                            data.elementType === "TestCaseSetNode"
+                            data.elementType === TreeItemContextValues.TEST_CASE_SET_NODE
                                 ? vscode.TreeItemCollapsibleState.None
                                 : hasChildren
                                   ? vscode.TreeItemCollapsibleState.Collapsed
@@ -379,8 +384,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
                     progress.report({ increment: 50, message: "Fetching test elements..." });
 
-                    // If the cycle has a parent of type "Version", fetch and display test elements.
-                    if (projectsTreeViewItem.parent?.item?.nodeType === "Version") {
+                    // If the cycle has a parent of type TreeItemContextValues.VERSION, fetch and display test elements.
+                    if (projectsTreeViewItem.parent?.item?.nodeType === TreeItemContextValues.VERSION) {
                         const tovKeyOfSelectedCycleElement = projectsTreeViewItem.parent?.item?.key;
                         logger.trace(
                             `Clicked cycle item has a parent TOV with the key: ${tovKeyOfSelectedCycleElement}. Creating test elements view using the TOV.`
@@ -428,7 +433,7 @@ export function findProjectKeyOfCycleElement(element: ProjectManagementTreeItem)
     }
     let current: ProjectManagementTreeItem | null = element;
     while (current) {
-        if (current.contextValue === "Project") {
+        if (current.contextValue === TreeItemContextValues.PROJECT) {
             return current.item.key;
         }
         current = current.parent;
@@ -494,14 +499,18 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
 
         // Set the tooltip based on the context value.
         // Tooltip for project, TOV and cycle elements looks like this: Type, Name, Status, Key
-        if (contextValue === "Project" || contextValue === "Version" || contextValue === "Cycle") {
+        if (
+            contextValue === TreeItemContextValues.PROJECT ||
+            contextValue === TreeItemContextValues.VERSION ||
+            contextValue === TreeItemContextValues.CYCLE
+        ) {
             this.tooltip = `Type: ${contextValue}\nName: ${item.name}\nStatus: ${this.statusOfTreeItem}\nKey: ${item.key}`;
         }
         // Tooltip for test theme, test case set and test case looks like this: Numbering, Type, Name, Status, ID
         else if (
-            contextValue === "TestThemeNode" ||
-            contextValue === "TestCaseSetNode" ||
-            contextValue === "TestCaseNode"
+            contextValue === TreeItemContextValues.TEST_THEME_NODE ||
+            contextValue === TreeItemContextValues.TEST_CASE_SET_NODE ||
+            contextValue === TreeItemContextValues.TEST_CASE_NODE
         ) {
             if (item?.base?.numbering) {
                 this.tooltip = `Numbering: ${item.base.numbering}\nType: ${item.elementType}\nName: ${item.base.name}\nStatus: ${this.statusOfTreeItem}\nID: ${item.base.uniqueID}`;

@@ -108,7 +108,7 @@ export async function deleteDirectoryRecursively(
     logger.debug("Excluded folders:", excludedFoldersFromDeletion);
 
     try {
-        const files = await fsPromises.readdir(directoryPathToDelete);
+        const files: string[] = await fsPromises.readdir(directoryPathToDelete);
 
         for (const file of files) {
             const currentPath: string = path.join(directoryPathToDelete, file);
@@ -119,7 +119,7 @@ export async function deleteDirectoryRecursively(
                 continue;
             }
 
-            const fileStats = await fsPromises.stat(currentPath);
+            const fileStats: fs.Stats = await fsPromises.stat(currentPath);
             if (fileStats.isDirectory()) {
                 // Recursively delete subdirectories.
                 await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion);
@@ -146,10 +146,10 @@ export async function deleteDirectoryRecursively(
 /**
  * Clears the contents of a workspace folder after user confirmation, excluding specified folders.
  *
- * @param workspaceLocationToClear - The absolute path of the workspace folder to clear.
- * @param excludedFoldersFromDeletion - An array of folder names to exclude from deletion.
- * @param promptForConfirmation - If true, prompts the user for confirmation before deletion.
- * @returns A promise that resolves when the folder is cleared, or null if an error occurs or the operation is cancelled.
+ * @param {string} workspaceLocationToClear - The absolute path of the workspace folder to clear.
+ * @param {string[]} excludedFoldersFromDeletion - An array of folder names to exclude from deletion.
+ * @param {boolean} promptForConfirmation - If true, prompts the user for confirmation before deletion.
+ * @returns {Promise<void | null>} A promise that resolves when the folder is cleared, or null if an error occurs or the operation is cancelled.
  */
 export async function clearInternalTestbenchFolder(
     workspaceLocationToClear: string,
@@ -161,7 +161,7 @@ export async function clearInternalTestbenchFolder(
     try {
         // Verify that the given path exists and is a directory.
         try {
-            const stats = await fsPromises.stat(workspaceLocationToClear);
+            const stats: fs.Stats = await fsPromises.stat(workspaceLocationToClear);
             if (!stats.isDirectory()) {
                 const notADirectoryMsg: string = `The path "${workspaceLocationToClear}" is not a directory. Cannot clear workspace folder.`;
                 vscode.window.showErrorMessage(notADirectoryMsg);

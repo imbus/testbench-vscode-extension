@@ -18,13 +18,12 @@ import * as projectManagementTreeView from "./projectManagementTreeView";
 import {
     getConfig,
     setConnection,
-    allExtensionCommands,
-    folderNameOfInternalTestbenchFolder,
     setProjectManagementTreeDataProvider,
     logger,
     loginWebViewProvider
 } from "./extension";
 import * as utils from "./utils";
+import { ConfigKeys, StorageKeys, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -40,14 +39,15 @@ export class PlayServerConnection {
     private sessionToken: string;
     private baseURL: string;
     private apiClient: AxiosInstance;
+    private readonly keepAliveIntervalInSeconds: number = 4 * 60 * 1000; // 4 minutes
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
     /**
      * Creates a new PlayServerConnection.
      *
-     * @param {vscode.ExtensionContext} context - The VS Code extension context.
-     * @param {string} serverName - The server name or IP address.
-     * @param {number} portNumber - The server port number.
+     * @param {string} serverName - The name of the server.
+     * @param {number} portNumber - The port number of the server.
+     * @param {string} username - The username for authentication.
      * @param {string} sessionToken - The session token for authentication.
      */
     constructor(serverName: string, portNumber: number, username: string, sessionToken: string) {
@@ -106,7 +106,7 @@ export class PlayServerConnection {
      * @returns {Promise<string | undefined>} The session token or undefined if not found.
      */
     async getSessionTokenFromSecretStorage(context: vscode.ExtensionContext): Promise<string | undefined> {
-        const token: string | undefined = await context.secrets.get("sessionToken");
+        const token: string | undefined = await context.secrets.get(StorageKeys.SESSION_TOKEN);
         if (!token) {
             logger.error("Session token not found.");
         }
@@ -694,12 +694,9 @@ export class PlayServerConnection {
      */
     private startKeepAlive(): void {
         this.stopKeepAlive(); // Prevent multiple intervals if previously started.
-        this.keepAliveIntervalId = setInterval(
-            () => {
-                this.sendKeepAliveRequest();
-            },
-            4 * 60 * 1000 // Every 4 minutes
-        );
+        this.keepAliveIntervalId = setInterval(() => {
+            this.sendKeepAliveRequest();
+        }, this.keepAliveIntervalInSeconds);
         // Send an immediate keep-alive request.
         this.sendKeepAliveRequest();
         logger.trace("Keep-alive started.");
@@ -874,7 +871,7 @@ export async function performLogin(
 
         // Only retrieve the password if the user has choosen to store it after successful login
         if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
-            password = await context.secrets.get("password");
+            password = await context.secrets.get(StorageKeys.PASSWORD);
         }
         // If the user has not chosen to store the password, clear it from the secret storage
         else {
@@ -882,7 +879,7 @@ export async function performLogin(
         }
 
         const userHasStoredCredentials = !!(
-            getConfig().get<string>("serverName") &&
+            getConfig().get<string>(ConfigKeys.SERVER_NAME) &&
             getConfig().get<string>("username") &&
             password &&
             getConfig().get<boolean>("storePasswordAfterLogin", false)
@@ -924,7 +921,7 @@ export async function performLogin(
 
         // If the user has stored credentials and wants to use them, retrieve them from the configuration, else prompt the user for new credentials
         if (useStoredCredentials) {
-            serverName = getConfig().get<string>("serverName")!;
+            serverName = getConfig().get<string>(ConfigKeys.SERVER_NAME)!;
             portNumber = getConfig().get<number>("portNumber")!;
             username = getConfig().get<string>("username")!;
         } else {
@@ -977,7 +974,7 @@ async function promptForLoginCredentials(): Promise<{
     username: string;
     password: string;
 } | null> {
-    const serverNameInConfig: string = getConfig().get<string>("serverName", "testbench");
+    const serverNameInConfig: string = getConfig().get<string>(ConfigKeys.SERVER_NAME, "testbench");
     // Prompt user for server name, showing the default value only if it exists
     const serverNameInput: string | null = await promptForInputAndValidate(
         `Enter the server name${serverNameInConfig ? ` (Default: ${serverNameInConfig})` : ""}`,
@@ -1097,7 +1094,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                 if (loginResponse.status === 201) {
                     // Store password in secret storage after succesfull login if the user chooses to
                     if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
-                        await context.secrets.store("password", password);
+                        await context.secrets.store(StorageKeys.PASSWORD, password);
                         logger.trace("Password stored securely.");
                     } else {
                         logger.trace("User chose not to store password.");
@@ -1154,7 +1151,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
  */
 export async function clearStoredCredentials(context: vscode.ExtensionContext): Promise<void> {
     try {
-        await context.secrets.delete("password");
+        await context.secrets.delete(StorageKeys.PASSWORD);
         logger.debug("Credentials deleted from secret storage.");
     } catch (error) {
         logger.error("Failed to clear credentials:", error);
