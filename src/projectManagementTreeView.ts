@@ -170,13 +170,40 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     async getChildren(element?: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
         try {
             if (!connection) {
-                return [];
+                // If no connection is available, return a placeholder item.
+                return [
+                    new ProjectManagementTreeItem(
+                        "Not connected",
+                        "placeholder",
+                        vscode.TreeItemCollapsibleState.None,
+                        {},
+                        null
+                    )
+                ];
             }
             if (!element) {
                 // If a root item is set, return its children
                 if (this.rootItem) {
                     return await this.getChildren(this.rootItem);
                 }
+
+                // If no project key is active/selected, don't try to fetch the tree
+                if (!this.activeProjectKeyInView) {
+                    logger.trace(
+                        "getChildren called for root, but no activeProjectKeyInView is set. Returning empty array."
+                    );
+                    // Return empty array or a placeholder item
+                    return [
+                        new ProjectManagementTreeItem(
+                            "No project selected",
+                            "placeholder",
+                            vscode.TreeItemCollapsibleState.None,
+                            {},
+                            null
+                        )
+                    ];
+                }
+
                 // No parent provided; load the root project.
                 const projectTree: testBenchTypes.TreeNode | null = await connection.getProjectTreeOfProject(
                     this.activeProjectKeyInView
@@ -494,7 +521,6 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
         super(label, collapsibleState);
         this.contextValue = contextValue;
         this.parent = parent;
-        this.updateIcon();
         this.statusOfTreeItem = item.exec?.status || item.status || "None"; // Possible values: Active, Planned, Finished, Closed, etc.
 
         // Set the tooltip based on the context value.
@@ -516,8 +542,10 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
                 this.tooltip = `Numbering: ${item.base.numbering}\nType: ${item.elementType}\nName: ${item.base.name}\nStatus: ${this.statusOfTreeItem}\nID: ${item.base.uniqueID}`;
             }
             // Display the uniqueID as a description next to the label.
-            this.description = item.base.uniqueID || "";
+            this.description = item.base?.uniqueID || "";
         }
+        // Set the icon path based on the context value and status.
+        this.updateIcon();
     }
 
     /**
@@ -528,8 +556,8 @@ export class ProjectManagementTreeItem extends vscode.TreeItem {
      */
     private getIconPath(): { light: string; dark: string } {
         const iconFolderPath: string = path.join(__dirname, "..", "resources", "icons");
-        const status = this.item.status || "default"; // (Active, Planned, Finished, Closed etc.)
-        const type = this.contextValue; // (Project, TOV, Cycle etc.)
+        const status = this.item?.status || "default"; // (Active, Planned, Finished, Closed etc.)
+        const type: string | undefined = this.contextValue; // (Project, TOV, Cycle etc.)
         // Map the context and status to the corresponding icon file name
         const iconMap: Record<string, Record<string, { light: string; dark: string }>> = {
             Project: {

@@ -370,7 +370,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
         const projectList: testBenchTypes.Project[] | null = await connection.getProjectsList();
         if (!projectList) {
-            logger.error("No projects found for selectAndLoadProject command.");
+            vscode.window.showErrorMessage("Project list is empty. Please check your connection.");
+            logger.error("Project list is empty. Cannot load projects.");
             return;
         }
 
@@ -557,12 +558,15 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             if (projectManagementTreeDataProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
                 if (tovKeyOfSelectedTreeElement) {
-                    await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                        tovKeyOfSelectedTreeElement,
-                        typeof treeItem.label === "string" ? treeItem.label : undefined
-                    );
+                    const areTestElementsFetched: boolean =
+                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(
+                            tovKeyOfSelectedTreeElement,
+                            typeof treeItem.label === "string" ? treeItem.label : undefined
+                        );
                     // Hide Project Contents Tree View after displaying Test Elements Tree View.
-                    await projectManagementTreeView?.hideProjectManagementTreeView();
+                    if (areTestElementsFetched) {
+                        await projectManagementTreeView?.hideProjectManagementTreeView();
+                    }
                 }
             }
             logger.trace("End of Command: Display Interactions For Selected TOV");

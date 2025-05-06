@@ -49,6 +49,19 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
      */
     async getChildren(element?: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
         if (!element) {
+            if (!this.rootElements || this.rootElements.length === 0) {
+                logger.trace("TestThemeTreeDataProvider: No root elements found, returning placeholder.");
+                // If no root elements are found, return a placeholder item.
+                return [
+                    new ProjectManagementTreeItem(
+                        "No test themes found for this cycle",
+                        "placeholder",
+                        vscode.TreeItemCollapsibleState.None,
+                        {},
+                        null
+                    )
+                ];
+            }
             return this.rootElements;
         }
         return element.children || [];
