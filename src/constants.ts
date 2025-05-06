@@ -136,5 +136,6 @@ export const allExtensionCommands = {
     openOrCreateRobotResourceFile: `${baseKeyOfExtension}.openOrCreateRobotResourceFile`,
     createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
-    modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`
+    modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
+    handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`
 };
