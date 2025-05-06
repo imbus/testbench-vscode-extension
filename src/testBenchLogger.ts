@@ -6,13 +6,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as utils from "./utils";
-import { getConfig, folderNameOfInternalTestbenchFolder } from "./extension";
+import { getConfig } from "./extension";
+import { folderNameOfInternalTestbenchFolder } from "./constants";
 
 // Use the native promises API for filesystem operations.
 const fsp = fs.promises;
 
 // Name of the logs folder (inside the working directory)
-export const folderNameOfLogs = "logs";
+export const folderNameOfLogs: string = "logs";
 
 const MAX_LOG_FILE_SIZE: number = 5 * 1024 * 1024; // Maximum log file size (in bytes) 5 MB
 const MAX_LOG_FILES: number = 3; // Maximum number of backup log files.
@@ -63,7 +64,7 @@ export class TestBenchLogger {
     /**
      * Creates an instance of the TestBenchLogger.
      *
-     * @param outputToTerminal Optional flag to output log messages to the terminal.
+     * @param {boolean | undefined} outputToTerminal Optional flag to output log messages to the terminal.
      *
      * The constructor sets default log paths (using the extension’s directory) and then asynchronously
      * attempts to update them based on the configured workspace location. It also caches the log level from the configuration.
@@ -96,7 +97,7 @@ export class TestBenchLogger {
      */
     private async initialize(): Promise<void> {
         try {
-            const workspaceLocation = await utils.validateAndReturnWorkspaceLocation(false);
+            const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation(false);
             if (workspaceLocation) {
                 // Example: workspaceFolder/.testbench/logs/testBenchExtension.log
                 this.logFolderPath = path.join(
@@ -161,14 +162,14 @@ export class TestBenchLogger {
 
             // Shift existing backup files using a naming scheme.
             for (let i = MAX_LOG_FILES; i >= 2; i--) {
-                const olderFile = `${this.logFilePath}.${i - 1}`;
-                const newFile = `${this.logFilePath}.${i}`;
+                const olderFileName: string = `${this.logFilePath}.${i - 1}`;
+                const newFileName: string = `${this.logFilePath}.${i}`;
                 try {
-                    await fsp.access(olderFile);
-                    await fsp.rename(olderFile, newFile);
+                    await fsp.access(olderFileName);
+                    await fsp.rename(olderFileName, newFileName);
                 } catch (error) {
                     // If the backup file doesn't exist, continue.
-                    console.error(`Failed to rotate log file ${olderFile} to ${newFile}:`, error);
+                    console.error(`Failed to rotate log file ${olderFileName} to ${newFileName}:`, error);
                 }
             }
             // Rename the current log file to the first backup.
@@ -243,7 +244,7 @@ export class TestBenchLogger {
      * @param {string} level The log level (e.g. "Trace", "Debug", "Info", "Warn", "Error").
      * @param {string} message The log message.
      * @param details Optional additional details to include.
-     * @param {boolean} outputToTerminal Optional flag to force terminal output (overrides instance setting).
+     * @param {boolean | undefined} outputToTerminal Optional flag to force terminal output (overrides instance setting).
      */
     public async log(level: string, message: string, details?: any | any[], outputToTerminal?: boolean): Promise<void> {
         // Skip logging if disabled or log level is below the configured level.
@@ -251,10 +252,10 @@ export class TestBenchLogger {
             return;
         }
 
-        const timestamp = new Date().toISOString();
-        const baseLogMessage = `${timestamp} [${level.toUpperCase()}]: ${message}`;
-        const detailsMessage = await this.formatDetails(details);
-        const fullLogMessage = `${baseLogMessage}${detailsMessage}`;
+        const timestamp: string = new Date().toISOString();
+        const baseLogMessage: string = `${timestamp} [${level.toUpperCase()}]: ${message}`;
+        const detailsMessage: string = await this.formatDetails(details);
+        const fullLogMessage: string = `${baseLogMessage}${detailsMessage}`;
 
         // Write to log file
         try {
@@ -289,9 +290,9 @@ export class TestBenchLogger {
     /**
      * Logs a trace message.
      *
-     * @param message The trace message.
+     * @param {string} message The trace message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output.
+     * @param {boolean | undefined} outputToTerminal Optional flag to force terminal output.
      */
     public trace(message: string, details?: any | any[], outputToTerminal?: boolean): void {
         this.log("Trace", message, details, outputToTerminal);
@@ -300,9 +301,9 @@ export class TestBenchLogger {
     /**
      * Logs a debug message.
      *
-     * @param message The debug message.
+     * @param {string} message The debug message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output.
+     * @param {boolean | undefined} outputToTerminal Optional flag to force terminal output.
      */
     public debug(message: string, details?: any | any[], outputToTerminal?: boolean): void {
         this.log("Debug", message, details, outputToTerminal);
@@ -311,9 +312,9 @@ export class TestBenchLogger {
     /**
      * Logs an informational message.
      *
-     * @param message The info message.
+     * @param {string} message The info message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output.
+     * @param {boolean | undefined} outputToTerminal Optional flag to force terminal output.
      */
     public info(message: string, details?: any | any[], outputToTerminal?: boolean): void {
         this.log("Info", message, details, outputToTerminal);
@@ -322,9 +323,9 @@ export class TestBenchLogger {
     /**
      * Logs a warning message.
      *
-     * @param message The warning message.
+     * @param {string} message The warning message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output.
+     * @param {boolean | undefined} outputToTerminal Optional flag to force terminal output.
      */
     public warn(message: string, details?: any | any[], outputToTerminal?: boolean): void {
         this.log("Warn", message, details, outputToTerminal);
@@ -335,9 +336,9 @@ export class TestBenchLogger {
      *
      * Error messages are always sent to the terminal by default.
      *
-     * @param message The error message.
+     * @param {string} message The error message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output (defaults to true).
+     * @param {boolean | undefined} outputToTerminal Optional flag to force terminal output (defaults to true).
      */
     public error(message: string, details?: any | any[], outputToTerminal: boolean = true): void {
         this.log("Error", message, details, outputToTerminal);

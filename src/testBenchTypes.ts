@@ -1,5 +1,6 @@
 /**
- * This file contains TypeScript interfaces and type definitions
+ * @file testBenchTypes.ts
+ * @description This file contains TypeScript interfaces and type definitions
  * used throughout the project. These interfaces define the structure
  * of various data types, server response formats, API request parameters,
  * and other project-related types.

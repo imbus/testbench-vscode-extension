@@ -5,6 +5,8 @@ import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
 import { connection } from "./extension";
 
+// TODO: Use constants from constants.ts instead of hardcoded strings
+
 export let client: LanguageClient;
 
 export async function initializeLanguageServer(): Promise<void> {
