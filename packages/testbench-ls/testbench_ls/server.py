@@ -2,7 +2,7 @@ import logging
 import re
 
 import requests  # type: ignore
-from testbench2robotframework.cli import generate_tests
+from testbench2robotframework.cli import generate_tests, fetch_results
 from lsprotocol.types import (
     INITIALIZE,
     TEXT_DOCUMENT_CODE_ACTION,
@@ -57,6 +57,7 @@ from .testbench_keysync.resource_documentation import ResourceDocumentation
 from .testbench_keysync.resource_file import RobotResourceFile
 from .testbench_keysync.testbench_patch import patch_interaction_details
 
+
 class TestBenchLanguageServer(LanguageServer):
     def __init__(self):
         super().__init__("testbench-language-server", __version__)
@@ -100,6 +101,7 @@ class TestBenchLanguageServer(LanguageServer):
 
 testbench_ls = TestBenchLanguageServer()
 
+
 @testbench_ls.command("testbench_ls.generateTestSuites")
 def generate_test_suites(ls: LanguageServer, kwargs):
     """Generate Robot Framework test suites via testbench2robotframework."""
@@ -118,6 +120,18 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         resource_root=(),
         library_mapping={},
         resource_mapping={},
+        testbench_report=pathlib.Path(kwargs.get("testbench_report")),
+    )
+
+
+@testbench_ls.command("testbench_ls.fetchResults")
+def generate_test_suites(ls: LanguageServer, kwargs):
+    """Generate Robot Framework test suites via testbench2robotframework."""
+    kwargs, *_ = kwargs
+    fetch_results.callback(
+        config=None,
+        robot_result=pathlib.Path(kwargs.get("robot_result")),
+        output_directory=pathlib.Path(kwargs.get("output_directory")),
         testbench_report=pathlib.Path(kwargs.get("testbench_report")),
     )
 
@@ -391,7 +405,13 @@ def pull_testbench_keyword(ls: LanguageServer, args):
 
     existing_keyword = resource.get_keyword(keyword_uid)
     new_keyword = create_keyword(
-        ls.server_name, ls.server_port, ls.login_name, ls.session_token, ls.project, ls.tov, keyword_uid
+        ls.server_name,
+        ls.server_port,
+        ls.login_name,
+        ls.session_token,
+        ls.project,
+        ls.tov,
+        keyword_uid,
     )
     edits.extend(create_keyword_edits(existing_keyword, new_keyword, change_identifier))
     if edits:
@@ -439,15 +459,14 @@ def push_testbench_keyword(ls: LanguageServer, args):
     except requests.exceptions.HTTPError as http_error:
         if http_error.response.status_code == 409:
             ls.send_notification(
-                    "custom/notification",
-                    {"message": f"Failed to push keyword: Element is locked in TestBench."},
-                )
+                "custom/notification",
+                {"message": f"Failed to push keyword: Element is locked in TestBench."},
+            )
         else:
             ls.send_notification(
                 "custom/notification",
                 {"message": f"Failed to push keyword: {http_error.response.text}"},
             )
-    
 
 
 # @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
