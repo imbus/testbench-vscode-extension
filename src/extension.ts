@@ -772,7 +772,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
 
-    // await initializeLanguageServer();  // TODO: Uncomment this line when the language server is ready.
+    await initializeLanguageServer();
 
     // Execute automatic login if the setting is enabled.
     vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);

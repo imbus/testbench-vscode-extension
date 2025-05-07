@@ -105,7 +105,7 @@ export async function deleteDirectoryRecursively(
     excludedFoldersFromDeletion: string[]
 ): Promise<void | null> {
     logger.debug(`Deleting directory recursively: "${directoryPathToDelete}"`);
-    logger.debug("Excluded folders:", excludedFoldersFromDeletion);
+    logger.debug("Excluded folders from recursive deletion:", excludedFoldersFromDeletion);
 
     try {
         const files: string[] = await fsPromises.readdir(directoryPathToDelete);
