@@ -140,25 +140,24 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         }
         this.isLoginProcessAlreadyRunningAfterButtonClick = true;
         logger.trace("Handling login command from webview.");
-
-        if (!extensionContext) {
-            logger.error("Extension context is missing in handleLogin.");
-            this.showLoginErrorInWebview("Internal error: Extension context missing."); // Show error in webview
-            this.resetLoginAttemptFlag();
-            return;
-        }
-
-        // Check if the user is already connected to a server, if so, show a message and hide the webview.
-        if (this.isConnectedToServer()) {
-            vscode.window.showInformationMessage("You are already connected to a server.");
-            this.resetLoginAttemptFlag();
-            return;
-        }
-
-        // In production, don't log sensitive data.
-        logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
-
         try {
+            if (!extensionContext) {
+                logger.error("Extension context is missing in handleLogin.");
+                this.showLoginErrorInWebview("Internal error: Extension context missing."); // Show error in webview
+                this.resetLoginAttemptFlag();
+                return;
+            }
+
+            // Check if the user is already connected to a server, if so, show a message and hide the webview.
+            if (this.isConnectedToServer()) {
+                vscode.window.showInformationMessage("You are already connected to a server.");
+                this.resetLoginAttemptFlag();
+                return;
+            }
+
+            // In production, don't log sensitive data.
+            logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
+
             // Attempt to log in. Successfull login will update and hide the webview automatically.
             const connectionAfterLoginAttempt: PlayServerConnection | null =
                 await loginToNewPlayServerAndInitSessionToken(

@@ -66,20 +66,27 @@
                         "default": false,
                         "description": "If enabled, the extension will automatically attempt to log in to the TestBench server using the stored credentials after the extension is activated.",
                         "order": 5
-                    },
+                    }
+                }
+            },
+            {
+                "title": "Syncing",
+                "properties": {
                     "testbenchExtension.project": {
                         "type": [
                             "string"
                         ],
                         "default": null,
-                        "description": "TestBench project to sync with."
+                        "description": "TestBench project to sync with.",
+                        "scope": "resource"
                     },
                     "testbenchExtension.tov": {
                         "type": [
                             "string"
                         ],
                         "default": null,
-                        "description": "TestBench tov to sync with."
+                        "description": "TestBench Test Object Version to sync with.",
+                        "scope": "resource"
                     }
                 }
             },
@@ -433,22 +440,26 @@
                     "type": "webview",
                     "id": "testbenchExtension.webView",
                     "name": "Login to TestBench",
-                    "when": "!testbenchExtension.connectionActive"
+                    "when": "!testbenchExtension.connectionActive",
+                    "icon": "resources/icons/login.svg"
                 },
                 {
                     "id": "projectManagementTree",
                     "name": "Project Contents",
-                    "when": "testbenchExtension.connectionActive"
+                    "when": "testbenchExtension.connectionActive",
+                    "icon": "resources/icons/project.svg"
                 },
                 {
                     "id": "testThemeTree",
                     "name": "Test Themes",
-                    "when": "testbenchExtension.connectionActive"
+                    "when": "testbenchExtension.connectionActive",
+                    "icon": "resources/icons/TestThemeOriginal-dark.svg"
                 },
                 {
                     "id": "testElementsView",
                     "name": "Test Elements",
-                    "when": "testbenchExtension.connectionActive"
+                    "when": "testbenchExtension.connectionActive",
+                    "icon": "resources/icons/test-elements-dark.svg"
                 }
             ]
         },

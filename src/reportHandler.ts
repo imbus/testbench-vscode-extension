@@ -843,17 +843,8 @@ async function runRobotFrameworkTestGenerationProcess(
         return null;
     }
 
-    // Construct the path where the testbench2robotframework library will be executed
-    const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
-        workspaceLocation,
-        folderNameOfInternalTestbenchFolder
-    );
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
-        await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
-            context,
-            testbenchWorkingDirectoryPathInsideWorkspace,
-            downloadedZip
-        );
+        await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedZip);
     await cleanUpReportFileIfConfiguredInSettings(downloadedZip);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         const testGenerationFailedMessage: string = "Test generation failed.";
@@ -1148,8 +1139,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             );
             const isTb2RobotFetchResultsExecutionSuccessful: boolean =
                 await testbench2robotframeworkLib.tb2robotLib.startTb2robotFetchResults(
-                    context,
-                    testbenchWorkingDirectoryPathInsideWorkspace,
                     outputXMLPath,
                     finalReportPath,
                     reportWithResultsZipFullPath
