@@ -23,7 +23,13 @@ import {
     loginWebViewProvider
 } from "./extension";
 import * as utils from "./utils";
-import { ConfigKeys, StorageKeys, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
+import {
+    ConfigKeys,
+    JobTypes,
+    StorageKeys,
+    allExtensionCommands,
+    folderNameOfInternalTestbenchFolder
+} from "./constants";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -405,7 +411,7 @@ export class PlayServerConnection {
                 }
             );
 
-            // User selects a file path for saving the JSON
+            // Save the JSON to a file for analyzing the structure
             /*
             const savePath: vscode.Uri | undefined = await vscode.window.showSaveDialog({
                 saveLabel: "Save Cycle Structure",
@@ -415,8 +421,8 @@ export class PlayServerConnection {
                 },
             });
             if (savePath) {
-                const filePath = savePath.fsPath;
-                utils.saveJsonDataToFile(filePath, response.data);
+                const filePath: string = savePath.fsPath;
+                utils.saveJsonDataToFile(filePath, cycleStructureResponse.data);
             } else {
                 vscode.window.showErrorMessage("No file path selected.");
             }
@@ -1268,53 +1274,27 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
     }
 }
 
-/**
- * Recursively searches for a cycle key matching the given cycle name.
- *
- * @param {any[]} treeElements - The array of tree elements.
- * @param {string} cycleName - The cycle name to search for.
- * @returns {string | null} The cycle key if found, otherwise null.
- */
-function findCycleKeyFromCycleNameRecursively(treeElements: any[], cycleName: string): string | null {
-    for (const element of treeElements) {
-        if (
-            (element.item?.nodeType === "Cycle" && element.item?.name === cycleName) ||
-            (element.nodeType === "Cycle" && element.name === cycleName)
-        ) {
-            return element.key;
-        }
-        // Recursively search in children elements
-        const children: any[] = element.item?.children || element.children;
-        if (children && children.length > 0) {
-            const foundCycleKey = findCycleKeyFromCycleNameRecursively(children, cycleName);
-            if (foundCycleKey) {
-                return foundCycleKey;
-            }
-        }
-    }
-    return null;
-}
-
 // TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
 /**
  * Imports a report (zip file with test results) to the TestBench server.
  *
  * @param {PlayServerConnection} connection - The PlayServerConnection.
- * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectManagementTreeDataProvider - The tree data provider.
+ * @param {string} projectKeyString - The project key string.
+ * @param {string} cycleKeyString - The cycle key string.
  * @param {string} reportWithResultsZipFilePath - The file path of the zip file containing the test results to import.
  * @returns {Promise<void | null>} A promise that resolves when the import is complete, or null if an error occurs.
  */
 export async function importReportWithResultsToTestbench(
     connection: PlayServerConnection,
-    projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider,
+    projectKeyString: string, // Now accepts projectKey
+    cycleKeyString: string, // Now accepts cycleKey
     reportWithResultsZipFilePath: string
 ): Promise<void | null> {
     try {
         logger.debug("Importing report with results to TestBench server.");
-        const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReport(reportWithResultsZipFilePath);
-        if (!uniqueID || !projectKey || !cycleNameOfProject) {
-            const extractionErrorMsg: string =
-                "Error extracting project key, cycle name, and unique ID from the zip file.";
+        const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
+        if (!uniqueID) {
+            const extractionErrorMsg: string = "Error extracting unique ID from the zip file.";
             vscode.window.showErrorMessage(extractionErrorMsg);
             logger.error(extractionErrorMsg);
             return null;
@@ -1323,16 +1303,6 @@ export async function importReportWithResultsToTestbench(
         // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
         // Later, we should fetch the project tree from the server and search for the cycle key there.
 
-        const allProjectTreeItemsInView: projectManagementTreeView.ProjectManagementTreeItem[] =
-            await projectManagementTreeDataProvider.getChildren(undefined);
-        if (!allProjectTreeItemsInView) {
-            const loadProjectTreeErrorMessage: string =
-                "Failed to load project management tree elements for importing results.";
-            logger.error(loadProjectTreeErrorMessage);
-            vscode.window.showErrorMessage("Failed to load project management tree elements.");
-            return null;
-        }
-
         /*
         // For debugging, save the tree elements to a file called allTreeElements.json
         const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
@@ -1340,19 +1310,20 @@ export async function importReportWithResultsToTestbench(
         console.log(`allTreeElements saved to ${allTreeElementsPath}`);
         */
 
-        const cycleKeyOfImportedReport: string | null = findCycleKeyFromCycleNameRecursively(
-            allProjectTreeItemsInView,
-            cycleNameOfProject
-        );
-        if (!cycleKeyOfImportedReport) {
-            const cycleNotFoundErrorMessage: string = "Cycle not found in the project tree.";
-            logger.error(cycleNotFoundErrorMessage);
-            vscode.window.showErrorMessage(cycleNotFoundErrorMessage);
+        // Use the passed-in keys (convert to numbers for API calls)
+        const projectKey: number = Number(projectKeyString);
+        const cycleKey: number = Number(cycleKeyString);
+
+        if (isNaN(projectKey) || isNaN(cycleKey)) {
+            logger.error(
+                `Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`
+            );
+            vscode.window.showErrorMessage("Internal error: Invalid project or cycle identifier for import.");
             return null;
         }
 
         const zipFilenameFromServer: string = await connection.importExecutionResultsAndReturnImportedFileName(
-            Number(projectKey),
+            projectKey,
             reportWithResultsZipFilePath
         );
         if (!zipFilenameFromServer) {
@@ -1386,30 +1357,32 @@ export async function importReportWithResultsToTestbench(
         try {
             // Start the import job
             logger.debug("Starting import execution results.");
-            const importJobID: string = await connection.getJobIDOfImportJob(
-                Number(projectKey),
-                Number(cycleKeyOfImportedReport),
-                importData
-            );
+            const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
 
             // Poll the job status until it is completed
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await reportHandler.pollJobStatus(
-                projectKey.toString(),
+                projectKeyString,
                 importJobID,
-                "import"
+                JobTypes.IMPORT
             );
 
-            // Check if the job is completed successfully
+            // Check job completion status
             if (!importJobStatus || reportHandler.isImportJobFailed(importJobStatus)) {
                 const importJobFailedMessage: string = "Import job could not be completed.";
                 logger.warn(importJobFailedMessage);
                 vscode.window.showErrorMessage(importJobFailedMessage);
                 return null;
-            } else {
+            } else if (reportHandler.isImportJobCompletedSuccessfully(importJobStatus)) {
                 vscode.window.showInformationMessage("Import completed successfully.");
+            } else {
+                logger.warn("Import job finished polling but status is unknown.", importJobStatus);
+                vscode.window.showWarningMessage("Import job status unknown after polling.");
             }
         } catch (error: any) {
-            logger.error("Error during import job:", error.message);
+            logger.error(
+                `Error during import job initiation or polling for Project ${projectKey}, Cycle ${cycleKey}:`,
+                error.message
+            );
             return null;
         }
     } catch (error: any) {
@@ -1423,12 +1396,10 @@ export async function importReportWithResultsToTestbench(
  * Prompts the user to select a report zip file and imports it to the TestBench server.
  *
  * @param {PlayServerConnection} connection - The PlayServerConnection.
- * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectManagementTreeDataProvider - The tree data provider.
  * @returns {Promise<void | null>} A promise that resolves when the import is complete, or null if an error occurs.
  */
 export async function selectReportWithResultsAndImportToTestbench(
-    connection: PlayServerConnection,
-    projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider
+    connection: PlayServerConnection
 ): Promise<void | null> {
     await vscode.window.withProgress(
         {
@@ -1442,8 +1413,23 @@ export async function selectReportWithResultsAndImportToTestbench(
             if (!resultZipFilePath) {
                 return null;
             }
+
+            progress.report({ message: "Extracting report context...", increment: 10 });
+            const { projectKey, cycleKey } = await extractDataFromReport(resultZipFilePath);
+
+            // Validate extracted keys
+            if (!projectKey || !cycleKey) {
+                const missingDataContextMsg: string =
+                    "Could not extract necessary project or cycle key from the selected report file.";
+                logger.error(missingDataContextMsg);
+                vscode.window.showErrorMessage(missingDataContextMsg);
+                // Clean up the selected file if it exists and configured, even on error
+                await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
+                return null;
+            }
+
             progress.report({ message: "Importing report file.", increment: 30 });
-            await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+            await importReportWithResultsToTestbench(connection, projectKey, cycleKey, resultZipFilePath);
             progress.report({ message: "Cleaning up.", increment: 30 });
             await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
         }
@@ -1460,6 +1446,7 @@ async function extractDataFromReport(zipFilePath: string): Promise<{
     uniqueID: string | null;
     projectKey: string | null;
     cycleNameOfProject: string | null;
+    cycleKey: string | null;
 }> {
     try {
         // Read zip file from disk
@@ -1480,13 +1467,14 @@ async function extractDataFromReport(zipFilePath: string): Promise<{
         const uniqueID: string | null = cycleStructureJson?.root?.base?.uniqueID || null;
         const projectKey: string | null = projectJson?.key || null;
         const cycleNameOfProject: string | null = projectJson?.projectContext?.cycleName || null;
+        const cycleKey: string | null = projectJson?.projectContext?.cycleKey || null;
 
         logger.debug(
-            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}`
+            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}` // Log cycleKey
         );
-        return { uniqueID, projectKey, cycleNameOfProject };
+        return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
     } catch (error) {
         logger.error("Error extracting JSON data from zip file:", error);
-        return { uniqueID: null, projectKey: null, cycleNameOfProject: null };
+        return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
     }
 }

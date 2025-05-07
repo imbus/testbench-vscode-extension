@@ -20,7 +20,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
         sandbox = sinon.createSandbox();
         connectionStub = sandbox.createStubInstance(PlayServerConnection);
         testThemeDataProviderStub = sandbox.createStubInstance(TestThemeTreeDataProvider);
-        treeDataProvider = new ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
+        treeDataProvider = new ProjectManagementTreeDataProvider(testThemeDataProviderStub);
     });
 
     teardown(() => {
@@ -28,7 +28,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
     });
 
     test("getChildren should return empty array when no connection is available", async () => {
-        treeDataProvider = new ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
+        treeDataProvider = new ProjectManagementTreeDataProvider(testThemeDataProviderStub);
 
         const children: ProjectManagementTreeItem[] = await treeDataProvider.getChildren();
 

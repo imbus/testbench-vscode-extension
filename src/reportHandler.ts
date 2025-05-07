@@ -14,7 +14,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import * as utils from "./utils";
-import { getConfig, connection, logger, projectManagementTreeDataProvider } from "./extension";
+import { getConfig, connection, logger } from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
@@ -664,7 +664,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     logger.debug("Generating tests for non-cycle element:", selectedTreeItem);
     const treeElementUID = selectedTreeItem.item?.base?.uniqueID;
     const cycleKey: string | null = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
-    const projectKey: string | null = projectManagementTreeView.findProjectKeyOfCycleElement(selectedTreeItem.parent!);
+    const projectKey: string | null = projectManagementTreeView.findProjectKeyForElement(selectedTreeItem);
 
     if (!projectKey || !cycleKey || !treeElementUID) {
         logger.error(
@@ -1158,7 +1158,8 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             }
             const successMessage: string = `Report with results created at: ${reportWithResultsZipFullPath}`;
             logger.debug(successMessage);
-            vscode.window.showInformationMessage(successMessage);
+            // Since the created report file might be deleted after the import to TestBench, dont display a message
+            // vscode.window.showInformationMessage(successMessage);
             return reportWithResultsZipFullPath;
         };
 
@@ -1198,6 +1199,19 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
         },
         async (progress) => {
             progress.report({ message: "Reading Test Results and Creating Report.", increment: 25 });
+
+            // Get the parameters needed for import
+            const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
+                getLastGeneratedReportParams(context);
+            if (!retrievedParams || !retrievedParams.projectKey || !retrievedParams.cycleKey) {
+                logger.error("Missing or invalid last generated params needed for import.");
+                vscode.window.showErrorMessage(
+                    "Cannot import results: context information missing. Please generate tests first."
+                );
+                return null;
+            }
+            const { projectKey, cycleKey } = retrievedParams;
+
             const pathOfCreatedReportWithResults: string | undefined =
                 await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(context, progress);
             if (!pathOfCreatedReportWithResults) {
@@ -1205,12 +1219,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 return null;
             }
             progress.report({ message: "Importing report to TestBench.", increment: 25 });
-            await importReportWithResultsToTestbench(
-                // The checks if connection and projectManagementTreeDataProvider are null are done in the caller function
-                connection!,
-                projectManagementTreeDataProvider!,
-                pathOfCreatedReportWithResults
-            );
+            await importReportWithResultsToTestbench(connection!, projectKey, cycleKey, pathOfCreatedReportWithResults);
             progress.report({ message: "Cleaning up.", increment: 25 });
             await cleanUpReportFileIfConfiguredInSettings(pathOfCreatedReportWithResults);
         }

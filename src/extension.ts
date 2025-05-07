@@ -13,7 +13,6 @@
 
 import * as vscode from "vscode";
 import * as testBenchLogger from "./testBenchLogger";
-import * as testBenchTypes from "./testBenchTypes";
 import * as testBenchConnection from "./testBenchConnection";
 import * as reportHandler from "./reportHandler";
 import * as projectManagementTreeView from "./projectManagementTreeView";
@@ -234,7 +233,9 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             if (loginResult) {
                 // If login was successful, display project selection dialog and the project management tree view.
                 projectManagementTreeView?.displayProjectManagementTreeView();
-                vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject);
+                await projectManagementTreeView?.hideTestThemeTreeView();
+                await testElementsTreeView?.hideTestElementsTreeView();
+                projectManagementTreeDataProvider?.refresh();
             }
         } else {
             logger.trace("Automatic login is disabled or password is not stored.");
@@ -261,9 +262,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         try {
             const performLoginResult: testBenchConnection.PlayServerConnection | null =
                 await testBenchConnection.performLogin(context);
-            // If login was successful, display project selection dialog and the project management tree view.
             if (performLoginResult) {
-                await vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject);
+                projectManagementTreeDataProvider?.refresh();
             }
         } catch (error) {
             logger.error(`Login process failed: ${error}`);
@@ -378,30 +378,17 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             return;
         }
 
-        const projectList: testBenchTypes.Project[] | null = await connection.getProjectsList();
-        if (!projectList) {
-            vscode.window.showErrorMessage("Project list is empty. Please check your connection.");
-            logger.error("Project list is empty. Cannot load projects.");
-            return;
-        }
-
-        // Show a quick pick dialog to select a project from the projects list.
-        const selectedProjectKey: string | null =
-            await connection.getProjectKeyFromProjectListQuickPickSelection(projectList);
-        if (!selectedProjectKey) {
-            logger.error("No project selected for selectAndLoadProject command.");
-            return;
-        }
-
-        // Initialize and display the project management tree view with the selected project.
-        await projectManagementTreeView.initializeProjectAndTestThemeTrees(context, selectedProjectKey);
+        // This command will now effectively refresh the all-projects view
+        // It reuses initializeProjectAndTestThemeTrees which should now handle loading all projects.
+        await projectManagementTreeView.initializeProjectAndTestThemeTrees(context); // No project key passed
+        projectManagementTreeView.displayProjectManagementTreeView(); // Ensure view is focused
 
         // After selecting a (new) project, hide the test theme tree view and test elements tree view and clear the test elements tree view.
         projectManagementTreeView.hideTestThemeTreeView();
         testElementsTreeView.hideTestElementsTreeView();
         testElementsTreeView.clearTestElementsTreeView();
 
-        logger.trace(`Project with key ${selectedProjectKey} loaded into project management tree view.`);
+        logger.trace("Project list refreshed in project management tree view.");
     });
 
     // --- Command: Toggle Project Management Tree View Visibility ---
@@ -437,15 +424,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             logger.error("importTestResultsToTestbench command called without connection.");
             return;
         }
-        if (!projectManagementTreeDataProvider || !projectManagementTreeDataProvider.activeProjectKeyInView) {
-            vscode.window.showErrorMessage("No project selected. Please select a project first.");
-            logger.error("importTestResultsToTestbench command called without a selected project.");
-            return;
-        }
-        await testBenchConnection.selectReportWithResultsAndImportToTestbench(
-            connection,
-            projectManagementTreeDataProvider
-        );
+
+        await testBenchConnection.selectReportWithResultsAndImportToTestbench(connection);
         logger.trace("End of command: Import Test Results To Testbench");
     });
 
