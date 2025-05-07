@@ -231,23 +231,27 @@ export class tb2robotLib {
         logger.debug(`Starting tb2robot ${fetchResultsCommand} command.`);
         let isFetchResultsCommandSuccessful = true;
 
-        await this.executeTb2robotFetchResultsCommand(
-            context,
-            commandExecutionDirectory,
-            outputXmlPath,
-            reportPath,
-            resultPath
-        )
-            .then(() => {
-                const providedPath = resultPath ? resultPath : "none";
-                logger.debug(`tb2robot ${fetchResultsCommand} completed. Provided output directory: ${providedPath}.`);
-            })
-            .catch((err) => {
-                logger.error(`Error in tb2robot ${fetchResultsCommand}:`, err);
-                vscode.window.showErrorMessage(`Error in tb2robot ${fetchResultsCommand}: ${err}`);
-                isFetchResultsCommandSuccessful = false;
-            });
-
+        // await this.executeTb2robotFetchResultsCommand(
+        //     context,
+        //     commandExecutionDirectory,
+        //     outputXmlPath,
+        //     reportPath,
+        //     resultPath
+        // )
+        //     .then(() => {
+        //         const providedPath = resultPath ? resultPath : "none";
+        //         logger.debug(`tb2robot ${fetchResultsCommand} completed. Provided output directory: ${providedPath}.`);
+        //     })
+        //     .catch((err) => {
+        //         logger.error(`Error in tb2robot ${fetchResultsCommand}:`, err);
+        //         vscode.window.showErrorMessage(`Error in tb2robot ${fetchResultsCommand}: ${err}`);
+        //         isFetchResultsCommandSuccessful = false;
+        //     });
+        await vscode.commands.executeCommand("testbench_ls.fetchResults", {
+            robot_result: outputXmlPath,
+            output_directory: resultPath,
+            testbench_report: reportPath
+        });
         logger.debug(`startTb2robotFetchResults success: ${isFetchResultsCommandSuccessful}`);
         return isFetchResultsCommandSuccessful;
     }
