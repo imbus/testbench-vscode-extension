@@ -267,7 +267,7 @@
                     },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
-                        "description": "The absolute file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when importing results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
+                        "description": "The relative file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when importing results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
                         "order": 23,
                         "scope": "resource"
                     }
@@ -331,7 +331,7 @@
             },
             {
                 "command": "testbenchExtension.selectAndLoadProject",
-                "title": "TestBench: Display Projects List",
+                "title": "TestBench: Display Projects",
                 "icon": {
                     "light": "resources/icons/menu-light.svg",
                     "dark": "resources/icons/menu-dark.svg"
@@ -445,9 +445,9 @@
                 },
                 {
                     "id": "projectManagementTree",
-                    "name": "Project Contents",
+                    "name": "Projects",
                     "when": "testbenchExtension.connectionActive",
-                    "icon": "resources/icons/project.svg"
+                    "icon": "resources/icons/project-dark.svg"
                 },
                 {
                     "id": "testThemeTree",
@@ -492,15 +492,6 @@
                     "icon": {
                         "light": "resources/icons/refresh-light.svg",
                         "dark": "resources/icons/refresh-dark.svg"
-                    }
-                },
-                {
-                    "command": "testbenchExtension.selectAndLoadProject",
-                    "group": "navigation@4",
-                    "when": "view == projectManagementTree",
-                    "icon": {
-                        "light": "resources/icons/menu-light.svg",
-                        "dark": "resources/icons/menu-dark.svg"
                     }
                 },
                 {

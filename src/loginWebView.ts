@@ -5,10 +5,10 @@
  */
 
 import * as vscode from "vscode";
-import { logger, connection, getConfig } from "./extension";
+import { logger, connection, getConfig, projectManagementTreeDataProvider } from "./extension";
 import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
 import { displayProjectManagementTreeView } from "./projectManagementTreeView";
-import { WebviewMessageCommands, ConfigKeys, StorageKeys, allExtensionCommands } from "./constants";
+import { WebviewMessageCommands, ConfigKeys, StorageKeys } from "./constants";
 
 /**
  * The provider for the login webview.
@@ -168,12 +168,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     password
                 );
 
-            // If login was successful, open project selection and display project tree view
+            // If login was successful, display project tree view
             if (connectionAfterLoginAttempt) {
-                await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject}`);
-                // If the user does not select a project and clicks away, there wont be any active view.
-                // Add project view so that the user can choose a project.
                 displayProjectManagementTreeView();
+                if (projectManagementTreeDataProvider) {
+                    projectManagementTreeDataProvider.refresh();
+                }
             } else {
                 logger.warn("Login failed via webview.");
                 this.showLoginErrorInWebview("Login failed. Please check credentials or server details.");
