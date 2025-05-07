@@ -11,6 +11,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as utils from "./utils";
 import { connection, logger, getConfig, testElementTreeView, getTestElementsTreeDataProvider } from "./extension";
+import { TreeItemContextValues } from "./constants";
 
 /* =============================================================================
    Global Variables and Helper Functions
@@ -402,7 +403,7 @@ const iconMapping: Record<string, { light: string; dark: string }> = {
  * @returns {vscode.Uri} The icon URI.
  */
 function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscode.Uri; dark: vscode.Uri } {
-    const elementType: ElementType = treeItem.testElementData.elementType;
+    const elementType: ElementType = treeItem.testElementData?.elementType || "Other"; // Default to Other if undefined
     logger.trace(`Getting icon for element type: ${elementType}`);
 
     // Fallback to "Other" if the elementType is not defined or not in the iconMapping
@@ -411,8 +412,12 @@ function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscod
     if (!iconPaths) {
         logger.error(`No icon mapping found for element type: ${elementType}. Falling back to default icon.`);
         const defaultIconPaths = iconMapping["Other"];
-        const lightIconUri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", defaultIconPaths.light));
-        const darkIconUri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", defaultIconPaths.dark));
+        const lightIconUri: vscode.Uri = vscode.Uri.file(
+            path.join(__dirname, "..", "resources", "icons", defaultIconPaths.light)
+        );
+        const darkIconUri: vscode.Uri = vscode.Uri.file(
+            path.join(__dirname, "..", "resources", "icons", defaultIconPaths.dark)
+        );
         return { light: lightIconUri, dark: darkIconUri };
     }
 
@@ -421,6 +426,20 @@ function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscod
 
     return { light: lightIconUri, dark: darkIconUri };
 }
+
+// Placeholder data structure
+const placeholderElementData: TestElementData = {
+    id: "placeholder-element", // Unique ID for the placeholder
+    parentId: null,
+    name: "No elements found", // Placeholder label
+    uniqueID: "",
+    libraryKey: null,
+    jsonString: "{}",
+    details: {}, // Empty details
+    elementType: "Other",
+    directRegexMatch: false,
+    children: []
+};
 
 /* =============================================================================
    TestElementTreeItem Class and TestElementsTreeDataProvider
@@ -438,43 +457,50 @@ export class TestElementTreeItem extends vscode.TreeItem {
      */
     constructor(elementData: TestElementData) {
         // Set the label to the element's name.
-        // Determine collapsibility based on whether the element has children.
-        super(
-            elementData.name,
-            elementData.children && elementData.children.length > 0
+        const label: string = elementData?.name || "Placeholder";
+        // Determine collapsibility: Placeholder should not be collapsible
+        const collapsibleState =
+            elementData?.children && elementData.children.length > 0
                 ? vscode.TreeItemCollapsibleState.Collapsed
-                : vscode.TreeItemCollapsibleState.None
-        );
-        this.testElementData = elementData;
+                : vscode.TreeItemCollapsibleState.None;
+
+        super(label, collapsibleState);
+
+        // Store elementData, ensure it's at least an empty object for placeholder
+        this.testElementData = elementData || ({} as TestElementData);
+
         // Set the context value to enable context menu contributions.
         // This value is used in package.json to enable context menu contributions.
         switch (elementData.elementType) {
             case "Subdivision":
-                this.contextValue = "subdivision";
+                this.contextValue = TreeItemContextValues.SUBDIVISION;
                 break;
             case "Interaction":
-                this.contextValue = "interaction";
+                this.contextValue = TreeItemContextValues.INTERACTION;
                 break;
             case "DataType":
-                this.contextValue = "dataType";
+                this.contextValue = TreeItemContextValues.DATA_TYPE;
                 break;
             case "Condition":
-                this.contextValue = "condition";
+                this.contextValue = TreeItemContextValues.CONDITION;
                 break;
             default:
-                this.contextValue = "testElement";
+                this.contextValue = TreeItemContextValues.TEST_ELEMENT;
                 break;
         }
 
         // Build a tooltip string with detailed information about the element.
-        let tooltip = `Type: ${elementData.elementType}\nName: ${elementData.name}\nUniqueID: ${elementData.uniqueID}`;
+        let tooltip: string = `Type: ${this.testElementData.elementType || "N/A"}\nName: ${elementData.name || label}`;
+        if (elementData.uniqueID) {
+            tooltip += `\nUniqueID: ${this.testElementData.uniqueID}`;
+        }
         if (elementData.libraryKey) {
             tooltip += `\nLibraryKey: ${elementData.libraryKey}`;
         }
-        if (elementData.details.hasVersion !== undefined) {
+        if (elementData.details?.hasVersion !== undefined) {
             tooltip += `\nHas Version: ${elementData.details.hasVersion}`;
         }
-        if (elementData.details.status !== undefined) {
+        if (elementData.details?.status !== undefined) {
             tooltip += `\nStatus: ${elementData.details.status}`;
         }
 
@@ -615,6 +641,15 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             );
             return childItems;
         } else {
+            // Root request
+            // placeholder data structure
+            if (!this.treeData || this.treeData.length === 0) {
+                logger.trace("TestElementsTreeDataProvider: No tree data found, returning placeholder.");
+                // Use the placeholder data structure
+                const customPlaceholderData = { ...placeholderElementData, name: "No matching test elements found" };
+                return [new TestElementTreeItem(customPlaceholderData)];
+            }
+
             // If no parent is provided, return the root items.
             const rootItems: TestElementTreeItem[] = await Promise.all(
                 this.treeData.map(async (child) => {
@@ -640,15 +675,15 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
      * Fetches test elements using a TOV key and updates the tree view.
      * @param {string} tovKey The TOV key.
      * @param {string} newTestElementsTreeViewTitle Optional new title for the tree view.
-     * @returns {Promise<void>} A promise that resolves when the tree view is updated.
+     * @returns {Promise<boolean>} A promise that resolves to true if test elements were fetched and displayed, false otherwise.
      */
-    async fetchAndDisplayTestElements(tovKey: string, newTestElementsTreeViewTitle?: string): Promise<void> {
+    async fetchAndDisplayTestElements(tovKey: string, newTestElementsTreeViewTitle?: string): Promise<boolean> {
         // For testing with a local JSON file.
         // const jsonPath = "ABSOLUTE-PATH-TO-JSON-FILE";
         // const testElementsJsonData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
 
         // Commented out for debugging purposes
-        const testElementsJsonData = await connection?.getTestElementsWithTovKeyOldPlayServer(tovKey);
+        const testElementsJsonData = await connection?.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
         if (testElementsJsonData) {
             setCurrentTovKey(tovKey);
             displayTestElementsTreeView();
@@ -656,8 +691,10 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             if (newTestElementsTreeViewTitle) {
                 testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
             }
+            return true;
         } else {
             vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
+            return false;
         }
     }
 }

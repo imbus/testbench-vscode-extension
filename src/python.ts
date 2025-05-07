@@ -1,6 +1,5 @@
 import { PythonExtension, ResolvedEnvironment } from "@vscode/python-extension";
 import { logger } from "./extension";
-
 import { Uri } from "vscode";
 
 let _pythonExtensionApi: PythonExtension | undefined;
@@ -13,8 +12,8 @@ async function getPythonExtensionAPI(): Promise<PythonExtension | undefined> {
 }
 
 export async function getInterpreterPath(resource?: Uri): Promise<string | undefined> {
-    const api = await getPythonExtensionAPI();
-    const environment = await api?.environments.resolveEnvironment(
+    const api: PythonExtension | undefined = await getPythonExtensionAPI();
+    const environment: ResolvedEnvironment | undefined = await api?.environments.resolveEnvironment(
         api?.environments.getActiveEnvironmentPath(resource)
     );
     if (environment?.executable.uri && checkPythonCompatibility(environment)) {

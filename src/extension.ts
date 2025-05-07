@@ -3,9 +3,6 @@
  * @description Main entry point for the TestBench VS Code extension.
  */
 
-// TODO: If possible, hide the tree views initially instead of creating them and then hiding them after.
-// TODO: The user generated tests, executed the tests, and restarted the extension. Last generated test params are now invalid due to restart, and he cant import. Use VS Code storage?
-
 // Before releasing the extension:
 // TODO: Add License.md to the extension
 // TODO: Set logger level to info or debug in production, remove too detailed logs.
@@ -21,7 +18,15 @@ import * as testElementsTreeView from "./testElementsTreeView";
 import * as loginWebView from "./loginWebView";
 import * as utils from "./utils";
 import path from "path";
-
+import {
+    allExtensionCommands,
+    baseKeyOfExtension,
+    ConfigKeys,
+    ContextKeys,
+    folderNameOfInternalTestbenchFolder,
+    StorageKeys,
+    TreeItemContextValues
+} from "./constants";
 import { initializeProjectAndTestThemeTrees } from "./projectManagementTreeView";
 import { initializeLanguageServer } from "./server";
 
@@ -29,52 +34,11 @@ import { initializeLanguageServer } from "./server";
    Constants, Global Variables & Exports
    ============================================================================= */
 
-/** Prefix of the extension commands and settings in package.json*/
-export const baseKeyOfExtension: string = "testbenchExtension";
-
 /** Workspace configuration for the extension. */
 let config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
 export function getConfig(): vscode.WorkspaceConfiguration {
     return config;
 }
-
-/**
- * All extension commands (as defined in package.json) to avoid typos.
- * Each command can be extended later with additional metadata such as description.
- */
-export const allExtensionCommands = {
-    setWorkspace: `${baseKeyOfExtension}.setWorkspace`,
-    displayCommand: `${baseKeyOfExtension}.displayCommands`,
-    login: `${baseKeyOfExtension}.login`,
-    logout: `${baseKeyOfExtension}.logout`,
-    generateTestCasesForCycle: `${baseKeyOfExtension}.generateTestCasesForCycle`,
-    generateTestCasesForTestThemeOrTestCaseSet: `${baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`,
-    readRFTestResultsAndCreateReportWithResults: `${baseKeyOfExtension}.readRFTestResultsAndCreateReportWithResults`,
-    makeRoot: `${baseKeyOfExtension}.makeRoot`,
-    getServerVersions: `${baseKeyOfExtension}.getServerVersions`,
-    showExtensionSettings: `${baseKeyOfExtension}.showExtensionSettings`,
-    fetchReportForSelectedTreeItem: `${baseKeyOfExtension}.fetchReportForSelectedTreeItem`,
-    selectAndLoadProject: `${baseKeyOfExtension}.selectAndLoadProject`,
-    importTestResultsToTestbench: `${baseKeyOfExtension}.importTestResultsToTestbench`,
-    readAndImportTestResultsToTestbench: `${baseKeyOfExtension}.readAndImportTestResultsToTestbench`,
-    executeRobotFrameworkTests: `${baseKeyOfExtension}.executeRobotFrameworkTests`,
-    refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
-    refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
-    clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
-    toggleProjectManagementTreeViewVisibility: `${baseKeyOfExtension}.toggleProjectManagementTreeViewVisibility`,
-    toggleTestThemeTreeViewVisibility: `${baseKeyOfExtension}.toggleTestThemeTreeViewVisibility`,
-    toggleWebViewVisibility: `${baseKeyOfExtension}.toggleWebViewVisibility`,
-    automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
-    refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
-    displayInteractionsForSelectedTOV: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`,
-    openOrCreateRobotResourceFile: `${baseKeyOfExtension}.openOrCreateRobotResourceFile`,
-    createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
-    openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
-    modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`
-};
-
-/** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
-export const folderNameOfInternalTestbenchFolder: string = ".testbench";
 
 /** Global logger instance. */
 export let logger: testBenchLogger.TestBenchLogger;
@@ -197,7 +161,7 @@ export async function loadConfiguration(context: vscode.ExtensionContext, newSco
     // If storePassword is set to false, delete the stored password immediately.
     // If storePassword is set to true, the password is only stored after a successful login.
     // The login process also clears the stored password if the user does not want to store it.
-    if (!config.get<boolean>("storePasswordAfterLogin", false)) {
+    if (!config.get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)) {
         await testBenchConnection?.clearStoredCredentials(context);
     }
 
@@ -232,9 +196,6 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
  * @param {vscode.ExtensionContext} context The extension context.
  */
 function registerExtensionCommands(context: vscode.ExtensionContext): void {
-    // --- Command: Toggle Login Webview Visibility ---
-    registerSafeCommand(context, allExtensionCommands.toggleWebViewVisibility, loginWebView.toggleWebViewVisibility);
-
     // --- Command: Show Extension Settings ---
     registerSafeCommand(context, allExtensionCommands.showExtensionSettings, async () => {
         logger.debug("Command Called: Show Extension Settings");
@@ -261,15 +222,18 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         if (
             config.get<boolean>("automaticLoginAfterExtensionActivation", false) &&
             config.get<boolean>("storePasswordAfterLogin", false) &&
-            (await context.secrets.get("password")) !== undefined
+            (await context.secrets.get(StorageKeys.PASSWORD)) !== undefined
         ) {
             logger.debug("Performing automatic login.");
 
             const loginResult: testBenchConnection.PlayServerConnection | null =
                 await testBenchConnection?.performLogin(context, false, true);
             if (loginResult) {
-                // If login was successful, display project selection dialog and the project management tree view.
+                // Display project management tree and hide other tree views if they are open.
                 projectManagementTreeView?.displayProjectManagementTreeView();
+                await projectManagementTreeView?.hideTestThemeTreeView();
+                await testElementsTreeView?.hideTestElementsTreeView();
+                // Load the project selection dialog
                 vscode.commands.executeCommand(allExtensionCommands.selectAndLoadProject);
             }
         } else {
@@ -321,13 +285,18 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             return;
         }
         await connection.logoutUser(projectManagementTreeDataProvider!);
-        // Show the login webview and hide the tree views after logout.
-        loginWebView.displayWebView();
-        projectManagementTreeView.hideProjectManagementTreeView();
-        projectManagementTreeView.hideTestThemeTreeView();
-        testElementsTreeView.hideTestElementsTreeView();
         logger.trace("End of command: Logout");
     });
+
+    // --- Command: Handle Cycle Click ---
+    // Handles the click event on a project cycle in the project management tree view.
+    registerSafeCommand(
+        context,
+        allExtensionCommands.handleProjectCycleClick,
+        async (cycleItem: projectManagementTreeView.ProjectManagementTreeItem) => {
+            await projectManagementTreeDataProvider!.handleTestCycleClick(cycleItem);
+        }
+    );
 
     // --- Command: Generate Test Cases For Cycle ---
     // Generates test cases for the selected cycle in the project management tree view.
@@ -357,7 +326,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             // Call getChildrenOfCycle to initialize the sub elements (Test themes etc.) of the cycle.
             // Offload the children of the cycle to the Test Theme Tree View.
             if (projectManagementTreeDataProvider?.testThemeDataProvider) {
-                const children = (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
+                const children: projectManagementTreeView.ProjectManagementTreeItem[] =
+                    (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
                 projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
             }
             await reportHandler.startTestGenerationForCycle(context, item);
@@ -410,7 +380,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
         const projectList: testBenchTypes.Project[] | null = await connection.getProjectsList();
         if (!projectList) {
-            logger.error("No projects found for selectAndLoadProject command.");
+            vscode.window.showErrorMessage("Project list is empty. Please check your connection.");
+            logger.error("Project list is empty. Cannot load projects.");
             return;
         }
 
@@ -536,7 +507,16 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             logger.debug("Command Called: Make Root for tree item:", treeItem);
             if (projectManagementTreeDataProvider) {
                 // Find out for which element type the make root command is called
-                if (treeItem.contextValue && ["Project", "Version", "Cycle"].includes(treeItem.contextValue)) {
+                if (
+                    treeItem.contextValue &&
+                    (
+                        [
+                            TreeItemContextValues.PROJECT,
+                            TreeItemContextValues.VERSION,
+                            TreeItemContextValues.CYCLE
+                        ] as string[]
+                    ).includes(treeItem.contextValue)
+                ) {
                     projectManagementTreeDataProvider.makeRoot(treeItem);
                 } else {
                     projectManagementTreeDataProvider.testThemeDataProvider.makeRoot(treeItem);
@@ -585,13 +565,18 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 treeItem
             );
             // Check if the command is executed for a TOV element.
-            if (projectManagementTreeDataProvider && treeItem.contextValue === "Version") {
+            if (projectManagementTreeDataProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
                 if (tovKeyOfSelectedTreeElement) {
-                    await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                        tovKeyOfSelectedTreeElement,
-                        typeof treeItem.label === "string" ? treeItem.label : undefined
-                    );
+                    const areTestElementsFetched: boolean =
+                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(
+                            tovKeyOfSelectedTreeElement,
+                            typeof treeItem.label === "string" ? treeItem.label : undefined
+                        );
+                    // Hide Project Contents Tree View after displaying Test Elements Tree View.
+                    if (areTestElementsFetched) {
+                        await projectManagementTreeView?.hideProjectManagementTreeView();
+                    }
                 }
             }
             logger.trace("End of Command: Display Interactions For Selected TOV");
@@ -726,7 +711,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // Set context value for connectionActive.
     // Used to enable or disable the login and logout buttons in the status bar,
     // which allows icon changes for login/logout buttons based on connectionActive variable.
-    vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
+    vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
     logger.trace(`Context value connectionActive set to: ${connection !== null}`);
 }
 
@@ -737,7 +722,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 /**
  * Called when the extension is activated.
  *
- * @param context The extension context.
+ * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     // Initialize logger.
@@ -782,18 +767,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Register all extension commands.
     registerExtensionCommands(context);
 
-    // Display the login webview display.
-    // This calls focuses and opens our extension even when the user wont want to use our extension.
-    // To solve this in package.json, "activationEvents" is set to "onView:testBenchExplorer" to activate the extension only when the extension view is opened.
-    await loginWebView.updateWebViewDisplay();
-    // Hide all tree views on activation, so that only login webview is visible.
-    await vscode.commands.executeCommand("projectManagementTree.removeView");
-    await vscode.commands.executeCommand("testThemeTree.removeView");
-    await vscode.commands.executeCommand("testElementsView.removeView");
+    // Set the initial context state. Before any login attempt, connection is null.
+    // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
+    await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", connection !== null);
+    logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
+
+    // await initializeLanguageServer();  // TODO: Uncomment this line when the language server is ready.
 
     // Execute automatic login if the setting is enabled.
     vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
-    await initializeLanguageServer();
 }
 
 /**

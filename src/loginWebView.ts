@@ -5,12 +5,10 @@
  */
 
 import * as vscode from "vscode";
-import { logger, connection, allExtensionCommands, getConfig } from "./extension";
+import { logger, connection, getConfig } from "./extension";
 import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
 import { displayProjectManagementTreeView } from "./projectManagementTreeView";
-
-// Tracks whether the login webview is visible.
-export let loginWebViewIsVisible: boolean = true; // Initially display the view when the extension starts.
+import { WebviewMessageCommands, ConfigKeys, StorageKeys, allExtensionCommands } from "./constants";
 
 /**
  * The provider for the login webview.
@@ -19,7 +17,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewId: string = "testbenchExtension.webView";
     private currentWebview?: vscode.WebviewView;
     // Prevent multiple login processes which can be caused by spamming the login button.
-    private isLoginProcessAlreadyRunning: boolean = false;
+    private isLoginProcessAlreadyRunningAfterButtonClick: boolean = false;
+    private _messageListenerDisposable: vscode.Disposable | undefined;
 
     /**
      * Constructs a new LoginWebViewProvider.
@@ -35,6 +34,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         logger.trace("Resolving login webview view.");
         this.currentWebview = webviewView;
 
+        // Dispose of the previous message listener if it exists.
+        if (this._messageListenerDisposable) {
+            this._messageListenerDisposable.dispose();
+            logger.trace("Disposed previous message listener.");
+        }
+
         // Enable scripts in the webview.
         webviewView.webview.options = {
             enableScripts: true
@@ -43,11 +48,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         // Set initial HTML content based on connection status.
         this.updateWebviewHTMLContent();
 
+        // Store new listener disposable
         // Listen for messages from the webview to respond to user actions.
-        webviewView.webview.onDidReceiveMessage(async (message) => {
+        this._messageListenerDisposable = webviewView.webview.onDidReceiveMessage(async (message) => {
             logger.trace(`Received message from webview: ${message.command}`);
             switch (message.command) {
-                case "login":
+                // Handle the login attempt
+                case WebviewMessageCommands.LOGIN:
                     this.handleLogin(
                         this.extensionContext,
                         message.serverName,
@@ -56,12 +63,59 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         message.password
                     );
                     break;
-                case "updateSetting":
-                    await getConfig().update(message.key, message.value);
-                    logger.trace(`Updated setting ${message.key} to ${message.value}`);
+                // Handle setting updates directly from the webview checkboxes
+                case WebviewMessageCommands.UPDATE_SETTING:
+                    await this.updateSetting(message.key, message.value);
+                    break;
+                default:
+                    logger.warn(`Unknown command from webview: ${message.command}`);
                     break;
             }
         });
+
+        // Add the new disposable to the extension context subscriptions
+        // to ensure it's cleaned up if the extension deactivates
+        if (this.extensionContext && this._messageListenerDisposable) {
+            this.extensionContext.subscriptions.push(this._messageListenerDisposable);
+        }
+
+        // Clean up when the view is disposed (e.g., user closes the view)
+        webviewView.onDidDispose(
+            () => {
+                // Only clear currentWebview if it's the one being disposed
+                if (this.currentWebview === webviewView) {
+                    this.currentWebview = undefined;
+                }
+                logger.trace("Login webview disposed.");
+            },
+            null,
+            this.extensionContext?.subscriptions
+        );
+    }
+
+    /**
+     * Resets the flag that prevents multiple login attempts.
+     * Should be called when a login process is definitively finished or aborted,
+     * especially after a logout, to allow new login attempts.
+     */
+    public resetLoginAttemptFlag(): void {
+        this.isLoginProcessAlreadyRunningAfterButtonClick = false;
+        logger.trace("Login attempt flag has been reset.");
+    }
+
+    /**
+     * Updates a setting in the workspace configuration.
+     * @param {string} key The setting key.
+     * @param {any} value The new value for the setting.
+     */
+    private async updateSetting(key: string, value: any): Promise<void> {
+        try {
+            await getConfig().update(key, value, vscode.ConfigurationTarget.Workspace);
+            logger.info(`Setting '${key}' updated to '${value}' via webview.`);
+        } catch (error) {
+            logger.error(`Failed to update setting ${key} from webview:`, error);
+            vscode.window.showErrorMessage(`Failed to update setting '${key}'.`);
+        }
     }
 
     /**
@@ -80,58 +134,85 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         username: string,
         password: string
     ): Promise<void> {
-        if (this.isLoginProcessAlreadyRunning) {
+        if (this.isLoginProcessAlreadyRunningAfterButtonClick) {
             logger.trace("Login process already running; ignoring duplicate submit.");
             return;
         }
-        this.isLoginProcessAlreadyRunning = true;
+        this.isLoginProcessAlreadyRunningAfterButtonClick = true;
         logger.trace("Handling login command from webview.");
+
+        if (!extensionContext) {
+            logger.error("Extension context is missing in handleLogin.");
+            this.showLoginErrorInWebview("Internal error: Extension context missing."); // Show error in webview
+            this.resetLoginAttemptFlag();
+            return;
+        }
 
         // Check if the user is already connected to a server, if so, show a message and hide the webview.
         if (this.isConnectedToServer()) {
             vscode.window.showInformationMessage("You are already connected to a server.");
-            hideWebView();
-            this.isLoginProcessAlreadyRunning = false;
+            this.resetLoginAttemptFlag();
             return;
         }
 
         // In production, don't log sensitive data.
         logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
 
-        // Attempt to log in. Successfull login will update and hide the webview automatically.
-        const connectionAfterLoginAttempt: PlayServerConnection | null = await loginToNewPlayServerAndInitSessionToken(
-            extensionContext!,
-            serverName,
-            portNumber,
-            username,
-            password
-        );
+        try {
+            // Attempt to log in. Successfull login will update and hide the webview automatically.
+            const connectionAfterLoginAttempt: PlayServerConnection | null =
+                await loginToNewPlayServerAndInitSessionToken(
+                    extensionContext!,
+                    serverName,
+                    portNumber,
+                    username,
+                    password
+                );
 
-        // If login was successful, open project selection and display project tree view
-        if (connectionAfterLoginAttempt) {
-            await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject}`);
-            // If the user does not select a project and clicks away, there wont be any active view.
-            // Add project view so that the user can choose a project.
-            displayProjectManagementTreeView();
+            // If login was successful, open project selection and display project tree view
+            if (connectionAfterLoginAttempt) {
+                await vscode.commands.executeCommand(`${allExtensionCommands.selectAndLoadProject}`);
+                // If the user does not select a project and clicks away, there wont be any active view.
+                // Add project view so that the user can choose a project.
+                displayProjectManagementTreeView();
+            } else {
+                logger.warn("Login failed via webview.");
+                this.showLoginErrorInWebview("Login failed. Please check credentials or server details.");
+            }
+        } catch (error) {
+            logger.error("Exception during login attempt from webview:", error);
+            this.showLoginErrorInWebview(`Login error: ${(error as Error).message}`);
+        } finally {
+            // Release the lock on the login process.
+            this.resetLoginAttemptFlag();
         }
-
-        // Release the lock on the login process.
-        this.isLoginProcessAlreadyRunning = false;
     }
 
     /**
      * Updates the HTML content of the webview based on the connection status.
      */
     async updateWebviewHTMLContent(): Promise<void> {
-        logger?.trace("Updating login webview content.");
-        if (!this.currentWebview) {
-            logger?.trace("No webview instance available for updating content.");
-            return;
+        if (this.currentWebview) {
+            logger.trace("Setting/Updating login webview HTML content.");
+            // The view is only resolved when not connected, so we always show the login page.
+            this.currentWebview.webview.html = await this.getLoginHtmlPage(this.currentWebview.webview);
+        } else {
+            logger.trace("No current login webview to update content for.");
         }
-        this.currentWebview.webview.html = this.isConnectedToServer()
-            ? this.getAlreadyConnectedHtml()
-            : await this.getLoginHtmlPage(this.currentWebview.webview);
-        logger?.trace("Login webview content updated.");
+    }
+
+    /**
+     * Sends a message to the webview to display an error message.
+     * @param {string} errorMessage The error message text to display.
+     */
+    private showLoginErrorInWebview(errorMessage: string): void {
+        if (this.currentWebview) {
+            // Post a message that the webview's script can handle
+            this.currentWebview.webview.postMessage({
+                command: WebviewMessageCommands.SHOW_ERROR,
+                message: errorMessage
+            });
+        }
     }
 
     /**
@@ -161,17 +242,18 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             logger.warn("Extension context is undefined; cannot get stored settings.");
         }
 
-        // TODO: In production, don't log sensitive data.
-        logger.trace(
-            `Login Webview is using stored extension settings: ServerName: ${getConfig().get<string>(
-                "serverName",
-                ""
-            )}, Port: ${getConfig().get<string>("portNumber", "")}, Username: ${getConfig().get<string>(
-                "username",
-                ""
-            )}`
-        );
-        const imageUri = this.createIconUri(webview);
+        const imageUri: vscode.Uri | null = this.createIconUri(webview);
+
+        // Use constants for config keys
+        const serverNameValue: string = getConfig().get<string>(ConfigKeys.SERVER_NAME, "");
+        const portNumberValue: string = getConfig().get<string>(ConfigKeys.PORT_NUMBER, "");
+        const usernameValue: string = getConfig().get<string>(ConfigKeys.USERNAME, "");
+        const storedPasswordValue: string = (await this.extensionContext?.secrets.get(StorageKeys.PASSWORD)) || "";
+        const savePasswordChecked: string = getConfig().get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)
+            ? "checked"
+            : "";
+        const autoLoginChecked: string = getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false) ? "checked" : "";
+
         return `
 <!DOCTYPE html>
 <html lang="en">
@@ -251,38 +333,26 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
         <div>
             <label for="serverName">Server Name:</label>
-            <input id="serverName" type="text" placeholder="Server Name" value="${
-                getConfig().get<string>("serverName", "") || ""
-            }" required/>
+            <input id="serverName" type="text" placeholder="Server Name" value="${serverNameValue || ""}" required/>
         </div>
         <div>
             <label for="portNumber">Port Number:</label>
-            <input id="portNumber" type="text" placeholder="Port Number" value="${
-                getConfig().get<string>("portNumber", "") || ""
-            }" required/>
+            <input id="portNumber" type="text" placeholder="Port Number" value="${portNumberValue || ""}" required/>
         </div>
         <div>
             <label for="username">Username:</label>
-            <input id="username" type="text" placeholder="Username" value="${
-                getConfig().get<string>("username", "") || ""
-            }" required/>
+            <input id="username" type="text" placeholder="Username" value="${usernameValue || ""}" required/>
         </div>
         <div>
             <label for="password">Password:</label>
-            <input id="password" type="password" placeholder="Password" value="${
-                (await this.extensionContext?.secrets.get("password")) || ""
-            }" required/>
+            <input id="password" type="password" placeholder="Password" value="${storedPasswordValue}" required/>
         </div>
         <div class="checkbox-container">
-            <input id="savePassword" type="checkbox" ${
-                getConfig().get<boolean>("storePasswordAfterLogin", false) ? "checked" : ""
-            }/>
+            <input id="savePassword" type="checkbox" ${savePasswordChecked}/>
             <label for="savePassword">Save Password</label>
         </div>
         <div class="checkbox-container">
-            <input id="autoLogin" type="checkbox" ${
-                getConfig().get<boolean>("automaticLoginAfterExtensionActivation", false) ? "checked" : ""
-            }/>
+            <input id="autoLogin" type="checkbox" ${autoLoginChecked}/>
             <label for="autoLogin">Auto Login</label>
         </div>              
         <div>
@@ -290,73 +360,81 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         </div>
     </form>
     <script>
+        console.log("Login webview script loaded.");
         const vscode = acquireVsCodeApi();
+        console.log("vscode API acquired:", vscode ? "OK" : "Failed");
+
         function submitLogin() {
-            const serverName = document.getElementById('serverName').value;
-            const portNumber = document.getElementById('portNumber').value;
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const autoLogin = document.getElementById('autoLogin').checked;
-            const savePassword = document.getElementById('savePassword').checked;
-            vscode.postMessage({ command: 'login', serverName, portNumber, username, password, autoLogin, savePassword });
+            console.log("submitLogin() function called.");
+            try {
+            const serverName = document.getElementById("serverName").value;
+            const portNumber = document.getElementById("portNumber").value;
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+            const autoLogin = document.getElementById("autoLogin").checked;
+            const savePassword = document.getElementById("savePassword").checked;
+
+                const messagePayload = {
+                    command: "${WebviewMessageCommands.LOGIN}",
+                    serverName,
+                    portNumber,
+                    username,
+                    password, // Be mindful logging passwords, even in DevTools
+                    autoLogin,
+                    savePassword
+                };
+
+                console.log("Attempting to post message:", messagePayload);
+                vscode.postMessage(messagePayload);
+                console.log("Message posted to extension.");
+
+            } catch (e) {
+                console.error("Error inside submitLogin():", e);
+                // Post error back to extension
+                vscode.postMessage({ command: "webviewError", error: e.message });
+            }
         }
 
         // Add event listeners for checkbox changes
-        document.getElementById('autoLogin').addEventListener('change', function() {
+        document.getElementById("autoLogin").addEventListener("change", function() {
             vscode.postMessage({ 
-                command: 'updateSetting', 
-                key: 'automaticLoginAfterExtensionActivation', 
+                command: "${WebviewMessageCommands.UPDATE_SETTING}", 
+                key: "${ConfigKeys.AUTO_LOGIN}", 
                 value: this.checked 
             });
         });
-        document.getElementById('savePassword').addEventListener('change', function() {
+        document.getElementById("savePassword").addEventListener("change", function() {
             vscode.postMessage({ 
-                command: 'updateSetting', 
-                key: 'storePasswordAfterLogin', 
+                command: "${WebviewMessageCommands.UPDATE_SETTING}", 
+                key: "${ConfigKeys.STORE_PASSWORD_AFTER_LOGIN}", 
                 value: this.checked 
             });
         });
 
         // Handle messages from the extension
-        window.addEventListener('message', (event) => {
+        window.addEventListener("message", (event) => {
             const message = event.data;
-            if (message.command === 'updateContent') {
-                document.body.innerHTML = message.html;
+             // Keep literal string for receiving message command
+            if (message.command === "${WebviewMessageCommands.UPDATE_CONTENT}") {
+                // Potentially update parts of the page instead of innerHTML
+                if (message.html) {
+                     document.body.innerHTML = message.html;
+                }
+            }
+            // Keep literal string for receiving message command
+            if (message.command === "${WebviewMessageCommands.SHOW_ERROR}") {
+                 // Add a dedicated error display area in your HTML
+                 const errorDiv = document.getElementById("error-message");
+                 if (errorDiv && message.message) {
+                     errorDiv.textContent = message.message;
+                     errorDiv.style.display = "block"; // Make it visible
+                 }
             }
         });
     </script>
 </body>
 </html>
 `;
-    }
-
-    /**
-     * Returns HTML content for when the user is already connected.
-     * @returns {string} The HTML string.
-     */
-    private getAlreadyConnectedHtml(): string {
-        logger.trace("Generating already connected HTML.");
-        return `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Connected</title>
-          <script>
-              window.addEventListener('message', (event) => {
-                  const message = event.data;
-                  if (message.command === 'updateContent') {
-                      document.body.innerHTML = message.html;
-                  }
-              });
-          </script>
-      </head>
-      <body>
-          <h1>Connected to server</h1>
-      </body>
-      </html>
-    `;
     }
 
     /**
@@ -372,50 +450,4 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             return false;
         }
     }
-}
-
-/* =============================================================================
-   Webview Visibility and Update Functions
-   ============================================================================= */
-
-/**
- * Updates the login webview display based on the current visibility flag.
- */
-export async function updateWebViewDisplay(): Promise<void> {
-    logger.trace("Updating login webview display.");
-    if (loginWebViewIsVisible) {
-        await displayWebView();
-    } else {
-        await hideWebView();
-    }
-}
-
-/**
- * Toggles the visibility of the login webview.
- */
-export async function toggleWebViewVisibility(): Promise<void> {
-    logger.trace("Toggling login webview visibility.");
-    if (loginWebViewIsVisible) {
-        await hideWebView();
-    } else {
-        await displayWebView();
-    }
-}
-
-/**
- * Hides the login webview.
- */
-export async function hideWebView(): Promise<void> {
-    logger.trace("Hiding login webview.");
-    await vscode.commands.executeCommand("testbenchExtension.webView.removeView");
-    loginWebViewIsVisible = false;
-}
-
-/**
- * Displays the login webview.
- */
-export async function displayWebView(): Promise<void> {
-    logger.trace("Displaying (focusing on) login webview.");
-    await vscode.commands.executeCommand("testbenchExtension.webView.focus");
-    loginWebViewIsVisible = true;
 }

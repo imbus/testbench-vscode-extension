@@ -14,26 +14,15 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import * as utils from "./utils";
+import { getConfig, connection, logger, projectManagementTreeDataProvider } from "./extension";
 import {
-    getConfig,
-    connection,
-    logger,
-    folderNameOfInternalTestbenchFolder,
-    projectManagementTreeDataProvider
-} from "./extension";
+    ConfigKeys,
+    StorageKeys,
+    JobTypes,
+    TreeItemContextValues,
+    folderNameOfInternalTestbenchFolder
+} from "./constants";
 import { importReportWithResultsToTestbench } from "./testBenchConnection";
-
-/**
- * Global object to store parameters from the last fethed report file,
- * to be able to use the report without the user selecting the report again while importing the report.
- * Declaring it as const does not prevent changing the properties of the object.
- */
-export const lastGeneratedReportParams: testBenchTypes.LastGeneratedReportParams = {
-    executionBased: undefined,
-    projectKey: undefined,
-    cycleKey: undefined,
-    UID: undefined
-};
 
 /**
  * Prompts the user to select the report export method in quick pick format (Execution based or Specification based).
@@ -70,6 +59,80 @@ export async function promptForReportGenerationMethodAndCheckIfExecBasedChosen()
 
         quickPick.show();
     });
+}
+
+/**
+ * Saves the last generated report parameters to workspace storage.
+ *
+ * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.
+ * @param {string} UID The unique ID of the root element used for generation.
+ * @param {string} projectKey The project key used.
+ * @param {string} cycleKey The cycle key used.
+ * @param {boolean} executionBased Whether the report was execution-based.
+ */
+async function saveLastGeneratedReportParams(
+    context: vscode.ExtensionContext, // Added context parameter
+    UID: string,
+    projectKey: string,
+    cycleKey: string,
+    executionBased: boolean
+): Promise<void> {
+    // Construct the object to save
+    const paramsToSave: testBenchTypes.LastGeneratedReportParams = {
+        UID,
+        projectKey,
+        cycleKey,
+        executionBased,
+        // Timestamp for context or potential cleanup
+        timestamp: Date.now()
+    };
+
+    try {
+        // Use workspaceState.update to save the data
+        // Data stored here persists across VS Code sessions for this specific workspace
+        await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, paramsToSave);
+        logger.debug(
+            `Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionBased=${executionBased}.`
+        );
+    } catch (error) {
+        logger.error("Failed to save last generated report params to workspace state:", error);
+        // Optionally show an error message, though this is less critical than retrieval failure
+        // vscode.window.showErrorMessage("Failed to save report generation context.");
+    }
+}
+
+/**
+ * Retrieves the last generated report parameters from workspace storage.
+ *
+ * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.
+ * @returns {testBenchTypes.LastGeneratedReportParams | undefined} The retrieved parameters or undefined if not found/invalid.
+ */
+function getLastGeneratedReportParams(
+    context: vscode.ExtensionContext // Added context parameter
+): testBenchTypes.LastGeneratedReportParams | undefined {
+    try {
+        // Retrieve the data from workspaceState using the key
+        const storedParams: testBenchTypes.LastGeneratedReportParams | undefined =
+            context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(StorageKeys.LAST_GENERATED_PARAMS);
+
+        // Basic validation to ensure the retrieved object looks correct
+        if (
+            storedParams &&
+            storedParams.UID &&
+            storedParams.projectKey &&
+            storedParams.cycleKey &&
+            storedParams.executionBased !== undefined
+        ) {
+            logger.debug("Retrieved last generated report params from workspace state:", storedParams);
+            return storedParams;
+        } else {
+            logger.warn("No valid last generated report params found in workspace state.");
+            return undefined;
+        }
+    } catch (error) {
+        logger.error("Failed to retrieve last generated report params from workspace state:", error);
+        return undefined;
+    }
 }
 
 /**
@@ -165,10 +228,10 @@ export async function pollJobStatus(
                 logger.debug(`Polling attempt ${pollingAttemptAmount}: Job status fetched.`);
             }
 
-            if (jobType === "report" && isReportJobCompletedSuccessfully(jobStatus)) {
+            if (jobType === JobTypes.REPORT && isReportJobCompletedSuccessfully(jobStatus)) {
                 logger.debug("Report job completed successfully.");
                 return jobStatus;
-            } else if (jobType === "import") {
+            } else if (jobType === JobTypes.IMPORT) {
                 if (isImportJobCompletedSuccessfully(jobStatus)) {
                     logger.debug("Import job completed successfully.");
                     return jobStatus;
@@ -246,13 +309,13 @@ export async function getJobId(
  *
  * @param {string} projectKey The project key.
  * @param {string} jobId The job ID.
- * @param {"report" | "import"} jobType The type of job ("report" or "import").
+ * @param {string} jobType The type of job
  * @returns {Promise<testBenchTypes.JobStatusResponse | null>} The job status response object, or throws an error if not successful.
  */
 export async function getJobStatus(
     projectKey: string,
     jobId: string,
-    jobType: "report" | "import"
+    jobType: string
 ): Promise<testBenchTypes.JobStatusResponse | null> {
     if (!connection) {
         logger.error("Connection object is missing, cannot get job status.");
@@ -479,7 +542,7 @@ export async function fetchReportZipFromServer(
         const jobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
             projectKey,
             jobId,
-            "report",
+            JobTypes.REPORT,
             progress,
             cancellationToken
         );
@@ -720,7 +783,7 @@ function findAllTestThemeNodesOfTreeItem(
     foundTestThemes: { name: string; uniqueID: string; numbering?: string }[] = []
 ): typeof foundTestThemes {
     // Check if the tree item is a TestThemeNode, and if so, add it to the results
-    if (treeItem.item?.elementType === "TestThemeNode") {
+    if (treeItem.item?.elementType === TreeItemContextValues.TEST_THEME_NODE) {
         // Extract the name, unique ID, and numbering of the TestThemeNode
         const { name = "Unnamed", uniqueID = "No ID", numbering } = treeItem.item.base || {};
         foundTestThemes.push({ name, uniqueID, numbering });
@@ -798,33 +861,14 @@ async function runRobotFrameworkTestGenerationProcess(
         vscode.window.showErrorMessage(testGenerationFailedMessage);
         return null;
     }
-    updateLastGeneratedReportParams(UID, projectKey, cycleKey, executionBased);
+
+    // Update the last generated report parameters workspaceState
+    await saveLastGeneratedReportParams(context, UID, projectKey, cycleKey, executionBased);
+
     vscode.window.showInformationMessage("Robot Framework test generation successful.");
     logger.debug("Test generation successful.");
     await vscode.commands.executeCommand("workbench.view.extension.test");
-}
-
-/**
- * Updates the last generated report parameters.
- *
- * @param {string} UID The unique ID.
- * @param {string} projectKey The project key.
- * @param {string} cycleKey The cycle key.
- * @param {boolean} executionBased Whether the report is execution-based.
- */
-function updateLastGeneratedReportParams(
-    UID: string,
-    projectKey: string,
-    cycleKey: string,
-    executionBased: boolean
-): void {
-    logger.debug(
-        `Updating last generated report params: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionBased=${executionBased}.`
-    );
-    lastGeneratedReportParams.UID = UID;
-    lastGeneratedReportParams.projectKey = projectKey;
-    lastGeneratedReportParams.cycleKey = cycleKey;
-    lastGeneratedReportParams.executionBased = executionBased;
+    return;
 }
 
 /**
@@ -833,7 +877,7 @@ function updateLastGeneratedReportParams(
  * @param {string} reportZipFilePath The path of the report zip file.
  */
 export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath: string): Promise<void> {
-    if (getConfig().get<boolean>("clearReportAfterProcessing")) {
+    if (getConfig().get<boolean>(ConfigKeys.CLEAR_REPORT_AFTER_PROCESSING)) {
         await removeReportZipFile(reportZipFilePath);
     } else {
         logger.debug("Report ZIP file removal skipped per the extension settings.");
@@ -1052,29 +1096,51 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             // TODO: Currently we are using the last generated report parameters to create the report with results,
             // these are used to fetch the report without results from the server.
             // Later we can make this process independent of the last generated report parameters.
-            if (
-                !lastGeneratedReportParams.executionBased ||
-                !lastGeneratedReportParams.projectKey ||
-                !lastGeneratedReportParams.cycleKey ||
-                !lastGeneratedReportParams.UID
-            ) {
-                const missingLastGeneratedReportError: string = "Last generated report parameters are missing.";
-                logger.error(missingLastGeneratedReportError);
-                vscode.window.showInformationMessage(missingLastGeneratedReportError);
+            // Retrieve parameters from workspace state instead of global variable
+            const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
+                getLastGeneratedReportParams(context);
+
+            if (!retrievedParams) {
+                const missingParamsError: string =
+                    "Could not find parameters from previous test generation. Please generate tests first in this workspace.";
+                logger.error(missingParamsError);
+                vscode.window.showErrorMessage(missingParamsError);
+                return undefined; // Stop the process
+            }
+            // Use the retrieved parameters
+            const { executionBased, projectKey, cycleKey, UID } = retrievedParams;
+
+            // Double check retrieved parameters validity (already done inside getLastGeneratedReportParams)
+            if (!executionBased || !projectKey || !cycleKey || !UID) {
+                const invalidParamsError: string = "Retrieved parameters from previous test generation are invalid.";
+                logger.error(invalidParamsError);
+                vscode.window.showErrorMessage(invalidParamsError);
                 return undefined;
             }
 
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-                basedOnExecution: lastGeneratedReportParams.executionBased,
-                treeRootUID: lastGeneratedReportParams.UID
+                basedOnExecution: executionBased,
+                treeRootUID: UID
             };
 
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipFromServer(
-                lastGeneratedReportParams.projectKey,
-                lastGeneratedReportParams.cycleKey,
+                projectKey, // Use retrieved projectKey
+                cycleKey, // Use retrieved cycleKey
                 folderNameOfInternalTestbenchFolder,
                 cycleStructureOptionsRequestParams
             );
+
+            // If fetching the report failed, we need the user to select it manually
+            const finalReportPath: string | null =
+                downloadedReportWithoutResultsZip ??
+                (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
+
+            if (!finalReportPath) {
+                logger.error("Report without results could not be obtained.");
+                vscode.window.showErrorMessage("Could not obtain the necessary report file (without results).");
+                return undefined;
+            }
+
             reportProgress("Working on report.", reportIncrement / 2);
             const reportWithResultsZipFullPath: string = path.join(
                 testbenchWorkingDirectoryPathInsideWorkspace,
@@ -1085,13 +1151,18 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
                     testbenchWorkingDirectoryPathInsideWorkspace,
                     outputXMLPath,
-                    downloadedReportWithoutResultsZip ??
-                        (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace))!,
+                    finalReportPath,
                     reportWithResultsZipFullPath
                 );
-            await cleanUpReportFileIfConfiguredInSettings(downloadedReportWithoutResultsZip!);
+
+            // Clean up the downloaded report after it has been used
+            if (downloadedReportWithoutResultsZip) {
+                await cleanUpReportFileIfConfiguredInSettings(downloadedReportWithoutResultsZip);
+            }
+
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
-                const testResultsImportError = "Fetching test results failed. Please check the output.xml file.";
+                const testResultsImportError: string =
+                    "Fetching test results failed. Please check the output.xml file.";
                 logger.error(testResultsImportError);
                 vscode.window.showErrorMessage(testResultsImportError);
                 return undefined;

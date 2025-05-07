@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
-import { extensions } from "vscode";
 import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
 import { connection } from "./extension";
+
+// TODO: Use constants from constants.ts instead of hardcoded strings
 
 export let client: LanguageClient;
 
@@ -15,12 +16,13 @@ export async function initializeLanguageServer(): Promise<void> {
     if (!connection) {
         return;
     }
-    const serverName = connection.getServerName();
-    const serverPort = connection.getServerPort();
-    const username = connection.getUsername();
-    const sessionToken = connection.getSessionToken();
+    const serverName: string = connection.getServerName();
+    const serverPort: string = connection.getServerPort();
+    const username: string = connection.getUsername();
+    const sessionToken: string = connection.getSessionToken();
 
-    const languge_server_settings = vscode.workspace.getConfiguration("testbenchExtension");
+    const languge_server_settings: vscode.WorkspaceConfiguration =
+        vscode.workspace.getConfiguration("testbenchExtension");
     const project: string = languge_server_settings.get<string>("project", "");
     const tov: string = languge_server_settings.get<string>("tov", "");
     const serverOptions: ServerOptions = {
@@ -65,12 +67,12 @@ export async function initializeLanguageServer(): Promise<void> {
     });
     vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("testbenchExtension.serverName")) {
-            const newServerName = vscode.workspace
+            const newServerName: string | null = vscode.workspace
                 .getConfiguration("testbenchExtension")
                 .get<string | null>("serverName", null);
             vscode.commands.executeCommand("testbench_ls.updateServerName", newServerName);
         } else if (event.affectsConfiguration("testbenchExtension.portNumber")) {
-            const newPortNumber = vscode.workspace
+            const newPortNumber: string | null = vscode.workspace
                 .getConfiguration("testbenchExtension")
                 .get<string | null>("portNumber", null);
             vscode.commands.executeCommand("testbench_ls.updateServerPort", newPortNumber);
@@ -80,12 +82,14 @@ export async function initializeLanguageServer(): Promise<void> {
         //   vscode.commands.executeCommand("testbench_ls.updateLoginName", newUsername);
         // }
         else if (event.affectsConfiguration("testbenchExtension.project")) {
-            const newProject = vscode.workspace
+            const newProject: string | null = vscode.workspace
                 .getConfiguration("testbenchExtension")
                 .get<string | null>("project", null);
             vscode.commands.executeCommand("testbench_ls.updateProject", newProject);
         } else if (event.affectsConfiguration("testbenchExtension.tov")) {
-            const newTov = vscode.workspace.getConfiguration("testbenchExtension").get<string | null>("tov", null);
+            const newTov: string | null = vscode.workspace
+                .getConfiguration("testbenchExtension")
+                .get<string | null>("tov", null);
             vscode.commands.executeCommand("testbench_ls.updateTov", newTov);
         }
     });

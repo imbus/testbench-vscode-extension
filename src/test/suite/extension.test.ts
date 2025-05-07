@@ -5,7 +5,6 @@ import {
     activate,
     deactivate,
     getConfig,
-    baseKeyOfExtension,
     safeCommandHandler,
     loadConfiguration,
     initializeTreeViews
@@ -14,6 +13,7 @@ import { TestBenchLogger } from "../../testBenchLogger";
 import { PlayServerConnection } from "../../testBenchConnection";
 import { ProjectManagementTreeDataProvider } from "../../projectManagementTreeView";
 import { TestElementsTreeDataProvider } from "../../testElementsTreeView";
+import { baseKeyOfExtension } from "../../constants";
 
 suite("Extension Test Suite", () => {
     let sandbox: sinon.SinonSandbox;

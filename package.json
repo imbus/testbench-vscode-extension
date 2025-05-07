@@ -12,8 +12,22 @@
     "engines": {
         "vscode": "^1.95.0"
     },
+    "homepage": "https://github.com/imbus/testbench-vs-code-extension",
+    "bugs": {
+        "url": "https://github.com/imbus/testbench-vs-code-extension/issues",
+        "email": "egegirit@imbus.de"
+    },
+    "keywords": [
+        "TestBench",
+        "imbus",
+        "testing",
+        "test automation",
+        "robot framework"
+    ],
+    "pricing": "Free",
+    "license": "SEE LICENSE IN LICENSE.md",
     "categories": [
-        "Other"
+        "Testing"
     ],
     "activationEvents": [
         "onView:testBenchExplorer"
@@ -75,7 +89,7 @@
                     "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Delete all files inside the working directory called .testbench excluding the log files before generating tests.",
+                        "description": "Delete all files excluding the log files inside the working directory called .testbench before generating tests.",
                         "order": 7,
                         "scope": "resource"
                     },
@@ -255,10 +269,6 @@
         ],
         "commands": [
             {
-                "command": "testbenchExtension.toggleWebViewVisibility",
-                "title": "Testbench: Toggle Login Web View Visibility"
-            },
-            {
                 "command": "testbenchExtension.login",
                 "title": "Testbench: Login",
                 "icon": {
@@ -341,6 +351,7 @@
                 "command": "testbenchExtension.refreshTestThemeTreeView",
                 "title": "TestBench: Refresh Test Tree View",
                 "when": "view == testThemeTree",
+                "group": "navigation@1",
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
                     "dark": "resources/icons/refresh-dark.svg"
@@ -381,6 +392,7 @@
             {
                 "command": "testbenchExtension.refreshTestElementsTree",
                 "title": "Refresh Test Elements",
+                "group": "navigation@1",
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
                     "dark": "resources/icons/refresh-dark.svg"
@@ -420,19 +432,23 @@
                 {
                     "type": "webview",
                     "id": "testbenchExtension.webView",
-                    "name": "Login to TestBench"
+                    "name": "Login to TestBench",
+                    "when": "!testbenchExtension.connectionActive"
                 },
                 {
                     "id": "projectManagementTree",
-                    "name": "Project Contents"
+                    "name": "Project Contents",
+                    "when": "testbenchExtension.connectionActive"
                 },
                 {
                     "id": "testThemeTree",
-                    "name": "Test Themes"
+                    "name": "Test Themes",
+                    "when": "testbenchExtension.connectionActive"
                 },
                 {
                     "id": "testElementsView",
-                    "name": "Test Elements"
+                    "name": "Test Elements",
+                    "when": "testbenchExtension.connectionActive"
                 }
             ]
         },
@@ -461,22 +477,57 @@
                 {
                     "command": "testbenchExtension.refreshProjectTreeView",
                     "group": "navigation@3",
-                    "when": "view == projectManagementTree"
+                    "when": "view == projectManagementTree",
+                    "icon": {
+                        "light": "resources/icons/refresh-light.svg",
+                        "dark": "resources/icons/refresh-dark.svg"
+                    }
                 },
                 {
                     "command": "testbenchExtension.selectAndLoadProject",
                     "group": "navigation@4",
-                    "when": "view == projectManagementTree"
+                    "when": "view == projectManagementTree",
+                    "icon": {
+                        "light": "resources/icons/menu-light.svg",
+                        "dark": "resources/icons/menu-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.selectAndLoadProject",
+                    "group": "navigation@3",
+                    "when": "view == testThemeTree",
+                    "icon": {
+                        "light": "resources/icons/menu-light.svg",
+                        "dark": "resources/icons/menu-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.selectAndLoadProject",
+                    "group": "navigation@2",
+                    "when": "view == testElementsView",
+                    "icon": {
+                        "light": "resources/icons/menu-light.svg",
+                        "dark": "resources/icons/menu-dark.svg"
+                    }
                 },
                 {
                     "command": "testbenchExtension.refreshTestThemeTreeView",
-                    "group": "navigation@5",
-                    "when": "view == testThemeTree"
+                    "group": "navigation@1",
+                    "when": "view == testThemeTree",
+                    "icon": {
+                        "light": "resources/icons/refresh-light.svg",
+                        "dark": "resources/icons/refresh-dark.svg"
+                    }
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
                     "group": "navigation@6",
-                    "when": "view == projectManagementTree || view == testThemeTree"
+                    "when": "view == projectManagementTree"
+                },
+                {
+                    "command": "testbenchExtension.readAndImportTestResultsToTestbench",
+                    "group": "navigation@2",
+                    "when": "view == testThemeTree"
                 },
                 {
                     "command": "testbenchExtension.clearInternalTestbenchFolder",
@@ -491,7 +542,11 @@
                 {
                     "command": "testbenchExtension.refreshTestElementsTree",
                     "when": "view == testElementsView",
-                    "group": "navigation"
+                    "group": "navigation",
+                    "icon": {
+                        "light": "resources/icons/refresh-light.svg",
+                        "dark": "resources/icons/refresh-dark.svg"
+                    }
                 }
             ],
             "view/item/context": [
@@ -611,12 +666,12 @@
     "dependencies": {
         "@vscode-elements/elements": "^1.10.0",
         "@vscode/python-extension": "^1.0.5",
-        "vscode-languageclient": "^9.0.1",
         "axios": "^1.7.7",
         "base-64": "^1.0.0",
         "flatted": "^3.3.1",
         "jszip": "^3.10.1",
-        "regex-translator": "^0.2.8"
+        "regex-translator": "^0.2.8",
+        "vscode-languageclient": "^9.0.1"
     },
     "extensionDependencies": [
         "ms-python.python",

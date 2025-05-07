@@ -8,7 +8,6 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
-import * as loginWebView from "./loginWebView";
 import * as base64 from "base-64"; // npm i --save-dev @types/base-64
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
@@ -19,13 +18,12 @@ import * as projectManagementTreeView from "./projectManagementTreeView";
 import {
     getConfig,
     setConnection,
-    allExtensionCommands,
-    folderNameOfInternalTestbenchFolder,
     setProjectManagementTreeDataProvider,
     logger,
     loginWebViewProvider
 } from "./extension";
 import * as utils from "./utils";
+import { ConfigKeys, StorageKeys, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -41,15 +39,16 @@ export class PlayServerConnection {
     private sessionToken: string;
     private baseURL: string;
     private apiClient: AxiosInstance;
+    private readonly keepAliveIntervalInSeconds: number = 4 * 60 * 1000; // 4 minutes
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
     /**
      * Creates a new PlayServerConnection.
      *
-     * @param context - The VS Code extension context.
-     * @param serverName - The server name or IP address.
-     * @param portNumber - The server port number.
-     * @param sessionToken - The session token for authentication.
+     * @param {string} serverName - The name of the server.
+     * @param {number} portNumber - The port number of the server.
+     * @param {string} username - The username for authentication.
+     * @param {string} sessionToken - The session token for authentication.
      */
     constructor(serverName: string, portNumber: number, username: string, sessionToken: string) {
         this.serverName = serverName;
@@ -103,11 +102,11 @@ export class PlayServerConnection {
     /**
      * Retrieves the session token from VS Code's secret storage.
      *
-     * @param context - The extension context.
-     * @returns The session token or undefined if not found.
+     * @param {vscode.ExtensionContext} context - The extension context.
+     * @returns {Promise<string | undefined>} The session token or undefined if not found.
      */
     async getSessionTokenFromSecretStorage(context: vscode.ExtensionContext): Promise<string | undefined> {
-        const token: string | undefined = await context.secrets.get("sessionToken");
+        const token: string | undefined = await context.secrets.get(StorageKeys.SESSION_TOKEN);
         if (!token) {
             logger.error("Session token not found.");
         }
@@ -166,7 +165,7 @@ export class PlayServerConnection {
         }
         try {
             logger.debug("Fetching projects list.");
-            const projectsURL = `/projects/v1`;
+            const projectsURL: string = `/projects/v1`;
             // Wrap the project list get request in the withRetry helper.
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
@@ -174,7 +173,7 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                2000 // delayMs: wait 2000ms between attempts
             );
 
             // Save the response from server to a file for analyzing the structure
@@ -212,7 +211,7 @@ export class PlayServerConnection {
     /**
      * Fetches the project tree for a specific project from the TestBench server.
      *
-     * @param projectKey - The project key as a string.
+     * @param {string | null} projectKey - The project key as a string.
      * @returns {Promise<testBenchTypes.TreeNode | null>} The project tree fetched from the server or null if an error occurs.
      */
     async getProjectTreeOfProject(projectKey: string | null): Promise<testBenchTypes.TreeNode | null> {
@@ -226,14 +225,14 @@ export class PlayServerConnection {
             return null;
         }
         try {
-            const projectTreeURL = `/projects/${projectKey}/tree/v1`;
+            const projectTreeURL: string = `/projects/${projectKey}/tree/v1`;
             const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await withRetry(
                 () =>
                     this.apiClient.get(projectTreeURL, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                2000 // delayMs: wait 2000ms between attempts
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -273,7 +272,7 @@ export class PlayServerConnection {
      * @param {string | null} tovKey - The TOV key as a string.
      * @returns {Promise<any | null>} The test elements data fetched from the server or null if an error occurs.
      */
-    async getTestElementsWithTovKeyOldPlayServer(tovKey: string | null): Promise<any | null> {
+    async getTestElementsWithTovKeyUsingOldPlayServer(tovKey: string | null): Promise<any | null> {
         logger.debug("Fetching test elements with TOV key:", tovKey);
         if (!this.sessionToken) {
             logger.error("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
@@ -285,7 +284,8 @@ export class PlayServerConnection {
         }
 
         try {
-            const oldPlayServerBaseUrl: string = `https://${this.serverName}:9443/api/1`;
+            const oldPlayServerPortNumber: number = 9443;
+            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
             const getTestElementsURL: string = `/tovs/${tovKey}/testElements`;
 
             logger.trace("Creating session for old play server.");
@@ -316,7 +316,7 @@ export class PlayServerConnection {
             const testElementsResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getTestElementsURL),
                 3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                2000, // delayMs: wait 2000ms between attempts
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
                         // Do not retry if the error is due to authentication or if the resource is not found.
@@ -392,7 +392,7 @@ export class PlayServerConnection {
                         }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                2000, // delayMs: wait 2000ms between attempts
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
                         // Do not retry if the error is due to a bad request, missing resource, or unprocessable data.
@@ -440,7 +440,7 @@ export class PlayServerConnection {
      * Logs out the user from the TestBench server.
      * Clears session data, stops the keep-alive process, clears the tree data provider which empties the tree view.
      *
-     * @param projectTreeDataProvider - The project management tree data provider.
+     * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectTreeDataProvider - The project management tree data provider.
      * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
      */
     async logoutUser(
@@ -454,7 +454,7 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                2000 // delayMs: wait 2000ms between attempts
             );
 
             if (logoutResponse.status === 204) {
@@ -465,19 +465,19 @@ export class PlayServerConnection {
                     logger.warn("Tree data provider is not defined. Cannot clear the tree.");
                 }
 
-                const logoutSuccessfulMessage = "Logout successful.";
+                const logoutSuccessfulMessage: string = "Logout successful.";
                 client.stop();
                 logger.debug(logoutSuccessfulMessage);
                 vscode.window.showInformationMessage(logoutSuccessfulMessage);
             } else {
-                const logoutFailedMessage = `Logout failed. Unexpected response status: ${logoutResponse.status}`;
+                const logoutFailedMessage: string = `Logout failed. Unexpected response status: ${logoutResponse.status}`;
                 logger.error(logoutFailedMessage);
                 vscode.window.showWarningMessage(logoutFailedMessage);
                 return null;
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                const logoutErrorMessage = `Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`;
+                const logoutErrorMessage: string = `Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`;
                 logger.error(logoutErrorMessage);
                 vscode.window.showWarningMessage(logoutErrorMessage);
                 return null;
@@ -529,7 +529,7 @@ export class PlayServerConnection {
                         validateStatus: () => true
                     }),
                 3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                2000, // delayMs: wait 2000ms between attempts
                 (error) => {
                     // Do not retry if the error is due to a non-transient condition
                     if (axios.isAxiosError(error) && error.response) {
@@ -618,7 +618,7 @@ export class PlayServerConnection {
                         validateStatus: () => true
                     }),
                 3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                2000, // delayMs: wait 2000ms between attempts
                 (error) => {
                     // Do not retry if the error has a non-transient status code.
                     if (axios.isAxiosError(error) && error.response) {
@@ -694,12 +694,9 @@ export class PlayServerConnection {
      */
     private startKeepAlive(): void {
         this.stopKeepAlive(); // Prevent multiple intervals if previously started.
-        this.keepAliveIntervalId = setInterval(
-            () => {
-                this.sendKeepAliveRequest();
-            },
-            4 * 60 * 1000 // Every 4 minutes
-        );
+        this.keepAliveIntervalId = setInterval(() => {
+            this.sendKeepAliveRequest();
+        }, this.keepAliveIntervalInSeconds);
         // Send an immediate keep-alive request.
         this.sendKeepAliveRequest();
         logger.trace("Keep-alive started.");
@@ -732,8 +729,8 @@ export class PlayServerConnection {
                     this.apiClient.get(`/login/session/v1`, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                5, // maxRetries: try 5 additional times
+                2000 // delayMs: wait 2000ms between attempts
             );
             logger.trace("Keep-alive request sent.");
         } catch (error) {
@@ -760,7 +757,7 @@ export class PlayServerConnection {
 async function withRetry<T>(
     asyncFunction: () => Promise<T>,
     maxRetries: number = 3,
-    delayMs: number = 1000,
+    delayMs: number = 2000,
     shouldRetry?: (error: any) => boolean,
     showProgressBar: boolean = true
 ): Promise<T> {
@@ -792,7 +789,7 @@ async function withRetry<T>(
                 await vscode.window.withProgress(
                     {
                         location: vscode.ProgressLocation.Notification,
-                        title: "Retrying request...",
+                        title: "Retrying request",
                         cancellable: false
                     },
                     async (progress) => {
@@ -874,7 +871,7 @@ export async function performLogin(
 
         // Only retrieve the password if the user has choosen to store it after successful login
         if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
-            password = await context.secrets.get("password");
+            password = await context.secrets.get(StorageKeys.PASSWORD);
         }
         // If the user has not chosen to store the password, clear it from the secret storage
         else {
@@ -882,7 +879,7 @@ export async function performLogin(
         }
 
         const userHasStoredCredentials = !!(
-            getConfig().get<string>("serverName") &&
+            getConfig().get<string>(ConfigKeys.SERVER_NAME) &&
             getConfig().get<string>("username") &&
             password &&
             getConfig().get<boolean>("storePasswordAfterLogin", false)
@@ -924,7 +921,7 @@ export async function performLogin(
 
         // If the user has stored credentials and wants to use them, retrieve them from the configuration, else prompt the user for new credentials
         if (useStoredCredentials) {
-            serverName = getConfig().get<string>("serverName")!;
+            serverName = getConfig().get<string>(ConfigKeys.SERVER_NAME)!;
             portNumber = getConfig().get<number>("portNumber")!;
             username = getConfig().get<string>("username")!;
         } else {
@@ -977,7 +974,7 @@ async function promptForLoginCredentials(): Promise<{
     username: string;
     password: string;
 } | null> {
-    const serverNameInConfig: string = getConfig().get<string>("serverName", "testbench");
+    const serverNameInConfig: string = getConfig().get<string>(ConfigKeys.SERVER_NAME, "testbench");
     // Prompt user for server name, showing the default value only if it exists
     const serverNameInput: string | null = await promptForInputAndValidate(
         `Enter the server name${serverNameInConfig ? ` (Default: ${serverNameInConfig})` : ""}`,
@@ -1067,8 +1064,8 @@ export async function loginToNewPlayServerAndInitSessionToken(
                 cancellable: true
             },
             async (progress) => {
-                const baseURL = `https://${serverName}:${portNumber}/api`;
-                const loginURL = `${baseURL}/login/session/v1`;
+                const baseURL: string = `https://${serverName}:${portNumber}/api`;
+                const loginURL: string = `${baseURL}/login/session/v1`;
 
                 logger.trace("Sending login request to:", loginURL);
                 progress.report({ message: "Sending login request..." });
@@ -1083,7 +1080,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                             httpsAgent: new https.Agent({ rejectUnauthorized: false })
                         }),
                     3, // maxRetries
-                    1000, // delayMs
+                    2000, // delayMs
                     (error) => {
                         // Do not retry if the error is due to invalid credentials (HTTP 401)
                         if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
@@ -1097,7 +1094,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                 if (loginResponse.status === 201) {
                     // Store password in secret storage after succesfull login if the user chooses to
                     if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
-                        await context.secrets.store("password", password);
+                        await context.secrets.store(StorageKeys.PASSWORD, password);
                         logger.trace("Password stored securely.");
                     } else {
                         logger.trace("User chose not to store password.");
@@ -1122,7 +1119,6 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     // Upon successful login, update the login webview content and hide it.
                     if (loginWebViewProvider) {
                         loginWebViewProvider.updateWebviewHTMLContent();
-                        loginWebView.hideWebView();
                     } else {
                         logger.error("loginWebViewProvider is null. Cannot update webview content.");
                     }
@@ -1151,11 +1147,11 @@ export async function loginToNewPlayServerAndInitSessionToken(
 /**
  * Clears stored user credentials from secret storage.
  *
- * @param context - The extension context.
+ * @param {vscode.ExtensionContext} context - The extension context.
  */
 export async function clearStoredCredentials(context: vscode.ExtensionContext): Promise<void> {
     try {
-        await context.secrets.delete("password");
+        await context.secrets.delete(StorageKeys.PASSWORD);
         logger.debug("Credentials deleted from secret storage.");
     } catch (error) {
         logger.error("Failed to clear credentials:", error);
@@ -1186,7 +1182,7 @@ async function fetchServerVersions(
                     httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: set to true in production
                 }),
             3, // maxRetries: try 3 additional times
-            1000, // delayMs: wait 1000ms between attempts
+            2000, // delayMs: wait 2000ms between attempts
             // Retry only if the error is due to a non-transient condition
             (error) => {
                 if (axios.isAxiosError(error) && error.response) {
