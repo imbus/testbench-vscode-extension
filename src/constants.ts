@@ -22,7 +22,8 @@ export const LANGUAGE_SERVER_DEBUG_PATH: string = path.join(
     "testbench_ls",
     "language_server_debug.py"
 );
-/** Prefix of the extension commands and settings in package.json*/
+
+/** Prefix of the extension commands and settings in package.json */
 export const baseKeyOfExtension: string = "testbenchExtension";
 
 // --- Webview Message Commands ---

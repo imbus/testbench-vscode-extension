@@ -15,6 +15,7 @@ import {
     logger,
     setProjectTreeView,
     projectTreeView,
+    projectManagementTreeDataProvider,
     setProjectManagementTreeDataProvider
 } from "./extension";
 import { testElementsTreeDataProvider } from "./extension";
@@ -28,14 +29,6 @@ export function getProjectManagementTreeView(): vscode.TreeView<ProjectManagemen
 }
 export function setProjectManagementTreeView(view: vscode.TreeView<ProjectManagementTreeItem> | null): void {
     projectManagementTreeView = view;
-}
-
-export let projectManagementDataProvider: ProjectManagementTreeDataProvider | null = null;
-export function getProjectManagementDataProvider(): ProjectManagementTreeDataProvider | null {
-    return projectManagementDataProvider;
-}
-export function setProjectManagementDataProvider(provider: ProjectManagementTreeDataProvider | null): void {
-    projectManagementDataProvider = provider;
 }
 
 export let testThemeTreeView: vscode.TreeView<ProjectManagementTreeItem> | null = null;
@@ -951,19 +944,18 @@ function createProjectDataProviderAndView(
     testThemeDataProvider?: TestThemeTreeDataProvider
 ): ProjectManagementTreeDataProvider {
     logger.debug("Initializing project management tree view.");
-    projectManagementDataProvider = new ProjectManagementTreeDataProvider(testThemeDataProvider);
-
-    setProjectManagementTreeDataProvider(projectManagementDataProvider);
+    const provider: ProjectManagementTreeDataProvider = new ProjectManagementTreeDataProvider(testThemeDataProvider);
+    setProjectManagementTreeDataProvider(provider);
     const newProjectTreeView: vscode.TreeView<ProjectManagementTreeItem> = vscode.window.createTreeView(
         "projectManagementTree",
         {
             // View ID from package.json
-            treeDataProvider: projectManagementDataProvider,
+            treeDataProvider: provider,
             canSelectMany: false
         }
     );
     setProjectTreeView(newProjectTreeView);
-    return projectManagementDataProvider;
+    return provider;
 }
 
 /**
@@ -977,12 +969,12 @@ function setupProjectTreeViewEventListeners(): void {
     }
     // Handle expand events to update expansion state and icons dynamically.
     projectTreeView.onDidExpandElement(async (event) => {
-        await projectManagementDataProvider!.handleExpansion(event.element, true);
+        await projectManagementTreeDataProvider!.handleExpansion(event.element, true);
     });
 
     // Handle collapse events to update expansion state and icons dynamically.
     projectTreeView.onDidCollapseElement(async (event) => {
-        await projectManagementDataProvider!.handleExpansion(event.element, false);
+        await projectManagementTreeDataProvider!.handleExpansion(event.element, false);
     });
 
     // Handle selection changes (click events) to trigger test theme tree initialization on cycle click.
@@ -997,14 +989,14 @@ function setupProjectTreeViewEventListeners(): void {
             let current: ProjectManagementTreeItem | null = selectedElement;
             while (current) {
                 if (current.contextValue === TreeItemContextValues.PROJECT) {
-                    projectManagementDataProvider?.setActiveProjectKeyInView(current.item.key);
+                    projectManagementTreeDataProvider?.setActiveProjectKeyInView(current.item.key);
                     break;
                 }
                 current = current.parent;
             }
             if (!current) {
                 // No project ancestor found (should not happen for valid items)
-                projectManagementDataProvider?.setActiveProjectKeyInView(null);
+                projectManagementTreeDataProvider?.setActiveProjectKeyInView(null);
             }
 
             if (selectedElement && selectedElement.contextValue === TreeItemContextValues.CYCLE) {
@@ -1029,9 +1021,9 @@ export async function initializeProjectAndTestThemeTrees(context: vscode.Extensi
         logger.error("Failed to create test theme tree view instance.");
         return;
     }
-    if (testThemeDataProvider && projectManagementDataProvider) {
-        projectManagementDataProvider.setTestThemeDataProvider(testThemeDataProvider);
-    } else if (testThemeDataProvider && !projectManagementDataProvider) {
+    if (testThemeDataProvider && projectManagementTreeDataProvider) {
+        projectManagementTreeDataProvider.setTestThemeDataProvider(testThemeDataProvider);
+    } else if (testThemeDataProvider && !projectManagementTreeDataProvider) {
         // initializing for the first time
     } else {
         logger.error("Failed to initialize testThemeDataProvider or projectManagementDataProvider not yet ready.");
@@ -1041,7 +1033,7 @@ export async function initializeProjectAndTestThemeTrees(context: vscode.Extensi
     createProjectDataProviderAndView(testThemeDataProvider);
     setupProjectTreeViewEventListeners();
 
-    if (!projectManagementDataProvider) {
+    if (!projectManagementTreeDataProvider) {
         logger.error("Failed to create project management tree data provider.");
         return;
     }
@@ -1053,9 +1045,9 @@ export async function initializeProjectAndTestThemeTrees(context: vscode.Extensi
     }
 
     // Initialize Test Theme Tree
-    if (projectManagementDataProvider && testThemeDataProvider) {
-        projectManagementDataProvider.setTestThemeDataProvider(testThemeDataProvider);
-        projectManagementDataProvider.testThemeDataProvider.refresh();
+    if (projectManagementTreeDataProvider && testThemeDataProvider) {
+        projectManagementTreeDataProvider.setTestThemeDataProvider(testThemeDataProvider);
+        projectManagementTreeDataProvider.testThemeDataProvider.refresh();
     }
     if (testThemeTreeView) {
         context.subscriptions.push(testThemeTreeView);

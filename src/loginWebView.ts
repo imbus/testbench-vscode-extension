@@ -5,7 +5,7 @@
  */
 
 import * as vscode from "vscode";
-import { logger, connection, getConfig, projectManagementTreeDataProvider } from "./extension";
+import { logger, connection, getConfig, projectManagementTreeDataProvider, initializeTreeViews } from "./extension";
 import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
 import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 import { WebviewMessageCommands, ConfigKeys, StorageKeys } from "./constants";
@@ -170,6 +170,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
             // If login was successful, display project tree view
             if (connectionAfterLoginAttempt) {
+                initializeTreeViews(extensionContext);
                 displayProjectManagementTreeView();
                 if (projectManagementTreeDataProvider) {
                     projectManagementTreeDataProvider.refresh();
