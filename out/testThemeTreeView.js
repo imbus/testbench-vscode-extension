@@ -38,8 +38,9 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TestThemeTreeDataProvider = void 0;
+exports.hideTestThemeTreeView = hideTestThemeTreeView;
+exports.displayTestThemeTreeView = displayTestThemeTreeView;
 const vscode = __importStar(require("vscode"));
-const projectManagementTreeView_1 = require("./projectManagementTreeView");
 const extension_1 = require("./extension");
 const constants_1 = require("./constants");
 /**
@@ -64,6 +65,26 @@ class TestThemeTreeDataProvider {
         extension_1.logger.debug("Refreshing test theme tree view.");
         // Store the keys of the expanded items to preserve state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
+        // Update message in the test theme tree view
+        if (extension_1.testThemeTreeViewInstance) {
+            // Check if the view instance is available
+            if (this.rootElements.length === 0) {
+                if (this._currentCycleKey) {
+                    extension_1.testThemeTreeViewInstance.message = "No test themes found for the current cycle.";
+                }
+                else if (extension_1.testThemeTreeViewInstance.message && extension_1.testThemeTreeViewInstance.message.startsWith("Refreshing")) {
+                    // Keep the "Refreshing..." message if it was set by the command
+                }
+                else {
+                    extension_1.testThemeTreeViewInstance.message = "Select a cycle to see test themes.";
+                }
+                extension_1.logger.trace(`Test Themes view message set: ${extension_1.testThemeTreeViewInstance.message}`);
+            }
+            else {
+                extension_1.testThemeTreeViewInstance.message = undefined; // Clear message
+                extension_1.logger.trace("Test Themes view message cleared.");
+            }
+        }
         // Explicitly fire with undefined to ensure a full refresh from the root.
         this._onDidChangeTreeData.fire(undefined);
     }
@@ -84,11 +105,9 @@ class TestThemeTreeDataProvider {
     async getChildren(element) {
         if (!element) {
             if (!this.rootElements || this.rootElements.length === 0) {
-                extension_1.logger.trace("TestThemeTreeDataProvider: No root elements found, returning placeholder.");
-                // If no root elements are found, return a placeholder item.
-                return [
-                    new projectManagementTreeView_1.BaseTestBenchTreeItem("No test themes found for this cycle", "placeholder.testTheme", vscode.TreeItemCollapsibleState.None, {}, null)
-                ];
+                extension_1.logger.trace("TestThemeTreeDataProvider: No root elements found, returning empty. Message should be set.");
+                // Message is set by refresh() or when setRoots() is called if children are empty.
+                return [];
             }
             return this.rootElements;
         }
@@ -181,10 +200,29 @@ class TestThemeTreeDataProvider {
         extension_1.logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
         this.rootElements = [];
+        if (extension_1.testThemeTreeViewInstance) {
+            // Only set default message if not already in a loading state from command
+            if (!(extension_1.testThemeTreeViewInstance.message && extension_1.testThemeTreeViewInstance.message.startsWith("Refreshing"))) {
+                extension_1.testThemeTreeViewInstance.message = "Select a cycle from the 'Projects' view to see test themes.";
+            }
+        }
         // TODO: Clear the expanded set items after clear command if needed.
         // this.expandedTreeItems.clear();
         this._onDidChangeTreeData.fire();
     }
 }
 exports.TestThemeTreeDataProvider = TestThemeTreeDataProvider;
+/**
+ * Hides the test theme tree view.
+ */
+async function hideTestThemeTreeView() {
+    // testThemeTree is the ID of the tree view in package.json
+    await vscode.commands.executeCommand("testThemeTree.removeView");
+}
+/**
+ * Displays the test theme tree view.
+ */
+async function displayTestThemeTreeView() {
+    await vscode.commands.executeCommand("testThemeTree.focus");
+}
 //# sourceMappingURL=testThemeTreeView.js.map

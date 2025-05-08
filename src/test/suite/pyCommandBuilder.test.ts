@@ -40,7 +40,6 @@ suite("getActiveWorkspaceFolder tests", () => {
         assert.strictEqual(workspaceFolder, workspaceFolder1, "Expected to return workspaceFolder1");
     });
 
-    //TODO: vscode.workspace.getWorkspaceFolder(passed Test value) returns undefined
     test("Should return the correct workspace folder when multiple are open", async () => {
         workspaceFolder1 = {
             uri: vscode.Uri.parse("file:///workspaceFolder1Path"),

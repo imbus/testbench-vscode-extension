@@ -40,7 +40,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.testElementsTreeDataProvider = exports.projectTreeView = exports.testElementTreeView = exports.loginWebViewProvider = exports.connection = exports.testThemeTreeDataProvider = exports.projectManagementTreeDataProvider = exports.logger = void 0;
+exports.testElementsTreeDataProvider = exports.projectTreeView = exports.testElementTreeView = exports.loginWebViewProvider = exports.connection = exports.testThemeTreeViewInstance = exports.testThemeTreeDataProvider = exports.projectManagementTreeDataProvider = exports.logger = void 0;
 exports.getConfig = getConfig;
 exports.setLogger = setLogger;
 exports.setProjectManagementTreeDataProvider = setProjectManagementTreeDataProvider;
@@ -181,7 +181,10 @@ function initializeTestElementsTreeView() {
     exports.testElementTreeView = vscode.window.createTreeView("testElementsView", {
         treeDataProvider: exports.testElementsTreeDataProvider
     });
-    vscode.window.registerTreeDataProvider("testElementsView", exports.testElementsTreeDataProvider);
+    if (exports.testElementsTreeDataProvider.isTreeDataEmpty()) {
+        exports.testElementTreeView.message =
+            "Select a Test Object Version (TOV) to see test elements, or check filter settings.";
+    }
     // Hide the test elements tree view initially.
     testElementsTreeView.hideTestElementsTreeView();
 }
@@ -191,21 +194,21 @@ function initializeTestElementsTreeView() {
  * @param {vscode.ExtensionContext} context The extension context.
  */
 function initializeTreeViews(context) {
-    // Create TestThemeTreeDataProvider first
+    // Create TestThemeTreeDataProvider
     exports.testThemeTreeDataProvider = new testThemeTreeView_1.TestThemeTreeDataProvider();
-    const newTestThemeTreeView = vscode.window.createTreeView("testThemeTree", {
+    exports.testThemeTreeViewInstance = vscode.window.createTreeView("testThemeTree", {
         treeDataProvider: exports.testThemeTreeDataProvider
     });
-    context.subscriptions.push(newTestThemeTreeView);
+    context.subscriptions.push(exports.testThemeTreeViewInstance);
     exports.projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider();
     const newProjectTreeView = vscode.window.createTreeView("projectManagementTree", {
         treeDataProvider: exports.projectManagementTreeDataProvider,
         canSelectMany: false
     });
     context.subscriptions.push(newProjectTreeView);
-    setProjectTreeView(newProjectTreeView); // Assuming setProjectTreeView updates a global view instance
+    setProjectTreeView(newProjectTreeView);
     // Listen to the new event from ProjectManagementTreeDataProvider
-    if (exports.projectManagementTreeDataProvider) {
+    if (exports.projectManagementTreeDataProvider && exports.testThemeTreeViewInstance) {
         context.subscriptions.push(exports.projectManagementTreeDataProvider.onDidPrepareCycleDataForThemeTree(async (eventData) => {
             if (exports.testThemeTreeDataProvider) {
                 exports.logger.info(`Cycle data prepared for ${eventData.cycleLabel}. Updating Test Theme Tree.`);
@@ -213,24 +216,29 @@ function initializeTreeViews(context) {
                 exports.testThemeTreeDataProvider.clearTree();
                 // Set new roots for Test Theme Tree
                 exports.testThemeTreeDataProvider.setRoots(eventData.children, eventData.cycleKey);
-                // Optionally, manage view visibility here
-                await projectManagementTreeView.hideProjectManagementTreeView(); // Example: Hide projects tree
-                // The displayTestThemeTreeView is implicitly handled by VS Code when data changes
-                // but if you need to ensure focus:
-                await vscode.commands.executeCommand("testThemeTree.focus");
-                // Display the test elements tree view (if it's part of this flow)
-                await testElementsTreeView.displayTestElementsTreeView(); // Assuming displayTestElementsTreeView is imported
+                // Update message for TestThemeTree
+                if (eventData.children.length === 0) {
+                    exports.testThemeTreeViewInstance.message = `No test themes found for cycle: ${eventData.cycleLabel}`;
+                }
+                else {
+                    exports.testThemeTreeViewInstance.message = undefined;
+                }
+                await projectManagementTreeView.hideProjectManagementTreeView();
+                // Display the Test Theme Tree View and test elements tree view
+                await (0, testThemeTreeView_1.displayTestThemeTreeView)();
+                await testElementsTreeView.displayTestElementsTreeView();
             }
         }));
     }
     // Initial data load/refresh for project tree
     exports.projectManagementTreeDataProvider?.refresh();
-    exports.testThemeTreeDataProvider?.clearTree(); // Ensure theme tree is initially empty or has a placeholder
-    // The original initializeProjectAndTestThemeTrees function from projectManagementTreeView.ts might need adjustment
-    // or its logic could be largely moved here or refactored.
-    // For now, we assume the core initialization of providers and their link via event happens here.
-    // The existing initializeTestElementsTreeView() can be called as before.
-    initializeTestElementsTreeView(); // Assuming this is defined and initializes the third tree
+    if (exports.testThemeTreeDataProvider && exports.testThemeTreeViewInstance) {
+        exports.testThemeTreeDataProvider.clearTree(); // Calls refresh and sets message via its own logic
+        if (exports.testThemeTreeDataProvider.rootElements.length === 0) {
+            exports.testThemeTreeViewInstance.message = "Select a cycle from the 'Projects' view to see test themes.";
+        }
+    }
+    initializeTestElementsTreeView();
 }
 /**
  * Registers all the commands defined by the extension.
@@ -266,7 +274,7 @@ function registerExtensionCommands(context) {
             if (loginResult) {
                 // Display project management tree and hide other tree views if they are open.
                 projectManagementTreeView?.displayProjectManagementTreeView();
-                await projectManagementTreeView?.hideTestThemeTreeView();
+                await (0, testThemeTreeView_1.hideTestThemeTreeView)();
                 await testElementsTreeView?.hideTestElementsTreeView();
                 exports.projectManagementTreeDataProvider?.refresh();
             }
@@ -418,7 +426,7 @@ function registerExtensionCommands(context) {
         }
         await projectManagementTreeView.displayProjectManagementTreeView();
         // After selecting a (new) project, hide the test theme tree view and test elements tree view and clear the test elements tree view.
-        await projectManagementTreeView.hideTestThemeTreeView();
+        await (0, testThemeTreeView_1.hideTestThemeTreeView)();
         await testElementsTreeView.hideTestElementsTreeView();
         testElementsTreeView.clearTestElementsTreeView();
         exports.logger.trace("Project list refreshed in project management tree view.");
@@ -477,7 +485,15 @@ function registerExtensionCommands(context) {
     });
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshProjectTreeView, async () => {
-        exports.projectManagementTreeDataProvider?.refresh();
+        exports.logger.debug("Command Called: Refresh Project Tree View (Hard Refresh)");
+        if (exports.projectManagementTreeDataProvider && exports.projectTreeView) {
+            exports.projectTreeView.message = "Refreshing projects...";
+            exports.projectManagementTreeDataProvider.refresh(true); // true for hard refresh
+        }
+        else {
+            exports.logger.warn("RefreshProjectTreeView: projectManagementTreeDataProvider or projectTreeView is null.");
+        }
+        exports.logger.trace("End of command: Refresh Project Tree View");
     });
     // --- Command: Refresh Test Theme Tree View ---
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshTestThemeTreeView, async () => {
@@ -487,10 +503,23 @@ function registerExtensionCommands(context) {
             vscode.window.showErrorMessage("Test Theme Tree is not available to refresh.");
             return;
         }
+        if (!exports.projectManagementTreeDataProvider) {
+            exports.logger.warn("Project Management Tree Data Provider not initialized. Cannot refresh.");
+            vscode.window.showErrorMessage("Project Management Tree is not available to refresh.");
+            return;
+        }
+        if (!exports.testThemeTreeViewInstance) {
+            exports.logger.warn("Test Theme TreeView instance is not available. Cannot set message.");
+        }
+        // Set Loading Message for Test Theme Tree View
+        if (exports.testThemeTreeViewInstance) {
+            exports.testThemeTreeViewInstance.message = "Refreshing test themes...";
+        }
+        exports.testThemeTreeDataProvider.refresh(); // Use public refresh method
         const currentCycleKey = exports.testThemeTreeDataProvider.isCurrentCycle("")
             ? null
             : exports.testThemeTreeDataProvider["_currentCycleKey"];
-        if (currentCycleKey && exports.projectManagementTreeDataProvider) {
+        if (currentCycleKey) {
             const firstRootInThemeTree = exports.testThemeTreeDataProvider.rootElements[0];
             const cycleElement = firstRootInThemeTree?.parent ?? undefined;
             if (cycleElement &&
@@ -525,7 +554,13 @@ function registerExtensionCommands(context) {
     // --- Command: Make Root ---
     // Right clicking on a tree element and selecting "Make Root" context menu option will make the selected element the root of the tree.
     registerSafeCommand(context, constants_1.allExtensionCommands.makeRoot, (treeItem) => {
-        exports.logger.debug("Command Called: Make Root for tree item:", treeItem);
+        // Assuming treeItem is BaseTestBenchTreeItem
+        exports.logger.debug("Command Called: Make Root for tree item:", treeItem?.label);
+        if (!treeItem) {
+            exports.logger.warn("MakeRoot command called with null treeItem.");
+            return;
+        }
+        // Check if the item belongs to the Project Management Tree
         if (treeItem.contextValue &&
             [
                 constants_1.TreeItemContextValues.PROJECT,
@@ -536,18 +571,25 @@ function registerExtensionCommands(context) {
                 exports.projectManagementTreeDataProvider.makeRoot(treeItem);
             }
             else {
-                exports.logger.warn("MakeRoot: projectManagementTreeDataProvider is null.");
+                exports.logger.warn("MakeRoot: projectManagementTreeDataProvider is null for project tree item.");
+                vscode.window.showErrorMessage("Project tree is not available to set root.");
             }
         }
-        else {
-            // Assuming it's an item for the Test Theme Tree
-            if (exports.testThemeTreeDataProvider) {
-                // Use the global testThemeTreeDataProvider
+        else if (exports.testThemeTreeDataProvider &&
+            treeItem.contextValue &&
+            [constants_1.TreeItemContextValues.TEST_THEME_NODE, constants_1.TreeItemContextValues.TEST_CASE_SET_NODE].includes(treeItem.contextValue)) {
+            // Delegate to testThemeTreeDataProvider if it's a test theme item
+            if (typeof exports.testThemeTreeDataProvider.makeRoot === "function") {
                 exports.testThemeTreeDataProvider.makeRoot(treeItem);
             }
             else {
-                exports.logger.warn("MakeRoot: testThemeTreeDataProvider is null.");
+                exports.logger.warn(`MakeRoot: testThemeTreeDataProvider does not have a makeRoot method or item type (${treeItem.contextValue}) is not supported for makeRoot in test theme tree.`);
+                vscode.window.showInformationMessage(`Cannot make '${treeItem.label}' root in the Test Themes view with current implementation.`);
             }
+        }
+        else {
+            exports.logger.warn(`MakeRoot: Item type "${treeItem.contextValue}" not supported for makeRoot or target provider not identified.`);
+            vscode.window.showInformationMessage(`Item '${treeItem.label}' cannot be made a root in the current view.`);
         }
         exports.logger.trace("End of Make Root command.");
     });
@@ -583,10 +625,17 @@ function registerExtensionCommands(context) {
         if (exports.projectManagementTreeDataProvider && treeItem.contextValue === constants_1.TreeItemContextValues.VERSION) {
             const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
             if (tovKeyOfSelectedTreeElement) {
+                // Set loading message for Test Elements Tree
+                if (exports.testElementTreeView) {
+                    exports.testElementTreeView.message = `Loading test elements for TOV: ${typeof treeItem.label === "string" ? treeItem.label : "..."} (${tovKeyOfSelectedTreeElement})`;
+                }
                 const areTestElementsFetched = await exports.testElementsTreeDataProvider.fetchAndDisplayTestElements(tovKeyOfSelectedTreeElement, typeof treeItem.label === "string" ? treeItem.label : undefined);
-                // Hide Project Contents Tree View after displaying Test Elements Tree View.
                 if (areTestElementsFetched) {
-                    await projectManagementTreeView?.hideProjectManagementTreeView();
+                    await projectManagementTreeView.hideProjectManagementTreeView();
+                    // testElementTreeView.message is cleared by fetchAndDisplayTestElements on success
+                }
+                else if (exports.testElementTreeView) {
+                    // If fetch failed, fetchAndDisplayTestElements already sets an error message
                 }
             }
         }
