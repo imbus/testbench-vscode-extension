@@ -4,8 +4,6 @@
  * retrieved from the TestBench server.
  */
 
-// TODO: If the test element view is empty due to the filtering, show a message to the user that no elements are mathed with the regex?
-
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
@@ -427,20 +425,6 @@ function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscod
     return { light: lightIconUri, dark: darkIconUri };
 }
 
-// Placeholder data structure
-const placeholderElementData: TestElementData = {
-    id: "placeholder-element", // Unique ID for the placeholder
-    parentId: null,
-    name: "No elements found", // Placeholder label
-    uniqueID: "",
-    libraryKey: null,
-    jsonString: "{}",
-    details: {}, // Empty details
-    elementType: "Other",
-    directRegexMatch: false,
-    children: []
-};
-
 /* =============================================================================
    TestElementTreeItem Class and TestElementsTreeDataProvider
    ============================================================================= */
@@ -620,6 +604,10 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     readonly onDidChangeTreeData: vscode.Event<TestElementTreeItem | undefined> = this._onDidChangeTreeData.event;
     private treeData: TestElementData[] = [];
 
+    public isTreeDataEmpty(): boolean {
+        return !this.treeData || this.treeData.length === 0;
+    }
+
     getTreeItem(item: TestElementTreeItem): vscode.TreeItem {
         return item;
     }
@@ -642,12 +630,12 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             return childItems;
         } else {
             // Root request
-            // placeholder data structure
-            if (!this.treeData || this.treeData.length === 0) {
-                logger.trace("TestElementsTreeDataProvider: No tree data found, returning placeholder.");
-                // Use the placeholder data structure
-                const customPlaceholderData = { ...placeholderElementData, name: "No matching test elements found" };
-                return [new TestElementTreeItem(customPlaceholderData)];
+            if (this.isTreeDataEmpty()) {
+                logger.trace(
+                    "TestElementsTreeDataProvider: No tree data found for root, returning empty. Message should be set."
+                );
+                // The message is set in refresh() or fetchAndDisplayTestElements()
+                return []; // Return empty array
             }
 
             // If no parent is provided, return the root items.
@@ -668,6 +656,22 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
      */
     refresh(flatTestElementsJsonData: any[]): void {
         this.treeData = buildTree(flatTestElementsJsonData);
+        // Update message based on treeData
+        if (testElementTreeView) {
+            // Check if the view instance is available
+            if (this.isTreeDataEmpty()) {
+                const filterPatterns = getConfig().get("resourceRegexInTestbench2robotframework", []);
+                if (filterPatterns && filterPatterns.length > 0) {
+                    testElementTreeView.message = "No test elements match the current filter criteria.";
+                } else {
+                    testElementTreeView.message = "No test elements found for the selected Test Object Version (TOV).";
+                }
+                logger.trace(`Test Elements view message set: ${testElementTreeView.message}`);
+            } else {
+                testElementTreeView.message = undefined; // Clear message if there's data
+                logger.trace("Test Elements view message cleared.");
+            }
+        }
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -682,18 +686,34 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         // const jsonPath = "ABSOLUTE-PATH-TO-JSON-FILE";
         // const testElementsJsonData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
 
-        // Commented out for debugging purposes
+        if (testElementTreeView) {
+            const tovLabel: string = newTestElementsTreeViewTitle || tovKey;
+            testElementTreeView.message = `Loading test elements for TOV: ${tovLabel}...`;
+        }
+        // Clear current data and trigger UI update to show loading message
+        // TODO: Check if this is needed
+        this.treeData = [];
+        this._onDidChangeTreeData.fire(undefined);
+
         const testElementsJsonData = await connection?.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
         if (testElementsJsonData) {
             setCurrentTovKey(tovKey);
             displayTestElementsTreeView();
             this.refresh(testElementsJsonData);
+            // Update the title of the tree view if a new title is provided.
             if (newTestElementsTreeViewTitle) {
                 testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
             }
             return true;
         } else {
             vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
+            // Set error message on the view
+            if (testElementTreeView) {
+                testElementTreeView.message = "Error: Failed to fetch test elements. Please try again or check logs.";
+            }
+            this.treeData = [];
+            this._onDidChangeTreeData.fire(undefined); // Refresh to show empty state with message
+
             return false;
         }
     }

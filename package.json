@@ -356,7 +356,7 @@
             },
             {
                 "command": "testbenchExtension.refreshTestThemeTreeView",
-                "title": "TestBench: Refresh Test Tree View",
+                "title": "TestBench: Refresh Test Themes",
                 "when": "view == testThemeTree",
                 "group": "navigation@1",
                 "icon": {

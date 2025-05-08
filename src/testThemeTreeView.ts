@@ -5,7 +5,7 @@
 
 import * as vscode from "vscode";
 import { BaseTestBenchTreeItem } from "./projectManagementTreeView";
-import { logger } from "./extension";
+import { logger, testThemeTreeViewInstance as testThemeTreeView } from "./extension";
 import { TreeItemContextValues } from "./constants";
 
 /**
@@ -35,6 +35,23 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         logger.debug("Refreshing test theme tree view.");
         // Store the keys of the expanded items to preserve state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
+        // Update message in the test theme tree view
+        if (testThemeTreeView) {
+            // Check if the view instance is available
+            if (this.rootElements.length === 0) {
+                if (this._currentCycleKey) {
+                    testThemeTreeView.message = "No test themes found for the current cycle.";
+                } else if (testThemeTreeView.message && testThemeTreeView.message.startsWith("Refreshing")) {
+                    // Keep the "Refreshing..." message if it was set by the command
+                } else {
+                    testThemeTreeView.message = "Select a cycle to see test themes.";
+                }
+                logger.trace(`Test Themes view message set: ${testThemeTreeView.message}`);
+            } else {
+                testThemeTreeView.message = undefined; // Clear message
+                logger.trace("Test Themes view message cleared.");
+            }
+        }
         // Explicitly fire with undefined to ensure a full refresh from the root.
         this._onDidChangeTreeData.fire(undefined);
     }
@@ -57,17 +74,11 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     async getChildren(element?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
         if (!element) {
             if (!this.rootElements || this.rootElements.length === 0) {
-                logger.trace("TestThemeTreeDataProvider: No root elements found, returning placeholder.");
-                // If no root elements are found, return a placeholder item.
-                return [
-                    new BaseTestBenchTreeItem(
-                        "No test themes found for this cycle",
-                        "placeholder.testTheme",
-                        vscode.TreeItemCollapsibleState.None,
-                        {},
-                        null
-                    )
-                ];
+                logger.trace(
+                    "TestThemeTreeDataProvider: No root elements found, returning empty. Message should be set."
+                );
+                // Message is set by refresh() or when setRoots() is called if children are empty.
+                return [];
             }
             return this.rootElements;
         }
@@ -170,6 +181,12 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
         this.rootElements = [];
+        if (testThemeTreeView) {
+            // Only set default message if not already in a loading state from command
+            if (!(testThemeTreeView.message && testThemeTreeView.message.startsWith("Refreshing"))) {
+                testThemeTreeView.message = "Select a cycle from the 'Projects' view to see test themes.";
+            }
+        }
         // TODO: Clear the expanded set items after clear command if needed.
         // this.expandedTreeItems.clear();
         this._onDidChangeTreeData.fire();
