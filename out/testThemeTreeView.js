@@ -68,8 +68,8 @@ class TestThemeTreeDataProvider {
     }
     /**
      * Returns the parent of a given tree item.
-     * @param {ProjectManagementTreeItem} element The tree item.
-     * @returns {ProjectManagementTreeItem | null} The parent TestbenchTreeItem or null.
+     * @param {BaseTestBenchTreeItem} element The tree item.
+     * @returns {BaseTestBenchTreeItem | null} The parent TestbenchTreeItem or null.
      */
     getParent(element) {
         return element.parent;
@@ -77,8 +77,8 @@ class TestThemeTreeDataProvider {
     /**
      * Returns the children of a given tree item. If no element is provided,
      * returns the root elements.
-     * @param {ProjectManagementTreeItem} element Optional parent tree item.
-     * @returns {Promise<ProjectManagementTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
+     * @param {BaseTestBenchTreeItem} element Optional parent tree item.
+     * @returns {Promise<BaseTestBenchTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
      */
     async getChildren(element) {
         if (!element) {
@@ -86,7 +86,7 @@ class TestThemeTreeDataProvider {
                 extension_1.logger.trace("TestThemeTreeDataProvider: No root elements found, returning placeholder.");
                 // If no root elements are found, return a placeholder item.
                 return [
-                    new projectManagementTreeView_1.ProjectManagementTreeItem("No test themes found for this cycle", "placeholder", vscode.TreeItemCollapsibleState.None, {}, null)
+                    new projectManagementTreeView_1.BaseTestBenchTreeItem("No test themes found for this cycle", "placeholder.testTheme", vscode.TreeItemCollapsibleState.None, {}, null)
                 ];
             }
             return this.rootElements;
@@ -95,7 +95,7 @@ class TestThemeTreeDataProvider {
     }
     /**
      * Returns the TreeItem representation for a given element.
-     * @param {ProjectManagementTreeItem[]} element The TestbenchTreeItem.
+     * @param {BaseTestBenchTreeItem[]} element The TestbenchTreeItem.
      * @returns {vscode.TreeItem} The corresponding vscode.TreeItem.
      */
     getTreeItem(element) {
@@ -103,19 +103,18 @@ class TestThemeTreeDataProvider {
     }
     /**
      * Sets the root elements of the test theme tree and refreshes the view.
-     * @param {ProjectManagementTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
+     * @param {BaseTestBenchTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
      */
     setRoots(roots, cycleKey) {
         // Output of roots is circular and large, so it is commented out.
         // logger.trace("Setting root elements of the test theme tree to:", roots);
         this._currentCycleKey = cycleKey;
         this.rootElements = roots;
-        this._onDidChangeTreeData.fire();
         this.refresh();
     }
     /**
      * Sets the selected tree item as the sole root of the test theme tree and refreshes the view.
-     * @param {ProjectManagementTreeItem} element The TestbenchTreeItem to set as root.
+     * @param {BaseTestBenchTreeItem} element The TestbenchTreeItem to set as root.
      */
     makeRoot(element) {
         extension_1.logger.debug("Setting the selected element as the root of the test theme tree view:", element);
@@ -124,7 +123,7 @@ class TestThemeTreeDataProvider {
     }
     /**
      * Handles expansion or collapse of a tree item and updates its icon.
-     * @param {ProjectManagementTreeItem} element The TestbenchTreeItem.
+     * @param {BaseTestBenchTreeItem} element The TestbenchTreeItem.
      * @param {boolean} expanded True if the item is expanded; false if collapsed.
      */
     handleExpansion(element, expanded) {
@@ -132,17 +131,18 @@ class TestThemeTreeDataProvider {
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
-        if (expanded) {
+        // Store the key of the expanded item in the set.
+        if (expanded && element.item?.key) {
             this.expandedTreeItems.add(element.item.key);
         }
-        else {
+        else if (element.item?.key) {
             this.expandedTreeItems.delete(element.item.key);
         }
         element.updateIcon();
     }
     /**
      * Recursively stores the keys of expanded nodes.
-     * @param {ProjectManagementTreeItem[] | null} elements An array of TestbenchTreeItems or null.
+     * @param {BaseTestBenchTreeItem[] | null} elements An array of TestbenchTreeItems or null.
      */
     storeExpandedTreeItems(elements) {
         if (elements) {
@@ -163,9 +163,9 @@ class TestThemeTreeDataProvider {
         extension_1.logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
         this.rootElements = [];
+        // TODO: Clear the expanded set items after clear command if needed.
         // this.expandedTreeItems.clear();
         this._onDidChangeTreeData.fire();
-        // this.refresh();
     }
 }
 exports.TestThemeTreeDataProvider = TestThemeTreeDataProvider;

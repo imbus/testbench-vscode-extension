@@ -4,17 +4,17 @@
  */
 
 import * as vscode from "vscode";
-import { ProjectManagementTreeItem } from "./projectManagementTreeView";
+import { BaseTestBenchTreeItem } from "./projectManagementTreeView";
 import { logger } from "./extension";
 
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display
  * TestTheme items in the Test Theme Tree view.
  */
-export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<ProjectManagementTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<ProjectManagementTreeItem | void> =
-        new vscode.EventEmitter<ProjectManagementTreeItem | void>();
-    readonly onDidChangeTreeData: vscode.Event<ProjectManagementTreeItem | void> = this._onDidChangeTreeData.event;
+export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTestBenchTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<BaseTestBenchTreeItem | void> =
+        new vscode.EventEmitter<BaseTestBenchTreeItem | void>();
+    readonly onDidChangeTreeData: vscode.Event<BaseTestBenchTreeItem | void> = this._onDidChangeTreeData.event;
 
     private _currentCycleKey: string | null = null;
     public isCurrentCycle(cycleKey: string): boolean {
@@ -22,7 +22,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
     }
 
     /** Root elements for the Test Theme Tree view */
-    rootElements: ProjectManagementTreeItem[] = [];
+    rootElements: BaseTestBenchTreeItem[] = [];
 
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     private expandedTreeItems: Set<string> = new Set<string>();
@@ -40,28 +40,28 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Returns the parent of a given tree item.
-     * @param {ProjectManagementTreeItem} element The tree item.
-     * @returns {ProjectManagementTreeItem | null} The parent TestbenchTreeItem or null.
+     * @param {BaseTestBenchTreeItem} element The tree item.
+     * @returns {BaseTestBenchTreeItem | null} The parent TestbenchTreeItem or null.
      */
-    getParent(element: ProjectManagementTreeItem): ProjectManagementTreeItem | null {
+    getParent(element: BaseTestBenchTreeItem): BaseTestBenchTreeItem | null {
         return element.parent;
     }
 
     /**
      * Returns the children of a given tree item. If no element is provided,
      * returns the root elements.
-     * @param {ProjectManagementTreeItem} element Optional parent tree item.
-     * @returns {Promise<ProjectManagementTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
+     * @param {BaseTestBenchTreeItem} element Optional parent tree item.
+     * @returns {Promise<BaseTestBenchTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
      */
-    async getChildren(element?: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
+    async getChildren(element?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
         if (!element) {
             if (!this.rootElements || this.rootElements.length === 0) {
                 logger.trace("TestThemeTreeDataProvider: No root elements found, returning placeholder.");
                 // If no root elements are found, return a placeholder item.
                 return [
-                    new ProjectManagementTreeItem(
+                    new BaseTestBenchTreeItem(
                         "No test themes found for this cycle",
-                        "placeholder",
+                        "placeholder.testTheme",
                         vscode.TreeItemCollapsibleState.None,
                         {},
                         null
@@ -75,31 +75,30 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Returns the TreeItem representation for a given element.
-     * @param {ProjectManagementTreeItem[]} element The TestbenchTreeItem.
+     * @param {BaseTestBenchTreeItem[]} element The TestbenchTreeItem.
      * @returns {vscode.TreeItem} The corresponding vscode.TreeItem.
      */
-    getTreeItem(element: ProjectManagementTreeItem): vscode.TreeItem {
+    getTreeItem(element: BaseTestBenchTreeItem): vscode.TreeItem {
         return element;
     }
 
     /**
      * Sets the root elements of the test theme tree and refreshes the view.
-     * @param {ProjectManagementTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
+     * @param {BaseTestBenchTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
      */
-    setRoots(roots: ProjectManagementTreeItem[], cycleKey: string): void {
+    setRoots(roots: BaseTestBenchTreeItem[], cycleKey: string): void {
         // Output of roots is circular and large, so it is commented out.
         // logger.trace("Setting root elements of the test theme tree to:", roots);
         this._currentCycleKey = cycleKey;
         this.rootElements = roots;
-        this._onDidChangeTreeData.fire();
         this.refresh();
     }
 
     /**
      * Sets the selected tree item as the sole root of the test theme tree and refreshes the view.
-     * @param {ProjectManagementTreeItem} element The TestbenchTreeItem to set as root.
+     * @param {BaseTestBenchTreeItem} element The TestbenchTreeItem to set as root.
      */
-    makeRoot(element: ProjectManagementTreeItem): void {
+    makeRoot(element: BaseTestBenchTreeItem): void {
         logger.debug("Setting the selected element as the root of the test theme tree view:", element);
         this.rootElements = [element];
         this.refresh();
@@ -107,10 +106,10 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Handles expansion or collapse of a tree item and updates its icon.
-     * @param {ProjectManagementTreeItem} element The TestbenchTreeItem.
+     * @param {BaseTestBenchTreeItem} element The TestbenchTreeItem.
      * @param {boolean} expanded True if the item is expanded; false if collapsed.
      */
-    handleExpansion(element: ProjectManagementTreeItem, expanded: boolean): void {
+    handleExpansion(element: BaseTestBenchTreeItem, expanded: boolean): void {
         logger.trace(
             `Setting expansion state of "${element.label}" to ${
                 expanded ? "expanded" : "collapsed"
@@ -120,9 +119,10 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
 
-        if (expanded) {
+        // Store the key of the expanded item in the set.
+        if (expanded && element.item?.key) {
             this.expandedTreeItems.add(element.item.key);
-        } else {
+        } else if (element.item?.key) {
             this.expandedTreeItems.delete(element.item.key);
         }
 
@@ -131,9 +131,9 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
 
     /**
      * Recursively stores the keys of expanded nodes.
-     * @param {ProjectManagementTreeItem[] | null} elements An array of TestbenchTreeItems or null.
+     * @param {BaseTestBenchTreeItem[] | null} elements An array of TestbenchTreeItems or null.
      */
-    private storeExpandedTreeItems(elements: ProjectManagementTreeItem[] | null): void {
+    private storeExpandedTreeItems(elements: BaseTestBenchTreeItem[] | null): void {
         if (elements) {
             elements.forEach((element) => {
                 if (element.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
@@ -153,8 +153,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
         logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
         this.rootElements = [];
+        // TODO: Clear the expanded set items after clear command if needed.
         // this.expandedTreeItems.clear();
         this._onDidChangeTreeData.fire();
-        // this.refresh();
     }
 }

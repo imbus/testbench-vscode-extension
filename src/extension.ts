@@ -69,9 +69,9 @@ export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null
  * The generic parameter specifies the type of tree item displayed by each view.
  */
 export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementTreeItem>;
-export let projectTreeView: vscode.TreeView<projectManagementTreeView.ProjectManagementTreeItem>;
+export let projectTreeView: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem>;
 export function setProjectTreeView(
-    newProjectTreeView: vscode.TreeView<projectManagementTreeView.ProjectManagementTreeItem>
+    newProjectTreeView: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem>
 ): void {
     projectTreeView = newProjectTreeView;
 }
@@ -296,7 +296,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(
         context,
         allExtensionCommands.handleProjectCycleClick,
-        async (cycleItem: projectManagementTreeView.ProjectManagementTreeItem) => {
+        async (cycleItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
             if (projectManagementTreeDataProvider) {
                 await projectManagementTreeDataProvider.handleTestCycleClick(cycleItem);
             } else {
@@ -311,7 +311,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(
         context,
         allExtensionCommands.generateTestCasesForCycle,
-        async (item: projectManagementTreeView.ProjectManagementTreeItem) => {
+        async (item: projectManagementTreeView.BaseTestBenchTreeItem) => {
             logger.debug("Command Called: Generate Test Cases For Cycle");
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
@@ -335,7 +335,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             // Call getChildrenOfCycle to initialize the sub elements (Test themes etc.) of the cycle.
             // Offload the children of the cycle to the Test Theme Tree View.
             if (projectManagementTreeDataProvider?.testThemeDataProvider) {
-                const children: projectManagementTreeView.ProjectManagementTreeItem[] =
+                const children: projectManagementTreeView.BaseTestBenchTreeItem[] =
                     (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
                 if (item.item?.key) {
                     projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children, item.item.key);
@@ -354,7 +354,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(
         context,
         allExtensionCommands.fetchReportForSelectedTreeItem,
-        async (treeItem: projectManagementTreeView.ProjectManagementTreeItem) => {
+        async (treeItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
             await reportHandler.fetchReportForTreeElement(
                 treeItem,
                 projectManagementTreeDataProvider,
@@ -367,7 +367,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(
         context,
         allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet,
-        async (treeItem: projectManagementTreeView.ProjectManagementTreeItem) => {
+        async (treeItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
             logger.debug("Command Called: Generate Test Cases For Test Theme or Test Case Set");
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
@@ -477,11 +477,11 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // --- Command: Refresh Test Theme Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshTestThemeTreeView, async () => {
         logger.debug("Command called: Refresh Test Theme Tree");
-        const cycleElement: projectManagementTreeView.ProjectManagementTreeItem | undefined =
+        const cycleElement: projectManagementTreeView.BaseTestBenchTreeItem | undefined =
             projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent ?? undefined;
         if (cycleElement && cycleElement.contextValue === "Cycle") {
             // Fetch the test themes from the server
-            const children: projectManagementTreeView.ProjectManagementTreeItem[] =
+            const children: projectManagementTreeView.BaseTestBenchTreeItem[] =
                 (await projectManagementTreeDataProvider?.getChildrenOfCycle(cycleElement)) ?? [];
             const cycleKey = cycleElement.item?.key;
             if (cycleKey) {
@@ -502,7 +502,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(
         context,
         allExtensionCommands.makeRoot,
-        (treeItem: projectManagementTreeView.ProjectManagementTreeItem) => {
+        (treeItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
             logger.debug("Command Called: Make Root for tree item:", treeItem);
             if (projectManagementTreeDataProvider) {
                 // Find out for which element type the make root command is called
@@ -558,7 +558,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(
         context,
         allExtensionCommands.displayInteractionsForSelectedTOV,
-        async (treeItem: projectManagementTreeView.ProjectManagementTreeItem) => {
+        async (treeItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
             logger.debug(
                 "Command Called: Display Interactions For Selected TOV command called for tree item:",
                 treeItem
