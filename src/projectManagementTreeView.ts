@@ -13,6 +13,7 @@ import { connection, logger, projectManagementTreeDataProvider } from "./extensi
 import { testElementsTreeDataProvider } from "./extension";
 import { allExtensionCommands, TreeItemContextValues } from "./constants";
 import { clearTestElementsTreeView } from "./testElementsTreeView";
+import { hideTestThemeTreeView, displayTestThemeTreeView } from "./testThemeTreeView";
 
 // Event payload
 export interface CycleDataForThemeTreeEvent {
@@ -56,6 +57,9 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
         this._onDidPrepareCycleDataForThemeTree.event;
 
+    // State for custom root item
+    private customRootItem: BaseTestBenchTreeItem | null = null;
+
     // Store keys of expanded nodes to restore expansion state of collapsible elements after a refresh.
     private expandedTreeItems: Set<string> = new Set<string>();
 
@@ -68,9 +72,15 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     /**
      * Refreshes the tree view.
+     * If isHardRefresh is true, it resets the custom root item.
+     * @param {boolean} isHardRefresh Optional flag to force a hard refresh.
      */
-    refresh(): void {
+    refresh(isHardRefresh: boolean = false): void {
         logger.debug("Refreshing project management tree view.");
+        if (isHardRefresh) {
+            this.customRootItem = null;
+            logger.trace("Hard refresh: Custom root has been reset.");
+        }
         this._onDidChangeTreeData.fire(undefined); // Fire with undefined to refresh from the root
         logger.trace("Project management tree view refreshed.");
     }
@@ -233,7 +243,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @private
      */
     private async getChildrenForProject(projectElement: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
-        logger.debug(`Workspaceing children (TOVs) for project: ${projectElement.label}`);
+        logger.debug(`Fetching children (TOVs) for project: ${projectElement.label}`);
         const projectKey = projectElement.item.key;
         if (!projectKey) {
             logger.error(`Project key is missing for project item: ${projectElement.label}`);
@@ -263,7 +273,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @private
      */
     private getChildrenForVersion(versionElement: BaseTestBenchTreeItem): BaseTestBenchTreeItem[] {
-        logger.debug(`Workspaceing children (Cycles) for TOV: ${versionElement.label}`);
+        logger.debug(`Fetching children (Cycles) for TOV: ${versionElement.label}`);
         // element.item is testBenchTypes.TreeNode representing a TOV
         // Its children array contains the Cycle nodes.
         const cycleNodes = versionElement.item.children ?? [];
@@ -356,6 +366,11 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         try {
             if (!element) {
                 // Root level: Fetch and display all projects
+                if (this.customRootItem) {
+                    // If a custom root item is set (via make root command), return it.
+                    this.customRootItem.parent = null;
+                    return [this.customRootItem];
+                }
                 return await this.getRootProjects();
             }
 
@@ -568,7 +583,26 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      */
     makeRoot(treeItem: BaseTestBenchTreeItem): void {
         logger.debug("Setting selected element as a temporary root:", treeItem.label);
-        this.refresh(); // re-trigger getChildren, which loads all projects.
+        if (treeItem) {
+            // To make it a root, its parent must be null.
+            // Make a shallow copy for the item data.
+            const newRoot = new BaseTestBenchTreeItem(
+                typeof treeItem.label === "string" ? treeItem.label : treeItem.label?.label || "Unknown Root",
+                treeItem.contextValue || "unknown",
+                treeItem.collapsibleState === vscode.TreeItemCollapsibleState.None
+                    ? vscode.TreeItemCollapsibleState.None
+                    : vscode.TreeItemCollapsibleState.Expanded, // Expand the new root by default if it's collapsible
+                { ...treeItem.item }, // Shallow copy of item data
+                null // Explicitly set parent to null
+            );
+
+            this.customRootItem = newRoot;
+            logger.info(`Item "${typeof newRoot.label === "string" ? newRoot.label : "N/A"}" is now the custom root.`);
+        } else {
+            this.customRootItem = null; // Clear custom root if null item is passed
+            logger.info("Custom root cleared.");
+        }
+        this._onDidChangeTreeData.fire(undefined); // Refresh the tree to show the new root
     }
 
     /**
@@ -626,7 +660,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Workspaceing data for cycle: ${currentCycleLabel}`,
+                title: `Fetching data for cycle: ${currentCycleLabel}`,
                 cancellable: false
             },
             async (progress) => {
@@ -972,21 +1006,6 @@ export async function hideProjectManagementTreeView(): Promise<void> {
  */
 export async function displayProjectManagementTreeView(): Promise<void> {
     await vscode.commands.executeCommand("projectManagementTree.focus");
-}
-
-/**
- * Hides the test theme tree view.
- */
-export async function hideTestThemeTreeView(): Promise<void> {
-    // testThemeTree is the ID of the tree view in package.json
-    await vscode.commands.executeCommand("testThemeTree.removeView");
-}
-
-/**
- * Displays the test theme tree view.
- */
-async function displayTestThemeTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testThemeTree.focus");
 }
 
 /**
