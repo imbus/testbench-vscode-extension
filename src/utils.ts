@@ -248,45 +248,51 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
             if (logger && enableLogging) {
                 logger.trace(`Active workspace found: "${workspaceFolder.uri.fsPath}"`);
             }
+            // If active editor's workspace is different from cache, update cache
+            cachedWorkspaceLocation = workspaceFolder.uri.fsPath;
             return workspaceFolder.uri.fsPath;
         }
     }
 
     // If no active editor is available, check if we have a cached workspace location.
     if (cachedWorkspaceLocation) {
-        if (logger && enableLogging) {
-            logger.trace(`Returning cached workspace location: "${cachedWorkspaceLocation}"`);
+        // Verify if the cached location still exists as a workspace folder
+        const exists: boolean | undefined = vscode.workspace.workspaceFolders?.some(
+            (folder) => folder.uri.fsPath === cachedWorkspaceLocation
+        );
+        if (exists) {
+            if (logger && enableLogging) {
+                logger.trace(`Returning cached workspace location: "${cachedWorkspaceLocation}"`);
+            }
+            return cachedWorkspaceLocation;
+        } else {
+            if (logger && enableLogging) {
+                logger.warn(`Cached workspace location "${cachedWorkspaceLocation}" no longer exists. Clearing cache.`);
+            }
+            cachedWorkspaceLocation = undefined; // Clear invalid cache
         }
-        return cachedWorkspaceLocation;
     }
 
     // Primary fallback: if no active editor and no cached value, use the workspace folders available.
     const workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        // Prompt the user to select one of the workspace folders.
-        const selectedWorkspaceFolder: vscode.WorkspaceFolder | undefined = await vscode.window.showWorkspaceFolderPick(
-            {
-                placeHolder: "Select a workspace folder"
-            }
-        );
-
-        // If the user makes a selection, cache and return it.
-        if (selectedWorkspaceFolder) {
-            cachedWorkspaceLocation = selectedWorkspaceFolder.uri.fsPath;
+        // If there are multiple folders, but no active editor/cache determined one,
+        // default to the first one without prompting initially.
+        // The user can change it later using the 'Set Workspace' command.
+        if (workspaceFolders.length >= 1) {
+            // Single and multiple folders
+            cachedWorkspaceLocation = workspaceFolders[0].uri.fsPath;
             if (logger && enableLogging) {
-                logger.trace(`User selected workspace: "${cachedWorkspaceLocation}"`);
+                if (workspaceFolders.length > 1) {
+                    logger.trace(
+                        `Multiple workspaces found and no active/cached preference; defaulting to first workspace: "${cachedWorkspaceLocation}"`
+                    );
+                } else {
+                    logger.trace(`Using single available workspace folder: "${cachedWorkspaceLocation}"`);
+                }
             }
             return cachedWorkspaceLocation;
         }
-
-        // If the user cancels, cache the first available workspace folder.
-        cachedWorkspaceLocation = workspaceFolders[0].uri.fsPath;
-        if (logger && enableLogging) {
-            logger.trace(
-                `No workspace selected; caching and using first workspace folder: "${cachedWorkspaceLocation}"`
-            );
-        }
-        return cachedWorkspaceLocation;
     }
 
     // Fallback: use the user's home directory as a safe option.
