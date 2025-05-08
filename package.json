@@ -330,7 +330,7 @@
                 "title": "TestBench: Make root"
             },
             {
-                "command": "testbenchExtension.selectAndLoadProject",
+                "command": "testbenchExtension.displayAllProjects",
                 "title": "TestBench: Display Projects",
                 "icon": {
                     "light": "resources/icons/menu-light.svg",
@@ -495,7 +495,7 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.selectAndLoadProject",
+                    "command": "testbenchExtension.displayAllProjects",
                     "group": "navigation@3",
                     "when": "view == testThemeTree",
                     "icon": {
@@ -504,7 +504,7 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.selectAndLoadProject",
+                    "command": "testbenchExtension.displayAllProjects",
                     "group": "navigation@2",
                     "when": "view == testElementsView",
                     "icon": {

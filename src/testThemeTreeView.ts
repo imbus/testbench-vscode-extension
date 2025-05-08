@@ -16,6 +16,11 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
         new vscode.EventEmitter<ProjectManagementTreeItem | void>();
     readonly onDidChangeTreeData: vscode.Event<ProjectManagementTreeItem | void> = this._onDidChangeTreeData.event;
 
+    private _currentCycleKey: string | null = null;
+    public isCurrentCycle(cycleKey: string): boolean {
+        return this._currentCycleKey === cycleKey;
+    }
+
     /** Root elements for the Test Theme Tree view */
     rootElements: ProjectManagementTreeItem[] = [];
 
@@ -29,7 +34,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
         logger.debug("Refreshing test theme tree view.");
         // Store the keys of the expanded items to preserve state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
-        this._onDidChangeTreeData.fire();
+        // Explicitly fire with undefined to ensure a full refresh from the root.
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
@@ -80,10 +86,12 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
      * Sets the root elements of the test theme tree and refreshes the view.
      * @param {ProjectManagementTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
      */
-    setRoots(roots: ProjectManagementTreeItem[]): void {
+    setRoots(roots: ProjectManagementTreeItem[], cycleKey: string): void {
         // Output of roots is circular and large, so it is commented out.
         // logger.trace("Setting root elements of the test theme tree to:", roots);
+        this._currentCycleKey = cycleKey;
         this.rootElements = roots;
+        this._onDidChangeTreeData.fire();
         this.refresh();
     }
 
@@ -143,7 +151,10 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<Projec
      */
     clearTree(): void {
         logger.trace("Clearing the test theme tree.");
+        this._currentCycleKey = null;
         this.rootElements = [];
-        this.refresh();
+        // this.expandedTreeItems.clear();
+        this._onDidChangeTreeData.fire();
+        // this.refresh();
     }
 }

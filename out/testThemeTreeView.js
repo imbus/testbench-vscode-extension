@@ -39,6 +39,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TestThemeTreeDataProvider = void 0;
 const vscode = __importStar(require("vscode"));
+const projectManagementTreeView_1 = require("./projectManagementTreeView");
 const extension_1 = require("./extension");
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display
@@ -47,6 +48,10 @@ const extension_1 = require("./extension");
 class TestThemeTreeDataProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
+    _currentCycleKey = null;
+    isCurrentCycle(cycleKey) {
+        return this._currentCycleKey === cycleKey;
+    }
     /** Root elements for the Test Theme Tree view */
     rootElements = [];
     /** Set to store keys of expanded items so that refresh can restore expansion state */
@@ -58,7 +63,8 @@ class TestThemeTreeDataProvider {
         extension_1.logger.debug("Refreshing test theme tree view.");
         // Store the keys of the expanded items to preserve state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
-        this._onDidChangeTreeData.fire();
+        // Explicitly fire with undefined to ensure a full refresh from the root.
+        this._onDidChangeTreeData.fire(undefined);
     }
     /**
      * Returns the parent of a given tree item.
@@ -76,6 +82,13 @@ class TestThemeTreeDataProvider {
      */
     async getChildren(element) {
         if (!element) {
+            if (!this.rootElements || this.rootElements.length === 0) {
+                extension_1.logger.trace("TestThemeTreeDataProvider: No root elements found, returning placeholder.");
+                // If no root elements are found, return a placeholder item.
+                return [
+                    new projectManagementTreeView_1.ProjectManagementTreeItem("No test themes found for this cycle", "placeholder", vscode.TreeItemCollapsibleState.None, {}, null)
+                ];
+            }
             return this.rootElements;
         }
         return element.children || [];
@@ -92,10 +105,12 @@ class TestThemeTreeDataProvider {
      * Sets the root elements of the test theme tree and refreshes the view.
      * @param {ProjectManagementTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
      */
-    setRoots(roots) {
+    setRoots(roots, cycleKey) {
         // Output of roots is circular and large, so it is commented out.
         // logger.trace("Setting root elements of the test theme tree to:", roots);
+        this._currentCycleKey = cycleKey;
         this.rootElements = roots;
+        this._onDidChangeTreeData.fire();
         this.refresh();
     }
     /**
@@ -146,8 +161,11 @@ class TestThemeTreeDataProvider {
      */
     clearTree() {
         extension_1.logger.trace("Clearing the test theme tree.");
+        this._currentCycleKey = null;
         this.rootElements = [];
-        this.refresh();
+        // this.expandedTreeItems.clear();
+        this._onDidChangeTreeData.fire();
+        // this.refresh();
     }
 }
 exports.TestThemeTreeDataProvider = TestThemeTreeDataProvider;

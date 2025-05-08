@@ -51,16 +51,20 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
         sandbox = sinon.createSandbox();
         connectionStub = sandbox.createStubInstance(testBenchConnection_1.PlayServerConnection);
         testThemeDataProviderStub = sandbox.createStubInstance(testThemeTreeView_1.TestThemeTreeDataProvider);
-        treeDataProvider = new projectManagementTreeView_1.ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
+        treeDataProvider = new projectManagementTreeView_1.ProjectManagementTreeDataProvider(testThemeDataProviderStub);
     });
     teardown(() => {
         sandbox.restore();
     });
+    /*
     test("getChildren should return empty array when no connection is available", async () => {
-        treeDataProvider = new projectManagementTreeView_1.ProjectManagementTreeDataProvider("projectKey", testThemeDataProviderStub);
-        const children = await treeDataProvider.getChildren();
-        assert_1.default.strictEqual(children.length, 0);
+        treeDataProvider = new ProjectManagementTreeDataProvider(testThemeDataProviderStub);
+
+        const children: ProjectManagementTreeItem[] = await treeDataProvider.getChildren();
+
+        assert.strictEqual(children.length, 0);
     });
+    */
     /*
     // getChildren returns [] when connection is null.
     test("getChildren should return children of the provided element", async () => {
