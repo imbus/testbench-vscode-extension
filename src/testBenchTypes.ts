@@ -119,6 +119,39 @@ export interface CycleStructure {
     }>;
 }
 
+export type CycleNodeData = {
+    base: {
+        key: string;
+        numbering: string;
+        parentKey: string;
+        name: string;
+        uniqueID: string;
+        matchesFilter: boolean;
+    };
+    spec?: {
+        // Optional
+        key: string;
+        locker: string | null;
+        status: string;
+    };
+    aut?: {
+        // Optional
+        key: string;
+        locker: string | null;
+        status: string;
+    };
+    exec?: {
+        // Optional
+        status: string;
+        execStatus: string;
+        verdict: string;
+        key: string;
+        locker: string | null;
+    };
+    filters?: any[]; // Optional
+    elementType: string; // e.g., TestThemeNode, TestCaseSetNode, TestCaseNode
+};
+
 // Interface for Test Case
 export interface TestCase {
     uniqueID: string;

@@ -40,7 +40,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ProjectManagementTreeItem = exports.ProjectManagementTreeDataProvider = exports.testThemeTreeView = exports.projectManagementTreeView = void 0;
+exports.BaseTestBenchTreeItem = exports.ProjectManagementTreeDataProvider = exports.testThemeTreeView = exports.projectManagementTreeView = void 0;
 exports.getProjectManagementTreeView = getProjectManagementTreeView;
 exports.setProjectManagementTreeView = setProjectManagementTreeView;
 exports.getTestThemeTreeView = getTestThemeTreeView;
@@ -111,218 +111,246 @@ class ProjectManagementTreeDataProvider {
     /**
      * Returns the parent of a given tree item.
      *
-     * @param {ProjectManagementTreeItem} element The tree item.
-     * @returns {ProjectManagementTreeItem | null} The parent tree item or null.
+     * @param {BaseTestBenchTreeItem} element The tree item.
+     * @returns {BaseTestBenchTreeItem | null} The parent tree item or null.
      */
     getParent(element) {
         return element.parent;
     }
+    // Factory method to create a tree item based on the provided JSON data and context value.
+    static TreeItemFactory = class {
+        static create(jsonData, // Can be Project, TreeNode, or CycleStructure node's 'base' or the node itself
+        contextValue, // Explicit context value like TreeItemContextValues.PROJECT
+        parent) {
+            let itemKey;
+            let itemName;
+            let itemData; // This will hold the object that BaseTestBenchTreeItem's 'item' property will refer to.
+            let label;
+            let defaultCollapsibleState;
+            // Normalize data extraction
+            // For TestThemeNode, TestCaseSetNode, TestCaseNode, jsonData is expected to be the 'base' object or the full node from CycleStructure
+            if (contextValue === constants_1.TreeItemContextValues.TEST_THEME_NODE ||
+                contextValue === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE ||
+                contextValue === constants_1.TreeItemContextValues.TEST_CASE_NODE) {
+                // If jsonData itself has 'key' and 'name', it might be the 'base' object already.
+                // If it has 'base.key', then it's the full CycleStructure node.
+                itemData = jsonData.base || jsonData; // Use jsonData.base if it exists, otherwise jsonData
+                if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
+                    extension_1.logger.warn("Attempted to create test theme/case tree item with invalid data structure:", jsonData);
+                    return null;
+                }
+                itemKey = itemData.key;
+                itemName = itemData.name;
+                label = itemData.numbering ? `${itemData.numbering} ${itemName}` : itemName;
+            }
+            else {
+                // For Project, Version, Cycle
+                itemData = jsonData; // jsonData is testBenchTypes.Project or testBenchTypes.TreeNode
+                if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
+                    extension_1.logger.warn("Attempted to create project/version/cycle tree item with invalid data structure:", jsonData);
+                    return null;
+                }
+                itemKey = itemData.key;
+                itemName = itemData.name;
+                label = itemName;
+            }
+            if (itemKey === undefined || itemName === undefined) {
+                extension_1.logger.warn(`Attempted to create tree item with missing key or name. Context: ${contextValue}, Key: ${itemKey}, Name: ${itemName}`, jsonData);
+                return null;
+            }
+            // Determine default collapsible state based on type and potential children
+            switch (contextValue) {
+                case constants_1.TreeItemContextValues.PROJECT: {
+                    const projectData = itemData;
+                    const hasProjectChildren = (projectData.tovsCount && projectData.tovsCount > 0) ||
+                        (projectData.cyclesCount && projectData.cyclesCount > 0);
+                    defaultCollapsibleState = hasProjectChildren
+                        ? vscode.TreeItemCollapsibleState.Collapsed
+                        : vscode.TreeItemCollapsibleState.None;
+                    break;
+                }
+                case constants_1.TreeItemContextValues.VERSION: {
+                    const versionData = itemData;
+                    defaultCollapsibleState =
+                        versionData.children && versionData.children.length > 0
+                            ? vscode.TreeItemCollapsibleState.Collapsed
+                            : vscode.TreeItemCollapsibleState.None;
+                    break;
+                }
+                case constants_1.TreeItemContextValues.CYCLE:
+                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.None; // Cycles offload children
+                    break;
+                case constants_1.TreeItemContextValues.TEST_THEME_NODE:
+                    // Test Themes are collapsible, Test Case Sets are not.
+                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+                    break;
+                case constants_1.TreeItemContextValues.TEST_CASE_SET_NODE:
+                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+                    break;
+                case constants_1.TreeItemContextValues.TEST_CASE_NODE: // Test cases are not displayed in these trees
+                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+                    break;
+                default:
+                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+            }
+            // itemData (which is jsonData or jsonData.base) is passed to BaseTestBenchTreeItem constructor
+            return new BaseTestBenchTreeItem(label, contextValue, defaultCollapsibleState, itemData, parent);
+        }
+    };
     /**
      * Creates a TestbenchTreeItem from raw JSON data.
      *
      * @param {any} jsonData The raw JSON data.
      * @param {string} explicitContextValue An explicit context value if jsonData.nodeType is not reliable.
-     * @param {ProjectManagementTreeItem | null} parent The parent tree item.
-     * @returns {ProjectManagementTreeItem | null} A new TestbenchTreeItem or null.
+     * @param {BaseTestBenchTreeItem | null} parent The parent tree item.
+     * @returns {BaseTestBenchTreeItem | null} A new TestbenchTreeItem or null.
      */
     createTreeItem(jsonData, explicitContextValue, parent) {
-        if (!jsonData || !jsonData.key || !jsonData.name) {
-            // Check for required properties for a valid tree item
-            extension_1.logger.warn("Attempted to create tree item with invalid jsonData:", jsonData);
+        if (!jsonData) {
+            // TreeItemFactory will do more detailed validation
+            extension_1.logger.warn("Attempted to create tree item with invalid jsonData (null or undefined).");
             return null;
         }
-        // Extract key, name, and other base data
-        let itemKey; // Key is also used for tracking expansion state
-        let itemName;
-        let itemBaseData; // To hold the object containing key/name
-        if (explicitContextValue === constants_1.TreeItemContextValues.TEST_THEME_NODE ||
-            explicitContextValue === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE ||
-            explicitContextValue === constants_1.TreeItemContextValues.TEST_CASE_NODE) {
-            // Data comes from fetchCycleStructureOfCycleInProject.
-            itemBaseData = jsonData;
-            if (!itemBaseData) {
-                extension_1.logger.warn("Tree item data missing 'base' property:", jsonData);
-                return null;
-            }
-            itemKey = itemBaseData.key;
-            itemName = itemBaseData.name;
-            // Check if key or name are missing AFTER trying to access them
-            if (!itemKey || itemName === undefined) {
-                extension_1.logger.warn(`Attempted to create tree item with missing key or name. Key: ${itemKey}, Name: ${itemName}`, itemBaseData);
-                return null;
-            }
-            // Adjust label specifically for these types if numbering exists
-            if (itemBaseData.numbering) {
-                itemName = `${itemBaseData.numbering} ${itemBaseData.name}`;
-            }
-        }
-        else {
-            // Data comes from getProjectTreeOfProject or getProjectsList
-            itemBaseData = jsonData;
-            itemKey = jsonData.key;
-            itemName = jsonData.name;
-        }
-        // Check if needed properties were found
-        if (!itemKey || itemName === undefined) {
-            // Check itemName for undefined specifically
-            extension_1.logger.warn(`Attempted to create tree item with missing key or name. Key: ${itemKey}, Name: ${itemName}`, itemBaseData);
+        const treeItem = ProjectManagementTreeDataProvider.TreeItemFactory.create(jsonData, // Pass the raw jsonData
+        explicitContextValue, parent);
+        if (!treeItem) {
             return null;
         }
-        // contextValue can be one of these types, which can be found in the response from the server:
-        // Project, Version, Cycle, TestThemeNode, TestCaseSetNode, TestCaseNode
-        const contextValue = explicitContextValue;
-        const label = itemName; // Use the extracted name/label
-        // Cycle elements are not collapsible since children of test cycles are shown in the Test Theme Tree.
-        // Determine default collapsible state based on type and potential children
-        let defaultCollapsibleState;
-        if (contextValue === constants_1.TreeItemContextValues.CYCLE) {
-            defaultCollapsibleState = vscode.TreeItemCollapsibleState.None; // Cycles offload children
-        }
-        else if (contextValue === constants_1.TreeItemContextValues.PROJECT) {
-            // Projects are collapsible if they have TOVs or Cycles reported by the API
-            const hasPotentialChildren = (jsonData.tovsCount && jsonData.tovsCount > 0) || (jsonData.cyclesCount && jsonData.cyclesCount > 0);
-            defaultCollapsibleState = hasPotentialChildren
-                ? vscode.TreeItemCollapsibleState.Collapsed
-                : vscode.TreeItemCollapsibleState.None;
-        }
-        else if (contextValue === constants_1.TreeItemContextValues.VERSION) {
-            // TOVs are collapsible if they have children (Cycles) in the TreeNode structure
-            defaultCollapsibleState =
-                jsonData.children && jsonData.children.length > 0
-                    ? vscode.TreeItemCollapsibleState.Collapsed
-                    : vscode.TreeItemCollapsibleState.None;
-        }
-        else {
-            // Default fallback for other types
-            defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
-        }
-        const treeItem = new ProjectManagementTreeItem(label, contextValue, 
-        // Initially set to the default state determined above
-        defaultCollapsibleState, jsonData, parent);
         // Restore Expansion State
-        // Check if this item's key was previously expanded
-        if (this.expandedTreeItems.has(itemKey) && defaultCollapsibleState !== vscode.TreeItemCollapsibleState.None) {
-            // If it was expanded, override the default state to Expanded
+        // The `itemKey` used for expandedTreeItems should come from treeItem.item.key
+        // which the factory has now set based on the jsonData structure.
+        const itemKeyForExpansion = treeItem.item?.key;
+        if (itemKeyForExpansion &&
+            this.expandedTreeItems.has(itemKeyForExpansion) &&
+            treeItem.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
             treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-            extension_1.logger.trace(`Restoring expanded state for item: ${label} (Key: ${itemKey})`);
-        }
-        // Update tooltip and description after creation
-        if (contextValue === constants_1.TreeItemContextValues.PROJECT ||
-            contextValue === constants_1.TreeItemContextValues.VERSION ||
-            contextValue === constants_1.TreeItemContextValues.CYCLE) {
-            treeItem.tooltip = `Type: ${contextValue}\nName: ${treeItem.item.name}\nStatus: ${treeItem.statusOfTreeItem}\nKey: ${treeItem.item.key}`;
-            if (contextValue === constants_1.TreeItemContextValues.PROJECT) {
-                treeItem.tooltip += `\nTOVs: ${treeItem.item.tovsCount || 0}\nCycles: ${treeItem.item.cyclesCount || 0}`;
-            }
-        }
-        else if (itemBaseData &&
-            (contextValue === constants_1.TreeItemContextValues.TEST_THEME_NODE ||
-                contextValue === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE ||
-                contextValue === constants_1.TreeItemContextValues.TEST_CASE_NODE)) {
-            // Use itemBaseData for these types
-            treeItem.tooltip = `Type: ${contextValue}\nName: ${itemBaseData.name}\nStatus: ${treeItem.statusOfTreeItem}\nID: ${itemBaseData.uniqueID}`;
-            if (itemBaseData.numbering) {
-                treeItem.tooltip = `Numbering: ${itemBaseData.numbering}\n${treeItem.tooltip}`;
-            }
-            treeItem.description = itemBaseData.uniqueID || "";
+            extension_1.logger.trace(`Restoring expanded state for item: ${treeItem.label} (Key: ${itemKeyForExpansion})`);
         }
         return treeItem;
+    }
+    /**
+     * Fetches and returns the children (Test Object Versions) for a given Project element.
+     * @param {BaseTestBenchTreeItem} projectElement The parent Project element.
+     * @returns {Promise<BaseTestBenchTreeItem[]>}
+     * @private
+     */
+    async getChildrenForProject(projectElement) {
+        extension_1.logger.debug(`Workspaceing children (TOVs) for project: ${projectElement.label}`);
+        const projectKey = projectElement.item.key;
+        if (!projectKey) {
+            extension_1.logger.error(`Project key is missing for project item: ${projectElement.label}`);
+            return [];
+        }
+        const projectTree = await extension_1.connection.getProjectTreeOfProject(projectKey); // connection is checked
+        if (projectTree && projectTree.children && projectTree.children.length > 0) {
+            return projectTree.children
+                .map((tovNode // tovNode is testBenchTypes.TreeNode
+            ) => this.createTreeItem(tovNode, tovNode.nodeType, projectElement) // tovNode.nodeType should be "Version"
+            )
+                .filter((item) => item !== null);
+        }
+        extension_1.logger.debug(`No children (TOVs) found for project: ${projectElement.label}`);
+        return [];
+    }
+    /**
+     * Returns the children (Cycles) for a given Version (TOV) element.
+     * These are typically pre-loaded as part of the Version's data.
+     * @param {BaseTestBenchTreeItem} versionElement The parent Version element.
+     * @returns {BaseTestBenchTreeItem[]}
+     * @private
+     */
+    getChildrenForVersion(versionElement) {
+        extension_1.logger.debug(`Workspaceing children (Cycles) for TOV: ${versionElement.label}`);
+        // element.item is testBenchTypes.TreeNode representing a TOV
+        // Its children array contains the Cycle nodes.
+        const cycleNodes = versionElement.item.children ?? [];
+        return cycleNodes
+            .map((cycleNode // cycleNode is a testBenchTypes.TreeNode
+        ) => this.createTreeItem(cycleNode, cycleNode.nodeType, versionElement) // cycleNode.nodeType should be "Cycle"
+        )
+            .filter((item) => item !== null);
+    }
+    /**
+     * Fetches and returns the root projects for the tree view.
+     * @private
+     */
+    async getRootProjects() {
+        extension_1.logger.debug("Fetching all projects for the root of Project Management Tree.");
+        const projectList = await extension_1.connection.getProjectsList(); // connection is checked before calling this
+        if (projectList && projectList.length > 0) {
+            return projectList
+                .map((project) => this.createTreeItem(project, constants_1.TreeItemContextValues.PROJECT, null))
+                .filter((item) => item !== null);
+        }
+        else if (projectList) {
+            // Empty list
+            extension_1.logger.debug("No projects found on the server.");
+            return [
+                new BaseTestBenchTreeItem("No projects found", "info.noProjects", vscode.TreeItemCollapsibleState.None, {}, null)
+            ];
+        }
+        else {
+            // Error during fetch
+            extension_1.logger.error("Failed to fetch project list from the server.");
+            return [
+                new BaseTestBenchTreeItem("Error fetching projects", "error.fetchProjects", vscode.TreeItemCollapsibleState.None, {}, null)
+            ];
+        }
+    }
+    /**
+     * Handles the expansion of a Cycle element.
+     * Offloads the actual children to the TestThemeTreeDataProvider.
+     * Returns an empty array as Cycle elements do not display children directly in this tree.
+     * @param {BaseTestBenchTreeItem} cycleElement The Cycle element.
+     * @returns {Promise<BaseTestBenchTreeItem[]>}
+     * @private
+     */
+    async handleCycleExpansion(cycleElement) {
+        extension_1.logger.trace(`Cycle node ${cycleElement.label} expanded in Project Tree. Offloading children to Test Theme Tree.`);
+        // Offload children to TestThemeTree
+        this.testThemeDataProvider.clearTree(); // Clear previous
+        const childrenOfCycle = await this.getChildrenOfCycle(cycleElement); // Fetches and prepares children for TestThemeTree
+        const cycleKey = cycleElement.item?.key;
+        if (typeof cycleKey === "string") {
+            this.testThemeDataProvider.setRoots(childrenOfCycle, cycleKey);
+        }
+        else {
+            extension_1.logger.error(`Cycle key not found for element ${cycleElement.label} in getChildren. Clearing test theme tree.`);
+            this.testThemeDataProvider.clearTree();
+        }
+        return []; // Return empty as children are in another tree
     }
     /**
      * Gets the children of a given tree item.
      * If no element is provided, it returns the root project.
      * Called when the tree view is first loaded or refreshed.
      *
-     * @param {ProjectManagementTreeItem} element Optional parent tree item.
-     * @returns {Promise<ProjectManagementTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
+     * @param {BaseTestBenchTreeItem} element Optional parent tree item.
+     * @returns {Promise<BaseTestBenchTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
      */
     async getChildren(element) {
         if (!extension_1.connection) {
             // If no connection is available, return a placeholder item.
             return [
-                new ProjectManagementTreeItem("Not connected to TestBench", "error.notConnected", vscode.TreeItemCollapsibleState.None, {}, null)
+                new BaseTestBenchTreeItem("Not connected to TestBench", "error.notConnected", vscode.TreeItemCollapsibleState.None, {}, null)
             ];
         }
         try {
-            // Fetch Root Projects
             if (!element) {
                 // Root level: Fetch and display all projects
-                extension_1.logger.debug("Fetching all projects for the root of Project Management Tree.");
-                const projectList = await extension_1.connection.getProjectsList();
-                if (projectList && projectList.length > 0) {
-                    // If projects are found, map each project data to a ProjectManagementTreeItem
-                    // createTreeItem handles expansion state.
-                    return projectList
-                        .map((project) => 
-                    // Create item for Project: pass project data, explicit context, and null parent.
-                    this.createTreeItem(project, constants_1.TreeItemContextValues.PROJECT, null))
-                        .filter((item) => item !== null); // Filter out any null items if creation failed.
-                }
-                else if (projectList) {
-                    // Empty list
-                    extension_1.logger.debug("No projects found on the server.");
-                    return [
-                        new ProjectManagementTreeItem("No projects found", "info.noProjects", vscode.TreeItemCollapsibleState.None, {}, null)
-                    ];
-                }
-                else {
-                    // Error during fetch, return placeholder
-                    extension_1.logger.error("Failed to fetch project list from the server.");
-                    return [
-                        new ProjectManagementTreeItem("Error fetching projects", "error.fetchProjects", vscode.TreeItemCollapsibleState.None, {}, null)
-                    ];
-                }
+                return await this.getRootProjects();
             }
             // Children of a Project item (Test Object Versions)
             if (element.contextValue === constants_1.TreeItemContextValues.PROJECT) {
-                extension_1.logger.debug(`Fetching children (TOVs) for project: ${element.label}`);
-                const projectKey = element.item.key; // element.item is testBenchTypes.Project
-                if (!projectKey) {
-                    extension_1.logger.error(`Project key is missing for project item: ${element.label}`);
-                    return [];
-                }
-                // Fetch the detailed tree for this project, which contains TOVs as children
-                const projectTree = await extension_1.connection.getProjectTreeOfProject(projectKey);
-                // Check if the project tree and its children (TOVs) exist.
-                if (projectTree && projectTree.children && projectTree.children.length > 0) {
-                    return projectTree.children
-                        .map((tovNode // tovNode is testBenchTypes.TreeNode
-                    ) => 
-                    // Pass `element` as the parent
-                    this.createTreeItem(tovNode, tovNode.nodeType, element) // tovNode.nodeType should be "Version"
-                    )
-                        .filter((item) => item !== null);
-                }
-                extension_1.logger.debug(`No children (TOVs) found for project: ${element.label}`);
-                return [];
+                return await this.getChildrenForProject(element);
             }
             // Children of a TOV (Cycles)
             if (element.contextValue === constants_1.TreeItemContextValues.VERSION) {
-                extension_1.logger.debug(`Fetching children (Cycles) for TOV: ${element.label}`);
-                // element.item is testBenchTypes.TreeNode representing a TOV
-                // Its children array contains the Cycle nodes.
-                const cycleNodes = element.item.children ?? [];
-                return cycleNodes
-                    .map((cycleNode // cycleNode is a testBenchTypes.TreeNode
-                ) => this.createTreeItem(cycleNode, cycleNode.nodeType, element) // cycleNode.nodeType should be "Cycle"
-                )
-                    .filter((item) => item !== null);
+                return this.getChildrenForVersion(element);
             }
-            // Cycles do not show children directly in this tree; they are offloaded to TestThemeTree
+            // Cycles do not show children directly in this tree: they are offloaded to TestThemeTree
             if (element.contextValue === constants_1.TreeItemContextValues.CYCLE) {
-                extension_1.logger.trace(`Cycle node ${element.label} expanded in Project Tree. Offloading children to Test Theme Tree.`);
-                // Offload children to TestThemeTree
-                this.testThemeDataProvider.clearTree(); // Clear previous
-                const childrenOfCycle = await this.getChildrenOfCycle(element); // Fetche and prepare children for TestThemeTree
-                const cycleKey = element.item?.key;
-                if (typeof cycleKey === 'string') {
-                    this.testThemeDataProvider.setRoots(childrenOfCycle, cycleKey);
-                }
-                else {
-                    extension_1.logger.error(`Cycle key not found for element ${element.label} in getChildren. Clearing test theme tree.`);
-                    this.testThemeDataProvider.clearTree();
-                }
-                return []; // Return empty as children are in another tree
+                return await this.handleCycleExpansion(element);
             }
             // Fallback for unexpected element types or elements with pre-loaded children.
             if (element.children) {
@@ -334,16 +362,16 @@ class ProjectManagementTreeDataProvider {
             extension_1.logger.error(`Error in getChildren for element ${element?.label || "root"}:`, error);
             vscode.window.showErrorMessage(`Error fetching tree data: ${error instanceof Error ? error.message : "Unknown error"}`);
             return [
-                new ProjectManagementTreeItem("Error loading children", "error.generic", vscode.TreeItemCollapsibleState.None, {}, null)
+                new BaseTestBenchTreeItem("Error loading children", "error.generic", vscode.TreeItemCollapsibleState.None, {}, null)
             ];
         }
         extension_1.logger.warn(`getChildren reached end without returning for element: ${element?.label}`);
-        return []; // Default empty return
+        return [];
     }
     /**
      * Adds the key of an expanded element to the set used for state preservation.
      * Called by the tree view's onDidExpandElement listener.
-     * @param {ProjectManagementTreeItem} element The element that was expanded.
+     * @param {BaseTestBenchTreeItem} element The element that was expanded.
      */
     rememberExpandedItem(element) {
         if (element && element.item && element.item.key) {
@@ -354,7 +382,7 @@ class ProjectManagementTreeDataProvider {
     /**
      * Removes the key of a collapsed element from the set used for state preservation.
      * Called by the tree view's onDidCollapseElement listener.
-     * @param {ProjectManagementTreeItem} element The element that was collapsed.
+     * @param {BaseTestBenchTreeItem} element The element that was collapsed.
      */
     forgetExpandedItem(element) {
         if (element && element.item && element.item.key) {
@@ -365,8 +393,8 @@ class ProjectManagementTreeDataProvider {
     /**
      * Fetches the sub-elements of a cycle element and builds the test theme tree.
      *
-     * @param {ProjectManagementTreeItem} cycleElement The cycle tree item.
-     * @returns {Promise<ProjectManagementTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
+     * @param {BaseTestBenchTreeItem} cycleElement The cycle tree item.
+     * @returns {Promise<BaseTestBenchTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
      */
     async getChildrenOfCycle(cycleElement) {
         extension_1.logger.trace("Fetching children of cycle element:", cycleElement.label);
@@ -420,8 +448,8 @@ class ProjectManagementTreeDataProvider {
          * creates corresponding tree items, and handles hierarchy and expansion state.
          *
          * @param {string} parentCycleKey - The key of the parent element whose children are being built.
-         * @param {ProjectManagementTreeItem} parentTreeItem - The tree item representing the parent.
-         * @returns {ProjectManagementTreeItem[]} An array of tree items representing the children for the Test Theme tree.
+         * @param {BaseTestBenchTreeItem} parentTreeItem - The tree item representing the parent.
+         * @returns {BaseTestBenchTreeItem[]} An array of tree items representing the children for the Test Theme tree.
          */
         const buildTestThemeTree = (parentCycleKey, parentTreeItem) => {
             // Filter potential children
@@ -505,7 +533,7 @@ class ProjectManagementTreeDataProvider {
     /**
      * Returns a TreeItem representation for the given element.
      *
-     * @param {ProjectManagementTreeItem} element The tree item.
+     * @param {BaseTestBenchTreeItem} element The tree item.
      * @returns {vscode.TreeItem} The tree item.
      */
     getTreeItem(element) {
@@ -514,7 +542,7 @@ class ProjectManagementTreeDataProvider {
     /**
      * Sets the selected tree item as the root and refreshes the tree.
      *
-     * @param {ProjectManagementTreeItem} treeItem The tree item to set as root.
+     * @param {BaseTestBenchTreeItem} treeItem The tree item to set as root.
      */
     makeRoot(treeItem) {
         extension_1.logger.debug("Setting selected element as a temporary root:", treeItem.label);
@@ -523,7 +551,7 @@ class ProjectManagementTreeDataProvider {
     /**
      * Handles expansion and collapse of a tree item.
      *
-     * @param {ProjectManagementTreeItem} element The tree item.
+     * @param {BaseTestBenchTreeItem} element The tree item.
      * @param {boolean} expanded True if the item is expanded, false otherwise.
      * @returns {Promise<void>} A promise that resolves when the operation is complete.
      */
@@ -551,7 +579,7 @@ class ProjectManagementTreeDataProvider {
     /**
      * Handles a click on a test cycle element to initialize the test theme tree and the test elements tree.
      *
-     * @param {ProjectManagementTreeItem} projectsTreeViewItem The clicked tree item in the projects tree view.
+     * @param {BaseTestBenchTreeItem} projectsTreeViewItem The clicked tree item in the projects tree view.
      * @returns {Promise<void>} A promise that resolves when the operation is complete.
      */
     async handleTestCycleClick(projectsTreeViewItem) {
@@ -636,7 +664,7 @@ exports.ProjectManagementTreeDataProvider = ProjectManagementTreeDataProvider;
 /**
  * Finds the project key (serial) for a given cycle element by traversing upward in the tree hierarchy.
  *
- * @param {ProjectManagementTreeItem} element The cycle tree item.
+ * @param {BaseTestBenchTreeItem} element The cycle tree item.
  * @returns {string | null} The project key as a string if found; otherwise null.
  */
 function findProjectKeyOfCycleElement(element) {
@@ -662,7 +690,7 @@ function findProjectKeyOfCycleElement(element) {
  * Finds the project key (serial) for a given project tree item by traversing upward in the tree hierarchy.
  * The input element can be of type Project, Version, Cycle, TestThemeNode, TestCaseSetNode, or TestCaseNode.
  *
- * @param {ProjectManagementTreeItem} element The project tree item.
+ * @param {BaseTestBenchTreeItem} element The project tree item.
  * @returns {string | null} The project key as a string if found; otherwise null.
  */
 function findProjectKeyOfProjectTreeItem(element) {
@@ -682,7 +710,7 @@ function findProjectKeyOfProjectTreeItem(element) {
 /**
  * Finds the cycle key (serial) for a given tree element by traversing upward in the tree hierarchy.
  *
- * @param {ProjectManagementTreeItem} element The tree item.
+ * @param {BaseTestBenchTreeItem} element The tree item.
  * @returns {string | null} The cycle key as a string if found; otherwise null.
  */
 function findCycleKeyOfTreeElement(element) {
@@ -704,7 +732,7 @@ function findCycleKeyOfTreeElement(element) {
 /**
  * Represents a tree item (Project, TOV, Cycle, TestThemeNode, TestCaseSetNode, etc.) in the tree view.
  */
-class ProjectManagementTreeItem extends vscode.TreeItem {
+class BaseTestBenchTreeItem extends vscode.TreeItem {
     item;
     parent;
     children;
@@ -716,7 +744,7 @@ class ProjectManagementTreeItem extends vscode.TreeItem {
      * @param {string} contextValue The type of the tree item.
      * @param {vscode.TreeItemCollapsibleState} collapsibleState The initial collapsible state.
      * @param {any} item The original data of the tree item.
-     * @param {ProjectManagementTreeItem | null} parent The parent tree item.
+     * @param {BaseTestBenchTreeItem | null} parent The parent tree item.
      */
     constructor(label, contextValue, collapsibleState, item, parent = null) {
         super(label, collapsibleState);
@@ -724,22 +752,31 @@ class ProjectManagementTreeItem extends vscode.TreeItem {
         this.contextValue = contextValue;
         this.parent = parent;
         this.statusOfTreeItem = item.exec?.status || item.status || "None"; // Possible values: Active, Planned, Finished, Closed, etc.
+        // item.base is specific to CycleStructure nodes (TestThemes, TestCaseSets)
+        const itemDataForTooltip = item?.base || item;
         // Set the tooltip based on the context value.
         // Tooltip for project, TOV and cycle elements looks like this: Type, Name, Status, Key
         if (contextValue === constants_1.TreeItemContextValues.PROJECT ||
             contextValue === constants_1.TreeItemContextValues.VERSION ||
             contextValue === constants_1.TreeItemContextValues.CYCLE) {
-            this.tooltip = `Type: ${contextValue}\nName: ${item.name}\nStatus: ${this.statusOfTreeItem}\nKey: ${item.key}`;
+            this.tooltip = `Type: ${contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nKey: ${itemDataForTooltip.key}`;
+            // For a project, add TOVs and cycles count to the tooltip.
+            if (contextValue === constants_1.TreeItemContextValues.PROJECT && item) {
+                this.tooltip += `\nTOVs: ${item.tovsCount || 0}\nCycles: ${item.cyclesCount || 0}`;
+            }
         }
         // Tooltip for test theme, test case set and test case looks like this: Numbering, Type, Name, Status, ID
         else if (contextValue === constants_1.TreeItemContextValues.TEST_THEME_NODE ||
             contextValue === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE ||
             contextValue === constants_1.TreeItemContextValues.TEST_CASE_NODE) {
-            if (item?.base?.numbering) {
-                this.tooltip = `Numbering: ${item.base.numbering}\nType: ${item.elementType}\nName: ${item.base.name}\nStatus: ${this.statusOfTreeItem}\nID: ${item.base.uniqueID}`;
+            if (itemDataForTooltip?.numbering) {
+                this.tooltip = `Numbering: ${itemDataForTooltip.numbering}\nType: ${itemDataForTooltip.elementType || contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nID: ${itemDataForTooltip.uniqueID}`;
+            }
+            else {
+                this.tooltip = `Type: ${itemDataForTooltip.elementType || contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nID: ${itemDataForTooltip.uniqueID}`;
             }
             // Display the uniqueID as a description next to the label.
-            this.description = item.base?.uniqueID || "";
+            this.description = itemDataForTooltip?.uniqueID || "";
         }
         // Set the command to be executed when the tree item is clicked.
         // Without this command, an already clicked cycle item is not clickable again.
@@ -819,7 +856,7 @@ class ProjectManagementTreeItem extends vscode.TreeItem {
         };
     }
 }
-exports.ProjectManagementTreeItem = ProjectManagementTreeItem;
+exports.BaseTestBenchTreeItem = BaseTestBenchTreeItem;
 /**
  * Initializes the project management tree view.
  * This function creates a new tree view for project management and sets its data provider.
@@ -1003,7 +1040,7 @@ async function toggleTestThemeTreeViewVisibility() {
 /**
  * Finds the project key (serial) for a given tree element by traversing upward in the tree hierarchy.
  *
- * @param {ProjectManagementTreeItem} element The tree item.
+ * @param {BaseTestBenchTreeItem} element The tree item.
  * @returns {string | null} The project key as a string if found; otherwise null.
  */
 function findProjectKeyForElement(element) {

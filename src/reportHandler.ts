@@ -583,7 +583,7 @@ export async function fetchReportZipFromServer(
  * @returns {Promise<void | null>} Resolves when the report is successfully downloaded, otherwise null
  */
 export async function fetchReportForTreeElement(
-    selectedProjectTreeItem: projectManagementTreeView.ProjectManagementTreeItem,
+    selectedProjectTreeItem: projectManagementTreeView.BaseTestBenchTreeItem,
     projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null,
     workingDirectoryToStoreReport: string
 ): Promise<void | null> {
@@ -656,12 +656,12 @@ export async function fetchReportForTreeElement(
  * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @param {projectManagementTreeView.ProjectManagementTreeItem} selectedTreeItem The selected tree item.
+ * @param {projectManagementTreeView.BaseTestBenchTreeItem} selectedTreeItem The selected tree item.
  * @returns {Promise<void | null>} Resolves when test generation is complete, or null if errors occur.
  */
 export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
-    selectedTreeItem: projectManagementTreeView.ProjectManagementTreeItem
+    selectedTreeItem: projectManagementTreeView.BaseTestBenchTreeItem
 ): Promise<void | null> {
     logger.debug("Generating tests for non-cycle element:", selectedTreeItem);
     const treeElementUID = selectedTreeItem.item?.base?.uniqueID;
@@ -689,7 +689,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  * Generates Robot Framework tests using testbench2robotframework library.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @param {projectManagementTreeView.ProjectManagementTreeItem} selectedTreeItem The selected tree item.
+ * @param {projectManagementTreeView.BaseTestBenchTreeItem} selectedTreeItem The selected tree item.
  * @param {string} itemLabel The label of the selected item.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
@@ -698,7 +698,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  */
 export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
     context: vscode.ExtensionContext,
-    selectedTreeItem: projectManagementTreeView.ProjectManagementTreeItem,
+    selectedTreeItem: projectManagementTreeView.BaseTestBenchTreeItem,
     itemLabel: string,
     projectKey: string,
     cycleKey: string,
@@ -792,7 +792,7 @@ function findAllTestThemeNodesOfTreeItem(
     }
     // Recursively search for TestThemeNodes in the children of the tree item
     if (Array.isArray(treeItem.children)) {
-        treeItem.children.forEach((child: projectManagementTreeView.ProjectManagementTreeItem) =>
+        treeItem.children.forEach((child: projectManagementTreeView.BaseTestBenchTreeItem) =>
             findAllTestThemeNodesOfTreeItem(child, foundTestThemes)
         );
     }
@@ -1232,11 +1232,11 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
  * Starts robotframework test generation for a cycle element.
  *
  * @param {vscode.ExtensionContext} context The extension context.
- * @param {projectManagementTreeView.ProjectManagementTreeItem} selectedCycleTreeItem The selected cycle tree item.
+ * @param {projectManagementTreeView.BaseTestBenchTreeItem} selectedCycleTreeItem The selected cycle tree item.
  */
 export async function startTestGenerationForCycle(
     context: vscode.ExtensionContext,
-    selectedCycleTreeItem: projectManagementTreeView.ProjectManagementTreeItem
+    selectedCycleTreeItem: projectManagementTreeView.BaseTestBenchTreeItem
 ): Promise<void | null> {
     try {
         if (!connection) {
