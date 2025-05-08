@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as os from "os";
 import JSZip from "jszip";
+import { folderNameOfInternalTestbenchFolder } from "./constants";
 
 /**
  * Delays execution for a given number of milliseconds.
@@ -207,7 +208,8 @@ export async function clearInternalTestbenchFolder(
             }
         }
 
-        logger.debug(`Workspace folder cleared successfully: "${workspaceLocationToClear}"`);
+        logger.debug(`Internal testbench folder cleared successfully: "${workspaceLocationToClear}"`);
+        vscode.window.showInformationMessage(`${folderNameOfInternalTestbenchFolder} folder cleared successfully.`);
     } catch (error: any) {
         const errorMsg: string = `An error occurred while clearing the workspace folder: ${error.message}`;
         vscode.window.showErrorMessage(errorMsg);

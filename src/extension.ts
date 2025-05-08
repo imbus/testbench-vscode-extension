@@ -263,6 +263,8 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             const performLoginResult: testBenchConnection.PlayServerConnection | null =
                 await testBenchConnection.performLogin(context);
             if (performLoginResult) {
+                // Reinitialize tree views after successful login
+                initializeTreeViews(context);
                 projectManagementTreeDataProvider?.refresh();
             }
         } catch (error) {
@@ -285,6 +287,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             return;
         }
         await connection.logoutUser(projectManagementTreeDataProvider!);
+
         logger.trace("End of command: Logout");
     });
 
@@ -294,7 +297,12 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.handleProjectCycleClick,
         async (cycleItem: projectManagementTreeView.ProjectManagementTreeItem) => {
-            await projectManagementTreeDataProvider!.handleTestCycleClick(cycleItem);
+            if (projectManagementTreeDataProvider) {
+                await projectManagementTreeDataProvider.handleTestCycleClick(cycleItem);
+            } else {
+                logger.error("Project management tree data provider is not initialized. (Handle Cycle Click)");
+                vscode.window.showErrorMessage("Project management tree is not initialized.");
+            }
         }
     );
 
