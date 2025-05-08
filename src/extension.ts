@@ -28,7 +28,7 @@ import {
 } from "./constants";
 import { CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
 import { initializeLanguageServer } from "./server";
-import { TestThemeTreeDataProvider } from "./testThemeTreeView";
+import { displayTestThemeTreeView, hideTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -219,7 +219,8 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
                         // Set new roots for Test Theme Tree
                         testThemeTreeDataProvider.setRoots(eventData.children, eventData.cycleKey);
                         await projectManagementTreeView.hideProjectManagementTreeView();
-                        // Display the test elements tree view
+                        // Display the Test Theme Tree View and test elements tree view
+                        await displayTestThemeTreeView();
                         await testElementsTreeView.displayTestElementsTreeView();
                     }
                 }
@@ -274,7 +275,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             if (loginResult) {
                 // Display project management tree and hide other tree views if they are open.
                 projectManagementTreeView?.displayProjectManagementTreeView();
-                await projectManagementTreeView?.hideTestThemeTreeView();
+                await hideTestThemeTreeView();
                 await testElementsTreeView?.hideTestElementsTreeView();
                 projectManagementTreeDataProvider?.refresh();
             }
@@ -461,7 +462,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         await projectManagementTreeView.displayProjectManagementTreeView();
 
         // After selecting a (new) project, hide the test theme tree view and test elements tree view and clear the test elements tree view.
-        await projectManagementTreeView.hideTestThemeTreeView();
+        await hideTestThemeTreeView();
         await testElementsTreeView.hideTestElementsTreeView();
         testElementsTreeView.clearTestElementsTreeView();
 
@@ -530,7 +531,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
 
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshProjectTreeView, async () => {
-        projectManagementTreeDataProvider?.refresh();
+        logger.debug("Command Called: Refresh Project Tree View (Hard Refresh)");
+        if (projectManagementTreeDataProvider) {
+            projectManagementTreeDataProvider.refresh(true); // Pass true for hard refresh
+        } else {
+            logger.warn("RefreshProjectTreeView: projectManagementTreeDataProvider is null.");
+        }
+        logger.trace("End of command: Refresh Project Tree View");
     });
 
     // --- Command: Refresh Test Theme Tree View ---
@@ -596,7 +603,14 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.makeRoot,
         (treeItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
-            logger.debug("Command Called: Make Root for tree item:", treeItem);
+            // Assuming treeItem is BaseTestBenchTreeItem
+            logger.debug("Command Called: Make Root for tree item:", treeItem?.label);
+            if (!treeItem) {
+                logger.warn("MakeRoot command called with null treeItem.");
+                return;
+            }
+
+            // Check if the item belongs to the Project Management Tree
             if (
                 treeItem.contextValue &&
                 (
@@ -610,14 +624,34 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 if (projectManagementTreeDataProvider) {
                     projectManagementTreeDataProvider.makeRoot(treeItem);
                 } else {
-                    logger.warn("MakeRoot: projectManagementTreeDataProvider is null.");
+                    logger.warn("MakeRoot: projectManagementTreeDataProvider is null for project tree item.");
+                    vscode.window.showErrorMessage("Project tree is not available to set root.");
+                }
+            } else if (
+                testThemeTreeDataProvider &&
+                treeItem.contextValue &&
+                (
+                    [TreeItemContextValues.TEST_THEME_NODE, TreeItemContextValues.TEST_CASE_SET_NODE] as string[]
+                ).includes(treeItem.contextValue)
+            ) {
+                // Delegate to testThemeTreeDataProvider if it's a test theme item
+                if (typeof (testThemeTreeDataProvider as any).makeRoot === "function") {
+                    (testThemeTreeDataProvider as any).makeRoot(treeItem);
+                } else {
+                    logger.warn(
+                        `MakeRoot: testThemeTreeDataProvider does not have a makeRoot method or item type (${treeItem.contextValue}) is not supported for makeRoot in test theme tree.`
+                    );
+                    vscode.window.showInformationMessage(
+                        `Cannot make '${treeItem.label}' root in the Test Themes view with current implementation.`
+                    );
                 }
             } else {
-                if (testThemeTreeDataProvider) {
-                    testThemeTreeDataProvider.makeRoot(treeItem);
-                } else {
-                    logger.warn("MakeRoot: testThemeTreeDataProvider is null.");
-                }
+                logger.warn(
+                    `MakeRoot: Item type "${treeItem.contextValue}" not supported for makeRoot or target provider not identified.`
+                );
+                vscode.window.showInformationMessage(
+                    `Item '${treeItem.label}' cannot be made a root in the current view.`
+                );
             }
             logger.trace("End of Make Root command.");
         }
