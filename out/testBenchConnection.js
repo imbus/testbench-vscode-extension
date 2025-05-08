@@ -425,12 +425,10 @@ class PlayServerConnection {
     }
     /**
      * Logs out the user from the TestBench server.
-     * Clears session data, stops the keep-alive process, clears the tree data provider which empties the tree view.
-     *
-     * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectTreeDataProvider - The project management tree data provider.
+     * Clears session data, stops the keep-alive process.
      * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
      */
-    async logoutUser(projectTreeDataProvider) {
+    async logoutUser() {
         extension_1.logger.debug("Logging out user.");
         try {
             const logoutResponse = await withRetry(() => this.apiClient.delete(`/login/session/v1`, {
@@ -439,13 +437,6 @@ class PlayServerConnection {
             2000 // delayMs: wait 2000ms between attempts
             );
             if (logoutResponse.status === 204) {
-                if (projectTreeDataProvider) {
-                    projectTreeDataProvider.clearTree();
-                }
-                else {
-                    // Note: When deactivating the extension or closing VS Code, the tree data provider may be null and this warning is expected.
-                    extension_1.logger.warn("Tree data provider is not defined. Cannot clear the tree.");
-                }
                 const logoutSuccessfulMessage = "Logout successful.";
                 server_1.client.stop();
                 extension_1.logger.debug(logoutSuccessfulMessage);
@@ -474,7 +465,7 @@ class PlayServerConnection {
             // Regardless of the outcome of logout operation, stop the keep-alive process
             this.stopKeepAlive();
             this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
-            await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
+            await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
             (0, extension_1.setProjectManagementTreeDataProvider)(null); // Clear the connection from the tree data provider
             (0, extension_1.setConnection)(null);
             // Notify login webview about the logout success to change its HTML content
@@ -978,7 +969,7 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
                 // Set the global connection object, it can be null in case the login fails
                 (0, extension_1.setConnection)(newConnection);
                 // Set the connectionActive context value for changing the login icon to logout icon based on this value
-                await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
+                await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, true);
                 const loginSuccessfulMessage = "Login successful.";
                 await (0, server_1.initializeLanguageServer)();
                 extension_1.logger.debug(loginSuccessfulMessage);

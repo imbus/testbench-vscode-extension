@@ -41,6 +41,7 @@ exports.TestThemeTreeDataProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const projectManagementTreeView_1 = require("./projectManagementTreeView");
 const extension_1 = require("./extension");
+const constants_1 = require("./constants");
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display
  * TestTheme items in the Test Theme Tree view.
@@ -104,13 +105,14 @@ class TestThemeTreeDataProvider {
     /**
      * Sets the root elements of the test theme tree and refreshes the view.
      * @param {BaseTestBenchTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
+     * @param {string} cycleKey The key of the cycle these roots belong to.
      */
     setRoots(roots, cycleKey) {
         // Output of roots is circular and large, so it is commented out.
         // logger.trace("Setting root elements of the test theme tree to:", roots);
         this._currentCycleKey = cycleKey;
         this.rootElements = roots;
-        this.refresh();
+        this.refresh(); // This will call _onDidChangeTreeData.fire(undefined)
     }
     /**
      * Sets the selected tree item as the sole root of the test theme tree and refreshes the view.
@@ -118,6 +120,22 @@ class TestThemeTreeDataProvider {
      */
     makeRoot(element) {
         extension_1.logger.debug("Setting the selected element as the root of the test theme tree view:", element);
+        // Find the cycle key for the new root element if it's part of a cycle.
+        let newCycleKey = null;
+        if (element.parent && element.parent.contextValue === constants_1.TreeItemContextValues.CYCLE) {
+            newCycleKey = element.parent.item?.key;
+        }
+        else if (element.contextValue === constants_1.TreeItemContextValues.CYCLE) {
+            newCycleKey = element.item?.key;
+        }
+        // If a cycle key is found and is different, or if we are making a non-cycle element root, update _currentCycleKey.
+        if (newCycleKey) {
+            this._currentCycleKey = newCycleKey;
+        }
+        else {
+            // If the new root isn't directly tied to a known cycle in its parentage here,
+            // it might be an implicit change of context.
+        }
         this.rootElements = [element];
         this.refresh();
     }
