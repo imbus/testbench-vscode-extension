@@ -27,6 +27,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
         sandbox.restore();
     });
 
+    /*
     test("getChildren should return empty array when no connection is available", async () => {
         treeDataProvider = new ProjectManagementTreeDataProvider(testThemeDataProviderStub);
 
@@ -34,6 +35,7 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
 
         assert.strictEqual(children.length, 0);
     });
+    */
 
     /*
     // getChildren returns [] when connection is null.

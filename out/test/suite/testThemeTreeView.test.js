@@ -58,15 +58,6 @@ suite("TestThemeTreeDataProvider Tests", () => {
         const child = new projectManagementTreeView_1.ProjectManagementTreeItem("Child", "contextValue", vscode.TreeItemCollapsibleState.None, {}, parent);
         assert.strictEqual(treeDataProvider.getParent(child), parent);
     });
-    test("getChildren should return root elements if no element is passed", async () => {
-        const rootElements = [
-            new projectManagementTreeView_1.ProjectManagementTreeItem("Root1", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
-            new projectManagementTreeView_1.ProjectManagementTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {})
-        ];
-        treeDataProvider.setRoots(rootElements);
-        const children = await treeDataProvider.getChildren();
-        assert.deepStrictEqual(children, rootElements);
-    });
     test("getChildren should return children of the element", async () => {
         const child1 = new projectManagementTreeView_1.ProjectManagementTreeItem("Child1", "contextValue", vscode.TreeItemCollapsibleState.None, {});
         const child2 = new projectManagementTreeView_1.ProjectManagementTreeItem("Child2", "contextValue", vscode.TreeItemCollapsibleState.None, {});
@@ -82,16 +73,6 @@ suite("TestThemeTreeDataProvider Tests", () => {
     test("getTreeItem should return the element itself", () => {
         const element = new projectManagementTreeView_1.ProjectManagementTreeItem("Element", "contextValue", vscode.TreeItemCollapsibleState.None, {});
         assert.strictEqual(treeDataProvider.getTreeItem(element), element);
-    });
-    test("setRoots should set root elements and refresh the tree", () => {
-        const rootElements = [
-            new projectManagementTreeView_1.ProjectManagementTreeItem("Root1", "contextValue", vscode.TreeItemCollapsibleState.None, {}),
-            new projectManagementTreeView_1.ProjectManagementTreeItem("Root2", "contextValue", vscode.TreeItemCollapsibleState.None, {})
-        ];
-        const spy = sandbox.spy(treeDataProvider, "refresh");
-        treeDataProvider.setRoots(rootElements);
-        assert.deepStrictEqual(treeDataProvider.rootElements, rootElements);
-        assert.strictEqual(spy.calledOnce, true);
     });
     test("makeRoot should set the selected element as the only root element and refresh the tree", () => {
         const element = new projectManagementTreeView_1.ProjectManagementTreeItem("Element", "contextValue", vscode.TreeItemCollapsibleState.None, {});

@@ -577,27 +577,27 @@ export async function fetchReportZipFromServer(
 /**
  * Fetches the report zip for a selected tree element.
  *
- * @param selectedProjectManagementTreeItem The selected tree item.
+ * @param selectedProjectTreeItem The selected tree item.
  * @param projectManagementTreeDataProvider The project management tree data provider.
  * @param workingDirectoryToStoreReport The directory where the report will be stored.
  * @returns {Promise<void | null>} Resolves when the report is successfully downloaded, otherwise null
  */
 export async function fetchReportForTreeElement(
-    selectedProjectManagementTreeItem: projectManagementTreeView.ProjectManagementTreeItem,
+    selectedProjectTreeItem: projectManagementTreeView.ProjectManagementTreeItem,
     projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null,
     workingDirectoryToStoreReport: string
 ): Promise<void | null> {
-    logger.debug(`Fetch Report called for ${selectedProjectManagementTreeItem.label}.`);
+    logger.debug(`Fetch Report called for ${selectedProjectTreeItem.label}.`);
     // Show progress bar in VS Code
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: `Fetching Report for ${selectedProjectManagementTreeItem.label}`,
+            title: `Fetching Report for ${selectedProjectTreeItem.label}`,
             cancellable: true
         },
         async (progress) => {
             progress.report({ increment: 30, message: "Selecting report parameters." });
-            logger.debug("Fetching report for tree item:", selectedProjectManagementTreeItem);
+            logger.debug("Fetching report for tree item:", selectedProjectTreeItem);
 
             try {
                 if (!connection) {
@@ -608,29 +608,31 @@ export async function fetchReportForTreeElement(
                     logger.error("Project management tree not initialized, cannot fetch report.");
                     return null;
                 }
-                const projectKeyOfProjectInView: string | null =
-                    projectManagementTreeDataProvider.activeProjectKeyInView;
-                if (!projectKeyOfProjectInView) {
-                    logger.error("No project selected, cannot fetch report.");
+
+                const projectKeyOfSelectedTreeItem: string | null =
+                    findProjectKeyOfProjectTreeItem(selectedProjectTreeItem);
+                if (!projectKeyOfSelectedTreeItem) {
+                    logger.error("Project key not found, cannot fetch report.");
                     return null;
                 }
+
                 // Find the cycle key associated with the selected tree item to fetch the report
-                const cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(selectedProjectManagementTreeItem);
+                const cycleKey: string | null =
+                    projectManagementTreeView.findCycleKeyOfTreeElement(selectedProjectTreeItem);
                 if (!cycleKey) {
                     logger.error("Cycle key not found, cannot fetch report.");
                     return null;
                 }
-                const treeElementUID = selectedProjectManagementTreeItem.item?.base?.uniqueID;
+                const treeElementUID = selectedProjectTreeItem.item?.base?.uniqueID;
                 const executionBased: boolean = true; // For now, defaulting to execution based
-                // await isExecutionBasedReportSelected();
                 const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
                     basedOnExecution: executionBased,
                     treeRootUID: treeElementUID
                 };
 
                 progress.report({ increment: 30, message: "Fetching report." });
-                const downloadedReportZipFilePath = await fetchReportZipFromServer(
-                    projectKeyOfProjectInView,
+                const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
+                    projectKeyOfSelectedTreeItem,
                     cycleKey,
                     workingDirectoryToStoreReport,
                     cycleStructureOptionsRequestParams
@@ -1454,6 +1456,7 @@ export async function showMultiSelectQuickPick(
 }
 
 import JSZip from "jszip";
+import { findProjectKeyOfProjectTreeItem } from "./projectManagementTreeView";
 
 /**
  * Reads a zip file and extracts unique quick pick items based on the file names.

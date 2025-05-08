@@ -41,6 +41,7 @@ const testBenchLogger_1 = require("../../testBenchLogger");
 const testBenchConnection_1 = require("../../testBenchConnection");
 const projectManagementTreeView_1 = require("../../projectManagementTreeView");
 const testElementsTreeView_1 = require("../../testElementsTreeView");
+const constants_1 = require("../../constants");
 suite("Extension Test Suite", () => {
     let sandbox;
     let getConfigurationStub;
@@ -89,7 +90,7 @@ suite("Extension Test Suite", () => {
     test("activate should initialize the extension", async () => {
         await (0, extension_1.activate)(context);
         assert.ok(loggerStub.info.calledWith("Extension activated."), "Logger should log activation message");
-        assert.ok(getConfigurationStub.calledWith(extension_1.baseKeyOfExtension), "Configuration should be loaded");
+        assert.ok(getConfigurationStub.calledWith(constants_1.baseKeyOfExtension), "Configuration should be loaded");
         assert.ok(context.subscriptions.length > 0, "Subscriptions should be added to the context");
     });
     test("deactivate should log out the user", async () => {
@@ -110,7 +111,7 @@ suite("Extension Test Suite", () => {
     });
     test("loadConfiguration should update the configuration", async () => {
         await (0, extension_1.loadConfiguration)(context);
-        assert.ok(getConfigurationStub.calledWith(extension_1.baseKeyOfExtension), "Configuration should be loaded");
+        assert.ok(getConfigurationStub.calledWith(constants_1.baseKeyOfExtension), "Configuration should be loaded");
     });
     test("initializeTreeViews should initialize the tree views", () => {
         (0, extension_1.initializeTreeViews)(context);

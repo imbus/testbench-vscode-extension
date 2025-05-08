@@ -119,7 +119,7 @@ export const allExtensionCommands = {
     getServerVersions: `${baseKeyOfExtension}.getServerVersions`,
     showExtensionSettings: `${baseKeyOfExtension}.showExtensionSettings`,
     fetchReportForSelectedTreeItem: `${baseKeyOfExtension}.fetchReportForSelectedTreeItem`,
-    selectAndLoadProject: `${baseKeyOfExtension}.selectAndLoadProject`,
+    displayAllProjects: `${baseKeyOfExtension}.displayAllProjects`,
     importTestResultsToTestbench: `${baseKeyOfExtension}.importTestResultsToTestbench`,
     readAndImportTestResultsToTestbench: `${baseKeyOfExtension}.readAndImportTestResultsToTestbench`,
     executeRobotFrameworkTests: `${baseKeyOfExtension}.executeRobotFrameworkTests`,

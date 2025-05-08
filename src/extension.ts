@@ -323,9 +323,10 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 return;
             }
             // Optionally clear the working directory before test generation.
-            if (config.get<boolean>("clearInternalTestbenchDirectoryBeforeTestGeneration")) {
+            if (config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
                 await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
+
             // If the user did not clicked on a test cycle in the tree view before,
             // the test cycle wont have any initialized children so that test themes cannot be displayed in the quickpick.
             // Call getChildrenOfCycle to initialize the sub elements (Test themes etc.) of the cycle.
@@ -333,7 +334,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             if (projectManagementTreeDataProvider?.testThemeDataProvider) {
                 const children: projectManagementTreeView.ProjectManagementTreeItem[] =
                     (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
-                projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children);
+                if (item.item?.key) {
+                    projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children, item.item.key);
+                } else {
+                    logger.warn(
+                        `Cycle key not found for item '${typeof item.label === "string" ? item.label : "unknown"}' in 'generateTestCasesForCycle'. Cannot set roots for test theme tree.`
+                    );
+                }
             }
             await reportHandler.startTestGenerationForCycle(context, item);
             logger.trace("End of command: Generate Test Cases For Cycle");
@@ -365,7 +372,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 return;
             }
             // Optionally clear the working directory before test generation.
-            if (config.get<boolean>("clearInternalTestbenchDirectoryBeforeTestGeneration")) {
+            if (config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
                 await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
             await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(context, treeItem);
@@ -373,24 +380,27 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         }
     );
 
-    // --- Command: Select And Load Project ---
-    // Fetches the projects list from the server and prompts the user to select a project to display its contents in the tree view.
-    registerSafeCommand(context, allExtensionCommands.selectAndLoadProject, async () => {
-        logger.debug("Command Called: Select And Load Project");
+    // --- Command: Display All Projects ---
+    // Opens the project management tree view and displays all projects with their contents.
+    registerSafeCommand(context, allExtensionCommands.displayAllProjects, async () => {
+        logger.debug("Command Called: Display All Projects");
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.error("selectAndLoadProject command called without connection.");
+            logger.error("displayAllProjects command called without connection.");
             return;
         }
 
-        // This command will now effectively refresh the all-projects view
-        // It reuses initializeProjectAndTestThemeTrees which should now handle loading all projects.
-        await projectManagementTreeView.initializeProjectAndTestThemeTrees(context); // No project key passed
-        projectManagementTreeView.displayProjectManagementTreeView(); // Ensure view is focused
+        // Clear all tree states before reloading
+        projectManagementTreeDataProvider?.clearTree();
+        projectManagementTreeDataProvider?.testThemeDataProvider.clearTree();
+        testElementsTreeDataProvider.refresh([]);
+
+        await projectManagementTreeView.initializeProjectAndTestThemeTrees(context);
+        await projectManagementTreeView.displayProjectManagementTreeView();
 
         // After selecting a (new) project, hide the test theme tree view and test elements tree view and clear the test elements tree view.
-        projectManagementTreeView.hideTestThemeTreeView();
-        testElementsTreeView.hideTestElementsTreeView();
+        await projectManagementTreeView.hideTestThemeTreeView();
+        await testElementsTreeView.hideTestElementsTreeView();
         testElementsTreeView.clearTestElementsTreeView();
 
         logger.trace("Project list refreshed in project management tree view.");
@@ -452,12 +462,6 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             return null;
         }
 
-        if (!projectManagementTreeDataProvider.activeProjectKeyInView) {
-            const missingProjectKeyErrorMessage: string = "Active project key is missing. Cannot import report.";
-            vscode.window.showErrorMessage(missingProjectKeyErrorMessage);
-            logger.error(missingProjectKeyErrorMessage);
-            return null;
-        }
         await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context);
         logger.trace("End of Command: Read And Import Test Results To Testbench");
     });
@@ -473,10 +477,17 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         const cycleElement: projectManagementTreeView.ProjectManagementTreeItem | undefined =
             projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent ?? undefined;
         if (cycleElement && cycleElement.contextValue === "Cycle") {
-            // Fetch the test themes etc. from the server
+            // Fetch the test themes from the server
             const children: projectManagementTreeView.ProjectManagementTreeItem[] =
                 (await projectManagementTreeDataProvider?.getChildrenOfCycle(cycleElement)) ?? [];
-            projectManagementTreeDataProvider?.testThemeDataProvider?.setRoots(children);
+            const cycleKey = cycleElement.item?.key;
+            if (cycleKey) {
+                projectManagementTreeDataProvider?.testThemeDataProvider?.setRoots(children, cycleKey);
+            } else {
+                logger.warn(
+                    `Cycle key not found for item '${typeof cycleElement.label === "string" ? cycleElement.label : "unknown"}' in 'refreshTestThemeTreeView'. Cannot set roots for test theme tree.`
+                );
+            }
         }
         projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
 
@@ -523,7 +534,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         await utils.clearInternalTestbenchFolder(
             testbenchWorkingDirectoryPath,
             [testBenchLogger.folderNameOfLogs], // Exclude log files from deletion
-            !config.get<boolean>("clearInternalTestbenchDirectoryBeforeTestGeneration") // Ask for confirmation if not set to clear before test generation
+            !config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR) // Ask for confirmation if not set to clear before test generation
         );
         logger.trace("End of Command: Clear Workspace Folder");
     });
