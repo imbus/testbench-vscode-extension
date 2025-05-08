@@ -13,7 +13,6 @@ import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
 import { initializeLanguageServer, client } from "./server";
-import * as projectManagementTreeView from "./projectManagementTreeView";
 
 import {
     getConfig,
@@ -25,6 +24,7 @@ import {
 import * as utils from "./utils";
 import {
     ConfigKeys,
+    ContextKeys,
     JobTypes,
     StorageKeys,
     allExtensionCommands,
@@ -444,14 +444,10 @@ export class PlayServerConnection {
 
     /**
      * Logs out the user from the TestBench server.
-     * Clears session data, stops the keep-alive process, clears the tree data provider which empties the tree view.
-     *
-     * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectTreeDataProvider - The project management tree data provider.
+     * Clears session data, stops the keep-alive process.
      * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
      */
-    async logoutUser(
-        projectTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider
-    ): Promise<void | null> {
+    async logoutUser(): Promise<void | null> {
         logger.debug("Logging out user.");
         try {
             const logoutResponse: AxiosResponse = await withRetry(
@@ -464,13 +460,6 @@ export class PlayServerConnection {
             );
 
             if (logoutResponse.status === 204) {
-                if (projectTreeDataProvider) {
-                    projectTreeDataProvider.clearTree();
-                } else {
-                    // Note: When deactivating the extension or closing VS Code, the tree data provider may be null and this warning is expected.
-                    logger.warn("Tree data provider is not defined. Cannot clear the tree.");
-                }
-
                 const logoutSuccessfulMessage: string = "Logout successful.";
                 client.stop();
                 logger.debug(logoutSuccessfulMessage);
@@ -495,7 +484,7 @@ export class PlayServerConnection {
             // Regardless of the outcome of logout operation, stop the keep-alive process
             this.stopKeepAlive();
             this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
-            await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
+            await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
             setProjectManagementTreeDataProvider(null); // Clear the connection from the tree data provider
             setConnection(null);
             // Notify login webview about the logout success to change its HTML content
@@ -1117,7 +1106,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     // Set the global connection object, it can be null in case the login fails
                     setConnection(newConnection);
                     // Set the connectionActive context value for changing the login icon to logout icon based on this value
-                    await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
+                    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
                     const loginSuccessfulMessage: string = "Login successful.";
                     await initializeLanguageServer();
                     logger.debug(loginSuccessfulMessage);

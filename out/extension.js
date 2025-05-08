@@ -40,10 +40,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.testElementsTreeDataProvider = exports.projectTreeView = exports.testElementTreeView = exports.loginWebViewProvider = exports.connection = exports.projectManagementTreeDataProvider = exports.logger = void 0;
+exports.testElementsTreeDataProvider = exports.projectTreeView = exports.testElementTreeView = exports.loginWebViewProvider = exports.connection = exports.testThemeTreeDataProvider = exports.projectManagementTreeDataProvider = exports.logger = void 0;
 exports.getConfig = getConfig;
 exports.setLogger = setLogger;
 exports.setProjectManagementTreeDataProvider = setProjectManagementTreeDataProvider;
+exports.getTestThemeTreeDataProvider = getTestThemeTreeDataProvider;
 exports.setConnection = setConnection;
 exports.setProjectTreeView = setProjectTreeView;
 exports.getTestElementsTreeDataProvider = getTestElementsTreeDataProvider;
@@ -66,8 +67,8 @@ const loginWebView = __importStar(require("./loginWebView"));
 const utils = __importStar(require("./utils"));
 const path_1 = __importDefault(require("path"));
 const constants_1 = require("./constants");
-const projectManagementTreeView_1 = require("./projectManagementTreeView");
 const server_1 = require("./server");
+const testThemeTreeView_1 = require("./testThemeTreeView");
 /* =============================================================================
    Constants, Global Variables & Exports
    ============================================================================= */
@@ -83,6 +84,10 @@ function setLogger(newLogger) {
 exports.projectManagementTreeDataProvider = null;
 function setProjectManagementTreeDataProvider(newProjectManagementTreeDataProvider) {
     exports.projectManagementTreeDataProvider = newProjectManagementTreeDataProvider;
+}
+exports.testThemeTreeDataProvider = null; // Added
+function getTestThemeTreeDataProvider() {
+    return exports.testThemeTreeDataProvider;
 }
 /** Global connection to the (new) TestBench Play server. */
 exports.connection = null;
@@ -186,8 +191,46 @@ function initializeTestElementsTreeView() {
  * @param {vscode.ExtensionContext} context The extension context.
  */
 function initializeTreeViews(context) {
-    (0, projectManagementTreeView_1.initializeProjectAndTestThemeTrees)(context);
-    initializeTestElementsTreeView();
+    // Create TestThemeTreeDataProvider first
+    exports.testThemeTreeDataProvider = new testThemeTreeView_1.TestThemeTreeDataProvider();
+    const newTestThemeTreeView = vscode.window.createTreeView("testThemeTree", {
+        treeDataProvider: exports.testThemeTreeDataProvider
+    });
+    context.subscriptions.push(newTestThemeTreeView);
+    exports.projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider();
+    const newProjectTreeView = vscode.window.createTreeView("projectManagementTree", {
+        treeDataProvider: exports.projectManagementTreeDataProvider,
+        canSelectMany: false
+    });
+    context.subscriptions.push(newProjectTreeView);
+    setProjectTreeView(newProjectTreeView); // Assuming setProjectTreeView updates a global view instance
+    // Listen to the new event from ProjectManagementTreeDataProvider
+    if (exports.projectManagementTreeDataProvider) {
+        context.subscriptions.push(exports.projectManagementTreeDataProvider.onDidPrepareCycleDataForThemeTree(async (eventData) => {
+            if (exports.testThemeTreeDataProvider) {
+                exports.logger.info(`Cycle data prepared for ${eventData.cycleLabel}. Updating Test Theme Tree.`);
+                // Clear previous state of Test Theme Tree
+                exports.testThemeTreeDataProvider.clearTree();
+                // Set new roots for Test Theme Tree
+                exports.testThemeTreeDataProvider.setRoots(eventData.children, eventData.cycleKey);
+                // Optionally, manage view visibility here
+                await projectManagementTreeView.hideProjectManagementTreeView(); // Example: Hide projects tree
+                // The displayTestThemeTreeView is implicitly handled by VS Code when data changes
+                // but if you need to ensure focus:
+                await vscode.commands.executeCommand("testThemeTree.focus");
+                // Display the test elements tree view (if it's part of this flow)
+                await testElementsTreeView.displayTestElementsTreeView(); // Assuming displayTestElementsTreeView is imported
+            }
+        }));
+    }
+    // Initial data load/refresh for project tree
+    exports.projectManagementTreeDataProvider?.refresh();
+    exports.testThemeTreeDataProvider?.clearTree(); // Ensure theme tree is initially empty or has a placeholder
+    // The original initializeProjectAndTestThemeTrees function from projectManagementTreeView.ts might need adjustment
+    // or its logic could be largely moved here or refactored.
+    // For now, we assume the core initialization of providers and their link via event happens here.
+    // The existing initializeTestElementsTreeView() can be called as before.
+    initializeTestElementsTreeView(); // Assuming this is defined and initializes the third tree
 }
 /**
  * Registers all the commands defined by the extension.
@@ -274,9 +317,11 @@ function registerExtensionCommands(context) {
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
             exports.logger.error("Logout command called without connection.");
+            // Ensure UI is in logged-out state if somehow connection is null but UI isn't
+            await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
             return;
         }
-        await exports.connection.logoutUser(exports.projectManagementTreeDataProvider);
+        await exports.connection.logoutUser();
         exports.logger.trace("End of command: Logout");
     });
     // --- Command: Handle Cycle Click ---
@@ -312,14 +357,27 @@ function registerExtensionCommands(context) {
         // the test cycle wont have any initialized children so that test themes cannot be displayed in the quickpick.
         // Call getChildrenOfCycle to initialize the sub elements (Test themes etc.) of the cycle.
         // Offload the children of the cycle to the Test Theme Tree View.
-        if (exports.projectManagementTreeDataProvider?.testThemeDataProvider) {
+        if (exports.projectManagementTreeDataProvider && exports.testThemeTreeDataProvider) {
             const children = (await exports.projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
             if (item.item?.key) {
-                exports.projectManagementTreeDataProvider.testThemeDataProvider.setRoots(children, item.item.key);
+                // The projectManagementTreeDataProvider.handleTestCycleClick method
+                // already fires an event that leads to testThemeTreeDataProvider.setRoots.
+                // But this command might be triggered from a context menu without a "click"
+                // that would normally populate the TestThemeTree.
+                // Directly update TestThemeTree (if this command is the primary trigger for this view for this action)
+                exports.testThemeTreeDataProvider.clearTree(); // Clear previous state
+                exports.testThemeTreeDataProvider.setRoots(children, item.item.key);
+                if (projectManagementTreeView.testThemeTreeView) {
+                    projectManagementTreeView.testThemeTreeView.title = `Test Themes (${typeof item.label === "string" ? item.label : "Cycle"})`;
+                }
+                await vscode.commands.executeCommand("testThemeTree.focus");
             }
             else {
                 exports.logger.warn(`Cycle key not found for item '${typeof item.label === "string" ? item.label : "unknown"}' in 'generateTestCasesForCycle'. Cannot set roots for test theme tree.`);
             }
+        }
+        else {
+            exports.logger.warn("generateTestCasesForCycle: projectManagementTreeDataProvider or testThemeTreeDataProvider is null.");
         }
         await reportHandler.startTestGenerationForCycle(context, item);
         exports.logger.trace("End of command: Generate Test Cases For Cycle");
@@ -354,9 +412,10 @@ function registerExtensionCommands(context) {
         }
         // Clear all tree states before reloading
         exports.projectManagementTreeDataProvider?.clearTree();
-        exports.projectManagementTreeDataProvider?.testThemeDataProvider.clearTree();
-        exports.testElementsTreeDataProvider.refresh([]);
-        await projectManagementTreeView.initializeProjectAndTestThemeTrees(context);
+        exports.testThemeTreeDataProvider?.clearTree();
+        if (exports.testElementsTreeDataProvider) {
+            exports.testElementsTreeDataProvider.refresh([]);
+        }
         await projectManagementTreeView.displayProjectManagementTreeView();
         // After selecting a (new) project, hide the test theme tree view and test elements tree view and clear the test elements tree view.
         await projectManagementTreeView.hideTestThemeTreeView();
@@ -423,37 +482,71 @@ function registerExtensionCommands(context) {
     // --- Command: Refresh Test Theme Tree View ---
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshTestThemeTreeView, async () => {
         exports.logger.debug("Command called: Refresh Test Theme Tree");
-        const cycleElement = exports.projectManagementTreeDataProvider?.testThemeDataProvider?.rootElements[0]?.parent ?? undefined;
-        if (cycleElement && cycleElement.contextValue === "Cycle") {
-            // Fetch the test themes from the server
-            const children = (await exports.projectManagementTreeDataProvider?.getChildrenOfCycle(cycleElement)) ?? [];
-            const cycleKey = cycleElement.item?.key;
-            if (cycleKey) {
-                exports.projectManagementTreeDataProvider?.testThemeDataProvider?.setRoots(children, cycleKey);
+        if (!exports.testThemeTreeDataProvider) {
+            exports.logger.warn("Test Theme Tree Data Provider not initialized. Cannot refresh.");
+            vscode.window.showErrorMessage("Test Theme Tree is not available to refresh.");
+            return;
+        }
+        const currentCycleKey = exports.testThemeTreeDataProvider.isCurrentCycle("")
+            ? null
+            : exports.testThemeTreeDataProvider["_currentCycleKey"];
+        if (currentCycleKey && exports.projectManagementTreeDataProvider) {
+            const firstRootInThemeTree = exports.testThemeTreeDataProvider.rootElements[0];
+            const cycleElement = firstRootInThemeTree?.parent ?? undefined;
+            if (cycleElement &&
+                cycleElement.contextValue === constants_1.TreeItemContextValues.CYCLE &&
+                cycleElement.item?.key === currentCycleKey) {
+                exports.logger.info(`Refreshing Test Theme Tree for cycle: ${typeof cycleElement.label === "string" ? cycleElement.label : "N/A"}`);
+                // Re-fetch children for this cycle and update the testThemeTreeDataProvider
+                const children = (await exports.projectManagementTreeDataProvider.getChildrenOfCycle(cycleElement)) ?? [];
+                // The setRoots will internally call refresh on testThemeTreeDataProvider
+                exports.testThemeTreeDataProvider.setRoots(children, cycleElement.item.key);
+                if (projectManagementTreeView.testThemeTreeView) {
+                    projectManagementTreeView.testThemeTreeView.title = `Test Themes (${typeof cycleElement.label === "string" ? cycleElement.label : "Cycle"})`;
+                }
+            }
+            else if (currentCycleKey) {
+                exports.logger.warn(`Could not find the parent cycle element for the current Test Theme Tree (cycleKey: ${currentCycleKey}). Refreshing with current roots.`);
+                exports.testThemeTreeDataProvider.refresh(); // This will just re-render current items.
             }
             else {
-                exports.logger.warn(`Cycle key not found for item '${typeof cycleElement.label === "string" ? cycleElement.label : "unknown"}' in 'refreshTestThemeTreeView'. Cannot set roots for test theme tree.`);
+                exports.logger.debug("No current cycle in Test Theme Tree to refresh, or provider not found. Clearing and refreshing.");
+                exports.testThemeTreeDataProvider.clearTree(); // This calls refresh internally
             }
         }
-        exports.projectManagementTreeDataProvider?.testThemeDataProvider.refresh();
+        else {
+            exports.logger.warn("Refresh Test Theme Tree: projectManagementTreeDataProvider or testThemeTreeDataProvider is null.");
+            if (exports.testThemeTreeDataProvider) {
+                exports.testThemeTreeDataProvider.refresh();
+            } // Attempt to refresh what it has
+        }
         exports.logger.trace("End of command: Refresh Test Theme Tree");
     });
     // --- Command: Make Root ---
     // Right clicking on a tree element and selecting "Make Root" context menu option will make the selected element the root of the tree.
     registerSafeCommand(context, constants_1.allExtensionCommands.makeRoot, (treeItem) => {
         exports.logger.debug("Command Called: Make Root for tree item:", treeItem);
-        if (exports.projectManagementTreeDataProvider) {
-            // Find out for which element type the make root command is called
-            if (treeItem.contextValue &&
-                [
-                    constants_1.TreeItemContextValues.PROJECT,
-                    constants_1.TreeItemContextValues.VERSION,
-                    constants_1.TreeItemContextValues.CYCLE
-                ].includes(treeItem.contextValue)) {
+        if (treeItem.contextValue &&
+            [
+                constants_1.TreeItemContextValues.PROJECT,
+                constants_1.TreeItemContextValues.VERSION,
+                constants_1.TreeItemContextValues.CYCLE
+            ].includes(treeItem.contextValue)) {
+            if (exports.projectManagementTreeDataProvider) {
                 exports.projectManagementTreeDataProvider.makeRoot(treeItem);
             }
             else {
-                exports.projectManagementTreeDataProvider.testThemeDataProvider.makeRoot(treeItem);
+                exports.logger.warn("MakeRoot: projectManagementTreeDataProvider is null.");
+            }
+        }
+        else {
+            // Assuming it's an item for the Test Theme Tree
+            if (exports.testThemeTreeDataProvider) {
+                // Use the global testThemeTreeDataProvider
+                exports.testThemeTreeDataProvider.makeRoot(treeItem);
+            }
+            else {
+                exports.logger.warn("MakeRoot: testThemeTreeDataProvider is null.");
             }
         }
         exports.logger.trace("End of Make Root command.");
@@ -640,7 +733,7 @@ async function activate(context) {
     registerExtensionCommands(context);
     // Set the initial context state. Before any login attempt, connection is null.
     // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
-    await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", exports.connection !== null);
+    await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, exports.connection !== null);
     exports.logger.trace(`Initial connectionActive context set to: ${exports.connection !== null}`);
     await (0, server_1.initializeLanguageServer)();
     // Execute automatic login if the setting is enabled.
@@ -652,7 +745,7 @@ async function activate(context) {
 async function deactivate() {
     try {
         // Gracefully log out the user when the extension is deactivated.
-        await exports.connection?.logoutUser(exports.projectManagementTreeDataProvider);
+        await exports.connection?.logoutUser();
         exports.logger.info("Extension deactivated.");
     }
     catch (error) {

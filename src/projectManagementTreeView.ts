@@ -9,18 +9,17 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { CycleNodeData, CycleStructure, Project, TreeNode } from "./testBenchTypes";
-import { TestThemeTreeDataProvider } from "./testThemeTreeView";
-import {
-    connection,
-    logger,
-    setProjectTreeView,
-    projectTreeView,
-    projectManagementTreeDataProvider,
-    setProjectManagementTreeDataProvider
-} from "./extension";
+import { connection, logger, projectManagementTreeDataProvider } from "./extension";
 import { testElementsTreeDataProvider } from "./extension";
 import { allExtensionCommands, TreeItemContextValues } from "./constants";
-import { clearTestElementsTreeView, displayTestElementsTreeView } from "./testElementsTreeView";
+import { clearTestElementsTreeView } from "./testElementsTreeView";
+
+// Event payload
+export interface CycleDataForThemeTreeEvent {
+    cycleKey: string;
+    children: BaseTestBenchTreeItem[];
+    cycleLabel: string;
+}
 
 // Global references to the tree views and data provider with getters and setters.
 export let projectManagementTreeView: vscode.TreeView<BaseTestBenchTreeItem> | null = null;
@@ -52,22 +51,19 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     readonly onDidChangeTreeData: vscode.Event<BaseTestBenchTreeItem | BaseTestBenchTreeItem[] | void | undefined> =
         this._onDidChangeTreeData.event;
 
-    // The test theme tree data provider used to display test themes.
-    testThemeDataProvider: TestThemeTreeDataProvider;
-    setTestThemeDataProvider(provider: TestThemeTreeDataProvider): void {
-        this.testThemeDataProvider = provider;
-    }
+    private _onDidPrepareCycleDataForThemeTree: vscode.EventEmitter<CycleDataForThemeTreeEvent> =
+        new vscode.EventEmitter<CycleDataForThemeTreeEvent>();
+    public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
+        this._onDidPrepareCycleDataForThemeTree.event;
 
     // Store keys of expanded nodes to restore expansion state of collapsible elements after a refresh.
     private expandedTreeItems: Set<string> = new Set<string>();
 
     /**
      * Constructs a new ProjectManagementTreeDataProvider.
-     *
-     * @param {TestThemeTreeDataProvider} testThemeDataProvider Optional test theme tree data provider.
      */
-    constructor(testThemeDataProvider?: TestThemeTreeDataProvider) {
-        this.testThemeDataProvider = testThemeDataProvider!;
+    constructor() {
+        logger.trace("ProjectManagementTreeDataProvider initialized.");
     }
 
     /**
@@ -321,28 +317,18 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     /**
      * Handles the expansion of a Cycle element.
-     * Offloads the actual children to the TestThemeTreeDataProvider.
-     * Returns an empty array as Cycle elements do not display children directly in this tree.
+     * For the project management tree, cycles do not directly show children here.
+     * The actual children (test themes, etc.) are intended for the TestThemeTree.
+     * This method could be simplified or removed if cycle expansion in this tree
+     * should not trigger data loading for another tree directly.
      * @param {BaseTestBenchTreeItem} cycleElement The Cycle element.
      * @returns {Promise<BaseTestBenchTreeItem[]>}
      * @private
      */
     private async handleCycleExpansion(cycleElement: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
         logger.trace(
-            `Cycle node ${cycleElement.label} expanded in Project Tree. Offloading children to Test Theme Tree.`
+            `Cycle node ${typeof cycleElement.label === "string" ? cycleElement.label : "N/A"} expanded in Project Tree.`
         );
-        // Offload children to TestThemeTree
-        this.testThemeDataProvider.clearTree(); // Clear previous
-        const childrenOfCycle: BaseTestBenchTreeItem[] = await this.getChildrenOfCycle(cycleElement); // Fetches and prepares children for TestThemeTree
-        const cycleKey = cycleElement.item?.key;
-        if (typeof cycleKey === "string") {
-            this.testThemeDataProvider.setRoots(childrenOfCycle, cycleKey);
-        } else {
-            logger.error(
-                `Cycle key not found for element ${cycleElement.label} in getChildren. Clearing test theme tree.`
-            );
-            this.testThemeDataProvider.clearTree();
-        }
         return []; // Return empty as children are in another tree
     }
 
@@ -462,11 +448,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @returns {Promise<BaseTestBenchTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
      */
     public async getChildrenOfCycle(cycleElement: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
-        logger.trace("Fetching children of cycle element:", cycleElement.label);
-
-        // Check if the cycleElement is a valid cycle item
+        const cycleElementLabel = typeof cycleElement.label === "string" ? cycleElement.label : "N/A";
+        logger.trace("Fetching children of cycle element:", cycleElementLabel);
         if (cycleElement.contextValue !== TreeItemContextValues.CYCLE) {
-            logger.warn(`getChildrenOfCycle called on non-Cycle item: ${cycleElement.label}`);
+            logger.warn(`getChildrenOfCycle called on non-Cycle item: ${cycleElementLabel}`);
             return [];
         }
 
@@ -491,126 +476,79 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             cycleKey
         );
 
-        // If the cycle has no sub-elements, return a placeholder item.
         if (!cycleData || !cycleData.nodes?.length) {
             logger.trace("Cycle has no sub-elements (getChildrenOfCycle).");
-            // vscode.window.showErrorMessage("Failed to fetch data for the selected cycle.");
-            return []; // Return empty, which will result in the placeholder in TestThemeTree
+            return [];
         }
         if (!cycleData.nodes || !cycleData.nodes?.length || !cycleData.root?.base?.key) {
-            logger.error(`Cycle structure for ${cycleElement.label} has no nodes or root key. Displaying placeholder.`);
+            logger.error(`Cycle structure for ${cycleElementLabel} has no nodes or root key. Displaying placeholder.`);
             return [];
         }
 
-        // Create a map to store elements by their key. A key identifies an element uniquely.
         const elementsByKey: Map<string, any> = new Map<string, any>();
         cycleData.nodes.forEach((data: any) => {
-            const cycleNode: CycleNodeData = data as CycleNodeData; // Cast for type checking
+            const cycleNode: CycleNodeData = data as CycleNodeData;
             if (cycleNode?.base?.key) {
                 elementsByKey.set(cycleNode.base.key, cycleNode);
             } else {
                 logger.warn("Found node without base.key in cycle structure:", cycleNode);
             }
         });
-
         if (elementsByKey.size === 0 && cycleData.nodes.length > 0) {
             logger.error(`No nodes with base.key were found in the cycle structure data, cannot build tree.`);
-            return []; // Cannot proceed if no nodes have keys for lookup
+            return [];
         }
 
-        /**
-         * Recursively builds the test theme tree starting from a given parent cycle key.
-         * Processes nodes from the cycle structure, filters them using predicates,
-         * creates corresponding tree items, and handles hierarchy.
-         *
-         * @param {string} parentItemKey - The key of the parent element whose children are being built.
-         * @param {BaseTestBenchTreeItem} parentTreeItem - The tree item representing the parent.
-         * @returns {BaseTestBenchTreeItem[]} An array of tree items representing the children for the Test Theme tree.
-         */
         const buildTestThemeTreeRecursive = (
             parentItemKey: string,
             parentTreeItem: BaseTestBenchTreeItem
         ): BaseTestBenchTreeItem[] => {
-            // Filter potential children
-            // Get all nodes from the map, filter them based on parent key and type first.
             const potentialChildrenData = Array.from(elementsByKey.values()).filter(
-                (node) => node?.base?.parentKey === parentItemKey && this.isCycleNodeVisibleInTestThemeTree(node) // Apply visibility filter
+                (node) => node?.base?.parentKey === parentItemKey && this.isCycleNodeVisibleInTestThemeTree(node)
             );
-
-            // Map filtered data to Tree Items
-            // Process each valid child node data to create a tree item.
             const childTreeItems: (BaseTestBenchTreeItem | null)[] = potentialChildrenData.map((nodeData) => {
-                // Determine if this node has its own valid children
-                // Check if any node in the original map lists the current node's key as its parent,
-                // meets the type criteria, and isn't filtered by status/locker.
                 const hasVisibleChildren: boolean = Array.from(elementsByKey.values()).some(
                     (childNode) =>
                         childNode?.base?.parentKey === nodeData.base.key &&
                         this.isCycleNodeVisibleInTestThemeTree(childNode)
                 );
 
-                // Create the basic tree item.
-                // The contextValue is nodeData.elementType.
                 const treeItem: BaseTestBenchTreeItem | null = this.createTreeItem(
-                    nodeData, // Pass the full node data, factory will access nodeData.base if needed
+                    nodeData,
                     nodeData.elementType,
                     parentTreeItem
                 );
-
-                // If item creation failed, skip further processing
                 if (!treeItem) {
                     return null;
                 }
-
-                // Store the full original data node onto the item if needed elsewhere
                 treeItem.item = nodeData;
-
-                // Determine the collapsible state based on type and whether it has children.
-                // TestCaseSetNodes are leaves in test theme tree, they are not expandable.
-                // Expandable if it has valid children, not expandable otherwise.
                 if (nodeData.elementType === TreeItemContextValues.TEST_CASE_SET_NODE) {
                     treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
                 } else {
-                    // For TestThemeNode primarily
                     treeItem.collapsibleState = hasVisibleChildren
                         ? vscode.TreeItemCollapsibleState.Collapsed
                         : vscode.TreeItemCollapsibleState.None;
                 }
-
-                // Recursively build children
-                // If the current element has children, recursively call this function
-                // to build the subtree for the next level.
                 if (hasVisibleChildren) {
-                    // Pass current treeItem as the new parent, use data.base.key for the next level's parent key
                     treeItem.children = buildTestThemeTreeRecursive(nodeData.base.key, treeItem);
                 } else {
-                    // Ensure children property is an empty array if no children
                     treeItem.children = [];
                 }
-
-                return treeItem; // Return the tree item
+                return treeItem;
             });
-
-            // Remove any null entries that might have resulted from failed item creation.
             return childTreeItems.filter(
                 (item: BaseTestBenchTreeItem | null): item is BaseTestBenchTreeItem => item !== null
             );
         };
 
         const rootCycleKey: string = cycleData.root.base.key;
-        // The parent for the first level of TestThemeTree items is the original cycleElement from ProjectManagementTree
-        const childrenOfCycle: BaseTestBenchTreeItem[] = buildTestThemeTreeRecursive(rootCycleKey, cycleElement);
-        // Assign the built children to the current element
-        cycleElement.children = childrenOfCycle;
-
-        // Display the test theme tree view if not already displayed
-        await displayTestThemeTreeView();
-
-        // Update the title of the test theme tree view
-        if (testThemeTreeView) {
-            testThemeTreeView.title = `Test Themes (${cycleElement.label})`;
-        }
-        return childrenOfCycle;
+        const childrenOfCycleToReturn: BaseTestBenchTreeItem[] = buildTestThemeTreeRecursive(
+            rootCycleKey,
+            cycleElement
+        );
+        // cycleElement.children = childrenOfCycleToReturn; // Do NOT assign here if this is for another tree.
+        // The project tree item itself does not have these as direct children.
+        return childrenOfCycleToReturn;
     }
 
     /**
@@ -662,86 +600,79 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     /**
-     * Handles a click on a test cycle element to initialize the test theme tree and the test elements tree.
+     * Handles a click on a test cycle element.
+     * Prepares data for the Test Theme tree and fires an event.
+     * Also handles Test Elements tree population.
      *
      * @param {BaseTestBenchTreeItem} projectsTreeViewItem The clicked tree item in the projects tree view.
      * @returns {Promise<void>} A promise that resolves when the operation is complete.
      */
-    async handleTestCycleClick(projectsTreeViewItem: BaseTestBenchTreeItem): Promise<void> {
-        logger.trace("Handling tree item click for:", projectsTreeViewItem.label);
-        logger.debug("ProjectManagementTreeDataProvider instance in handleTestCycleClick:", this);
+    public async handleTestCycleClick(projectsTreeViewItem: BaseTestBenchTreeItem): Promise<void> {
+        const currentCycleLabel: string =
+            typeof projectsTreeViewItem.label === "string" ? projectsTreeViewItem.label : "N/A";
+        logger.trace("Handling tree item click for:", currentCycleLabel);
+
         if (projectsTreeViewItem.contextValue !== TreeItemContextValues.CYCLE) {
             logger.error("Clicked tree item is not a cycle. Cannot proceed.");
             return;
         }
 
         const cycleKey = projectsTreeViewItem.item.key;
-
-        // Skip if already viewing this cycle
-        if (this.testThemeDataProvider.isCurrentCycle(cycleKey)) {
+        if (!cycleKey) {
+            logger.error("Cycle key is missing from clicked item. Cannot proceed.");
             return;
         }
 
-        // Display a progress bar since this operation may take some time.
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Fetching data for cycle: ${projectsTreeViewItem.label}`,
+                title: `Workspaceing data for cycle: ${currentCycleLabel}`,
                 cancellable: false
             },
             async (progress) => {
                 progress.report({ increment: 0, message: "Fetching test themes..." });
-                logger.trace("Clicked tree item is a cycle. Creating test theme tree view.");
 
-                // Clear the test theme tree first
-                this.testThemeDataProvider.clearTree();
-                testElementsTreeDataProvider.refresh([]);
-
-                // Ensure activeProjectKeyInView is set based on the clicked cycle's project.
-                const projectKey: string | null = findProjectKeyOfCycleElement(projectsTreeViewItem);
-                if (!projectKey) {
-                    logger.error("Could not determine project key for the clicked cycle. Aborting further actions.");
-                    vscode.window.showErrorMessage("Could not identify the project for the selected cycle.");
-                    return;
-                }
-
-                // Hide the project management tree view
-                await hideProjectManagementTreeView();
-                // Display the test theme tree view
-                await displayTestThemeTreeView();
-                // Display the test elements tree view
-                await displayTestElementsTreeView();
-
-                progress.report({ increment: 20, message: "Fetching test themes..." });
-                // Fetch new data for the test theme tree
+                // Fetch children for the Test Theme Tree
                 const childrenForTestThemeTree: BaseTestBenchTreeItem[] =
                     await this.getChildrenOfCycle(projectsTreeViewItem);
-                logger.debug("TestThemeTreeDataProvider instance before setRoots:", this.testThemeDataProvider);
-                this.testThemeDataProvider.setRoots(childrenForTestThemeTree, cycleKey);
 
+                progress.report({ increment: 40, message: "Preparing views..." });
+
+                // Fire the event with the prepared data
+                this._onDidPrepareCycleDataForThemeTree.fire({
+                    cycleKey: cycleKey,
+                    children: childrenForTestThemeTree,
+                    cycleLabel: currentCycleLabel
+                });
+
+                // Test Elements Tree Logic
                 progress.report({ increment: 60, message: "Fetching test elements..." });
-                // If the cycle has a parent of type TOV (Version), fetch and display test elements.
                 if (projectsTreeViewItem.parent?.contextValue === TreeItemContextValues.VERSION) {
-                    // Check parent context value
-                    const tovKeyOfSelectedCycleElement = projectsTreeViewItem.parent?.item?.key; // Get key from parent's item
+                    const tovKeyOfSelectedCycleElement = projectsTreeViewItem.parent?.item?.key;
                     const tovLabel: string | undefined =
                         typeof projectsTreeViewItem.parent?.label === "string"
                             ? projectsTreeViewItem.parent.label
                             : undefined;
+
                     if (tovKeyOfSelectedCycleElement) {
                         logger.trace(
                             `Clicked cycle item has a parent TOV with key: ${tovKeyOfSelectedCycleElement}. Fetching test elements.`
                         );
-                        const areTestElementsFetched: boolean =
-                            await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                                tovKeyOfSelectedCycleElement,
-                                tovLabel
-                            );
-                        if (!areTestElementsFetched) {
-                            clearTestElementsTreeView();
+                        if (testElementsTreeDataProvider) {
+                            const areTestElementsFetched: boolean =
+                                await testElementsTreeDataProvider.fetchAndDisplayTestElements(
+                                    tovKeyOfSelectedCycleElement,
+                                    tovLabel
+                                );
+                            if (!areTestElementsFetched) {
+                                clearTestElementsTreeView();
+                            }
+                        } else {
+                            logger.error("testElementsTreeDataProvider is not available.");
                         }
                     } else {
                         logger.warn("Parent TOV key not found for the clicked cycle.");
+                        clearTestElementsTreeView(); // Clear if context is lost
                     }
                 } else {
                     logger.trace(
@@ -749,6 +680,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                     );
                     clearTestElementsTreeView();
                 }
+
                 progress.report({ increment: 100, message: "Data loaded." });
             }
         );
@@ -759,9 +691,6 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      */
     public clearTree(): void {
         logger.trace("Clearing project management tree.");
-        if (this.testThemeDataProvider) {
-            this.testThemeDataProvider.clearTree();
-        }
         this.refresh();
     }
 }
@@ -982,142 +911,52 @@ export class BaseTestBenchTreeItem extends vscode.TreeItem {
 }
 
 /**
- * Initializes the project management tree view.
- * This function creates a new tree view for project management and sets its data provider.
- * @param {TestThemeTreeDataProvider} testThemeDataProvider The test theme tree data provider.
- * @returns {ProjectManagementTreeDataProvider} The initialized project management tree data provider.
- */
-function createProjectDataProviderAndView(
-    testThemeDataProvider?: TestThemeTreeDataProvider
-): ProjectManagementTreeDataProvider {
-    logger.debug("Initializing project management tree view.");
-    const provider: ProjectManagementTreeDataProvider = new ProjectManagementTreeDataProvider(testThemeDataProvider);
-    setProjectManagementTreeDataProvider(provider);
-    const newProjectTreeView: vscode.TreeView<BaseTestBenchTreeItem> = vscode.window.createTreeView(
-        "projectManagementTree",
-        {
-            // View ID from package.json
-            treeDataProvider: provider,
-            canSelectMany: false
-        }
-    );
-    setProjectTreeView(newProjectTreeView);
-    return provider;
-}
-
-/**
  * Sets up event listeners for the project tree view to handle expand/collapse and selection events.
  * These events update the expansion state, icons dynamically, and initialize the test theme tree on cycle click.
  */
-function setupProjectTreeViewEventListeners(): void {
-    if (!projectTreeView) {
+export function setupProjectTreeViewEventListeners(
+    projectTreeViewInstance: vscode.TreeView<BaseTestBenchTreeItem>,
+    providerInstance: ProjectManagementTreeDataProvider
+): void {
+    if (!projectTreeViewInstance) {
         logger.error("Project tree view (projectTreeView) is not initialized. Cannot set up event listeners.");
         return;
     }
+    if (!providerInstance) {
+        logger.error("Project management data provider is not initialized. Cannot set up event listeners.");
+        return;
+    }
 
-    // Handle expand events to update expansion state and icons dynamically.
-    projectTreeView.onDidExpandElement(async (event) => {
-        if (projectManagementTreeDataProvider) {
-            await projectManagementTreeDataProvider.handleExpansion(event.element, true);
-        }
+    projectTreeViewInstance.onDidExpandElement(async (event) => {
+        // No direct call to testThemeDataProvider here
+        await providerInstance.handleExpansion(event.element, true);
+        // If cycle expansion in project tree should *also* trigger theme tree population
+        // (independent of the click command), then handleTestCycleClick could be called here too,
+        // which would then fire the event.
+        // if (event.element.contextValue === TreeItemContextValues.CYCLE) {
+        //    await providerInstance.handleTestCycleClick(event.element);
+        // }
     });
-
-    // Handle collapse events to update expansion state and icons dynamically.
-    projectTreeView.onDidCollapseElement(async (event) => {
-        if (projectManagementTreeDataProvider) {
-            await projectManagementTreeDataProvider.handleExpansion(event.element, false);
-        }
+    projectTreeViewInstance.onDidCollapseElement(async (event) => {
+        await providerInstance.handleExpansion(event.element, false);
     });
-
-    // Handle selection changes (initial click events) to trigger test theme tree initialization on cycle click.
-    // Note: Clicking on an already clicked cycle item does not trigger this onDidChangeSelection, another command is used to handle this.
-    projectTreeView.onDidChangeSelection(async (event) => {
+    // onDidChangeSelection might still call handleTestCycleClick if that's the desired trigger
+    projectTreeViewInstance.onDidChangeSelection(async (event) => {
         if (event.selection.length > 0) {
             const selectedElement: BaseTestBenchTreeItem = event.selection[0];
             logger.trace(
-                `Selection changed in Project Tree: ${selectedElement.label}, context: ${selectedElement.contextValue}`
+                `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
             );
-
-            // TODO: Remove?
             if (selectedElement && selectedElement.contextValue === TreeItemContextValues.CYCLE) {
-                // Trigger loading data into TestThemeTree and TestElementsTree
-                if (projectManagementTreeDataProvider) {
-                    // await projectManagementTreeDataProvider.handleTestCycleClick(selectedElement);
+                // Check if providerInstance is the global projectManagementTreeDataProvider for safety
+                if (projectManagementTreeDataProvider === providerInstance) {
+                    await projectManagementTreeDataProvider.handleTestCycleClick(selectedElement);
                 } else {
-                    logger.error("projectManagementTreeDataProvider is null, cannot handle test cycle click.");
+                    logger.warn("Provider instance mismatch in onDidChangeSelection.");
                 }
             }
         }
     });
-}
-
-/**
- * Initializes or updates the project management tree view and test theme tree view and set the global references.
- * This function ensures that tree views and data providers are created only once during extension activation.
- * Subsequent calls update the existing instances and their internal references.
- * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @returns {Promise<void>} A promise that resolves when the trees are initialized or updated.
- */
-export async function initializeProjectAndTestThemeTrees(context: vscode.ExtensionContext): Promise<void> {
-    logger.debug("Initializing project and test theme trees (multi-project mode).");
-
-    // Always create fresh providers to ensure clean state
-    const testThemeDataProvider = new TestThemeTreeDataProvider();
-    setTestThemeTreeView(
-        vscode.window.createTreeView("testThemeTree", {
-            treeDataProvider: testThemeDataProvider
-        })
-    );
-
-    const projectProvider = new ProjectManagementTreeDataProvider(testThemeDataProvider);
-    setProjectManagementTreeDataProvider(projectProvider);
-
-    // Clear any existing state
-    testThemeDataProvider.clearTree();
-    projectProvider.clearTree();
-
-    // Setup the test theme tree view first, its provider is needed by ProjectManagementTreeDataProvider
-    // const testThemeDataProvider: TestThemeTreeDataProvider = initializeTestThemeTreeView();
-    if (!testThemeTreeView) {
-        logger.error("Failed to create test theme tree view instance.");
-        return;
-    }
-    if (testThemeDataProvider && projectManagementTreeDataProvider) {
-        projectManagementTreeDataProvider.setTestThemeDataProvider(testThemeDataProvider);
-    } else if (testThemeDataProvider && !projectManagementTreeDataProvider) {
-        // initializing for the first time
-    } else {
-        logger.error("Failed to initialize testThemeDataProvider or projectManagementDataProvider not yet ready.");
-    }
-
-    // Setup the project management tree view.
-    createProjectDataProviderAndView(testThemeDataProvider);
-    setupProjectTreeViewEventListeners();
-
-    if (!projectManagementTreeDataProvider) {
-        logger.error("Failed to create project management tree data provider.");
-        return;
-    }
-
-    if (projectTreeView) {
-        context.subscriptions.push(projectTreeView);
-    } else {
-        logger.error("Project Tree View (projectTreeView) was not created successfully.");
-    }
-
-    // Initialize Test Theme Tree
-    if (projectManagementTreeDataProvider && testThemeDataProvider) {
-        projectManagementTreeDataProvider.setTestThemeDataProvider(testThemeDataProvider);
-        projectManagementTreeDataProvider.testThemeDataProvider.refresh();
-    }
-    if (testThemeTreeView) {
-        context.subscriptions.push(testThemeTreeView);
-    }
-
-    // Display the project management tree view if not displayed already
-    // Triggers getChildren() for the root, loads all projects.
-    await vscode.commands.executeCommand("projectManagementTree.focus");
-    logger.info("Project and Test Theme trees initialized for multi-project display.");
 }
 
 /**
