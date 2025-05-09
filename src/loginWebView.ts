@@ -5,9 +5,8 @@
  */
 
 import * as vscode from "vscode";
-import { logger, connection, getConfig, projectManagementTreeDataProvider, initializeTreeViews } from "./extension";
+import { logger, connection, getConfig, getProjectManagementTreeDataProvider, initializeTreeViews } from "./extension";
 import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
-import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 import { WebviewMessageCommands, ConfigKeys, StorageKeys } from "./constants";
 
 /**
@@ -171,9 +170,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             // If login was successful, display project tree view
             if (connectionAfterLoginAttempt) {
                 initializeTreeViews(extensionContext);
-                displayProjectManagementTreeView();
-                if (projectManagementTreeDataProvider) {
-                    projectManagementTreeDataProvider.refresh();
+                const pmProvider = getProjectManagementTreeDataProvider();
+                if (pmProvider) {
+                    pmProvider.refresh();
                 }
             } else {
                 logger.warn("Login failed via webview.");
@@ -244,7 +243,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         const imageUri: vscode.Uri | null = this.createIconUri(webview);
 
-        // Use constants for config keys
         const serverNameValue: string = getConfig().get<string>(ConfigKeys.SERVER_NAME, "");
         const portNumberValue: string = getConfig().get<string>(ConfigKeys.PORT_NUMBER, "");
         const usernameValue: string = getConfig().get<string>(ConfigKeys.USERNAME, "");

@@ -46,48 +46,51 @@ export function setLogger(newLogger: testBenchLogger.TestBenchLogger): void {
     logger = newLogger;
 }
 
-/** Global project management tree data provider. */
-export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
-export function setProjectManagementTreeDataProvider(
-    newProjectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null
-): void {
-    projectManagementTreeDataProvider = newProjectManagementTreeDataProvider;
-}
-
-export let testThemeTreeDataProvider: TestThemeTreeDataProvider | null = null; // Added
-export function getTestThemeTreeDataProvider(): TestThemeTreeDataProvider | null {
-    return testThemeTreeDataProvider;
-}
-
-export let testThemeTreeViewInstance: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem>; // Renamed for clarity from local newTestThemeTreeView
-
 /** Global connection to the (new) TestBench Play server. */
 export let connection: testBenchConnection.PlayServerConnection | null = null;
 export function setConnection(newConnection: testBenchConnection.PlayServerConnection | null): void {
     connection = newConnection;
 }
 
-/** Global login webview provider instance. */
-export let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null;
-
-/** Global tree views.
- * The generic parameter specifies the type of tree item displayed by each view.
- */
-export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementTreeItem>;
-export let projectTreeView: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem>;
-export function setProjectTreeView(
-    newProjectTreeView: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem>
-): void {
-    projectTreeView = newProjectTreeView;
+/** Module-private webview provider instance. */
+let loginWebViewProvider: loginWebView.LoginWebViewProvider | null = null;
+export function getLoginWebViewProvider(): loginWebView.LoginWebViewProvider | null {
+    return loginWebViewProvider;
 }
 
-/**
- * Global Test Elements Tree Data Provider.
- * Declared here so it can be referenced from command handlers.
- */
-export let testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDataProvider;
-export function getTestElementsTreeDataProvider(): testElementsTreeView.TestElementsTreeDataProvider {
-    return testElementsTreeDataProvider;
+/** Module-private variables to hold instances */
+let _projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
+let _testThemeTreeDataProvider: TestThemeTreeDataProvider | null = null;
+let _testThemeTreeViewInstance: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem> | undefined;
+let _testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementTreeItem> | undefined;
+let _projectTreeView: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem> | undefined;
+let _testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDataProvider | undefined;
+
+/** Getter functions for providers and views */
+export function getProjectManagementTreeDataProvider(): projectManagementTreeView.ProjectManagementTreeDataProvider | null {
+    return _projectManagementTreeDataProvider;
+}
+
+export function getTestThemeTreeDataProvider(): TestThemeTreeDataProvider | null {
+    return _testThemeTreeDataProvider;
+}
+
+export function getTestElementsTreeDataProvider(): testElementsTreeView.TestElementsTreeDataProvider | undefined {
+    return _testElementsTreeDataProvider;
+}
+
+export function getProjectTreeView(): vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem> | undefined {
+    return _projectTreeView;
+}
+
+export function getTestThemeTreeViewInstance():
+    | vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem>
+    | undefined {
+    return _testThemeTreeViewInstance;
+}
+
+export function getTestElementTreeView(): vscode.TreeView<testElementsTreeView.TestElementTreeItem> | undefined {
+    return _testElementTreeView;
 }
 
 /* =============================================================================
@@ -177,16 +180,32 @@ export async function loadConfiguration(context: vscode.ExtensionContext, newSco
     // loginWebViewProvider?.updateWebviewHTMLContent();
 }
 
-function initializeTestElementsTreeView(): void {
-    testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider();
-    testElementTreeView = vscode.window.createTreeView("testElementsView", {
-        treeDataProvider: testElementsTreeDataProvider
+/**
+ * Initializes the Test Elements Tree View.
+ *
+ * This function sets up the tree data provider for the test elements,
+ * creates the tree view itself, and registers it with the extension's subscriptions.
+ * It also handles the initial message display if the tree is empty and
+ * hides the tree view by default.
+ *
+ * @param context - The extension context provided by VS Code, used for managing disposables.
+ */
+function initializeTestElementsTreeView(context: vscode.ExtensionContext): void {
+    _testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider((message) => {
+        // Pass callback for message updates
+        if (_testElementTreeView) {
+            _testElementTreeView.message = message;
+        }
     });
-    if (testElementsTreeDataProvider.isTreeDataEmpty()) {
-        testElementTreeView.message =
-            "Select a Test Object Version (TOV) to see test elements, or check filter settings.";
-    }
+    _testElementTreeView = vscode.window.createTreeView("testElementsView", {
+        treeDataProvider: _testElementsTreeDataProvider
+    });
+    context.subscriptions.push(_testElementTreeView); // Add to subscriptions
 
+    if (_testElementsTreeDataProvider.isTreeDataEmpty()) {
+        // Message setting will be handled by the provider via callback
+        _testElementsTreeDataProvider.updateMessage();
+    }
     // Hide the test elements tree view initially.
     testElementsTreeView.hideTestElementsTreeView();
 }
@@ -198,44 +217,54 @@ function initializeTestElementsTreeView(): void {
  */
 export function initializeTreeViews(context: vscode.ExtensionContext): void {
     // Create TestThemeTreeDataProvider
-    testThemeTreeDataProvider = new TestThemeTreeDataProvider();
-    testThemeTreeViewInstance = vscode.window.createTreeView("testThemeTree", {
-        treeDataProvider: testThemeTreeDataProvider
+    _testThemeTreeDataProvider = new TestThemeTreeDataProvider((message) => {
+        // Pass callback for message updates
+        if (_testThemeTreeViewInstance) {
+            _testThemeTreeViewInstance.message = message;
+        }
     });
-    context.subscriptions.push(testThemeTreeViewInstance);
+    _testThemeTreeViewInstance = vscode.window.createTreeView("testThemeTree", {
+        treeDataProvider: _testThemeTreeDataProvider
+    });
+    context.subscriptions.push(_testThemeTreeViewInstance);
 
-    projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider();
+    _projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(
+        (message) => {
+            // Pass callback for message updates
+            if (_projectTreeView) {
+                _projectTreeView.message = message;
+            }
+        },
+        _testThemeTreeDataProvider // Pass testThemeTreeDataProvider instance
+    );
     const newProjectTreeView: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem> =
         vscode.window.createTreeView("projectManagementTree", {
-            treeDataProvider: projectManagementTreeDataProvider,
+            treeDataProvider: _projectManagementTreeDataProvider,
             canSelectMany: false
         });
     context.subscriptions.push(newProjectTreeView);
-    setProjectTreeView(newProjectTreeView);
+    _projectTreeView = newProjectTreeView; // Assign to module-private variable
 
     // Listen to the new event from ProjectManagementTreeDataProvider
-    if (projectManagementTreeDataProvider && testThemeTreeViewInstance) {
+    if (_projectManagementTreeDataProvider && _testThemeTreeViewInstance && _testThemeTreeDataProvider) {
         context.subscriptions.push(
-            projectManagementTreeDataProvider.onDidPrepareCycleDataForThemeTree(
+            _projectManagementTreeDataProvider.onDidPrepareCycleDataForThemeTree(
                 async (eventData: CycleDataForThemeTreeEvent) => {
-                    if (testThemeTreeDataProvider) {
+                    if (_testThemeTreeDataProvider && _testThemeTreeViewInstance) {
+                        // Also check _testThemeTreeViewInstance
                         logger.info(`Cycle data prepared for ${eventData.cycleLabel}. Updating Test Theme Tree.`);
-                        // Clear previous state of Test Theme Tree
-                        testThemeTreeDataProvider.clearTree();
-                        // Set new roots for Test Theme Tree
-                        testThemeTreeDataProvider.setRoots(eventData.children, eventData.cycleKey);
+                        _testThemeTreeDataProvider.clearTree();
+                        _testThemeTreeDataProvider.setRoots(eventData.children, eventData.cycleKey);
 
-                        // Update message for TestThemeTree
-                        if (eventData.children.length === 0) {
-                            testThemeTreeViewInstance.message = `No test themes found for cycle: ${eventData.cycleLabel}`;
-                        } else {
-                            testThemeTreeViewInstance.message = undefined;
-                        }
+                        // Update the title of the Test Themes tree view
+                        _testThemeTreeViewInstance.title = `Test Themes (${eventData.cycleLabel})`;
+                        logger.trace(`Test Theme TreeView title updated to: ${_testThemeTreeViewInstance.title}`);
 
                         await projectManagementTreeView.hideProjectManagementTreeView();
-                        // Display the Test Theme Tree View and test elements tree view
                         await displayTestThemeTreeView();
-                        await testElementsTreeView.displayTestElementsTreeView();
+                        if (getTestElementsTreeDataProvider()) {
+                            await testElementsTreeView.displayTestElementsTreeView();
+                        }
                     }
                 }
             )
@@ -243,14 +272,19 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
     }
 
     // Initial data load/refresh for project tree
-    projectManagementTreeDataProvider?.refresh();
-    if (testThemeTreeDataProvider && testThemeTreeViewInstance) {
-        testThemeTreeDataProvider.clearTree(); // Calls refresh and sets message via its own logic
-        if (testThemeTreeDataProvider.rootElements.length === 0) {
-            testThemeTreeViewInstance.message = "Select a cycle from the 'Projects' view to see test themes.";
-        }
+    _projectManagementTreeDataProvider?.refresh(true); // true for hard refresh
+
+    if (_testThemeTreeDataProvider && _testThemeTreeViewInstance) {
+        _testThemeTreeDataProvider.clearTree();
+        // Message is set by clearTree/refresh via callback
     }
-    initializeTestElementsTreeView();
+    initializeTestElementsTreeView(context);
+    if (_projectTreeView && _projectManagementTreeDataProvider) {
+        projectManagementTreeView.setupProjectTreeViewEventListeners(
+            _projectTreeView,
+            _projectManagementTreeDataProvider
+        );
+    }
 }
 
 /**
@@ -293,10 +327,15 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 await testBenchConnection?.performLogin(context, false, true);
             if (loginResult) {
                 // Display project management tree and hide other tree views if they are open.
-                projectManagementTreeView?.displayProjectManagementTreeView();
+                await projectManagementTreeView?.displayProjectManagementTreeView();
                 await hideTestThemeTreeView();
                 await testElementsTreeView?.hideTestElementsTreeView();
-                projectManagementTreeDataProvider?.refresh();
+                const pmDataProvider = getProjectManagementTreeDataProvider();
+                if (pmDataProvider) {
+                    pmDataProvider.refresh(true); // Force hard refresh on login
+                } else {
+                    logger.warn("ProjectManagementTreeDataProvider not available for refresh after automatic login.");
+                }
             }
         } else {
             logger.trace("Automatic login is disabled or password is not stored.");
@@ -326,7 +365,11 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             if (performLoginResult) {
                 // Reinitialize tree views after successful login
                 initializeTreeViews(context);
-                projectManagementTreeDataProvider?.refresh();
+                const pmProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null =
+                    getProjectManagementTreeDataProvider();
+                if (pmProvider) {
+                    pmProvider.refresh();
+                }
             }
         } catch (error) {
             logger.error(`Login process failed: ${error}`);
@@ -351,6 +394,11 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         }
         await connection.logoutUser();
 
+        // Clear provider states on logout
+        getProjectManagementTreeDataProvider()?.clearTree();
+        getTestThemeTreeDataProvider()?.clearTree();
+        getTestElementsTreeDataProvider()?.refresh([]); // Clear with empty data
+
         logger.trace("End of command: Logout");
     });
 
@@ -360,8 +408,10 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.handleProjectCycleClick,
         async (cycleItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
-            if (projectManagementTreeDataProvider) {
-                await projectManagementTreeDataProvider.handleTestCycleClick(cycleItem);
+            const pmProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null =
+                getProjectManagementTreeDataProvider();
+            if (pmProvider) {
+                await pmProvider.handleTestCycleClick(cycleItem);
             } else {
                 logger.error("Project management tree data provider is not initialized. (Handle Cycle Click)");
                 vscode.window.showErrorMessage("Project management tree is not initialized.");
@@ -381,7 +431,11 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 logger.error("generateTestCasesForCycle command called without connection.");
                 return;
             }
-            if (!projectManagementTreeDataProvider) {
+
+            const pmProvider = getProjectManagementTreeDataProvider();
+            const ttProvider = getTestThemeTreeDataProvider();
+
+            if (!pmProvider) {
                 vscode.window.showErrorMessage(
                     "Project management tree is not initialized. Please select a project first."
                 );
@@ -397,9 +451,9 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             // the test cycle wont have any initialized children so that test themes cannot be displayed in the quickpick.
             // Call getChildrenOfCycle to initialize the sub elements (Test themes etc.) of the cycle.
             // Offload the children of the cycle to the Test Theme Tree View.
-            if (projectManagementTreeDataProvider && testThemeTreeDataProvider) {
+            if (pmProvider && ttProvider) {
                 const children: projectManagementTreeView.BaseTestBenchTreeItem[] =
-                    (await projectManagementTreeDataProvider.getChildrenOfCycle(item)) ?? [];
+                    (await pmProvider.getChildrenOfCycle(item)) ?? [];
                 if (item.item?.key) {
                     // The projectManagementTreeDataProvider.handleTestCycleClick method
                     // already fires an event that leads to testThemeTreeDataProvider.setRoots.
@@ -407,10 +461,19 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                     // that would normally populate the TestThemeTree.
 
                     // Directly update TestThemeTree (if this command is the primary trigger for this view for this action)
-                    testThemeTreeDataProvider.clearTree(); // Clear previous state
-                    testThemeTreeDataProvider.setRoots(children, item.item.key);
-                    if (projectManagementTreeView.testThemeTreeView) {
-                        projectManagementTreeView.testThemeTreeView.title = `Test Themes (${typeof item.label === "string" ? item.label : "Cycle"})`;
+                    ttProvider.clearTree(); // Clear previous state
+                    ttProvider.setRoots(children, item.item.key);
+
+                    const ttView: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem> | undefined =
+                        getTestThemeTreeViewInstance();
+
+                    if (ttView) {
+                        const themeTreeView:
+                            | vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem>
+                            | undefined = getTestThemeTreeViewInstance();
+                        if (themeTreeView) {
+                            themeTreeView.title = `Test Themes (${typeof item.label === "string" ? item.label : "Cycle"})`;
+                        }
                     }
                     await vscode.commands.executeCommand("testThemeTree.focus");
                 } else {
@@ -435,7 +498,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         async (treeItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
             await reportHandler.fetchReportForTreeElement(
                 treeItem,
-                projectManagementTreeDataProvider,
+                getProjectManagementTreeDataProvider(),
                 folderNameOfInternalTestbenchFolder
             );
         }
@@ -472,10 +535,14 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         }
 
         // Clear all tree states before reloading
-        projectManagementTreeDataProvider?.clearTree();
-        testThemeTreeDataProvider?.clearTree();
-        if (testElementsTreeDataProvider) {
-            testElementsTreeDataProvider.refresh([]);
+        const pmProvider = getProjectManagementTreeDataProvider();
+        const ttProvider = getTestThemeTreeDataProvider();
+        const teProvider = getTestElementsTreeDataProvider();
+
+        pmProvider?.clearTree();
+        ttProvider?.clearTree();
+        if (teProvider) {
+            teProvider.refresh([]);
         }
 
         await projectManagementTreeView.displayProjectManagementTreeView();
@@ -536,7 +603,10 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             logger.error(noConnectionErrorMessage);
             return null;
         }
-        if (!projectManagementTreeDataProvider) {
+
+        const pmProvider = getProjectManagementTreeDataProvider();
+
+        if (!pmProvider) {
             const missingProviderErrorMessage: string =
                 "Project management tree provider is not initialized. Cannot import report.";
             vscode.window.showErrorMessage(missingProviderErrorMessage);
@@ -551,9 +621,13 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshProjectTreeView, async () => {
         logger.debug("Command Called: Refresh Project Tree View (Hard Refresh)");
-        if (projectManagementTreeDataProvider && projectTreeView) {
-            projectTreeView.message = "Refreshing projects...";
-            projectManagementTreeDataProvider.refresh(true); // true for hard refresh
+
+        const pmProvider = getProjectManagementTreeDataProvider();
+        const pTreeView = getProjectTreeView();
+        if (pmProvider && pTreeView) {
+            // Message update should be handled by provider via callback
+            // pTreeView.message = "Refreshing projects...";
+            pmProvider.refresh(true); // true for hard refresh
         } else {
             logger.warn("RefreshProjectTreeView: projectManagementTreeDataProvider or projectTreeView is null.");
         }
@@ -564,33 +638,32 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     registerSafeCommand(context, allExtensionCommands.refreshTestThemeTreeView, async () => {
         logger.debug("Command called: Refresh Test Theme Tree");
 
-        if (!testThemeTreeDataProvider) {
+        const ttProvider = getTestThemeTreeDataProvider();
+        const pmProvider = getProjectManagementTreeDataProvider();
+        const ttView = getTestThemeTreeViewInstance();
+
+        if (!ttProvider) {
             logger.warn("Test Theme Tree Data Provider not initialized. Cannot refresh.");
             vscode.window.showErrorMessage("Test Theme Tree is not available to refresh.");
             return;
         }
 
-        if (!projectManagementTreeDataProvider) {
+        if (!pmProvider) {
             logger.warn("Project Management Tree Data Provider not initialized. Cannot refresh.");
             vscode.window.showErrorMessage("Project Management Tree is not available to refresh.");
             return;
         }
 
-        if (!testThemeTreeViewInstance) {
+        if (!ttView) {
             logger.warn("Test Theme TreeView instance is not available. Cannot set message.");
         }
 
-        // Set Loading Message for Test Theme Tree View
-        if (testThemeTreeViewInstance) {
-            testThemeTreeViewInstance.message = "Refreshing test themes...";
-        }
-        testThemeTreeDataProvider.refresh(); // Use public refresh method
+        // Message update should be handled by provider via callback
+        ttProvider.refresh();
 
-        const currentCycleKey = testThemeTreeDataProvider.isCurrentCycle("")
-            ? null
-            : testThemeTreeDataProvider["_currentCycleKey"];
+        const currentCycleKey: string | null = ttProvider["_currentCycleKey"];
         if (currentCycleKey) {
-            const firstRootInThemeTree = testThemeTreeDataProvider.rootElements[0];
+            const firstRootInThemeTree = ttProvider.rootElements[0];
             const cycleElement: projectManagementTreeView.BaseTestBenchTreeItem | undefined =
                 firstRootInThemeTree?.parent ?? undefined;
 
@@ -604,29 +677,31 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 );
                 // Re-fetch children for this cycle and update the testThemeTreeDataProvider
                 const children: projectManagementTreeView.BaseTestBenchTreeItem[] =
-                    (await projectManagementTreeDataProvider.getChildrenOfCycle(cycleElement)) ?? [];
+                    (await pmProvider.getChildrenOfCycle(cycleElement)) ?? [];
                 // The setRoots will internally call refresh on testThemeTreeDataProvider
-                testThemeTreeDataProvider.setRoots(children, cycleElement.item.key);
-                if (projectManagementTreeView.testThemeTreeView) {
-                    projectManagementTreeView.testThemeTreeView.title = `Test Themes (${typeof cycleElement.label === "string" ? cycleElement.label : "Cycle"})`;
+                ttProvider.setRoots(children, cycleElement.item.key);
+                const themeTreeView = getTestThemeTreeViewInstance();
+                if (themeTreeView) {
+                    // Check if defined
+                    themeTreeView.title = `Test Themes (${typeof cycleElement.label === "string" ? cycleElement.label : "Cycle"})`;
                 }
             } else if (currentCycleKey) {
                 logger.warn(
                     `Could not find the parent cycle element for the current Test Theme Tree (cycleKey: ${currentCycleKey}). Refreshing with current roots.`
                 );
-                testThemeTreeDataProvider.refresh(); // This will just re-render current items.
+                ttProvider.refresh(); // This will just re-render current items.
             } else {
                 logger.debug(
                     "No current cycle in Test Theme Tree to refresh, or provider not found. Clearing and refreshing."
                 );
-                testThemeTreeDataProvider.clearTree(); // This calls refresh internally
+                ttProvider.clearTree(); // This calls refresh internally
             }
         } else {
             logger.warn(
                 "Refresh Test Theme Tree: projectManagementTreeDataProvider or testThemeTreeDataProvider is null."
             );
-            if (testThemeTreeDataProvider) {
-                testThemeTreeDataProvider.refresh();
+            if (ttProvider) {
+                ttProvider.refresh();
             } // Attempt to refresh what it has
         }
 
@@ -639,12 +714,14 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
         context,
         allExtensionCommands.makeRoot,
         (treeItem: projectManagementTreeView.BaseTestBenchTreeItem) => {
-            // Assuming treeItem is BaseTestBenchTreeItem
             logger.debug("Command Called: Make Root for tree item:", treeItem?.label);
             if (!treeItem) {
                 logger.warn("MakeRoot command called with null treeItem.");
                 return;
             }
+
+            const pmProvider = getProjectManagementTreeDataProvider();
+            const ttProvider = getTestThemeTreeDataProvider();
 
             // Check if the item belongs to the Project Management Tree
             if (
@@ -657,22 +734,22 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                     ] as string[]
                 ).includes(treeItem.contextValue)
             ) {
-                if (projectManagementTreeDataProvider) {
-                    projectManagementTreeDataProvider.makeRoot(treeItem);
+                if (pmProvider) {
+                    pmProvider.makeRoot(treeItem);
                 } else {
                     logger.warn("MakeRoot: projectManagementTreeDataProvider is null for project tree item.");
                     vscode.window.showErrorMessage("Project tree is not available to set root.");
                 }
             } else if (
-                testThemeTreeDataProvider &&
+                ttProvider &&
                 treeItem.contextValue &&
                 (
                     [TreeItemContextValues.TEST_THEME_NODE, TreeItemContextValues.TEST_CASE_SET_NODE] as string[]
                 ).includes(treeItem.contextValue)
             ) {
                 // Delegate to testThemeTreeDataProvider if it's a test theme item
-                if (typeof (testThemeTreeDataProvider as any).makeRoot === "function") {
-                    (testThemeTreeDataProvider as any).makeRoot(treeItem);
+                if (typeof (ttProvider as any).makeRoot === "function") {
+                    (ttProvider as any).makeRoot(treeItem);
                 } else {
                     logger.warn(
                         `MakeRoot: testThemeTreeDataProvider does not have a makeRoot method or item type (${treeItem.contextValue}) is not supported for makeRoot in test theme tree.`
@@ -714,12 +791,16 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // Refreshes the test elements tree view with the latest test elements for the selected TOV.
     registerSafeCommand(context, allExtensionCommands.refreshTestElementsTree, async () => {
         logger.debug("Command Called: Refresh Test Elements Tree");
-        const currentTovKey: string = testElementsTreeDataProvider.getCurrentTovKey();
+        const teProvider = getTestElementsTreeDataProvider();
+        if (!teProvider) {
+            return;
+        }
+        const currentTovKey: string = teProvider.getCurrentTovKey();
         if (!currentTovKey) {
             vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
             return;
         }
-        await testElementsTreeDataProvider.fetchAndDisplayTestElements(currentTovKey);
+        await teProvider.fetchAndDisplayTestElements(currentTovKey);
     });
 
     // --- Command: Display Interactions For Selected TOV ---
@@ -731,23 +812,21 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 "Command Called: Display Interactions For Selected TOV command called for tree item:",
                 treeItem
             );
+            const pmProvider = getProjectManagementTreeDataProvider();
+            const teProvider = getTestElementsTreeDataProvider();
+            const teView = getTestElementTreeView();
             // Check if the command is executed for a TOV element.
-            if (projectManagementTreeDataProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
+            if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
-                if (tovKeyOfSelectedTreeElement) {
-                    // Set loading message for Test Elements Tree
-                    if (testElementTreeView) {
-                        testElementTreeView.message = `Loading test elements for TOV: ${typeof treeItem.label === "string" ? treeItem.label : "..."} (${tovKeyOfSelectedTreeElement})`;
-                    }
-                    const areTestElementsFetched: boolean =
-                        await testElementsTreeDataProvider.fetchAndDisplayTestElements(
-                            tovKeyOfSelectedTreeElement,
-                            typeof treeItem.label === "string" ? treeItem.label : undefined
-                        );
+                if (tovKeyOfSelectedTreeElement && teProvider) {
+                    const areTestElementsFetched: boolean = await teProvider.fetchAndDisplayTestElements(
+                        tovKeyOfSelectedTreeElement,
+                        typeof treeItem.label === "string" ? treeItem.label : undefined
+                    );
                     if (areTestElementsFetched) {
                         await projectManagementTreeView.hideProjectManagementTreeView();
                         // testElementTreeView.message is cleared by fetchAndDisplayTestElements on success
-                    } else if (testElementTreeView) {
+                    } else if (teView) {
                         // If fetch failed, fetchAndDisplayTestElements already sets an error message
                     }
                 }
@@ -809,6 +888,11 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
                 return;
             }
 
+            const teProvider = getTestElementsTreeDataProvider();
+            if (!teProvider) {
+                return;
+            }
+
             // Prompt user for new interaction name
             const interactionName: string | undefined = await vscode.window.showInputBox({
                 prompt: "Enter name for the new Interaction",
@@ -832,7 +916,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
             if (newInteraction) {
                 // TODO: After the API is implemented, use the API to create the interaction on the server
                 // For now, refresh the tree view to show the new interaction
-                testElementsTreeDataProvider._onDidChangeTreeData.fire(undefined);
+                teProvider._onDidChangeTreeData.fire(undefined);
 
                 vscode.window.showInformationMessage(`Successfully created interaction '${interactionName}'`);
                 logger.debug(
