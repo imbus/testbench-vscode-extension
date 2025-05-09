@@ -14,7 +14,13 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import * as utils from "./utils";
-import { getConfig, connection, logger } from "./extension";
+import {
+    getConfig,
+    connection,
+    logger,
+    getProjectManagementTreeDataProvider,
+    getTestThemeTreeDataProvider
+} from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
@@ -660,24 +666,59 @@ export async function fetchReportForTreeElement(
  */
 export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
-    selectedTreeItem: projectManagementTreeView.BaseTestBenchTreeItem
+    selectedTreeItem: projectManagementTreeView.BaseTestBenchTreeItem,
+    providedCycleKey?: string
 ): Promise<void | null> {
     logger.debug("Generating tests for non-cycle element:", selectedTreeItem);
     const treeElementUID = selectedTreeItem.item?.base?.uniqueID;
-    const cycleKey: string | null = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
-    const projectKey: string | null = projectManagementTreeView.findProjectKeyForElement(selectedTreeItem);
+    let cycleKey: string | null = providedCycleKey || null;
+    let projectKey: string | null = null;
 
-    if (!projectKey || !cycleKey || !treeElementUID) {
+    if (!cycleKey) {
+        // If cycleKey wasn't provided by the caller
+        // attempt to find it by traversing parent.
+        logger.warn(`CycleKey not provided for ${selectedTreeItem.label}, attempting to find via parent traversal.`);
+        cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
+    }
+
+    if (!cycleKey) {
         logger.error(
-            `Cannot generate RF Tests. Missing project key (${projectKey}), cycle key (${cycleKey}) or UID (${treeElementUID}).`
+            `generateRobotFrameworkTestsForTestThemeOrTestCaseSet: Cycle key not found for item ${selectedTreeItem.label}.`
         );
+        vscode.window.showErrorMessage(`Error: Cycle key could not be determined for '${selectedTreeItem.label}'.`);
+        return null;
+    }
+
+    const pmProvider = getProjectManagementTreeDataProvider();
+    if (pmProvider) {
+        const ttProvider = getTestThemeTreeDataProvider();
+        if (ttProvider && ttProvider["_currentCycleKey"] === cycleKey && ttProvider["_currentProjectKey"]) {
+            projectKey = ttProvider["_currentProjectKey"];
+        }
+    }
+
+    if (!projectKey) {
+        // Fallback: Try to find it via selectedTreeItem if it has enough context
+        projectKey = projectManagementTreeView.findProjectKeyForElement(selectedTreeItem);
+    }
+
+    if (!projectKey) {
+        logger.error(
+            `generateRobotFrameworkTestsForTestThemeOrTestCaseSet: Project key not found for cycle ${cycleKey}.`
+        );
+        vscode.window.showErrorMessage(`Error: Project key could not be determined for the current cycle.`);
+        return null;
+    }
+
+    if (!treeElementUID) {
+        logger.error(`Cannot generate RF Tests. Missing UID for item ${selectedTreeItem.label}.`);
         return null;
     }
 
     await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
         context,
         selectedTreeItem,
-        typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : "", // Label might be undefined
+        typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : "",
         projectKey,
         cycleKey,
         treeElementUID

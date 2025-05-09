@@ -22,9 +22,10 @@ import { hideTestThemeTreeView, displayTestThemeTreeView, TestThemeTreeDataProvi
 
 // Event payload
 export interface CycleDataForThemeTreeEvent {
+    projectKey: string;
     cycleKey: string;
-    children: BaseTestBenchTreeItem[];
     cycleLabel: string;
+    rawCycleStructure: CycleStructure | null;
 }
 
 /**
@@ -112,6 +113,53 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     /**
+     * Fetches the raw structural data for a specific test cycle.
+     *
+     * @param {BaseTestBenchTreeItem} cycleElement The tree item representing the cycle.
+     * @returns {Promise<CycleStructure | null>} A promise that resolves to a `CycleStructure` object or `null` if an error occurs.
+     */
+    public async getRawCycleData(cycleElement: BaseTestBenchTreeItem): Promise<CycleStructure | null> {
+        const cycleElementLabel: string = typeof cycleElement.label === "string" ? cycleElement.label : "N/A";
+        logger.trace("Fetching raw cycle data for element:", cycleElementLabel);
+        if (cycleElement.contextValue !== TreeItemContextValues.CYCLE) {
+            logger.warn(`getRawCycleData called on non-Cycle item: ${cycleElementLabel}`);
+            return null;
+        }
+
+        const cycleKey: string = cycleElement.item?.key;
+        if (!cycleKey) {
+            logger.error("Cycle key is missing from the provided cycleElement item data.");
+            return null;
+        }
+
+        const projectKey: string | null = findProjectKeyOfCycleElement(cycleElement);
+        if (!projectKey) {
+            logger.warn("Project key of cycle not found (getRawCycleData).");
+            return null;
+        }
+        if (!connection) {
+            logger.warn("No connection available (getRawCycleData).");
+            return null;
+        }
+
+        const cycleData: CycleStructure | null = await connection.fetchCycleStructureOfCycleInProject(
+            projectKey,
+            cycleKey
+        );
+
+        if (!cycleData) {
+            logger.trace("No cycle structure data returned from server (getRawCycleData).");
+            return null;
+        }
+        // Validate fetched data
+        if (!cycleData.nodes || !cycleData.root?.base?.key) {
+            logger.error(`Workspaceed cycle structure for ${cycleElementLabel} is missing nodes or root key.`);
+            return null;
+        }
+        return cycleData;
+    }
+
+    /**
      * Creates a TestbenchTreeItem from raw JSON data.
      * Handles expansion state restoration for collapsible items.
      *
@@ -130,43 +178,20 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return null;
         }
 
-        let itemKey: string | undefined;
-        let itemName: string | undefined;
-        let itemData: any;
-        let label: string;
+        const itemData: any = jsonData;
         let defaultCollapsibleState: vscode.TreeItemCollapsibleState;
 
         // Normalize data extraction
-        if (
-            contextValue === TreeItemContextValues.TEST_THEME_NODE ||
-            contextValue === TreeItemContextValues.TEST_CASE_SET_NODE ||
-            contextValue === TreeItemContextValues.TEST_CASE_NODE
-        ) {
-            itemData = jsonData.base || jsonData;
-            if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
-                logger.warn(
-                    `Attempted to create test theme/case tree item with invalid data structure for context ${contextValue}:`,
-                    jsonData
-                );
-                return null;
-            }
-            itemKey = itemData.key;
-            itemName = itemData.name;
-            label = itemData.numbering ? `${itemData.numbering} ${itemName}` : itemName!;
-        } else {
-            // For Project, Version, Cycle
-            itemData = jsonData;
-            if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
-                logger.warn(
-                    `Attempted to create project/version/cycle tree item with invalid data structure for context ${contextValue}:`,
-                    jsonData
-                );
-                return null;
-            }
-            itemKey = itemData.key;
-            itemName = itemData.name;
-            label = itemName!;
+        if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
+            logger.warn(
+                `Attempted to create project/version/cycle tree item with invalid data structure for context ${contextValue}:`,
+                jsonData
+            );
+            return null;
         }
+        const itemKey: string | undefined = itemData.key;
+        const itemName: string | undefined = itemData.name;
+        const label: string = itemName!;
 
         if (itemKey === undefined || itemName === undefined) {
             logger.warn(
@@ -197,18 +222,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                 break;
             }
             case TreeItemContextValues.CYCLE:
-                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
-                break;
-            case TreeItemContextValues.TEST_THEME_NODE:
-                defaultCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-                break;
-            case TreeItemContextValues.TEST_CASE_SET_NODE:
-                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
-                break;
-            case TreeItemContextValues.TEST_CASE_NODE:
-                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None; // Cycles in this tree are not directly expandable to show themes
                 break;
             default:
+                logger.warn(
+                    `Unexpected contextValue '${contextValue}' in ProjectManagementTreeDataProvider.createTreeItem`
+                );
                 defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
         }
 
@@ -662,6 +681,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return;
         }
 
+        const projectKey: string | null = findProjectKeyOfCycleElement(projectsTreeViewItem);
+        if (!projectKey) {
+            logger.error("Project key is missing from clicked item. Cannot proceed.");
+            return;
+        }
+
         const currentThemeTreeView = getTestThemeTreeViewInstance();
         const currentElementTreeView = getTestElementTreeView();
         const currentElementsProvider = getTestElementsTreeDataProvider();
@@ -690,17 +715,17 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             async (progress) => {
                 progress.report({ increment: 0, message: "Fetching test themes..." });
 
-                // Fetch children for the Test Theme Tree
-                const childrenForTestThemeTree: BaseTestBenchTreeItem[] =
-                    await this.getChildrenOfCycle(projectsTreeViewItem);
+                // Fetch raw cycle data
+                const rawCycleData: CycleStructure | null = await this.getRawCycleData(projectsTreeViewItem);
 
                 progress.report({ increment: 40, message: "Preparing views..." });
 
-                // Fire the event with the prepared data
+                // Fire the event with the raw data
                 this._onDidPrepareCycleDataForThemeTree.fire({
+                    projectKey: projectKey,
                     cycleKey: cycleKey,
-                    children: childrenForTestThemeTree,
-                    cycleLabel: currentCycleLabel
+                    cycleLabel: currentCycleLabel,
+                    rawCycleStructure: rawCycleData
                 });
 
                 // Test Elements Tree Logic

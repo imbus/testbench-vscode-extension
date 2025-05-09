@@ -254,7 +254,7 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
                         // Also check _testThemeTreeViewInstance
                         logger.info(`Cycle data prepared for ${eventData.cycleLabel}. Updating Test Theme Tree.`);
                         _testThemeTreeDataProvider.clearTree();
-                        _testThemeTreeDataProvider.setRoots(eventData.children, eventData.cycleKey);
+                        _testThemeTreeDataProvider.populateFromCycleData(eventData);
 
                         // Update the title of the Test Themes tree view
                         _testThemeTreeViewInstance.title = `Test Themes (${eventData.cycleLabel})`;
@@ -519,7 +519,49 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             if (config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
                 await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
-            await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(context, treeItem);
+
+            const ttProvider = getTestThemeTreeDataProvider();
+            let cycleKey: string | null = null;
+
+            if (
+                (ttProvider && ttProvider.rootElements.includes(treeItem)) ||
+                (ttProvider && treeItem.parent && ttProvider.rootElements.includes(treeItem.parent))
+            ) {
+                cycleKey = ttProvider["_currentCycleKey"];
+                if (cycleKey) {
+                    if (!cycleKey) {
+                        logger.error(
+                            "Cycle key could not be determined from TestThemeTreeDataProvider for item:",
+                            treeItem.label
+                        );
+                        vscode.window.showErrorMessage("Could not determine the current cycle for test generation.");
+                        return;
+                    }
+                    logger.info(`Using cycleKey '${cycleKey}' from TestThemeTreeDataProvider for test generation.`);
+                } else {
+                    logger.error("Could not retrieve current cycle key from TestThemeTreeDataProvider.");
+                    vscode.window.showErrorMessage("Failed to identify the current cycle for test generation.");
+                    return;
+                }
+            } else {
+                // Fallback or if item is from another tree (should not happen for this command context)
+                logger.warn(
+                    "Item not recognized as part of the current TestThemeTree. Falling back to parent traversal for cycle key."
+                );
+                cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
+            }
+
+            if (!cycleKey) {
+                vscode.window.showErrorMessage(
+                    `Error: Cycle key not found for the selected item '${treeItem.label}'. Cannot generate tests.`
+                );
+                logger.error(
+                    `Cycle key not found for tree element: ${treeItem.label} (UID: ${treeItem.item?.uniqueID || treeItem.item?.key})`
+                );
+                return;
+            }
+
+            await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(context, treeItem, cycleKey);
             logger.trace("End of command: Generate Test Cases For Test Theme or Test Case Set");
         }
     );
