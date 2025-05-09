@@ -15,25 +15,6 @@ import { TreeItemContextValues } from "./constants";
    Global Variables and Helper Functions
    ============================================================================= */
 
-/** Stores the current TOV key used for fetching interactions. */
-let currentTovKeyOfInteractionsInView: string = "";
-
-/**
- * Returns the current TOV key.
- * @returns The current TOV key.
- */
-export function getCurrentTovKey(): string {
-    return currentTovKeyOfInteractionsInView;
-}
-
-/**
- * Sets the current TOV key.
- * @param {string} newTovKey The new TOV key.
- */
-export function setCurrentTovKey(newTovKey: string): void {
-    currentTovKeyOfInteractionsInView = newTovKey;
-}
-
 /**
  * Allowed element types for test elements.
  */
@@ -603,6 +584,12 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     >();
     readonly onDidChangeTreeData: vscode.Event<TestElementTreeItem | undefined> = this._onDidChangeTreeData.event;
     private treeData: TestElementData[] = [];
+    // Private member to store the current TOV key
+    private _currentTovKey: string = "";
+
+    public getCurrentTovKey(): string {
+        return this._currentTovKey;
+    }
 
     public isTreeDataEmpty(): boolean {
         return !this.treeData || this.treeData.length === 0;
@@ -697,7 +684,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
 
         const testElementsJsonData = await connection?.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
         if (testElementsJsonData) {
-            setCurrentTovKey(tovKey);
+            this._currentTovKey = tovKey;
             displayTestElementsTreeView();
             this.refresh(testElementsJsonData);
             // Update the title of the tree view if a new title is provided.
@@ -706,6 +693,8 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             }
             return true;
         } else {
+            // If fetching fails, clear the TOV key
+            this._currentTovKey = "";
             vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
             // Set error message on the view
             if (testElementTreeView) {
