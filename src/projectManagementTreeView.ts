@@ -64,8 +64,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
         this._onDidPrepareCycleDataForThemeTree.event;
 
-    // State for custom root item
-    private customRootItem: BaseTestBenchTreeItem | null = null;
+    // Custom root
+    private customRootKey: string | null = null;
+    private customRootContextValue: string | null = null;
+    private customRootJsonData: any | null = null;
 
     // Store keys of expanded nodes to restore expansion state of collapsible elements after a refresh.
     private expandedTreeItems: Set<string> = new Set<string>();
@@ -85,14 +87,17 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     refresh(isHardRefresh: boolean = false): void {
         logger.debug("Refreshing project management tree view.");
         if (isHardRefresh) {
-            this.customRootItem = null;
+            this.customRootKey = null;
+            this.customRootContextValue = null;
+            this.customRootJsonData = null;
             logger.trace("Hard refresh: Custom root has been reset.");
         }
-        if (projectTreeView && !this.customRootItem) {
+        if (projectTreeView && !this.customRootKey) {
             // Only manage message if not in customRoot mode
             projectTreeView.message = "Loading projects..."; // Temporary loading message
-        } else if (projectTreeView && this.customRootItem) {
-            projectTreeView.message = `Displaying custom root: ${typeof this.customRootItem.label === "string" ? this.customRootItem.label : "..."}`;
+        } else if (projectTreeView && this.customRootKey && this.customRootJsonData) {
+            const tempLabel = this.customRootJsonData?.name || this.customRootKey;
+            projectTreeView.message = `Displaying custom root: ${tempLabel}`;
         }
         this._onDidChangeTreeData.fire(undefined); // Fire with undefined to refresh from the root
         logger.trace("Project management tree view refreshed.");
@@ -108,134 +113,116 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         return element.parent;
     }
 
-    // Factory method to create a tree item based on the provided JSON data and context value.
-    static TreeItemFactory = class {
-        static create(
-            jsonData: any, // Can be Project, TreeNode, or CycleStructure node's 'base' or the node itself
-            contextValue: string, // Explicit context value like TreeItemContextValues.PROJECT
-            parent: BaseTestBenchTreeItem | null
-        ): BaseTestBenchTreeItem | null {
-            let itemKey: string | undefined;
-            let itemName: string | undefined;
-            let itemData: any; // This will hold the object that BaseTestBenchTreeItem's 'item' property will refer to.
-            let label: string;
-            let defaultCollapsibleState: vscode.TreeItemCollapsibleState;
-
-            // Normalize data extraction
-            // For TestThemeNode, TestCaseSetNode, TestCaseNode, jsonData is expected to be the 'base' object or the full node from CycleStructure
-            if (
-                contextValue === TreeItemContextValues.TEST_THEME_NODE ||
-                contextValue === TreeItemContextValues.TEST_CASE_SET_NODE ||
-                contextValue === TreeItemContextValues.TEST_CASE_NODE
-            ) {
-                // If jsonData itself has 'key' and 'name', it might be the 'base' object already.
-                // If it has 'base.key', then it's the full CycleStructure node.
-                itemData = jsonData.base || jsonData; // Use jsonData.base if it exists, otherwise jsonData
-                if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
-                    logger.warn("Attempted to create test theme/case tree item with invalid data structure:", jsonData);
-                    return null;
-                }
-                itemKey = itemData.key;
-                itemName = itemData.name;
-                label = itemData.numbering ? `${itemData.numbering} ${itemName}` : itemName!;
-            } else {
-                // For Project, Version, Cycle
-                itemData = jsonData; // jsonData is testBenchTypes.Project or testBenchTypes.TreeNode
-                if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
-                    logger.warn(
-                        "Attempted to create project/version/cycle tree item with invalid data structure:",
-                        jsonData
-                    );
-                    return null;
-                }
-                itemKey = itemData.key;
-                itemName = itemData.name;
-                label = itemName!;
-            }
-
-            if (itemKey === undefined || itemName === undefined) {
-                logger.warn(
-                    `Attempted to create tree item with missing key or name. Context: ${contextValue}, Key: ${itemKey}, Name: ${itemName}`,
-                    jsonData
-                );
-                return null;
-            }
-
-            // Determine default collapsible state based on type and potential children
-            switch (contextValue) {
-                case TreeItemContextValues.PROJECT: {
-                    const projectData = itemData as Project;
-                    const hasProjectChildren =
-                        (projectData.tovsCount && projectData.tovsCount > 0) ||
-                        (projectData.cyclesCount && projectData.cyclesCount > 0);
-                    defaultCollapsibleState = hasProjectChildren
-                        ? vscode.TreeItemCollapsibleState.Collapsed
-                        : vscode.TreeItemCollapsibleState.None;
-                    break;
-                }
-                case TreeItemContextValues.VERSION: {
-                    const versionData = itemData as TreeNode;
-                    defaultCollapsibleState =
-                        versionData.children && versionData.children.length > 0
-                            ? vscode.TreeItemCollapsibleState.Collapsed
-                            : vscode.TreeItemCollapsibleState.None;
-                    break;
-                }
-                case TreeItemContextValues.CYCLE:
-                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.None; // Cycles offload children
-                    break;
-                case TreeItemContextValues.TEST_THEME_NODE:
-                    // Test Themes are collapsible, Test Case Sets are not.
-                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-                    break;
-                case TreeItemContextValues.TEST_CASE_SET_NODE:
-                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
-                    break;
-                case TreeItemContextValues.TEST_CASE_NODE: // Test cases are not displayed in these trees
-                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
-                    break;
-                default:
-                    defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
-            }
-
-            // itemData (which is jsonData or jsonData.base) is passed to BaseTestBenchTreeItem constructor
-            return new BaseTestBenchTreeItem(label, contextValue, defaultCollapsibleState, itemData, parent);
-        }
-    };
-
     /**
      * Creates a TestbenchTreeItem from raw JSON data.
      * Handles expansion state restoration for collapsible items.
      *
      * @param {any} jsonData The raw JSON data.
-     * @param {string} explicitContextValue An explicit context value if jsonData.nodeType is not reliable.
+     * @param {string} contextValue An explicit context value if jsonData.nodeType is not reliable.
      * @param {BaseTestBenchTreeItem | null} parent The parent tree item.
      * @returns {BaseTestBenchTreeItem | null} A new TestbenchTreeItem or null.
      */
     private createTreeItem(
         jsonData: any,
-        explicitContextValue: string,
+        contextValue: string,
         parent: BaseTestBenchTreeItem | null
     ): BaseTestBenchTreeItem | null {
         if (!jsonData) {
-            // TreeItemFactory will do more detailed validation
             logger.warn("Attempted to create tree item with invalid jsonData (null or undefined).");
             return null;
         }
 
-        const treeItem = ProjectManagementTreeDataProvider.TreeItemFactory.create(
-            jsonData, // Pass the raw jsonData
-            explicitContextValue,
-            parent
-        );
+        let itemKey: string | undefined;
+        let itemName: string | undefined;
+        let itemData: any;
+        let label: string;
+        let defaultCollapsibleState: vscode.TreeItemCollapsibleState;
 
-        if (!treeItem) {
+        // Normalize data extraction
+        if (
+            contextValue === TreeItemContextValues.TEST_THEME_NODE ||
+            contextValue === TreeItemContextValues.TEST_CASE_SET_NODE ||
+            contextValue === TreeItemContextValues.TEST_CASE_NODE
+        ) {
+            itemData = jsonData.base || jsonData;
+            if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
+                logger.warn(
+                    `Attempted to create test theme/case tree item with invalid data structure for context ${contextValue}:`,
+                    jsonData
+                );
+                return null;
+            }
+            itemKey = itemData.key;
+            itemName = itemData.name;
+            label = itemData.numbering ? `${itemData.numbering} ${itemName}` : itemName!;
+        } else {
+            // For Project, Version, Cycle
+            itemData = jsonData;
+            if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
+                logger.warn(
+                    `Attempted to create project/version/cycle tree item with invalid data structure for context ${contextValue}:`,
+                    jsonData
+                );
+                return null;
+            }
+            itemKey = itemData.key;
+            itemName = itemData.name;
+            label = itemName!;
+        }
+
+        if (itemKey === undefined || itemName === undefined) {
+            logger.warn(
+                `Attempted to create tree item with missing key or name. Context: ${contextValue}, Key: ${itemKey}, Name: ${itemName}`,
+                jsonData
+            );
             return null;
         }
 
+        // Determine default collapsible state based on type and potential children
+        switch (contextValue) {
+            case TreeItemContextValues.PROJECT: {
+                const projectData = itemData as Project;
+                const hasProjectChildren =
+                    (projectData.tovsCount && projectData.tovsCount > 0) ||
+                    (projectData.cyclesCount && projectData.cyclesCount > 0);
+                defaultCollapsibleState = hasProjectChildren
+                    ? vscode.TreeItemCollapsibleState.Collapsed
+                    : vscode.TreeItemCollapsibleState.None;
+                break;
+            }
+            case TreeItemContextValues.VERSION: {
+                const versionData = itemData as TreeNode;
+                defaultCollapsibleState =
+                    versionData.children && versionData.children.length > 0
+                        ? vscode.TreeItemCollapsibleState.Collapsed
+                        : vscode.TreeItemCollapsibleState.None;
+                break;
+            }
+            case TreeItemContextValues.CYCLE:
+                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+                break;
+            case TreeItemContextValues.TEST_THEME_NODE:
+                defaultCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+                break;
+            case TreeItemContextValues.TEST_CASE_SET_NODE:
+                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+                break;
+            case TreeItemContextValues.TEST_CASE_NODE:
+                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+                break;
+            default:
+                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+        }
+
+        const treeItem: BaseTestBenchTreeItem = new BaseTestBenchTreeItem(
+            label,
+            contextValue,
+            defaultCollapsibleState,
+            itemData,
+            parent
+        );
+
         // Restore Expansion State
-        // The `itemKey` used for expandedTreeItems should come from treeItem.item.key
-        // which the factory has now set based on the jsonData structure.
         const itemKeyForExpansion = treeItem.item?.key;
         if (
             itemKeyForExpansion &&
@@ -301,6 +288,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     /**
      * Fetches and returns the root projects for the tree view.
+     * This is called when no custom root is set and the tree should display all projects.
      * @private
      */
     private async getRootProjects(): Promise<BaseTestBenchTreeItem[]> {
@@ -309,7 +297,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
         if (projectList && projectList.length > 0) {
             // Clear message if projects found
-            if (projectTreeView && !this.customRootItem) {
+            if (projectTreeView) {
                 projectTreeView.message = undefined;
             }
             return projectList
@@ -318,7 +306,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         } else if (projectList) {
             // Empty list
             logger.debug("No projects found on the server.");
-            if (projectTreeView && !this.customRootItem) {
+            if (projectTreeView) {
                 projectTreeView.message =
                     "No projects found on the server. Create a project in TestBench or check permissions.";
             }
@@ -326,7 +314,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         } else {
             // Error during fetch
             logger.error("Failed to fetch project list from the server.");
-            if (projectTreeView && !this.customRootItem) {
+            if (projectTreeView) {
                 projectTreeView.message = "Error fetching projects. Please check connection or try refreshing.";
             }
             vscode.window.showErrorMessage("Failed to fetch project list from TestBench. Check logs for details.");
@@ -370,13 +358,31 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         try {
             if (!element) {
                 // Root level: Fetch and display all projects
-                if (this.customRootItem) {
+                if (this.customRootKey && this.customRootContextValue && this.customRootJsonData) {
                     if (projectTreeView) {
                         projectTreeView.message = undefined;
                     } // Clear message for custom root
-                    // If a custom root item is set (via make root command), return it.
-                    this.customRootItem.parent = null;
-                    return [this.customRootItem];
+                    // Reconstruct the custom root item to be displayed
+                    const rootItem = this.createTreeItem(
+                        this.customRootJsonData,
+                        this.customRootContextValue,
+                        null // Parent is null for root
+                    );
+                    if (rootItem) {
+                        if (rootItem.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+                            rootItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                        }
+                        return [rootItem];
+                    } else {
+                        // Failed to recreate custom root, clear it and fall back to all projects
+                        logger.error(
+                            `Failed to recreate custom root for key ${this.customRootKey}. Clearing custom root.`
+                        );
+                        this.customRootKey = null;
+                        this.customRootContextValue = null;
+                        this.customRootJsonData = null;
+                        return await this.getRootProjects();
+                    }
                 }
                 return await this.getRootProjects();
             }
@@ -465,7 +471,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @returns {Promise<BaseTestBenchTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
      */
     public async getChildrenOfCycle(cycleElement: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
-        const cycleElementLabel = typeof cycleElement.label === "string" ? cycleElement.label : "N/A";
+        const cycleElementLabel: string = typeof cycleElement.label === "string" ? cycleElement.label : "N/A";
         logger.trace("Fetching children of cycle element:", cycleElementLabel);
         if (cycleElement.contextValue !== TreeItemContextValues.CYCLE) {
             logger.warn(`getChildrenOfCycle called on non-Cycle item: ${cycleElementLabel}`);
@@ -524,10 +530,11 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                 (node) => node?.base?.parentKey === parentItemKey && this.isCycleNodeVisibleInTestThemeTree(node)
             );
             const childTreeItems: (BaseTestBenchTreeItem | null)[] = potentialChildrenData.map((nodeData) => {
+                // Determine if this nodeData itself will have children in the theme tree
                 const hasVisibleChildren: boolean = Array.from(elementsByKey.values()).some(
-                    (childNode) =>
-                        childNode?.base?.parentKey === nodeData.base.key &&
-                        this.isCycleNodeVisibleInTestThemeTree(childNode)
+                    (childNodeCandidate) =>
+                        childNodeCandidate?.base?.parentKey === nodeData.base.key &&
+                        this.isCycleNodeVisibleInTestThemeTree(childNodeCandidate)
                 );
 
                 const treeItem: BaseTestBenchTreeItem | null = this.createTreeItem(
@@ -546,6 +553,19 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                         ? vscode.TreeItemCollapsibleState.Collapsed
                         : vscode.TreeItemCollapsibleState.None;
                 }
+
+                /*
+                // Restore expansion if it was previously expanded (createTreeItem already does this)
+                const itemKeyForExpansion = treeItem.item?.base?.key || treeItem.item?.key; // CycleStructure items have key in base
+                if (
+                    itemKeyForExpansion &&
+                    this.expandedTreeItems.has(itemKeyForExpansion) &&
+                    treeItem.collapsibleState !== vscode.TreeItemCollapsibleState.None
+                ) {
+                    treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                }
+                */
+
                 if (hasVisibleChildren) {
                     treeItem.children = buildTestThemeTreeRecursive(nodeData.base.key, treeItem);
                 } else {
@@ -585,26 +605,22 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      */
     makeRoot(treeItem: BaseTestBenchTreeItem): void {
         logger.debug("Setting selected element as a temporary root:", treeItem.label);
-        if (treeItem) {
-            // To make it a root, its parent must be null.
-            // Make a shallow copy for the item data.
-            const newRoot = new BaseTestBenchTreeItem(
-                typeof treeItem.label === "string" ? treeItem.label : treeItem.label?.label || "Unknown Root",
-                treeItem.contextValue || "unknown",
-                treeItem.collapsibleState === vscode.TreeItemCollapsibleState.None
-                    ? vscode.TreeItemCollapsibleState.None
-                    : vscode.TreeItemCollapsibleState.Expanded, // Expand the new root by default if it's collapsible
-                { ...treeItem.item }, // Shallow copy of item data
-                null // Explicitly set parent to null
+        if (treeItem && treeItem.item && treeItem.item.key && treeItem.contextValue) {
+            // Store the necessary information to reconstruct or fetch
+            this.customRootKey = treeItem.item.key;
+            this.customRootContextValue = treeItem.contextValue;
+            // Store a copy of the item's data.
+            this.customRootJsonData = { ...treeItem.item }; // Shallow copy
+            logger.info(
+                `Item "${typeof treeItem.label === "string" ? treeItem.label : treeItem.item.name}" (Key: ${this.customRootKey}) is now set as custom root.`
             );
-
-            this.customRootItem = newRoot;
-            logger.info(`Item "${typeof newRoot.label === "string" ? newRoot.label : "N/A"}" is now the custom root.`);
         } else {
-            this.customRootItem = null; // Clear custom root if null item is passed
+            this.customRootKey = null;
+            this.customRootContextValue = null;
+            this.customRootJsonData = null;
             logger.info("Custom root cleared.");
         }
-        this._onDidChangeTreeData.fire(undefined); // Refresh the tree to show the new root
+        this._onDidChangeTreeData.fire(undefined); // Refresh the tree to show the new root or all projects
     }
 
     /**
@@ -663,10 +679,11 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         if (testThemeTreeViewInstance) {
             testThemeTreeViewInstance.message = `Loading test themes for cycle: ${currentCycleLabel}...`;
         }
-        // Also potentially for Test Elements if that's always reloaded on cycle click
+        // Test Elements message
         if (testElementTreeView) {
             const tovParent = projectsTreeViewItem.parent;
-            const tovLabel = tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
+            const tovLabel: string =
+                tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
             testElementTreeView.message = `Loading test elements for ${tovLabel}...`;
             if (testElementsTreeDataProvider) {
                 testElementsTreeDataProvider.refresh([]); // Clear and show message

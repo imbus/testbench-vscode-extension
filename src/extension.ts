@@ -717,7 +717,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // Refreshes the test elements tree view with the latest test elements for the selected TOV.
     registerSafeCommand(context, allExtensionCommands.refreshTestElementsTree, async () => {
         logger.debug("Command Called: Refresh Test Elements Tree");
-        const currentTovKey: string = testElementsTreeView.getCurrentTovKey();
+        const currentTovKey: string = testElementsTreeDataProvider.getCurrentTovKey();
         if (!currentTovKey) {
             vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
             return;
