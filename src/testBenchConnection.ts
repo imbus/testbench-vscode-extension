@@ -491,7 +491,7 @@ export class PlayServerConnection {
             // Notify login webview about the logout success to change its HTML content
             const lwvProvider = getLoginWebViewProvider();
             if (lwvProvider) {
-                lwvProvider.updateWebviewHTMLContent();
+                await lwvProvider.updateWebviewHTMLContent();
             } else {
                 logger.error("loginWebViewProvider is null. Cannot update webview content.");
             }
@@ -1118,7 +1118,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     // Upon successful login, update the login webview content and hide it.
                     const lwvProvider = getLoginWebViewProvider();
                     if (lwvProvider) {
-                        lwvProvider.updateWebviewHTMLContent();
+                        await lwvProvider.updateWebviewHTMLContent();
                     } else {
                         logger.error("loginWebViewProvider is null. Cannot update webview content.");
                     }

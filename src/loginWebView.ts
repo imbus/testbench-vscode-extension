@@ -29,7 +29,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * Called when VS Code loads the webview.
      * @param {vscode.WebviewView} webviewView The webview view instance.
      */
-    resolveWebviewView(webviewView: vscode.WebviewView): void {
+    async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
         logger.trace("Resolving login webview view.");
         this.currentWebview = webviewView;
 
@@ -45,7 +45,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         };
 
         // Set initial HTML content based on connection status.
-        this.updateWebviewHTMLContent();
+        await this.updateWebviewHTMLContent();
 
         // Store new listener disposable
         // Listen for messages from the webview to respond to user actions.
@@ -54,7 +54,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             switch (message.command) {
                 // Handle the login attempt
                 case WebviewMessageCommands.LOGIN:
-                    this.handleLogin(
+                    await this.handleLogin(
                         this.extensionContext,
                         message.serverName,
                         parseInt(message.portNumber, 10), // Port number is an integer, parse it

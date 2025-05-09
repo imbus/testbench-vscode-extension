@@ -180,7 +180,7 @@ export async function loadConfiguration(context: vscode.ExtensionContext, newSco
 
     // Update the webview input fields after extension settings are changed to reflect the changes in the webview live.
     // Commented out due to the password field being empty after the extension settings are changed.
-    // loginWebViewProvider?.updateWebviewHTMLContent();
+    // await loginWebViewProvider?.updateWebviewHTMLContent();
 }
 
 /**
@@ -295,7 +295,7 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
  *
  * @param {vscode.ExtensionContext} context The extension context.
  */
-function registerExtensionCommands(context: vscode.ExtensionContext): void {
+async function registerExtensionCommands(context: vscode.ExtensionContext): Promise<void> {
     // --- Command: Show Extension Settings ---
     registerSafeCommand(context, allExtensionCommands.showExtensionSettings, async () => {
         logger.debug("Command Called: Show Extension Settings");
@@ -971,7 +971,7 @@ function registerExtensionCommands(context: vscode.ExtensionContext): void {
     // Set context value for connectionActive.
     // Used to enable or disable the login and logout buttons in the status bar,
     // which allows icon changes for login/logout buttons based on connectionActive variable.
-    vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
+    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
     logger.trace(`Context value connectionActive set to: ${connection !== null}`);
 }
 
@@ -1025,7 +1025,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // Register all extension commands.
-    registerExtensionCommands(context);
+    await registerExtensionCommands(context);
 
     // Set the initial context state. Before any login attempt, connection is null.
     // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
@@ -1035,8 +1035,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await initializeLanguageServer();
 
     // Execute automatic login if the setting is enabled.
-    vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
-    await initializeLanguageServer();
+    await vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
 }
 
 /**
