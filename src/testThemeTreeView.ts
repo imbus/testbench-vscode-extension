@@ -5,7 +5,7 @@
 
 import * as vscode from "vscode";
 import { BaseTestBenchTreeItem } from "./projectManagementTreeView";
-import { logger, testThemeTreeViewInstance as testThemeTreeView } from "./extension";
+import { logger, getTestThemeTreeViewInstance } from "./extension";
 import { TreeItemContextValues } from "./constants";
 
 /**
@@ -28,6 +28,18 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     private expandedTreeItems: Set<string> = new Set<string>();
 
+    // Callback for message updates
+    private updateMessageCallback: (message: string | undefined) => void;
+
+    // Constructor to accept the callback
+    constructor(updateMessageCallback: (message: string | undefined) => void) {
+        this.updateMessageCallback = updateMessageCallback;
+    }
+    // Public method to set message via callback
+    public setMessage(message: string | undefined): void {
+        this.updateMessageCallback(message);
+    }
+
     /**
      * Refreshes the test theme tree view.
      */
@@ -35,23 +47,22 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         logger.debug("Refreshing test theme tree view.");
         // Store the keys of the expanded items to preserve state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
+
+        const currentThemeTreeView = getTestThemeTreeViewInstance();
         // Update message in the test theme tree view
-        if (testThemeTreeView) {
-            // Check if the view instance is available
-            if (this.rootElements.length === 0) {
-                if (this._currentCycleKey) {
-                    testThemeTreeView.message = "No test themes found for the current cycle.";
-                } else if (testThemeTreeView.message && testThemeTreeView.message.startsWith("Refreshing")) {
-                    // Keep the "Refreshing..." message if it was set by the command
-                } else {
-                    testThemeTreeView.message = "Select a cycle to see test themes.";
-                }
-                logger.trace(`Test Themes view message set: ${testThemeTreeView.message}`);
+        // Check if the view instance is available
+        if (this.rootElements.length === 0) {
+            if (this._currentCycleKey) {
+                this.updateMessageCallback("No test themes found for the current cycle.");
             } else {
-                testThemeTreeView.message = undefined; // Clear message
-                logger.trace("Test Themes view message cleared.");
+                this.updateMessageCallback("Select a cycle to see test themes.");
             }
+            logger.trace(`Test Themes view message set: ${currentThemeTreeView?.message}`);
+        } else {
+            this.updateMessageCallback(undefined); // Clear message
+            logger.trace("Test Themes view message cleared.");
         }
+
         // Explicitly fire with undefined to ensure a full refresh from the root.
         this._onDidChangeTreeData.fire(undefined);
     }
@@ -181,14 +192,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
         this.rootElements = [];
-        if (testThemeTreeView) {
-            // Only set default message if not already in a loading state from command
-            if (!(testThemeTreeView.message && testThemeTreeView.message.startsWith("Refreshing"))) {
-                testThemeTreeView.message = "Select a cycle from the 'Projects' view to see test themes.";
-            }
-        }
-        // TODO: Clear the expanded set items after clear command if needed.
-        // this.expandedTreeItems.clear();
+        this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
+        this.expandedTreeItems.clear();
         this._onDidChangeTreeData.fire();
     }
 }

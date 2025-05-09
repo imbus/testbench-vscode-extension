@@ -17,9 +17,9 @@ import { initializeLanguageServer, client } from "./server";
 import {
     getConfig,
     setConnection,
-    setProjectManagementTreeDataProvider,
     logger,
-    loginWebViewProvider
+    getProjectManagementTreeDataProvider,
+    getLoginWebViewProvider
 } from "./extension";
 import * as utils from "./utils";
 import {
@@ -484,11 +484,14 @@ export class PlayServerConnection {
             this.stopKeepAlive();
             this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-            setProjectManagementTreeDataProvider(null); // Clear the connection from the tree data provider
+
+            const pmProvider = getProjectManagementTreeDataProvider();
+            pmProvider?.clearTree();
             setConnection(null);
             // Notify login webview about the logout success to change its HTML content
-            if (loginWebViewProvider) {
-                loginWebViewProvider.updateWebviewHTMLContent();
+            const lwvProvider = getLoginWebViewProvider();
+            if (lwvProvider) {
+                lwvProvider.updateWebviewHTMLContent();
             } else {
                 logger.error("loginWebViewProvider is null. Cannot update webview content.");
             }
@@ -1051,7 +1054,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
         force: true
     };
     try {
-        const connection = await vscode.window.withProgress(
+        const connectionResult = await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
                 title: "Logging in",
@@ -1107,12 +1110,15 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     // Set the connectionActive context value for changing the login icon to logout icon based on this value
                     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
                     const loginSuccessfulMessage: string = "Login successful.";
+
                     await initializeLanguageServer();
+
                     logger.debug(loginSuccessfulMessage);
                     vscode.window.showInformationMessage(loginSuccessfulMessage);
                     // Upon successful login, update the login webview content and hide it.
-                    if (loginWebViewProvider) {
-                        loginWebViewProvider.updateWebviewHTMLContent();
+                    const lwvProvider = getLoginWebViewProvider();
+                    if (lwvProvider) {
+                        lwvProvider.updateWebviewHTMLContent();
                     } else {
                         logger.error("loginWebViewProvider is null. Cannot update webview content.");
                     }
@@ -1125,7 +1131,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                 }
             }
         );
-        return connection;
+        return connectionResult;
     } catch (error) {
         if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
             logger.error("Login failed: Invalid credentials.");

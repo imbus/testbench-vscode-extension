@@ -8,7 +8,13 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as utils from "./utils";
-import { connection, logger, getConfig, testElementTreeView, getTestElementsTreeDataProvider } from "./extension";
+import {
+    connection,
+    logger,
+    getConfig,
+    getTestElementTreeView,
+    getTestElementsTreeDataProvider as extensionGetTestElementsTreeDataProvider
+} from "./extension";
 import { TreeItemContextValues } from "./constants";
 
 /* =============================================================================
@@ -591,6 +597,31 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         return this._currentTovKey;
     }
 
+    // Callback for message updates
+    private updateMessageCallback: (message: string | undefined) => void;
+
+    // Constructor to accept the callback
+    constructor(updateMessageCallback: (message: string | undefined) => void) {
+        this.updateMessageCallback = updateMessageCallback;
+    }
+    // Public method to set message via callback, can be used internally too
+    public setMessage(message: string | undefined): void {
+        this.updateMessageCallback(message);
+    }
+    // Method to update message based on current state, called by constructor or refresh
+    public updateMessage(): void {
+        if (this.isTreeDataEmpty()) {
+            const filterPatterns = getConfig().get("resourceRegexInTestbench2robotframework", []);
+            if (filterPatterns && filterPatterns.length > 0) {
+                this.setMessage("No test elements match the current filter criteria.");
+            } else {
+                this.setMessage("No test elements found for the selected Test Object Version (TOV).");
+            }
+        } else {
+            this.setMessage(undefined);
+        }
+    }
+
     public isTreeDataEmpty(): boolean {
         return !this.treeData || this.treeData.length === 0;
     }
@@ -644,21 +675,23 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     refresh(flatTestElementsJsonData: any[]): void {
         this.treeData = buildTree(flatTestElementsJsonData);
         // Update message based on treeData
-        if (testElementTreeView) {
-            // Check if the view instance is available
+        // Check if the view instance is available
+        const currentElementTreeView = getTestElementTreeView();
+        if (currentElementTreeView) {
             if (this.isTreeDataEmpty()) {
                 const filterPatterns = getConfig().get("resourceRegexInTestbench2robotframework", []);
                 if (filterPatterns && filterPatterns.length > 0) {
-                    testElementTreeView.message = "No test elements match the current filter criteria.";
+                    this.updateMessageCallback("No test elements match the current filter criteria.");
                 } else {
-                    testElementTreeView.message = "No test elements found for the selected Test Object Version (TOV).";
+                    this.updateMessageCallback("No test elements found for the selected Test Object Version (TOV).");
                 }
-                logger.trace(`Test Elements view message set: ${testElementTreeView.message}`);
+                logger.trace(`Test Elements view message set: ${currentElementTreeView.message}`);
             } else {
-                testElementTreeView.message = undefined; // Clear message if there's data
+                this.updateMessageCallback(undefined); // Clear message if there's data
                 logger.trace("Test Elements view message cleared.");
             }
         }
+
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -673,12 +706,10 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         // const jsonPath = "ABSOLUTE-PATH-TO-JSON-FILE";
         // const testElementsJsonData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
 
-        if (testElementTreeView) {
-            const tovLabel: string = newTestElementsTreeViewTitle || tovKey;
-            testElementTreeView.message = `Loading test elements for TOV: ${tovLabel}...`;
-        }
+        const tovLabel: string = newTestElementsTreeViewTitle || tovKey;
+        this.updateMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
+
         // Clear current data and trigger UI update to show loading message
-        // TODO: Check if this is needed
         this.treeData = [];
         this._onDidChangeTreeData.fire(undefined);
 
@@ -687,9 +718,10 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             this._currentTovKey = tovKey;
             displayTestElementsTreeView();
             this.refresh(testElementsJsonData);
+            const currentElementTreeView = getTestElementTreeView();
             // Update the title of the tree view if a new title is provided.
-            if (newTestElementsTreeViewTitle) {
-                testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
+            if (newTestElementsTreeViewTitle && currentElementTreeView) {
+                currentElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
             }
             return true;
         } else {
@@ -697,9 +729,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             this._currentTovKey = "";
             vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
             // Set error message on the view
-            if (testElementTreeView) {
-                testElementTreeView.message = "Error: Failed to fetch test elements. Please try again or check logs.";
-            }
+            this.updateMessageCallback("Error: Failed to fetch test elements. Please try again or check logs.");
             this.treeData = [];
             this._onDidChangeTreeData.fire(undefined); // Refresh to show empty state with message
 
@@ -958,7 +988,8 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
 
         // Update the icon for the subdivision tree item.
         await updateTestElementIcon(subdivisionTreeItem);
-        getTestElementsTreeDataProvider()._onDidChangeTreeData.fire(undefined);
+        const teProvider = extensionGetTestElementsTreeDataProvider();
+        teProvider?._onDidChangeTreeData.fire(undefined);
     } catch (error: any) {
         logger.error(`Failed to handle subdivision: ${error}`);
         vscode.window.showErrorMessage(`Failed to create folder structure: ${error.message}`);
@@ -1032,7 +1063,8 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 
     // Trigger subdivision icon update after handling the interaction.
-    getTestElementsTreeDataProvider()._onDidChangeTreeData.fire(undefined);
+    const teProvider = extensionGetTestElementsTreeDataProvider();
+    teProvider?._onDidChangeTreeData.fire(undefined);
 }
 
 /**
@@ -1220,5 +1252,6 @@ export function removeRobotResourceFromPathString(pathStr: string): string {
  * Clears the test elements tree view by refreshing it with an empty array.
  */
 export function clearTestElementsTreeView(): void {
-    getTestElementsTreeDataProvider().refresh([]);
+    const teProvider = extensionGetTestElementsTreeDataProvider();
+    teProvider?.refresh([]); // refresh will handle messages via callback
 }

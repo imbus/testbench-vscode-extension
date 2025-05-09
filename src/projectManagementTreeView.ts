@@ -12,38 +12,19 @@ import { CycleNodeData, CycleStructure, Project, TreeNode } from "./testBenchTyp
 import {
     connection,
     logger,
-    projectManagementTreeDataProvider,
-    projectTreeView,
-    testElementTreeView,
-    testThemeTreeViewInstance
+    getProjectTreeView,
+    getTestElementTreeView,
+    getTestThemeTreeViewInstance,
+    getTestElementsTreeDataProvider
 } from "./extension";
-import { testElementsTreeDataProvider } from "./extension";
 import { allExtensionCommands, TreeItemContextValues } from "./constants";
-import { clearTestElementsTreeView } from "./testElementsTreeView";
-import { hideTestThemeTreeView, displayTestThemeTreeView } from "./testThemeTreeView";
+import { hideTestThemeTreeView, displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
 
 // Event payload
 export interface CycleDataForThemeTreeEvent {
     cycleKey: string;
     children: BaseTestBenchTreeItem[];
     cycleLabel: string;
-}
-
-// Global references to the tree views and data provider with getters and setters.
-export let projectManagementTreeView: vscode.TreeView<BaseTestBenchTreeItem> | null = null;
-export function getProjectManagementTreeView(): vscode.TreeView<BaseTestBenchTreeItem> | null {
-    return projectManagementTreeView;
-}
-export function setProjectManagementTreeView(view: vscode.TreeView<BaseTestBenchTreeItem> | null): void {
-    projectManagementTreeView = view;
-}
-
-export let testThemeTreeView: vscode.TreeView<BaseTestBenchTreeItem> | null = null;
-export function getTestThemeTreeView(): vscode.TreeView<BaseTestBenchTreeItem> | null {
-    return testThemeTreeView;
-}
-export function setTestThemeTreeView(view: vscode.TreeView<BaseTestBenchTreeItem> | null): void {
-    testThemeTreeView = view;
 }
 
 /**
@@ -64,6 +45,11 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
         this._onDidPrepareCycleDataForThemeTree.event;
 
+    // Callback for message updates
+    private updateMessageCallback: (message: string | undefined) => void;
+    // Injected TestThemeTreeDataProvider
+    private testThemeTreeDataProviderInstance: TestThemeTreeDataProvider | null;
+
     // Custom root
     private customRootKey: string | null = null;
     private customRootContextValue: string | null = null;
@@ -74,8 +60,15 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     /**
      * Constructs a new ProjectManagementTreeDataProvider.
+     * @param {function} updateMessageCallback Callback to update the message in the tree view.
+     * @param {TestThemeTreeDataProvider} testThemeTreeDataProviderInstance Instance of the TestThemeTreeDataProvider.
      */
-    constructor() {
+    constructor(
+        updateMessageCallback: (message: string | undefined) => void,
+        testThemeTreeDataProviderInstance: TestThemeTreeDataProvider | null
+    ) {
+        this.updateMessageCallback = updateMessageCallback;
+        this.testThemeTreeDataProviderInstance = testThemeTreeDataProviderInstance;
         logger.trace("ProjectManagementTreeDataProvider initialized.");
     }
 
@@ -90,15 +83,20 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             this.customRootKey = null;
             this.customRootContextValue = null;
             this.customRootJsonData = null;
+            this.expandedTreeItems.clear();
             logger.trace("Hard refresh: Custom root has been reset.");
         }
-        if (projectTreeView && !this.customRootKey) {
-            // Only manage message if not in customRoot mode
-            projectTreeView.message = "Loading projects..."; // Temporary loading message
-        } else if (projectTreeView && this.customRootKey && this.customRootJsonData) {
+        const currentProjectTreeView = getProjectTreeView();
+        if (!connection) {
+            this.updateMessageCallback("Not connected to TestBench. Please log in.");
+        } else if (currentProjectTreeView && this.customRootKey && this.customRootJsonData) {
             const tempLabel = this.customRootJsonData?.name || this.customRootKey;
-            projectTreeView.message = `Displaying custom root: ${tempLabel}`;
+            this.updateMessageCallback(`Displaying custom root: ${tempLabel}`);
+        } else {
+            // Default state before fetching root projects
+            this.updateMessageCallback("Loading projects..."); // Temporary loading message
         }
+
         this._onDidChangeTreeData.fire(undefined); // Fire with undefined to refresh from the root
         logger.trace("Project management tree view refreshed.");
     }
@@ -297,26 +295,21 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
         if (projectList && projectList.length > 0) {
             // Clear message if projects found
-            if (projectTreeView) {
-                projectTreeView.message = undefined;
-            }
+            this.updateMessageCallback(undefined);
             return projectList
                 .map((project) => this.createTreeItem(project, TreeItemContextValues.PROJECT, null))
                 .filter((item): item is BaseTestBenchTreeItem => item !== null);
         } else if (projectList) {
             // Empty list
             logger.debug("No projects found on the server.");
-            if (projectTreeView) {
-                projectTreeView.message =
-                    "No projects found on the server. Create a project in TestBench or check permissions.";
-            }
+            this.updateMessageCallback(
+                "No projects found on the server. Create a project in TestBench or check permissions."
+            );
             return [];
         } else {
             // Error during fetch
             logger.error("Failed to fetch project list from the server.");
-            if (projectTreeView) {
-                projectTreeView.message = "Error fetching projects. Please check connection or try refreshing.";
-            }
+            this.updateMessageCallback("Error fetching projects. Please check connection or try refreshing.");
             vscode.window.showErrorMessage("Failed to fetch project list from TestBench. Check logs for details.");
             return [];
         }
@@ -350,18 +343,14 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     async getChildren(element?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
         if (!connection) {
             // Handle "Not Connected" state with message
-            if (projectTreeView) {
-                projectTreeView.message = "Not connected to TestBench. Please log in.";
-            }
+            this.updateMessageCallback("Not connected to TestBench. Please log in.");
             return [];
         }
         try {
             if (!element) {
                 // Root level: Fetch and display all projects
                 if (this.customRootKey && this.customRootContextValue && this.customRootJsonData) {
-                    if (projectTreeView) {
-                        projectTreeView.message = undefined;
-                    } // Clear message for custom root
+                    this.updateMessageCallback(undefined); // Clear message for custom root
                     // Reconstruct the custom root item to be displayed
                     const rootItem = this.createTreeItem(
                         this.customRootJsonData,
@@ -412,9 +401,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             vscode.window.showErrorMessage(
                 `Error fetching tree data: ${error instanceof Error ? error.message : "Unknown error"}`
             );
-            if (projectTreeView) {
-                projectTreeView.message = "An error occurred while loading tree items.";
-            }
+            this.updateMessageCallback("An error occurred while loading tree items.");
             return [];
         }
 
@@ -675,19 +662,23 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return;
         }
 
+        const currentThemeTreeView = getTestThemeTreeViewInstance();
+        const currentElementTreeView = getTestElementTreeView();
+        const currentElementsProvider = getTestElementsTreeDataProvider();
+
         // Set loading message for Test Themes before fetching cycle children
-        if (testThemeTreeViewInstance) {
-            testThemeTreeViewInstance.message = `Loading test themes for cycle: ${currentCycleLabel}...`;
+        if (currentThemeTreeView && this.testThemeTreeDataProviderInstance) {
+            // Check injected provider
+            // Message update on theme tree view is handled by its own provider via callback
+            this.testThemeTreeDataProviderInstance.setMessage(`Loading test themes for cycle: ${currentCycleLabel}...`);
         }
         // Test Elements message
-        if (testElementTreeView) {
+        if (currentElementTreeView && currentElementsProvider) {
             const tovParent = projectsTreeViewItem.parent;
             const tovLabel: string =
                 tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
-            testElementTreeView.message = `Loading test elements for ${tovLabel}...`;
-            if (testElementsTreeDataProvider) {
-                testElementsTreeDataProvider.refresh([]); // Clear and show message
-            }
+            currentElementsProvider.setMessage(`Loading test elements for ${tovLabel}...`);
+            currentElementsProvider.refresh([]);
         }
 
         await vscode.window.withProgress(
@@ -725,27 +716,30 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                         logger.trace(
                             `Clicked cycle item has a parent TOV with key: ${tovKeyOfSelectedCycleElement}. Fetching test elements.`
                         );
-                        if (testElementsTreeDataProvider) {
+                        if (currentElementsProvider) {
                             const areTestElementsFetched: boolean =
-                                await testElementsTreeDataProvider.fetchAndDisplayTestElements(
+                                await currentElementsProvider.fetchAndDisplayTestElements(
                                     tovKeyOfSelectedCycleElement,
                                     tovLabel
                                 );
                             if (!areTestElementsFetched) {
-                                clearTestElementsTreeView();
+                                const teProvider = getTestElementsTreeDataProvider();
+                                teProvider?.refresh([]);
                             }
                         } else {
                             logger.error("testElementsTreeDataProvider is not available.");
                         }
                     } else {
                         logger.warn("Parent TOV key not found for the clicked cycle.");
-                        clearTestElementsTreeView(); // Clear if context is lost
+                        const teProvider = getTestElementsTreeDataProvider();
+                        teProvider?.refresh([]); // Clear if context is lost
                     }
                 } else {
                     logger.trace(
                         "Clicked cycle item does not have a direct TOV parent or parent information is missing."
                     );
-                    clearTestElementsTreeView();
+                    const teProvider = getTestElementsTreeDataProvider();
+                    teProvider?.refresh([]);
                 }
 
                 progress.report({ increment: 100, message: "Data loaded." });
@@ -758,7 +752,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      */
     public clearTree(): void {
         logger.trace("Clearing project management tree.");
-        this.refresh();
+        this.customRootKey = null;
+        this.customRootContextValue = null;
+        this.customRootJsonData = null;
+        this.expandedTreeItems.clear();
+        this.updateMessageCallback("Select a project to see its contents or refresh.");
+        this._onDidChangeTreeData.fire(undefined);
     }
 }
 
@@ -994,9 +993,9 @@ export function setupProjectTreeViewEventListeners(
     }
 
     projectTreeViewInstance.onDidExpandElement(async (event) => {
-        // No direct call to testThemeDataProvider here
         await providerInstance.handleExpansion(event.element, true);
-        // If cycle expansion in project tree should *also* trigger theme tree population
+        providerInstance.rememberExpandedItem(event.element);
+        // If cycle expansion in project tree should also trigger theme tree population
         // (independent of the click command), then handleTestCycleClick could be called here too,
         // which would then fire the event.
         // if (event.element.contextValue === TreeItemContextValues.CYCLE) {
@@ -1005,22 +1004,19 @@ export function setupProjectTreeViewEventListeners(
     });
     projectTreeViewInstance.onDidCollapseElement(async (event) => {
         await providerInstance.handleExpansion(event.element, false);
+        providerInstance.forgetExpandedItem(event.element);
     });
-    // onDidChangeSelection might still call handleTestCycleClick if that's the desired trigger
+    // React to selection changes in the project tree view
     projectTreeViewInstance.onDidChangeSelection(async (event) => {
         if (event.selection.length > 0) {
             const selectedElement: BaseTestBenchTreeItem = event.selection[0];
             logger.trace(
                 `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
             );
+            /*
             if (selectedElement && selectedElement.contextValue === TreeItemContextValues.CYCLE) {
-                // Check if providerInstance is the global projectManagementTreeDataProvider for safety
-                if (projectManagementTreeDataProvider === providerInstance) {
-                    await projectManagementTreeDataProvider.handleTestCycleClick(selectedElement);
-                } else {
-                    logger.warn("Provider instance mismatch in onDidChangeSelection.");
-                }
-            }
+                await providerInstance.handleTestCycleClick(selectedElement);
+            }*/
         }
     });
 }
@@ -1045,8 +1041,9 @@ export async function displayProjectManagementTreeView(): Promise<void> {
  */
 export async function toggleProjectManagementTreeViewVisibility(): Promise<void> {
     logger.debug("Toggling project management tree view visibility.");
-    if (projectManagementTreeView) {
-        if (projectManagementTreeView.visible) {
+    const currentProjectTreeView = getProjectTreeView();
+    if (currentProjectTreeView) {
+        if (currentProjectTreeView.visible) {
             logger.trace("Project tree view is visible. Hiding it.");
             await hideProjectManagementTreeView();
             logger.trace("Project tree view is now hidden.");
@@ -1063,8 +1060,9 @@ export async function toggleProjectManagementTreeViewVisibility(): Promise<void>
  */
 export async function toggleTestThemeTreeViewVisibility(): Promise<void> {
     logger.debug("Toggling test theme tree view visibility.");
-    if (testThemeTreeView) {
-        if (testThemeTreeView.visible) {
+    const currentTestThemeTreeView = getTestThemeTreeViewInstance();
+    if (currentTestThemeTreeView) {
+        if (currentTestThemeTreeView.visible) {
             logger.trace("Test theme tree view is visible. Hiding it.");
             await hideTestThemeTreeView();
             logger.trace("Test theme tree view is now hidden.");

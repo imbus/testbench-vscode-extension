@@ -88,7 +88,6 @@ async function saveLastGeneratedReportParams(
     };
 
     try {
-        // Use workspaceState.update to save the data
         // Data stored here persists across VS Code sessions for this specific workspace
         await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, paramsToSave);
         logger.debug(
@@ -979,7 +978,7 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
 
     // Open file selection dialog to select the output xml file, display only XML files in the selection.
     // To use relative paths to workspace location in extension settings,
-    // we need to get the workspace location to construct the full path of outputXmlFilePath.
+    // get the workspace location to construct the full path of outputXmlFilePath.
     const outputXMLFileRelativePathInExtensionSettings: string | undefined =
         getConfig().get<string>("outputXmlFilePath");
     const outputXMLFileAbsolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
@@ -1100,7 +1099,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 vscode.window.showErrorMessage(missingParamsError);
                 return undefined; // Stop the process
             }
-            // Use the retrieved parameters
             const { executionBased, projectKey, cycleKey, UID } = retrievedParams;
 
             // Double check retrieved parameters validity (already done inside getLastGeneratedReportParams)
@@ -1117,8 +1115,8 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             };
 
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipFromServer(
-                projectKey, // Use retrieved projectKey
-                cycleKey, // Use retrieved cycleKey
+                projectKey,
+                cycleKey,
                 folderNameOfInternalTestbenchFolder,
                 cycleStructureOptionsRequestParams
             );
@@ -1336,7 +1334,6 @@ export async function showMultiSelectQuickPick(
     regularItemLabels: string[],
     placeholder: string = "Select items (use Select All/Clear All)"
 ): Promise<string[]> {
-    // Use a Promise to handle the asynchronous nature and resolution/rejection
     return new Promise<string[]>((resolve) => {
         let quickPick: vscode.QuickPick<vscode.QuickPickItem> | undefined;
         let isResolved: boolean = false; // Flag to prevent double resolution/disposal
