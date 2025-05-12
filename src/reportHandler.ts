@@ -9,11 +9,12 @@ import * as fs from "fs";
 import * as fsPromise from "fs/promises";
 import * as path from "path";
 import * as os from "os";
-import axios, { AxiosResponse } from "axios";
 import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
-import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import * as utils from "./utils";
+import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
+import JSZip from "jszip";
+import axios, { AxiosResponse } from "axios";
 import {
     getConfig,
     connection,
@@ -580,84 +581,6 @@ export async function fetchReportZipFromServer(
 }
 
 /**
- * Fetches the report zip for a selected tree element.
- *
- * @param selectedProjectTreeItem The selected tree item.
- * @param projectManagementTreeDataProvider The project management tree data provider.
- * @param workingDirectoryToStoreReport The directory where the report will be stored.
- * @returns {Promise<void | null>} Resolves when the report is successfully downloaded, otherwise null
- */
-export async function fetchReportForTreeElement(
-    selectedProjectTreeItem: projectManagementTreeView.BaseTestBenchTreeItem,
-    projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null,
-    workingDirectoryToStoreReport: string
-): Promise<void | null> {
-    logger.debug(`Fetch Report called for ${selectedProjectTreeItem.label}.`);
-    // Show progress bar in VS Code
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: `Fetching Report for ${selectedProjectTreeItem.label}`,
-            cancellable: true
-        },
-        async (progress) => {
-            progress.report({ increment: 30, message: "Selecting report parameters." });
-            logger.debug("Fetching report for tree item:", selectedProjectTreeItem);
-
-            try {
-                if (!connection) {
-                    logger.error("No connection available, cannot fetch report.");
-                    return null;
-                }
-                if (!projectManagementTreeDataProvider) {
-                    logger.error("Project management tree not initialized, cannot fetch report.");
-                    return null;
-                }
-
-                const projectKeyOfSelectedTreeItem: string | null =
-                    findProjectKeyOfProjectTreeItem(selectedProjectTreeItem);
-                if (!projectKeyOfSelectedTreeItem) {
-                    logger.error("Project key not found, cannot fetch report.");
-                    return null;
-                }
-
-                // Find the cycle key associated with the selected tree item to fetch the report
-                const cycleKey: string | null =
-                    projectManagementTreeView.findCycleKeyOfTreeElement(selectedProjectTreeItem);
-                if (!cycleKey) {
-                    logger.error("Cycle key not found, cannot fetch report.");
-                    return null;
-                }
-                const treeElementUID = selectedProjectTreeItem.item?.base?.uniqueID;
-                const executionBased: boolean = true; // For now, defaulting to execution based
-                const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-                    basedOnExecution: executionBased,
-                    treeRootUID: treeElementUID
-                };
-
-                progress.report({ increment: 30, message: "Fetching report." });
-                const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
-                    projectKeyOfSelectedTreeItem,
-                    cycleKey,
-                    workingDirectoryToStoreReport,
-                    cycleStructureOptionsRequestParams
-                );
-                if (downloadedReportZipFilePath) {
-                    logger.debug(`Report downloaded to: ${downloadedReportZipFilePath}`);
-                } else {
-                    logger.warn("Download cancelled or failed.");
-                    return null;
-                }
-            } catch (error) {
-                vscode.window.showErrorMessage((error as Error).message);
-                logger.error("Error fetching report:", error);
-                return null;
-            }
-        }
-    );
-}
-
-/**
  * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
@@ -1138,11 +1061,11 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     "Could not find parameters from previous test generation. Please generate tests first in this workspace.";
                 logger.error(missingParamsError);
                 vscode.window.showErrorMessage(missingParamsError);
-                return undefined; // Stop the process
+                return undefined;
             }
             const { executionBased, projectKey, cycleKey, UID } = retrievedParams;
 
-            // Double check retrieved parameters validity (already done inside getLastGeneratedReportParams)
+            // Check retrieved parameters validity
             if (!executionBased || !projectKey || !cycleKey || !UID) {
                 const invalidParamsError: string = "Retrieved parameters from previous test generation are invalid.";
                 logger.error(invalidParamsError);
@@ -1492,9 +1415,6 @@ export async function showMultiSelectQuickPick(
         }
     });
 }
-
-import JSZip from "jszip";
-import { findProjectKeyOfProjectTreeItem } from "./projectManagementTreeView";
 
 /**
  * Reads a zip file and extracts unique quick pick items based on the file names.

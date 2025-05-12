@@ -18,7 +18,8 @@ import {
     getTestElementsTreeDataProvider
 } from "./extension";
 import { allExtensionCommands, TreeItemContextValues } from "./constants";
-import { hideTestThemeTreeView, displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
+import { displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
+import { displayTestElementsTreeView } from "./testElementsTreeView";
 
 // Event payload
 export interface CycleDataForThemeTreeEvent {
@@ -49,7 +50,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     // Callback for message updates
     private updateMessageCallback: (message: string | undefined) => void;
     // Injected TestThemeTreeDataProvider
-    private testThemeTreeDataProviderInstance: TestThemeTreeDataProvider | null;
+    private testThemeTreeDataProvider: TestThemeTreeDataProvider | null;
 
     // Custom root
     private customRootKey: string | null = null;
@@ -69,7 +70,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         testThemeTreeDataProviderInstance: TestThemeTreeDataProvider | null
     ) {
         this.updateMessageCallback = updateMessageCallback;
-        this.testThemeTreeDataProviderInstance = testThemeTreeDataProviderInstance;
+        this.testThemeTreeDataProvider = testThemeTreeDataProviderInstance;
         logger.trace("ProjectManagementTreeDataProvider initialized.");
     }
 
@@ -113,12 +114,12 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     /**
-     * Fetches the raw structural data for a specific test cycle.
+     * Fetches the raw json data for a specific test cycle from the server.
      *
      * @param {BaseTestBenchTreeItem} cycleElement The tree item representing the cycle.
      * @returns {Promise<CycleStructure | null>} A promise that resolves to a `CycleStructure` object or `null` if an error occurs.
      */
-    public async getRawCycleData(cycleElement: BaseTestBenchTreeItem): Promise<CycleStructure | null> {
+    public async getCycleJSONData(cycleElement: BaseTestBenchTreeItem): Promise<CycleStructure | null> {
         const cycleElementLabel: string = typeof cycleElement.label === "string" ? cycleElement.label : "N/A";
         logger.trace("Fetching raw cycle data for element:", cycleElementLabel);
         if (cycleElement.contextValue !== TreeItemContextValues.CYCLE) {
@@ -659,8 +660,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     /**
      * Handles a click on a test cycle element.
-     * Prepares data for the Test Theme tree and fires an event.
-     * Also handles Test Elements tree population.
+     * Prepares data for the Test Theme tree and fires an event,
+     * and handles Test Elements tree population.
      *
      * @param {BaseTestBenchTreeItem} projectsTreeViewItem The clicked tree item in the projects tree view.
      * @returns {Promise<void>} A promise that resolves when the operation is complete.
@@ -692,10 +693,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         const currentElementsProvider = getTestElementsTreeDataProvider();
 
         // Set loading message for Test Themes before fetching cycle children
-        if (currentThemeTreeView && this.testThemeTreeDataProviderInstance) {
+        if (currentThemeTreeView && this.testThemeTreeDataProvider) {
             // Check injected provider
             // Message update on theme tree view is handled by its own provider via callback
-            this.testThemeTreeDataProviderInstance.setMessage(`Loading test themes for cycle: ${currentCycleLabel}...`);
+            this.testThemeTreeDataProvider.setMessage(`Loading test themes for cycle: ${currentCycleLabel}...`);
         }
         // Test Elements message
         if (currentElementTreeView && currentElementsProvider) {
@@ -704,6 +705,14 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                 tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
             currentElementsProvider.setMessage(`Loading test elements for ${tovLabel}...`);
             currentElementsProvider.refresh([]);
+        }
+
+        // Hide the project management tree view and show the test theme tree and test elements tree views
+        // before fetching data for responsiveness
+        await hideProjectManagementTreeView();
+        await displayTestThemeTreeView();
+        if (getTestElementsTreeDataProvider()) {
+            await displayTestElementsTreeView();
         }
 
         await vscode.window.withProgress(
@@ -716,7 +725,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                 progress.report({ increment: 0, message: "Fetching test themes..." });
 
                 // Fetch raw cycle data
-                const rawCycleData: CycleStructure | null = await this.getRawCycleData(projectsTreeViewItem);
+                const rawCycleData: CycleStructure | null = await this.getCycleJSONData(projectsTreeViewItem);
 
                 progress.report({ increment: 40, message: "Preparing views..." });
 
@@ -742,11 +751,10 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                             `Clicked cycle item has a parent TOV with key: ${tovKeyOfSelectedCycleElement}. Fetching test elements.`
                         );
                         if (currentElementsProvider) {
-                            const areTestElementsFetched: boolean =
-                                await currentElementsProvider.fetchAndDisplayTestElements(
-                                    tovKeyOfSelectedCycleElement,
-                                    tovLabel
-                                );
+                            const areTestElementsFetched: boolean = await currentElementsProvider.fetchTestElements(
+                                tovKeyOfSelectedCycleElement,
+                                tovLabel
+                            );
                             if (!areTestElementsFetched) {
                                 const teProvider = getTestElementsTreeDataProvider();
                                 teProvider?.refresh([]);
@@ -1025,9 +1033,10 @@ export function setupProjectTreeViewEventListeners(
         // If cycle expansion in project tree should also trigger theme tree population
         // (independent of the click command), then handleTestCycleClick could be called here too,
         // which would then fire the event.
-        // if (event.element.contextValue === TreeItemContextValues.CYCLE) {
-        //    await providerInstance.handleTestCycleClick(event.element);
-        // }
+        /*
+        if (event.element.contextValue === TreeItemContextValues.CYCLE) {
+            await projectManagementProvider.handleTestCycleClick(event.element);
+         }*/
     });
     projectTreeView.onDidCollapseElement(async (event) => {
         await projectManagementProvider.handleExpansion(event.element, false);
@@ -1061,44 +1070,6 @@ export async function hideProjectManagementTreeView(): Promise<void> {
  */
 export async function displayProjectManagementTreeView(): Promise<void> {
     await vscode.commands.executeCommand("projectManagementTree.focus");
-}
-
-/**
- * Toggles the visibility of the project management tree view.
- */
-export async function toggleProjectManagementTreeViewVisibility(): Promise<void> {
-    logger.debug("Toggling project management tree view visibility.");
-    const currentProjectTreeView = getProjectTreeView();
-    if (currentProjectTreeView) {
-        if (currentProjectTreeView.visible) {
-            logger.trace("Project tree view is visible. Hiding it.");
-            await hideProjectManagementTreeView();
-            logger.trace("Project tree view is now hidden.");
-        } else {
-            logger.trace("Project tree view is hidden. Displaying it.");
-            await displayProjectManagementTreeView();
-            logger.trace("Project tree view is now displayed.");
-        }
-    }
-}
-
-/**
- * Toggles the visibility of the test theme tree view.
- */
-export async function toggleTestThemeTreeViewVisibility(): Promise<void> {
-    logger.debug("Toggling test theme tree view visibility.");
-    const currentTestThemeTreeView = getTestThemeTreeViewInstance();
-    if (currentTestThemeTreeView) {
-        if (currentTestThemeTreeView.visible) {
-            logger.trace("Test theme tree view is visible. Hiding it.");
-            await hideTestThemeTreeView();
-            logger.trace("Test theme tree view is now hidden.");
-        } else {
-            logger.trace("Test theme tree view is hidden. Displaying it.");
-            await displayTestThemeTreeView();
-            logger.trace("Test theme tree view is now displayed.");
-        }
-    }
 }
 
 /**

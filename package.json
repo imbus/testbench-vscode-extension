@@ -300,14 +300,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.toggleProjectManagementTreeViewVisibility",
-                "title": "TestBench: Toggle Project Tree View Visibility"
-            },
-            {
-                "command": "testbenchExtension.toggleTestThemeTreeViewVisibility",
-                "title": "TestBench: Toggle Test Theme Tree View Visibility"
-            },
-            {
                 "command": "testbenchExtension.generateTestCasesForCycle",
                 "title": "Generate Tests",
                 "icon": "$(robotcode-robot)"
