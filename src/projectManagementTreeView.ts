@@ -15,9 +15,10 @@ import {
     getProjectTreeView,
     getTestElementTreeView,
     getTestThemeTreeViewInstance,
-    getTestElementsTreeDataProvider
+    getTestElementsTreeDataProvider,
+    getConfig
 } from "./extension";
-import { allExtensionCommands, TreeItemContextValues } from "./constants";
+import { allExtensionCommands, ConfigKeys, TreeItemContextValues } from "./constants";
 import { displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { displayTestElementsTreeView } from "./testElementsTreeView";
 
@@ -1053,6 +1054,48 @@ export function setupProjectTreeViewEventListeners(
             if (selectedElement && selectedElement.contextValue === TreeItemContextValues.CYCLE) {
                 await providerInstance.handleTestCycleClick(selectedElement);
             }*/
+
+            const projectAndTovNameObj = getProjectAndTovNamesFromSelection(selectedElement);
+
+            if (projectAndTovNameObj) {
+                const { projectName, tovName } = projectAndTovNameObj;
+
+                // Update VSCode configuration settings with the selected project and TOV names
+                const config: vscode.WorkspaceConfiguration = getConfig();
+                const updatePromises = [];
+
+                if (projectName !== undefined) {
+                    updatePromises.push(
+                        config.update(ConfigKeys.PROJECT, projectName, vscode.ConfigurationTarget.Workspace)
+                    );
+                } else {
+                    // If no project name could be determined clear the configuration
+                    updatePromises.push(
+                        config.update(ConfigKeys.PROJECT, undefined, vscode.ConfigurationTarget.Workspace)
+                    );
+                }
+
+                if (tovName !== undefined) {
+                    updatePromises.push(config.update(ConfigKeys.TOV, tovName, vscode.ConfigurationTarget.Workspace));
+                } else {
+                    // If no TOV could be determined clear TOV configuration
+                    updatePromises.push(config.update(ConfigKeys.TOV, undefined, vscode.ConfigurationTarget.Workspace));
+                }
+
+                try {
+                    await Promise.all(updatePromises);
+                    logger.info(
+                        `Configuration updated - Project: ${projectName ?? "(none)"}, TOV: ${tovName ?? "(none)"}`
+                    );
+
+                    // TODO: These config changes will trigger a language server restart after the TODO in extension.ts is implemented.
+                } catch (error) {
+                    logger.error("Failed to update configuration for LS restart:", error);
+                }
+            } else {
+                logger.warn("Could not determine context for LS restart from selection.");
+                // TODO: Maybe stop language server if no valid context is selected
+            }
         }
     });
 }
@@ -1091,4 +1134,74 @@ export function findProjectKeyForElement(element: BaseTestBenchTreeItem): string
     const projectKeyNotFoundErrorMessage: string = `Project key not found traversing up from tree element: ${element.label}`;
     logger.error(projectKeyNotFoundErrorMessage);
     return null;
+}
+
+/**
+ * Determines the project name and TOV name based on the selected TreeItem.
+ * @param {BaseTestBenchTreeItem} selectedItem The selected BaseTestBenchTreeItem.
+ * @returns An object with projectName and tovName, or null if not determinable.
+ */
+export function getProjectAndTovNamesFromSelection(
+    selectedItem: BaseTestBenchTreeItem
+): { projectName: string | undefined; tovName: string | undefined } | null {
+    if (!selectedItem || !selectedItem.item) {
+        return null;
+    }
+
+    let projectName: string | undefined;
+    let tovName: string | undefined;
+
+    let currentItem: BaseTestBenchTreeItem | null = selectedItem;
+
+    // Iterate upwards in the tree to find Project and TOV
+    while (currentItem) {
+        if (currentItem.contextValue === TreeItemContextValues.PROJECT) {
+            projectName = currentItem.item.name;
+        } else if (currentItem.contextValue === TreeItemContextValues.VERSION) {
+            tovName = currentItem.item.name;
+            // If we found the TOV, its parent must be the project
+            if (currentItem.parent && currentItem.parent.contextValue === TreeItemContextValues.PROJECT) {
+                projectName = currentItem.parent.item.name;
+            }
+        }
+        // If both project and TOV are found (or project, if TOV was the root element of selection)
+        if (projectName && (tovName || selectedItem.contextValue === TreeItemContextValues.PROJECT)) {
+            break;
+        }
+        currentItem = currentItem.parent;
+    }
+
+    // If the selected item is a Project
+    if (selectedItem.contextValue === TreeItemContextValues.PROJECT) {
+        projectName = selectedItem.item.name;
+        tovName = undefined; // No specific TOV selected
+        logger.trace(`Selected item is a Project. Project: ${projectName}, TOV: (none)`);
+    }
+    // If the selected item is a TOV
+    else if (selectedItem.contextValue === TreeItemContextValues.VERSION) {
+        tovName = selectedItem.item.name;
+        if (selectedItem.parent && selectedItem.parent.contextValue === TreeItemContextValues.PROJECT) {
+            projectName = selectedItem.parent.item.name;
+        }
+        logger.trace(`Selected item is a TOV. Project: ${projectName}, TOV: ${tovName}`);
+    }
+    // A Cycle is selected
+    else if (selectedItem.contextValue === TreeItemContextValues.CYCLE) {
+        if (selectedItem.parent && selectedItem.parent.contextValue === TreeItemContextValues.VERSION) {
+            tovName = selectedItem.parent.item.name;
+            if (
+                selectedItem.parent.parent &&
+                selectedItem.parent.parent.contextValue === TreeItemContextValues.PROJECT
+            ) {
+                projectName = selectedItem.parent.parent.item.name;
+            }
+        }
+        logger.trace(`Selected item is a Cycle. Project: ${projectName}, TOV: ${tovName}`);
+    }
+
+    if (!projectName) {
+        logger.warn(`Could not determine Project Name from selected item: ${selectedItem.label}`);
+    }
+
+    return { projectName, tovName };
 }

@@ -948,6 +948,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (e.affectsConfiguration(baseKeyOfExtension)) {
                 await loadConfiguration(context);
                 logger.info("Configuration updated after changes were detected.");
+
+                // TODO: Check if the language server should restart after config changes
+                /*
+                if (
+                    e.affectsConfiguration(`${baseKeyOfExtension}.${ConfigKeys.PROJECT}`) ||
+                    e.affectsConfiguration(`${baseKeyOfExtension}.${ConfigKeys.TOV}`)
+                   
+                ) {
+                    logger.info("Relevant configuration changed, restarting language server.");
+                    // TODO: Restart the language server if it is running
+                }
+                */
             }
         })
     );
