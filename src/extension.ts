@@ -27,7 +27,7 @@ import {
     TreeItemContextValues
 } from "./constants";
 import { CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
-import { initializeLanguageServer } from "./server";
+import { client, initializeLanguageServer } from "./server";
 import { hideTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { clearTestElementsTreeView, displayTestElementsTreeView } from "./testElementsTreeView";
 
@@ -381,6 +381,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         getTestThemeTreeDataProvider()?.clearTree();
         getTestElementsTreeDataProvider()?.refresh([]); // Clear with empty data
         // Login web view is displayed automatically after context value change
+
+        // Stop the language server if it is running
+        await client.stop();
     });
 
     // --- Command: Handle Cycle Click ---
@@ -954,7 +957,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // Load initial configuration and register a listener for configuration changes.
+    // Load initial configuration
     await loadConfiguration(context);
 
     initializeTreeViews(context);
@@ -968,7 +971,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Register all extension commands.
     await registerExtensionCommands(context);
 
-    // Set the initial context state. Before any login attempt, connection is null.
+    // Set the initial connection context state. Before any login attempt, connection is null.
     // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
@@ -986,6 +989,8 @@ export async function deactivate(): Promise<void> {
     try {
         // Gracefully log out the user when the extension is deactivated.
         await connection?.logoutUser();
+        // Stop the language server if it is running
+        await client.stop();
         logger.info("Extension deactivated.");
     } catch (error) {
         logger.error("Error during deactivation:", error);
