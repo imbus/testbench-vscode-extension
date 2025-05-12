@@ -656,7 +656,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  * @param {string} itemLabel The label of the selected item.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
- * @param {string} UIDofTestThemeElementToGenerateTestsFor Optional unique ID for the test theme element.
+ * @param {string} elementUID Cycle UID or Theme/Set UID
  * @returns {Promise<void | null>} Resolves when tests are generated, or null if an error occurs.
  */
 export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
@@ -665,21 +665,34 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     itemLabel: string,
     projectKey: string,
     cycleKey: string,
-    UIDofTestThemeElementToGenerateTestsFor?: string
+    elementUID: string
 ): Promise<void | null> {
     try {
         logger.debug("Generating tests for:", selectedTreeItem);
         const isReportGenerationExecutionBased: boolean = true; // Defaulting to execution based for now.
-        const UIDofSelectedTreeElement: string | undefined =
-            UIDofTestThemeElementToGenerateTestsFor ||
-            (await promptForTestThemeNodeSelectionAndReturnUIDOfNode(selectedTreeItem));
-        if (!UIDofSelectedTreeElement) {
-            logger.error("No UID selected for test theme.");
+        let UIDforRequest: string;
+
+        if (selectedTreeItem.contextValue === TreeItemContextValues.CYCLE) {
+            // If the selected item is a Cycle, generate for the whole cycle.
+            logger.debug("Generating tests for the entire cycle.");
+            UIDforRequest = ""; // Empty string expected for root/all
+        } else if (
+            selectedTreeItem.contextValue === TreeItemContextValues.TEST_THEME_NODE ||
+            selectedTreeItem.contextValue === TreeItemContextValues.TEST_CASE_SET_NODE
+        ) {
+            // If it's a test theme or test case set, use its specific UID passed as elementUID.
+            logger.debug(`Generating tests for specific element UID: ${elementUID}.`);
+            UIDforRequest = elementUID;
+        } else {
+            // Handle unsupported types
+            logger.error(`Unsupported item type for test generation: ${selectedTreeItem.contextValue}`);
+            vscode.window.showErrorMessage(`Cannot generate tests for item type: ${selectedTreeItem.contextValue}`);
             return null;
         }
+
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
             basedOnExecution: isReportGenerationExecutionBased,
-            treeRootUID: UIDofSelectedTreeElement === "Generate all" ? "" : UIDofSelectedTreeElement
+            treeRootUID: UIDforRequest
         };
 
         await vscode.window.withProgress(
@@ -694,7 +707,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
                     projectKey,
                     cycleKey,
                     isReportGenerationExecutionBased,
-                    UIDofSelectedTreeElement,
+                    elementUID,
                     cycleReportOptionsRequestParams,
                     progress,
                     cancellationToken
@@ -714,62 +727,13 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
 }
 
 /**
- * Prompts the user to select a TestThemeNode and returns its UID.
- *
- * @param treeItem The tree item to search for TestThemeNodes.
- * @returns {Promise<string | undefined>} The UID of the selected node, or "Generate all" if selected.
- */
-async function promptForTestThemeNodeSelectionAndReturnUIDOfNode(treeItem: any): Promise<string | undefined> {
-    const testThemeNodes: { name: string; uniqueID: string; numbering?: string }[] =
-        findAllTestThemeNodesOfTreeItem(treeItem);
-    const quickPickItems = [
-        { label: "Generate all", description: "Generate All Tests Under The Test Cycle" },
-        ...testThemeNodes.map((node) => ({
-            label: node.numbering ? `${node.numbering} ${node.name}` : node.name,
-            description: `ID: ${node.uniqueID}`,
-            uniqueID: node.uniqueID
-        }))
-    ];
-    const selected = await vscode.window.showQuickPick(quickPickItems, {
-        placeHolder: 'Select a test theme or "Generate all" to generate all tests under the cycle.'
-    });
-    return selected?.label === "Generate all" ? "Generate all" : (selected as any)?.uniqueID;
-}
-
-/**
- * Recursively finds all TestThemeNode elements from a tree item.
- *
- * @param treeItem The tree item to search.
- * @param foundTestThemes Array to accumulate found nodes.
- * @returns An array of objects containing name, uniqueID, and optional numbering.
- */
-function findAllTestThemeNodesOfTreeItem(
-    treeItem: any,
-    foundTestThemes: { name: string; uniqueID: string; numbering?: string }[] = []
-): typeof foundTestThemes {
-    // Check if the tree item is a TestThemeNode, and if so, add it to the results
-    if (treeItem.item?.elementType === TreeItemContextValues.TEST_THEME_NODE) {
-        // Extract the name, unique ID, and numbering of the TestThemeNode
-        const { name = "Unnamed", uniqueID = "No ID", numbering } = treeItem.item.base || {};
-        foundTestThemes.push({ name, uniqueID, numbering });
-    }
-    // Recursively search for TestThemeNodes in the children of the tree item
-    if (Array.isArray(treeItem.children)) {
-        treeItem.children.forEach((child: projectManagementTreeView.BaseTestBenchTreeItem) =>
-            findAllTestThemeNodesOfTreeItem(child, foundTestThemes)
-        );
-    }
-    return foundTestThemes;
-}
-
-/**
  * Runs the Robot Framework test generation process with progress reporting.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
  * @param {boolean} executionBased Whether the report is execution-based.
- * @param {string} UID The UID of the selected element.
+ * @param {string} elementUID The UID of the selected element.
  * @param {testBenchTypes.OptionalJobIDRequestParameter} cycleStructureOptionsRequestParams Request parameters for the cycle report.
  * @param {vscode.Progress} progress The VS Code progress reporter.
  * @param {vscode.CancellationToken} cancellationToken The cancellation token.
@@ -780,7 +744,7 @@ async function runRobotFrameworkTestGenerationProcess(
     projectKey: string,
     cycleKey: string,
     executionBased: boolean,
-    UID: string,
+    elementUID: string,
     cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
@@ -819,7 +783,7 @@ async function runRobotFrameworkTestGenerationProcess(
     }
 
     // Update the last generated report parameters workspaceState
-    await saveLastGeneratedReportParams(context, UID, projectKey, cycleKey, executionBased);
+    await saveLastGeneratedReportParams(context, elementUID, projectKey, cycleKey, executionBased);
 
     vscode.window.showInformationMessage("Robot Framework test generation successful.");
     logger.debug("Test generation successful.");
@@ -1228,13 +1192,21 @@ export async function startTestGenerationForCycle(
         if (!workspaceLocation) {
             return null;
         }
+
+        const cycleUID = selectedCycleTreeItem.item?.uniqueID || selectedCycleTreeItem.item?.key || "";
+        if (!cycleUID) {
+            logger.warn(
+                `Could not determine UID or Key for cycle: ${selectedCycleTreeItem.label}. Using empty string.`
+            );
+        }
+
         await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
             context,
             selectedCycleTreeItem,
             selectedCycleTreeItem.label,
             projectKey,
             cycleKey,
-            undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
+            cycleUID
         );
     } catch (error) {
         logger.error("Error in startTestGenerationForCycle:", (error as Error).message);

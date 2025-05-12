@@ -12,7 +12,7 @@ import * as base64 from "base-64"; // npm i --save-dev @types/base-64
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
-import { initializeLanguageServer, client } from "./server";
+import { initializeLanguageServer } from "./server";
 
 import {
     getConfig,
@@ -1111,6 +1111,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
                     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
                     const loginSuccessfulMessage: string = "Login successful.";
 
+                    // Initialize the language server after successful login
                     await initializeLanguageServer();
 
                     logger.debug(loginSuccessfulMessage);
