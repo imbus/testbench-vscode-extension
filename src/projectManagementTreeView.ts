@@ -1003,23 +1003,25 @@ export class BaseTestBenchTreeItem extends vscode.TreeItem {
 /**
  * Sets up event listeners for the project tree view to handle expand/collapse and selection events.
  * These events update the expansion state, icons dynamically, and initialize the test theme tree on cycle click.
+ * @param {vscode.TreeView<BaseTestBenchTreeItem>} projectTreeView The project tree view instance.
+ * @param {ProjectManagementTreeDataProvider} projectManagementProvider The project management data provider instance.
  */
 export function setupProjectTreeViewEventListeners(
-    projectTreeViewInstance: vscode.TreeView<BaseTestBenchTreeItem>,
-    providerInstance: ProjectManagementTreeDataProvider
+    projectTreeView: vscode.TreeView<BaseTestBenchTreeItem>,
+    projectManagementProvider: ProjectManagementTreeDataProvider
 ): void {
-    if (!projectTreeViewInstance) {
+    if (!projectTreeView) {
         logger.error("Project tree view (projectTreeView) is not initialized. Cannot set up event listeners.");
         return;
     }
-    if (!providerInstance) {
+    if (!projectManagementProvider) {
         logger.error("Project management data provider is not initialized. Cannot set up event listeners.");
         return;
     }
 
-    projectTreeViewInstance.onDidExpandElement(async (event) => {
-        await providerInstance.handleExpansion(event.element, true);
-        providerInstance.rememberExpandedItem(event.element);
+    projectTreeView.onDidExpandElement(async (event) => {
+        await projectManagementProvider.handleExpansion(event.element, true);
+        projectManagementProvider.rememberExpandedItem(event.element);
         // If cycle expansion in project tree should also trigger theme tree population
         // (independent of the click command), then handleTestCycleClick could be called here too,
         // which would then fire the event.
@@ -1027,18 +1029,18 @@ export function setupProjectTreeViewEventListeners(
         //    await providerInstance.handleTestCycleClick(event.element);
         // }
     });
-    projectTreeViewInstance.onDidCollapseElement(async (event) => {
-        await providerInstance.handleExpansion(event.element, false);
-        providerInstance.forgetExpandedItem(event.element);
+    projectTreeView.onDidCollapseElement(async (event) => {
+        await projectManagementProvider.handleExpansion(event.element, false);
+        projectManagementProvider.forgetExpandedItem(event.element);
     });
     // React to selection changes in the project tree view
-    projectTreeViewInstance.onDidChangeSelection(async (event) => {
+    projectTreeView.onDidChangeSelection(async (event) => {
         if (event.selection.length > 0) {
             const selectedElement: BaseTestBenchTreeItem = event.selection[0];
             logger.trace(
                 `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
             );
-            /*
+            /* Do not handle click events here, as they are handled by the command in the tree item.
             if (selectedElement && selectedElement.contextValue === TreeItemContextValues.CYCLE) {
                 await providerInstance.handleTestCycleClick(selectedElement);
             }*/
