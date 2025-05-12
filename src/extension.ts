@@ -509,7 +509,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.debug(`Command Called: ${allExtensionCommands.readRFTestResultsAndCreateReportWithResults}`);
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.error("readRFTestResultsAndCreateReportWithResults command called without connection.");
+            logger.error(
+                `${allExtensionCommands.readRFTestResultsAndCreateReportWithResults} command called without connection.`
+            );
             return;
         }
         await reportHandler.fetchTestResultsAndCreateReportWithResultsWithTb2Robot(context);
@@ -521,7 +523,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.debug(`Command Called: ${allExtensionCommands.importTestResultsToTestbench}`);
         if (!connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.error("importTestResultsToTestbench command called without connection.");
+            logger.error(`${allExtensionCommands.importTestResultsToTestbench} command called without connection.`);
             return;
         }
 
@@ -542,10 +544,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const pmProvider = getProjectManagementTreeDataProvider();
 
         if (!pmProvider) {
-            const missingProviderErrorMessage: string =
+            const missingProjectProviderErrorMessage: string =
                 "Project management tree provider is not initialized. Cannot import report.";
-            vscode.window.showErrorMessage(missingProviderErrorMessage);
-            logger.error(missingProviderErrorMessage);
+            vscode.window.showErrorMessage(missingProjectProviderErrorMessage);
+            logger.error(missingProjectProviderErrorMessage);
             return null;
         }
 
@@ -562,7 +564,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             // Message update should be handled by provider via callback
             pmProvider.refresh(true); // true for hard refresh
         } else {
-            logger.warn("RefreshProjectTreeView: projectManagementTreeDataProvider or projectTreeView is null.");
+            logger.warn(`Project Management Tree Data Provider or Project Tree View not initialized. Cannot refresh.`);
         }
     });
 
@@ -621,12 +623,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 logger.warn(
                     `Could not find the parent cycle element for the current Test Theme Tree (cycleKey: ${currentCycleKey}). Refreshing with current roots.`
                 );
-                ttProvider.refresh(); // This will just re-render current items.
+                ttProvider.refresh(); // Re-render current items.
             } else {
                 logger.debug(
                     "No current cycle in Test Theme Tree to refresh, or provider not found. Clearing and refreshing."
                 );
-                ttProvider.clearTree(); // This calls refresh internally
+                ttProvider.clearTree(); // Calls refresh internally
             }
         } else {
             logger.warn(
@@ -640,6 +642,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     // --- Command: Make Root ---
     // Right clicking on a tree element and selecting "Make Root" context menu option will make the selected element the root of the tree.
+    // Refreshing the tree will revert the tree to its original state.
     registerSafeCommand(
         context,
         allExtensionCommands.makeRoot,
@@ -667,10 +670,14 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 if (pmProvider) {
                     pmProvider.makeRoot(treeItem);
                 } else {
-                    logger.warn("MakeRoot: projectManagementTreeDataProvider is null for project tree item.");
-                    vscode.window.showErrorMessage("Project tree is not available to set root.");
+                    const makeRootNoProviderErrorMessage: string =
+                        "MakeRoot command called without projectManagementTreeDataProvider.";
+                    logger.warn(makeRootNoProviderErrorMessage);
+                    vscode.window.showErrorMessage(makeRootNoProviderErrorMessage);
                 }
-            } else if (
+            }
+            // Check if the item belongs to the Test Theme Tree
+            else if (
                 ttProvider &&
                 treeItem.contextValue &&
                 (
@@ -700,7 +707,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     );
 
     // --- Command: Clear Workspace Folder ---
-    // Clears the workspace folder of its contents, excluding log files.
+    // Clears the workspace folder of its contents, excluding extension log files.
     registerSafeCommand(context, allExtensionCommands.clearInternalTestbenchFolder, async () => {
         logger.debug(`Command Called: ${allExtensionCommands.clearInternalTestbenchFolder}`);
         const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
@@ -721,6 +728,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.debug(`Command Called: ${allExtensionCommands.refreshTestElementsTree}`);
         const teProvider = getTestElementsTreeDataProvider();
         if (!teProvider) {
+            logger.warn("Test Elements Tree Data Provider not initialized. Cannot refresh Test Elements Tree.");
             return;
         }
         const currentTovKey: string = teProvider.getCurrentTovKey();
@@ -742,7 +750,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             const pmProvider = getProjectManagementTreeDataProvider();
             const teProvider = getTestElementsTreeDataProvider();
-            const teView = getTestElementTreeView();
             // Check if the command is executed for a TOV element.
             if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
@@ -754,9 +761,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     if (areTestElementsFetched) {
                         await projectManagementTreeView.hideProjectManagementTreeView();
                         await displayTestElementsTreeView();
-                        // testElementTreeView.message is cleared by fetchAndDisplayTestElements on success
-                    } else if (teView) {
-                        // If fetch failed, fetchAndDisplayTestElements already sets an error message
+                    } else {
+                        logger.warn(
+                            `Test Elements Tree Data Provider not initialized or failed to fetch test elements for TOV: ${tovKeyOfSelectedTreeElement}`
+                        );
+                        vscode.window.showErrorMessage(
+                            `Failed to fetch test elements for TOV: ${tovKeyOfSelectedTreeElement}`
+                        );
                     }
                 }
             }
@@ -800,8 +811,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         await testElementsTreeView.handleFallback(absolutePathOfSelectedTestElement);
                 }
             } catch (error: any) {
-                vscode.window.showErrorMessage("Error in Open Robot Resource File command: " + error.message);
-                logger.error("Error in Open Robot Resource File command:", error);
+                vscode.window.showErrorMessage(`Error in Open Robot Resource File command: ${error.message}`);
+                logger.error(`${allExtensionCommands.openOrCreateRobotResourceFile} command failed: ${error.message}`);
             }
         }
     );
@@ -819,7 +830,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.error("createInteractionUnderSubdivision command called without connection.");
+                logger.error(
+                    `${allExtensionCommands.createInteractionUnderSubdivision} command called without connection.`
+                );
                 return;
             }
 
