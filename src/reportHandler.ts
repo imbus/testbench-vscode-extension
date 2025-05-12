@@ -1393,50 +1393,102 @@ export async function showMultiSelectQuickPick(
  *
  * 1. Reads the zip file from disk.
  * 2. Loads the zip file using JSZip.
- * 3. Iterates over all file entries and checks for files with names starting with "iTB-TC-" and ending with ".json".
+ * 3. Iterates over all file entries and checks for files with names starting with "iTB-TC-" or "iTB-TT-" and ending with ".json".
  * 4. Uses a regular expression to capture the common prefix (e.g. "iTB-TC-325") from each file.
- * 5. Adds the common identifier to a set to ensure uniqueness.
+ * 5. If groupByPrefix is true, it attempts to read the corresponding "{prefix}.json" file to extract a 'name' property
+ * and formats the quick pick item label as "{prefix} (name)" or "{prefix}" if the name is not available.
+ * 6. Adds the common identifier (or full filename if not grouping) to a set to ensure uniqueness.
  *
  * @param {string} zipFilePath - The path to the zip file.
- * @param {boolean} groupByPrefix - (Optinal) When true, related JSON files sharing the same prefix (e.g., "iTB-TC-325")
- *                        are combined into a single quick pick item. When false, every file is
- *                        returned as an individual item. Default is true.
+ * @param {boolean} groupByPrefix - (Optional) When true, related JSON files sharing the same prefix (e.g., "iTB-TC-325")
+ * are combined into a single quick pick item, potentially including a name from the JSON.
+ * When false, every file is returned as an individual item label.
+ * Default is true.
  * @returns {Promise<string[]>} A promise that resolves with an array of unique quick pick item labels.
  */
 export async function getQuickPickItemsFromReportZipWithResults(
     zipFilePath: string,
     groupByPrefix: boolean = true
 ): Promise<string[]> {
-    logger.trace(`Reading JSON's from zip file: ${zipFilePath}`);
+    logger.trace(`Reading JSON's from zip file: ${zipFilePath}, groupByPrefix: ${groupByPrefix}`);
     try {
         // Read the zip file as binary data.
         const data: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
         // Load the zip file using JSZip.
         const zip = await JSZip.loadAsync(data);
+        // File names in the zip file
+        const filesInZip: string[] = Object.keys(zip.files);
 
         if (groupByPrefix) {
-            logger.trace("Grouping JSON files by prefix.");
-            const uniqueItems: Set<string> = new Set<string>();
-            Object.keys(zip.files).forEach((fileName) => {
+            logger.trace("Grouping JSON files by prefix and fetching names.");
+            const uniquePrefixes: Set<string> = new Set<string>();
+
+            // Collect all unique prefixes
+            for (const fileName of filesInZip) {
                 if (isCandidateJsonFile(fileName)) {
                     const prefix: string | null = extractPrefix(fileName);
                     if (prefix) {
-                        uniqueItems.add(prefix);
+                        uniquePrefixes.add(prefix);
                     }
                 }
-            });
-            logger.trace(`Unique items found: ${Array.from(uniqueItems)}`);
-            return Array.from(uniqueItems);
-        } else {
-            logger.trace("Returning all JSON files as individual items.");
-            const items: string[] = [];
-            Object.keys(zip.files).forEach((fileName) => {
-                if (isCandidateJsonFile(fileName)) {
-                    items.push(fileName);
+            }
+
+            const quickPickItemLabels: string[] = [];
+            // For each unique prefix, try to fetch its name and construct label for quick pick
+            for (const prefix of uniquePrefixes) {
+                let nameProperty: string | null = null;
+                // Attempt to find and read the specific file "{prefix}.json" (case-insensitive)
+                const specificJsonFileNameToFind: string = `${prefix}.json`.toLowerCase();
+                const actualFileNameInZip: string | undefined = filesInZip.find(
+                    (fileName) => fileName.toLowerCase() === specificJsonFileNameToFind
+                );
+
+                if (actualFileNameInZip) {
+                    const jsonFile: JSZip.JSZipObject | null = zip.file(actualFileNameInZip);
+                    if (jsonFile) {
+                        try {
+                            const jsonString: string = await jsonFile.async("string");
+                            const jsonData = JSON.parse(jsonString);
+                            nameProperty = jsonData?.name || null;
+                        } catch (error) {
+                            logger.warn(
+                                `Could not read or parse JSON for ${actualFileNameInZip} to get name property for prefix ${prefix}:`,
+                                error
+                            );
+                        }
+                    }
                 }
-            });
-            logger.trace(`Items found: ${items}`);
-            return items;
+
+                const displayLabel: string = nameProperty ? `${prefix} (${nameProperty})` : prefix;
+                quickPickItemLabels.push(displayLabel);
+            }
+
+            logger.trace(`Unique item labels for quick pick (grouped by prefix): ${quickPickItemLabels}`);
+            return quickPickItemLabels.sort(); // Sort for consistent order
+        } else {
+            logger.trace("Listing all candidate JSON files with their names if available.");
+            const quickPickItemLabelsIndividual: string[] = [];
+
+            for (const fileName of filesInZip) {
+                if (isCandidateJsonFile(fileName)) {
+                    let nameProperty: string | null = null;
+                    const jsonFile: JSZip.JSZipObject | null = zip.file(fileName);
+                    if (jsonFile) {
+                        try {
+                            const jsonString: string = await jsonFile.async("string");
+                            const jsonData = JSON.parse(jsonString);
+                            // Attempt to get the 'name' property as a top level property of the JSON structure
+                            nameProperty = jsonData?.name || null;
+                        } catch (e) {
+                            logger.warn(`Could not read or parse JSON for ${fileName} to get name property:`, e);
+                        }
+                    }
+                    const displayLabel: string = nameProperty ? `${fileName} (${nameProperty})` : fileName;
+                    quickPickItemLabelsIndividual.push(displayLabel);
+                }
+            }
+            logger.trace(`Item labels for quick pick (individual files): ${quickPickItemLabelsIndividual}`);
+            return quickPickItemLabelsIndividual.sort(); // Sort for consistent order
         }
     } catch (error) {
         logger.error("Error processing the zip file:", error);
@@ -1475,8 +1527,21 @@ export async function createNewReportWithSelectedItems(
             // Only consider JSON files with the matching prefix.
             if (isCandidateJsonFile(fileName)) {
                 if (groupByPrefix) {
-                    const prefix: string | null = extractPrefix(fileName);
-                    if (prefix && !selectedItems.includes(prefix)) {
+                    // Extract the actual prefixes from the selected display labels
+                    const selectedPrefixes: Set<string> = new Set(
+                        selectedItems.map((label) => {
+                            // Regex to extract prefix from "prefix (name)" or "prefix"
+                            const match: RegExpMatchArray | null = label.match(/^(itb-(?:tc|tt)-\d+)/i);
+                            // Fallback to the full label if no prefix pattern is matched (should ideally not happen for valid items)
+                            return match ? match[1] : label;
+                        })
+                    );
+
+                    const prefixFromFile: string | null = extractPrefix(fileName);
+                    if (prefixFromFile && !selectedPrefixes.has(prefixFromFile)) {
+                        logger.trace(
+                            `Removing ${fileName} as its prefix ${prefixFromFile} was not selected (selected were: ${Array.from(selectedPrefixes).join(", ")})`
+                        );
                         zip.remove(fileName);
                     }
                 } else {
