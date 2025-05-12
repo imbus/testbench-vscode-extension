@@ -892,7 +892,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.debug(`Command Called: ${allExtensionCommands.modifyReportWithResultsZip}`);
 
         // Prompt the user to select a report zip file with results.
-        const zipUris = await vscode.window.showOpenDialog({
+        const zipUris: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
             canSelectMany: false,
             filters: {
                 "Zip Files": ["zip"],
