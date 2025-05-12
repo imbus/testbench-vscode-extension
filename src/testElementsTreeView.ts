@@ -592,9 +592,17 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     private treeData: TestElementData[] = [];
     // Private member to store the current TOV key
     private _currentTovKey: string = "";
-
     public getCurrentTovKey(): string {
         return this._currentTovKey;
+    }
+    public setCurrentTovKey(tovKey: string): void {
+        this._currentTovKey = tovKey;
+    }
+
+    // Flag to be able to set a proper tree view message
+    private dataFetchAttempted: boolean = false;
+    public setDataFetchAttempted(attempted: boolean): void {
+        this.dataFetchAttempted = attempted;
     }
 
     // Callback for message updates
@@ -611,14 +619,19 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     // Method to update message based on current state, called by constructor or refresh
     public updateMessage(): void {
         if (this.isTreeDataEmpty()) {
-            const filterPatterns = getConfig().get("resourceRegexInTestbench2robotframework", []);
-            if (filterPatterns && filterPatterns.length > 0) {
-                this.setMessage("No test elements match the current filter criteria.");
+            if (!this.dataFetchAttempted) {
+                // Check if data fetch has been attempted to set initial message
+                this.setMessage("Select a Test Object Version (TOV) from the 'Projects' view to load test elements.");
             } else {
-                this.setMessage("No test elements found for the selected Test Object Version (TOV).");
+                const filterPatterns = getConfig().get("resourceRegexInTestbench2robotframework", []);
+                if (filterPatterns && filterPatterns.length > 0) {
+                    this.setMessage("No test elements match the current filter criteria.");
+                } else {
+                    this.setMessage("No test elements found for the selected Test Object Version (TOV).");
+                }
             }
         } else {
-            this.setMessage(undefined);
+            this.setMessage(undefined); // Clear message if data is present
         }
     }
 
@@ -652,7 +665,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
                 logger.trace(
                     "TestElementsTreeDataProvider: No tree data found for root, returning empty. Message should be set."
                 );
-                // The message is set in refresh() or fetchAndDisplayTestElements()
+                // The message is set in refresh() or fetchTestElements()
                 return []; // Return empty array
             }
 
@@ -701,10 +714,12 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
      * @param {string} newTestElementsTreeViewTitle Optional new title for the tree view.
      * @returns {Promise<boolean>} A promise that resolves to true if test elements were fetched and displayed, false otherwise.
      */
-    async fetchAndDisplayTestElements(tovKey: string, newTestElementsTreeViewTitle?: string): Promise<boolean> {
+    async fetchTestElements(tovKey: string, newTestElementsTreeViewTitle?: string): Promise<boolean> {
         // For testing with a local JSON file.
         // const jsonPath = "ABSOLUTE-PATH-TO-JSON-FILE";
         // const testElementsJsonData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+
+        this.setDataFetchAttempted(true);
 
         const tovLabel: string = newTestElementsTreeViewTitle || tovKey;
         this.updateMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
@@ -716,7 +731,6 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         const testElementsJsonData = await connection?.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
         if (testElementsJsonData) {
             this._currentTovKey = tovKey;
-            displayTestElementsTreeView();
             this.refresh(testElementsJsonData);
             const currentElementTreeView = getTestElementTreeView();
             // Update the title of the tree view if a new title is provided.
@@ -1253,5 +1267,9 @@ export function removeRobotResourceFromPathString(pathStr: string): string {
  */
 export function clearTestElementsTreeView(): void {
     const teProvider = extensionGetTestElementsTreeDataProvider();
-    teProvider?.refresh([]); // refresh will handle messages via callback
+    if (teProvider) {
+        teProvider.setCurrentTovKey(""); // Clear the current TOV key
+        teProvider.setDataFetchAttempted(false); // Reset the flag
+        teProvider.refresh([]); // refresh will handle messages via callback
+    }
 }

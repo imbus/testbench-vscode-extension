@@ -252,6 +252,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         }
         this.refresh(); // Refresh the view with new elements
     }
+
     /**
      * Checks if a cycle node is visible in the test theme tree.
      * @param {CycleNodeData} nodeData The cycle node data.
