@@ -117,11 +117,19 @@ export class TestBenchLogger {
     }
 
     /**
-     * Updates the cached log level configuration.
+     * Updates the cached log level configuration if it has changed.
      * Should be called whenever the extension configuration is updated.
+     * @returns {boolean} True if the log level was updated, false otherwise.
      */
-    public updateCachedLogLevel(): void {
-        this.cachedLogLevel = getConfig().get("testBenchLogger", "No logging");
+    public updateCachedLogLevel(): boolean {
+        const newLogLevel: string = getConfig().get("testBenchLogger", "No logging");
+        if (this.cachedLogLevel !== newLogLevel) {
+            const oldLogLevel: string = this.cachedLogLevel;
+            this.cachedLogLevel = newLogLevel;
+            console.log(`Logger level changed from "${oldLogLevel}" to "${this.cachedLogLevel}"`);
+            return true;
+        }
+        return false;
     }
 
     /**

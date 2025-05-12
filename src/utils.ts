@@ -321,17 +321,19 @@ export async function setWorkspaceLocation(enableLogging: boolean = true): Promi
     cachedWorkspaceLocation = undefined;
     if (logger && enableLogging) {
         // Set the logger for the new workspace location to write logs in the new workspace.
-        const logger = new testBenchLogger.TestBenchLogger();
+        const logger: testBenchLogger.TestBenchLogger = new testBenchLogger.TestBenchLogger();
         setLogger(logger);
         logger.trace("Cleared cached workspace location.");
     }
 
-    // Prompt the user to select a new workspace folder.
+    // Prompt the user to select a new workspace folder among available ones.
     const workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const selectedWorkspaceFolder = await vscode.window.showWorkspaceFolderPick({
-            placeHolder: "Select a new workspace folder"
-        });
+        const selectedWorkspaceFolder: vscode.WorkspaceFolder | undefined = await vscode.window.showWorkspaceFolderPick(
+            {
+                placeHolder: "Select a workspace folder"
+            }
+        );
         if (selectedWorkspaceFolder) {
             cachedWorkspaceLocation = selectedWorkspaceFolder.uri.fsPath;
             vscode.window.showInformationMessage(`Workspace changed to: "${cachedWorkspaceLocation}"`);

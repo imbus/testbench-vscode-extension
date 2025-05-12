@@ -19,6 +19,9 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     readonly onDidChangeTreeData: vscode.Event<BaseTestBenchTreeItem | void> = this._onDidChangeTreeData.event;
 
     private _currentCycleKey: string | null = null;
+    public getCurrentCycleKey(): string | null {
+        return this._currentCycleKey;
+    }
     public isCurrentCycle(cycleKey: string): boolean {
         return this._currentCycleKey === cycleKey;
     }
