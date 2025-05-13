@@ -13,6 +13,7 @@ import * as testBenchLogger from "./testBenchLogger";
 import * as testBenchConnection from "./testBenchConnection";
 import * as reportHandler from "./reportHandler";
 import * as projectManagementTreeView from "./projectManagementTreeView";
+import { getProjectAndTovNamesFromSelection } from "./projectManagementTreeView";
 import * as testElementsTreeView from "./testElementsTreeView";
 import * as loginWebView from "./loginWebView";
 import * as utils from "./utils";
@@ -395,7 +396,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         // Login web view is displayed automatically after context value change
 
         // Stop the language server if it is running
-        await client.stop();
+        await client?.stop();
     });
 
     // --- Command: Handle Cycle Click ---
@@ -762,6 +763,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             const pmProvider = getProjectManagementTreeDataProvider();
             const teProvider = getTestElementsTreeDataProvider();
+            await client?.stop();
             // Check if the command is executed for a TOV element.
             if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
@@ -773,6 +775,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     if (areTestElementsFetched) {
                         await projectManagementTreeView.hideProjectManagementTreeView();
                         await displayTestElementsTreeView();
+                        const projectAndTovNameObj = getProjectAndTovNamesFromSelection(treeItem);
+                        if (projectAndTovNameObj) {
+                            const { projectName, tovName } = projectAndTovNameObj;
+                            if (projectName && tovName) {
+                                await initializeLanguageServer(projectName, tovName);
+                            }
+                        }
                     } else {
                         logger.warn(
                             `Test Elements Tree Data Provider not initialized or failed to fetch test elements for TOV: ${tovKeyOfSelectedTreeElement}`
@@ -1007,8 +1016,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
 
-    await initializeLanguageServer();
-
     // Execute automatic login if the setting is enabled.
     await vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
 }
@@ -1021,7 +1028,7 @@ export async function deactivate(): Promise<void> {
         // Gracefully log out the user when the extension is deactivated.
         await connection?.logoutUser();
         // Stop the language server if it is running
-        await client.stop();
+        await client?.stop();
         logger.info("Extension deactivated.");
     } catch (error) {
         logger.error("Error during deactivation:", error);
