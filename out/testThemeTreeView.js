@@ -41,6 +41,7 @@ exports.TestThemeTreeDataProvider = void 0;
 exports.hideTestThemeTreeView = hideTestThemeTreeView;
 exports.displayTestThemeTreeView = displayTestThemeTreeView;
 const vscode = __importStar(require("vscode"));
+const projectManagementTreeView_1 = require("./projectManagementTreeView");
 const extension_1 = require("./extension");
 const constants_1 = require("./constants");
 /**
@@ -51,13 +52,27 @@ class TestThemeTreeDataProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
     _currentCycleKey = null;
+    getCurrentCycleKey() {
+        return this._currentCycleKey;
+    }
     isCurrentCycle(cycleKey) {
         return this._currentCycleKey === cycleKey;
     }
+    _currentProjectKey = null;
     /** Root elements for the Test Theme Tree view */
     rootElements = [];
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     expandedTreeItems = new Set();
+    // Callback for message updates
+    updateMessageCallback;
+    // Constructor to accept the callback
+    constructor(updateMessageCallback) {
+        this.updateMessageCallback = updateMessageCallback;
+    }
+    // Public method to set message via callback
+    setMessage(message) {
+        this.updateMessageCallback(message);
+    }
     /**
      * Refreshes the test theme tree view.
      */
@@ -65,25 +80,21 @@ class TestThemeTreeDataProvider {
         extension_1.logger.debug("Refreshing test theme tree view.");
         // Store the keys of the expanded items to preserve state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
+        const currentThemeTreeView = (0, extension_1.getTestThemeTreeViewInstance)();
         // Update message in the test theme tree view
-        if (extension_1.testThemeTreeViewInstance) {
-            // Check if the view instance is available
-            if (this.rootElements.length === 0) {
-                if (this._currentCycleKey) {
-                    extension_1.testThemeTreeViewInstance.message = "No test themes found for the current cycle.";
-                }
-                else if (extension_1.testThemeTreeViewInstance.message && extension_1.testThemeTreeViewInstance.message.startsWith("Refreshing")) {
-                    // Keep the "Refreshing..." message if it was set by the command
-                }
-                else {
-                    extension_1.testThemeTreeViewInstance.message = "Select a cycle to see test themes.";
-                }
-                extension_1.logger.trace(`Test Themes view message set: ${extension_1.testThemeTreeViewInstance.message}`);
+        // Check if the view instance is available
+        if (this.rootElements.length === 0) {
+            if (this._currentCycleKey) {
+                this.updateMessageCallback("No test themes found for the current cycle.");
             }
             else {
-                extension_1.testThemeTreeViewInstance.message = undefined; // Clear message
-                extension_1.logger.trace("Test Themes view message cleared.");
+                this.updateMessageCallback("Select a cycle to see test themes.");
             }
+            extension_1.logger.trace(`Test Themes view message set: ${currentThemeTreeView?.message}`);
+        }
+        else {
+            this.updateMessageCallback(undefined); // Clear message
+            extension_1.logger.trace("Test Themes view message cleared.");
         }
         // Explicitly fire with undefined to ensure a full refresh from the root.
         this._onDidChangeTreeData.fire(undefined);
@@ -200,15 +211,142 @@ class TestThemeTreeDataProvider {
         extension_1.logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
         this.rootElements = [];
-        if (extension_1.testThemeTreeViewInstance) {
-            // Only set default message if not already in a loading state from command
-            if (!(extension_1.testThemeTreeViewInstance.message && extension_1.testThemeTreeViewInstance.message.startsWith("Refreshing"))) {
-                extension_1.testThemeTreeViewInstance.message = "Select a cycle from the 'Projects' view to see test themes.";
+        this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
+        this.expandedTreeItems.clear();
+        this._onDidChangeTreeData.fire();
+    }
+    /**
+     * Populates the tree view with data from a specific cycle.
+     *
+     * Processes the provided cycle data, builds a tree structure
+     * from its nodes, and then refreshes the tree view to display the new data.
+     * If the provided data is invalid or incomplete, the tree view will be cleared.
+     *
+     * @param {CycleDataForThemeTreeEvent} eventData - The cycle data used to populate the tree.
+     *                    It includes the cycle key, label, and raw node structure.
+     */
+    populateFromCycleData(eventData) {
+        extension_1.logger.trace(`TestThemeTreeDataProvider: Populating from cycle data for cycleKey: ${eventData.cycleKey}`);
+        this._currentCycleKey = eventData.cycleKey;
+        this._currentProjectKey = eventData.projectKey;
+        if (!eventData.rawCycleStructure ||
+            !eventData.rawCycleStructure.nodes?.length ||
+            !eventData.rawCycleStructure.root?.base?.key) {
+            extension_1.logger.warn(`No valid raw cycle structure data provided for cycle ${eventData.cycleLabel}. Clearing tree.`);
+            this.rootElements = [];
+        }
+        else {
+            const elementsByKey = new Map();
+            eventData.rawCycleStructure.nodes.forEach((node) => {
+                if (node?.base?.key) {
+                    elementsByKey.set(node.base.key, node);
+                }
+                else {
+                    extension_1.logger.warn("TestThemeTreeDataProvider: Found node without base.key in cycle structure:", node);
+                }
+            });
+            if (elementsByKey.size === 0 && eventData.rawCycleStructure.nodes.length > 0) {
+                extension_1.logger.error(`TestThemeTreeDataProvider: No nodes with base.key were found in the cycle structure data for cycle ${eventData.cycleLabel}, cannot build tree.`);
+                this.rootElements = [];
+            }
+            else {
+                const rootCycleNodeKey = eventData.rawCycleStructure.root.base.key;
+                this.rootElements = this.buildThemeTreeRecursive(rootCycleNodeKey, null, elementsByKey, eventData.rawCycleStructure.root.base.name);
             }
         }
-        // TODO: Clear the expanded set items after clear command if needed.
-        // this.expandedTreeItems.clear();
-        this._onDidChangeTreeData.fire();
+        this.refresh(); // Refresh the view with new elements
+    }
+    /**
+     * Checks if a cycle node is visible in the test theme tree.
+     * @param {CycleNodeData} nodeData The cycle node data.
+     * @returns {boolean} True if the node is visible; false otherwise.
+     */
+    isCycleNodeVisibleInTestThemeTree(nodeData) {
+        if (nodeData.elementType === constants_1.TreeItemContextValues.TEST_CASE_NODE) {
+            return false;
+        }
+        if (nodeData.exec?.status === "NotPlanned" || nodeData.exec?.locker === "-2") {
+            return false;
+        }
+        return true;
+    }
+    /**
+     * Recursively builds a theme tree structure.
+     *
+     * @param {string} parentItemKey - The key of the parent item for which to find children.
+     * @param {BaseTestBenchTreeItem | null} parentTreeItem - The parent tree item in the current recursion level, or null for the root.
+     * @param {Map<string, CycleNodeData>} elementsByKey - A map containing all available cycle node data, keyed by their unique keys.
+     * @param {string} parentNameForLogging - The name of the parent item, used for logging purposes.
+     * @returns {BaseTestBenchTreeItem[]} An array of `BaseTestBenchTreeItem` representing the children of the specified parent.
+     */
+    buildThemeTreeRecursive(parentItemKey, parentTreeItem, elementsByKey, parentNameForLogging) {
+        extension_1.logger.trace(`TestThemeTreeDataProvider: Building children for parentKey: ${parentItemKey} ('${parentNameForLogging}')`);
+        const potentialChildrenData = Array.from(elementsByKey.values()).filter((node) => node?.base?.parentKey === parentItemKey && this.isCycleNodeVisibleInTestThemeTree(node));
+        const childTreeItems = potentialChildrenData.map((nodeData) => {
+            const hasVisibleChildren = Array.from(elementsByKey.values()).some((childNodeCandidate) => childNodeCandidate?.base?.parentKey === nodeData.base.key &&
+                this.isCycleNodeVisibleInTestThemeTree(childNodeCandidate));
+            const treeItem = this.createThemeTreeItem(nodeData, nodeData.elementType, parentTreeItem, hasVisibleChildren);
+            if (!treeItem) {
+                return null;
+            }
+            // Recursively build children if this node has visible children
+            if (hasVisibleChildren) {
+                treeItem.children = this.buildThemeTreeRecursive(nodeData.base.key, treeItem, elementsByKey, nodeData.base.name);
+            }
+            else {
+                treeItem.children = [];
+            }
+            return treeItem;
+        });
+        return childTreeItems.filter((item) => item !== null);
+    }
+    /**
+     * Creates a tree item for the Test Theme view.
+     *
+     * @param {CycleNodeData} nodeData - The raw data for the theme item.
+     * @param {string} contextValue - The context value determining the item's type and behavior.
+     * @param {BaseTestBenchTreeItem | null} parent - The parent tree item, or null if it's a root item.
+     * @param {boolean} hasVisibleChildren - Indicates if the item has children that are currently visible in the tree.
+     * @returns A new {@link BaseTestBenchTreeItem} instance, or null if `nodeData` is invalid.
+     */
+    createThemeTreeItem(nodeData, // Raw data for the theme item
+    contextValue, parent, hasVisibleChildren) {
+        if (!nodeData ||
+            !nodeData.base ||
+            typeof nodeData.base.key === "undefined" ||
+            typeof nodeData.base.name === "undefined") {
+            extension_1.logger.warn(`TestThemeTreeDataProvider: Attempted to create theme tree item with invalid data structure for context ${contextValue}:`, nodeData);
+            return null;
+        }
+        const itemName = nodeData.base.name;
+        const label = nodeData.base.numbering ? `${nodeData.base.numbering} ${itemName}` : itemName;
+        let defaultCollapsibleState;
+        switch (contextValue) {
+            case constants_1.TreeItemContextValues.TEST_THEME_NODE:
+                defaultCollapsibleState = hasVisibleChildren
+                    ? vscode.TreeItemCollapsibleState.Collapsed
+                    : vscode.TreeItemCollapsibleState.None;
+                break;
+            case constants_1.TreeItemContextValues.TEST_CASE_SET_NODE:
+                defaultCollapsibleState = hasVisibleChildren // if TEST_CASE_NODE were included and visible
+                    ? vscode.TreeItemCollapsibleState.Collapsed
+                    : vscode.TreeItemCollapsibleState.None;
+                break;
+            // TEST_CASE_NODE is filtered out by isCycleNodeVisibleInTestThemeTree
+            default:
+                extension_1.logger.warn(`TestThemeTreeDataProvider: Unexpected contextValue '${contextValue}' during item creation.`);
+                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
+        }
+        const treeItem = new projectManagementTreeView_1.BaseTestBenchTreeItem(label, contextValue, defaultCollapsibleState, nodeData, parent);
+        // Restore Expansion State
+        const itemKeyForExpansion = treeItem.item?.base?.key; // Key is in item.base for CycleStructure nodes
+        if (itemKeyForExpansion &&
+            this.expandedTreeItems.has(itemKeyForExpansion) &&
+            treeItem.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+            treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            extension_1.logger.trace(`TestThemeTreeDataProvider: Restoring expanded state for item: ${treeItem.label} (Key: ${itemKeyForExpansion})`);
+        }
+        return treeItem;
     }
 }
 exports.TestThemeTreeDataProvider = TestThemeTreeDataProvider;
