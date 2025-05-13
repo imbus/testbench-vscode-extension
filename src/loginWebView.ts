@@ -318,13 +318,22 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         button:hover {
             background-color: var(--vscode-button-hoverBackground);
         }
-        /* Optional styling for checkboxes */
         .checkbox-container {
             display: flex;
             align-items: center;
         }
         .checkbox-container input {
             margin-right: 0.5em;
+        }
+        .error-container {
+            color: var(--vscode-errorForeground);
+            background-color: var(--vscode-inputValidation-errorBackground);
+            border: 1px solid var(--vscode-inputValidation-errorBorder);
+            padding: 0.5em;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+            border-radius: 4px;
+            word-wrap: break-word; /* Ensure long messages wrap */
         }
     </style>
 </head>
@@ -357,9 +366,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         <div class="checkbox-container">
             <input id="autoLogin" type="checkbox" ${autoLoginChecked}/>
             <label for="autoLogin">Auto Login</label>
-        </div>              
+        </div>            
         <div>
             <button id="submitBtn" type="submit">Submit</button>
+        </div>
+        <div>
+            <div id="error-message" class="error-container" style="display: none;"></div>
         </div>
     </form>
     <script>
@@ -369,6 +381,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         function submitLogin() {
             console.log("submitLogin() function called.");
+
+            // Clear any previous error message
+            const errorDiv = document.getElementById("error-message");
+            if (errorDiv) {
+                errorDiv.textContent = "";
+                errorDiv.style.display = "none";
+            }
+
             try {
             const serverName = document.getElementById("serverName").value;
             const portNumber = document.getElementById("portNumber").value;
