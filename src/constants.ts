@@ -41,6 +41,7 @@ export const ConfigKeys = {
     USERNAME: "username",
     STORE_PASSWORD_AFTER_LOGIN: "storePasswordAfterLogin",
     AUTO_LOGIN: "automaticLoginAfterExtensionActivation",
+    // TODO: Remove project and tov in the future
     PROJECT: "project",
     TOV: "tov",
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",

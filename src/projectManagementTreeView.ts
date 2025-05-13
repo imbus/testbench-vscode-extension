@@ -15,10 +15,9 @@ import {
     getProjectTreeView,
     getTestElementTreeView,
     getTestThemeTreeViewInstance,
-    getTestElementsTreeDataProvider,
-    getConfig
+    getTestElementsTreeDataProvider
 } from "./extension";
-import { allExtensionCommands, ConfigKeys, TreeItemContextValues } from "./constants";
+import { allExtensionCommands, TreeItemContextValues } from "./constants";
 import { displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { displayTestElementsTreeView } from "./testElementsTreeView";
 
@@ -1043,6 +1042,7 @@ export function setupProjectTreeViewEventListeners(
         await projectManagementProvider.handleExpansion(event.element, false);
         projectManagementProvider.forgetExpandedItem(event.element);
     });
+
     // React to selection changes in the project tree view
     projectTreeView.onDidChangeSelection(async (event) => {
         if (event.selection.length > 0) {
@@ -1059,39 +1059,8 @@ export function setupProjectTreeViewEventListeners(
 
             if (projectAndTovNameObj) {
                 const { projectName, tovName } = projectAndTovNameObj;
-
-                // Update VSCode configuration settings with the selected project and TOV names
-                const config: vscode.WorkspaceConfiguration = getConfig();
-                const updatePromises = [];
-
-                if (projectName !== undefined) {
-                    updatePromises.push(
-                        config.update(ConfigKeys.PROJECT, projectName, vscode.ConfigurationTarget.Workspace)
-                    );
-                } else {
-                    // If no project name could be determined clear the configuration
-                    updatePromises.push(
-                        config.update(ConfigKeys.PROJECT, undefined, vscode.ConfigurationTarget.Workspace)
-                    );
-                }
-
-                if (tovName !== undefined) {
-                    updatePromises.push(config.update(ConfigKeys.TOV, tovName, vscode.ConfigurationTarget.Workspace));
-                } else {
-                    // If no TOV could be determined clear TOV configuration
-                    updatePromises.push(config.update(ConfigKeys.TOV, undefined, vscode.ConfigurationTarget.Workspace));
-                }
-
-                try {
-                    await Promise.all(updatePromises);
-                    logger.info(
-                        `Configuration updated - Project: ${projectName ?? "(none)"}, TOV: ${tovName ?? "(none)"}`
-                    );
-
-                    // TODO: These config changes will trigger a language server restart after the TODO in extension.ts is implemented.
-                } catch (error) {
-                    logger.error("Failed to update configuration for LS restart:", error);
-                }
+                logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
+                // TODO: Restart language server with the selected project and TOV
             } else {
                 logger.warn("Could not determine context for LS restart from selection.");
                 // TODO: Maybe stop language server if no valid context is selected
@@ -1139,7 +1108,7 @@ export function findProjectKeyForElement(element: BaseTestBenchTreeItem): string
 /**
  * Determines the project name and TOV name based on the selected TreeItem.
  * @param {BaseTestBenchTreeItem} selectedItem The selected BaseTestBenchTreeItem.
- * @returns An object with projectName and tovName, or null if not determinable.
+ * @returns {{ projectName: string | undefined; tovName: string | undefined }} An object with projectName and tovName, or null if not determinable.
  */
 export function getProjectAndTovNamesFromSelection(
     selectedItem: BaseTestBenchTreeItem

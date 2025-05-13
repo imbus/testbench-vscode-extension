@@ -94,6 +94,18 @@ export function getTestElementTreeView(): vscode.TreeView<testElementsTreeView.T
     return _testElementTreeView;
 }
 
+// Global state for current project and TOV context for language server
+let currentLanguageServerProject: string | undefined;
+let currentLanguageServerTov: string | undefined;
+
+export function getCurrentLsProject(): string | undefined {
+    return currentLanguageServerProject;
+}
+
+export function getCurrentLsTov(): string | undefined {
+    return currentLanguageServerTov;
+}
+
 /* =============================================================================
    Helper Functions
    ============================================================================= */
@@ -919,6 +931,25 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     logger.trace(`Context value connectionActive set to: ${connection !== null}`);
 }
 
+/**
+ * Updates the context for the Language Server and triggers a restart.
+ * @param {string} projectName (Optional) The name of the selected project.
+ * @param {string} tovName (Optional) The name of the selected TOV.
+ */
+export async function updateLanguageServerContextAndRestart(projectName?: string, tovName?: string): Promise<void> {
+    const projectChanged: boolean = currentLanguageServerProject !== projectName;
+    const tovChanged: boolean = currentLanguageServerTov !== tovName;
+
+    if (projectChanged || tovChanged) {
+        logger.info(` Project name or TOV name changed.
+            Old: Project='${currentLanguageServerProject}', TOV='${currentLanguageServerTov}'. 
+            New: Project='${projectName}', TOV='${tovName}'.`);
+        currentLanguageServerProject = projectName;
+        currentLanguageServerTov = tovName;
+        // TODO: Restart language server with new project and TOV here
+    }
+}
+
 /* =============================================================================
    Extension Activation & Deactivation
    ============================================================================= */
@@ -945,18 +976,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (e.affectsConfiguration(baseKeyOfExtension)) {
                 await loadConfiguration(context);
                 logger.info("Configuration updated after changes were detected.");
-
-                // TODO: Check if the language server should restart after config changes
-                /*
-                if (
-                    e.affectsConfiguration(`${baseKeyOfExtension}.${ConfigKeys.PROJECT}`) ||
-                    e.affectsConfiguration(`${baseKeyOfExtension}.${ConfigKeys.TOV}`)
-                   
-                ) {
-                    logger.info("Relevant configuration changed, restarting language server.");
-                    // TODO: Restart the language server if it is running
-                }
-                */
             }
         })
     );
