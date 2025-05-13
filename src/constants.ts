@@ -34,7 +34,7 @@ export const WebviewMessageCommands = {
     UPDATE_CONTENT: "updateContent"
 } as const; // 'as const' makes properties readonly and literal types
 
-// --- Configuration Setting Keys ---
+// --- Extension Configuration Setting Keys ---
 export const ConfigKeys = {
     SERVER_NAME: "serverName",
     PORT_NUMBER: "portNumber",
@@ -46,7 +46,6 @@ export const ConfigKeys = {
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",
     CLEAR_REPORT_AFTER_PROCESSING: "clearReportAfterProcessing",
     LOGGER_LEVEL: "testBenchLogger",
-    // Config keys used from package.json
     TB2ROBOT_CONFIG_PATH: "configurationPathInTestbench2robotframework",
     TB2ROBOT_CLEAN: "cleanFilesBeforeTestGenerationInTestbench2robotframework",
     TB2ROBOT_FULLY_QUALIFIED: "fullyQualifiedKeywordsInTestbench2robotframework",
@@ -105,7 +104,6 @@ export const folderNameOfInternalTestbenchFolder: string = ".testbench";
 
 /**
  * All extension commands (as defined in package.json) to avoid typos.
- * Each command can be extended later with additional metadata such as description.
  */
 export const allExtensionCommands = {
     setWorkspace: `${baseKeyOfExtension}.setWorkspace`,
@@ -126,8 +124,6 @@ export const allExtensionCommands = {
     refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
-    toggleProjectManagementTreeViewVisibility: `${baseKeyOfExtension}.toggleProjectManagementTreeViewVisibility`,
-    toggleTestThemeTreeViewVisibility: `${baseKeyOfExtension}.toggleTestThemeTreeViewVisibility`,
     automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
     displayInteractionsForSelectedTOV: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`,

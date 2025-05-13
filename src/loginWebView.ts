@@ -5,9 +5,8 @@
  */
 
 import * as vscode from "vscode";
-import { logger, connection, getConfig, projectManagementTreeDataProvider, initializeTreeViews } from "./extension";
+import { logger, connection, getConfig, getProjectManagementTreeDataProvider, initializeTreeViews } from "./extension";
 import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
-import { displayProjectManagementTreeView } from "./projectManagementTreeView";
 import { WebviewMessageCommands, ConfigKeys, StorageKeys } from "./constants";
 
 /**
@@ -30,7 +29,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * Called when VS Code loads the webview.
      * @param {vscode.WebviewView} webviewView The webview view instance.
      */
-    resolveWebviewView(webviewView: vscode.WebviewView): void {
+    async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
         logger.trace("Resolving login webview view.");
         this.currentWebview = webviewView;
 
@@ -46,7 +45,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         };
 
         // Set initial HTML content based on connection status.
-        this.updateWebviewHTMLContent();
+        await this.updateWebviewHTMLContent();
 
         // Store new listener disposable
         // Listen for messages from the webview to respond to user actions.
@@ -55,7 +54,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             switch (message.command) {
                 // Handle the login attempt
                 case WebviewMessageCommands.LOGIN:
-                    this.handleLogin(
+                    await this.handleLogin(
                         this.extensionContext,
                         message.serverName,
                         parseInt(message.portNumber, 10), // Port number is an integer, parse it
@@ -171,9 +170,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             // If login was successful, display project tree view
             if (connectionAfterLoginAttempt) {
                 initializeTreeViews(extensionContext);
-                displayProjectManagementTreeView();
-                if (projectManagementTreeDataProvider) {
-                    projectManagementTreeDataProvider.refresh();
+                const pmProvider = getProjectManagementTreeDataProvider();
+                if (pmProvider) {
+                    pmProvider.refresh();
                 }
             } else {
                 logger.warn("Login failed via webview.");
@@ -244,7 +243,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         const imageUri: vscode.Uri | null = this.createIconUri(webview);
 
-        // Use constants for config keys
         const serverNameValue: string = getConfig().get<string>(ConfigKeys.SERVER_NAME, "");
         const portNumberValue: string = getConfig().get<string>(ConfigKeys.PORT_NUMBER, "");
         const usernameValue: string = getConfig().get<string>(ConfigKeys.USERNAME, "");

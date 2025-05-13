@@ -179,7 +179,7 @@ export async function clearInternalTestbenchFolder(
         // Optionally prompt the user for confirmation.
         if (promptForConfirmation) {
             const userResponse = await vscode.window.showWarningMessage(
-                "Are you sure you want to delete all contents of the testbench folder? Log files will not be deleted.",
+                `Are you sure you want to delete all contents of the ${folderNameOfInternalTestbenchFolder} folder? Log files will not be deleted.`,
                 { modal: true },
                 "Yes",
                 "No"
@@ -190,23 +190,43 @@ export async function clearInternalTestbenchFolder(
             }
         }
 
-        // Process the contents of the folder.
-        const files: string[] = await fsPromises.readdir(workspaceLocationToClear);
-        for (const file of files) {
-            const filePath: string = path.join(workspaceLocationToClear, file);
+        // Display a progress bar while clearing the folder.
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: `Clearing ${folderNameOfInternalTestbenchFolder}`,
+                cancellable: true
+            },
+            async (progress) => {
+                // Process the contents of the folder.
+                const files: string[] = await fsPromises.readdir(workspaceLocationToClear);
+                const totalFiles: number = files.length;
+                let processedFiles: number = 0;
 
-            if (excludedFoldersFromDeletion.includes(file)) {
-                logger.trace(`Skipped deleting excluded item: "${file}"`);
-                continue;
-            }
+                for (const file of files) {
+                    processedFiles++;
+                    const increment: number = (1 / totalFiles) * 100;
+                    progress.report({
+                        increment,
+                        message: `Processing ${file}... (${processedFiles}/${totalFiles})`
+                    });
 
-            const fileStats = await fsPromises.stat(filePath);
-            if (fileStats.isDirectory()) {
-                await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
-            } else {
-                await fsPromises.unlink(filePath);
+                    const filePath: string = path.join(workspaceLocationToClear, file);
+
+                    if (excludedFoldersFromDeletion.includes(file)) {
+                        logger.trace(`Skipped deleting excluded item: "${file}"`);
+                        continue;
+                    }
+
+                    const fileStats: fs.Stats = await fsPromises.stat(filePath);
+                    if (fileStats.isDirectory()) {
+                        await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
+                    } else {
+                        await fsPromises.unlink(filePath);
+                    }
+                }
             }
-        }
+        );
 
         logger.debug(`Internal testbench folder cleared successfully: "${workspaceLocationToClear}"`);
         vscode.window.showInformationMessage(`${folderNameOfInternalTestbenchFolder} folder cleared successfully.`);
@@ -321,17 +341,19 @@ export async function setWorkspaceLocation(enableLogging: boolean = true): Promi
     cachedWorkspaceLocation = undefined;
     if (logger && enableLogging) {
         // Set the logger for the new workspace location to write logs in the new workspace.
-        const logger = new testBenchLogger.TestBenchLogger();
+        const logger: testBenchLogger.TestBenchLogger = new testBenchLogger.TestBenchLogger();
         setLogger(logger);
         logger.trace("Cleared cached workspace location.");
     }
 
-    // Prompt the user to select a new workspace folder.
+    // Prompt the user to select a new workspace folder among available ones.
     const workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const selectedWorkspaceFolder = await vscode.window.showWorkspaceFolderPick({
-            placeHolder: "Select a new workspace folder"
-        });
+        const selectedWorkspaceFolder: vscode.WorkspaceFolder | undefined = await vscode.window.showWorkspaceFolderPick(
+            {
+                placeHolder: "Select a workspace folder"
+            }
+        );
         if (selectedWorkspaceFolder) {
             cachedWorkspaceLocation = selectedWorkspaceFolder.uri.fsPath;
             vscode.window.showInformationMessage(`Workspace changed to: "${cachedWorkspaceLocation}"`);

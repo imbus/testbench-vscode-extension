@@ -9,12 +9,19 @@ import * as fs from "fs";
 import * as fsPromise from "fs/promises";
 import * as path from "path";
 import * as os from "os";
-import axios, { AxiosResponse } from "axios";
 import * as testBenchTypes from "./testBenchTypes";
 import * as projectManagementTreeView from "./projectManagementTreeView";
-import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import * as utils from "./utils";
-import { getConfig, connection, logger } from "./extension";
+import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
+import JSZip from "jszip";
+import axios, { AxiosResponse } from "axios";
+import {
+    getConfig,
+    connection,
+    logger,
+    getProjectManagementTreeDataProvider,
+    getTestThemeTreeDataProvider
+} from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
@@ -88,7 +95,6 @@ async function saveLastGeneratedReportParams(
     };
 
     try {
-        // Use workspaceState.update to save the data
         // Data stored here persists across VS Code sessions for this specific workspace
         await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, paramsToSave);
         logger.debug(
@@ -575,84 +581,6 @@ export async function fetchReportZipFromServer(
 }
 
 /**
- * Fetches the report zip for a selected tree element.
- *
- * @param selectedProjectTreeItem The selected tree item.
- * @param projectManagementTreeDataProvider The project management tree data provider.
- * @param workingDirectoryToStoreReport The directory where the report will be stored.
- * @returns {Promise<void | null>} Resolves when the report is successfully downloaded, otherwise null
- */
-export async function fetchReportForTreeElement(
-    selectedProjectTreeItem: projectManagementTreeView.BaseTestBenchTreeItem,
-    projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null,
-    workingDirectoryToStoreReport: string
-): Promise<void | null> {
-    logger.debug(`Fetch Report called for ${selectedProjectTreeItem.label}.`);
-    // Show progress bar in VS Code
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: `Fetching Report for ${selectedProjectTreeItem.label}`,
-            cancellable: true
-        },
-        async (progress) => {
-            progress.report({ increment: 30, message: "Selecting report parameters." });
-            logger.debug("Fetching report for tree item:", selectedProjectTreeItem);
-
-            try {
-                if (!connection) {
-                    logger.error("No connection available, cannot fetch report.");
-                    return null;
-                }
-                if (!projectManagementTreeDataProvider) {
-                    logger.error("Project management tree not initialized, cannot fetch report.");
-                    return null;
-                }
-
-                const projectKeyOfSelectedTreeItem: string | null =
-                    findProjectKeyOfProjectTreeItem(selectedProjectTreeItem);
-                if (!projectKeyOfSelectedTreeItem) {
-                    logger.error("Project key not found, cannot fetch report.");
-                    return null;
-                }
-
-                // Find the cycle key associated with the selected tree item to fetch the report
-                const cycleKey: string | null =
-                    projectManagementTreeView.findCycleKeyOfTreeElement(selectedProjectTreeItem);
-                if (!cycleKey) {
-                    logger.error("Cycle key not found, cannot fetch report.");
-                    return null;
-                }
-                const treeElementUID = selectedProjectTreeItem.item?.base?.uniqueID;
-                const executionBased: boolean = true; // For now, defaulting to execution based
-                const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-                    basedOnExecution: executionBased,
-                    treeRootUID: treeElementUID
-                };
-
-                progress.report({ increment: 30, message: "Fetching report." });
-                const downloadedReportZipFilePath: string | null = await fetchReportZipFromServer(
-                    projectKeyOfSelectedTreeItem,
-                    cycleKey,
-                    workingDirectoryToStoreReport,
-                    cycleStructureOptionsRequestParams
-                );
-                if (downloadedReportZipFilePath) {
-                    logger.debug(`Report downloaded to: ${downloadedReportZipFilePath}`);
-                } else {
-                    logger.warn("Download cancelled or failed.");
-                    return null;
-                }
-            } catch (error) {
-                vscode.window.showErrorMessage((error as Error).message);
-                logger.error("Error fetching report:", error);
-                return null;
-            }
-        }
-    );
-}
-
-/**
  * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
@@ -661,24 +589,59 @@ export async function fetchReportForTreeElement(
  */
 export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
-    selectedTreeItem: projectManagementTreeView.BaseTestBenchTreeItem
+    selectedTreeItem: projectManagementTreeView.BaseTestBenchTreeItem,
+    providedCycleKey?: string
 ): Promise<void | null> {
     logger.debug("Generating tests for non-cycle element:", selectedTreeItem);
     const treeElementUID = selectedTreeItem.item?.base?.uniqueID;
-    const cycleKey: string | null = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
-    const projectKey: string | null = projectManagementTreeView.findProjectKeyForElement(selectedTreeItem);
+    let cycleKey: string | null = providedCycleKey || null;
+    let projectKey: string | null = null;
 
-    if (!projectKey || !cycleKey || !treeElementUID) {
+    if (!cycleKey) {
+        // If cycleKey wasn't provided by the caller
+        // attempt to find it by traversing parent.
+        logger.warn(`CycleKey not provided for ${selectedTreeItem.label}, attempting to find via parent traversal.`);
+        cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
+    }
+
+    if (!cycleKey) {
         logger.error(
-            `Cannot generate RF Tests. Missing project key (${projectKey}), cycle key (${cycleKey}) or UID (${treeElementUID}).`
+            `generateRobotFrameworkTestsForTestThemeOrTestCaseSet: Cycle key not found for item ${selectedTreeItem.label}.`
         );
+        vscode.window.showErrorMessage(`Error: Cycle key could not be determined for '${selectedTreeItem.label}'.`);
+        return null;
+    }
+
+    const pmProvider = getProjectManagementTreeDataProvider();
+    if (pmProvider) {
+        const ttProvider = getTestThemeTreeDataProvider();
+        if (ttProvider && ttProvider["_currentCycleKey"] === cycleKey && ttProvider["_currentProjectKey"]) {
+            projectKey = ttProvider["_currentProjectKey"];
+        }
+    }
+
+    if (!projectKey) {
+        // Fallback: Try to find it via selectedTreeItem if it has enough context
+        projectKey = projectManagementTreeView.findProjectKeyForElement(selectedTreeItem);
+    }
+
+    if (!projectKey) {
+        logger.error(
+            `generateRobotFrameworkTestsForTestThemeOrTestCaseSet: Project key not found for cycle ${cycleKey}.`
+        );
+        vscode.window.showErrorMessage(`Error: Project key could not be determined for the current cycle.`);
+        return null;
+    }
+
+    if (!treeElementUID) {
+        logger.error(`Cannot generate RF Tests. Missing UID for item ${selectedTreeItem.label}.`);
         return null;
     }
 
     await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
         context,
         selectedTreeItem,
-        typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : "", // Label might be undefined
+        typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : "",
         projectKey,
         cycleKey,
         treeElementUID
@@ -693,7 +656,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  * @param {string} itemLabel The label of the selected item.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
- * @param {string} UIDofTestThemeElementToGenerateTestsFor Optional unique ID for the test theme element.
+ * @param {string} elementUID Cycle UID or Theme/Set UID
  * @returns {Promise<void | null>} Resolves when tests are generated, or null if an error occurs.
  */
 export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
@@ -702,21 +665,34 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     itemLabel: string,
     projectKey: string,
     cycleKey: string,
-    UIDofTestThemeElementToGenerateTestsFor?: string
+    elementUID: string
 ): Promise<void | null> {
     try {
         logger.debug("Generating tests for:", selectedTreeItem);
         const isReportGenerationExecutionBased: boolean = true; // Defaulting to execution based for now.
-        const UIDofSelectedTreeElement: string | undefined =
-            UIDofTestThemeElementToGenerateTestsFor ||
-            (await promptForTestThemeNodeSelectionAndReturnUIDOfNode(selectedTreeItem));
-        if (!UIDofSelectedTreeElement) {
-            logger.error("No UID selected for test theme.");
+        let UIDforRequest: string;
+
+        if (selectedTreeItem.contextValue === TreeItemContextValues.CYCLE) {
+            // If the selected item is a Cycle, generate for the whole cycle.
+            logger.debug("Generating tests for the entire cycle.");
+            UIDforRequest = ""; // Empty string expected for root/all
+        } else if (
+            selectedTreeItem.contextValue === TreeItemContextValues.TEST_THEME_NODE ||
+            selectedTreeItem.contextValue === TreeItemContextValues.TEST_CASE_SET_NODE
+        ) {
+            // If it's a test theme or test case set, use its specific UID passed as elementUID.
+            logger.debug(`Generating tests for specific element UID: ${elementUID}.`);
+            UIDforRequest = elementUID;
+        } else {
+            // Handle unsupported types
+            logger.error(`Unsupported item type for test generation: ${selectedTreeItem.contextValue}`);
+            vscode.window.showErrorMessage(`Cannot generate tests for item type: ${selectedTreeItem.contextValue}`);
             return null;
         }
+
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
             basedOnExecution: isReportGenerationExecutionBased,
-            treeRootUID: UIDofSelectedTreeElement === "Generate all" ? "" : UIDofSelectedTreeElement
+            treeRootUID: UIDforRequest
         };
 
         await vscode.window.withProgress(
@@ -731,7 +707,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
                     projectKey,
                     cycleKey,
                     isReportGenerationExecutionBased,
-                    UIDofSelectedTreeElement,
+                    elementUID,
                     cycleReportOptionsRequestParams,
                     progress,
                     cancellationToken
@@ -751,62 +727,13 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
 }
 
 /**
- * Prompts the user to select a TestThemeNode and returns its UID.
- *
- * @param treeItem The tree item to search for TestThemeNodes.
- * @returns {Promise<string | undefined>} The UID of the selected node, or "Generate all" if selected.
- */
-async function promptForTestThemeNodeSelectionAndReturnUIDOfNode(treeItem: any): Promise<string | undefined> {
-    const testThemeNodes: { name: string; uniqueID: string; numbering?: string }[] =
-        findAllTestThemeNodesOfTreeItem(treeItem);
-    const quickPickItems = [
-        { label: "Generate all", description: "Generate All Tests Under The Test Cycle" },
-        ...testThemeNodes.map((node) => ({
-            label: node.numbering ? `${node.numbering} ${node.name}` : node.name,
-            description: `ID: ${node.uniqueID}`,
-            uniqueID: node.uniqueID
-        }))
-    ];
-    const selected = await vscode.window.showQuickPick(quickPickItems, {
-        placeHolder: 'Select a test theme or "Generate all" to generate all tests under the cycle.'
-    });
-    return selected?.label === "Generate all" ? "Generate all" : (selected as any)?.uniqueID;
-}
-
-/**
- * Recursively finds all TestThemeNode elements from a tree item.
- *
- * @param treeItem The tree item to search.
- * @param foundTestThemes Array to accumulate found nodes.
- * @returns An array of objects containing name, uniqueID, and optional numbering.
- */
-function findAllTestThemeNodesOfTreeItem(
-    treeItem: any,
-    foundTestThemes: { name: string; uniqueID: string; numbering?: string }[] = []
-): typeof foundTestThemes {
-    // Check if the tree item is a TestThemeNode, and if so, add it to the results
-    if (treeItem.item?.elementType === TreeItemContextValues.TEST_THEME_NODE) {
-        // Extract the name, unique ID, and numbering of the TestThemeNode
-        const { name = "Unnamed", uniqueID = "No ID", numbering } = treeItem.item.base || {};
-        foundTestThemes.push({ name, uniqueID, numbering });
-    }
-    // Recursively search for TestThemeNodes in the children of the tree item
-    if (Array.isArray(treeItem.children)) {
-        treeItem.children.forEach((child: projectManagementTreeView.BaseTestBenchTreeItem) =>
-            findAllTestThemeNodesOfTreeItem(child, foundTestThemes)
-        );
-    }
-    return foundTestThemes;
-}
-
-/**
  * Runs the Robot Framework test generation process with progress reporting.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
  * @param {boolean} executionBased Whether the report is execution-based.
- * @param {string} UID The UID of the selected element.
+ * @param {string} elementUID The UID of the selected element.
  * @param {testBenchTypes.OptionalJobIDRequestParameter} cycleStructureOptionsRequestParams Request parameters for the cycle report.
  * @param {vscode.Progress} progress The VS Code progress reporter.
  * @param {vscode.CancellationToken} cancellationToken The cancellation token.
@@ -817,7 +744,7 @@ async function runRobotFrameworkTestGenerationProcess(
     projectKey: string,
     cycleKey: string,
     executionBased: boolean,
-    UID: string,
+    elementUID: string,
     cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
@@ -856,7 +783,7 @@ async function runRobotFrameworkTestGenerationProcess(
     }
 
     // Update the last generated report parameters workspaceState
-    await saveLastGeneratedReportParams(context, UID, projectKey, cycleKey, executionBased);
+    await saveLastGeneratedReportParams(context, elementUID, projectKey, cycleKey, executionBased);
 
     vscode.window.showInformationMessage("Robot Framework test generation successful.");
     logger.debug("Test generation successful.");
@@ -979,7 +906,7 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
 
     // Open file selection dialog to select the output xml file, display only XML files in the selection.
     // To use relative paths to workspace location in extension settings,
-    // we need to get the workspace location to construct the full path of outputXmlFilePath.
+    // get the workspace location to construct the full path of outputXmlFilePath.
     const outputXMLFileRelativePathInExtensionSettings: string | undefined =
         getConfig().get<string>("outputXmlFilePath");
     const outputXMLFileAbsolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
@@ -1098,12 +1025,11 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     "Could not find parameters from previous test generation. Please generate tests first in this workspace.";
                 logger.error(missingParamsError);
                 vscode.window.showErrorMessage(missingParamsError);
-                return undefined; // Stop the process
+                return undefined;
             }
-            // Use the retrieved parameters
             const { executionBased, projectKey, cycleKey, UID } = retrievedParams;
 
-            // Double check retrieved parameters validity (already done inside getLastGeneratedReportParams)
+            // Check retrieved parameters validity
             if (!executionBased || !projectKey || !cycleKey || !UID) {
                 const invalidParamsError: string = "Retrieved parameters from previous test generation are invalid.";
                 logger.error(invalidParamsError);
@@ -1117,8 +1043,8 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             };
 
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipFromServer(
-                projectKey, // Use retrieved projectKey
-                cycleKey, // Use retrieved cycleKey
+                projectKey,
+                cycleKey,
                 folderNameOfInternalTestbenchFolder,
                 cycleStructureOptionsRequestParams
             );
@@ -1266,13 +1192,21 @@ export async function startTestGenerationForCycle(
         if (!workspaceLocation) {
             return null;
         }
+
+        const cycleUID = selectedCycleTreeItem.item?.uniqueID || selectedCycleTreeItem.item?.key || "";
+        if (!cycleUID) {
+            logger.warn(
+                `Could not determine UID or Key for cycle: ${selectedCycleTreeItem.label}. Using empty string.`
+            );
+        }
+
         await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
             context,
             selectedCycleTreeItem,
             selectedCycleTreeItem.label,
             projectKey,
             cycleKey,
-            undefined // UIDofTestThemeElementToGenerateTestsFor is undefined for a test cycle
+            cycleUID
         );
     } catch (error) {
         logger.error("Error in startTestGenerationForCycle:", (error as Error).message);
@@ -1336,7 +1270,6 @@ export async function showMultiSelectQuickPick(
     regularItemLabels: string[],
     placeholder: string = "Select items (use Select All/Clear All)"
 ): Promise<string[]> {
-    // Use a Promise to handle the asynchronous nature and resolution/rejection
     return new Promise<string[]>((resolve) => {
         let quickPick: vscode.QuickPick<vscode.QuickPickItem> | undefined;
         let isResolved: boolean = false; // Flag to prevent double resolution/disposal
@@ -1455,58 +1388,107 @@ export async function showMultiSelectQuickPick(
     });
 }
 
-import JSZip from "jszip";
-import { findProjectKeyOfProjectTreeItem } from "./projectManagementTreeView";
-
 /**
  * Reads a zip file and extracts unique quick pick items based on the file names.
  *
  * 1. Reads the zip file from disk.
  * 2. Loads the zip file using JSZip.
- * 3. Iterates over all file entries and checks for files with names starting with "iTB-TC-" and ending with ".json".
+ * 3. Iterates over all file entries and checks for files with names starting with "iTB-TC-" or "iTB-TT-" and ending with ".json".
  * 4. Uses a regular expression to capture the common prefix (e.g. "iTB-TC-325") from each file.
- * 5. Adds the common identifier to a set to ensure uniqueness.
+ * 5. If groupByPrefix is true, it attempts to read the corresponding "{prefix}.json" file to extract a 'name' property
+ * and formats the quick pick item label as "{prefix} (name)" or "{prefix}" if the name is not available.
+ * 6. Adds the common identifier (or full filename if not grouping) to a set to ensure uniqueness.
  *
  * @param {string} zipFilePath - The path to the zip file.
- * @param {boolean} groupByPrefix - (Optinal) When true, related JSON files sharing the same prefix (e.g., "iTB-TC-325")
- *                        are combined into a single quick pick item. When false, every file is
- *                        returned as an individual item. Default is true.
+ * @param {boolean} groupByPrefix - (Optional) When true, related JSON files sharing the same prefix (e.g., "iTB-TC-325")
+ * are combined into a single quick pick item, potentially including a name from the JSON.
+ * When false, every file is returned as an individual item label.
+ * Default is true.
  * @returns {Promise<string[]>} A promise that resolves with an array of unique quick pick item labels.
  */
 export async function getQuickPickItemsFromReportZipWithResults(
     zipFilePath: string,
     groupByPrefix: boolean = true
 ): Promise<string[]> {
-    logger.trace(`Reading JSON's from zip file: ${zipFilePath}`);
+    logger.trace(`Reading JSON's from zip file: ${zipFilePath}, groupByPrefix: ${groupByPrefix}`);
     try {
         // Read the zip file as binary data.
         const data: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
         // Load the zip file using JSZip.
         const zip = await JSZip.loadAsync(data);
+        // File names in the zip file
+        const filesInZip: string[] = Object.keys(zip.files);
 
         if (groupByPrefix) {
-            logger.trace("Grouping JSON files by prefix.");
-            const uniqueItems: Set<string> = new Set<string>();
-            Object.keys(zip.files).forEach((fileName) => {
+            logger.trace("Grouping JSON files by prefix and fetching names.");
+            const uniquePrefixes: Set<string> = new Set<string>();
+
+            // Collect all unique prefixes
+            for (const fileName of filesInZip) {
                 if (isCandidateJsonFile(fileName)) {
                     const prefix: string | null = extractPrefix(fileName);
                     if (prefix) {
-                        uniqueItems.add(prefix);
+                        uniquePrefixes.add(prefix);
                     }
                 }
-            });
-            logger.trace(`Unique items found: ${Array.from(uniqueItems)}`);
-            return Array.from(uniqueItems);
-        } else {
-            logger.trace("Returning all JSON files as individual items.");
-            const items: string[] = [];
-            Object.keys(zip.files).forEach((fileName) => {
-                if (isCandidateJsonFile(fileName)) {
-                    items.push(fileName);
+            }
+
+            const quickPickItemLabels: string[] = [];
+            // For each unique prefix, try to fetch its name and construct label for quick pick
+            for (const prefix of uniquePrefixes) {
+                let nameProperty: string | null = null;
+                // Attempt to find and read the specific file "{prefix}.json" (case-insensitive)
+                const specificJsonFileNameToFind: string = `${prefix}.json`.toLowerCase();
+                const actualFileNameInZip: string | undefined = filesInZip.find(
+                    (fileName) => fileName.toLowerCase() === specificJsonFileNameToFind
+                );
+
+                if (actualFileNameInZip) {
+                    const jsonFile: JSZip.JSZipObject | null = zip.file(actualFileNameInZip);
+                    if (jsonFile) {
+                        try {
+                            const jsonString: string = await jsonFile.async("string");
+                            const jsonData = JSON.parse(jsonString);
+                            nameProperty = jsonData?.name || null;
+                        } catch (error) {
+                            logger.warn(
+                                `Could not read or parse JSON for ${actualFileNameInZip} to get name property for prefix ${prefix}:`,
+                                error
+                            );
+                        }
+                    }
                 }
-            });
-            logger.trace(`Items found: ${items}`);
-            return items;
+
+                const displayLabel: string = nameProperty ? `${prefix} (${nameProperty})` : prefix;
+                quickPickItemLabels.push(displayLabel);
+            }
+
+            logger.trace(`Unique item labels for quick pick (grouped by prefix): ${quickPickItemLabels}`);
+            return quickPickItemLabels.sort(); // Sort for consistent order
+        } else {
+            logger.trace("Listing all candidate JSON files with their names if available.");
+            const quickPickItemLabelsIndividual: string[] = [];
+
+            for (const fileName of filesInZip) {
+                if (isCandidateJsonFile(fileName)) {
+                    let nameProperty: string | null = null;
+                    const jsonFile: JSZip.JSZipObject | null = zip.file(fileName);
+                    if (jsonFile) {
+                        try {
+                            const jsonString: string = await jsonFile.async("string");
+                            const jsonData = JSON.parse(jsonString);
+                            // Attempt to get the 'name' property as a top level property of the JSON structure
+                            nameProperty = jsonData?.name || null;
+                        } catch (e) {
+                            logger.warn(`Could not read or parse JSON for ${fileName} to get name property:`, e);
+                        }
+                    }
+                    const displayLabel: string = nameProperty ? `${fileName} (${nameProperty})` : fileName;
+                    quickPickItemLabelsIndividual.push(displayLabel);
+                }
+            }
+            logger.trace(`Item labels for quick pick (individual files): ${quickPickItemLabelsIndividual}`);
+            return quickPickItemLabelsIndividual.sort(); // Sort for consistent order
         }
     } catch (error) {
         logger.error("Error processing the zip file:", error);
@@ -1545,8 +1527,21 @@ export async function createNewReportWithSelectedItems(
             // Only consider JSON files with the matching prefix.
             if (isCandidateJsonFile(fileName)) {
                 if (groupByPrefix) {
-                    const prefix: string | null = extractPrefix(fileName);
-                    if (prefix && !selectedItems.includes(prefix)) {
+                    // Extract the actual prefixes from the selected display labels
+                    const selectedPrefixes: Set<string> = new Set(
+                        selectedItems.map((label) => {
+                            // Regex to extract prefix from "prefix (name)" or "prefix"
+                            const match: RegExpMatchArray | null = label.match(/^(itb-(?:tc|tt)-\d+)/i);
+                            // Fallback to the full label if no prefix pattern is matched (should ideally not happen for valid items)
+                            return match ? match[1] : label;
+                        })
+                    );
+
+                    const prefixFromFile: string | null = extractPrefix(fileName);
+                    if (prefixFromFile && !selectedPrefixes.has(prefixFromFile)) {
+                        logger.trace(
+                            `Removing ${fileName} as its prefix ${prefixFromFile} was not selected (selected were: ${Array.from(selectedPrefixes).join(", ")})`
+                        );
                         zip.remove(fileName);
                     }
                 } else {

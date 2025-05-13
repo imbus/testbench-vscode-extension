@@ -277,7 +277,7 @@
         "commands": [
             {
                 "command": "testbenchExtension.login",
-                "title": "Testbench: Login",
+                "title": "Login",
                 "icon": {
                     "light": "resources/icons/login.svg",
                     "dark": "resources/icons/login.svg"
@@ -285,7 +285,7 @@
             },
             {
                 "command": "testbenchExtension.logout",
-                "title": "Testbench: Logout",
+                "title": "Logout",
                 "icon": {
                     "light": "resources/icons/logout.svg",
                     "dark": "resources/icons/logout.svg"
@@ -293,19 +293,11 @@
             },
             {
                 "command": "testbenchExtension.clearInternalTestbenchFolder",
-                "title": "TestBench: Clear Temporary Files",
+                "title": "Clear Temporary Files",
                 "icon": {
                     "light": "resources/icons/clearInternalTestbenchFolder-light.svg",
                     "dark": "resources/icons/clearInternalTestbenchFolder-dark.svg"
                 }
-            },
-            {
-                "command": "testbenchExtension.toggleProjectManagementTreeViewVisibility",
-                "title": "TestBench: Toggle Project Tree View Visibility"
-            },
-            {
-                "command": "testbenchExtension.toggleTestThemeTreeViewVisibility",
-                "title": "TestBench: Toggle Test Theme Tree View Visibility"
             },
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
@@ -327,11 +319,11 @@
             },
             {
                 "command": "testbenchExtension.makeRoot",
-                "title": "TestBench: Make root"
+                "title": "Make root"
             },
             {
                 "command": "testbenchExtension.displayAllProjects",
-                "title": "TestBench: Display Projects",
+                "title": "Display Projects",
                 "icon": {
                     "light": "resources/icons/menu-light.svg",
                     "dark": "resources/icons/menu-dark.svg"
@@ -339,7 +331,7 @@
             },
             {
                 "command": "testbenchExtension.readRFTestResultsAndCreateReportWithResults",
-                "title": "TestBench: Read Test Results & Create Report With Results",
+                "title": "Read Test Results & Create Report With Results",
                 "icon": {
                     "light": "resources/icons/read-light.svg",
                     "dark": "resources/icons/read-dark.svg"
@@ -347,7 +339,7 @@
             },
             {
                 "command": "testbenchExtension.refreshProjectTreeView",
-                "title": "TestBench: Refresh Project Tree View",
+                "title": "Refresh Project Tree View",
                 "when": "view == projectManagementTree",
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
@@ -356,7 +348,7 @@
             },
             {
                 "command": "testbenchExtension.refreshTestThemeTreeView",
-                "title": "TestBench: Refresh Test Themes",
+                "title": "Refresh Test Themes",
                 "when": "view == testThemeTree",
                 "group": "navigation@1",
                 "icon": {
@@ -374,7 +366,7 @@
             },
             {
                 "command": "testbenchExtension.showExtensionSettings",
-                "title": "TestBench: Show Extension Settings",
+                "title": "Show Extension Settings",
                 "icon": {
                     "light": "resources/icons/settings-light.svg",
                     "dark": "resources/icons/settings-dark.svg"
@@ -382,7 +374,7 @@
             },
             {
                 "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                "title": "TestBench: Read Tests & Import Results To Testbench",
+                "title": "Read Tests & Import Results To Testbench",
                 "icon": {
                     "light": "resources/icons/upload-light.svg",
                     "dark": "resources/icons/upload-dark.svg"
@@ -390,7 +382,7 @@
             },
             {
                 "command": "testbenchExtension.importTestResultsToTestbench",
-                "title": "TestBench: Import Test Results To Testbench",
+                "title": "Import Test Results To Testbench",
                 "icon": {
                     "light": "resources/icons/upload-light.svg",
                     "dark": "resources/icons/upload-dark.svg"
@@ -468,7 +460,7 @@
                 {
                     "command": "testbenchExtension.login",
                     "group": "navigation@1",
-                    "title": "Testbench: Login",
+                    "title": "Login",
                     "when": "!testbenchExtension.connectionActive && (view == projectManagementTree)",
                     "icon": {
                         "light": "resources/icons/login.svg",
@@ -478,7 +470,7 @@
                 {
                     "command": "testbenchExtension.logout",
                     "group": "navigation@2",
-                    "title": "Testbench: Logout",
+                    "title": "Logout",
                     "when": "testbenchExtension.connectionActive && (view == projectManagementTree)",
                     "icon": {
                         "light": "resources/icons/logout.svg",
