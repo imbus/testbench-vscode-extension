@@ -1116,15 +1116,9 @@ export async function loginToNewPlayServerAndInitSessionToken(
 
                     logger.debug(loginSuccessfulMessage);
                     vscode.window.showInformationMessage(loginSuccessfulMessage);
-                    // Upon successful login, update the login webview content and hide it.
-                    const lwvProvider = getLoginWebViewProvider();
-                    if (lwvProvider) {
-                        await lwvProvider.updateWebviewHTMLContent();
-                    } else {
-                        logger.error("loginWebViewProvider is null. Cannot update webview content.");
-                    }
                     return newConnection;
                 } else {
+                    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                     const loginFailedMessage: string = "Login failed. Unexpected status code: " + loginResponse.status;
                     logger.error(loginFailedMessage);
                     vscode.window.showInformationMessage(loginFailedMessage);
@@ -1141,6 +1135,7 @@ export async function loginToNewPlayServerAndInitSessionToken(
             logger.error("Error during login");
             vscode.window.showInformationMessage("Error during login.");
         }
+        await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
         return null;
     }
 }
