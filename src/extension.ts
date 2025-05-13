@@ -469,7 +469,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             if (ttProvider) {
                 cycleKey = ttProvider.getCurrentCycleKey();
                 if (cycleKey) {
-                    logger.info(`Using cycle key '${cycleKey}' from TestThemeTreeDataProvider for test generation.`);
+                    logger.trace(`Using cycle key '${cycleKey}' from TestThemeTreeDataProvider for test generation.`);
                 } else {
                     logger.warn(
                         "TestThemeTreeDataProvider available but cycle key not set. Falling back to parent traversal."
@@ -543,23 +543,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     });
 
     // --- Command: Read And Import Test Results To Testbench ---
-    // A command that combines the read and import test results commands.
+    // A command that combines the reading of robotframework test results, creating a report file with results, and importing test results to testbench server.
     registerSafeCommand(context, allExtensionCommands.readAndImportTestResultsToTestbench, async () => {
         logger.debug(`Command Called: ${allExtensionCommands.readAndImportTestResultsToTestbench}`);
         if (!connection) {
             const noConnectionErrorMessage: string = "No connection available. Cannot import report.";
             vscode.window.showErrorMessage(noConnectionErrorMessage);
             logger.error(noConnectionErrorMessage);
-            return null;
-        }
-
-        const pmProvider = getProjectManagementTreeDataProvider();
-
-        if (!pmProvider) {
-            const missingProjectProviderErrorMessage: string =
-                "Project management tree provider is not initialized. Cannot import report.";
-            vscode.window.showErrorMessage(missingProjectProviderErrorMessage);
-            logger.error(missingProjectProviderErrorMessage);
             return null;
         }
 

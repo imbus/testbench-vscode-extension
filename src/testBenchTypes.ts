@@ -68,11 +68,20 @@ export const defaultTestbench2robotframeworkConfig: Testbench2robotframeworkConf
 
 // Store the last successfully generated report parameters for test generation to be able to fetch the report again for read command
 export interface LastGeneratedReportParams {
-    executionBased: boolean | undefined;
-    projectKey: string | undefined;
-    cycleKey: string | undefined;
-    UID: string | undefined;
-    timestamp: number | undefined; // Timestamp of the last successful report generation for potential cleanup
+    UID: string;
+    projectKey: string;
+    cycleKey: string;
+    executionBased: boolean;
+    timestamp: number;
+    alreadyImported: boolean;
+}
+
+export interface LastImportedReportDetails {
+    outputXmlPath: string; // Path to the Robot Framework output.xml
+    baseReportPath: string; // Path to the base report (without results)
+    targetProjectKey: string;
+    targetCycleKey: string;
+    timestamp: number;
 }
 
 export interface CycleStructure {
