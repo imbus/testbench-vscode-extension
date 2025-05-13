@@ -34,6 +34,12 @@
     ],
     "main": "./dist/extension.js",
     "contributes": {
+        "authentication": [
+            {
+                "label": "TestBench",
+                "id": "testbench-auth"
+            }
+        ],
         "configuration": [
             {
                 "title": "Login",
@@ -277,11 +283,15 @@
         "commands": [
             {
                 "command": "testbenchExtension.login",
-                "title": "Login",
+                "title": "Login / Switch Profile",
                 "icon": {
                     "light": "resources/icons/login.svg",
                     "dark": "resources/icons/login.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.showProfiles",
+                "title": "TestBench: Manage Profiles"
             },
             {
                 "command": "testbenchExtension.logout",
@@ -290,6 +300,26 @@
                     "light": "resources/icons/logout.svg",
                     "dark": "resources/icons/logout.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.manageProfiles",
+                "title": "TestBench: Manage Connection Profiles",
+                "category": "Profiles"
+            },
+            {
+                "command": "testbenchExtension.selectActiveProfile",
+                "title": "TestBench: Select Active Connection Profile",
+                "category": "Profiles"
+            },
+            {
+                "command": "testbenchExtension.addNewProfile",
+                "title": "TestBench: Add New Connection Profile",
+                "category": "Profiles"
+            },
+            {
+                "command": "testbenchExtension.deleteProfile",
+                "title": "TestBench: Delete Connection Profile",
+                "category": "Profiles"
             },
             {
                 "command": "testbenchExtension.clearInternalTestbenchFolder",
@@ -631,6 +661,7 @@
         "@types/mocha": "^10.0.9",
         "@types/node": "^22.7.5",
         "@types/sinon": "^17.0.3",
+        "@types/uuid": "^10.0.0",
         "@types/vscode": "^1.95.0",
         "@typescript-eslint/eslint-plugin": "^8.9.0",
         "@typescript-eslint/parser": "^8.9.0",
@@ -660,6 +691,7 @@
         "flatted": "^3.3.1",
         "jszip": "^3.10.1",
         "regex-translator": "^0.2.8",
+        "uuid": "^11.1.0",
         "vscode-languageclient": "^9.0.1"
     },
     "extensionDependencies": [

@@ -9,6 +9,19 @@
  * type definitions for better code reusability, consistency, and maintainability.
  */
 
+export interface TestBenchProfile {
+    id: string; // Unique identifier for the profile
+    label: string; // User-friendly name for the profile (e.g., "Dev Server")
+    serverName: string;
+    portNumber: number;
+    username: string;
+}
+
+// Internal session representation
+export interface ActiveTestBenchSessionInfo extends TestBenchProfile {
+    sessionToken: string; // The TestBench API session token
+}
+
 export interface Testbench2robotframeworkConfiguration {
     "library-root": string[];
     "resource-root": string[];

@@ -29,7 +29,7 @@ import {
     TreeItemContextValues,
     folderNameOfInternalTestbenchFolder
 } from "./constants";
-import { importReportWithResultsToTestbench } from "./testBenchConnection";
+import { importReportWithResultsToTestbench, withRetry } from "./testBenchConnection";
 
 /**
  * Prompts the user to select the report export method in quick pick format (Execution based or Specification based).
@@ -338,24 +338,45 @@ export async function getJobId(
     const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
     logger.debug(`Fetching job ID from URL: ${getJobIDUrl}`);
     try {
-        const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await axios.post(
-            getJobIDUrl,
-            requestParams,
-            {
-                headers: {
-                    accept: "application/json",
-                    Authorization: connection.getSessionToken(),
-                    "Content-Type": "application/json"
+        // Use the apiClient from the global connection object.
+        // It's already configured with the baseURL and Authorization header.
+        const apiClient = connection.getApiClient();
+        const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
+            () =>
+                apiClient.post<testBenchTypes.JobIdResponse>(getJobIDUrl, requestParams, {
+                    headers: {
+                        accept: "application/json",
+                        "Content-Type": "application/json"
+                    }
+                }),
+            3, // maxRetries
+            2000, // delayMs
+            (error: { response: { status: number } }) => {
+                // shouldRetry predicate
+                if (axios.isAxiosError(error) && error.response) {
+                    const nonRetryableStatusCodes = [400, 401, 403, 404, 422]; // Common non-retryable client errors
+                    if (nonRetryableStatusCodes.includes(error.response.status)) {
+                        logger.warn(
+                            `[ReportHandler] Non-retryable error ${error.response.status} for getJobId. Not retrying.`
+                        );
+                        return false;
+                    }
                 }
+                return true; // Retry on other errors (e.g., network issues, 5xx server errors)
             }
         );
-        logger.trace("Job ID response:", jobIdResponse.data);
+
+        logger.trace("[ReportHandler] Job ID response status:", jobIdResponse.status);
+        logger.trace("[ReportHandler] Job ID response data:", jobIdResponse.data);
+
         if (jobIdResponse.status !== 200) {
             logger.error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
+
             return null;
         }
+
         return jobIdResponse.data.jobID;
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Error fetching job ID:", error);
         return null;
     }
@@ -380,12 +401,31 @@ export async function getJobStatus(
     }
     const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
     logger.debug(`Checking job status at: ${getJobStatusUrl}`);
-    const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await axios.get(getJobStatusUrl, {
-        headers: {
-            accept: "application/vnd.testbench+json",
-            Authorization: connection.getSessionToken()
+
+    const apiClient = connection.getApiClient();
+    const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
+        () =>
+            apiClient.get(getJobStatusUrl, {
+                headers: {
+                    accept: "application/vnd.testbench+json"
+                }
+            }),
+        3, // max retries
+        2000, // delay in ms between retries
+        (error: { response: { status: number } }) => {
+            if (axios.isAxiosError(error) && error.response) {
+                const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
+                if (nonRetryableStatusCodes.includes(error.response.status)) {
+                    logger.warn(
+                        `[ReportHandler] Non-retryable error ${error.response.status} for getJobStatus. Not retrying.`
+                    );
+                    return false;
+                }
+            }
+            return true;
         }
-    });
+    );
+
     logger.trace("Job status response:", jobStatusResponse.data);
     if (jobStatusResponse.status !== 200) {
         logger.error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
@@ -424,13 +464,32 @@ export async function downloadReport(
         const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
         logger.debug(`Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
-        const downloadZipResponse: AxiosResponse<any> = await axios.get(downloadReportUrl, {
-            responseType: "arraybuffer", // Expecting binary data
-            headers: {
-                accept: "application/vnd.testbench+json",
-                Authorization: connection.getSessionToken()
+        const apiClient = connection.getApiClient();
+        const downloadZipResponse: AxiosResponse<any> = await withRetry(
+            () =>
+                apiClient.get(downloadReportUrl, {
+                    responseType: "arraybuffer", // Expecting binary data
+                    headers: {
+                        accept: "application/vnd.testbench+json"
+                    }
+                }),
+            3, // maxRetries
+            2000, // delayMs
+            (error: { response: { status: number } }) => {
+                const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
+                if (
+                    axios.isAxiosError(error) &&
+                    error.response &&
+                    nonRetryableStatusCodes.includes(error.response.status)
+                ) {
+                    logger.warn(
+                        `[ReportHandler] Non-retryable error ${error.response.status} during report download. Not retrying.`
+                    );
+                    return false;
+                }
+                return true;
             }
-        });
+        );
 
         if (downloadZipResponse.status !== 200) {
             const downloadReportErrorMessage: string = `Failed to download report, status code: ${downloadZipResponse.status}`;
