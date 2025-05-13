@@ -5,20 +5,15 @@ import requests  # type: ignore
 from testbench2robotframework.cli import generate_tests, fetch_results
 from lsprotocol.types import (
     INITIALIZE,
-    TEXT_DOCUMENT_CODE_ACTION,
     TEXT_DOCUMENT_CODE_LENS,
     WORKSPACE_APPLY_EDIT,
     AnnotatedTextEdit,
     ApplyWorkspaceEditParams,
     ChangeAnnotation,
     ChangeAnnotationIdentifier,
-    CodeAction,
-    CodeActionKind,
-    CodeActionParams,
     CodeLens,
     CodeLensParams,
     Command,
-    ExecuteCommandParams,
     InitializeParams,
     InitializeResult,
     OptionalVersionedTextDocumentIdentifier,
@@ -30,7 +25,7 @@ from lsprotocol.types import (
     WorkspaceEdit,
 )
 from pygls.server import LanguageServer
-from robot.api.parsing import Documentation, Keyword, KeywordSection, SectionHeader, Token
+from robot.api.parsing import KeywordSection, SectionHeader, Token
 
 from testbench_ls import __version__
 import pathlib
