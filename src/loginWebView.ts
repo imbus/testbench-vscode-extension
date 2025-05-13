@@ -450,7 +450,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                  const errorDiv = document.getElementById("error-message");
                  if (errorDiv && message.message) {
                      errorDiv.textContent = message.message;
-                     errorDiv.style.display = "block"; // Make it visible
+                     errorDiv.style.display = "inline-block";
                  }
             }
         });
