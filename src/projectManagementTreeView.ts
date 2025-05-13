@@ -618,14 +618,14 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             this.customRootContextValue = treeItem.contextValue;
             // Store a copy of the item's data.
             this.customRootJsonData = { ...treeItem.item }; // Shallow copy
-            logger.info(
+            logger.debug(
                 `Item "${typeof treeItem.label === "string" ? treeItem.label : treeItem.item.name}" (Key: ${this.customRootKey}) is now set as custom root.`
             );
         } else {
             this.customRootKey = null;
             this.customRootContextValue = null;
             this.customRootJsonData = null;
-            logger.info("Custom root cleared.");
+            logger.debug("Custom root cleared.");
         }
         this._onDidChangeTreeData.fire(undefined); // Refresh the tree to show the new root or all projects
     }

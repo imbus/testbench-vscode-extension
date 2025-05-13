@@ -1433,7 +1433,7 @@ export async function selectReportWithResultsAndImportToTestbench(
  * @param {string} zipFilePath - The file path of the zip file.
  * @returns {Promise<ExtractedData>} An object containing uniqueID, projectKey, and cycleNameOfProject.
  */
-async function extractDataFromReport(zipFilePath: string): Promise<{
+export async function extractDataFromReport(zipFilePath: string): Promise<{
     uniqueID: string | null;
     projectKey: string | null;
     cycleNameOfProject: string | null;

@@ -76,34 +76,85 @@ export async function promptForReportGenerationMethodAndCheckIfExecBasedChosen()
  * @param {string} projectKey The project key used.
  * @param {string} cycleKey The cycle key used.
  * @param {boolean} executionBased Whether the report was execution-based.
+ * @param {boolean} alreadyImported Whether the report was already imported.
  */
 async function saveLastGeneratedReportParams(
-    context: vscode.ExtensionContext, // Added context parameter
+    context: vscode.ExtensionContext,
     UID: string,
     projectKey: string,
     cycleKey: string,
-    executionBased: boolean
+    executionBased: boolean,
+    alreadyImported: boolean
 ): Promise<void> {
-    // Construct the object to save
     const paramsToSave: testBenchTypes.LastGeneratedReportParams = {
         UID,
         projectKey,
         cycleKey,
         executionBased,
         // Timestamp for context or potential cleanup
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        alreadyImported
     };
 
     try {
         // Data stored here persists across VS Code sessions for this specific workspace
         await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, paramsToSave);
         logger.debug(
-            `Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionBased=${executionBased}.`
+            `Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionBased=${executionBased}, alreadyImported=${alreadyImported}.`
         );
     } catch (error) {
         logger.error("Failed to save last generated report params to workspace state:", error);
-        // Optionally show an error message, though this is less critical than retrieval failure
-        // vscode.window.showErrorMessage("Failed to save report generation context.");
+    }
+}
+
+/**
+ * Updates only the alreadyImported flag in the last generated report parameters stored in workspaceState.
+ *
+ * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.
+ * @param {boolean} alreadyImported The new alreadyImported flag value.
+ */
+async function updateAlreadyImportedFlagOfLastImportedReport(
+    context: vscode.ExtensionContext,
+    alreadyImported: boolean
+): Promise<void> {
+    try {
+        const existingParams = context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(
+            StorageKeys.LAST_GENERATED_PARAMS
+        );
+        if (!existingParams) {
+            logger.warn(
+                "No last generated report parameters found in workspace state. Cannot update alreadyImported flag."
+            );
+            return;
+        }
+        existingParams.alreadyImported = alreadyImported;
+        await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, existingParams);
+        logger.debug(`Updated alreadyImported flag to ${alreadyImported} in workspace state.`);
+    } catch (error) {
+        logger.error("Failed to update alreadyImported flag in workspace state:", error);
+    }
+}
+
+/**
+ * Saves the last imported report details to workspace storage.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {testBenchTypes.LastImportedReportDetails} details The report details to save.
+ */
+async function saveLastImportedReportDetails(
+    context: vscode.ExtensionContext,
+    details: testBenchTypes.LastImportedReportDetails
+): Promise<void> {
+    try {
+        if (!details.outputXmlPath || !details.baseReportPath || !details.targetProjectKey || !details.targetCycleKey) {
+            logger.error("Attempted to save incomplete LastImportedReportDetails. Aborting save.", details);
+            return;
+        }
+        await context.workspaceState.update(StorageKeys.LAST_IMPORTED_REPORT_DETAILS, details);
+        logger.debug(
+            `Saved last imported report details: outputXml='${details.outputXmlPath}', baseReport='${details.baseReportPath}', targetProject='${details.targetProjectKey}', targetCycle='${details.targetCycleKey}'.`
+        );
+    } catch (error) {
+        logger.error("Failed to save last imported report details to workspace state:", error);
     }
 }
 
@@ -114,20 +165,20 @@ async function saveLastGeneratedReportParams(
  * @returns {testBenchTypes.LastGeneratedReportParams | undefined} The retrieved parameters or undefined if not found/invalid.
  */
 function getLastGeneratedReportParams(
-    context: vscode.ExtensionContext // Added context parameter
+    context: vscode.ExtensionContext
 ): testBenchTypes.LastGeneratedReportParams | undefined {
     try {
-        // Retrieve the data from workspaceState using the key
+        // Retrieve the data from workspaceState
         const storedParams: testBenchTypes.LastGeneratedReportParams | undefined =
             context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(StorageKeys.LAST_GENERATED_PARAMS);
 
-        // Basic validation to ensure the retrieved object looks correct
         if (
             storedParams &&
             storedParams.UID &&
             storedParams.projectKey &&
             storedParams.cycleKey &&
-            storedParams.executionBased !== undefined
+            storedParams.executionBased !== undefined &&
+            storedParams.alreadyImported !== undefined
         ) {
             logger.debug("Retrieved last generated report params from workspace state:", storedParams);
             return storedParams;
@@ -782,8 +833,8 @@ async function runRobotFrameworkTestGenerationProcess(
         return null;
     }
 
-    // Update the last generated report parameters workspaceState
-    await saveLastGeneratedReportParams(context, elementUID, projectKey, cycleKey, executionBased);
+    // Update the last generated report parameters workspaceState to be able to import the generated tests later
+    await saveLastGeneratedReportParams(context, elementUID, projectKey, cycleKey, executionBased, false);
 
     vscode.window.showInformationMessage("Robot Framework test generation successful.");
     logger.debug("Test generation successful.");
@@ -974,23 +1025,24 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
    ============================================================================= */
 
 /**
- * Reads test results using testbench2robotframework library and creates a report zip file.
+ * Reads test results using testbench2robotframework library and creates a report zip file with results.
  *
  * @param {vscode.ExtensionContext} context The extension context.
  * @param {vscode.Progress} currentProgress Optional progress reporter.
- * @returns {Promise<string | undefined>} The absolute path of the created report zip file, or undefined on error.
- * Undefined is returned (and not null) due to the usage of VSCode progress bar.
+ * @returns {Promise<{createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string} | undefined>}
+ * An object with paths, or undefined on error.
  */
 export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
-): Promise<string | undefined> {
+): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
         logger.debug("Started fetching test results and creating report with results.");
-
         const executeWithProgress = async (
             progress: vscode.Progress<{ message?: string; increment?: number }>
-        ): Promise<string | undefined> => {
+        ): Promise<
+            { createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined
+        > => {
             const reportIncrement: number = currentProgress ? 6 : 20;
             const reportProgress = (msg: string, inc: number) => progress.report({ message: msg, increment: inc });
 
@@ -999,19 +1051,23 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             const reportWithResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;
             const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
             if (!workspaceLocation) {
-                logger.error("Workspace location not configured.");
+                logger.error("Workspace location not configured for report creation.");
+                vscode.window.showErrorMessage("Workspace location not configured. Cannot create report.");
                 return undefined;
             }
             const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
                 workspaceLocation,
                 folderNameOfInternalTestbenchFolder
             );
+
             const outputXMLPath: string | null = await chooseRobotOutputXMLFileIfNotSet(workspaceLocation);
             if (!outputXMLPath) {
                 return undefined;
             }
-            logger.debug(`Report zip file will be named ${reportWithResultsZipName}`);
-            reportProgress("Fetching report.", reportIncrement);
+            logger.trace(`Using output XML file: ${outputXMLPath}`);
+
+            logger.debug(`Generated report zip file will be named ${reportWithResultsZipName}`);
+            reportProgress("Fetching base report structure.", reportIncrement);
 
             // TODO: Currently we are using the last generated report parameters to create the report with results,
             // these are used to fetch the report without results from the server.
@@ -1019,19 +1075,25 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             // Retrieve parameters from workspace state instead of global variable
             const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
                 getLastGeneratedReportParams(context);
-
             if (!retrievedParams) {
                 const missingParamsError: string =
-                    "Could not find parameters from previous test generation. Please generate tests first in this workspace.";
+                    "Could not find parameters from previous test generation required for base report. Please generate tests first in this workspace.";
                 logger.error(missingParamsError);
                 vscode.window.showErrorMessage(missingParamsError);
                 return undefined;
             }
-            const { executionBased, projectKey, cycleKey, UID } = retrievedParams;
 
-            // Check retrieved parameters validity
-            if (!executionBased || !projectKey || !cycleKey || !UID) {
-                const invalidParamsError: string = "Retrieved parameters from previous test generation are invalid.";
+            const { executionBased, projectKey, cycleKey, UID, alreadyImported } = retrievedParams;
+            if (
+                executionBased === undefined ||
+                !projectKey ||
+                !cycleKey ||
+                UID === undefined ||
+                alreadyImported === undefined
+            ) {
+                // UID can be empty string
+                const invalidParamsError: string =
+                    "Retrieved parameters from previous test generation are incomplete/invalid for fetching base report.";
                 logger.error(invalidParamsError);
                 vscode.window.showErrorMessage(invalidParamsError);
                 return undefined;
@@ -1046,29 +1108,35 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 projectKey,
                 cycleKey,
                 folderNameOfInternalTestbenchFolder,
-                cycleStructureOptionsRequestParams
+                cycleStructureOptionsRequestParams,
+                progress
             );
 
             // If fetching the report failed, we need the user to select it manually
-            const finalReportPath: string | null =
+            const finalBaseReportPath: string | null =
                 downloadedReportWithoutResultsZip ??
                 (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
 
-            if (!finalReportPath) {
-                logger.error("Report without results could not be obtained.");
-                vscode.window.showErrorMessage("Could not obtain the necessary report file (without results).");
+            if (!finalBaseReportPath) {
+                logger.error("Base report (without results) could not be obtained.");
+                vscode.window.showErrorMessage(
+                    "Could not obtain the necessary base report file (without results). Process aborted."
+                );
                 return undefined;
             }
+            logger.trace(`Using base report file: ${finalBaseReportPath}`);
 
-            reportProgress("Working on report.", reportIncrement / 2);
+            reportProgress("Merging results with base report.", reportIncrement / 2);
             const reportWithResultsZipFullPath: string = path.join(
                 testbenchWorkingDirectoryPathInsideWorkspace,
                 reportWithResultsZipName
             );
+
+            // Create the report with results
             const isTb2RobotFetchResultsExecutionSuccessful: boolean =
                 await testbench2robotframeworkLib.tb2robotLib.startTb2robotFetchResults(
                     outputXMLPath,
-                    finalReportPath,
+                    finalBaseReportPath,
                     reportWithResultsZipFullPath
                 );
 
@@ -1079,16 +1147,19 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const testResultsImportError: string =
-                    "Fetching test results failed. Please check the output.xml file.";
+                    "Merging test results with base report failed. Please check the output.xml and base report.";
                 logger.error(testResultsImportError);
                 vscode.window.showErrorMessage(testResultsImportError);
                 return undefined;
             }
-            const successMessage: string = `Report with results created at: ${reportWithResultsZipFullPath}`;
+            const successMessage: string = `Report with results created: ${reportWithResultsZipFullPath}`;
             logger.debug(successMessage);
-            // Since the created report file might be deleted after the import to TestBench, dont display a message
-            // vscode.window.showInformationMessage(successMessage);
-            return reportWithResultsZipFullPath;
+
+            return {
+                createdReportPath: reportWithResultsZipFullPath,
+                outputXmlPathUsed: outputXMLPath,
+                baseReportPathUsed: finalBaseReportPath
+            };
         };
 
         if (currentProgress) {
@@ -1097,16 +1168,16 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             return await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: "Reading Test Results and Creating Report",
+                    title: "Creating Report with Test Results",
                     cancellable: true
                 },
                 executeWithProgress
             );
         }
     } catch (error) {
-        const fetchResultsErrorMessage: string = `An error occurred while fetching test results: ${(error as Error).message}`;
+        const fetchResultsErrorMessage: string = `An error occurred while creating report with results: ${error instanceof Error ? error.message : String(error)}`;
         vscode.window.showErrorMessage(fetchResultsErrorMessage);
-        logger.error(`An error occurred while fetching test results: ${(error as Error).message}`);
+        logger.error(fetchResultsErrorMessage, error);
         return undefined;
     }
 }
@@ -1119,37 +1190,143 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     context: vscode.ExtensionContext
 ): Promise<void | null> {
+    logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
             title: "Reading Test Results and Creating Report",
             cancellable: true
         },
-        async (progress) => {
-            progress.report({ message: "Reading Test Results and Creating Report.", increment: 25 });
+        async (progress, cancellationToken) => {
+            try {
+                if (cancellationToken.isCancellationRequested) {
+                    logger.trace("User cancelled the import process at the beginning.");
+                    vscode.window.showInformationMessage("Import process cancelled.");
+                    return null;
+                }
 
-            // Get the parameters needed for import
-            const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
-                getLastGeneratedReportParams(context);
-            if (!retrievedParams || !retrievedParams.projectKey || !retrievedParams.cycleKey) {
-                logger.error("Missing or invalid last generated params needed for import.");
-                vscode.window.showErrorMessage(
-                    "Cannot import results: context information missing. Please generate tests first."
+                progress.report({ message: "Step 1/4: Retrieving parameters for import target...", increment: 10 });
+                logger.trace("Retrieving parameters for TestBench import target (Project/Cycle).");
+                const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
+                    getLastGeneratedReportParams(context);
+
+                if (
+                    !retrievedParams ||
+                    !retrievedParams.projectKey ||
+                    !retrievedParams.cycleKey ||
+                    retrievedParams.alreadyImported === undefined
+                ) {
+                    const errorMsg: string =
+                        "Cannot determine import target: Context information (project/cycle from last test generation) is missing. Please generate tests first in this workspace.";
+                    logger.error(errorMsg);
+                    vscode.window.showErrorMessage(errorMsg);
+                    return null;
+                }
+
+                const {
+                    projectKey: targetProjectKey,
+                    cycleKey: targetCycleKey,
+                    alreadyImported: alreadyImported
+                } = retrievedParams;
+                logger.trace(
+                    `Target for TestBench import: Project Key '${targetProjectKey}', Cycle Key '${targetCycleKey}', already imported: ${alreadyImported}'.`
                 );
-                return null;
-            }
-            const { projectKey, cycleKey } = retrievedParams;
 
-            const pathOfCreatedReportWithResults: string | undefined =
-                await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(context, progress);
-            if (!pathOfCreatedReportWithResults) {
-                logger.error("Error creating report with results.");
+                if (alreadyImported) {
+                    logger.warn(
+                        `Attempting to re-import same report. targetProject='${targetProjectKey}', targetCycle='${targetCycleKey}'.`
+                    );
+                    const userChoice = await vscode.window.showWarningMessage(
+                        `You are about to import results to Project ${targetProjectKey}, Cycle ${targetCycleKey} again. This seems to be the same operation as before. Do you want to proceed?`,
+                        { modal: true },
+                        "Yes, Import Again",
+                        "Cancel"
+                    );
+                    if (userChoice !== "Yes, Import Again") {
+                        logger.trace("User cancelled re-import of the same data to the same target.");
+                        return null;
+                    }
+                    logger.trace("User chose to proceed with re-importing.");
+                }
+
+                if (cancellationToken.isCancellationRequested) {
+                    logger.trace("Cancelled after param retrieval.");
+                    return null;
+                }
+
+                progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });
+                logger.trace(
+                    "Calling fetchTestResultsAndCreateReportWithResultsWithTb2Robot to get report sources and created path."
+                );
+
+                const reportCreationDetails = await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
+                    context,
+                    progress
+                );
+
+                if (cancellationToken.isCancellationRequested) {
+                    logger.trace("Cancelled after report creation attempt.");
+                    return null;
+                }
+
+                if (!reportCreationDetails || !reportCreationDetails.createdReportPath) {
+                    logger.error("Failed to create report with results, or process was cancelled. Aborting import.");
+                    return null;
+                }
+                const { createdReportPath, outputXmlPathUsed, baseReportPathUsed } = reportCreationDetails;
+                logger.trace(
+                    `Successfully created report with results: ${createdReportPath}. Based on output.xml: '${outputXmlPathUsed}' and base report: '${baseReportPathUsed}'.`
+                );
+
+                const reportFileNameForDisplay = path.basename(createdReportPath);
+
+                if (cancellationToken.isCancellationRequested) {
+                    logger.trace("Cancelled after re-import check.");
+                    return null;
+                }
+
+                progress.report({ message: "Step 3/4: Importing to TestBench...", increment: 30 });
+
+                const importTargetMessage: string = `Importing report '${reportFileNameForDisplay}' to TestBench Project: ${targetProjectKey}, Cycle: ${targetCycleKey}.`;
+                logger.trace(importTargetMessage);
+                vscode.window.showInformationMessage(importTargetMessage);
+
+                await importReportWithResultsToTestbench(
+                    connection!,
+                    targetProjectKey,
+                    targetCycleKey,
+                    createdReportPath
+                );
+
+                // Save details of this successful import (using sources and target)
+                // Note: This is not needed anymore but can be used for logging
+                await saveLastImportedReportDetails(context, {
+                    outputXmlPath: outputXmlPathUsed,
+                    baseReportPath: baseReportPathUsed,
+                    targetProjectKey: targetProjectKey,
+                    targetCycleKey: targetCycleKey,
+                    timestamp: Date.now()
+                });
+
+                if (cancellationToken.isCancellationRequested) {
+                    logger.trace("Cancelled after import to TestBench.");
+                    return null;
+                }
+
+                progress.report({ message: "Step 4/4: Cleaning up temporary files...", increment: 30 });
+                logger.debug(`Cleaning up generated report file: ${createdReportPath}`);
+                await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
+
+                // Set already imported to true in the last generated report parameters to prevent re-import
+                await updateAlreadyImportedFlagOfLastImportedReport(context, true);
+
+                logger.trace("Process Completed: Read, Create, and Import Test Results to Testbench.");
+            } catch (error) {
+                const errorMsg: string = `An error occurred during the main import process: ${error instanceof Error ? error.message : String(error)}`;
+                logger.error(errorMsg, error);
+                vscode.window.showErrorMessage(errorMsg);
                 return null;
             }
-            progress.report({ message: "Importing report to TestBench.", increment: 25 });
-            await importReportWithResultsToTestbench(connection!, projectKey, cycleKey, pathOfCreatedReportWithResults);
-            progress.report({ message: "Cleaning up.", increment: 25 });
-            await cleanUpReportFileIfConfiguredInSettings(pathOfCreatedReportWithResults);
         }
     );
 }
