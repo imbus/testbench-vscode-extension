@@ -566,6 +566,16 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             // Ensure clean state on error too
             await handleTestBenchSessionChange(context);
         }
+        await connection.logoutUser();
+
+        // Clear provider states on logout
+        getProjectManagementTreeDataProvider()?.clearTree();
+        getTestThemeTreeDataProvider()?.clearTree();
+        getTestElementsTreeDataProvider()?.refresh([]); // Clear with empty data
+        // Login web view is displayed automatically after context value change
+
+        // Stop the language server if it is running
+        await client?.stop();
     });
 
     // --- Command: Handle Cycle Click ---
@@ -922,6 +932,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             const pmProvider = getProjectManagementTreeDataProvider();
             const teProvider = getTestElementsTreeDataProvider();
+            await client?.stop();
             // Check if the command is executed for a TOV element.
             if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
@@ -934,10 +945,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         await projectManagementTreeView?.hideProjectManagementTreeView();
                         await displayTestElementsTreeView();
                         const projectAndTovNameObj = getProjectAndTovNamesFromSelection(treeItem);
-
                         if (projectAndTovNameObj) {
                             const { projectName, tovName } = projectAndTovNameObj;
-
                             if (projectName && tovName) {
                                 await initializeLanguageServer(projectName, tovName);
                             }
@@ -1357,58 +1366,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
 
-    // Register the login webview provider.
-    loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(loginWebView.LoginWebViewProvider.viewId, loginWebViewProvider, {
-            webviewOptions: { retainContextWhenHidden: true }
-        })
-    );
-
-    // Register all extension commands.
-    await registerExtensionCommands(context);
-
-    // Attempt to restore session on activation
-    // Try to get an existing session without creating one.
-    logger.trace("[Extension] Attempting to silently restore existing TestBench session on activation...");
-    try {
-        const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-            createIfNone: false, // Dont trigger createSession yet
-            silent: true // Try to get silently
-        });
-        if (session) {
-            logger.info("[Extension] Found existing VS Code AuthenticationSession for TestBench during initial check.");
-            await handleTestBenchSessionChange(context, session);
-        } else {
-            logger.info("[Extension] No existing TestBench session found during initial check.");
-            // If auto-login is enabled, it will be triggered next.
-            // If not, user needs to login manually.
-            // Ensure UI reflects logged-out state if no session and no auto-login.
-            if (!getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-                await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-                getLoginWebViewProvider()?.updateWebviewHTMLContent();
-            }
-        }
-    } catch (error) {
-        logger.warn("[Extension] Error trying to get initial session silently:", error);
-        await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-    }
-
-    // Trigger Automatic Login Command if configured
-    // This will happen *after* the initial silent check for an existing session.
-    if (getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-        logger.info("[Extension] Auto-login configured. Triggering automatic login command.");
-        // Dont use await, to block the login webview display, let it run in background
-        vscode.commands
-            .executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation)
-            .then(undefined, (err) => {
-                logger.error("[Extension] Error triggering auto-login command during activation:", err);
-            });
-    } else {
-        logger.info("[Extension] Auto-login is disabled. Skipping automatic login command.");
-    }
-
-    logger.info("Extension activated successfully.");
+    // Execute automatic login if the setting is enabled.
+    await vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
 }
 
 /**
@@ -1417,16 +1376,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 export async function deactivate(): Promise<void> {
     try {
         // Gracefully log out the user when the extension is deactivated.
-        if (connection) {
-            logger.info("[Extension] Performing server logout on deactivation.");
-            await connection.logoutUserOnServer();
-            setConnection(null);
-        }
-        // Stop the language server
-        if (client) {
-            await client?.stop();
-            logger.info("[Extension] Language server stopped.");
-        }
+        await connection?.logoutUser();
+        // Stop the language server if it is running
+        await client?.stop();
         logger.info("Extension deactivated.");
     } catch (error) {
         logger.error("Error during deactivation:", error);
