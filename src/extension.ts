@@ -996,6 +996,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     initializeTreeViews(context);
 
+    // Set the initial connection context state. Before any login attempt, connection is null.
+    // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
+    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
+    logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
+
     // Register the login webview provider.
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
     context.subscriptions.push(
@@ -1005,15 +1010,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Register all extension commands.
     await registerExtensionCommands(context);
 
-    // Set the initial connection context state. Before any login attempt, connection is null.
-    // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
-    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
-    logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
-
     await initializeLanguageServer();
 
     // Execute automatic login if the setting is enabled.
-    await vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
+    // NOTE: Do not use await here, otherwise the login form won't be shown until the login process is finished.
+    vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
 }
 
 /**
