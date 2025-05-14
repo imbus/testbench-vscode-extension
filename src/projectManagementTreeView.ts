@@ -1077,15 +1077,22 @@ export function setupProjectTreeViewEventListeners(
  * Hides the project management tree view.
  */
 export async function hideProjectManagementTreeView(): Promise<void> {
-    // projectManagementTree is the ID of the tree view in package.json
-    await vscode.commands.executeCommand("projectManagementTree.removeView");
+    const projectTreeView = getProjectTreeView();
+    if (projectTreeView && projectTreeView.visible) {
+        logger.trace(
+            "Project management tree view is visible. Attempting to execute 'projectManagementTree.removeView'."
+        );
+        await vscode.commands.executeCommand("projectManagementTree.removeView");
+    }
 }
 
 /**
  * Displays the project management tree view.
  */
 export async function displayProjectManagementTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("projectManagementTree.focus");
+    if (getProjectTreeView()) {
+        await vscode.commands.executeCommand("projectManagementTree.focus");
+    }
 }
 
 /**

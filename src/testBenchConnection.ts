@@ -763,7 +763,7 @@ export class PlayServerConnection {
      * If the session token is null, the keep-alive process is not started.
      * If the keep-alive process is already running and it is triggered again, the previous one is stopped before starting a new one.
      */
-    private startKeepAlive(): void {
+    public startKeepAlive(): void {
         this.stopKeepAlive(); // Prevent multiple intervals if previously started.
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();

@@ -760,14 +760,22 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
  * Hides the Test Elements tree view.
  */
 export async function hideTestElementsTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testElementsView.removeView");
+    if (getTestElementTreeView()) {
+        // If the treeView instance exists, it implies the view is registered/active.
+        await vscode.commands.executeCommand("testElementsView.removeView");
+    } else {
+        // Optional: Log if the view instance wasn't found.
+        logger.trace("Test Elements view instance not found, 'removeView' command not executed.");
+    }
 }
 
 /**
  * Displays the Test Elements tree view.
  */
 export async function displayTestElementsTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testElementsView.focus");
+    if (getTestElementTreeView()) {
+        await vscode.commands.executeCommand("testElementsView.focus");
+    }
 }
 
 /* =============================================================================
