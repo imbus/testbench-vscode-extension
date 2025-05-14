@@ -213,3 +213,39 @@ export async function getActiveProfile(context: vscode.ExtensionContext): Promis
 export async function clearActiveProfile(context: vscode.ExtensionContext): Promise<void> {
     await setActiveProfileId(context, undefined);
 }
+
+/**
+ * Checks if a profile with the given credentials (server, port, username) already exists.
+ * @param context The extension context.
+ * @param serverName The server name to check.
+ * @param portNumber The port number to check.
+ * @param username The username to check.
+ * @returns A promise that resolves to the existing TestBenchProfile if a duplicate is found, otherwise undefined.
+ */
+export async function findProfileByCredentials(
+    context: vscode.ExtensionContext,
+    serverName: string,
+    portNumber: number,
+    username: string
+): Promise<TestBenchProfile | undefined> {
+    try {
+        const profiles = await getProfiles(context);
+        for (const profile of profiles) {
+            if (
+                profile.serverName.toLowerCase() === serverName.toLowerCase() &&
+                profile.portNumber === portNumber &&
+                profile.username.toLowerCase() === username.toLowerCase()
+            ) {
+                logger.trace(
+                    `[ProfileManager] Found existing profile with matching server/user: ${profile.label} (ID: ${profile.id})`
+                );
+                return profile; // Found a profile with the same server, port, and username
+            }
+        }
+        logger.trace(`[ProfileManager] No existing profile found with the provided server/user.`);
+        return undefined; // No duplicate found
+    } catch (error) {
+        logger.error("[ProfileManager] Error checking for duplicate profile by server/user:", error);
+        return undefined;
+    }
+}
