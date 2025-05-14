@@ -676,11 +676,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
-        await projectManagementTreeView.displayProjectManagementTreeView();
+        await projectManagementTreeView?.displayProjectManagementTreeView();
 
         // Hide the test theme tree view and test elements tree view
         await hideTestThemeTreeView();
-        await testElementsTreeView.hideTestElementsTreeView();
+        await testElementsTreeView?.hideTestElementsTreeView();
     });
 
     // --- Command: Read Robotframework Test Results And Create Report With Results ---
@@ -930,7 +930,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         typeof treeItem.label === "string" ? treeItem.label : undefined
                     );
                     if (areTestElementsFetched) {
-                        await projectManagementTreeView.hideProjectManagementTreeView();
+                        await projectManagementTreeView?.hideProjectManagementTreeView();
                         await displayTestElementsTreeView();
                         const projectAndTovNameObj = getProjectAndTovNamesFromSelection(treeItem);
 
@@ -1146,9 +1146,40 @@ async function handleTestBenchSessionChange(
     if (sessionToProcess && sessionToProcess.accessToken) {
         const activeProfile = await profileManager.getActiveProfile(context);
         if (activeProfile) {
+            // Check if a connection for this session and profile already exists
+            if (
+                connection && // Global connection object from extension.ts
+                connection.getSessionToken() === sessionToProcess.accessToken &&
+                connection.getUsername() === activeProfile.username &&
+                connection.getServerName() === activeProfile.serverName &&
+                connection.getServerPort() === activeProfile.portNumber.toString()
+            ) {
+                logger.info(
+                    `[Extension] Connection for profile '${activeProfile.label}' and current session token is already active. Skipping re-initialization.`
+                );
+                if (!wasPreviouslyConnected) {
+                    logger.info("[Extension] Re-asserting UI state for existing matching connection.");
+                    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true); // Ensure context is set
+                    getLoginWebViewProvider()?.updateWebviewHTMLContent();
+                    await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
+                    getProjectManagementTreeDataProvider()?.refresh(true);
+                    getTestThemeTreeDataProvider()?.clearTree();
+                    clearTestElementsTreeView();
+                }
+                return; // Exit if the connection is already the correct one
+            }
+
             logger.info(
                 `[Extension] TestBench session active for profile: ${activeProfile.label}. Initializing PlayServerConnection.`
             );
+
+            if (connection) {
+                logger.warn(
+                    "[Extension] A different connection was active. Logging out from previous server session before establishing new one."
+                );
+                await connection.logoutUserOnServer(); // Ensure previous server session is terminated
+            }
+
             const newConnection = new PlayServerConnection(
                 activeProfile.serverName,
                 activeProfile.portNumber,
@@ -1159,7 +1190,10 @@ async function handleTestBenchSessionChange(
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-            if (!wasPreviouslyConnected) {
+            if (
+                !wasPreviouslyConnected ||
+                (connection && connection.getSessionToken() !== newConnection.getSessionToken())
+            ) {
                 // This is a new login session (e.g., startup auto-login, or manual login from disconnected state)
                 logger.info(
                     "[Extension] New session established. Setting default view to 'Projects' and refreshing data."
@@ -1192,9 +1226,9 @@ async function handleTestBenchSessionChange(
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
             // Clean up views and data on logout/no active profile
-            await projectManagementTreeView.hideProjectManagementTreeView();
+            await projectManagementTreeView?.hideProjectManagementTreeView();
             await hideTestThemeTreeView();
-            await testElementsTreeView.hideTestElementsTreeView();
+            await testElementsTreeView?.hideTestElementsTreeView();
             getProjectManagementTreeDataProvider()?.clearTree();
             getTestThemeTreeDataProvider()?.clearTree();
             clearTestElementsTreeView();
@@ -1209,9 +1243,9 @@ async function handleTestBenchSessionChange(
         getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
         // Clean up views and data on logout
-        await projectManagementTreeView.hideProjectManagementTreeView();
+        await projectManagementTreeView?.hideProjectManagementTreeView();
         await hideTestThemeTreeView();
-        await testElementsTreeView.hideTestElementsTreeView();
+        await testElementsTreeView?.hideTestElementsTreeView();
         getProjectManagementTreeDataProvider()?.clearTree();
         getTestThemeTreeDataProvider()?.clearTree();
         clearTestElementsTreeView();
@@ -1295,7 +1329,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.authentication.onDidChangeSessions(async (e) => {
             if (e.provider.id === TESTBENCH_AUTH_PROVIDER_ID) {
                 logger.info("[Extension] TestBench authentication sessions changed.");
-                await handleTestBenchSessionChange(context);
+                try {
+                    // Get the current session state directly from the API.
+                    const currentSession = await vscode.authentication.getSession(
+                        TESTBENCH_AUTH_PROVIDER_ID,
+                        ["api_access"],
+                        { createIfNone: false, silent: true } // Get an existing session
+                    );
+                    logger.info(
+                        `[Extension] Fetched current session in onDidChangeSessions: ${currentSession ? currentSession.id : "undefined"}`
+                    );
+                    await handleTestBenchSessionChange(context, currentSession);
+                } catch (error) {
+                    logger.error("[Extension] Error getting session in onDidChangeSessions listener:", error);
+                    // If an error occurs, it's safer to assume no session / logout state.
+                    await handleTestBenchSessionChange(context, undefined);
+                }
             }
         })
     );
