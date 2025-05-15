@@ -7,6 +7,7 @@
 // TODO: Add License.md to the extension
 // TODO: Set logger level to info or debug in production, remove too detailed logs.
 // TODO: In production, remove process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; in connection class.
+// Note: A virtual python environment is required for the extension to work + an empty pyproject.toml in workspace root.
 
 import * as vscode from "vscode";
 import * as testBenchLogger from "./testBenchLogger";
@@ -116,6 +117,11 @@ export function getCurrentLsTov(): string | undefined {
     return currentLanguageServerTov;
 }
 
+// Global variable to store the current configuration scope (workspace or global).
+let currentConfigScope: vscode.Uri | undefined;
+// Global variable to store the active editor instance to determine the best scope for configuration.
+let activeEditor: vscode.TextEditor | undefined;
+
 /* =============================================================================
    Helper Functions
    ============================================================================= */
@@ -169,11 +175,6 @@ function registerSafeCommand(
     });
     context.subscriptions.push(disposable);
 }
-
-// Global variable to store the current configuration scope (workspace or global).
-let currentConfigScope: vscode.Uri | undefined;
-// Global variable to store the active editor instance to determine the best scope for configuration.
-let activeEditor: vscode.TextEditor | undefined;
 
 /**
  * Loads the latest extension configuration and updates the global configuration object.

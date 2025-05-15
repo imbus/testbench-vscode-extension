@@ -7,6 +7,7 @@
 import * as vscode from "vscode";
 import { v4 as uuidv4 } from "uuid"; // For generating unique profile IDs.
 import { logger } from "./extension";
+import { StorageKeys } from "./constants";
 
 // Structure of a TestBench Profile
 export interface TestBenchProfile {
@@ -17,11 +18,6 @@ export interface TestBenchProfile {
     username: string;
 }
 
-// Constants for storage keys
-const PROFILES_STORAGE_KEY = "testbench.profiles";
-const ACTIVE_PROFILE_ID_KEY = "testbench.activeProfileId";
-const PROFILE_PASSWORD_SECRET_PREFIX = "testbench.profile.password."; // Prefix for storing passwords in SecretStorage
-
 /**
  * Retrieves all saved TestBench profiles.
  * @param context The extension context.
@@ -29,7 +25,7 @@ const PROFILE_PASSWORD_SECRET_PREFIX = "testbench.profile.password."; // Prefix 
  */
 export async function getProfiles(context: vscode.ExtensionContext): Promise<TestBenchProfile[]> {
     try {
-        const profiles = context.globalState.get<TestBenchProfile[]>(PROFILES_STORAGE_KEY, []);
+        const profiles = context.globalState.get<TestBenchProfile[]>(StorageKeys.PROFILES_STORAGE_KEY, []);
         logger.trace(`[ProfileManager] Retrieved ${profiles.length} profiles.`);
         return profiles;
     } catch (error) {
@@ -70,11 +66,11 @@ export async function saveProfile(
             logger.trace(`[ProfileManager] Adding new profile: ${profileToSave.label} (ID: ${profileToSave.id})`);
         }
 
-        await context.globalState.update(PROFILES_STORAGE_KEY, profiles);
+        await context.globalState.update(StorageKeys.PROFILES_STORAGE_KEY, profiles);
 
         if (password !== undefined) {
             // Allow empty string password, but not undefined
-            await context.secrets.store(PROFILE_PASSWORD_SECRET_PREFIX + profileToSave.id, password);
+            await context.secrets.store(StorageKeys.PROFILE_PASSWORD_SECRET_PREFIX + profileToSave.id, password);
             logger.trace(`[ProfileManager] Password stored for profile ID: ${profileToSave.id}`);
         }
         return profileToSave.id;
@@ -97,8 +93,8 @@ export async function deleteProfile(context: vscode.ExtensionContext, profileId:
         profiles = profiles.filter((p) => p.id !== profileId);
 
         if (profiles.length < initialLength) {
-            await context.globalState.update(PROFILES_STORAGE_KEY, profiles);
-            await context.secrets.delete(PROFILE_PASSWORD_SECRET_PREFIX + profileId);
+            await context.globalState.update(StorageKeys.PROFILES_STORAGE_KEY, profiles);
+            await context.secrets.delete(StorageKeys.PROFILE_PASSWORD_SECRET_PREFIX + profileId);
             logger.trace(`[ProfileManager] Deleted profile with ID: ${profileId}`);
 
             // If the deleted profile was the active one, clear the active profile setting
@@ -127,7 +123,7 @@ export async function getPasswordForProfile(
     profileId: string
 ): Promise<string | undefined> {
     try {
-        const password = await context.secrets.get(PROFILE_PASSWORD_SECRET_PREFIX + profileId);
+        const password = await context.secrets.get(StorageKeys.PROFILE_PASSWORD_SECRET_PREFIX + profileId);
         if (password) {
             logger.trace(`[ProfileManager] Password retrieved for profile ID: ${profileId}`);
         } else {
@@ -150,7 +146,7 @@ export async function setActiveProfileId(
     profileId: string | undefined
 ): Promise<void> {
     try {
-        await context.globalState.update(ACTIVE_PROFILE_ID_KEY, profileId);
+        await context.globalState.update(StorageKeys.ACTIVE_PROFILE_ID_KEY, profileId);
         if (profileId) {
             logger.trace(`[ProfileManager] Active profile ID set to: ${profileId}`);
         } else {
@@ -168,7 +164,7 @@ export async function setActiveProfileId(
  */
 export async function getActiveProfileId(context: vscode.ExtensionContext): Promise<string | undefined> {
     try {
-        const activeId = context.globalState.get<string | undefined>(ACTIVE_PROFILE_ID_KEY);
+        const activeId = context.globalState.get<string | undefined>(StorageKeys.ACTIVE_PROFILE_ID_KEY);
         logger.trace(`[ProfileManager] Retrieved active profile ID: ${activeId}`);
         return activeId;
     } catch (error) {

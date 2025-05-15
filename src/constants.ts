@@ -45,7 +45,7 @@ export const WebviewMessageCommands = {
     DISPLAY_PROFILES_IN_WEBVIEW: "displayProfilesInWebview",
     SHOW_WEBVIEW_MESSAGE: "showWebviewMessage",
     PROFILE_OPERATION_COMPLETE: "profileOperationComplete"
-} as const; // 'as const' makes properties readonly and literal types
+} as const;
 
 // --- Extension Configuration Setting Keys ---
 export const ConfigKeys = {
@@ -84,7 +84,12 @@ export const ContextKeys = {
 // --- Storage Keys ---
 export const StorageKeys = {
     SESSION_TOKEN: "sessionToken", // Secret Storage
+    // TODO: delete
     PASSWORD: "password", // Secret Storage
+    // AuthenticationProvider constants
+    PROFILES_STORAGE_KEY: "testbench.profiles",
+    ACTIVE_PROFILE_ID_KEY: "testbench.activeProfileId",
+    PROFILE_PASSWORD_SECRET_PREFIX: "testbench.profile.password.",
     /**
      * Workspace state storage key for the last generated report parameters
      * to be able to use the report without the user selecting the report again while importing the report.
@@ -114,7 +119,7 @@ export const JobTypes = {
     IMPORT: "import"
 } as const;
 
-/** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
+/** Internal folder name used to store and process files internally. */
 export const folderNameOfInternalTestbenchFolder: string = ".testbench";
 
 /**
