@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as profileManager from "./profileManager";
-import { loginToServerAndGetSessionDetails } from "./testBenchConnection";
+import { loginToServerAndGetSessionDetails, TestBenchLoginResult } from "./testBenchConnection";
 import { TestBenchProfile } from "./testBenchTypes";
 import { logger } from "./extension";
 
@@ -46,13 +46,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
     /**
      * Get a list of sessions.
-     * @param scopes An optional list of scopes. If provided, the sessions returned should match these permissions.
+     * @param {string[]} scopes An optional list of scopes. If provided, the sessions returned should match these permissions.
      * @returns A promise that resolves to an array of authentication sessions.
      */
-    async getSessions(
-        scopes?: readonly string[]
-        // options?: vscode.AuthenticationProviderSessionOptions
-    ): Promise<vscode.AuthenticationSession[]> {
+    async getSessions(scopes?: readonly string[]): Promise<vscode.AuthenticationSession[]> {
         logger.trace(`[AuthProvider] getSessions called. Scopes: ${scopes}`);
         const sessionsToReturn: vscode.AuthenticationSession[] = [];
         for (const sessionData of this.activeSessions.values()) {
@@ -60,7 +57,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 id: sessionData.sessionId,
                 accessToken: sessionData.testBenchSessionToken,
                 account: { label: sessionData.accountLabel, id: sessionData.userKey },
-                scopes: ["api_access"] // Static scopes
+                scopes: ["api_access"]
             });
         }
         logger.trace(`[AuthProvider] getSessions returning ${sessionsToReturn.length} session(s).`);
@@ -74,9 +71,9 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * It can utilize an active profile, prompt the user to select or create a new profile,
      * and manages password retrieval and storage.
      *
-     * @param scopes - An array of scopes requested for the session.
-     * @param options - Optional parameters for session creation, which can indicate if the call is for silent authentication.
-     * @returns A promise that resolves to a `vscode.AuthenticationSession` object upon successful login.
+     * @param {string[]} scopes - An array of scopes requested for the session.
+     * @param {vscode.AuthenticationProviderSessionOptions} options - Optional parameters for session creation, which can indicate if the call is for silent authentication.
+     * @returns {Promise<vscode.AuthenticationSession>} A promise that resolves to a `vscode.AuthenticationSession` object upon successful login.
      * @throws Error if the login process is cancelled, fails due to incorrect credentials,
      * missing profile information, or other issues during session creation.
      */
@@ -87,9 +84,9 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         logger.trace(`[AuthProvider] createSession called. Scopes: ${scopes}, Options: ${JSON.stringify(options)}`);
 
         logger.trace(`[AuthProvider] createSession called. Scopes: ${scopes}, Options: ${JSON.stringify(options)}`);
-        const isSilent = this._isAttemptingSilentAutoLogin; // Check if it's a silent attempt
+        const isSilent: boolean = this._isAttemptingSilentAutoLogin;
         if (this._isAttemptingSilentAutoLogin) {
-            this._isAttemptingSilentAutoLogin = false; // Reset flag immediately for subsequent calls
+            this._isAttemptingSilentAutoLogin = false;
             logger.trace("[AuthProvider] createSession: Silent auto-login attempt detected.");
         } else {
             logger.trace(
@@ -101,12 +98,12 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             let targetProfile: TestBenchProfile | undefined;
             let passwordToUse: string | undefined;
 
-            // Check if a profile hint is provided (e.g., from our new Webview)
-            // The LoginWebView will have already called profileManager.setActiveProfileId()
-            const activeProfileIdFromManager = await profileManager.getActiveProfileId(this.context);
+            const activeProfileIdFromManager: string | undefined = await profileManager.getActiveProfileId(
+                this.context
+            );
 
             if (activeProfileIdFromManager) {
-                const allProfiles = await profileManager.getProfiles(this.context);
+                const allProfiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.context);
                 targetProfile = allProfiles.find((p) => p.id === activeProfileIdFromManager);
                 if (targetProfile) {
                     logger.info(
@@ -153,32 +150,34 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 }
 
                 if (selection.isAddNew || !selection.profile) {
-                    const newProfileDetails = await this.promptForNewProfileDetails(); // Existing method
+                    const newProfileDetails = await this.promptForNewProfileDetails();
                     if (!newProfileDetails) {
                         throw new Error("Profile creation cancelled.");
                     }
                     // Temp profile object, might not have ID yet if not saved
                     targetProfile = {
-                        id: "", // Placeholder, will be set by saveProfile
+                        id: "", // Will be set by saveProfile
                         label:
                             newProfileDetails.label || `${newProfileDetails.username}@${newProfileDetails.serverName}`,
                         serverName: newProfileDetails.serverName,
                         portNumber: newProfileDetails.portNumber,
                         username: newProfileDetails.username
-                        // Password handled separately
                     };
                     passwordToUse = newProfileDetails.password;
 
-                    const saveChoice = await vscode.window.showQuickPick(["Yes", "No"], {
+                    const saveNewConnectionChoice = await vscode.window.showQuickPick(["Yes", "No"], {
                         placeHolder: `Save new connection "${targetProfile.label}"?`,
                         ignoreFocusOut: true
                     });
-                    if (saveChoice === "Yes") {
-                        const savedId = await profileManager.saveProfile(this.context, targetProfile, passwordToUse);
-                        targetProfile.id = savedId; // Update profile with actual ID
-                        await profileManager.setActiveProfileId(this.context, targetProfile.id); // Set as active
+                    if (saveNewConnectionChoice === "Yes") {
+                        const savedId: string = await profileManager.saveProfile(
+                            this.context,
+                            targetProfile,
+                            passwordToUse
+                        );
+                        targetProfile.id = savedId;
+                        await profileManager.setActiveProfileId(this.context, targetProfile.id);
                     } else if (!passwordToUse) {
-                        // If not saving and password wasn't provided in promptForNewProfileDetails (e.g. it was optional)
                         throw new Error("Password required for unsaved profile.");
                     }
                 } else {
@@ -186,14 +185,12 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 }
             }
 
-            // Password retrieval for targetProfile (whether from hint or QuickPick)
             if (passwordToUse === undefined && targetProfile) {
                 // if password wasn't set during new profile creation
                 passwordToUse = await profileManager.getPasswordForProfile(this.context, targetProfile.id);
                 if (passwordToUse === undefined) {
-                    // Password not found in storage
                     if (isSilent) {
-                        // For silent auto-login, if password is not found and is required, we must fail.
+                        // For silent auto-login, if password is not found and is required, fail silently
                         throw new Error(
                             `Password for profile "${targetProfile.label}" not found in storage. Auto-login failed.`
                         );
@@ -203,19 +200,16 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                         password: true,
                         ignoreFocusOut: true
                     });
+                    // Empty string is a valid password
                     if (passwordToUse === undefined) {
-                        // Check for undefined, as empty string might be a valid password
                         throw new Error("Password entry cancelled.");
                     }
-                    // Offer to save the password if retrieved this way and profile exists
                     if (targetProfile.id) {
-                        // Only if it's an existing or saved new profile
                         const storePasswordChoice = await vscode.window.showQuickPick(["Yes", "No"], {
                             placeHolder: `Save password for profile "${targetProfile.label}"?`,
                             ignoreFocusOut: true
                         });
                         if (storePasswordChoice === "Yes") {
-                            // Re-save the profile with the newly entered password
                             await profileManager.saveProfile(this.context, targetProfile, passwordToUse);
                         }
                     }
@@ -227,7 +221,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             }
 
             logger.info(`[AuthProvider] Attempting login to ${targetProfile.serverName} as ${targetProfile.username}`);
-            const loginResult = await loginToServerAndGetSessionDetails(
+            const loginResult: TestBenchLoginResult | null = await loginToServerAndGetSessionDetails(
                 targetProfile.serverName,
                 targetProfile.portNumber,
                 targetProfile.username,
@@ -235,20 +229,20 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             );
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
-                await profileManager.clearActiveProfile(this.context); // Clear active if login fails
+                await profileManager.clearActiveProfile(this.context);
                 throw new Error("TestBench login failed. Check credentials or server details.");
             }
 
-            const vsCodeSessionId = Date.now().toString() + Math.random().toString();
+            const vsCodeSessionId: string = Date.now().toString() + Math.random().toString();
             const sessionData: TestBenchSessionData = {
                 sessionId: vsCodeSessionId,
-                profileId: targetProfile.id, // Ensure targetProfile has an ID here
+                profileId: targetProfile.id,
                 testBenchSessionToken: loginResult.sessionToken,
                 accountLabel: `${targetProfile.username}@${targetProfile.serverName}`,
                 userKey: loginResult.userKey
             };
             this.activeSessions.set(vsCodeSessionId, sessionData);
-            await profileManager.setActiveProfileId(this.context, targetProfile.id); // Ensure it's set as active
+            await profileManager.setActiveProfileId(this.context, targetProfile.id);
 
             this._onDidChangeSessions.fire({
                 added: [
@@ -269,10 +263,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 account: { label: sessionData.accountLabel, id: sessionData.userKey },
                 scopes
             };
-        } catch (err: any) {
-            logger.error(`[AuthProvider] createSession error${isSilent ? " (auto-login)" : ""}:`, err);
+        } catch (error: any) {
+            logger.error(`[AuthProvider] createSession error${isSilent ? " (auto-login)" : ""}:`, error);
             await profileManager.clearActiveProfile(this.context);
-            throw err; // Re-throw to signal failure
+            throw error;
         }
     }
 
@@ -284,17 +278,17 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * the active profile is cleared. Finally, it fires the `_onDidChangeSessions`
      * event to notify VS Code about the session removal.
      *
-     * @param sessionId The ID of the session to remove.
+     * @param {string} sessionId The ID of the session to remove.
      * @returns A promise that resolves when the session has been removed and notifications have been sent.
      */
     async removeSession(sessionId: string): Promise<void> {
         logger.trace(`[AuthProvider] removeSession called for ID ${sessionId}`);
-        const sessionData = this.activeSessions.get(sessionId);
+        const sessionData: TestBenchSessionData | undefined = this.activeSessions.get(sessionId);
         if (sessionData) {
             logger.info(`[AuthProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`);
             this.activeSessions.delete(sessionId);
 
-            const activeProfileId = await profileManager.getActiveProfileId(this.context);
+            const activeProfileId: string | undefined = await profileManager.getActiveProfileId(this.context);
             if (activeProfileId === sessionData.profileId) {
                 await profileManager.clearActiveProfile(this.context);
                 logger.trace(
@@ -326,14 +320,14 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
     private async promptForNewProfileDetails(): Promise<
         (Omit<TestBenchProfile, "id" | "label"> & { label?: string; password?: string }) | undefined
     > {
-        const serverName = await vscode.window.showInputBox({
+        const serverName: string | undefined = await vscode.window.showInputBox({
             prompt: "Enter TestBench Server Name (e.g., testbench.example.com)",
             ignoreFocusOut: true
         });
         if (!serverName) {
             return undefined;
         }
-        const portStr = await vscode.window.showInputBox({
+        const portStr: string | undefined = await vscode.window.showInputBox({
             prompt: "Enter Port Number (e.g., 9445)",
             ignoreFocusOut: true,
             validateInput: (val) => (/^\d+$/.test(val) ? null : "Must be a number")
@@ -341,18 +335,22 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         if (!portStr) {
             return undefined;
         }
-        const portNumber = parseInt(portStr, 10);
-        const username = await vscode.window.showInputBox({ prompt: "Enter TestBench Username", ignoreFocusOut: true });
+        const portNumber: number = parseInt(portStr, 10);
+        const username: string | undefined = await vscode.window.showInputBox({
+            prompt: "Enter TestBench Username",
+            ignoreFocusOut: true
+        });
         if (!username) {
             return undefined;
         }
-        const password = await vscode.window.showInputBox({
+        const password: string | undefined = await vscode.window.showInputBox({
             prompt: "Enter TestBench Password",
             password: true,
             ignoreFocusOut: true
         });
-        // Don't return undefined if password is empty, let createSession handle it if needed
-        const label = await vscode.window.showInputBox({
+        // Let createSession handle if password is empty,
+
+        const label: string | undefined = await vscode.window.showInputBox({
             prompt: "Enter a label for this connection (optional)",
             placeHolder: `${username}@${serverName}`,
             ignoreFocusOut: true

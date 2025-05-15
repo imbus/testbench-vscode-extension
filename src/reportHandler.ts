@@ -30,6 +30,7 @@ import {
     folderNameOfInternalTestbenchFolder
 } from "./constants";
 import { importReportWithResultsToTestbench, withRetry } from "./testBenchConnection";
+import { ExecutionMode } from "./testBenchTypes";
 
 /**
  * Prompts the user to select the report export method in quick pick format (Execution based or Specification based).
@@ -43,7 +44,6 @@ export async function promptForReportGenerationMethodAndCheckIfExecBasedChosen()
         quickPick.title = "Select Export Option";
         quickPick.placeholder = "Select the export option for the reports.";
 
-        // Handle the user selection
         quickPick.onDidChangeSelection((selection) => {
             if (selection[0]) {
                 if (selection[0].label === "Cancel") {
@@ -53,7 +53,7 @@ export async function promptForReportGenerationMethodAndCheckIfExecBasedChosen()
                     logger.debug(`Export method selected: ${selection[0].label}`);
                     resolve(selection[0].label === "Execution based");
                 }
-                quickPick.hide(); // Close the quick pick after selection
+                quickPick.hide();
             }
         });
 
@@ -61,7 +61,7 @@ export async function promptForReportGenerationMethodAndCheckIfExecBasedChosen()
         quickPick.onDidHide(() => {
             logger.debug("Export method selection dialog closed by the user.");
             resolve(null);
-            quickPick.dispose(); // Clean up resources after closing
+            quickPick.dispose();
         });
 
         quickPick.show();
@@ -75,7 +75,7 @@ export async function promptForReportGenerationMethodAndCheckIfExecBasedChosen()
  * @param {string} UID The unique ID of the root element used for generation.
  * @param {string} projectKey The project key used.
  * @param {string} cycleKey The cycle key used.
- * @param {boolean} executionBased Whether the report was execution-based.
+ * @param {ExecutionMode} executionMode Whether the report was execution-based.
  * @param {boolean} alreadyImported Whether the report was already imported.
  */
 async function saveLastGeneratedReportParams(
@@ -83,24 +83,22 @@ async function saveLastGeneratedReportParams(
     UID: string,
     projectKey: string,
     cycleKey: string,
-    executionBased: boolean,
+    executionMode: ExecutionMode,
     alreadyImported: boolean
 ): Promise<void> {
     const paramsToSave: testBenchTypes.LastGeneratedReportParams = {
         UID,
         projectKey,
         cycleKey,
-        executionBased,
-        // Timestamp for context or potential cleanup
+        executionMode: executionMode,
         timestamp: Date.now(),
         alreadyImported
     };
 
     try {
-        // Data stored here persists across VS Code sessions for this specific workspace
         await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, paramsToSave);
         logger.debug(
-            `Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionBased=${executionBased}, alreadyImported=${alreadyImported}.`
+            `Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
         );
     } catch (error) {
         logger.error("Failed to save last generated report params to workspace state:", error);
@@ -108,7 +106,8 @@ async function saveLastGeneratedReportParams(
 }
 
 /**
- * Updates only the alreadyImported flag in the last generated report parameters stored in workspaceState.
+ * Updates only the alreadyImported flag in the last generated report parameters stored in workspaceState
+ * to track if the report was already imported.
  *
  * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.
  * @param {boolean} alreadyImported The new alreadyImported flag value.
@@ -118,9 +117,8 @@ async function updateAlreadyImportedFlagOfLastImportedReport(
     alreadyImported: boolean
 ): Promise<void> {
     try {
-        const existingParams = context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(
-            StorageKeys.LAST_GENERATED_PARAMS
-        );
+        const existingParams: testBenchTypes.LastGeneratedReportParams | undefined =
+            context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(StorageKeys.LAST_GENERATED_PARAMS);
         if (!existingParams) {
             logger.warn(
                 "No last generated report parameters found in workspace state. Cannot update alreadyImported flag."
@@ -136,29 +134,6 @@ async function updateAlreadyImportedFlagOfLastImportedReport(
 }
 
 /**
- * Saves the last imported report details to workspace storage.
- * @param {vscode.ExtensionContext} context The extension context.
- * @param {testBenchTypes.LastImportedReportDetails} details The report details to save.
- */
-async function saveLastImportedReportDetails(
-    context: vscode.ExtensionContext,
-    details: testBenchTypes.LastImportedReportDetails
-): Promise<void> {
-    try {
-        if (!details.outputXmlPath || !details.baseReportPath || !details.targetProjectKey || !details.targetCycleKey) {
-            logger.error("Attempted to save incomplete LastImportedReportDetails. Aborting save.", details);
-            return;
-        }
-        await context.workspaceState.update(StorageKeys.LAST_IMPORTED_REPORT_DETAILS, details);
-        logger.debug(
-            `Saved last imported report details: outputXml='${details.outputXmlPath}', baseReport='${details.baseReportPath}', targetProject='${details.targetProjectKey}', targetCycle='${details.targetCycleKey}'.`
-        );
-    } catch (error) {
-        logger.error("Failed to save last imported report details to workspace state:", error);
-    }
-}
-
-/**
  * Retrieves the last generated report parameters from workspace storage.
  *
  * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.
@@ -168,7 +143,6 @@ function getLastGeneratedReportParams(
     context: vscode.ExtensionContext
 ): testBenchTypes.LastGeneratedReportParams | undefined {
     try {
-        // Retrieve the data from workspaceState
         const storedParams: testBenchTypes.LastGeneratedReportParams | undefined =
             context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(StorageKeys.LAST_GENERATED_PARAMS);
 
@@ -177,7 +151,7 @@ function getLastGeneratedReportParams(
             storedParams.UID &&
             storedParams.projectKey &&
             storedParams.cycleKey &&
-            storedParams.executionBased !== undefined &&
+            storedParams.executionMode !== undefined &&
             storedParams.alreadyImported !== undefined
         ) {
             logger.debug("Retrieved last generated report params from workspace state:", storedParams);
@@ -205,7 +179,7 @@ export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
 
 /**
  * Checks if the import job has completed successfully.
- * @param jobStatus The job status response object.
+ * @param {testBenchTypes.JobStatusResponse} jobStatus The job status response object.
  * @returns {boolean} True if the import job completed successfully; otherwise false.
  */
 export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
@@ -216,7 +190,7 @@ export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
 
 /**
  * Checks if the import job has failed.
- * @param jobStatus The job status response object.
+ * @param {testBenchTypes.JobStatusResponse} jobStatus The job status response object.
  * @returns {boolean} True if the import job failed; otherwise false.
  */
 export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): boolean {
@@ -244,7 +218,7 @@ export async function pollJobStatus(
     cancellationToken?: vscode.CancellationToken,
     maxPollingTimeMs?: number // Optional timeout, disabled by default so that the user can cancel manually
 ): Promise<testBenchTypes.JobStatusResponse | null> {
-    const startTime = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
+    const startTime: number = Date.now(); // Start time for the polling to adjust the polling interval after 10 seconds
     let pollingAttemptAmount: number = 0;
     let jobStatus: testBenchTypes.JobStatusResponse | null = null;
     let lastProgressIncrement: number = 0;
@@ -270,11 +244,11 @@ export async function pollJobStatus(
                 return null;
             }
 
-            // Display the job status progress in the progressbar text if counts are available
-            const totalItems = jobStatus?.progress?.totalItemsCount;
-            const handledItems = jobStatus?.progress?.handledItemsCount;
+            // Display the job status progress in the progress bar text if counts are available
+            const totalItems: number | undefined = jobStatus?.progress?.totalItemsCount;
+            const handledItems: number | undefined = jobStatus?.progress?.handledItemsCount;
             if (totalItems && handledItems) {
-                const percentage = Math.round((handledItems / totalItems) * 100);
+                const percentage: number = Math.round((handledItems / totalItems) * 100);
                 progress?.report({
                     message: `Fetching job status (${handledItems}/${totalItems}).`,
                     increment: (percentage - lastProgressIncrement) / 3
@@ -300,7 +274,7 @@ export async function pollJobStatus(
             logger.error(`Polling attempt ${pollingAttemptAmount}: Failed to get job status.`, error);
         }
 
-        // (Optional) Check if the maximum polling time has been exceeded.
+        // Check if the maximum polling time has been exceeded.
         if (maxPollingTimeMs !== undefined && Date.now() - startTime >= maxPollingTimeMs) {
             logger.warn("Maximum polling time exceeded. Aborting job status polling.");
             break;
@@ -328,7 +302,7 @@ export async function pollJobStatus(
 export async function getJobId(
     projectKey: string,
     cycleKey: string,
-    requestParams?: testBenchTypes.OptionalJobIDRequestParameter // TODO: Execution mode is added in new branch, project tree is also changed? ExecutionImportingSuccess
+    requestParams?: testBenchTypes.OptionalJobIDRequestParameter
 ): Promise<string | null> {
     if (!connection) {
         logger.error("Connection object is missing, cannot get job ID.");
@@ -338,9 +312,7 @@ export async function getJobId(
     const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
     logger.debug(`Fetching job ID from URL: ${getJobIDUrl}`);
     try {
-        // Use the apiClient from the global connection object.
-        // It's already configured with the baseURL and Authorization header.
-        const apiClient = connection.getApiClient();
+        const apiClient: axios.AxiosInstance = connection.getApiClient();
         const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
             () =>
                 apiClient.post<testBenchTypes.JobIdResponse>(getJobIDUrl, requestParams, {
@@ -402,7 +374,7 @@ export async function getJobStatus(
     const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
     logger.debug(`Checking job status at: ${getJobStatusUrl}`);
 
-    const apiClient = connection.getApiClient();
+    const apiClient: axios.AxiosInstance = connection.getApiClient();
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
         () =>
             apiClient.get(getJobStatusUrl, {
@@ -464,7 +436,7 @@ export async function downloadReport(
         const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
         logger.debug(`Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
-        const apiClient = connection.getApiClient();
+        const apiClient: axios.AxiosInstance = connection.getApiClient();
         const downloadZipResponse: AxiosResponse<any> = await withRetry(
             () =>
                 apiClient.get(downloadReportUrl, {
@@ -534,7 +506,7 @@ async function storeReportFileLocally(
 ): Promise<string | null> {
     try {
         const filePath: string = path.join(workspaceLocation, folderNameOfReport, fileNameOfReport);
-        const uri = vscode.Uri.file(filePath);
+        const uri: vscode.Uri = vscode.Uri.file(filePath);
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
         logger.debug(`Report saved to ${uri.fsPath}`);
         return uri.fsPath;
@@ -580,15 +552,14 @@ async function promptUserForSaveLocationAndSaveReportToFile(
             }
         }
 
-        // If file exists, prompt for overwrite confirmation
         if (fileExists) {
-            const overwrite = await vscode.window.showWarningMessage(
+            const overwritePromptResult = await vscode.window.showWarningMessage(
                 `The file "${fileNameOfReport}" already exists. Overwrite?`,
                 { modal: true },
                 "Overwrite",
                 "Skip"
             );
-            if (overwrite === "Skip") {
+            if (overwritePromptResult === "Skip") {
                 const skipDownloadMsg: string = "File download skipped by the user.";
                 vscode.window.showInformationMessage(skipDownloadMsg);
                 logger.debug(skipDownloadMsg);
@@ -596,7 +567,6 @@ async function promptUserForSaveLocationAndSaveReportToFile(
             }
         }
 
-        // Write the file to the chosen location
         await vscode.workspace.fs.writeFile(zipUri, new Uint8Array(downloadResponse.data));
         logger.debug(`Report saved to ${zipUri.fsPath}`);
         return zipUri.fsPath;
@@ -607,10 +577,6 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         return null;
     }
 }
-
-/* =============================================================================
-   Report & Test Generation Functions
-   ============================================================================= */
 
 /**
  * Fetch the TestBench JSON report as ZIP Archive for the selected tree item from the server.
@@ -646,7 +612,6 @@ export async function fetchReportZipFromServer(
         );
         logger.trace("Request parameters:", requestParameters);
 
-        // Step 1: Get Job ID
         const jobId: string | null = await getJobId(projectKey, cycleKey, requestParameters);
         if (!jobId) {
             logger.error("Job ID not received from server.");
@@ -654,7 +619,6 @@ export async function fetchReportZipFromServer(
         }
         logger.debug(`Job ID received: ${jobId}`);
 
-        // Step 2: Poll Job Status
         const jobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
             projectKey,
             jobId,
@@ -671,7 +635,6 @@ export async function fetchReportZipFromServer(
         const reportName: string = jobStatus.completion.result.ReportingSuccess!.reportName;
         logger.debug(`Report name to download: ${reportName}`);
 
-        // Step 3: Download the report ZIP file
         const downloadedFilePath: string | null = await downloadReport(
             projectKey,
             reportName,
@@ -708,8 +671,6 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     let projectKey: string | null = null;
 
     if (!cycleKey) {
-        // If cycleKey wasn't provided by the caller
-        // attempt to find it by traversing parent.
         logger.warn(`CycleKey not provided for ${selectedTreeItem.label}, attempting to find via parent traversal.`);
         cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(selectedTreeItem);
     }
@@ -731,7 +692,6 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     }
 
     if (!projectKey) {
-        // Fallback: Try to find it via selectedTreeItem if it has enough context
         projectKey = projectManagementTreeView.findProjectKeyForElement(selectedTreeItem);
     }
 
@@ -779,11 +739,10 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
 ): Promise<void | null> {
     try {
         logger.debug("Generating tests for:", selectedTreeItem);
-        const isReportGenerationExecutionBased: boolean = true; // Defaulting to execution based for now.
+        const defaultExecutionMode: testBenchTypes.ExecutionMode = testBenchTypes.ExecutionMode.Execute;
         let UIDforRequest: string;
 
         if (selectedTreeItem.contextValue === TreeItemContextValues.CYCLE) {
-            // If the selected item is a Cycle, generate for the whole cycle.
             logger.debug("Generating tests for the entire cycle.");
             UIDforRequest = ""; // Empty string expected for root/all
         } else if (
@@ -794,14 +753,13 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             logger.debug(`Generating tests for specific element UID: ${elementUID}.`);
             UIDforRequest = elementUID;
         } else {
-            // Handle unsupported types
             logger.error(`Unsupported item type for test generation: ${selectedTreeItem.contextValue}`);
             vscode.window.showErrorMessage(`Cannot generate tests for item type: ${selectedTreeItem.contextValue}`);
             return null;
         }
 
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-            basedOnExecution: isReportGenerationExecutionBased,
+            executionMode: defaultExecutionMode,
             treeRootUID: UIDforRequest
         };
 
@@ -816,7 +774,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
                     context,
                     projectKey,
                     cycleKey,
-                    isReportGenerationExecutionBased,
+                    defaultExecutionMode,
                     elementUID,
                     cycleReportOptionsRequestParams,
                     progress,
@@ -842,7 +800,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
  * @param {vscode.ExtensionContext} context The VS Code extension context.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
- * @param {boolean} executionBased Whether the report is execution-based.
+ * @param {ExecutionMode} executionMode Execution mode for the test generation.
  * @param {string} elementUID The UID of the selected element.
  * @param {testBenchTypes.OptionalJobIDRequestParameter} cycleStructureOptionsRequestParams Request parameters for the cycle report.
  * @param {vscode.Progress} progress The VS Code progress reporter.
@@ -853,7 +811,7 @@ async function runRobotFrameworkTestGenerationProcess(
     context: vscode.ExtensionContext,
     projectKey: string,
     cycleKey: string,
-    executionBased: boolean,
+    executionMode: ExecutionMode,
     elementUID: string,
     cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
@@ -893,7 +851,7 @@ async function runRobotFrameworkTestGenerationProcess(
     }
 
     // Update the last generated report parameters workspaceState to be able to import the generated tests later
-    await saveLastGeneratedReportParams(context, elementUID, projectKey, cycleKey, executionBased, false);
+    await saveLastGeneratedReportParams(context, elementUID, projectKey, cycleKey, executionMode, false);
 
     vscode.window.showInformationMessage("Robot Framework test generation successful.");
     logger.debug("Test generation successful.");
@@ -931,13 +889,12 @@ export async function removeReportZipFile(
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         logger.debug(`Attempt ${attempt} to delete ${zipFileFullPath}`);
         try {
-            // Check if the file exists
+            // Check if the file exists (throws error if not)
             await fsPromise.access(zipFileFullPath);
-            // Validate that the file is a zip file
             if (path.extname(zipFileFullPath) !== ".zip") {
                 throw new Error(`Invalid file type: ${path.extname(zipFileFullPath)}. Only zip files can be removed.`);
             }
-            // Remove the file
+
             await fsPromise.unlink(zipFileFullPath);
             logger.debug(`Zip file removed: ${zipFileFullPath}`);
             return;
@@ -958,10 +915,6 @@ export async function removeReportZipFile(
         }
     }
 }
-
-/* =============================================================================
-   File & Path Helper Functions
-   ============================================================================= */
 
 /**
  * Recursively searches for a file within a directory.
@@ -988,9 +941,7 @@ export async function findFileRecursivelyInDirectory(
                 if (foundSearchResult) {
                     return foundSearchResult;
                 }
-            }
-            // Check if the current file is not a folder and it is the file we are looking for
-            else if (stat.isFile() && currentFileName === fileNameToSearch) {
+            } else if (stat.isFile() && currentFileName === fileNameToSearch) {
                 logger.debug(`File found: ${pathOfCurrentFile}`);
                 return pathOfCurrentFile;
             }
@@ -1014,11 +965,11 @@ export async function findFileRecursivelyInDirectory(
 async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): Promise<string | null> {
     logger.debug(`Choosing output XML file using working directory: ${workingDirectoryPath}`);
 
-    // Open file selection dialog to select the output xml file, display only XML files in the selection.
-    // To use relative paths to workspace location in extension settings,
+    // To use relative paths to the workspace root,
     // get the workspace location to construct the full path of outputXmlFilePath.
-    const outputXMLFileRelativePathInExtensionSettings: string | undefined =
-        getConfig().get<string>("outputXmlFilePath");
+    const outputXMLFileRelativePathInExtensionSettings: string | undefined = getConfig().get<string>(
+        ConfigKeys.TB2ROBOT_OUTPUT_XML_PATH
+    );
     const outputXMLFileAbsolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
         outputXMLFileRelativePathInExtensionSettings,
         true
@@ -1026,18 +977,16 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     if (outputXMLFileAbsolutePath) {
         return outputXMLFileAbsolutePath;
     }
-    logger.trace("Prompting user to select output XML file manually.");
-    // Get the first workspace folder path, if available
+
+    logger.trace("outputXmlFilePath could not be constructred. Prompting user to select output XML file manually.");
     const firstWorkspaceFolderPath: string | undefined = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     // Determine which path to use as the default URI for the file selection dialog
     const defaultUri: vscode.Uri = firstWorkspaceFolderPath
-        ? vscode.Uri.file(firstWorkspaceFolderPath) // Try using the first workspace folder first
+        ? vscode.Uri.file(firstWorkspaceFolderPath) // Try first workspace folder
         : workingDirectoryPath
-          ? vscode.Uri.file(workingDirectoryPath) // Fall back to the working directory
-          : vscode.Uri.file(os.homedir()); // Final fallback to the user's home directory if none of the above are available
+          ? vscode.Uri.file(workingDirectoryPath) // Try working directory
+          : vscode.Uri.file(os.homedir()); // Fallback to the user's home directory
     logger.trace(`Default URI for XML selection: ${defaultUri.fsPath}`);
-
-    // Output XML was not set in the extension settings. Open file selection dialog.
     const selectedXMLFileUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
         defaultUri: defaultUri,
         canSelectFiles: true,
@@ -1046,12 +995,13 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         openLabel: "Select Output XML File",
         filters: { "XML Files": ["xml"] }
     });
-    // Return the selected file path if a file was chosen
+
     if (selectedXMLFileUri && selectedXMLFileUri.length > 0) {
         logger.debug(`Output XML file selected: ${selectedXMLFileUri[0].fsPath}`);
         return selectedXMLFileUri[0].fsPath;
     }
-    const xmlFileNotSelectedError: string = "No output XML file selected.";
+
+    const xmlFileNotSelectedError: string = "No output.xml file selected.";
     logger.error(xmlFileNotSelectedError);
     vscode.window.showErrorMessage(xmlFileNotSelectedError);
     return null;
@@ -1064,7 +1014,7 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
  * @returns {Promise<string | null>} The absolute path of the selected zip file, or null if none selected.
  */
 async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): Promise<string | null> {
-    const selectedFiles = await vscode.window.showOpenDialog({
+    const selectedFiles: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
         defaultUri: vscode.Uri.file(workingDirectoryPath),
         title: "Select Report Zip File",
         openLabel: "Select Report Zip File",
@@ -1078,10 +1028,6 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
     logger.error("No report zip file selected for the results zip file.");
     return null;
 }
-
-/* =============================================================================
-   Test Results & Import Functions
-   ============================================================================= */
 
 /**
  * Reads test results using testbench2robotframework library and creates a report zip file with results.
@@ -1106,8 +1052,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             const reportProgress = (msg: string, inc: number) => progress.report({ message: msg, increment: inc });
 
             reportProgress("Choosing result XML file.", reportIncrement);
-            // Add a timestamp to the report zip file name
-            const reportWithResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;
+            const timestampedResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;
             const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
             if (!workspaceLocation) {
                 logger.error("Workspace location not configured for report creation.");
@@ -1125,7 +1070,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             }
             logger.trace(`Using output XML file: ${outputXMLPath}`);
 
-            logger.debug(`Generated report zip file will be named ${reportWithResultsZipName}`);
+            logger.debug(`Generated report zip file will be named ${timestampedResultsZipName}`);
             reportProgress("Fetching base report structure.", reportIncrement);
 
             // TODO: Currently we are using the last generated report parameters to create the report with results,
@@ -1142,15 +1087,14 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 return undefined;
             }
 
-            const { executionBased, projectKey, cycleKey, UID, alreadyImported } = retrievedParams;
+            const { executionMode: executionBased, projectKey, cycleKey, UID, alreadyImported } = retrievedParams;
             if (
                 executionBased === undefined ||
                 !projectKey ||
                 !cycleKey ||
-                UID === undefined ||
+                UID === undefined || // UID can be empty string
                 alreadyImported === undefined
             ) {
-                // UID can be empty string
                 const invalidParamsError: string =
                     "Retrieved parameters from previous test generation are incomplete/invalid for fetching base report.";
                 logger.error(invalidParamsError);
@@ -1159,7 +1103,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             }
 
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-                basedOnExecution: executionBased,
+                executionMode: executionBased,
                 treeRootUID: UID
             };
 
@@ -1171,7 +1115,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 progress
             );
 
-            // If fetching the report failed, we need the user to select it manually
+            // If report fetching fails, prompt user to select the report zip file manually
             const finalBaseReportPath: string | null =
                 downloadedReportWithoutResultsZip ??
                 (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
@@ -1188,10 +1132,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             reportProgress("Merging results with base report.", reportIncrement / 2);
             const reportWithResultsZipFullPath: string = path.join(
                 testbenchWorkingDirectoryPathInsideWorkspace,
-                reportWithResultsZipName
+                timestampedResultsZipName
             );
 
-            // Create the report with results
             const isTb2RobotFetchResultsExecutionSuccessful: boolean =
                 await testbench2robotframeworkLib.tb2robotLib.startTb2robotFetchResults(
                     outputXMLPath,
@@ -1199,7 +1142,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     reportWithResultsZipFullPath
                 );
 
-            // Clean up the downloaded report after it has been used
             if (downloadedReportWithoutResultsZip) {
                 await cleanUpReportFileIfConfiguredInSettings(downloadedReportWithoutResultsZip);
             }
@@ -1295,13 +1237,13 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     logger.warn(
                         `Attempting to re-import same report. targetProject='${targetProjectKey}', targetCycle='${targetCycleKey}'.`
                     );
-                    const userChoice = await vscode.window.showWarningMessage(
+                    const reimportPromptChoice = await vscode.window.showWarningMessage(
                         `You are about to import results to Project ${targetProjectKey}, Cycle ${targetCycleKey} again. This seems to be the same operation as before. Do you want to proceed?`,
                         { modal: true },
                         "Yes, Import Again",
                         "Cancel"
                     );
-                    if (userChoice !== "Yes, Import Again") {
+                    if (reimportPromptChoice !== "Yes, Import Again") {
                         logger.trace("User cancelled re-import of the same data to the same target.");
                         return null;
                     }
@@ -1337,7 +1279,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     `Successfully created report with results: ${createdReportPath}. Based on output.xml: '${outputXmlPathUsed}' and base report: '${baseReportPathUsed}'.`
                 );
 
-                const reportFileNameForDisplay = path.basename(createdReportPath);
+                const reportFileNameForDisplay: string = path.basename(createdReportPath);
 
                 if (cancellationToken.isCancellationRequested) {
                     logger.trace("Cancelled after re-import check.");
@@ -1357,16 +1299,6 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     createdReportPath
                 );
 
-                // Save details of this successful import (using sources and target)
-                // Note: This is not needed anymore but can be used for logging
-                await saveLastImportedReportDetails(context, {
-                    outputXmlPath: outputXmlPathUsed,
-                    baseReportPath: baseReportPathUsed,
-                    targetProjectKey: targetProjectKey,
-                    targetCycleKey: targetCycleKey,
-                    timestamp: Date.now()
-                });
-
                 if (cancellationToken.isCancellationRequested) {
                     logger.trace("Cancelled after import to TestBench.");
                     return null;
@@ -1376,7 +1308,6 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 logger.debug(`Cleaning up generated report file: ${createdReportPath}`);
                 await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
 
-                // Set already imported to true in the last generated report parameters to prevent re-import
                 await updateAlreadyImportedFlagOfLastImportedReport(context, true);
 
                 logger.trace("Process Completed: Read, Create, and Import Test Results to Testbench.");
@@ -1450,50 +1381,6 @@ export async function startTestGenerationForCycle(
     }
 }
 
-/* =============================================================================
-   File Deletion & Cleanup Functions
-   ============================================================================= */
-
-/**
- * Deletes the testbench2robotframework configuration file.
- * Retries the operation in case the file is busy with small delays.
- *
- * @param {string} configFilePath The full path of the configuration file.
- * @param {number} maxRetries Maximum number of retries.
- * @param {number} delayMs Delay between retries in milliseconds.
- */
-export async function deleteTb2RobotConfigurationFile(
-    configFilePath: string,
-    maxRetries: number = 5,
-    delayMs: number = 500
-): Promise<void> {
-    logger.debug(`Deleting configuration file at: ${configFilePath}`);
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            // Check if the file exists before attempting to delete
-            await fsPromise.access(configFilePath);
-            await fsPromise.unlink(configFilePath);
-            logger.debug(`Configuration file deleted from: ${configFilePath}`);
-            return;
-        } catch (error: any) {
-            if (error.code === "ENOENT") {
-                vscode.window.showErrorMessage(`Configuration file not found: ${configFilePath}`);
-                return;
-            } else if (error.code === "EBUSY" && attempt < maxRetries) {
-                logger.warn(`Attempt ${attempt} failed due to EBUSY. Retrying in ${delayMs}ms...`);
-                vscode.window.showErrorMessage(`Failed to delete file due to EBUSY. Retrying in ${delayMs}ms...`);
-                await new Promise((resolve) => setTimeout(resolve, delayMs));
-            } else {
-                vscode.window.showErrorMessage(
-                    `Failed to delete configuration file after ${attempt} attempts: ${error.message}`
-                );
-                logger.error(`Error deleting file at ${configFilePath}:`, error);
-                return;
-            }
-        }
-    }
-}
-
 /**
  * Displays a Quick Pick menu with multi-select options including control items "Select All" and "Clear All".
  * All regular items are pre-selected by default.
@@ -1508,35 +1395,28 @@ export async function showMultiSelectQuickPick(
 ): Promise<string[]> {
     return new Promise<string[]>((resolve) => {
         let quickPick: vscode.QuickPick<vscode.QuickPickItem> | undefined;
-        let isResolved: boolean = false; // Flag to prevent double resolution/disposal
+        let isResolutionComplete: boolean = false;
 
         try {
             quickPick = vscode.window.createQuickPick();
             quickPick.canSelectMany = true;
             quickPick.placeholder = placeholder;
-            quickPick.ignoreFocusOut = true; // Optional: keep open if focus moves
+            quickPick.ignoreFocusOut = true;
 
-            // Select All and Clear All buttons that will be displayed above the regular items
-            // These are not selectable items, but control items to select/deselect all
-            const selectAllLabel: string = "$(check-all) Select All";
-            const clearAllLabel: string = "$(clear-all) Clear All";
+            const selectAllButtonLabel: string = "$(check-all) Select All";
+            const clearAllButtonLabel: string = "$(clear-all) Clear All";
 
-            // Create QuickPickItem objects for regular items
             const regularItems: vscode.QuickPickItem[] = regularItemLabels.map((label) => ({ label }));
 
-            // Create QuickPickItem objects for control items
-            const selectAllItem: vscode.QuickPickItem = { label: selectAllLabel, alwaysShow: true };
-            const clearAllItem: vscode.QuickPickItem = { label: clearAllLabel, alwaysShow: true };
+            const selectAllControlItem: vscode.QuickPickItem = { label: selectAllButtonLabel, alwaysShow: true };
+            const clearAllControlItem: vscode.QuickPickItem = { label: clearAllButtonLabel, alwaysShow: true };
 
-            // Separator for visual grouping (optional but recommended)
             const separator: vscode.QuickPickItem = {
                 label: "Actions",
                 kind: vscode.QuickPickItemKind.Separator
             };
 
-            // Set the items in the Quick Pick
-            // Place actions first, then separator, then regular items
-            quickPick.items = [selectAllItem, clearAllItem, separator, ...regularItems];
+            quickPick.items = [selectAllControlItem, clearAllControlItem, separator, ...regularItems];
 
             // Pre-select all regular items initially
             if (quickPick) {
@@ -1544,32 +1424,28 @@ export async function showMultiSelectQuickPick(
             }
 
             // --- Event Listeners ---
-
             let ignoreSelectionChange: boolean = false;
             quickPick.onDidChangeSelection((selection) => {
-                if (ignoreSelectionChange || isResolved) {
+                if (ignoreSelectionChange || isResolutionComplete) {
                     return;
                 } // Prevent updates if flagged or after resolution
 
-                // Check if a control item was just selected
                 const selectedLabels: string[] = selection.map((item) => item.label);
-                const isSelectAllTriggered: boolean = selectedLabels.includes(selectAllLabel);
-                const isClearAllTriggered: boolean = selectedLabels.includes(clearAllLabel);
+                const isSelectAllTriggered: boolean = selectedLabels.includes(selectAllButtonLabel);
+                const isClearAllTriggered: boolean = selectedLabels.includes(clearAllButtonLabel);
 
                 if (isSelectAllTriggered || isClearAllTriggered) {
                     ignoreSelectionChange = true;
                     if (isSelectAllTriggered) {
-                        // Select all regular items
                         if (quickPick) {
                             quickPick.selectedItems = [...regularItems];
                         }
                     } else {
-                        // Deselect all regular items
                         if (quickPick) {
                             quickPick.selectedItems = [];
                         }
                     }
-                    // Re-enable the listener after a brief moment
+                    // Re-enable the listener after 10ms to allow for quick pick updates
                     setTimeout(() => {
                         ignoreSelectionChange = false;
                     }, 10);
@@ -1577,49 +1453,45 @@ export async function showMultiSelectQuickPick(
             });
 
             quickPick.onDidAccept(() => {
-                if (isResolved || !quickPick) {
+                if (isResolutionComplete || !quickPick) {
                     return;
                 }
-                isResolved = true;
+                isResolutionComplete = true;
                 try {
-                    // Filter out control items and map to labels
                     const selectedRegularLabels: string[] = quickPick.selectedItems
                         .filter(
                             (item) =>
-                                item.label !== selectAllLabel &&
-                                item.label !== clearAllLabel &&
+                                item.label !== selectAllButtonLabel &&
+                                item.label !== clearAllButtonLabel &&
                                 item.kind !== vscode.QuickPickItemKind.Separator
                         )
                         .map((item) => item.label);
                     resolve(selectedRegularLabels);
                 } catch (err) {
                     logger.error("Error processing Quick Pick acceptance:", err);
-                    resolve([]); // Resolve with empty on error during processing
+                    resolve([]);
                 } finally {
-                    quickPick.dispose(); // Dispose on accept
+                    quickPick.dispose();
                 }
             });
 
             quickPick.onDidHide(() => {
-                // Important: onDidHide fires even after onDidAccept.
-                // The isResolved flag prevents resolving twice.
-                if (isResolved || !quickPick) {
+                if (isResolutionComplete || !quickPick) {
                     return;
                 }
-                isResolved = true;
-                resolve([]); // User cancelled
-                quickPick.dispose(); // Dispose on hide/cancel
+                isResolutionComplete = true;
+                resolve([]);
+                quickPick.dispose();
             });
 
             quickPick.show();
         } catch (error) {
             logger.error("Error creating or displaying Quick Pick:", error);
-            if (quickPick && !isResolved) {
-                // Ensure disposal if error happens after creation but before hide/accept
+            if (quickPick && !isResolutionComplete) {
                 quickPick.dispose();
             }
-            isResolved = true;
-            resolve([]); // Resolve with empty array on error
+            isResolutionComplete = true;
+            resolve([]);
         }
     });
 }
@@ -1648,19 +1520,15 @@ export async function getQuickPickItemsFromReportZipWithResults(
 ): Promise<string[]> {
     logger.trace(`Reading JSON's from zip file: ${zipFilePath}, groupByPrefix: ${groupByPrefix}`);
     try {
-        // Read the zip file as binary data.
-        const data: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
-        // Load the zip file using JSZip.
-        const zip = await JSZip.loadAsync(data);
-        // File names in the zip file
-        const filesInZip: string[] = Object.keys(zip.files);
+        const binaryDataOfZip: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
+        const zip = await JSZip.loadAsync(binaryDataOfZip);
+        const filesNamesInZip: string[] = Object.keys(zip.files);
 
         if (groupByPrefix) {
             logger.trace("Grouping JSON files by prefix and fetching names.");
             const uniquePrefixes: Set<string> = new Set<string>();
 
-            // Collect all unique prefixes
-            for (const fileName of filesInZip) {
+            for (const fileName of filesNamesInZip) {
                 if (isCandidateJsonFile(fileName)) {
                     const prefix: string | null = extractPrefix(fileName);
                     if (prefix) {
@@ -1670,12 +1538,11 @@ export async function getQuickPickItemsFromReportZipWithResults(
             }
 
             const quickPickItemLabels: string[] = [];
-            // For each unique prefix, try to fetch its name and construct label for quick pick
             for (const prefix of uniquePrefixes) {
                 let nameProperty: string | null = null;
                 // Attempt to find and read the specific file "{prefix}.json" (case-insensitive)
                 const specificJsonFileNameToFind: string = `${prefix}.json`.toLowerCase();
-                const actualFileNameInZip: string | undefined = filesInZip.find(
+                const actualFileNameInZip: string | undefined = filesNamesInZip.find(
                     (fileName) => fileName.toLowerCase() === specificJsonFileNameToFind
                 );
 
@@ -1700,12 +1567,12 @@ export async function getQuickPickItemsFromReportZipWithResults(
             }
 
             logger.trace(`Unique item labels for quick pick (grouped by prefix): ${quickPickItemLabels}`);
-            return quickPickItemLabels.sort(); // Sort for consistent order
+            return quickPickItemLabels.sort();
         } else {
             logger.trace("Listing all candidate JSON files with their names if available.");
             const quickPickItemLabelsIndividual: string[] = [];
 
-            for (const fileName of filesInZip) {
+            for (const fileName of filesNamesInZip) {
                 if (isCandidateJsonFile(fileName)) {
                     let nameProperty: string | null = null;
                     const jsonFile: JSZip.JSZipObject | null = zip.file(fileName);
@@ -1713,7 +1580,6 @@ export async function getQuickPickItemsFromReportZipWithResults(
                         try {
                             const jsonString: string = await jsonFile.async("string");
                             const jsonData = JSON.parse(jsonString);
-                            // Attempt to get the 'name' property as a top level property of the JSON structure
                             nameProperty = jsonData?.name || null;
                         } catch (e) {
                             logger.warn(`Could not read or parse JSON for ${fileName} to get name property:`, e);
@@ -1724,7 +1590,7 @@ export async function getQuickPickItemsFromReportZipWithResults(
                 }
             }
             logger.trace(`Item labels for quick pick (individual files): ${quickPickItemLabelsIndividual}`);
-            return quickPickItemLabelsIndividual.sort(); // Sort for consistent order
+            return quickPickItemLabelsIndividual.sort();
         }
     } catch (error) {
         logger.error("Error processing the zip file:", error);
@@ -1753,9 +1619,8 @@ export async function createNewReportWithSelectedItems(
 ): Promise<void> {
     logger.trace(`Updating zip file: ${zipFilePath} with selected items: ${selectedItems}`);
     try {
-        // Read the zip file as binary data.
-        const data: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
-        const zip: JSZip = await JSZip.loadAsync(data);
+        const binaryZipData: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
+        const zip: JSZip = await JSZip.loadAsync(binaryZipData);
 
         Object.keys(zip.files).forEach((fileName) => {
             if (isCandidateJsonFile(fileName)) {
@@ -1764,9 +1629,8 @@ export async function createNewReportWithSelectedItems(
                     const selectedPrefixes: Set<string> = new Set(
                         selectedItems.map((label) => {
                             // Regex to extract prefix from "prefix (name)" or "prefix"
-                            const match: RegExpMatchArray | null = label.match(/^(itb-(?:tc|tt)-\d+)/i);
-                            // Fallback to the full label if no prefix pattern is matched (should ideally not happen for valid items)
-                            return match ? match[1] : label;
+                            const regexMatchArray: RegExpMatchArray | null = label.match(/^(itb-(?:tc|tt)-\d+)/i);
+                            return regexMatchArray ? regexMatchArray[1] : label;
                         })
                     );
 
@@ -1785,13 +1649,10 @@ export async function createNewReportWithSelectedItems(
             }
         });
 
-        // Generate a new file name with a suffix appended before the extension.
-        const filePathWithoutExtension: string = zipFilePath.substring(0, zipFilePath.lastIndexOf("."));
-        const fileExtension: string = path.extname(zipFilePath);
-        const newZipFilePath: string = `${filePathWithoutExtension}-MODIFIED${fileExtension}`;
-        // Generate the new zip archive as a Node.js buffer.
+        const filePathWithoutZipExtension: string = zipFilePath.substring(0, zipFilePath.lastIndexOf("."));
+        const zipFileExtension: string = path.extname(zipFilePath);
+        const newZipFilePath: string = `${filePathWithoutZipExtension}-MODIFIED${zipFileExtension}`;
         const newZipData: Buffer<ArrayBufferLike> = await zip.generateAsync({ type: "nodebuffer" });
-        // Write the new zip archive to the new file.
         fs.writeFileSync(newZipFilePath, newZipData);
 
         const zipUpdateSuccessMessage: string = `Modified report file created at: ${newZipFilePath}`;

@@ -1006,6 +1006,7 @@ export function setupProjectTreeViewEventListeners(
             const projectAndTovNameObj = getProjectAndTovNamesFromSelection(selectedElement);
             if (projectAndTovNameObj) {
                 const { projectName, tovName } = projectAndTovNameObj;
+                logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
                 if (projectName && tovName) {
                     await initializeLanguageServer(projectName, tovName);
                 }

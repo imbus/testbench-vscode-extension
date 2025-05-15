@@ -91,8 +91,7 @@ export const StorageKeys = {
      * Workspace state storage key for the last generated report parameters
      * to be able to use the report without the user selecting the report again while importing the report.
      */
-    LAST_GENERATED_PARAMS: "testbenchExtension.lastGeneratedReportParams",
-    LAST_IMPORTED_REPORT_DETAILS: "testbenchExtension.lastImportedReportDetails" // Workspace state
+    LAST_GENERATED_PARAMS: "testbenchExtension.lastGeneratedReportParams"
 } as const;
 
 // --- Tree Item Context Values ---

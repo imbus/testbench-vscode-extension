@@ -22,6 +22,7 @@ export interface ActiveTestBenchSessionInfo extends TestBenchProfile {
     sessionToken: string; // The TestBench API session token
 }
 
+// TODO: Remove if not needed
 export interface Testbench2robotframeworkConfiguration {
     "library-root": string[];
     "resource-root": string[];
@@ -47,6 +48,7 @@ export interface Testbench2robotframeworkConfiguration {
     };
 }
 
+// TODO: Remove if not needed
 // Default configuration for Testbench2robotframework
 export const defaultTestbench2robotframeworkConfig: Testbench2robotframeworkConfiguration = {
     "library-root": ["Interactions", "RF-Library"],
@@ -84,17 +86,11 @@ export interface LastGeneratedReportParams {
     UID: string;
     projectKey: string;
     cycleKey: string;
-    executionBased: boolean;
+    executionMode: ExecutionMode;
     timestamp: number;
+    // Track if the report has already been imported
+    // to avoid re-importing the same report multiple times
     alreadyImported: boolean;
-}
-
-export interface LastImportedReportDetails {
-    outputXmlPath: string; // Path to the Robot Framework output.xml
-    baseReportPath: string; // Path to the base report (without results)
-    targetProjectKey: string;
-    targetCycleKey: string;
-    timestamp: number;
 }
 
 export interface CycleStructure {
@@ -151,46 +147,29 @@ export type CycleNodeData = {
         matchesFilter: boolean;
     };
     spec?: {
-        // Optional
         key: string;
         locker: string | null;
         status: string;
     };
     aut?: {
-        // Optional
         key: string;
         locker: string | null;
         status: string;
     };
     exec?: {
-        // Optional
         status: string;
         execStatus: string;
         verdict: string;
         key: string;
         locker: string | null;
     };
-    filters?: any[]; // Optional
+    filters?: any[];
     elementType: string; // e.g., TestThemeNode, TestCaseSetNode, TestCaseNode
 };
 
-// Interface for Test Case
-export interface TestCase {
-    uniqueID: string;
-    name: string;
-    steps: string[];
-}
-
-// Interface for Test Suite containing Test Cases
-export interface TestSuite {
-    themeID: string;
-    testCases: TestCase[];
-}
-
-// Interface representing the optional request body parameters.
 export interface OptionalJobIDRequestParameter {
     treeRootUID?: string;
-    basedOnExecution?: boolean;
+    executionMode?: ExecutionMode;
     suppressFilteredData?: boolean;
     suppressNotExecutable?: boolean;
     suppressEmptyTestThemes?: boolean;
@@ -201,12 +180,17 @@ export interface OptionalJobIDRequestParameter {
     }[];
 }
 
-// Interface representing the successful response from the server.
+export enum ExecutionMode {
+    Execute = "execute",
+    Continue = "continue",
+    View = "view",
+    Simulate = "simulate"
+}
+
 export interface JobIdResponse {
     jobID: string;
 }
 
-// Interface representing the successful response from the job status GET request.
 export interface JobStatusResponse {
     id: string;
     projectKey: string;
@@ -246,53 +230,6 @@ export interface JobStatusResponse {
     };
 }
 
-export interface Interaction {
-    key: string;
-    uniqueID: string;
-    name: string;
-    interactionType: string;
-    path: string;
-    spec: {
-        callKey: string;
-        sequencePhase: string;
-        callType: string;
-        description: string;
-        comments: string;
-        references: any[];
-        preConditions: any[];
-        postConditions: any[];
-    };
-    exec: {
-        verdict: string;
-        time: string;
-        duration: number;
-        currentUser: { key: string; name: string };
-        tester: string | null;
-        comments: string;
-        references: any[];
-    };
-    parameters: ParameterOfInteraction[];
-    interactions?: Interaction[];
-}
-
-export interface ParameterOfInteraction {
-    dataType: {
-        key: string;
-        kind: string;
-        name: string;
-        path: string;
-        uniqueID: string;
-        version: string | null;
-    };
-    definitionType: string;
-    key: string;
-    name: string;
-    evaluationType: string;
-    value: string;
-    valueType: string;
-}
-
-// New play server Project structure
 export interface Project {
     key: string;
     creationTime: string;
@@ -307,7 +244,6 @@ export interface Project {
     endDate: string | null;
 }
 
-// New play server Tree node structure
 export interface TreeNode {
     nodeType: string;
     key: string;
@@ -318,14 +254,6 @@ export interface TreeNode {
     children?: TreeNode[]; // Not all nodes have children
 }
 
-// Define an interface for the server versions response
-export interface ServerVersionsResponse {
-    releaseVersion: string;
-    databaseVersion: string;
-    revision: string;
-}
-
-// Data structure for the import request body for importing test results from a file.
 export interface ImportData {
     fileName: string;
     reportRootUID: string;
@@ -341,14 +269,12 @@ export interface ImportDataFilter {
     testThemeUID: string;
 }
 
-// Request body structure for the login request
 export interface LoginRequestBody {
     login: string;
     password: string;
     force: boolean;
 }
 
-// Response body structure for the login request
 export interface LoginResponse {
     userKey: string;
     login: string;

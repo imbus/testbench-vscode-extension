@@ -8,20 +8,15 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
-import * as base64 from "base-64"; // npm i --save-dev @types/base-64
+import * as base64 from "base-64";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
 
 import { setConnection, logger, getProjectManagementTreeDataProvider, getLoginWebViewProvider } from "./extension";
 import * as utils from "./utils";
-import {
-    ContextKeys,
-    JobTypes,
-    StorageKeys,
-    allExtensionCommands,
-    folderNameOfInternalTestbenchFolder
-} from "./constants";
+import { ContextKeys, JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
+import { ExecutionMode } from "./testBenchTypes";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -29,7 +24,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 export interface TestBenchLoginResult {
     sessionToken: string;
     userKey: string; // From LoginResponse
-    loginName: string; // The login name used
+    loginName: string;
 }
 
 /**
@@ -61,7 +56,6 @@ export class PlayServerConnection {
             `[PlayServerConnection] Initializing for server: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
         );
 
-        // Create Axios instance for API calls to the server using the session token
         this.apiClient = axios.create({
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
@@ -70,7 +64,6 @@ export class PlayServerConnection {
             })
         });
 
-        // Only start keep-alive if a token is provided
         if (this.sessionToken) {
             // Start the keep-alive process immediately to prevent session timeout after 5 minutes
             this.startKeepAlive();
@@ -89,6 +82,7 @@ export class PlayServerConnection {
         return this.portNumber.toString();
     }
 
+    /** Returns the username. */
     public getUsername(): string {
         return this.username;
     }
@@ -103,10 +97,7 @@ export class PlayServerConnection {
         return this.apiClient;
     }
 
-    /**
-     * Returns the current session token.
-     * @returns {string} The session token.
-     */
+    /** Returns the current session token. */
     public getSessionToken(): string {
         return this.sessionToken;
     }
@@ -123,15 +114,14 @@ export class PlayServerConnection {
         );
         if (!this.sessionToken) {
             logger.warn("[PlayServerConnection] No session token available. Cannot perform server-side logout.");
-            this.stopKeepAlive(); // Stop keep-alive even if no token, as a precaution
-            return true; // No action needed, consider it "successful" in terms of cleanup
+            this.stopKeepAlive();
+            return true;
         }
 
         try {
             const logoutResponse: AxiosResponse = await withRetry(
                 () =>
                     this.apiClient.delete(`/login/session/v1`, {
-                        // apiClient is already configured with the token
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3,
@@ -157,23 +147,8 @@ export class PlayServerConnection {
             }
             return false;
         } finally {
-            this.stopKeepAlive(); // Always stop keep-alive after a logout attempt
-            // Do NOT clear session data here or call setConnection(null). That's for the auth provider / extension.ts
+            this.stopKeepAlive();
         }
-    }
-
-    /**
-     * Retrieves the session token from VS Code's secret storage.
-     *
-     * @param {vscode.ExtensionContext} context - The extension context.
-     * @returns {Promise<string | undefined>} The session token or undefined if not found.
-     */
-    async getSessionTokenFromSecretStorage(context: vscode.ExtensionContext): Promise<string | undefined> {
-        const token: string | undefined = await context.secrets.get(StorageKeys.SESSION_TOKEN);
-        if (!token) {
-            logger.error("Session token not found.");
-        }
-        return token;
     }
 
     /** Clears session data and resets API client and keep-alive timer. */
@@ -184,36 +159,6 @@ export class PlayServerConnection {
         this.sessionToken = "";
         this.apiClient = axios.create();
         this.keepAliveIntervalId = null;
-    }
-
-    /**
-     * Displays a quick pick list for selecting a project key.
-     *
-     * @param projectsData - The list of projects fetched from the server.
-     * @returns {Promise<string | null>} The selected project key or null if none selected.
-     */
-    async getProjectKeyFromProjectListQuickPickSelection(
-        projectsData: testBenchTypes.Project[]
-    ): Promise<string | null> {
-        // Extract project names from the projects data and display them in a quick pick list
-        const projectNames: string[] = projectsData.map((project) => project.name);
-        const selectedProjectName: string | undefined = await vscode.window.showQuickPick(projectNames, {
-            placeHolder: "Select a project"
-        });
-
-        if (!selectedProjectName) {
-            logger.error("Selected project name not found.");
-            return null;
-        }
-
-        logger.debug("Selected project name:", selectedProjectName);
-        const selectedProject = projectsData.find((project) => project.name === selectedProjectName);
-        if (!selectedProject) {
-            logger.error("Selected project not found.");
-            return null;
-        }
-
-        return selectedProject.key;
     }
 
     /**
@@ -229,14 +174,13 @@ export class PlayServerConnection {
         try {
             logger.debug("Fetching projects list.");
             const projectsURL: string = `/projects/v1`;
-            // Wrap the project list get request in the withRetry helper.
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
                     this.apiClient.get(projectsURL, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                3, // maxRetries: try 3 additional times
-                2000 // delayMs: wait 2000ms between attempts
+                3, // Try 3 additional times
+                2000 // delayMs
             );
 
             // Save the response from server to a file for analyzing the structure
@@ -294,8 +238,8 @@ export class PlayServerConnection {
                     this.apiClient.get(projectTreeURL, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                3, // maxRetries: try 3 additional times
-                2000 // delayMs: wait 2000ms between attempts
+                3, // maxRetries
+                2000 // delayMs
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -356,10 +300,6 @@ export class PlayServerConnection {
 
             const userNameFromConfig: string = this.username;
             const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
-            logger.trace("@@@@ Username from config:", userNameFromConfig);
-            logger.trace("@@@@ Session token:", this.sessionToken);
-            logger.trace("@@@@ base64 encoded credentials:", encoded);
-            // Create session for API calls to the old play server
             const oldPlayServerSession: axios.AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
                 // Old play server, which runs on port 9443, uses BasicAuth.
@@ -369,7 +309,6 @@ export class PlayServerConnection {
                     password: this.sessionToken
                 },
                 headers: {
-                    // Manually encode the credentials to Base64
                     Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
@@ -380,20 +319,20 @@ export class PlayServerConnection {
             });
 
             if (!oldPlayServerSession) {
-                logger.error("@@@@@ Failed to create session for old play server.");
+                logger.error("Failed to create session for old play server.");
                 return null;
             } else {
-                logger.trace(`@@@@@ Old play server session created successfully: ${oldPlayServerSession}`);
+                logger.trace(`Old play server session created successfully: ${oldPlayServerSession}`);
             }
 
             logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
             const testElementsResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getTestElementsURL),
-                3, // maxRetries: try 3 additional times
-                2000, // delayMs: wait 2000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
-                        // Do not retry if the error is due to authentication or if the resource is not found.
+                        // Retry predicates
                         const nonRetryableStatusCodes: number[] = [401, 404];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
                             return false;
@@ -449,7 +388,7 @@ export class PlayServerConnection {
     ): Promise<testBenchTypes.CycleStructure | null> {
         const cycleStructureUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
-            basedOnExecution: true,
+            executionMode: ExecutionMode.Execute,
             suppressFilteredData: false,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
@@ -465,11 +404,11 @@ export class PlayServerConnection {
                             "Content-Type": "application/json"
                         }
                     }),
-                3, // maxRetries: try 3 additional times
-                2000, // delayMs: wait 2000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
-                        // Do not retry if the error is due to a bad request, missing resource, or unprocessable data.
+                        // Retry predicates
                         const nonRetryableStatusCodes = [400, 404, 422];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
                             return false;
@@ -523,8 +462,8 @@ export class PlayServerConnection {
                     this.apiClient.delete(`/login/session/v1`, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                3, // maxRetries: try 3 additional times
-                2000 // delayMs: wait 2000ms between attempts
+                3, // maxRetries
+                2000 // delayMs
             );
 
             if (logoutResponse.status === 204) {
@@ -556,6 +495,7 @@ export class PlayServerConnection {
             const pmProvider = getProjectManagementTreeDataProvider();
             pmProvider?.clearTree();
             setConnection(null);
+
             // Notify login webview about the logout success to change its HTML content
             const lwvProvider = getLoginWebViewProvider();
             if (lwvProvider) {
@@ -593,10 +533,10 @@ export class PlayServerConnection {
                         // Handle all status codes manually
                         validateStatus: () => true
                     }),
-                3, // maxRetries: try 3 additional times
-                2000, // delayMs: wait 2000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
                 (error) => {
-                    // Do not retry if the error is due to a non-transient condition
+                    // Retry predicates
                     if (axios.isAxiosError(error) && error.response) {
                         const nonRetryableStatusCodes = [403, 404, 422];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
@@ -610,7 +550,6 @@ export class PlayServerConnection {
             switch (importZipResponse.status) {
                 case 201: {
                     logger.debug("Report imported successfully.");
-                    // Extract the fileName from the response and return it
                     const fileName: string | undefined = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
@@ -682,10 +621,10 @@ export class PlayServerConnection {
                         },
                         validateStatus: () => true
                     }),
-                3, // maxRetries: try 3 additional times
-                2000, // delayMs: wait 2000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
                 (error) => {
-                    // Do not retry if the error has a non-transient status code.
+                    // Retry predicates
                     if (axios.isAxiosError(error) && error.response) {
                         const nonRetryableStatusCodes = [400, 403, 404, 422];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
@@ -758,11 +697,10 @@ export class PlayServerConnection {
      * If the keep-alive process is already running and it is triggered again, the previous one is stopped before starting a new one.
      */
     public startKeepAlive(): void {
-        this.stopKeepAlive(); // Prevent multiple intervals if previously started.
+        this.stopKeepAlive();
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();
         }, this.keepAliveIntervalInSeconds);
-        // Send an immediate keep-alive request.
         this.sendKeepAliveRequest();
         logger.trace("Keep-alive started.");
     }
@@ -795,15 +733,11 @@ export class PlayServerConnection {
                     this.apiClient.get(`/login/session/v1`, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                5, // maxRetries: try 5 additional times
-                2000 // delayMs: wait 2000ms between attempts
+                5, // maxRetries
+                2000 // delayMs
             );
             logger.trace("Keep-alive request sent.");
         } catch (error) {
-            // IMPORTANT: If keep-alive fails and results in logout, it should signal this failure
-            // back to the AuthenticationProvider or a global listener to update the VS Code session state.
-            // This might involve emitting an event from PlayServerConnection or having the keep-alive
-            // failure directly trigger vscode.authentication.removeSession if possible.
             logger.error("Keep-alive request failed after retries:", error);
             logger.warn("Logging out the user after keep-alive failure.");
             await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
@@ -817,7 +751,7 @@ export class PlayServerConnection {
  *
  * @template T - The type returned by the asynchronous function.
  * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
- * @param {number} maxRetries - Maximum number of retry attempts (default is 3).
+ * @param {number} maxAllowedRetryCount - Maximum number of retry attempts (default is 3).
  * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
  * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
  * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is false).
@@ -826,31 +760,27 @@ export class PlayServerConnection {
  */
 export async function withRetry<T>(
     asyncFunction: () => Promise<T>,
-    maxRetries: number = 3,
+    maxAllowedRetryCount: number = 3,
     delayMs: number = 2000,
     shouldRetry?: (error: any) => boolean,
     showProgressBar: boolean = true
 ): Promise<T> {
-    let attempt: number = 0;
+    let retryCount: number = 0;
 
     while (true) {
         try {
-            // Attempt to execute the function.
             return await asyncFunction();
         } catch (error) {
-            // Log the retry attempt and delay before retrying.
-            logger.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`);
+            logger.warn(`Attempt ${retryCount} failed. Retrying in ${delayMs}ms...`);
 
-            // Check if we should not retry based on the error type/condition.
             if (shouldRetry && !shouldRetry(error)) {
                 logger.warn(`Error is not retryable. Aborting further retry attempts.`);
                 throw error;
             }
 
-            attempt++;
-            if (attempt > maxRetries) {
-                // If we've exceeded maxRetries, rethrow the error.
-                logger.error(`Attempt ${attempt} failed. Maximum retries reached, aborting further retries.`);
+            retryCount++;
+            if (retryCount > maxAllowedRetryCount) {
+                logger.error(`Attempt ${retryCount} failed. Maximum retries reached, aborting further retries.`);
                 throw error;
             }
 
@@ -863,80 +793,14 @@ export async function withRetry<T>(
                         cancellable: false
                     },
                     async (progress) => {
-                        progress.report({ message: `Attempt ${attempt} of ${maxRetries}` });
+                        progress.report({ message: `Attempt ${retryCount} of ${maxAllowedRetryCount}` });
                         await new Promise((resolve) => setTimeout(resolve, delayMs));
                     }
                 );
             } else {
-                // If progress bar is disabled, just wait for the delay.
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
             }
         }
-    }
-}
-
-// TODO: This function could be useful for a quickpick login UI, where the user has to enter the server URL and port number first.
-// But with a login web view all inputs are given at once. Delete this function if not needed.
-/**
- * Fetches the server versions from the TestBench server.
- * Used to verify the availability of server after receiving the server URL and port number in the login process.
- *
- * @param {string} serverName - The server name.
- * @param {number} portNumber - The port number.
- * @returns {Promise<testBenchTypes.ServerVersionsResponse | null>} The server versions data or null if an error occurs.
- */
-async function fetchServerVersions(
-    serverName: string,
-    portNumber: number
-): Promise<testBenchTypes.ServerVersionsResponse | null> {
-    try {
-        const baseURL = `https://${serverName}:${portNumber}`;
-        const serverVersionsURL = `${baseURL}/api/serverVersions/v1`;
-
-        logger.debug("Fetching server versions from URL:", serverVersionsURL);
-        const serverVersionsResponse: AxiosResponse<testBenchTypes.ServerVersionsResponse> = await withRetry(
-            () =>
-                axios.get(serverVersionsURL, {
-                    headers: { Accept: "application/vnd.testbench+json" },
-                    httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: set to true in production
-                }),
-            3, // maxRetries: try 3 additional times
-            2000, // delayMs: wait 2000ms between attempts
-            // Retry only if the error is due to a non-transient condition
-            (error) => {
-                if (axios.isAxiosError(error) && error.response) {
-                    // Do not retry if a 404 is received
-                    const nonRetryableStatusCodes = [404];
-                    if (nonRetryableStatusCodes.includes(error.response.status)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-        );
-
-        logger.debug(
-            `TestBench Release Version: ${serverVersionsResponse.data.releaseVersion}, ` +
-                `Database Version: ${serverVersionsResponse.data.databaseVersion}, ` +
-                `Revision: ${serverVersionsResponse.data.revision}`
-        );
-        return serverVersionsResponse.data;
-    } catch (error) {
-        if (axios.isAxiosError(error)) {
-            if (error.response) {
-                logger.error(`Error: Received status code ${error.response.status}`, error.response.data);
-                if (error.response.status === 404) {
-                    logger.error(`TestBench version cannot be found at https://${serverName}:${portNumber}`);
-                }
-            } else if (error.request) {
-                logger.error("Error: No response received from server.", error.request);
-            } else {
-                logger.error("Error:", error.message);
-            }
-        } else {
-            logger.error("Unexpected error:", error);
-        }
-        return null;
     }
 }
 
@@ -999,8 +863,8 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
  */
 export async function importReportWithResultsToTestbench(
     connection: PlayServerConnection,
-    projectKeyString: string, // Now accepts projectKey
-    cycleKeyString: string, // Now accepts cycleKey
+    projectKeyString: string,
+    cycleKeyString: string,
     reportWithResultsZipFilePath: string
 ): Promise<void | null> {
     try {
@@ -1023,7 +887,6 @@ export async function importReportWithResultsToTestbench(
         console.log(`allTreeElements saved to ${allTreeElementsPath}`);
         */
 
-        // Use the passed-in keys (convert to numbers for API calls)
         const projectKey: number = Number(projectKeyString);
         const cycleKey: number = Number(cycleKeyString);
 
@@ -1046,7 +909,6 @@ export async function importReportWithResultsToTestbench(
             return null;
         }
 
-        // Import the results to TestBench server
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
             reportRootUID: uniqueID,
@@ -1065,18 +927,15 @@ export async function importReportWithResultsToTestbench(
         };
 
         try {
-            // Start the import job
             logger.debug("Starting import execution results.");
             const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
 
-            // Poll the job status until it is completed
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await reportHandler.pollJobStatus(
                 projectKeyString,
                 importJobID,
                 JobTypes.IMPORT
             );
 
-            // Check job completion status
             if (!importJobStatus || reportHandler.isImportJobFailed(importJobStatus)) {
                 const importJobFailedMessage: string = "Import job could not be completed.";
                 logger.warn(importJobFailedMessage);
@@ -1127,13 +986,11 @@ export async function selectReportWithResultsAndImportToTestbench(
             progress.report({ message: "Extracting report context...", increment: 10 });
             const { projectKey, cycleKey } = await extractDataFromReport(resultZipFilePath);
 
-            // Validate extracted keys
             if (!projectKey || !cycleKey) {
                 const missingDataContextMsg: string =
                     "Could not extract necessary project or cycle key from the selected report file.";
                 logger.error(missingDataContextMsg);
                 vscode.window.showErrorMessage(missingDataContextMsg);
-                // Clean up the selected file if it exists and configured, even on error
                 await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
                 return null;
             }
@@ -1159,28 +1016,23 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
     cycleKey: string | null;
 }> {
     try {
-        // Read zip file from disk
         const zipData: Buffer = await fs.promises.readFile(path.resolve(zipFilePath));
         const zip: JSZip = new JSZip();
-        // Load zip data
         const zipContents: JSZip = await zip.loadAsync(zipData);
 
-        // Define file names
         const cycleStructureFileName: string = "cycle_structure.json";
         const projectFileName: string = "project.json";
 
-        // Extract JSON content
         const cycleStructureJson = await utils.extractAndParseJsonContent(zipContents, cycleStructureFileName);
         const projectJson = await utils.extractAndParseJsonContent(zipContents, projectFileName);
 
-        // Parse JSON and extract required fields
         const uniqueID: string | null = cycleStructureJson?.root?.base?.uniqueID || null;
         const projectKey: string | null = projectJson?.key || null;
         const cycleNameOfProject: string | null = projectJson?.projectContext?.cycleName || null;
         const cycleKey: string | null = projectJson?.projectContext?.cycleKey || null;
 
         logger.debug(
-            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}` // Log cycleKey
+            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`
         );
         return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
     } catch (error) {
@@ -1193,11 +1045,11 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
  * Logs in to the TestBench server with the provided credentials and returns session details.
  * This function focuses on the API interaction and does not handle UI or global state.
  *
- * @param serverName The server hostname or IP.
- * @param portNumber The server port.
- * @param username The TestBench username.
- * @param password The TestBench password.
- * @returns A promise resolving to TestBenchLoginResult if successful, otherwise null.
+ * @param {string} serverName The server hostname or IP.
+ * @param {number} portNumber The server port.
+ * @param {string} username The TestBench username.
+ * @param {string} password The TestBench password.
+ * @returns {Promise<TestBenchLoginResult | null>} A promise resolving to TestBenchLoginResult if successful, otherwise null.
  */
 export async function loginToServerAndGetSessionDetails(
     serverName: string,
@@ -1208,16 +1060,15 @@ export async function loginToServerAndGetSessionDetails(
     const requestBody: testBenchTypes.LoginRequestBody = {
         login: username,
         password: password,
-        force: true // Or make this configurable if needed
+        force: true
     };
 
-    const baseURL = `https://${serverName}:${portNumber}/api`;
-    const loginURL = `${baseURL}/login/session/v1`;
+    const baseURL: string = `https://${serverName}:${portNumber}/api`;
+    const loginURL: string = `${baseURL}/login/session/v1`;
 
     logger.trace(`[Connection] Sending login request to: ${loginURL} for user ${username}`);
 
     try {
-        // Using withRetry helper (assuming it's still in this file or imported)
         const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await withRetry(
             () =>
                 axios.post(loginURL, requestBody, {
@@ -1233,9 +1084,9 @@ export async function loginToServerAndGetSessionDetails(
                 // shouldRetry predicate
                 if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
                     logger.warn("[Connection] Login attempt failed with 401 (Invalid Credentials). Not retrying.");
-                    return false; // Do not retry on 401
+                    return false;
                 }
-                return true; // Retry on other errors (e.g., network issues)
+                return true;
             }
         );
 
@@ -1245,7 +1096,6 @@ export async function loginToServerAndGetSessionDetails(
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
                 loginName: loginResponse.data.login
-                // Add other relevant fields from LoginResponse if needed
             };
         } else {
             logger.error(
@@ -1255,10 +1105,10 @@ export async function loginToServerAndGetSessionDetails(
         }
     } catch (error: any) {
         if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            // Already logged by shouldRetry, but good to catch specifically
+            logger.error(`[Connection] Login failed for ${username} to ${serverName}: Invalid credentials.`);
         } else {
             logger.error(`[Connection] Error during login for ${username} to ${serverName}:`, error.message);
         }
-        return null; // Ensure null is returned on any error
+        return null;
     }
 }
