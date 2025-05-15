@@ -5,7 +5,7 @@ import { TestBenchProfile } from "./testBenchTypes";
 import { logger } from "./extension";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
-export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench";
+export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in VS Code Accounts UI
 
 interface TestBenchSessionData {
     sessionId: string; // VS Code session ID

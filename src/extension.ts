@@ -157,12 +157,11 @@ function registerSafeCommand(
     commandId: string,
     callback: (...args: any[]) => any
 ): void {
-    const disposable = vscode.commands.registerCommand(commandId, async (...args: any[]) => {
+    const disposable: vscode.Disposable = vscode.commands.registerCommand(commandId, async (...args: any[]) => {
         try {
             await callback(...args);
         } catch (error: any) {
-            // For silent auto-login, we expect errors if conditions aren't met,
-            // so avoid showing an error message to the user for this specific command.
+            // Errors expected in silent auto-login, dont show error message to user.
             if (commandId === allExtensionCommands.automaticLoginAfterExtensionActivation) {
                 logger.warn(
                     `Command ${commandId} error (expected for silent auto-login if conditions not met): ${error.message}`
@@ -228,7 +227,6 @@ export async function loadConfiguration(context: vscode.ExtensionContext, newSco
  */
 function initializeTestElementsTreeView(context: vscode.ExtensionContext): void {
     _testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider((message) => {
-        // Pass callback for message updates
         if (_testElementTreeView) {
             _testElementTreeView.message = message;
         }
@@ -239,7 +237,6 @@ function initializeTestElementsTreeView(context: vscode.ExtensionContext): void 
     context.subscriptions.push(_testElementTreeView);
 
     if (_testElementsTreeDataProvider.isTreeDataEmpty()) {
-        // Message setting will be handled by the provider via callback
         _testElementsTreeDataProvider.updateMessage();
     }
 }
@@ -260,14 +257,11 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
     });
     context.subscriptions.push(_testThemeTreeView);
 
-    _projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider(
-        (message) => {
-            if (_projectTreeView) {
-                _projectTreeView.message = message;
-            }
-        },
-        _testThemeTreeDataProvider // Pass the test theme tree data provider to the project management tree
-    );
+    _projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider((message) => {
+        if (_projectTreeView) {
+            _projectTreeView.message = message;
+        }
+    }, _testThemeTreeDataProvider);
     const newProjectTreeView: vscode.TreeView<projectManagementTreeView.BaseTestBenchTreeItem> =
         vscode.window.createTreeView("projectManagementTree", {
             treeDataProvider: _projectManagementTreeDataProvider,
@@ -283,11 +277,12 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
             _projectManagementTreeDataProvider.onDidPrepareCycleDataForThemeTree(
                 async (eventData: CycleDataForThemeTreeEvent) => {
                     if (_testThemeTreeDataProvider && _testThemeTreeView) {
-                        logger.debug(`Cycle data prepared for ${eventData.cycleLabel}. Updating Test Theme Tree.`);
+                        logger.debug(
+                            `[Prepare Cycle Event] Cycle data prepared for ${eventData.cycleLabel}. Updating Test Theme Tree.`
+                        );
 
-                        // Update the title of the Test Themes tree view
                         _testThemeTreeView.title = `Test Themes (${eventData.cycleLabel})`;
-                        logger.trace(`Test Theme TreeView title updated to: ${_testThemeTreeView.title}`);
+                        logger.trace(`Test Themes view title updated to: ${_testThemeTreeView.title}`);
 
                         _testThemeTreeDataProvider.clearTree();
                         _testThemeTreeDataProvider.populateFromCycleData(eventData);
@@ -297,12 +292,10 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
         );
     }
 
-    // Initial data load/refresh for project tree
-    _projectManagementTreeDataProvider?.refresh(true); // true for hard refresh
+    _projectManagementTreeDataProvider?.refresh(true);
 
     if (_testThemeTreeDataProvider && _testThemeTreeView) {
         _testThemeTreeDataProvider.clearTree();
-        // Message is set by clearTree/refresh via callback
     }
     initializeTestElementsTreeView(context);
     if (_projectTreeView && _projectManagementTreeDataProvider) {
@@ -337,115 +330,22 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         await utils.setWorkspaceLocation();
     });
 
-    // --- Command: Manage Profiles ---
-    registerSafeCommand(context, "testbenchExtension.manageProfiles", async () => {
-        logger.debug("[Cmd] Called: testbenchExtension.manageProfiles");
-        const profiles = await profileManager.getProfiles(context);
-        const activeProfileId = await profileManager.getActiveProfileId(context);
-
-        const items: vscode.QuickPickItem[] = [
-            { label: "$(add) Add New Profile", description: "Configure a new TestBench connection" },
-            ...profiles.map((p) => ({
-                label: `${activeProfileId === p.id ? "$(check) " : ""}${p.label}`,
-                description: `${p.username}@${p.serverName}:${p.portNumber}`,
-                detail: p.id // Store ID for later use
-            }))
-        ];
-        if (profiles.length > 0) {
-            items.push({ label: "$(trash) Delete a Profile", description: "Remove a saved connection" });
-            items.push({ label: "$(settings-gear) Set Active Profile", description: "Choose which profile to use" });
-        }
-
-        const selection = await vscode.window.showQuickPick(items, { placeHolder: "Manage TestBench Profiles" });
-
-        if (selection) {
-            if (selection.label.includes("$(add)")) {
-                await vscode.commands.executeCommand(allExtensionCommands.addNewProfile);
-            } else if (selection.label.includes("$(trash)")) {
-                await vscode.commands.executeCommand(allExtensionCommands.deleteProfile);
-            } else if (selection.label.includes("$(settings-gear)")) {
-                await vscode.commands.executeCommand(allExtensionCommands.selectActiveProfile);
-            } else if (selection.detail) {
-                // An existing profile was selected (could be used to edit or set active)
-                await profileManager.setActiveProfileId(context, selection.detail);
-                vscode.window.showInformationMessage(
-                    `Profile "${selection.label.replace("$(check) ", "")}" is now active. Please login if not already connected.`
-                );
-                // Trigger a login attempt with the new active profile
-                await vscode.commands.executeCommand(allExtensionCommands.login);
-            }
-        }
-    });
-
-    registerSafeCommand(context, allExtensionCommands.addNewProfile, async () => {
-        logger.debug("[Cmd] Called: testbenchExtension.addNewProfile");
-        vscode.window.showInformationMessage(
-            "To add a new profile, please use the 'TestBench: Login' command and choose to add a new connection when prompted."
-        );
-    });
-
-    registerSafeCommand(context, allExtensionCommands.selectActiveProfile, async () => {
-        logger.debug("[Cmd] Called: testbenchExtension.selectActiveProfile");
-        const profiles = await profileManager.getProfiles(context);
-        if (profiles.length === 0) {
-            vscode.window.showInformationMessage("No saved TestBench profiles. Please add one first.");
-            return;
-        }
-        const items = profiles.map((p) => ({
-            label: p.label,
-            description: `${p.username}@${p.serverName}:${p.portNumber}`,
-            id: p.id
-        }));
-        const selection = await vscode.window.showQuickPick(items, { placeHolder: "Select active TestBench profile" });
-        if (selection) {
-            await profileManager.setActiveProfileId(context, selection.id);
-            vscode.window.showInformationMessage(
-                `Profile "${selection.label}" is now active. Please use the Login command to connect.`
-            );
-            // Optionally trigger login:
-            // await vscode.commands.executeCommand(allExtensionCommands.login);
-        }
-    });
-
-    registerSafeCommand(context, allExtensionCommands.deleteProfile, async () => {
-        logger.debug("[Cmd] Called: testbenchExtension.deleteProfile");
-        const profiles = await profileManager.getProfiles(context);
-        if (profiles.length === 0) {
-            vscode.window.showInformationMessage("No TestBench profiles to delete.");
-            return;
-        }
-        const items = profiles.map((p) => ({ label: p.label, description: `ID: ${p.id}`, id: p.id }));
-        const selection = await vscode.window.showQuickPick(items, {
-            placeHolder: "Select TestBench profile to delete"
-        });
-        if (selection) {
-            const confirm = await vscode.window.showWarningMessage(
-                `Are you sure you want to delete profile "${selection.label}"?`,
-                { modal: true },
-                "Delete"
-            );
-            if (confirm === "Delete") {
-                await profileManager.deleteProfile(context, selection.id);
-                vscode.window.showInformationMessage(`Profile "${selection.label}" deleted.`);
-            }
-        }
-    });
-
-    // --- Command: Automatic Login After Activation ---
+    // --- Command: Automatic Login After Extension Start ---
     registerSafeCommand(context, allExtensionCommands.automaticLoginAfterExtensionActivation, async () => {
         logger.debug(`[Cmd] Called: ${allExtensionCommands.automaticLoginAfterExtensionActivation}`);
 
         if (getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
             logger.info("[Cmd] Auto-login is enabled. Attempting silent login with last active profile...");
 
-            const activeProfile = await profileManager.getActiveProfile(context);
+            const activeProfile: profileManager.TestBenchProfile | undefined =
+                await profileManager.getActiveProfile(context);
             if (!activeProfile) {
                 logger.info("[Cmd] Auto-login: No last active profile found. Cannot auto-login.");
                 return;
             }
 
-            const passwordIsStored = !!(await profileManager.getPasswordForProfile(context, activeProfile.id));
-            const requiresPasswordAndNotStored =
+            const passwordIsStored: boolean = !!(await profileManager.getPasswordForProfile(context, activeProfile.id));
+            const requiresPasswordAndNotStored: boolean =
                 !passwordIsStored && getConfig().get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false);
 
             if (requiresPasswordAndNotStored) {
@@ -464,24 +364,22 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             }
 
             try {
-                // Set the active profile ID so the provider can pick it up
                 await profileManager.setActiveProfileId(context, activeProfile.id);
                 authProviderInstance.prepareForSilentAutoLogin();
 
                 logger.trace("[Cmd] Auto-login: Calling vscode.authentication.getSession silently.");
-                const session = await vscode.authentication.getSession(
+                const session: vscode.AuthenticationSession = await vscode.authentication.getSession(
                     TESTBENCH_AUTH_PROVIDER_ID,
-                    ["api_access"], // Your defined scopes
-                    { createIfNone: true } // Standard options
+                    ["api_access"],
+                    { createIfNone: true }
                 );
 
                 if (session) {
                     logger.info(
                         `[Cmd] Auto-login successful for profile: ${activeProfile.label} (session restored/created silently).`
                     );
-                    // The onDidChangeSessions listener in extension.ts will handle further setup.
+                    // The onDidChangeSessions listener in extension.ts handles further setup.
                 } else {
-                    // This case might not be hit if getSession throws on silent failure.
                     logger.info(
                         "[Cmd] Auto-login: No session restored/created silently. User may need to login manually."
                     );
@@ -490,7 +388,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 logger.warn(
                     `[Cmd] Auto-login attempt for profile "${activeProfile.label}" failed silently (this is expected if credentials/profile are incomplete or server issues prevent silent login): ${error.message}`
                 );
-                await profileManager.clearActiveProfile(context); // Clear if auto-login fails
+                await profileManager.clearActiveProfile(context);
             }
         } else {
             logger.trace("[Cmd] Auto-login is disabled in settings.");
@@ -502,17 +400,16 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(context, allExtensionCommands.login, async () => {
         logger.debug(`[Cmd] Called: ${allExtensionCommands.login}`);
         try {
-            // This will trigger TestBenchAuthenticationProvider.createSession if no session exists
-            const session = await vscode.authentication.getSession(
+            // Triggers TestBenchAuthenticationProvider.createSession if no session exists
+            const session: vscode.AuthenticationSession = await vscode.authentication.getSession(
                 TESTBENCH_AUTH_PROVIDER_ID,
-                ["api_access"], // Define your scopes
-                { createIfNone: true } // Prompt user to login if no session
+                ["api_access"],
+                { createIfNone: true }
             );
-            // The onDidChangeSessions listener will handle setting up the connection object
+            // The onDidChangeSessions listener handles connection object setup
             if (session) {
                 logger.info(`[Cmd] Login successful, session ID: ${session.id}`);
-                // handleTestBenchSessionChange might have already run, but ensure UI is updated
-                await initializeTreeViews(context); // Re-ensure trees are ready
+                initializeTreeViews(context);
                 getProjectManagementTreeDataProvider()?.refresh(true);
             }
         } catch (error) {
@@ -524,16 +421,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     // --- Command: Logout ---
     // Performs the logout process and clears the connection object.
     registerSafeCommand(context, allExtensionCommands.logout, async () => {
-        logger.debug(`[Cmd] Called (Alternative): ${allExtensionCommands.logout}`);
+        logger.debug(`[Cmd] Called: ${allExtensionCommands.logout}`);
         try {
-            logger.debug(`[Cmd] Called: ${allExtensionCommands.logout}`);
-
-            // Step 1: Try to get an existing session for your provider.
-            // We need the session.id to tell VS Code which session to remove.
             const session = await vscode.authentication.getSession(
                 TESTBENCH_AUTH_PROVIDER_ID,
-                [], // No specific scopes needed for logout, just to find the session
-                { createIfNone: false, silent: true } // Do not create a new session if none exists, and don't show UI
+                [], // No scopes needed for logout
+                { createIfNone: false, silent: true }
             );
 
             if (session && session.id) {
@@ -542,25 +435,22 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 );
 
                 if (authProviderInstance) {
-                    await authProviderInstance.removeSession(session.id); // Call your provider's method
+                    await authProviderInstance.removeSession(session.id);
                     vscode.window.showInformationMessage("Logged out from TestBench.");
                 } else {
                     logger.error("[Cmd] AuthProvider instance not available for logout.");
                     vscode.window.showErrorMessage("Logout failed: Auth provider not initialized.");
-                    // Fallback to manual cleanup if provider instance is somehow null
+                    // Manual cleanup
                     await handleTestBenchSessionChange(context);
                 }
             } else {
                 logger.info("[Cmd] No active TestBench session found to logout. Ensuring UI is in a logged-out state.");
-                // If VS Code's layer finds no session, ensure our extension's state is also cleared.
-                // This is important if, for some reason, our internal state thinks we're logged in
-                // but VS Code's session layer doesn't have a corresponding session.
-                await handleTestBenchSessionChange(context); // This will set connection=null and update context
+                await handleTestBenchSessionChange(context);
             }
         } catch (error: any) {
             logger.error(`[Cmd] Error during logout:`, error);
             vscode.window.showErrorMessage(`TestBench Logout Error: ${error.message}`);
-            // Ensure clean state on error too
+            // Ensure clean state on error
             await handleTestBenchSessionChange(context);
         }
         await client?.stop();
@@ -576,8 +466,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             const pmProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null =
                 getProjectManagementTreeDataProvider();
             if (pmProvider) {
-                // Clear the test theme tree and test elements tree view items before loading new data.
-                // This might avoid displaying old data in the tree views if fetching fails.
+                // Avoid displaying old data in the tree views by clearing if fetching fails.
                 getTestThemeTreeDataProvider()?.clearTree();
                 clearTestElementsTreeView();
 
@@ -604,7 +493,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 return;
             }
 
-            // Optionally clear the working directory before test generation.
             if (config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
                 await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
@@ -626,7 +514,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 );
                 return;
             }
-            // Optionally clear the working directory before test generation.
             if (config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
                 await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
@@ -642,12 +529,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     logger.warn(
                         "TestThemeTreeDataProvider available but cycle key not set. Falling back to parent traversal."
                     );
-                    // Fallback
                     cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
                 }
             } else {
                 logger.warn("TestThemeTreeDataProvider not available. Falling back to parent traversal for cycle key.");
-                // Fallback when provider is not available
                 cycleKey = projectManagementTreeView.findCycleKeyOfTreeElement(treeItem);
             }
 
@@ -676,8 +561,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         await projectManagementTreeView?.displayProjectManagementTreeView();
-
-        // Hide the test theme tree view and test elements tree view
         await hideTestThemeTreeView();
         await testElementsTreeView?.hideTestElementsTreeView();
     });
@@ -731,8 +614,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const pmProvider = getProjectManagementTreeDataProvider();
         const pTreeView = getProjectTreeView();
         if (pmProvider && pTreeView) {
-            // Message update should be handled by provider via callback
-            pmProvider.refresh(true); // true for hard refresh
+            pmProvider.refresh(true);
         } else {
             logger.warn(`Project Management Tree Data Provider or Project Tree View not initialized. Cannot refresh.`);
         }
@@ -762,7 +644,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             logger.warn("Test Theme TreeView instance is not available. Cannot set message.");
         }
 
-        // Message update should be handled by provider via callback
         ttProvider.refresh();
 
         const currentCycleKey: string | null = ttProvider["_currentCycleKey"];
@@ -779,26 +660,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 logger.info(
                     `Refreshing Test Theme Tree for cycle: ${typeof cycleElement.label === "string" ? cycleElement.label : "N/A"}`
                 );
-                // Re-fetch children for this cycle and update the testThemeTreeDataProvider
                 const children: projectManagementTreeView.BaseTestBenchTreeItem[] =
                     (await pmProvider.getChildrenOfCycle(cycleElement)) ?? [];
                 // The setRoots will internally call refresh on testThemeTreeDataProvider
                 ttProvider.setRoots(children, cycleElement.item.key);
                 const themeTreeView = getTestThemeTreeViewInstance();
                 if (themeTreeView) {
-                    // Check if defined
                     themeTreeView.title = `Test Themes (${typeof cycleElement.label === "string" ? cycleElement.label : "Cycle"})`;
                 }
             } else if (currentCycleKey) {
                 logger.warn(
                     `Could not find the parent cycle element for the current Test Theme Tree (cycleKey: ${currentCycleKey}). Refreshing with current roots.`
                 );
-                ttProvider.refresh(); // Re-render current items.
+                ttProvider.refresh();
             } else {
                 logger.debug(
                     "No current cycle in Test Theme Tree to refresh, or provider not found. Clearing and refreshing."
                 );
-                ttProvider.clearTree(); // Calls refresh internally
+                ttProvider.clearTree();
             }
         } else {
             logger.warn(
@@ -806,7 +685,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             if (ttProvider) {
                 ttProvider.refresh();
-            } // Attempt to refresh what it has
+            }
         }
     });
 
@@ -910,6 +789,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     });
 
     // --- Command: Display Interactions For Selected TOV ---
+    // TODO: This code throwed an error, analyze and fix it.
     registerSafeCommand(
         context,
         allExtensionCommands.displayInteractionsForSelectedTOV,
@@ -1020,7 +900,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 return;
             }
 
-            // Prompt user for new interaction name
             const interactionName: string | undefined = await vscode.window.showInputBox({
                 prompt: "Enter name for the new Interaction",
                 placeHolder: "New Interaction Name",
@@ -1036,7 +915,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 return; // User cancelled input box
             }
 
-            // Create the new interaction
             const newInteraction: testElementsTreeView.TestElementData | null =
                 await testElementsTreeView.createInteractionUnderSubdivision(subdivisionTreeItem, interactionName);
 
@@ -1067,14 +945,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(context, allExtensionCommands.modifyReportWithResultsZip, async () => {
         logger.debug(`Command Called: ${allExtensionCommands.modifyReportWithResultsZip}`);
 
-        // Prompt the user to select a report zip file with results.
         const zipUris: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
             canSelectMany: false,
             filters: {
                 "Zip Files": ["zip"],
                 "All Files": ["*"]
             },
-            openLabel: "Select Report Zip File"
+            openLabel: "Select Report Zip File With Test Results"
         });
         if (!zipUris || zipUris.length === 0) {
             vscode.window.showErrorMessage("No zip file selected.");
@@ -1083,42 +960,19 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const zipPath: string = zipUris[0].fsPath;
         const quickPickItems: string[] = await reportHandler.getQuickPickItemsFromReportZipWithResults(zipPath);
 
-        // Then call your quick pick function with the retrieved items.
         const chosenQuickPickItems: string[] = await reportHandler.showMultiSelectQuickPick(quickPickItems);
         logger.log("Trace", "User selected following json files:", chosenQuickPickItems);
 
-        // Create a new zip file by removing JSON files that were not selected from the original report zip.
         await reportHandler.createNewReportWithSelectedItems(zipPath, chosenQuickPickItems);
     });
-
-    // Set context value for connectionActive.
-    // Used to enable or disable the login and logout buttons in the status bar,
-    // which allows icon changes for login/logout buttons based on connectionActive variable.
-    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
-    logger.trace(`Context value connectionActive set to: ${connection !== null}`);
 }
 
 /**
  * Handles changes in the TestBench authentication session.
  *
- * This function is responsible for updating the application state based on the
- * provided or retrieved authentication session. It will:
- * - Attempt to retrieve an active session if one is not provided.
- * - If a session is active and an active profile exists:
- *   - Initialize a `PlayServerConnection` with the session token and profile details.
- *   - Set the `ContextKeys.CONNECTION_ACTIVE` to true.
- *   - Refresh relevant tree views and update the login webview.
- * - If a session is active but no active profile is found:
- *   - Clear any existing connection and log out the user from the server.
- *   - Set `ContextKeys.CONNECTION_ACTIVE` to false.
- *   - Clear tree views and update the login webview.
- * - If no session is active:
- *   - Clear any existing connection and log out the user from the server.
- *   - Set `ContextKeys.CONNECTION_ACTIVE` to false.
- *   - Clear tree views and update the login webview.
- *
- * @param context - The VS Code extension context.
- * @param existingSession - An optional existing authentication session to process.
+ * Updates the application state based on the provided or retrieved authentication session.
+ * @param {vscode.ExtensionContext} context - The VS Code extension context.
+ * @param {vscode.AuthenticationSession} existingSession - An optional existing authentication session to process.
  *                          If not provided, the function will attempt to retrieve the current session.
  * @returns A promise that resolves when the session change has been handled.
  */
@@ -1140,14 +994,14 @@ async function handleTestBenchSessionChange(
         }
     }
 
-    const wasPreviouslyConnected = !!connection; // Check connection state before potential changes
+    const wasPreviouslyConnected = !!connection;
 
     if (sessionToProcess && sessionToProcess.accessToken) {
         const activeProfile = await profileManager.getActiveProfile(context);
         if (activeProfile) {
             // Check if a connection for this session and profile already exists
             if (
-                connection && // Global connection object from extension.ts
+                connection &&
                 connection.getSessionToken() === sessionToProcess.accessToken &&
                 connection.getUsername() === activeProfile.username &&
                 connection.getServerName() === activeProfile.serverName &&
@@ -1158,14 +1012,14 @@ async function handleTestBenchSessionChange(
                 );
                 if (!wasPreviouslyConnected) {
                     logger.info("[Extension] Re-asserting UI state for existing matching connection.");
-                    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true); // Ensure context is set
+                    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
                     getLoginWebViewProvider()?.updateWebviewHTMLContent();
                     await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
                     getProjectManagementTreeDataProvider()?.refresh(true);
                     getTestThemeTreeDataProvider()?.clearTree();
                     clearTestElementsTreeView();
                 }
-                return; // Exit if the connection is already the correct one
+                return;
             }
 
             logger.info(
@@ -1176,7 +1030,7 @@ async function handleTestBenchSessionChange(
                 logger.warn(
                     "[Extension] A different connection was active. Logging out from previous server session before establishing new one."
                 );
-                await connection.logoutUserOnServer(); // Ensure previous server session is terminated
+                await connection.logoutUserOnServer();
             }
 
             const newConnection = new PlayServerConnection(
@@ -1185,7 +1039,7 @@ async function handleTestBenchSessionChange(
                 activeProfile.username,
                 sessionToProcess.accessToken
             );
-            setConnection(newConnection); // Set the global connection
+            setConnection(newConnection);
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
@@ -1197,16 +1051,13 @@ async function handleTestBenchSessionChange(
                 logger.info(
                     "[Extension] New session established. Setting default view to 'Projects' and refreshing data."
                 );
-                // Set the correct view visibility
                 await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
 
-                // Refresh/clear data
-                getProjectManagementTreeDataProvider()?.refresh(true); // Hard refresh for projects
+                getProjectManagementTreeDataProvider()?.refresh(true);
                 getTestThemeTreeDataProvider()?.clearTree();
                 clearTestElementsTreeView();
             } else {
                 // Session changed while already connected (e.g., profile switch if supported, or token refresh)
-                // For a profile switch, resetting to Projects view is also a good default.
                 logger.info(
                     "[Extension] Session changed while already connected. Resetting view to 'Projects' and refreshing data."
                 );
@@ -1224,7 +1075,6 @@ async function handleTestBenchSessionChange(
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-            // Clean up views and data on logout/no active profile
             await projectManagementTreeView?.hideProjectManagementTreeView();
             await hideTestThemeTreeView();
             await testElementsTreeView?.hideTestElementsTreeView();
@@ -1241,32 +1091,12 @@ async function handleTestBenchSessionChange(
         await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
         getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-        // Clean up views and data on logout
         await projectManagementTreeView?.hideProjectManagementTreeView();
         await hideTestThemeTreeView();
         await testElementsTreeView?.hideTestElementsTreeView();
         getProjectManagementTreeDataProvider()?.clearTree();
         getTestThemeTreeDataProvider()?.clearTree();
         clearTestElementsTreeView();
-    }
-}
-
-/**
- * Updates the context for the Language Server and triggers a restart.
- * @param {string} projectName (Optional) The name of the selected project.
- * @param {string} tovName (Optional) The name of the selected TOV.
- */
-export async function updateLanguageServerContextAndRestart(projectName?: string, tovName?: string): Promise<void> {
-    const projectChanged: boolean = currentLanguageServerProject !== projectName;
-    const tovChanged: boolean = currentLanguageServerTov !== tovName;
-
-    if (projectChanged || tovChanged) {
-        logger.info(` Project name or TOV name changed.
-            Old: Project='${currentLanguageServerProject}', TOV='${currentLanguageServerTov}'. 
-            New: Project='${projectName}', TOV='${tovName}'.`);
-        currentLanguageServerProject = projectName;
-        currentLanguageServerTov = tovName;
-        // TODO: Restart language server with new project and TOV here
     }
 }
 
@@ -1280,13 +1110,11 @@ export async function updateLanguageServerContextAndRestart(projectName?: string
  * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    // Initialize logger.
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
 
     // Initialize with the best scope
     activeEditor = vscode.window.activeTextEditor;
-
     // Initialize with global scope by default
     currentConfigScope = undefined;
 
@@ -1304,11 +1132,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(async (editor) => {
             activeEditor = editor;
-            await loadConfiguration(context); // Automatically update config when editor changes
+            await loadConfiguration(context);
         })
     );
 
-    // Load initial configuration
     await loadConfiguration(context);
 
     // Register AuthenticationProvider
@@ -1316,9 +1143,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.authentication.registerAuthenticationProvider(
             TESTBENCH_AUTH_PROVIDER_ID,
-            TESTBENCH_AUTH_PROVIDER_LABEL, // User-facing name in Accounts UI
+            TESTBENCH_AUTH_PROVIDER_LABEL,
             authProviderInstance,
-            { supportsMultipleAccounts: false } // Change to true to support multiple simultaneous TestBench logins
+            { supportsMultipleAccounts: false } // No support for multiple simultaneous TestBench logins
         )
     );
     logger.info("TestBenchAuthenticationProvider registered.");
@@ -1329,11 +1156,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (e.provider.id === TESTBENCH_AUTH_PROVIDER_ID) {
                 logger.info("[Extension] TestBench authentication sessions changed.");
                 try {
-                    // Get the current session state directly from the API.
                     const currentSession = await vscode.authentication.getSession(
                         TESTBENCH_AUTH_PROVIDER_ID,
                         ["api_access"],
-                        { createIfNone: false, silent: true } // Get an existing session
+                        { createIfNone: false, silent: true }
                     );
                     logger.info(
                         `[Extension] Fetched current session in onDidChangeSessions: ${currentSession ? currentSession.id : "undefined"}`
@@ -1341,7 +1167,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     await handleTestBenchSessionChange(context, currentSession);
                 } catch (error) {
                     logger.error("[Extension] Error getting session in onDidChangeSessions listener:", error);
-                    // If an error occurs, it's safer to assume no session / logout state.
                     await handleTestBenchSessionChange(context, undefined);
                 }
             }
@@ -1352,10 +1177,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Set the initial connection context state. Before any login attempt, connection is null.
     // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
+    // CONNECTION_ACTIVE is also used to enable or disable the login and logout buttons in the status bar,
+    // which allows icon changes for login/logout buttons based on connectionActive variable.
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
 
-    // Register the login webview provider.
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(loginWebView.LoginWebViewProvider.viewId, loginWebViewProvider, {
@@ -1363,7 +1189,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // Register all extension commands.
     await registerExtensionCommands(context);
 
     // Attempt to restore session on activation
@@ -1371,8 +1196,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.trace("[Extension] Attempting to silently restore existing TestBench session on activation...");
     try {
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-            createIfNone: false, // Dont trigger createSession yet
-            silent: true // Try to get silently
+            createIfNone: false,
+            silent: true
         });
         if (session) {
             logger.info("[Extension] Found existing VS Code AuthenticationSession for TestBench during initial check.");
@@ -1381,7 +1206,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             logger.info("[Extension] No existing TestBench session found during initial check.");
             // If auto-login is enabled, it will be triggered next.
             // If not, user needs to login manually.
-            // Ensure UI reflects logged-out state if no session and no auto-login.
             if (!getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
@@ -1393,10 +1217,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     // Trigger Automatic Login Command if configured
-    // This will happen *after* the initial silent check for an existing session.
     if (getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
         logger.info("[Extension] Auto-login configured. Triggering automatic login command.");
-        // Dont use await, to block the login webview display, let it run in background
+        // Note: Dont use await here, which would block the login webview display during autologin.
         vscode.commands
             .executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation)
             .then(undefined, (err) => {
@@ -1414,13 +1237,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  */
 export async function deactivate(): Promise<void> {
     try {
-        // Gracefully log out the user when the extension is deactivated.
         if (connection) {
             logger.info("[Extension] Performing server logout on deactivation.");
             await connection.logoutUserOnServer();
             setConnection(null);
         }
-        // Stop the language server
         if (client) {
             await client?.stop();
             logger.info("[Extension] Language server stopped.");

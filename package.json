@@ -302,26 +302,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.manageProfiles",
-                "title": "TestBench: Manage Connection Profiles",
-                "category": "Profiles"
-            },
-            {
-                "command": "testbenchExtension.selectActiveProfile",
-                "title": "TestBench: Select Active Connection Profile",
-                "category": "Profiles"
-            },
-            {
-                "command": "testbenchExtension.addNewProfile",
-                "title": "TestBench: Add New Connection Profile",
-                "category": "Profiles"
-            },
-            {
-                "command": "testbenchExtension.deleteProfile",
-                "title": "TestBench: Delete Connection Profile",
-                "category": "Profiles"
-            },
-            {
                 "command": "testbenchExtension.clearInternalTestbenchFolder",
                 "title": "Clear Temporary Files",
                 "icon": {

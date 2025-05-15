@@ -1755,12 +1755,9 @@ export async function createNewReportWithSelectedItems(
     try {
         // Read the zip file as binary data.
         const data: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
-        // Load the zip file using JSZip.
         const zip: JSZip = await JSZip.loadAsync(data);
 
-        // Process each file in the zip.
         Object.keys(zip.files).forEach((fileName) => {
-            // Only consider JSON files with the matching prefix.
             if (isCandidateJsonFile(fileName)) {
                 if (groupByPrefix) {
                     // Extract the actual prefixes from the selected display labels
