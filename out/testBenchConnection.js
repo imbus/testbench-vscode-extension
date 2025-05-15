@@ -41,11 +41,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PlayServerConnection = void 0;
+exports.withRetry = withRetry;
 exports.performLogin = performLogin;
 exports.loginToNewPlayServerAndInitSessionToken = loginToNewPlayServerAndInitSessionToken;
 exports.clearStoredCredentials = clearStoredCredentials;
 exports.importReportWithResultsToTestbench = importReportWithResultsToTestbench;
 exports.selectReportWithResultsAndImportToTestbench = selectReportWithResultsAndImportToTestbench;
+exports.extractDataFromReport = extractDataFromReport;
+exports.loginToServerAndGetSessionDetails = loginToServerAndGetSessionDetails;
 const https = __importStar(require("https"));
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
@@ -54,7 +57,6 @@ const base64 = __importStar(require("base-64")); // npm i --save-dev @types/base
 const jszip_1 = __importDefault(require("jszip"));
 const axios_1 = __importDefault(require("axios"));
 const path_1 = __importDefault(require("path"));
-const server_1 = require("./server");
 const extension_1 = require("./extension");
 const utils = __importStar(require("./utils"));
 const constants_1 = require("./constants");
@@ -87,6 +89,7 @@ class PlayServerConnection {
         this.username = username;
         this.sessionToken = sessionToken;
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
+        extension_1.logger.trace(`[PlayServerConnection] Initializing for server: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`);
         // Create Axios instance for API calls to the server using the session token
         this.apiClient = axios_1.default.create({
             baseURL: this.baseURL,
@@ -95,8 +98,14 @@ class PlayServerConnection {
                 rejectUnauthorized: false // TODO: Use true in production.
             })
         });
-        // Start the keep-alive process immediately to prevent session timeout after 5 minutes
-        this.startKeepAlive();
+        // Only start keep-alive if a token is provided
+        if (this.sessionToken) {
+            // Start the keep-alive process immediately to prevent session timeout after 5 minutes
+            this.startKeepAlive();
+        }
+        else {
+            extension_1.logger.warn("[PlayServerConnection] Initialized without a session token. Keep-alive not started.");
+        }
     }
     /** Returns the server name. */
     getServerName() {
@@ -109,10 +118,6 @@ class PlayServerConnection {
     getUsername() {
         return this.username;
     }
-    /** Returns the current session token. */
-    getSessionToken() {
-        return this.sessionToken;
-    }
     /** Returns the base URL of the server. */
     getBaseURL() {
         return this.baseURL;
@@ -120,6 +125,54 @@ class PlayServerConnection {
     /** Returns the Axios API client. */
     getApiClient() {
         return this.apiClient;
+    }
+    /**
+     * Returns the current session token.
+     * @returns {string} The session token.
+     */
+    getSessionToken() {
+        return this.sessionToken;
+    }
+    /**
+     * Logs out the user from the TestBench server by invalidating the current session token.
+     * This method now focuses on the server-side logout. UI and global state changes
+     * should be handled by the AuthenticationProvider or session change listeners.
+     * @returns {Promise<boolean>} True if server logout was successful or no action needed, false on API error.
+     */
+    async logoutUserOnServer() {
+        extension_1.logger.debug(`[PlayServerConnection] Attempting to log out user ${this.username} from server ${this.serverName}.`);
+        if (!this.sessionToken) {
+            extension_1.logger.warn("[PlayServerConnection] No session token available. Cannot perform server-side logout.");
+            this.stopKeepAlive(); // Stop keep-alive even if no token, as a precaution
+            return true; // No action needed, consider it "successful" in terms of cleanup
+        }
+        try {
+            const logoutResponse = await withRetry(() => this.apiClient.delete(`/login/session/v1`, {
+                // apiClient is already configured with the token
+                headers: { accept: "application/vnd.testbench+json" }
+            }), 3, 2000);
+            if (logoutResponse.status === 204) {
+                extension_1.logger.debug("[PlayServerConnection] Server logout successful (204).");
+                return true;
+            }
+            else {
+                extension_1.logger.error(`[PlayServerConnection] Server logout failed. Unexpected response status: ${logoutResponse.status}`);
+                return false;
+            }
+        }
+        catch (error) {
+            if (axios_1.default.isAxiosError(error)) {
+                extension_1.logger.error(`[PlayServerConnection] Error during server logout: ${error.response?.status} - ${error.response?.statusText}.`);
+            }
+            else {
+                extension_1.logger.error(`[PlayServerConnection] Unexpected error during server logout: ${error}`);
+            }
+            return false;
+        }
+        finally {
+            this.stopKeepAlive(); // Always stop keep-alive after a logout attempt
+            // Do NOT clear session data here or call setConnection(null). That's for the auth provider / extension.ts
+        }
     }
     /**
      * Retrieves the session token from VS Code's secret storage.
@@ -173,7 +226,7 @@ class PlayServerConnection {
      * @returns {Promise<testBenchTypes.Project[] | null>} The list of projects or null if an error occurs.
      */
     async getProjectsList() {
-        if (!this.sessionToken) {
+        if (!this.sessionToken || !this.apiClient) {
             extension_1.logger.error("Session token is null. Cannot fetch projects list.");
             return null;
         }
@@ -291,20 +344,25 @@ class PlayServerConnection {
         try {
             const oldPlayServerPortNumber = 9443;
             const oldPlayServerBaseUrl = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
-            const getTestElementsURL = `/tovs/${tovKey}/testElements`;
-            extension_1.logger.trace("Creating session for old play server.");
+            const getTestElementsURL = `tovs/${tovKey}/testElements`;
+            extension_1.logger.trace("Creating session for old play server with URL:", oldPlayServerBaseUrl);
+            const userNameFromConfig = this.username;
+            const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
+            extension_1.logger.trace("@@@@ Username from config:", userNameFromConfig);
+            extension_1.logger.trace("@@@@ Session token:", this.sessionToken);
+            extension_1.logger.trace("@@@@ base64 encoded credentials:", encoded);
             // Create session for API calls to the old play server
             const oldPlayServerSession = axios_1.default.create({
                 baseURL: oldPlayServerBaseUrl,
                 // Old play server, which runs on port 9443, uses BasicAuth.
                 // Use loginName as username, and use sessionToken as the password
                 auth: {
-                    username: (0, extension_1.getConfig)().get("username"),
+                    username: this.username,
                     password: this.sessionToken
                 },
                 headers: {
                     // Manually encode the credentials to Base64
-                    Authorization: `Basic ${base64.encode(`${(0, extension_1.getConfig)().get("username")}:${this.sessionToken}`)}`,
+                    Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
                 // Ignore self-signed certificates
@@ -312,6 +370,13 @@ class PlayServerConnection {
                     rejectUnauthorized: false //TODO: This should only be used in a development environment
                 })
             });
+            if (!oldPlayServerSession) {
+                extension_1.logger.error("@@@@@ Failed to create session for old play server.");
+                return null;
+            }
+            else {
+                extension_1.logger.trace(`@@@@@ Old play server session created successfully: ${oldPlayServerSession}`);
+            }
             extension_1.logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
             const testElementsResponse = await withRetry(() => oldPlayServerSession.get(getTestElementsURL), 3, // maxRetries: try 3 additional times
             2000, // delayMs: wait 2000ms between attempts
@@ -438,7 +503,6 @@ class PlayServerConnection {
             );
             if (logoutResponse.status === 204) {
                 const logoutSuccessfulMessage = "Logout successful.";
-                server_1.client.stop();
                 extension_1.logger.debug(logoutSuccessfulMessage);
                 vscode.window.showInformationMessage(logoutSuccessfulMessage);
             }
@@ -466,11 +530,13 @@ class PlayServerConnection {
             this.stopKeepAlive();
             this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
             await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
-            (0, extension_1.setProjectManagementTreeDataProvider)(null); // Clear the connection from the tree data provider
+            const pmProvider = (0, extension_1.getProjectManagementTreeDataProvider)();
+            pmProvider?.clearTree();
             (0, extension_1.setConnection)(null);
             // Notify login webview about the logout success to change its HTML content
-            if (extension_1.loginWebViewProvider) {
-                extension_1.loginWebViewProvider.updateWebviewHTMLContent();
+            const lwvProvider = (0, extension_1.getLoginWebViewProvider)();
+            if (lwvProvider) {
+                await lwvProvider.updateWebviewHTMLContent();
             }
             else {
                 extension_1.logger.error("loginWebViewProvider is null. Cannot update webview content.");
@@ -672,8 +738,9 @@ class PlayServerConnection {
      * If the keep alive request fails, the user is logged out automatically, since the session will be timed out later anyway.
      */
     async sendKeepAliveRequest() {
-        if (!this.sessionToken) {
-            extension_1.logger.error("Session token is null. Cannot send keep-alive request.");
+        if (!this.sessionToken || !this.apiClient) {
+            extension_1.logger.error("[PlayServerConnection] Session token or apiClient is null. Cannot send keep-alive request.");
+            this.stopKeepAlive();
             return;
         }
         try {
@@ -685,6 +752,10 @@ class PlayServerConnection {
             extension_1.logger.trace("Keep-alive request sent.");
         }
         catch (error) {
+            // IMPORTANT: If keep-alive fails and results in logout, it should signal this failure
+            // back to the AuthenticationProvider or a global listener to update the VS Code session state.
+            // This might involve emitting an event from PlayServerConnection or having the keep-alive
+            // failure directly trigger vscode.authentication.removeSession if possible.
             extension_1.logger.error("Keep-alive request failed after retries:", error);
             extension_1.logger.warn("Logging out the user after keep-alive failure.");
             await vscode.commands.executeCommand(`${constants_1.allExtensionCommands.logout}`);
@@ -912,6 +983,7 @@ async function promptForLoginCredentials() {
     return { serverName, portNumber, username, password };
 }
 /**
+ * // TODO: Remove
  * Logs in to the TestBench server and initializes a session token.
  *
  * @param {vscode.ExtensionContext} context - The extension context.
@@ -928,7 +1000,7 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
         force: true
     };
     try {
-        const connection = await vscode.window.withProgress({
+        const connectionResult = await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: "Logging in",
             cancellable: true
@@ -971,26 +1043,19 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
                 // Set the connectionActive context value for changing the login icon to logout icon based on this value
                 await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, true);
                 const loginSuccessfulMessage = "Login successful.";
-                await (0, server_1.initializeLanguageServer)();
                 extension_1.logger.debug(loginSuccessfulMessage);
                 vscode.window.showInformationMessage(loginSuccessfulMessage);
-                // Upon successful login, update the login webview content and hide it.
-                if (extension_1.loginWebViewProvider) {
-                    extension_1.loginWebViewProvider.updateWebviewHTMLContent();
-                }
-                else {
-                    extension_1.logger.error("loginWebViewProvider is null. Cannot update webview content.");
-                }
                 return newConnection;
             }
             else {
+                await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
                 const loginFailedMessage = "Login failed. Unexpected status code: " + loginResponse.status;
                 extension_1.logger.error(loginFailedMessage);
                 vscode.window.showInformationMessage(loginFailedMessage);
                 return null;
             }
         });
-        return connection;
+        return connectionResult;
     }
     catch (error) {
         if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
@@ -1001,10 +1066,12 @@ async function loginToNewPlayServerAndInitSessionToken(context, serverName, port
             extension_1.logger.error("Error during login");
             vscode.window.showInformationMessage("Error during login.");
         }
+        await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
         return null;
     }
 }
 /**
+ * // TODO: Remove
  * Clears stored user credentials from secret storage.
  *
  * @param {vscode.ExtensionContext} context - The extension context.
@@ -1280,6 +1347,67 @@ async function extractDataFromReport(zipFilePath) {
     catch (error) {
         extension_1.logger.error("Error extracting JSON data from zip file:", error);
         return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
+    }
+}
+/**
+ * Logs in to the TestBench server with the provided credentials and returns session details.
+ * This function focuses on the API interaction and does not handle UI or global state.
+ *
+ * @param serverName The server hostname or IP.
+ * @param portNumber The server port.
+ * @param username The TestBench username.
+ * @param password The TestBench password.
+ * @returns A promise resolving to TestBenchLoginResult if successful, otherwise null.
+ */
+async function loginToServerAndGetSessionDetails(serverName, portNumber, username, password) {
+    const requestBody = {
+        login: username,
+        password: password,
+        force: true // Or make this configurable if needed
+    };
+    const baseURL = `https://${serverName}:${portNumber}/api`;
+    const loginURL = `${baseURL}/login/session/v1`;
+    extension_1.logger.trace(`[Connection] Sending login request to: ${loginURL} for user ${username}`);
+    try {
+        // Using withRetry helper (assuming it's still in this file or imported)
+        const loginResponse = await withRetry(() => axios_1.default.post(loginURL, requestBody, {
+            headers: {
+                accept: "application/vnd.testbench+json",
+                "Content-Type": "application/vnd.testbench+json"
+            },
+            httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: Review for production
+        }), 3, // maxRetries
+        2000, // delayMs
+        (error) => {
+            // shouldRetry predicate
+            if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
+                extension_1.logger.warn("[Connection] Login attempt failed with 401 (Invalid Credentials). Not retrying.");
+                return false; // Do not retry on 401
+            }
+            return true; // Retry on other errors (e.g., network issues)
+        });
+        if (loginResponse.status === 201 && loginResponse.data && loginResponse.data.sessionToken) {
+            extension_1.logger.info(`[Connection] Login successful for user ${username} on ${serverName}.`);
+            return {
+                sessionToken: loginResponse.data.sessionToken,
+                userKey: loginResponse.data.userKey,
+                loginName: loginResponse.data.login
+                // Add other relevant fields from LoginResponse if needed
+            };
+        }
+        else {
+            extension_1.logger.error(`[Connection] Login failed for ${username}. Unexpected status code: ${loginResponse.status}, Data: ${JSON.stringify(loginResponse.data)}`);
+            return null;
+        }
+    }
+    catch (error) {
+        if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
+            // Already logged by shouldRetry, but good to catch specifically
+        }
+        else {
+            extension_1.logger.error(`[Connection] Error during login for ${username} to ${serverName}:`, error.message);
+        }
+        return null; // Ensure null is returned on any error
     }
 }
 //# sourceMappingURL=testBenchConnection.js.map

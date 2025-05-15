@@ -406,13 +406,20 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
  * Hides the test theme tree view.
  */
 export async function hideTestThemeTreeView(): Promise<void> {
-    // testThemeTree is the ID of the tree view in package.json
-    await vscode.commands.executeCommand("testThemeTree.removeView");
+    if (getTestThemeTreeViewInstance()) {
+        await vscode.commands.executeCommand("testThemeTree.removeView");
+    } else {
+        logger.debug("Test Theme Tree View instance not found; 'removeView' command not executed.");
+    }
 }
 
 /**
  * Displays the test theme tree view.
  */
 export async function displayTestThemeTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testThemeTree.focus");
+    if (getTestThemeTreeViewInstance()) {
+        await vscode.commands.executeCommand("testThemeTree.focus");
+    } else {
+        logger.debug("Test Theme Tree View instance not found; 'removeView' command not executed.");
+    }
 }

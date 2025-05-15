@@ -78,7 +78,7 @@ export class PyCommandBuilder {
         // Construct the absolute path to the tb2robot main script.
         // path.join("packages", "testbench-ls", "testbench_ls", "__main__.py");
         // path.join("bundled", "libs", "testbench2robotframework", "__main__.py");
-        const testbenchPythonMainPath: string = path.join("packages", "testbench-ls", "testbench_ls", "__main__.py");
+        const testbenchPythonMainPath: string = path.join("bundled", "libs", "testbench2robotframework", "__main__.py");
         const tb2RobotMainFile: string = extensionContext.asAbsolutePath(testbenchPythonMainPath);
         logger.trace("tb2robot main path set to:", tb2RobotMainFile);
 

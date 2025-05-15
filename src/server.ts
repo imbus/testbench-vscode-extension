@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH, baseKeyOfExtension } from "./constants";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
 import { connection, logger } from "./extension";

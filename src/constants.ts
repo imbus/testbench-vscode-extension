@@ -31,7 +31,20 @@ export const WebviewMessageCommands = {
     LOGIN: "login",
     UPDATE_SETTING: "updateSetting",
     SHOW_ERROR: "showError",
-    UPDATE_CONTENT: "updateContent"
+    UPDATE_CONTENT: "updateContent",
+
+    // Profile Management UI
+    PROFILE_UI_LOADED: "profileUiLoaded",
+    REQUEST_PROFILES_FROM_WEBVIEW: "requestProfilesFromWebview",
+    LOGIN_WITH_PROFILE: "loginWithProfile",
+    SAVE_NEW_PROFILE: "saveNewProfile",
+    REQUEST_DELETE_CONFIRMATION: "requestDeleteConfirmation",
+    PERFORM_DELETE_PROFILE: "performDeleteProfile",
+
+    // Host to Webview communication
+    DISPLAY_PROFILES_IN_WEBVIEW: "displayProfilesInWebview",
+    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage",
+    PROFILE_OPERATION_COMPLETE: "profileOperationComplete"
 } as const; // 'as const' makes properties readonly and literal types
 
 // --- Extension Configuration Setting Keys ---
@@ -76,7 +89,8 @@ export const StorageKeys = {
      * Workspace state storage key for the last generated report parameters
      * to be able to use the report without the user selecting the report again while importing the report.
      */
-    LAST_GENERATED_PARAMS: "testbenchExtension.lastGeneratedReportParams"
+    LAST_GENERATED_PARAMS: "testbenchExtension.lastGeneratedReportParams",
+    LAST_IMPORTED_REPORT_DETAILS: "testbenchExtension.lastImportedReportDetails" // Workspace state
 } as const;
 
 // --- Tree Item Context Values ---
@@ -132,5 +146,8 @@ export const allExtensionCommands = {
     createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
     modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
-    handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`
+    handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`,
+    addNewProfile: `${baseKeyOfExtension}.addNewProfile`,
+    deleteProfile: `${baseKeyOfExtension}.deleteProfile`,
+    selectActiveProfile: `${baseKeyOfExtension}.selectActiveProfile`
 };

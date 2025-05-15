@@ -9,7 +9,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { client, initializeLanguageServer } from "./server";
-
 import { CycleNodeData, CycleStructure, Project, TreeNode } from "./testBenchTypes";
 import {
     connection,
@@ -620,14 +619,14 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             this.customRootContextValue = treeItem.contextValue;
             // Store a copy of the item's data.
             this.customRootJsonData = { ...treeItem.item }; // Shallow copy
-            logger.info(
+            logger.debug(
                 `Item "${typeof treeItem.label === "string" ? treeItem.label : treeItem.item.name}" (Key: ${this.customRootKey}) is now set as custom root.`
             );
         } else {
             this.customRootKey = null;
             this.customRootContextValue = null;
             this.customRootJsonData = null;
-            logger.info("Custom root cleared.");
+            logger.debug("Custom root cleared.");
         }
         this._onDidChangeTreeData.fire(undefined); // Refresh the tree to show the new root or all projects
     }
@@ -1061,12 +1060,13 @@ export function setupProjectTreeViewEventListeners(
             const projectAndTovNameObj = getProjectAndTovNamesFromSelection(selectedElement);
             if (projectAndTovNameObj) {
                 const { projectName, tovName } = projectAndTovNameObj;
+                logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
+                // Restart language server with the selected project and TOV
                 if (projectName && tovName) {
                     await initializeLanguageServer(projectName, tovName);
                 }
             } else {
                 logger.warn("Could not determine context for LS restart from selection.");
-                // TODO: Maybe stop language server if no valid context is selected
             }
         }
     });
@@ -1076,15 +1076,22 @@ export function setupProjectTreeViewEventListeners(
  * Hides the project management tree view.
  */
 export async function hideProjectManagementTreeView(): Promise<void> {
-    // projectManagementTree is the ID of the tree view in package.json
-    await vscode.commands.executeCommand("projectManagementTree.removeView");
+    const projectTreeView = getProjectTreeView();
+    if (projectTreeView && projectTreeView.visible) {
+        logger.trace(
+            "Project management tree view is visible. Attempting to execute 'projectManagementTree.removeView'."
+        );
+        await vscode.commands.executeCommand("projectManagementTree.removeView");
+    }
 }
 
 /**
  * Displays the project management tree view.
  */
 export async function displayProjectManagementTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("projectManagementTree.focus");
+    if (getProjectTreeView()) {
+        await vscode.commands.executeCommand("projectManagementTree.focus");
+    }
 }
 
 /**

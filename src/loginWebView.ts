@@ -5,9 +5,11 @@
  */
 
 import * as vscode from "vscode";
-import { logger, connection, getConfig, getProjectManagementTreeDataProvider, initializeTreeViews } from "./extension";
-import { loginToNewPlayServerAndInitSessionToken, PlayServerConnection } from "./testBenchConnection";
-import { WebviewMessageCommands, ConfigKeys, StorageKeys } from "./constants";
+import { logger, connection } from "./extension";
+import { WebviewMessageCommands, allExtensionCommands } from "./constants";
+import * as profileManager from "./profileManager";
+import { TestBenchProfile } from "./testBenchTypes";
+import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
 
 /**
  * The provider for the login webview.
@@ -15,21 +17,27 @@ import { WebviewMessageCommands, ConfigKeys, StorageKeys } from "./constants";
 export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewId: string = "testbenchExtension.webView";
     private currentWebview?: vscode.WebviewView;
-    // Prevent multiple login processes which can be caused by spamming the login button.
-    private isLoginProcessAlreadyRunningAfterButtonClick: boolean = false;
     private _messageListenerDisposable: vscode.Disposable | undefined;
 
     /**
      * Constructs a new LoginWebViewProvider.
      * @param {vscode.ExtensionContext} extensionContext The extension context.
      */
-    constructor(private extensionContext?: vscode.ExtensionContext) {}
+    constructor(private extensionContext: vscode.ExtensionContext) {
+        logger.trace("LoginWebViewProvider initialized.");
+    }
 
     /**
      * Called when VS Code loads the webview.
      * @param {vscode.WebviewView} webviewView The webview view instance.
      */
-    async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
+    async resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        _context: vscode.WebviewViewResolveContext,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        _token: vscode.CancellationToken
+    ): Promise<void> {
         logger.trace("Resolving login webview view.");
         this.currentWebview = webviewView;
 
@@ -41,33 +49,65 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         // Enable scripts in the webview.
         webviewView.webview.options = {
-            enableScripts: true
+            enableScripts: true,
+            localResourceRoots: [
+                vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources"),
+                vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist")
+            ]
         };
 
-        // Set initial HTML content based on connection status.
+        // Set initial HTML content, generates new UI
         await this.updateWebviewHTMLContent();
 
         // Store new listener disposable
         // Listen for messages from the webview to respond to user actions.
         this._messageListenerDisposable = webviewView.webview.onDidReceiveMessage(async (message) => {
-            logger.trace(`Received message from webview: ${message.command}`);
+            logger.trace(`[LoginWebView] Received message from webview: ${message.command}`);
             switch (message.command) {
-                // Handle the login attempt
-                case WebviewMessageCommands.LOGIN:
-                    await this.handleLogin(
-                        this.extensionContext,
-                        message.serverName,
-                        parseInt(message.portNumber, 10), // Port number is an integer, parse it
-                        message.username,
-                        message.password
-                    );
+                case WebviewMessageCommands.PROFILE_UI_LOADED:
+                    await this.sendProfilesToWebview();
                     break;
-                // Handle setting updates directly from the webview checkboxes
-                case WebviewMessageCommands.UPDATE_SETTING:
-                    await this.updateSetting(message.key, message.value);
+                case WebviewMessageCommands.LOGIN_WITH_PROFILE:
+                    await this.handleLoginWithProfile(message.payload.profileId);
+                    break;
+                case WebviewMessageCommands.SAVE_NEW_PROFILE:
+                    await this.handleSaveNewProfile(message.payload);
+                    break;
+                case WebviewMessageCommands.REQUEST_DELETE_CONFIRMATION:
+                    await this.handleRequestDeleteConfirmation(message.payload.profileId);
+                    break;
+                case WebviewMessageCommands.LOGIN:
+                    logger.info(
+                        '[LoginWebView] Old "Sign In" button clicked. Triggering TestBench login command for generic flow.'
+                    );
+                    vscode.commands.executeCommand(allExtensionCommands.login).then(undefined, (err) => {
+                        logger.error("[LoginWebView] Error executing generic login command:", err);
+                        this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                            type: "error",
+                            text: "Could not start TestBench login process."
+                        });
+                    });
+                    break;
+                // Logout button
+                case "triggerCommand":
+                    if (message.payload && message.payload.commandId) {
+                        logger.info(
+                            `[LoginWebView] Webview requested to trigger command: ${message.payload.commandId}`
+                        );
+                        vscode.commands.executeCommand(message.payload.commandId).then(undefined, (err) => {
+                            logger.error(
+                                `[LoginWebView] Error executing command '${message.payload.commandId}' from webview:`,
+                                err
+                            );
+                            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                                type: "error",
+                                text: `Could not execute command: ${message.payload.commandId}`
+                            });
+                        });
+                    }
                     break;
                 default:
-                    logger.warn(`Unknown command from webview: ${message.command}`);
+                    logger.warn(`[LoginWebView] Unknown command from webview: ${message.command}`);
                     break;
             }
         });
@@ -85,7 +125,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 if (this.currentWebview === webviewView) {
                     this.currentWebview = undefined;
                 }
-                logger.trace("Login webview disposed.");
+                if (this._messageListenerDisposable) {
+                    this._messageListenerDisposable.dispose();
+                }
+                logger.trace("[LoginWebView] Profile Management webview disposed.");
             },
             null,
             this.extensionContext?.subscriptions
@@ -93,97 +136,232 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Resets the flag that prevents multiple login attempts.
-     * Should be called when a login process is definitively finished or aborted,
-     * especially after a logout, to allow new login attempts.
+     * Handles the request to confirm the deletion of a user profile.
+     * It prompts the user with a confirmation dialog before proceeding with the deletion.
+     *
+     * @param profileId - The ID of the profile to be considered for deletion.
+     * @returns A promise that resolves when the confirmation process is complete.
      */
-    public resetLoginAttemptFlag(): void {
-        this.isLoginProcessAlreadyRunningAfterButtonClick = false;
-        logger.trace("Login attempt flag has been reset.");
-    }
-
-    /**
-     * Updates a setting in the workspace configuration.
-     * @param {string} key The setting key.
-     * @param {any} value The new value for the setting.
-     */
-    private async updateSetting(key: string, value: any): Promise<void> {
-        try {
-            await getConfig().update(key, value, vscode.ConfigurationTarget.Workspace);
-            logger.info(`Setting '${key}' updated to '${value}' via webview.`);
-        } catch (error) {
-            logger.error(`Failed to update setting ${key} from webview:`, error);
-            vscode.window.showErrorMessage(`Failed to update setting '${key}'.`);
-        }
-    }
-
-    /**
-     * Handles the login process when a login message is received from the webview when the user submits the login form.
-     * Prevents multiple login attempts and triggers the login sequence.
-     * @param {vscode.ExtensionContext | undefined} extensionContext The extension context.
-     * @param {string} serverName The server name.
-     * @param {number} portNumber The port number.
-     * @param {string} username The username.
-     * @param {string} password The password.
-     */
-    private async handleLogin(
-        extensionContext: vscode.ExtensionContext | undefined,
-        serverName: string,
-        portNumber: number,
-        username: string,
-        password: string
-    ): Promise<void> {
-        if (this.isLoginProcessAlreadyRunningAfterButtonClick) {
-            logger.trace("Login process already running; ignoring duplicate submit.");
+    private async handleRequestDeleteConfirmation(profileId: string): Promise<void> {
+        logger.info(`[LoginWebView] Received request for delete confirmation for profile ID: ${profileId}`);
+        if (!profileId) {
+            logger.warn("[LoginWebView] No profileId provided for delete confirmation.");
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "error",
+                text: "Cannot delete: Profile ID missing."
+            });
             return;
         }
-        this.isLoginProcessAlreadyRunningAfterButtonClick = true;
-        logger.trace("Handling login command from webview.");
+
+        const profileToDelete = (await profileManager.getProfiles(this.extensionContext)).find(
+            (p) => p.id === profileId
+        );
+        if (!profileToDelete) {
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "error",
+                text: `Profile not found for deletion.`
+            });
+            return;
+        }
+
+        const confirmation = await vscode.window.showWarningMessage(
+            `Are you sure you want to delete the profile "${profileToDelete.label}"?`,
+            { modal: true }, // Makes the dialog modal
+            "Delete", // Confirmation option
+            "Cancel" // Cancellation option
+        );
+
+        if (confirmation === "Delete") {
+            logger.info(`[LoginWebView] User confirmed deletion for profile ID: ${profileId}. Proceeding with delete.`);
+            // Now call the actual delete handler
+            await this.handleDeleteProfile(profileId);
+        } else {
+            logger.info(`[LoginWebView] User cancelled deletion for profile ID: ${profileId}.`);
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "info",
+                text: "Delete operation cancelled."
+            });
+        }
+    }
+
+    /**
+     * Posts a message to the current webview.
+     * @param command The command to send to the webview.
+     * @param payload The data to send with the command.
+     */
+    private postMessageToWebview(command: string, payload: any): void {
+        if (this.currentWebview) {
+            this.currentWebview.webview.postMessage({ command, payload });
+        }
+    }
+
+    /**
+     * Asynchronously fetches user profiles and sends them to the webview.
+     * If successful, it posts the profiles for display.
+     * If an error occurs, it logs the error and posts an error message to the webview.
+     */
+    private async sendProfilesToWebview(): Promise<void> {
         try {
-            if (!extensionContext) {
-                logger.error("Extension context is missing in handleLogin.");
-                this.showLoginErrorInWebview("Internal error: Extension context missing."); // Show error in webview
-                this.resetLoginAttemptFlag();
+            const profiles = await profileManager.getProfiles(this.extensionContext);
+            this.postMessageToWebview(WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW, profiles);
+        } catch (error: any) {
+            logger.error("[LoginWebView] Error fetching profiles for webview:", error);
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "error",
+                text: "Error loading profiles."
+            });
+        }
+    }
+
+    /**
+     * Handles the login process using a specified profile ID.
+     * It retrieves the profile, sets it as active, and then initiates
+     * the VS Code authentication flow.
+     *
+     * @param profileId The ID of the profile to use for login.
+     * @returns A promise that resolves when the login attempt is complete.
+     */
+    private async handleLoginWithProfile(profileId: string): Promise<void> {
+        logger.info(`[LoginWebView] Attempting login with profile ID: ${profileId}`);
+        try {
+            const profiles = await profileManager.getProfiles(this.extensionContext);
+            const selectedProfile = profiles.find((p) => p.id === profileId);
+
+            if (!selectedProfile) {
+                this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                    type: "error",
+                    text: `Profile with ID ${profileId} not found.`
+                });
                 return;
             }
 
-            // Check if the user is already connected to a server, if so, show a message and hide the webview.
-            if (this.isConnectedToServer()) {
-                vscode.window.showInformationMessage("You are already connected to a server.");
-                this.resetLoginAttemptFlag();
-                return;
-            }
+            // Set active profile ID before calling getSession
+            await profileManager.setActiveProfileId(this.extensionContext, selectedProfile.id);
 
-            // In production, don't log sensitive data.
-            logger.trace(`Received login data: Server: ${serverName}, Port: ${portNumber}, Username: ${username}`);
+            // Trigger VS Code's authentication flow.
+            const session = await vscode.authentication.getSession(
+                TESTBENCH_AUTH_PROVIDER_ID,
+                ["api_access"], // scopes
+                { createIfNone: true } // This will trigger createSession
+            );
 
-            // Attempt to log in. Successfull login will update and hide the webview automatically.
-            const connectionAfterLoginAttempt: PlayServerConnection | null =
-                await loginToNewPlayServerAndInitSessionToken(
-                    extensionContext!,
-                    serverName,
-                    portNumber,
-                    username,
-                    password
-                );
-
-            // If login was successful, display project tree view
-            if (connectionAfterLoginAttempt) {
-                initializeTreeViews(extensionContext);
-                const pmProvider = getProjectManagementTreeDataProvider();
-                if (pmProvider) {
-                    pmProvider.refresh();
-                }
+            if (session) {
+                logger.info(`[LoginWebView] Login successful via provider for profile: ${selectedProfile.label}`);
+                // The onDidChangeSessions listener in extension.ts handles UI updates
             } else {
-                logger.warn("Login failed via webview.");
-                this.showLoginErrorInWebview("Login failed. Please check credentials or server details.");
+                this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                    type: "error",
+                    text: "Login failed. Please check credentials or server details."
+                });
             }
-        } catch (error) {
-            logger.error("Exception during login attempt from webview:", error);
-            this.showLoginErrorInWebview(`Login error: ${(error as Error).message}`);
-        } finally {
-            // Release the lock on the login process.
-            this.resetLoginAttemptFlag();
+        } catch (error: any) {
+            logger.error(`[LoginWebView] Login failed for profile ${profileId}:`, error);
+            await profileManager.clearActiveProfile(this.extensionContext); // Clear if login fails
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "error",
+                text: `Login Error: ${error.message}`
+            });
+        }
+    }
+
+    /**
+     * Handles the saving of a new user profile.
+     * It validates the necessary profile data, attempts to save it,
+     * and then sends a status message (success or error) back to the webview.
+     * If successful, it also refreshes the list of profiles in the webview.
+     *
+     * @param profileData - An object containing the details of the new profile to be saved.
+     *                      This includes server name, port number, username, and an optional password and label.
+     *                      The 'id' property is omitted as it will be generated upon saving.
+     * @returns A promise that resolves when the save operation (including webview updates) is complete.
+     */
+    private async handleSaveNewProfile(
+        profileData: Omit<TestBenchProfile, "id"> & { password?: string }
+    ): Promise<void> {
+        logger.info(`[LoginWebView] Attempting to save new profile: ${profileData.label || "No Label"}`);
+        try {
+            if (!profileData.serverName || !profileData.portNumber || !profileData.username) {
+                this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                    type: "error",
+                    text: "Server, Port, and Username are required."
+                });
+                return;
+            }
+
+            // Check for existing profile with the same server, port, and username
+            const existingProfile = await profileManager.findProfileByCredentials(
+                this.extensionContext,
+                profileData.serverName,
+                profileData.portNumber,
+                profileData.username
+            );
+
+            if (existingProfile) {
+                this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                    type: "warning", // Use warning for duplicates
+                    text: `A profile with the same server, port, and username already exists: "${existingProfile.label}". Not saving duplicate.`
+                });
+                logger.warn(
+                    `[LoginWebView] Attempt to save duplicate profile (server/user match) prevented for: ${existingProfile.label}`
+                );
+                return; // Do not save if duplicate
+            }
+
+            const newProfileId = await profileManager.saveProfile(
+                this.extensionContext,
+                profileData,
+                profileData.password
+            );
+            logger.info(`[LoginWebView] New profile saved with ID: ${newProfileId}`);
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "success",
+                text: `Profile "${profileData.label || newProfileId}" saved.`
+            });
+            await this.sendProfilesToWebview(); // Refresh list
+        } catch (error: any) {
+            logger.error("[LoginWebView] Error saving new profile:", error);
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "error",
+                text: `Error saving profile: ${error.message}`
+            });
+        }
+    }
+
+    /**
+     * Handles the deletion of a user profile.
+     * It attempts to find and delete a profile based on the provided ID.
+     * Sends success or error messages to the webview and refreshes the profile list upon successful deletion.
+     *
+     * @param profileId The ID of the profile to delete.
+     * @returns A promise that resolves when the deletion process is complete.
+     */
+    private async handleDeleteProfile(profileId: string): Promise<void> {
+        logger.info(`[LoginWebView] Attempting to delete profile ID: ${profileId}`);
+        try {
+            const profileToDelete = (await profileManager.getProfiles(this.extensionContext)).find(
+                (p) => p.id === profileId
+            );
+            if (!profileToDelete) {
+                this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                    type: "error",
+                    text: `Profile not found for deletion.`
+                });
+                return;
+            }
+
+            await profileManager.deleteProfile(this.extensionContext, profileId);
+            logger.info(`[LoginWebView] Profile deleted: ${profileId}`);
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "success",
+                text: `Profile "${profileToDelete.label}" deleted.`
+            });
+            await this.sendProfilesToWebview(); // Refresh list
+        } catch (error: any) {
+            logger.error(`[LoginWebView] Error deleting profile ${profileId}:`, error);
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "error",
+                text: `Error deleting profile: ${error.message}`
+            });
         }
     }
 
@@ -192,260 +370,651 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      */
     async updateWebviewHTMLContent(): Promise<void> {
         if (this.currentWebview) {
-            logger.trace("Setting/Updating login webview HTML content.");
-            // The view is only resolved when not connected, so we always show the login page.
-            this.currentWebview.webview.html = await this.getLoginHtmlPage(this.currentWebview.webview);
-        } else {
-            logger.trace("No current login webview to update content for.");
-        }
-    }
-
-    /**
-     * Sends a message to the webview to display an error message.
-     * @param {string} errorMessage The error message text to display.
-     */
-    private showLoginErrorInWebview(errorMessage: string): void {
-        if (this.currentWebview) {
-            // Post a message that the webview's script can handle
-            this.currentWebview.webview.postMessage({
-                command: WebviewMessageCommands.SHOW_ERROR,
-                message: errorMessage
-            });
+            const isSignedIn = !!connection;
+            if (isSignedIn) {
+                this.currentWebview.webview.html = this.getAlreadyLoggedInHtmlPage(this.currentWebview.webview);
+            } else {
+                // Generate the new Profile Management UI
+                this.currentWebview.webview.html = this.getProfileManagementHtmlPage(this.currentWebview.webview);
+                // After setting HTML, if webview is visible and not signed in, tell it to load profiles
+            }
         }
     }
 
     /**
      * Creates a URI for the TestBench icon.
      * @param {vscode.Webview} webview The webview instance.
+     * @param {string} iconName The name of the icon file.
      * @returns {vscode.Uri | null} The icon URI, or null if the extension context is undefined.
      */
-    private createIconUri(webview: vscode.Webview): vscode.Uri | null {
+    private createIconUri(webview: vscode.Webview, iconName: string): vscode.Uri | null {
         if (!this.extensionContext) {
-            logger.error("Extension context is undefined; cannot create icon URI.");
+            logger.error("[LoginWebView] Extension context is undefined; cannot create icon URI.");
             return null;
         }
-        // Create the URI for testbench icon
-        return webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", "iTB-EE-Logo-256x256.png")
+        const iconUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", iconName)
         );
+        logger.trace(`[LoginWebView] Created icon URI: ${iconUri}`);
+        return iconUri;
     }
 
     /**
-     * Returns a simple login HTML page with VS Code styling.
-     * @param {vscode.Webview} webview The webview instance.
-     * @returns {Promise<string>} A promise resolving to an HTML string.
+     * Generates the HTML content for the profile management webview.
+     * This includes the UI for displaying, adding, and managing connection profiles.
+     *
+     * @param webview The VS Code webview instance to which this HTML will be rendered.
+     *                Used to generate Content Security Policy nonces and URIs.
+     * @returns A string containing the complete HTML for the profile management page.
      */
-    private async getLoginHtmlPage(webview: vscode.Webview): Promise<string> {
-        logger.trace("Returning login HTML page for Webview.");
-        if (!this.extensionContext) {
-            logger.warn("Extension context is undefined; cannot get stored settings.");
+    private getProfileManagementHtmlPage(webview: vscode.Webview): string {
+        const nonce = getNonce();
+        const cspSource = webview.cspSource;
+        const contentSecurityPolicy = `
+            default-src 'none';
+            img-src ${cspSource} https: data:;
+            script-src 'nonce-${nonce}';
+            style-src ${cspSource} 'unsafe-inline' 'self'; 
+            font-src ${cspSource};
+        `;
+
+        // Icons for the header and buttons
+        const profilesHeaderIconUri = this.createIconUri(webview, "profiles.svg");
+        const addProfileHeaderIconUri = this.createIconUri(webview, "add.svg");
+        const saveProfileButtonIconUri = this.createIconUri(webview, "save.svg");
+
+        return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TestBench Profile Management</title>
+        <style>
+        body {
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            color: var(--vscode-editor-foreground);
+            background-color: var(--vscode-side-bar-background, var(--vscode-editor-background));
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+            gap: 20px;
         }
 
-        const imageUri: vscode.Uri | null = this.createIconUri(webview);
+        /* Improved section styling */
+        .profile-section, .add-profile-section {
+            padding: 15px;
+            border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
+            border-radius: 6px;
+            background-color: var(--vscode-list-inactiveSelectionBackground);
+        }
 
-        const serverNameValue: string = getConfig().get<string>(ConfigKeys.SERVER_NAME, "");
-        const portNumberValue: string = getConfig().get<string>(ConfigKeys.PORT_NUMBER, "");
-        const usernameValue: string = getConfig().get<string>(ConfigKeys.USERNAME, "");
-        const storedPasswordValue: string = (await this.extensionContext?.secrets.get(StorageKeys.PASSWORD)) || "";
-        const savePasswordChecked: string = getConfig().get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)
-            ? "checked"
-            : "";
-        const autoLoginChecked: string = getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false) ? "checked" : "";
+        h2, h3 {
+            color: var(--vscode-settings-headerForeground);
+            margin-top: 0;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--vscode-focusBorder, var(--vscode-settings-dropdownBorder));
+            font-weight: 600;
+            display: flex; /* To align icon and text */
+            align-items: center;
+        }
+
+        ul#profilesList {
+            list-style: none;
+            padding: 0;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
+            border-radius: 4px;
+        }
+
+        ul#profilesList li {
+            padding: 10px 12px;
+            margin-bottom: -1px;
+            border-bottom: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--vscode-list-hoverBackground);
+            transition: background-color 0.2s ease-in-out;
+        }
+        ul#profilesList li:last-child {
+            border-bottom: none;
+        }
+        ul#profilesList li:hover {
+            background-color: var(--vscode-list-focusBackground);
+        }
+
+        ul#profilesList li .profile-details {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+
+        ul#profilesList li .profile-label {
+            font-weight: bold;
+            color: var(--vscode-list-activeSelectionForeground);
+            font-size: 1.05em;
+        }
+
+        ul#profilesList li .profile-info {
+            font-size: 0.9em;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 3px;
+        }
+
+        .profile-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .profile-actions button {
+            padding: 5px 10px;
+            font-size: 0.9em;
+            /* display: inline-flex; ensure button itself handles flex for icon */
+            /* align-items: center; */
+            /* gap: 5px; */
+        }
+
+        button {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder));
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+            display: inline-flex; /* For icon and text alignment in button */
+            align-items: center;
+            justify-content: center; /* Center content if button wider than text/icon */
+        }
+        button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+            border-color: var(--vscode-focusBorder);
+        }
+        button:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            outline-offset: 2px;
+        }
+
+        /* Specific styling for primary action (Save Profile) */
+        #saveProfileBtn {
+            background-color: var(--vscode-button-primaryBackground, var(--vscode-button-background));
+            color: var(--vscode-button-primaryForeground, var(--vscode-button-foreground));
+        }
+        #saveProfileBtn:hover {
+            background-color: var(--vscode-button-primaryHoverBackground, var(--vscode-button-hoverBackground));
+        }
+
+        /* Login button in profile list */
+        .login-btn {
+            background-color: var(--vscode-button-primaryBackground, var(--vscode-button-background));
+            color: var(--vscode-button-primaryForeground, var(--vscode-button-foreground));
+        }
+        .login-btn:hover {
+            background-color: var(--vscode-button-primaryHoverBackground, var(--vscode-button-hoverBackground));
+        }
+
+        /* Delete button styling */
+        button.delete-btn {
+            background-color: var(--vscode-button-secondaryBackground, var(--vscode-errorForeground));
+            color: var(--vscode-button-secondaryForeground, white);
+            border-color: var(--vscode-button-secondaryBackground, var(--vscode-errorForeground));
+        }
+        button.delete-btn:hover {
+            background-color: var(--vscode-errorForeground); /* Keep it distinct on hover */
+            opacity: 0.8; /* Or use a specific hover background from theme if available */
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.95em;
+            font-weight: 500;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group input[type="password"] {
+            width: calc(100% - 12px); /* padding compensation */
+            padding: 8px 6px;
+            border-radius: 3px;
+            border: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+        }
+        .form-group input[type="text"]:focus,
+        .form-group input[type="number"]:focus,
+        .form-group input[type="password"]:focus {
+            border-color: var(--vscode-focusBorder);
+            box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+        }
+
+        .password-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .password-wrapper input[type="password"] {
+            flex-grow: 1;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 8px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: var(--vscode-icon-foreground);
+        }
+
+        #messages {
+            margin-top: 15px;
+            padding: 10px 12px;
+            border-radius: 4px;
+            word-break: break-word;
+            font-size: 0.95em;
+            display: flex; /* For icon alignment */
+            align-items: center;
+            gap: 8px; /* Space between icon and text */
+        }
+        #messages.hidden {
+            display: none;
+        }
+
+        .message-info {
+            background-color: var(--vscode-inputValidation-infoBackground);
+            color: var(--vscode-inputValidation-infoForeground);
+            border: 1px solid var(--vscode-inputValidation-infoBorder);
+        }
+        /* text-shadow for info can also be added if needed */
+
+        .message-success {
+            background-color: var(--vscode-editorGutter-addedBackground);
+            color: var(--vscode-notification-infoForeground);
+            border: 1px solid var(--vscode-gitDecoration-addedResourceForeground);
+        }
+
+        .message-error {
+            background-color: var(--vscode-inputValidation-errorBackground);
+            color: var(--vscode-inputValidation-errorForeground);
+            border: 1px solid var(--vscode-inputValidation-errorBorder);
+        }
+        .message-warning {
+            background-color: var(--vscode-inputValidation-warningBackground, #warning_color_background_fallback);
+            color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
+            border: 1px solid var(--vscode-inputValidation-warningBorder, #warning_color_border_fallback);
+        }
+
+        .scrollable-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding-right: 5px; /* Space for scrollbar if it appears */
+        }
+
+        #noProfilesMessage {
+            padding: 15px;
+            text-align: center;
+            color: var(--vscode-descriptionForeground);
+            border: 1px dashed var(--vscode-input-border);
+            border-radius: 4px;
+        }
+
+        /* --- Custom Icon Styling --- */
+        /* Common class for inline icons used with background-image */
+        .icon {
+            display: inline-block;
+            width: 16px; /* Default icon size */
+            height: 16px; /* Default icon size */
+            margin-right: 8px; /* Default space after icon (if before text) */
+            vertical-align: middle; /* Aligns icon nicely with text */
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain; /* Scales icon to fit within width/height */
+        }
+
+        /* Icons for Headers */
+        .profile-section h2 .icon-profiles-header {
+            background-image: url(${profilesHeaderIconUri});
+        }
+        .add-profile-section h3 .icon-add-profile-header {
+            background-image: url(${addProfileHeaderIconUri});
+        }
+
+        /* Icons for Buttons */
+        /* The .icon span inside a button */
+        button .icon {
+            margin-right: 6px; /* Space between icon and text if icon is first */
+        }
+        #saveProfileBtn .icon-save {
+            background-image: url(${saveProfileButtonIconUri});
+        }
+       
+        /* Icons for Messages */
+        #messages .icon-message { /* The common span for message icons */
+            width: 18px; /* Slightly larger for messages */
+            height: 18px;
+            margin-right: 8px;
+            flex-shrink: 0; /* Prevent icon from shrinking if message text is long */
+        }
+
+        /* Icon for "No Profiles" message */
+        #noProfilesMessage .icon-no-profiles {
+            display: block; /* Icon on its own line for emphasis */
+            width: 24px; /* Larger for empty state */
+            height: 24px;
+            margin: 0 auto 8px auto; /* Center the icon above the text */
+        }
+        
+    </style>
+        </head>
+        <body>
+            <div class="scrollable-content">
+            <section class="profile-section" aria-labelledby="profilesHeading">
+            <h2 id="profilesHeading">
+                <span class="icon icon-profiles-header"></span>
+                Available Profiles
+            </h2>
+            <ul id="profilesList" aria-live="polite">
+                </ul>
+            <p id="noProfilesMessage" style="display: none;">No profiles configured yet.<br>Use the form below to add one.</p>
+            </section>
+
+            <section class="add-profile-section" aria-labelledby="addProfileHeading">
+            <h3 id="addProfileHeading">
+                <span class="icon icon-add-profile-header"></span>
+                Add New Profile
+            </h3>
+            <form id="addProfileForm">
+                <div class="form-group">
+                <label for="profileLabel">Profile Label (e.g., "My Dev Server")</label>
+                <input type="text" id="profileLabel" name="profileLabel" placeholder="Optional, e.g., Main TestBench">
+                </div>
+                <div class="form-group">
+                <label for="serverName">Server Hostname or IP Address</label>
+                <input type="text" id="serverName" name="serverName" required placeholder="e.g., testbench.example.com">
+                </div>
+                <div class="form-group">
+                <label for="portNumber">Port Number</label>
+                <input type="number" id="portNumber" name="portNumber" value="9445" required placeholder="e.g., 9445">
+                </div>
+                <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required placeholder="Your TestBench username">
+                </div>
+                <div class="form-group">
+                <label for="password">Password</label>
+                <div class="password-wrapper">
+                    <input type="password" id="password" name="password" placeholder="Enter password (stored securely)">
+                    </div>
+                <small style="color: var(--vscode-descriptionForeground); font-size: 0.85em; margin-top: 4px; display: block;">Password will be stored securely in VS Code's Secret Storage.</small>
+                </div>
+                <button type="button" id="saveProfileBtn">
+                    <span class="icon icon-save"></span>                
+                    Save New Profile
+                </button>
+            </form>
+            </section>
+        </div>
+        <div id="messages" class="hidden" role="alert" aria-live="assertive"></div>
+
+            <script nonce="${nonce}">
+            (function() {
+                const vscode = acquireVsCodeApi();
+                const profilesListEl = document.getElementById('profilesList');
+                const noProfilesMessageEl = document.getElementById('noProfilesMessage');
+                const messagesEl = document.getElementById('messages');
+
+                // Form elements
+                const profileLabelInput = document.getElementById('profileLabel');
+                const serverNameInput = document.getElementById('serverName');
+                const portNumberInput = document.getElementById('portNumber');
+                const usernameInput = document.getElementById('username');
+                const passwordInput = document.getElementById('password');
+                const saveProfileBtn = document.getElementById('saveProfileBtn');
+                const addProfileForm = document.getElementById('addProfileForm');
+
+                // Ensure elements exist before adding listeners
+                if (!profilesListEl || !saveProfileBtn || !noProfilesMessageEl || !messagesEl || !addProfileForm) {
+                console.error('[WebviewScript] Critical UI elements not found. Aborting script setup.');
+                return;
+                }
+
+                function displayMessage(type, text) {
+                    messagesEl.textContent = text;
+                    messagesEl.className = 'message-' + type; // e.g., 'message-success'
+                    messagesEl.classList.remove('hidden'); // Make it visible
+                    messagesEl.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+                    // Clear message after a delay, but not for errors, or make errors clearable
+                    if (type !== 'error') {
+                        setTimeout(() => {
+                        messagesEl.textContent = '';
+                        messagesEl.className = '';
+                        messagesEl.classList.add('hidden');
+                        }, 7000); // Slightly longer display
+                    } else {
+                        // Optionally add a close button for errors
+                        // For now, errors will persist until a new message or page reload
+                    }
+                }
+
+                function clearAddProfileFormFields() {
+                    if (addProfileForm) {
+                        addProfileForm.reset(); // Resets all form fields to their initial values
+                        // To clear specific fields:
+                        // profileLabelInput.value = '';
+                        // serverNameInput.value = '';
+                        // portNumberInput.value = '9445'; // Or your default
+                        // usernameInput.value = '';
+                        // passwordInput.value = '';
+                    }
+                }
+
+                function renderProfiles(profiles) {
+                profilesListEl.innerHTML = ''; // Clear existing
+                if (!profiles || profiles.length === 0) {
+                    noProfilesMessageEl.style.display = 'block';
+                    return;
+                }
+                noProfilesMessageEl.style.display = 'none';
+                profiles.forEach(profile => {
+                    const li = document.createElement('li');
+                    li.setAttribute('tabindex', '0'); // Make list items focusable
+                    li.setAttribute('aria-label', \`Profile: \${profile.label}, user \${profile.username} at \${profile.serverName}\`);
+
+                    li.innerHTML = \`
+                    <div class="profile-details">
+                        <div class="profile-label">\${profile.label}</div>
+                        <div class="profile-info">\${profile.username}@\${profile.serverName}:\${profile.portNumber}</div>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="login-btn" data-profile-id="\${profile.id}" aria-label="Login with profile \${profile.label}">Login</button>
+                        <button class="delete-btn" data-profile-id="\${profile.id}" aria-label="Delete profile \${profile.label}">Delete</button>
+                    </div>
+                    \`;
+                    profilesListEl.appendChild(li);
+                });
+                }
+
+                // Event listeners for profile actions (profile list clicks)
+                profilesListEl.addEventListener('click', function(event) {
+                const targetButton = event.target.closest('button');
+
+                if (targetButton) {
+                    const profileId = targetButton.dataset.profileId;
+                    if (targetButton.classList.contains('login-btn')) {
+                    vscode.postMessage({ command: '${WebviewMessageCommands.LOGIN_WITH_PROFILE}', payload: { profileId } });
+                    } else if (targetButton.classList.contains('delete-btn')) {
+                    vscode.postMessage({ command: '${WebviewMessageCommands.REQUEST_DELETE_CONFIRMATION}', payload: { profileId } });
+                    }
+                }
+                });
+
+                // Event listener for saving new profile
+                saveProfileBtn.addEventListener('click', function() {
+                // Basic validation
+                if (!serverNameInput.value.trim() || !portNumberInput.value.trim() || !usernameInput.value.trim()) {
+                    displayMessage('error', 'Server, Port, and Username are required fields.');
+                    // Focus the first empty required field
+                    if (!serverNameInput.value.trim()) serverNameInput.focus();
+                    else if (!portNumberInput.value.trim()) portNumberInput.focus();
+                    else if (!usernameInput.value.trim()) usernameInput.focus();
+                    return;
+                }
+                if (isNaN(parseInt(portNumberInput.value, 10))) {
+                    displayMessage('error', 'Port must be a valid number.');
+                    portNumberInput.focus();
+                    return;
+                }
+
+                const payload = {
+                    label: profileLabelInput.value.trim() || \`\${usernameInput.value.trim()}@\${serverNameInput.value.trim()}\`, // Auto-generate label if empty
+                    serverName: serverNameInput.value.trim(),
+                    portNumber: parseInt(portNumberInput.value, 10),
+                    username: usernameInput.value.trim(),
+                    password: passwordInput.value // Password can be empty, handled by auth provider
+                };
+
+                // Disable button during processing
+                saveProfileBtn.disabled = true;
+                saveProfileBtn.textContent = 'Saving...';
+
+                vscode.postMessage({ command: '${WebviewMessageCommands.SAVE_NEW_PROFILE}', payload });
+                // Password field is cleared, and button re-enabled via message from extension (PROFILE_OPERATION_COMPLETE or similar)
+                // or after a timeout if direct feedback isn't implemented for this action.
+                // For now, we'll clear and re-enable manually, but this is better handled by response from extension.
+                setTimeout(() => { // Simulating processing delay and re-enabling
+                    passwordInput.value = ''; // Clear password after attempt
+                    // addProfileForm.reset(); // Optionally reset the whole form, but might not be desired if save fails.
+                    saveProfileBtn.disabled = false;
+                    saveProfileBtn.innerHTML = '<span class="icon icon-save"></span> Save New Profile'; // Restore original text including icon
+                    // If using textContent and icon was via ::before, it's simpler: saveProfileBtn.textContent = 'Save New Profile';
+                }, 1000); // Adjust timing or remove if extension sends feedback
+
+                });
+                
+                // Handle messages from the extension host
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    console.log('[WebviewScript] Message received from host:', message);
+                    switch (message.command) {
+                        case '${WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW}':
+                            renderProfiles(message.payload);
+                            break;
+                        case '${WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE}':
+                            displayMessage(message.payload.type, message.payload.text);
+                            // If profile operation was completed, re-enable save button
+                            if (message.payload.operation === 'saveProfile' || message.payload.operation === 'deleteProfile') {
+                                saveProfileBtn.disabled = false;
+                                saveProfileBtn.innerHTML = '<span class="icon icon-save"></span> Save New Profile'; // Reset text/icon
+                            }
+                            break;
+                        case 'clearAddProfileForm':
+                            clearAddProfileFormFields();
+                            break;               
+                    }
+                });
+
+                // Initial load: Tell the extension the UI is ready
+                console.log('[WebviewScript] Requesting initial profiles via PROFILE_UI_LOADED.');
+                vscode.postMessage({ command: '${WebviewMessageCommands.PROFILE_UI_LOADED}' });
+                // Initially hide messages area
+                messagesEl.classList.add('hidden');
+            }());
+            </script>
+        </body>
+        </html>`;
+    }
+
+    /**
+     * Generates the HTML content for a webview page indicating that the user is already logged in.
+     * This page displays a success message, the TestBench logo, and a sign-out button.
+     *
+     * @param webview The VS Code webview instance to which the HTML will be rendered.
+     * @returns A string containing the HTML markup for the "already logged in" page.
+     */
+    private getAlreadyLoggedInHtmlPage(webview: vscode.Webview): string {
+        const testBenchLogoUri = this.createIconUri(webview, "iTB-EE-Logo-256x256.png");
+        const nonce = getNonce();
+        const cspSource = webview.cspSource;
+        const contentSecurityPolicy = `default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource};`;
+
+        // Attempt to get current connection details for display
+        const currentConnection = connection; // from './extension'
+        let connectedAsInfo = "You are connected to TestBench.";
+        if (currentConnection) {
+            connectedAsInfo = `Connected as <strong>${currentConnection.getUsername()}</strong> on <strong>${currentConnection.getServerName()}:${currentConnection.getServerPort()}</strong>.`;
+        }
 
         return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8"/>
+    <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login to TestBench</title>
+    <title>TestBench Connected</title>
     <style>
         body {
             font-family: var(--vscode-font-family);
             font-size: var(--vscode-font-size);
-            color: var(--vscode-foreground);
-            background-color: var(--vscode-editor-background);
-            margin: 20px;
-        }
-        .header-container {
-            display: flex;
-            align-items: center;
-            margin-bottom: 1em;
-        }
-        .header-container img {
-            width: 30px;
-            height: 30px;
-            margin-right: 10px;
-        }
-        .header-container h2 {
-            margin: 0;
             color: var(--vscode-editor-foreground);
-        }
-        form div {
-            margin-top: 0.5em;
-        }
-        label {
-            display: block;
-            margin-bottom: 0.25em;
-            color: var(--vscode-editor-foreground);
-        }
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 0.5em;
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
-            background-color: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-        }
-        input:focus {
-            outline: 1px solid var(--vscode-focusBorder);
-        }
-        button {
-            margin-top: 1em;
-            padding: 0.5em 1em;
-            border: none;
-            border-radius: 4px;
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
-        /* Optional styling for checkboxes */
-        .checkbox-container {
+            background-color: var(--vscode-side-bar-background, var(--vscode-editor-background));
+            padding: 15px;
             display: flex;
-            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+            gap: 20px;
         }
-        .checkbox-container input {
-            margin-right: 0.5em;
-        }
+        .container { display: flex; flex-direction: column; align-items: center; }
+        img { width: 48px; height: 48px; margin-bottom: 15px; }
+        p { color: var(--vscode-descriptionForeground); }
     </style>
 </head>
 <body>
-    <div class="header-container">
-        <img src="${imageUri || ""}" alt="TestBench Logo">
-        <h2>Login to TestBench</h2>
+    <div class="container">
+        ${testBenchLogoUri ? `<img src="${testBenchLogoUri}" alt="TestBench Logo" class="logo">` : ""}
+        <p class="connection-info">${connectedAsInfo}</p>
+        <p class="info-text">Use the TestBench views in the explorer or run TestBench commands.</p>
+        <button id="logoutButton"><span class="icon icon-logout"></span>Sign Out</button>
     </div>
-    <form id="loginForm" onsubmit="event.preventDefault(); submitLogin();">
-        <div>
-            <label for="serverName">Server Name:</label>
-            <input id="serverName" type="text" placeholder="Server Name" value="${serverNameValue || ""}" required/>
-        </div>
-        <div>
-            <label for="portNumber">Port Number:</label>
-            <input id="portNumber" type="text" placeholder="Port Number" value="${portNumberValue || ""}" required/>
-        </div>
-        <div>
-            <label for="username">Username:</label>
-            <input id="username" type="text" placeholder="Username" value="${usernameValue || ""}" required/>
-        </div>
-        <div>
-            <label for="password">Password:</label>
-            <input id="password" type="password" placeholder="Password" value="${storedPasswordValue}" required/>
-        </div>
-        <div class="checkbox-container">
-            <input id="savePassword" type="checkbox" ${savePasswordChecked}/>
-            <label for="savePassword">Save Password</label>
-        </div>
-        <div class="checkbox-container">
-            <input id="autoLogin" type="checkbox" ${autoLoginChecked}/>
-            <label for="autoLogin">Auto Login</label>
-        </div>              
-        <div>
-            <button id="submitBtn" type="submit">Submit</button>
-        </div>
-    </form>
-    <script>
-        console.log("Login webview script loaded.");
-        const vscode = acquireVsCodeApi();
-        console.log("vscode API acquired:", vscode ? "OK" : "Failed");
-
-        function submitLogin() {
-            console.log("submitLogin() function called.");
-            try {
-            const serverName = document.getElementById("serverName").value;
-            const portNumber = document.getElementById("portNumber").value;
-            const username = document.getElementById("username").value;
-            const password = document.getElementById("password").value;
-            const autoLogin = document.getElementById("autoLogin").checked;
-            const savePassword = document.getElementById("savePassword").checked;
-
-                const messagePayload = {
-                    command: "${WebviewMessageCommands.LOGIN}",
-                    serverName,
-                    portNumber,
-                    username,
-                    password, // Be mindful logging passwords, even in DevTools
-                    autoLogin,
-                    savePassword
-                };
-
-                console.log("Attempting to post message:", messagePayload);
-                vscode.postMessage(messagePayload);
-                console.log("Message posted to extension.");
-
-            } catch (e) {
-                console.error("Error inside submitLogin():", e);
-                // Post error back to extension
-                vscode.postMessage({ command: "webviewError", error: e.message });
+    <script nonce="${nonce}">
+        (function() {
+            const vscode = acquireVsCodeApi();
+            const logoutButton = document.getElementById('logoutButton');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', () => {
+                    console.log("Sign Out button clicked.");
+                    vscode.postMessage({ command: 'triggerCommand', payload: { commandId: '${allExtensionCommands.logout}' }
+                });                
             }
-        }
-
-        // Add event listeners for checkbox changes
-        document.getElementById("autoLogin").addEventListener("change", function() {
-            vscode.postMessage({ 
-                command: "${WebviewMessageCommands.UPDATE_SETTING}", 
-                key: "${ConfigKeys.AUTO_LOGIN}", 
-                value: this.checked 
-            });
-        });
-        document.getElementById("savePassword").addEventListener("change", function() {
-            vscode.postMessage({ 
-                command: "${WebviewMessageCommands.UPDATE_SETTING}", 
-                key: "${ConfigKeys.STORE_PASSWORD_AFTER_LOGIN}", 
-                value: this.checked 
-            });
-        });
-
-        // Handle messages from the extension
-        window.addEventListener("message", (event) => {
-            const message = event.data;
-             // Keep literal string for receiving message command
-            if (message.command === "${WebviewMessageCommands.UPDATE_CONTENT}") {
-                // Potentially update parts of the page instead of innerHTML
-                if (message.html) {
-                     document.body.innerHTML = message.html;
-                }
-            }
-            // Keep literal string for receiving message command
-            if (message.command === "${WebviewMessageCommands.SHOW_ERROR}") {
-                 // Add a dedicated error display area in your HTML
-                 const errorDiv = document.getElementById("error-message");
-                 if (errorDiv && message.message) {
-                     errorDiv.textContent = message.message;
-                     errorDiv.style.display = "block"; // Make it visible
-                 }
-            }
-        });
+        }());
     </script>
 </body>
-</html>
-`;
+</html>`;
     }
+}
 
-    /**
-     * Determines whether the extension is connected to a server.
-     * @returns {boolean} True if connected; otherwise false.
-     */
-    private isConnectedToServer(): boolean {
-        if (connection) {
-            logger.trace("Connection is active.");
-            return true;
-        } else {
-            logger.trace("Connection is not active.");
-            return false;
-        }
+/**
+ * Generates a random 32-character string.
+ * This string can be used as a nonce (number used once) for security purposes.
+ * @returns A 32-character random string.
+ */
+function getNonce(): string {
+    let text = "";
+    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
+    return text;
 }
