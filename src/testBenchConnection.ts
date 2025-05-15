@@ -13,16 +13,9 @@ import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
 
-import {
-    getConfig,
-    setConnection,
-    logger,
-    getProjectManagementTreeDataProvider,
-    getLoginWebViewProvider
-} from "./extension";
+import { setConnection, logger, getProjectManagementTreeDataProvider, getLoginWebViewProvider } from "./extension";
 import * as utils from "./utils";
 import {
-    ConfigKeys,
     ContextKeys,
     JobTypes,
     StorageKeys,
@@ -336,6 +329,7 @@ export class PlayServerConnection {
         }
     }
 
+    // TODO: If this API call is implemented in the new play server, replace this method with the new API.
     /**
      * Fetches test elements using the Test Object Version (TOV) key from the old play server.
      *
@@ -881,357 +875,8 @@ export async function withRetry<T>(
     }
 }
 
-/**
- * Prompts the user for general input with live validation.
- * Loops until valid input is provided, "quit" is typed, or the user cancels.
- *
- * @param {string} promptMessage - The prompt message.
- * @param {boolean} inputCanBeEmpty - Whether the input may be empty.
- * @param {boolean }maskSensitiveInputData - Whether to mask the input (e.g. for passwords).
- * @param {(value: string) => string | null} validateInputFunction - Optional validation function; should return an error message if invalid.
- * @returns {Promise<string | null>} The user input as a string, or null if aborted.
- */
-async function promptForInputAndValidate(
-    promptMessage: string,
-    inputCanBeEmpty: boolean = false,
-    maskSensitiveInputData: boolean = false,
-    validateInputFunction?: (value: string) => string | null
-): Promise<string | null> {
-    while (true) {
-        const input: string | undefined = await vscode.window.showInputBox({
-            prompt: promptMessage,
-            password: maskSensitiveInputData,
-            ignoreFocusOut: true,
-            validateInput: (value) => {
-                if (!inputCanBeEmpty && value === "") {
-                    return "Value cannot be empty";
-                }
-                if (validateInputFunction) {
-                    return validateInputFunction(value);
-                }
-                return null;
-            }
-        });
-
-        if (input === undefined || input.toLowerCase() === "quit") {
-            vscode.window.showInformationMessage("Login process aborted");
-            return null;
-        }
-
-        if (!validateInputFunction || validateInputFunction(input) === null) {
-            return input;
-        }
-
-        vscode.window.showErrorMessage(validateInputFunction(input) || "Invalid input, please try again.");
-    }
-}
-
-/**
- * Performs the login process to the TestBench server by prompting the user for the server name, port number, username, and password.
- * Loops until login is successful or the user cancels.
- *
- * @param {vscode.ExtensionContext} context - The extension context.
- * @param {boolean} promptForNewCredentials - Whether to prompt for new credentials.
- * @param {boolean} performAutoLoginWithStoredCredentialsWithoutPrompting - (Optional) Whether to auto-login without prompting.
- * @returns {Promise<PlayServerConnection | null>} A PlayServerConnection if login is successful; otherwise, null.
- */
-export async function performLogin(
-    context: vscode.ExtensionContext,
-    promptForNewCredentials: boolean = false,
-    performAutoLoginWithStoredCredentialsWithoutPrompting?: boolean
-): Promise<PlayServerConnection | null> {
-    // Loop until the user successfully logs in or cancels the login process
-    while (true) {
-        // Retrieve the stored credentials if they exist
-        let password: string | undefined;
-
-        // Only retrieve the password if the user has choosen to store it after successful login
-        if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
-            password = await context.secrets.get(StorageKeys.PASSWORD);
-        }
-        // If the user has not chosen to store the password, clear it from the secret storage
-        else {
-            clearStoredCredentials(context);
-        }
-
-        const userHasStoredCredentials = !!(
-            getConfig().get<string>(ConfigKeys.SERVER_NAME) &&
-            getConfig().get<string>("username") &&
-            password &&
-            getConfig().get<boolean>("storePasswordAfterLogin", false)
-        );
-
-        let useStoredCredentials: boolean = false;
-        // If the user has stored credentials and can auto-login,
-        // and the user has not chosen to prompt for new credentials,
-        // and the user has not chosen to auto-login without prompting, then auto-login
-        if (
-            userHasStoredCredentials &&
-            !promptForNewCredentials &&
-            !performAutoLoginWithStoredCredentialsWithoutPrompting
-        ) {
-            const choice = await vscode.window.showInformationMessage(
-                "Do you want to login using your previous credentials?",
-                // Modal dialog is used so that the input box wont disappear, which forces the user to choose an option. Without it, login may be locked.
-                { modal: true },
-                "Yes",
-                "No"
-            );
-            if (choice === "Yes") {
-                useStoredCredentials = true;
-            }
-            // User selected Cancel, which sets choice to undefined
-            else if (!choice) {
-                logger.debug("Login process aborted.");
-                return null;
-            }
-            // Continue the function in case of "No"
-        } else {
-            // Convert undefined value to false with !! if the optional parameter is not provided
-            useStoredCredentials = !!performAutoLoginWithStoredCredentialsWithoutPrompting;
-        }
-
-        let serverName: string | undefined;
-        let portNumber: number | undefined;
-        let username: string | undefined;
-
-        // If the user has stored credentials and wants to use them, retrieve them from the configuration, else prompt the user for new credentials
-        if (useStoredCredentials) {
-            serverName = getConfig().get<string>(ConfigKeys.SERVER_NAME)!;
-            portNumber = getConfig().get<number>("portNumber")!;
-            username = getConfig().get<string>("username")!;
-        } else {
-            const credentials = await promptForLoginCredentials();
-            if (!credentials) {
-                vscode.window.showInformationMessage("Login process aborted.");
-                logger.debug("Login process aborted.");
-                return null;
-            }
-            ({ serverName, portNumber, username, password } = credentials);
-        }
-
-        // Attempt to login
-        const newConnection: PlayServerConnection | null = await loginToNewPlayServerAndInitSessionToken(
-            context,
-            serverName!,
-            portNumber!,
-            username!,
-            password!
-        );
-
-        if (newConnection) {
-            return newConnection;
-        } else {
-            // Login may fail due to a server problem or incorrect credentials.
-            const retry = await vscode.window.showInformationMessage(
-                "Login failed! Do you want to retry?",
-                "Retry",
-                "Cancel"
-            );
-            if (retry !== "Retry") {
-                vscode.window.showInformationMessage("Login process aborted.");
-                logger.debug("Login process aborted.");
-                return null;
-            }
-            // Continue the loop to retry
-        }
-    }
-}
-
-/**
- * Prompts the user for login credentials.
- *
- * @returns {Promise<{ serverName: string; portNumber: number; username: string; password: string } | null>}
- * An object containing serverName, portNumber, username, and password or null if aborted.
- */
-async function promptForLoginCredentials(): Promise<{
-    serverName: string;
-    portNumber: number;
-    username: string;
-    password: string;
-} | null> {
-    const serverNameInConfig: string = getConfig().get<string>(ConfigKeys.SERVER_NAME, "testbench");
-    // Prompt user for server name, showing the default value only if it exists
-    const serverNameInput: string | null = await promptForInputAndValidate(
-        `Enter the server name${serverNameInConfig ? ` (Default: ${serverNameInConfig})` : ""}`,
-        true
-    );
-
-    // If user cancels the input prompt, return null to cancel the login process
-    if ((!serverNameInput && !serverNameInConfig) || serverNameInput === undefined) {
-        logger.trace("Login process aborted while entering server name.");
-        return null;
-    }
-
-    // Use user input if provided, otherwise fallback to configuration value
-    const serverName: string = serverNameInput || serverNameInConfig;
-    // Get port number from configuration (default: 9445)
-    const portInConfig: number = getConfig().get<number>("portNumber", 9445);
-    // Prompt user for port number, only showing the default if it's configured
-    const portInputAsString = await promptForInputAndValidate(
-        `Enter the port number${portInConfig ? ` (Default: ${portInConfig})` : ""}`,
-        true,
-        false,
-        (value) => (!/^\d+$/.test(value) ? "Port number must be a number" : null)
-    );
-    if ((!portInputAsString && !portInConfig) || portInputAsString === undefined) {
-        logger.trace("Login process aborted while entering port number.");
-        return null;
-    }
-    const portNumber: number = portInputAsString ? parseInt(portInputAsString, 10) : portInConfig;
-
-    const serverVersionsResponse: testBenchTypes.ServerVersionsResponse | null = await fetchServerVersions(
-        serverName,
-        portNumber
-    );
-    if (!serverVersionsResponse) {
-        const serverVersionsErrorMessage = "Server not accessible with the provided server name and port.";
-        logger.error(serverVersionsErrorMessage);
-        vscode.window.showErrorMessage(serverVersionsErrorMessage);
-        return null;
-    }
-
-    const usernameInput: string | null = await promptForInputAndValidate(
-        `Enter your login name (Default: ${getConfig().get<string>("username", "undefined")})`,
-        true
-    );
-    if (!usernameInput) {
-        logger.trace("Login process aborted while entering username.");
-        return null;
-    }
-    const username: string = usernameInput || getConfig().get<string>("username", "undefined");
-
-    const password: string | null = await promptForInputAndValidate("Enter your password", false, true);
-    if (!password) {
-        logger.trace("Login process aborted while entering password.");
-        return null;
-    }
-
-    return { serverName, portNumber, username, password };
-}
-
-/**
- * // TODO: Remove
- * Logs in to the TestBench server and initializes a session token.
- *
- * @param {vscode.ExtensionContext} context - The extension context.
- * @param {string} serverName - The server name.
- * @param {number} portNumber - The port number.
- * @param {string} username - The username.
- * @param {string} password - The password.
- * @returns {Promise<PlayServerConnection | null>} A PlayServerConnection if login is successful; otherwise, null.
- */
-export async function loginToNewPlayServerAndInitSessionToken(
-    context: vscode.ExtensionContext,
-    serverName: string,
-    portNumber: number,
-    username: string,
-    password: string
-): Promise<PlayServerConnection | null> {
-    const requestBody: testBenchTypes.LoginRequestBody = {
-        login: username,
-        password: password,
-        force: true
-    };
-    try {
-        const connectionResult = await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: "Logging in",
-                cancellable: true
-            },
-            async (progress) => {
-                const baseURL: string = `https://${serverName}:${portNumber}/api`;
-                const loginURL: string = `${baseURL}/login/session/v1`;
-
-                logger.trace("Sending login request to:", loginURL);
-                progress.report({ message: "Sending login request..." });
-
-                const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await withRetry(
-                    () =>
-                        axios.post(loginURL, requestBody, {
-                            headers: {
-                                accept: "application/vnd.testbench+json",
-                                "Content-Type": "application/vnd.testbench+json"
-                            },
-                            httpsAgent: new https.Agent({ rejectUnauthorized: false })
-                        }),
-                    3, // maxRetries
-                    2000, // delayMs
-                    (error) => {
-                        // Do not retry if the error is due to invalid credentials (HTTP 401)
-                        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-                            return false;
-                        }
-                        return true;
-                    }
-                );
-
-                // An exception is thrown automatically if the status code is not 2xx
-                if (loginResponse.status === 201) {
-                    // Store password in secret storage after succesfull login if the user chooses to
-                    if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
-                        await context.secrets.store(StorageKeys.PASSWORD, password);
-                        logger.trace("Password stored securely.");
-                    } else {
-                        logger.trace("User chose not to store password.");
-                        // Clear the password from secret storage if it was previously stored
-                        clearStoredCredentials(context);
-                    }
-                    // Starts keep alive in the constructor of PlayServerConnection
-                    const newConnection: PlayServerConnection = new PlayServerConnection(
-                        serverName,
-                        portNumber,
-                        username,
-                        loginResponse.data.sessionToken
-                    );
-                    // Set the global connection object, it can be null in case the login fails
-                    setConnection(newConnection);
-                    // Set the connectionActive context value for changing the login icon to logout icon based on this value
-                    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
-                    const loginSuccessfulMessage: string = "Login successful.";
-
-                    logger.debug(loginSuccessfulMessage);
-                    vscode.window.showInformationMessage(loginSuccessfulMessage);
-                    return newConnection;
-                } else {
-                    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-                    const loginFailedMessage: string = "Login failed. Unexpected status code: " + loginResponse.status;
-                    logger.error(loginFailedMessage);
-                    vscode.window.showInformationMessage(loginFailedMessage);
-                    return null;
-                }
-            }
-        );
-        return connectionResult;
-    } catch (error) {
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            logger.error("Login failed: Invalid credentials.");
-            vscode.window.showInformationMessage("Login failed: Invalid credentials.");
-        } else {
-            logger.error("Error during login");
-            vscode.window.showInformationMessage("Error during login.");
-        }
-        await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-        return null;
-    }
-}
-
-/**
- * // TODO: Remove
- * Clears stored user credentials from secret storage.
- *
- * @param {vscode.ExtensionContext} context - The extension context.
- */
-export async function clearStoredCredentials(context: vscode.ExtensionContext): Promise<void> {
-    try {
-        await context.secrets.delete(StorageKeys.PASSWORD);
-        logger.debug("Credentials deleted from secret storage.");
-    } catch (error) {
-        logger.error("Failed to clear credentials:", error);
-    }
-}
-
+// TODO: This function could be useful for a quickpick login UI, where the user has to enter the server URL and port number first.
+// But with a login web view all inputs are given at once. Delete this function if not needed.
 /**
  * Fetches the server versions from the TestBench server.
  * Used to verify the availability of server after receiving the server URL and port number in the login process.
@@ -1343,7 +988,6 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
     }
 }
 
-// TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
 /**
  * Imports a report (zip file with test results) to the TestBench server.
  *
@@ -1402,14 +1046,11 @@ export async function importReportWithResultsToTestbench(
             return null;
         }
 
-        // TODO: ignoreNonExecutedTestCases and checkPaths do not exists in feature branch
         // Import the results to TestBench server
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
             reportRootUID: uniqueID,
             useExistingDefect: true,
-            ignoreNonExecutedTestCases: true,
-            checkPaths: true,
             discardTesterInformation: false,
             // defaultTester: "tester",
             filters: [
