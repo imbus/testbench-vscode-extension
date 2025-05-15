@@ -17,14 +17,7 @@ import {
 } from "./extension";
 import { TreeItemContextValues } from "./constants";
 
-/* =============================================================================
-   Global Variables and Helper Functions
-   ============================================================================= */
-
-/**
- * Allowed element types for test elements.
- */
-type ElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
+type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
 /**
  * Interface representing a test element from the json response of the server.
@@ -49,7 +42,7 @@ export interface TestElementData {
     libraryKey: string | null;
     jsonString: string;
     details: any;
-    elementType: ElementType;
+    elementType: TestElementType;
     directRegexMatch: boolean;
     children?: TestElementData[];
     hierarchicalName?: string;
@@ -73,13 +66,13 @@ function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
         // Replace named capture group syntax ( Transform (?P<name>... into (?<name>... )
         let javascriptRegex: string = pythonRegex.replace(/\(\?P<([^>]+)>([^)]+)\)/g, "(?<$1>$2)");
 
-        // Replace \s* with \s* (already correct in this case, but still execute)
+        // Replace \s* with \s*
         javascriptRegex = javascriptRegex.replace(/\\s\*/g, "\\s*");
 
         // Replace [Robot-Resource] with \[Robot-Resource\]
         javascriptRegex = javascriptRegex.replace(/\[Robot-Resource\]/g, "\\[Robot-Resource\\]");
 
-        // Replace .* with .* (already correct in this case, but still execute)
+        // Replace .* with .*
         javascriptRegex = javascriptRegex.replace(/\.\*/g, "\\.*");
 
         // Replace . with \.
@@ -91,10 +84,10 @@ function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
     const JSlibraryRegexPatterns: RegExp[] = pythonResourceRegexPatternsInExtensionSettings
         .map((pythonRegexPattern) => {
             logger.trace(`Converting python regex pattern: ${pythonRegexPattern}`);
-            const convertedJSPattern = convertPythonRegexToJs(pythonRegexPattern);
+            const convertedJSPattern: string = convertPythonRegexToJs(pythonRegexPattern);
             logger.trace(`Converted to javascript regex pattern: ${convertedJSPattern}`);
             try {
-                const regex = new RegExp(convertedJSPattern, "u");
+                const regex: RegExp = new RegExp(convertedJSPattern, "u");
                 logger.trace(`Created JS regex: ${regex}`);
                 return regex;
             } catch (error) {
@@ -124,9 +117,9 @@ function matchesRegex(value: string, regexList: RegExp[]): boolean {
  * Determines the type of a test element based on its properties.
  *
  * @param {any} item The test element object.
- * @returns {ElementType} The type of the test element.
+ * @returns {TestElementType} The type of the test element.
  */
-function getTestElementTreeItemType(item: any): ElementType {
+function getTestElementTreeItemType(item: any): TestElementType {
     if (item.Subdivision_key && item.Subdivision_key.serial) {
         return "Subdivision";
     }
@@ -146,20 +139,18 @@ function getTestElementTreeItemType(item: any): ElementType {
  * Generates a unique ID for a test element, handling different element types.
  *
  * @param {any} item The test element object.
- * @param {ElementType} elementType The type of the test element.
+ * @param {TestElementType} elementType The type of the test element.
  * @param {string} uniqueID The unique ID string.
  * @returns {string} The unique ID of the test element.
  */
-function generateTestElementTreeItemId(item: any, elementType: ElementType, uniqueID: string): string {
+function generateTestElementTreeItemId(item: any, elementType: TestElementType, uniqueID: string): string {
     switch (elementType) {
         case "Subdivision":
         case "Interaction":
         case "Condition":
         case "DataType":
-            // Use a consistent ID format for all keyed elements.
             return `${item[`${elementType}_key`].serial}_${uniqueID}`;
         default:
-            // Fallback: use uniqueID as the identifier if no key-specific id is found.
             return uniqueID;
     }
 }
@@ -175,7 +166,7 @@ function getItemParentId(item: any, libraryKey: string | null | undefined): stri
     // Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
     if (item.parent && item.parent.serial) {
         // Use both the parent's serial and uniqueID to create the composite parentId.
-        // During tree linking we match composite ids (which start with parent's serial)
+        // During tree linking composite ids are matched (which start with parent's serial)
         // "serial_uniqueID" is used for uniqueness even for elements with identical serials.
         return item.parent.uniqueID ? `${item.parent.serial}_${item.parent.uniqueID}` : item.parent.serial;
     }
@@ -195,70 +186,63 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
 
     // Build a map for all elements without filtering.
     // This map is used to assign children to their respective parents.
-    const map: { [id: string]: TestElementData } = {};
+    const elementIdToDataMap: { [id: string]: TestElementData } = {};
 
     // Process each JSON object and create a TestElement.
-    flatJsonTestElements.forEach((item) => {
-        // Process the libraryKey: if it is an object with a 'serial' property, use that.
-        // Otherwise, use the key as a string.
+    flatJsonTestElements.forEach((jsonTestElement) => {
         let libraryKey: string | null = null;
-        if (item.libraryKey) {
-            if (typeof item.libraryKey === "object" && item.libraryKey.serial) {
-                libraryKey = item.libraryKey.serial;
+        if (jsonTestElement.libraryKey) {
+            if (typeof jsonTestElement.libraryKey === "object" && jsonTestElement.libraryKey.serial) {
+                libraryKey = jsonTestElement.libraryKey.serial;
             } else {
-                libraryKey = item.libraryKey;
+                libraryKey = jsonTestElement.libraryKey;
             }
         }
 
-        // Determine the element type and compute the id of the element.
-        const testElementType: ElementType = getTestElementTreeItemType(item);
-        // Each element type has a unique key property that is used as the identifier.
-        const IDOfTestElement: string = generateTestElementTreeItemId(item, testElementType, item.uniqueID);
-        // Determine the parent ID of the element. Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
-        const parentId: string | null = getItemParentId(item, libraryKey);
+        const testElementType: TestElementType = getTestElementTreeItemType(jsonTestElement);
+        const UniqueIDOfTestElement: string = generateTestElementTreeItemId(
+            jsonTestElement,
+            testElementType,
+            jsonTestElement.uniqueID
+        );
+        //  Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
+        const testElementParentId: string | null = getItemParentId(jsonTestElement, libraryKey);
 
-        // Compute whether this element directly matches the regex filter.
-        // If resouce regex patterns exist in the extension settings, use them. Otherwise, include all elements without filtering.
-        const directRegexMatch: boolean =
+        const isRegexMatch: boolean =
             resourceRegexPatternsInExtensionSettings.length > 0
-                ? matchesRegex(item.name, resourceRegexPatternsInExtensionSettings)
+                ? matchesRegex(jsonTestElement.name, resourceRegexPatternsInExtensionSettings)
                 : true;
 
-        // Create the TestElement object.
         const testElement: TestElementData = {
-            id: IDOfTestElement,
-            parentId,
-            name: item.name,
-            uniqueID: item.uniqueID,
+            id: UniqueIDOfTestElement,
+            parentId: testElementParentId,
+            name: jsonTestElement.name,
+            uniqueID: jsonTestElement.uniqueID,
             libraryKey,
-            jsonString: JSON.stringify(item, null, 2),
-            details: item,
+            jsonString: JSON.stringify(jsonTestElement, null, 2),
+            details: jsonTestElement,
             elementType: testElementType,
-            directRegexMatch: directRegexMatch,
+            directRegexMatch: isRegexMatch,
             children: []
         };
 
-        // Store the current element in the map.
-        map[IDOfTestElement] = testElement;
+        elementIdToDataMap[UniqueIDOfTestElement] = testElement;
     });
 
     // Build the full tree structure by assigning children to their respective parents.
     const rootsOfTestElementView: TestElementData[] = [];
-    Object.values(map).forEach((testElement) => {
+    Object.values(elementIdToDataMap).forEach((testElement) => {
         if (testElement.parentId) {
-            // Find the parent by matching a composite id (parent's serial + uniqueID).
-            const parent: TestElementData | undefined = Object.values(map).find((p) =>
+            const foundParentElement: TestElementData | undefined = Object.values(elementIdToDataMap).find((p) =>
                 p.id.startsWith(`${testElement.parentId}_`)
             );
-            if (parent) {
-                testElement.parent = parent;
-                parent.children!.push(testElement);
+            if (foundParentElement) {
+                testElement.parent = foundParentElement;
+                foundParentElement.children!.push(testElement);
             } else {
-                // If the element has no parent, it is a root element.
                 rootsOfTestElementView.push(testElement);
             }
         } else {
-            // If the element has no parent, it is a root element.
             rootsOfTestElementView.push(testElement);
         }
     });
@@ -286,7 +270,6 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
                 .filter((child) => child !== null) as TestElementData[];
         }
 
-        // Filter out elements of type DataType or Condition.
         if (testElement.elementType === "DataType" || testElement.elementType === "Condition") {
             return null;
         }
@@ -388,7 +371,7 @@ const iconMapping: Record<string, { light: string; dark: string }> = {
  * @returns {vscode.Uri} The icon URI.
  */
 function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscode.Uri; dark: vscode.Uri } {
-    const elementType: ElementType = treeItem.testElementData?.elementType || "Other"; // Default to Other if undefined
+    const elementType: TestElementType = treeItem.testElementData?.elementType || "Other"; // Default to Other if undefined
     logger.trace(`Getting icon for element type: ${elementType}`);
 
     // Fallback to "Other" if the elementType is not defined or not in the iconMapping

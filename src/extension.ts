@@ -941,6 +941,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     });
 
     // --- Command: Modify Report With Results Zip ---
+    // TODO: This feature needs to be discussed with the team.
     // Allows the user to select a report zip file and create a new report by removing JSON files that were not selected in the quick pick from the original report zip.
     registerSafeCommand(context, allExtensionCommands.modifyReportWithResultsZip, async () => {
         logger.debug(`Command Called: ${allExtensionCommands.modifyReportWithResultsZip}`);
