@@ -330,8 +330,6 @@ export interface ImportData {
     fileName: string;
     reportRootUID: string;
     useExistingDefect: boolean;
-    ignoreNonExecutedTestCases: boolean;
-    checkPaths: boolean;
     discardTesterInformation: boolean;
     defaultTester?: string;
     filters: ImportDataFilter[];

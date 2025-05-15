@@ -216,7 +216,7 @@ export async function loadConfiguration(context: vscode.ExtensionContext, newSco
     // If storePassword is set to true, the password is only stored after a successful login.
     // The login process also clears the stored password if the user does not want to store it.
     if (!config.get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)) {
-        await testBenchConnection?.clearStoredCredentials(context);
+        // TODO: Remove the password of the current user.
     }
 }
 
