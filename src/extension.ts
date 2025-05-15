@@ -563,6 +563,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             // Ensure clean state on error too
             await handleTestBenchSessionChange(context);
         }
+        await client?.stop();
     });
 
     // --- Command: Handle Cycle Click ---
@@ -919,6 +920,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             const pmProvider = getProjectManagementTreeDataProvider();
             const teProvider = getTestElementsTreeDataProvider();
+            await client?.stop();
             // Check if the command is executed for a TOV element.
             if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
@@ -934,7 +936,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
                         if (projectAndTovNameObj) {
                             const { projectName, tovName } = projectAndTovNameObj;
-
                             if (projectName && tovName) {
                                 await initializeLanguageServer(projectName, tovName);
                             }
