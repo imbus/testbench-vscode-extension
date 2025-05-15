@@ -47,7 +47,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             logger.trace("Disposed previous message listener.");
         }
 
-        // Enable scripts in the webview.
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [
@@ -56,10 +55,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             ]
         };
 
-        // Set initial HTML content, generates new UI
         await this.updateWebviewHTMLContent();
 
-        // Store new listener disposable
         // Listen for messages from the webview to respond to user actions.
         this._messageListenerDisposable = webviewView.webview.onDidReceiveMessage(async (message) => {
             logger.trace(`[LoginWebView] Received message from webview: ${message.command}`);
@@ -88,8 +85,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         });
                     });
                     break;
-                // Logout button
-                case "triggerCommand":
+                case WebviewMessageCommands.TRIGGER_COMMAND:
                     if (message.payload && message.payload.commandId) {
                         logger.info(
                             `[LoginWebView] Webview requested to trigger command: ${message.payload.commandId}`
@@ -118,7 +114,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             this.extensionContext.subscriptions.push(this._messageListenerDisposable);
         }
 
-        // Clean up when the view is disposed (e.g., user closes the view)
         webviewView.onDidDispose(
             () => {
                 // Only clear currentWebview if it's the one being disposed
@@ -139,7 +134,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * Handles the request to confirm the deletion of a user profile.
      * It prompts the user with a confirmation dialog before proceeding with the deletion.
      *
-     * @param profileId - The ID of the profile to be considered for deletion.
+     * @param {string} profileId - The ID of the profile to be considered for deletion.
      * @returns A promise that resolves when the confirmation process is complete.
      */
     private async handleRequestDeleteConfirmation(profileId: string): Promise<void> {
@@ -153,9 +148,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        const profileToDelete = (await profileManager.getProfiles(this.extensionContext)).find(
-            (p) => p.id === profileId
-        );
+        const profileToDelete: profileManager.TestBenchProfile | undefined = (
+            await profileManager.getProfiles(this.extensionContext)
+        ).find((p) => p.id === profileId);
         if (!profileToDelete) {
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
@@ -166,14 +161,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         const confirmation = await vscode.window.showWarningMessage(
             `Are you sure you want to delete the profile "${profileToDelete.label}"?`,
-            { modal: true }, // Makes the dialog modal
-            "Delete", // Confirmation option
-            "Cancel" // Cancellation option
+            { modal: true },
+            "Delete",
+            "Cancel"
         );
 
         if (confirmation === "Delete") {
             logger.info(`[LoginWebView] User confirmed deletion for profile ID: ${profileId}. Proceeding with delete.`);
-            // Now call the actual delete handler
             await this.handleDeleteProfile(profileId);
         } else {
             logger.info(`[LoginWebView] User cancelled deletion for profile ID: ${profileId}.`);
@@ -186,7 +180,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
     /**
      * Posts a message to the current webview.
-     * @param command The command to send to the webview.
+     * @param {string} command The command to send to the webview.
      * @param payload The data to send with the command.
      */
     private postMessageToWebview(command: string, payload: any): void {
@@ -202,7 +196,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      */
     private async sendProfilesToWebview(): Promise<void> {
         try {
-            const profiles = await profileManager.getProfiles(this.extensionContext);
+            const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
             this.postMessageToWebview(WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW, profiles);
         } catch (error: any) {
             logger.error("[LoginWebView] Error fetching profiles for webview:", error);
@@ -218,14 +212,16 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * It retrieves the profile, sets it as active, and then initiates
      * the VS Code authentication flow.
      *
-     * @param profileId The ID of the profile to use for login.
+     * @param {string} profileId The ID of the profile to use for login.
      * @returns A promise that resolves when the login attempt is complete.
      */
     private async handleLoginWithProfile(profileId: string): Promise<void> {
         logger.info(`[LoginWebView] Attempting login with profile ID: ${profileId}`);
         try {
-            const profiles = await profileManager.getProfiles(this.extensionContext);
-            const selectedProfile = profiles.find((p) => p.id === profileId);
+            const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
+            const selectedProfile: profileManager.TestBenchProfile | undefined = profiles.find(
+                (p) => p.id === profileId
+            );
 
             if (!selectedProfile) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -235,15 +231,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            // Set active profile ID before calling getSession
             await profileManager.setActiveProfileId(this.extensionContext, selectedProfile.id);
 
-            // Trigger VS Code's authentication flow.
-            const session = await vscode.authentication.getSession(
-                TESTBENCH_AUTH_PROVIDER_ID,
-                ["api_access"], // scopes
-                { createIfNone: true } // This will trigger createSession
-            );
+            const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+                createIfNone: true
+            });
 
             if (session) {
                 logger.info(`[LoginWebView] Login successful via provider for profile: ${selectedProfile.label}`);
@@ -256,7 +248,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
         } catch (error: any) {
             logger.error(`[LoginWebView] Login failed for profile ${profileId}:`, error);
-            await profileManager.clearActiveProfile(this.extensionContext); // Clear if login fails
+            await profileManager.clearActiveProfile(this.extensionContext);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Login Error: ${error.message}`
@@ -288,23 +280,24 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            // Check for existing profile with the same server, port, and username
-            const existingProfile = await profileManager.findProfileByCredentials(
-                this.extensionContext,
-                profileData.serverName,
-                profileData.portNumber,
-                profileData.username
-            );
+            // Dont include password check when comparing existing profiles
+            const existingProfile: profileManager.TestBenchProfile | undefined =
+                await profileManager.findProfileByCredentials(
+                    this.extensionContext,
+                    profileData.serverName,
+                    profileData.portNumber,
+                    profileData.username
+                );
 
             if (existingProfile) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
-                    type: "warning", // Use warning for duplicates
+                    type: "warning",
                     text: `A profile with the same server, port, and username already exists: "${existingProfile.label}". Not saving duplicate.`
                 });
                 logger.warn(
                     `[LoginWebView] Attempt to save duplicate profile (server/user match) prevented for: ${existingProfile.label}`
                 );
-                return; // Do not save if duplicate
+                return;
             }
 
             const newProfileId = await profileManager.saveProfile(
@@ -317,7 +310,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 type: "success",
                 text: `Profile "${profileData.label || newProfileId}" saved.`
             });
-            await this.sendProfilesToWebview(); // Refresh list
+            await this.sendProfilesToWebview();
         } catch (error: any) {
             logger.error("[LoginWebView] Error saving new profile:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -332,15 +325,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * It attempts to find and delete a profile based on the provided ID.
      * Sends success or error messages to the webview and refreshes the profile list upon successful deletion.
      *
-     * @param profileId The ID of the profile to delete.
+     * @param {string} profileId The ID of the profile to delete.
      * @returns A promise that resolves when the deletion process is complete.
      */
     private async handleDeleteProfile(profileId: string): Promise<void> {
         logger.info(`[LoginWebView] Attempting to delete profile ID: ${profileId}`);
         try {
-            const profileToDelete = (await profileManager.getProfiles(this.extensionContext)).find(
-                (p) => p.id === profileId
-            );
+            const profileToDelete: profileManager.TestBenchProfile | undefined = (
+                await profileManager.getProfiles(this.extensionContext)
+            ).find((p) => p.id === profileId);
             if (!profileToDelete) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
@@ -355,7 +348,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 type: "success",
                 text: `Profile "${profileToDelete.label}" deleted.`
             });
-            await this.sendProfilesToWebview(); // Refresh list
+            await this.sendProfilesToWebview();
         } catch (error: any) {
             logger.error(`[LoginWebView] Error deleting profile ${profileId}:`, error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -374,9 +367,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             if (isSignedIn) {
                 this.currentWebview.webview.html = this.getAlreadyLoggedInHtmlPage(this.currentWebview.webview);
             } else {
-                // Generate the new Profile Management UI
                 this.currentWebview.webview.html = this.getProfileManagementHtmlPage(this.currentWebview.webview);
-                // After setting HTML, if webview is visible and not signed in, tell it to load profiles
             }
         }
     }
@@ -403,14 +394,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * Generates the HTML content for the profile management webview.
      * This includes the UI for displaying, adding, and managing connection profiles.
      *
-     * @param webview The VS Code webview instance to which this HTML will be rendered.
+     * @param {vscode.Webview} webview The VS Code webview instance to which this HTML will be rendered.
      *                Used to generate Content Security Policy nonces and URIs.
-     * @returns A string containing the complete HTML for the profile management page.
+     * @returns {string} A string containing the complete HTML for the profile management page.
      */
     private getProfileManagementHtmlPage(webview: vscode.Webview): string {
-        const nonce = getNonce();
-        const cspSource = webview.cspSource;
-        const contentSecurityPolicy = `
+        const nonce: string = getNonce();
+        const cspSource: string = webview.cspSource;
+        const contentSecurityPolicy: string = `
             default-src 'none';
             img-src ${cspSource} https: data:;
             script-src 'nonce-${nonce}';
@@ -418,10 +409,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             font-src ${cspSource};
         `;
 
-        // Icons for the header and buttons
-        const profilesHeaderIconUri = this.createIconUri(webview, "profiles.svg");
-        const addProfileHeaderIconUri = this.createIconUri(webview, "add.svg");
-        const saveProfileButtonIconUri = this.createIconUri(webview, "save.svg");
+        const profilesHeaderIconUri: vscode.Uri | null = this.createIconUri(webview, "profiles.svg");
+        const addProfileHeaderIconUri: vscode.Uri | null = this.createIconUri(webview, "add.svg");
+        const saveProfileButtonIconUri: vscode.Uri | null = this.createIconUri(webview, "save.svg");
 
         return `
     <!DOCTYPE html>
@@ -939,17 +929,16 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * Generates the HTML content for a webview page indicating that the user is already logged in.
      * This page displays a success message, the TestBench logo, and a sign-out button.
      *
-     * @param webview The VS Code webview instance to which the HTML will be rendered.
-     * @returns A string containing the HTML markup for the "already logged in" page.
+     * @param {vscode.Webview} webview The VS Code webview instance to which the HTML will be rendered.
+     * @returns {string} A string containing the HTML markup for the "already logged in" page.
      */
     private getAlreadyLoggedInHtmlPage(webview: vscode.Webview): string {
-        const testBenchLogoUri = this.createIconUri(webview, "iTB-EE-Logo-256x256.png");
-        const nonce = getNonce();
-        const cspSource = webview.cspSource;
-        const contentSecurityPolicy = `default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource};`;
+        const testBenchLogoUri: vscode.Uri | null = this.createIconUri(webview, "iTB-EE-Logo-256x256.png");
+        const nonce: string = getNonce();
+        const cspSource: string = webview.cspSource;
+        const contentSecurityPolicy: string = `default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource};`;
 
-        // Attempt to get current connection details for display
-        const currentConnection = connection; // from './extension'
+        const currentConnection = connection;
         let connectedAsInfo = "You are connected to TestBench.";
         if (currentConnection) {
             connectedAsInfo = `Connected as <strong>${currentConnection.getUsername()}</strong> on <strong>${currentConnection.getServerName()}:${currentConnection.getServerPort()}</strong>.`;
@@ -995,7 +984,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             if (logoutButton) {
                 logoutButton.addEventListener('click', () => {
                     console.log("Sign Out button clicked.");
-                    vscode.postMessage({ command: 'triggerCommand', payload: { commandId: '${allExtensionCommands.logout}' }
+                    vscode.postMessage({ command: '${WebviewMessageCommands.TRIGGER_COMMAND}', payload: { commandId: '${allExtensionCommands.logout}' }
                 });                
             }
         }());
@@ -1008,11 +997,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 /**
  * Generates a random 32-character string.
  * This string can be used as a nonce (number used once) for security purposes.
- * @returns A 32-character random string.
+ * @returns {string} A 32-character random string.
  */
 function getNonce(): string {
-    let text = "";
-    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let text: string = "";
+    const possible: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     for (let i = 0; i < 32; i++) {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
     }

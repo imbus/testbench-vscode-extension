@@ -33,6 +33,7 @@ export const WebviewMessageCommands = {
     UPDATE_SETTING: "updateSetting",
     SHOW_ERROR: "showError",
     UPDATE_CONTENT: "updateContent",
+    TRIGGER_COMMAND: "triggerCommand",
 
     // Profile Management UI
     PROFILE_UI_LOADED: "profileUiLoaded",
@@ -55,9 +56,6 @@ export const ConfigKeys = {
     USERNAME: "username",
     STORE_PASSWORD_AFTER_LOGIN: "storePasswordAfterLogin",
     AUTO_LOGIN: "automaticLoginAfterExtensionActivation",
-    // TODO: Remove project and tov in the future
-    PROJECT: "project",
-    TOV: "tov",
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",
     CLEAR_REPORT_AFTER_PROCESSING: "clearReportAfterProcessing",
     LOGGER_LEVEL: "testBenchLogger",
@@ -85,8 +83,6 @@ export const ContextKeys = {
 // --- Storage Keys ---
 export const StorageKeys = {
     SESSION_TOKEN: "sessionToken", // Secret Storage
-    // TODO: delete
-    PASSWORD: "password", // Secret Storage
     // AuthenticationProvider constants
     PROFILES_STORAGE_KEY: "testbench.profiles",
     ACTIVE_PROFILE_ID_KEY: "testbench.activeProfileId",
@@ -124,7 +120,7 @@ export const JobTypes = {
 export const folderNameOfInternalTestbenchFolder: string = ".testbench";
 
 /**
- * All extension commands (as defined in package.json) to avoid typos.
+ * All extension commands as defined in package.json.
  */
 export const allExtensionCommands = {
     setWorkspace: `${baseKeyOfExtension}.setWorkspace`,
@@ -152,8 +148,5 @@ export const allExtensionCommands = {
     createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
     modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
-    handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`,
-    addNewProfile: `${baseKeyOfExtension}.addNewProfile`,
-    deleteProfile: `${baseKeyOfExtension}.deleteProfile`,
-    selectActiveProfile: `${baseKeyOfExtension}.selectActiveProfile`
+    handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`
 };
