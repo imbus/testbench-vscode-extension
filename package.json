@@ -290,10 +290,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.showProfiles",
-                "title": "TestBench: Manage Profiles"
-            },
-            {
                 "command": "testbenchExtension.logout",
                 "title": "Logout",
                 "icon": {
@@ -318,14 +314,6 @@
                 "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
                 "title": "Generate Tests",
                 "icon": "$(robotcode-robot)"
-            },
-            {
-                "command": "testbenchExtension.fetchReportForSelectedTreeItem",
-                "title": "Fetch Report",
-                "icon": {
-                    "light": "resources/icons/download-light.svg",
-                    "dark": "resources/icons/download-dark.svg"
-                }
             },
             {
                 "command": "testbenchExtension.makeRoot",
@@ -364,14 +352,6 @@
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
                     "dark": "resources/icons/refresh-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.displayCommands",
-                "title": "TestBench: Display Commands",
-                "icon": {
-                    "light": "resources/icons/more-light.svg",
-                    "dark": "resources/icons/more-dark.svg"
                 }
             },
             {
