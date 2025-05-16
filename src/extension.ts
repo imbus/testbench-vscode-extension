@@ -597,7 +597,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.debug(`Command Called: ${allExtensionCommands.refreshTestThemeTreeView}`);
 
         const ttProvider = getTestThemeTreeDataProvider();
-        const pmProvider = getProjectManagementTreeDataProvider();
         const ttView = getTestThemeTreeViewInstance();
 
         if (!ttProvider) {
@@ -606,58 +605,22 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
-        if (!pmProvider) {
-            logger.warn("Project Management Tree Data Provider not initialized. Cannot refresh.");
-            vscode.window.showErrorMessage("Project Management Tree is not available to refresh.");
+        if (!ttProvider.getCurrentCycleKey() || !ttProvider.getCurrentProjectKey()) {
+            logger.info("Test Theme Tree: No current cycle selected to refresh. Clearing tree.");
+            ttProvider.clearTree();
+            if (ttView) {
+                ttView.title = "Test Themes";
+            }
             return;
         }
 
-        if (!ttView) {
-            logger.warn("Test Theme TreeView instance is not available. Cannot set message.");
-        }
-
-        ttProvider.refresh();
-
-        const currentCycleKey: string | null = ttProvider["_currentCycleKey"];
-        if (currentCycleKey) {
-            const firstRootInThemeTree = ttProvider.rootElements[0];
-            const cycleElement: projectManagementTreeView.BaseTestBenchTreeItem | undefined =
-                firstRootInThemeTree?.parent ?? undefined;
-
-            if (
-                cycleElement &&
-                cycleElement.contextValue === TreeItemContextValues.CYCLE &&
-                cycleElement.item?.key === currentCycleKey
-            ) {
-                logger.info(
-                    `Refreshing Test Theme Tree for cycle: ${typeof cycleElement.label === "string" ? cycleElement.label : "N/A"}`
-                );
-                const children: projectManagementTreeView.BaseTestBenchTreeItem[] =
-                    (await pmProvider.getChildrenOfCycle(cycleElement)) ?? [];
-                // The setRoots will internally call refresh on testThemeTreeDataProvider
-                ttProvider.setRoots(children, cycleElement.item.key);
-                const themeTreeView = getTestThemeTreeViewInstance();
-                if (themeTreeView) {
-                    themeTreeView.title = `Test Themes (${typeof cycleElement.label === "string" ? cycleElement.label : "Cycle"})`;
-                }
-            } else if (currentCycleKey) {
-                logger.warn(
-                    `Could not find the parent cycle element for the current Test Theme Tree (cycleKey: ${currentCycleKey}). Refreshing with current roots.`
-                );
-                ttProvider.refresh();
-            } else {
-                logger.debug(
-                    "No current cycle in Test Theme Tree to refresh, or provider not found. Clearing and refreshing."
-                );
-                ttProvider.clearTree();
-            }
-        } else {
-            logger.warn(
-                "Refresh Test Theme Tree: projectManagementTreeDataProvider or testThemeTreeDataProvider is null."
-            );
-            if (ttProvider) {
-                ttProvider.refresh();
-            }
+        try {
+            await ttProvider.refresh(true);
+            logger.info("Test Theme Tree view refresh initiated and completed via provider.");
+        } catch (error) {
+            logger.error("Error during Test Theme Tree view refresh command execution:", error);
+            vscode.window.showErrorMessage("Failed to refresh Test Themes. Check logs for details.");
+            ttProvider.setTreeViewStatusMessage("Error refreshing test themes.");
         }
     });
 
