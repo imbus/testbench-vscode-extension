@@ -37,23 +37,22 @@ export const WebviewMessageCommands = {
 
     // Profile Management UI
     PROFILE_UI_LOADED: "profileUiLoaded",
-    REQUEST_PROFILES_FROM_WEBVIEW: "requestProfilesFromWebview",
     LOGIN_WITH_PROFILE: "loginWithProfile",
     SAVE_NEW_PROFILE: "saveNewProfile",
     REQUEST_DELETE_CONFIRMATION: "requestDeleteConfirmation",
-    PERFORM_DELETE_PROFILE: "performDeleteProfile",
 
     // Host to Webview communication
     DISPLAY_PROFILES_IN_WEBVIEW: "displayProfilesInWebview",
-    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage",
-    PROFILE_OPERATION_COMPLETE: "profileOperationComplete"
+    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage"
 } as const;
 
 // --- Extension Configuration Setting Keys ---
 export const ConfigKeys = {
+    // TODO: Remove credentials from extension settings
     SERVER_NAME: "serverName",
     PORT_NUMBER: "portNumber",
     USERNAME: "username",
+
     STORE_PASSWORD_AFTER_LOGIN: "storePasswordAfterLogin",
     AUTO_LOGIN: "automaticLoginAfterExtensionActivation",
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",
@@ -77,21 +76,23 @@ export const ConfigKeys = {
 
 // --- Context Keys ---
 export const ContextKeys = {
-    CONNECTION_ACTIVE: "testbenchExtension.connectionActive"
+    CONNECTION_ACTIVE: "testbenchExtension.connectionActive",
+    PROJECT_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.projectTreeHasCustomRoot",
+    THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot"
 } as const;
 
 // --- Storage Keys ---
 export const StorageKeys = {
     SESSION_TOKEN: "sessionToken", // Secret Storage
-    // AuthenticationProvider constants
-    PROFILES_STORAGE_KEY: "testbench.profiles",
-    ACTIVE_PROFILE_ID_KEY: "testbench.activeProfileId",
-    PROFILE_PASSWORD_SECRET_PREFIX: "testbench.profile.password.",
     /**
      * Workspace state storage key for the last generated report parameters
      * to be able to use the report without the user selecting the report again while importing the report.
      */
-    LAST_GENERATED_PARAMS: "testbenchExtension.lastGeneratedReportParams"
+    LAST_GENERATED_PARAMS: "testbenchExtension.lastGeneratedReportParams",
+    // AuthenticationProvider constants
+    PROFILES_STORAGE_KEY: "testbench.profiles",
+    ACTIVE_PROFILE_ID_KEY: "testbench.activeProfileId",
+    PROFILE_PASSWORD_SECRET_PREFIX: "testbench.profile.password."
 } as const;
 
 // --- Tree Item Context Values ---
@@ -106,7 +107,9 @@ export const TreeItemContextValues = {
     INTERACTION: "interaction",
     DATA_TYPE: "dataType",
     CONDITION: "condition",
-    TEST_ELEMENT: "testElement"
+    TEST_ELEMENT: "testElement",
+    CUSTOM_ROOT_PROJECT: "customRoot.project",
+    CUSTOM_ROOT_THEME: "customRoot.theme"
 } as const;
 
 // --- Job Types ---
@@ -143,5 +146,7 @@ export const allExtensionCommands = {
     createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
     modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
-    handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`
+    handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`,
+    resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
+    resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`
 };
