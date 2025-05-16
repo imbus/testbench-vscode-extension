@@ -933,7 +933,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns {string} A string containing the HTML markup for the "already logged in" page.
      */
     private getAlreadyLoggedInHtmlPage(webview: vscode.Webview): string {
-        const testBenchLogoUri: vscode.Uri | null = this.createIconUri(webview, "iTB-EE-Logo-256x256.png");
+        const testBenchLogoUri: vscode.Uri | null = this.createIconUri(webview, "testbench-logo.svg");
         const nonce: string = getNonce();
         const cspSource: string = webview.cspSource;
         const contentSecurityPolicy: string = `default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource};`;

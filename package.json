@@ -3,7 +3,7 @@
     "publisher": "imbus",
     "displayName": "TestBench Visual Studio Code Extension",
     "description": "A Visual Studio Code extension for TestBench.",
-    "icon": "resources/icons/iTB-EE-Logo-256x256.png",
+    "icon": "resources/icons/testbench-logo.png",
     "version": "0.0.1",
     "repository": {
         "type": "git",
