@@ -320,6 +320,14 @@
                 "title": "Make root"
             },
             {
+                "command": "testbenchExtension.resetProjectTreeViewRoot",
+                "title": "Reset Project View Root"
+            },
+            {
+                "command": "testbenchExtension.resetTestThemeTreeViewRoot",
+                "title": "Reset Test Theme View Root"
+            },
+            {
                 "command": "testbenchExtension.displayAllProjects",
                 "title": "Display Projects",
                 "icon": {
@@ -541,7 +549,7 @@
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == tov || viewItem == Version || viewItem == TestThemeNode)",
+                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == TestThemeNode)",
                     "group": "navigation"
                 },
                 {
@@ -558,6 +566,18 @@
                     "command": "testbenchExtension.createInteractionUnderSubdivision",
                     "when": "view == testElementsView && viewItem == subdivision",
                     "group": "1_modification"
+                },
+                {
+                    "command": "testbenchExtension.resetProjectTreeViewRoot",
+                    "when": "view == projectManagementTree && viewItem == customRoot.project",
+                    "group": "navigation@1",
+                    "title": "Reset Custom Root"
+                },
+                {
+                    "command": "testbenchExtension.resetTestThemeTreeViewRoot",
+                    "when": "view == testThemeTree && viewItem == customRoot.theme",
+                    "group": "navigation@1",
+                    "title": "Reset Custom Root"
                 }
             ]
         },

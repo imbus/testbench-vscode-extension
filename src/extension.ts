@@ -14,7 +14,6 @@ import * as testBenchLogger from "./testBenchLogger";
 import * as testBenchConnection from "./testBenchConnection";
 import * as reportHandler from "./reportHandler";
 import * as projectManagementTreeView from "./projectManagementTreeView";
-import { getProjectAndTovNamesFromSelection } from "./projectManagementTreeView";
 import * as testElementsTreeView from "./testElementsTreeView";
 import * as loginWebView from "./loginWebView";
 import * as utils from "./utils";
@@ -271,10 +270,27 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
     }
     initializeTestElementsTreeView(context);
     if (_projectTreeView && _projectManagementTreeDataProvider) {
-        projectManagementTreeView.setupProjectTreeViewEventListeners(
-            _projectTreeView,
-            _projectManagementTreeDataProvider
-        );
+        const pmProviderInstance = _projectManagementTreeDataProvider;
+        projectManagementTreeView.setupProjectTreeViewEventListeners(_projectTreeView, pmProviderInstance);
+
+        _projectTreeView.onDidChangeSelection(async (event) => {
+            if (event.selection.length > 0 && pmProviderInstance) {
+                await client?.stop();
+                const selectedElement: projectManagementTreeView.BaseTestBenchTreeItem = event.selection[0];
+                logger.trace(
+                    `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
+                );
+
+                const { projectName, tovName } = pmProviderInstance.getProjectAndTovNamesForItem(selectedElement);
+
+                logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
+                if (projectName && tovName) {
+                    await initializeLanguageServer(projectName, tovName);
+                } else {
+                    logger.warn("Could not determine context for LS restart from selection.");
+                }
+            }
+        });
     }
 }
 
@@ -581,12 +597,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshProjectTreeView, async () => {
-        logger.debug(`Command Called: ${allExtensionCommands.refreshProjectTreeView} (Hard refresh)`);
+        logger.debug(`Command Called: ${allExtensionCommands.refreshProjectTreeView}`);
 
         const pmProvider = getProjectManagementTreeDataProvider();
         const pTreeView = getProjectTreeView();
         if (pmProvider && pTreeView) {
-            pmProvider.refresh(true);
+            pmProvider.refresh(false);
         } else {
             logger.warn(`Project Management Tree Data Provider or Project Tree View not initialized. Cannot refresh.`);
         }
@@ -615,7 +631,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await ttProvider.refresh(true);
+            await ttProvider.refresh(false);
             logger.info("Test Theme Tree view refresh initiated and completed via provider.");
         } catch (error) {
             logger.error("Error during Test Theme Tree view refresh command execution:", error);
@@ -690,6 +706,30 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     );
 
+    // --- Command: Reset Project Tree View Root ---
+    registerSafeCommand(context, allExtensionCommands.resetProjectTreeViewRoot, async () => {
+        logger.debug(`Command Called: ${allExtensionCommands.resetProjectTreeViewRoot}`);
+        const pmProvider = getProjectManagementTreeDataProvider();
+        if (pmProvider) {
+            pmProvider.resetCustomRoot();
+        } else {
+            logger.warn("ProjectManagementTreeDataProvider not available to reset custom root.");
+            vscode.window.showWarningMessage("Project tree is not ready to reset root.");
+        }
+    });
+
+    // --- Command: Reset Test Theme Tree View Root ---
+    registerSafeCommand(context, allExtensionCommands.resetTestThemeTreeViewRoot, async () => {
+        logger.debug(`Command Called: ${allExtensionCommands.resetTestThemeTreeViewRoot}`);
+        const ttProvider = getTestThemeTreeDataProvider();
+        if (ttProvider) {
+            await ttProvider.resetCustomRoot();
+        } else {
+            logger.warn("TestThemeTreeDataProvider not available to reset custom root.");
+            vscode.window.showWarningMessage("Test theme tree is not ready to reset root.");
+        }
+    });
+
     // --- Command: Clear Workspace Folder ---
     // Clears the workspace folder of its contents, excluding extension log files.
     registerSafeCommand(context, allExtensionCommands.clearInternalTestbenchFolder, async () => {
@@ -752,7 +792,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     if (areTestElementsFetched) {
                         await projectManagementTreeView?.hideProjectManagementTreeView();
                         await displayTestElementsTreeView();
-                        const projectAndTovNameObj = getProjectAndTovNamesFromSelection(treeItem);
+                        const projectAndTovNameObj = pmProvider.getProjectAndTovNamesForItem(treeItem);
 
                         if (projectAndTovNameObj) {
                             const { projectName, tovName } = projectAndTovNameObj;
@@ -1122,6 +1162,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // which allows icon changes for login/logout buttons based on connectionActive variable.
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
     logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
+
+    await vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
+    await vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
 
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
     context.subscriptions.push(
