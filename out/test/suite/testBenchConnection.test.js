@@ -65,13 +65,6 @@ suite("PlayServerConnection Tests", () => {
         const token: string | undefined = await serverConnection.getSessionTokenFromSecretStorage(context);
         assert.strictEqual(token, "mockSessionToken");
     });
-
-    test("clearSessionData should clear session data", () => {
-        serverConnection.clearSessionData();
-        assert.strictEqual(serverConnection.getSessionToken(), "");
-        assert.strictEqual(serverConnection.getBaseURL(), "");
-    });
-
     
     test("selectProjectKeyFromProjectList should return the selected project key", async () => {
         const projectsData: testBenchTypes.Project[] = [
@@ -142,15 +135,6 @@ suite("PlayServerConnection Tests", () => {
         } catch (error) {
             assert.fail("fetchCycleStructure should not throw an error");
         }
-    });
-
-    test("logoutUser should clear session data and stop keep-alive", async () => {
-        const stopKeepAliveStub = sinon.stub(serverConnection as any, "stopKeepAlive");
-        axiosStub().delete.resolves({ status: 204 });
-
-        await serverConnection.logoutUser(context, {} as any);
-        assert.strictEqual(serverConnection.getSessionToken(), "");
-        assert(stopKeepAliveStub.calledOnce);
     });
 
     test("importExecutionResults should handle errors gracefully", async () => {

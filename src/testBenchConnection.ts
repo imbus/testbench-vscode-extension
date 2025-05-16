@@ -12,10 +12,9 @@ import * as base64 from "base-64";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
-
-import { setConnection, logger, getProjectManagementTreeDataProvider, getLoginWebViewProvider } from "./extension";
+import { logger } from "./extension";
 import * as utils from "./utils";
-import { ContextKeys, JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
+import { JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
 import { ExecutionMode } from "./testBenchTypes";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
@@ -149,16 +148,6 @@ export class PlayServerConnection {
         } finally {
             this.stopKeepAlive();
         }
-    }
-
-    /** Clears session data and resets API client and keep-alive timer. */
-    clearSessionData(): void {
-        this.baseURL = "";
-        this.serverName = "";
-        this.portNumber = 0;
-        this.sessionToken = "";
-        this.apiClient = axios.create();
-        this.keepAliveIntervalId = null;
     }
 
     /**
@@ -446,63 +435,6 @@ export class PlayServerConnection {
         } catch (error) {
             logger.error("Error fetching cycle structure:", error);
             return null;
-        }
-    }
-
-    /**
-     * Logs out the user from the TestBench server.
-     * Clears session data, stops the keep-alive process.
-     * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
-     */
-    async logoutUser(): Promise<void | null> {
-        logger.debug("Logging out user.");
-        try {
-            const logoutResponse: AxiosResponse = await withRetry(
-                () =>
-                    this.apiClient.delete(`/login/session/v1`, {
-                        headers: { accept: "application/vnd.testbench+json" }
-                    }),
-                3, // maxRetries
-                2000 // delayMs
-            );
-
-            if (logoutResponse.status === 204) {
-                const logoutSuccessfulMessage: string = "Logout successful.";
-                logger.debug(logoutSuccessfulMessage);
-                vscode.window.showInformationMessage(logoutSuccessfulMessage);
-            } else {
-                const logoutFailedMessage: string = `Logout failed. Unexpected response status: ${logoutResponse.status}`;
-                logger.error(logoutFailedMessage);
-                vscode.window.showWarningMessage(logoutFailedMessage);
-                return null;
-            }
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const logoutErrorMessage: string = `Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`;
-                logger.error(logoutErrorMessage);
-                vscode.window.showWarningMessage(logoutErrorMessage);
-                return null;
-            } else {
-                logger.error(`Unexpected error during logout: ${error}`);
-                return null;
-            }
-        } finally {
-            // Regardless of the outcome of logout operation, stop the keep-alive process
-            this.stopKeepAlive();
-            this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
-            await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-
-            const pmProvider = getProjectManagementTreeDataProvider();
-            pmProvider?.clearTree();
-            setConnection(null);
-
-            // Notify login webview about the logout success to change its HTML content
-            const lwvProvider = getLoginWebViewProvider();
-            if (lwvProvider) {
-                await lwvProvider.updateWebviewHTMLContent();
-            } else {
-                logger.error("loginWebViewProvider is null. Cannot update webview content.");
-            }
         }
     }
 

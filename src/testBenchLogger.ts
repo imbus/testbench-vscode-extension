@@ -79,15 +79,6 @@ export class TestBenchLogger {
     }
 
     /**
-     * Awaits the completion of asynchronous initialization.
-     *
-     * Used to ensure the logger has been initialized (i.e. updated log paths) before logging.
-     */
-    public async awaitInit(): Promise<void> {
-        await this.initPromise;
-    }
-
-    /**
      * Performs asynchronous initialization of the logger.
      *
      * It attempts to obtain the workspace location from the extension settings and update the log folder and file paths.

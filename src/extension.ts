@@ -105,26 +105,10 @@ export function getTestElementTreeView(): vscode.TreeView<testElementsTreeView.T
 // Global variable to store the authentication provider instance
 let authProviderInstance: TestBenchAuthenticationProvider | null = null;
 
-// Global state for current project and TOV context for language server
-let currentLanguageServerProject: string | undefined;
-let currentLanguageServerTov: string | undefined;
-
-export function getCurrentLsProject(): string | undefined {
-    return currentLanguageServerProject;
-}
-
-export function getCurrentLsTov(): string | undefined {
-    return currentLanguageServerTov;
-}
-
 // Global variable to store the current configuration scope (workspace or global).
 let currentConfigScope: vscode.Uri | undefined;
 // Global variable to store the active editor instance to determine the best scope for configuration.
 let activeEditor: vscode.TextEditor | undefined;
-
-/* =============================================================================
-   Helper Functions
-   ============================================================================= */
 
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
@@ -182,35 +166,25 @@ function registerSafeCommand(
  * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function loadConfiguration(context: vscode.ExtensionContext, newScope?: vscode.Uri): Promise<void> {
-    // If no new scope provided, determine the best scope automatically
     if (newScope === undefined) {
         if (activeEditor) {
-            // If there is an active editor, use its workspace folder as the scope
             newScope = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)?.uri;
         } else if (vscode.workspace.workspaceFolders?.length === 1) {
-            // If there is only one workspace folder, use it as the scope
             newScope = vscode.workspace.workspaceFolders[0].uri;
         }
     }
 
     currentConfigScope = newScope;
-
-    // Update the configuration object with the latest values.
-    // Without this, the configuration changes may not be updated and old values may be used.
     config = vscode.workspace.getConfiguration(baseKeyOfExtension, currentConfigScope);
 
-    // Log the configuration source for debugging
     const configSource: string = currentConfigScope
         ? `workspace folder: ${vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name}`
         : "global (no workspace)";
     logger.trace(`Loading configuration from ${configSource}`);
 
-    // Update the log level based on the new configuration.
     logger.updateCachedLogLevel();
 
     // If storePassword is set to false, delete the stored password immediately.
-    // If storePassword is set to true, the password is only stored after a successful login.
-    // The login process also clears the stored password if the user does not want to store it.
     if (!config.get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)) {
         // TODO: Remove the password of the current user.
     }
@@ -237,7 +211,7 @@ function initializeTestElementsTreeView(context: vscode.ExtensionContext): void 
     context.subscriptions.push(_testElementTreeView);
 
     if (_testElementsTreeDataProvider.isTreeDataEmpty()) {
-        _testElementsTreeDataProvider.updateMessage();
+        _testElementsTreeDataProvider.updateTreeViewStatusMessage();
     }
 }
 
@@ -270,8 +244,6 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
     context.subscriptions.push(newProjectTreeView);
     _projectTreeView = newProjectTreeView;
 
-    // Listen to event from ProjectManagementTreeDataProvider to update the Test Theme Tree
-    // when the cycle data is prepared.
     if (_projectManagementTreeDataProvider && _testThemeTreeView && _testThemeTreeDataProvider) {
         context.subscriptions.push(
             _projectManagementTreeDataProvider.onDidPrepareCycleDataForThemeTree(

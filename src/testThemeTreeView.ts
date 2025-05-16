@@ -22,10 +22,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     public getCurrentCycleKey(): string | null {
         return this._currentCycleKey;
     }
-    public isCurrentCycle(cycleKey: string): boolean {
-        return this._currentCycleKey === cycleKey;
-    }
-
     private _currentProjectKey: string | null = null;
 
     /** Root elements for the Test Theme Tree view */
@@ -34,16 +30,14 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     private expandedTreeItems: Set<string> = new Set<string>();
 
-    // Callback for message updates
-    private updateMessageCallback: (message: string | undefined) => void;
+    private updateTreeViewStatusMessageCallback: (message: string | undefined) => void;
 
-    // Constructor to accept the callback
     constructor(updateMessageCallback: (message: string | undefined) => void) {
-        this.updateMessageCallback = updateMessageCallback;
+        this.updateTreeViewStatusMessageCallback = updateMessageCallback;
     }
-    // Public method to set message via callback
-    public setMessage(message: string | undefined): void {
-        this.updateMessageCallback(message);
+
+    public setTreeViewStatusMessage(message: string | undefined): void {
+        this.updateTreeViewStatusMessageCallback(message);
     }
 
     /**
@@ -51,25 +45,22 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      */
     refresh(): void {
         logger.debug("Refreshing test theme tree view.");
-        // Store the keys of the expanded items to preserve state on refresh.
+        // Preserve expanded state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
 
         const currentThemeTreeView = getTestThemeTreeViewInstance();
-        // Update message in the test theme tree view
-        // Check if the view instance is available
         if (this.rootElements.length === 0) {
             if (this._currentCycleKey) {
-                this.updateMessageCallback("No test themes found for the current cycle.");
+                this.updateTreeViewStatusMessageCallback("No test themes found for the current cycle.");
             } else {
-                this.updateMessageCallback("Select a cycle to see test themes.");
+                this.updateTreeViewStatusMessageCallback("Select a cycle to see test themes.");
             }
             logger.trace(`Test Themes view message set: ${currentThemeTreeView?.message}`);
         } else {
-            this.updateMessageCallback(undefined); // Clear message
+            this.updateTreeViewStatusMessageCallback(undefined);
             logger.trace("Test Themes view message cleared.");
         }
 
-        // Explicitly fire with undefined to ensure a full refresh from the root.
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -94,7 +85,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 logger.trace(
                     "TestThemeTreeDataProvider: No root elements found, returning empty. Message should be set."
                 );
-                // Message is set by refresh() or when setRoots() is called if children are empty.
                 return [];
             }
             return this.rootElements;
@@ -121,7 +111,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         // logger.trace("Setting root elements of the test theme tree to:", roots);
         this._currentCycleKey = cycleKey;
         this.rootElements = roots;
-        this.refresh(); // This will call _onDidChangeTreeData.fire(undefined)
+        this.refresh();
     }
 
     /**
@@ -130,19 +120,15 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      */
     makeRoot(element: BaseTestBenchTreeItem): void {
         logger.debug("Setting the selected element as the root of the test theme tree view:", element);
-        // Find the cycle key for the new root element if it's part of a cycle.
         let newCycleKey: string | null = null;
         if (element.parent && element.parent.contextValue === TreeItemContextValues.CYCLE) {
             newCycleKey = element.parent.item?.key;
         } else if (element.contextValue === TreeItemContextValues.CYCLE) {
             newCycleKey = element.item?.key;
         }
-        // If a cycle key is found and is different, or if we are making a non-cycle element root, update _currentCycleKey.
+
         if (newCycleKey) {
             this._currentCycleKey = newCycleKey;
-        } else {
-            // If the new root isn't directly tied to a known cycle in its parentage here,
-            // it might be an implicit change of context.
         }
 
         this.rootElements = [element];
@@ -164,7 +150,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
 
-        // Store the key of the expanded item in the set.
         if (expanded && element.item?.key) {
             this.expandedTreeItems.add(element.item.key);
         } else if (element.item?.key) {
@@ -198,7 +183,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
         this.rootElements = [];
-        this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
+        this.updateTreeViewStatusMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
         this.expandedTreeItems.clear();
         this._onDidChangeTreeData.fire();
     }
@@ -242,7 +227,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 this.rootElements = [];
             } else {
                 const rootCycleNodeKey: string = eventData.rawCycleStructure.root.base.key;
-                this.rootElements = this.buildThemeTreeRecursive(
+                this.rootElements = this.buildThemeTreeRecursively(
                     rootCycleNodeKey,
                     null,
                     elementsByKey,
@@ -250,7 +235,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 );
             }
         }
-        this.refresh(); // Refresh the view with new elements
+        this.refresh();
     }
 
     /**
@@ -277,7 +262,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @param {string} parentNameForLogging - The name of the parent item, used for logging purposes.
      * @returns {BaseTestBenchTreeItem[]} An array of `BaseTestBenchTreeItem` representing the children of the specified parent.
      */
-    private buildThemeTreeRecursive(
+    private buildThemeTreeRecursively(
         parentItemKey: string,
         parentTreeItem: BaseTestBenchTreeItem | null,
         elementsByKey: Map<string, CycleNodeData>,
@@ -308,9 +293,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 return null;
             }
 
-            // Recursively build children if this node has visible children
             if (hasVisibleChildren) {
-                treeItem.children = this.buildThemeTreeRecursive(
+                treeItem.children = this.buildThemeTreeRecursively(
                     nodeData.base.key,
                     treeItem,
                     elementsByKey,
@@ -337,7 +321,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @returns A new {@link BaseTestBenchTreeItem} instance, or null if `nodeData` is invalid.
      */
     private createThemeTreeItem(
-        nodeData: CycleNodeData, // Raw data for the theme item
+        nodeData: CycleNodeData, // Raw data for the test theme item
         contextValue: string,
         parent: BaseTestBenchTreeItem | null,
         hasVisibleChildren: boolean
@@ -366,7 +350,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                     : vscode.TreeItemCollapsibleState.None;
                 break;
             case TreeItemContextValues.TEST_CASE_SET_NODE:
-                defaultCollapsibleState = hasVisibleChildren // if TEST_CASE_NODE were included and visible
+                defaultCollapsibleState = hasVisibleChildren
                     ? vscode.TreeItemCollapsibleState.Collapsed
                     : vscode.TreeItemCollapsibleState.None;
                 break;

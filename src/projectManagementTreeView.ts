@@ -663,13 +663,15 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         const currentElementsProvider = getTestElementsTreeDataProvider();
 
         if (currentThemeTreeView && this.testThemeTreeDataProvider) {
-            this.testThemeTreeDataProvider.setMessage(`Loading test themes for cycle: ${currentCycleLabel}...`);
+            this.testThemeTreeDataProvider.setTreeViewStatusMessage(
+                `Loading test themes for cycle: ${currentCycleLabel}...`
+            );
         }
         if (currentElementTreeView && currentElementsProvider) {
             const tovParent = projectsTreeViewItem.parent;
             const tovLabel: string =
                 tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
-            currentElementsProvider.setMessage(`Loading test elements for ${tovLabel}...`);
+            currentElementsProvider.setTreViewMessage(`Loading test elements for ${tovLabel}...`);
             currentElementsProvider.refresh([]);
         }
 
@@ -781,28 +783,6 @@ export function findProjectKeyOfCycleElement(element: BaseTestBenchTreeItem): st
     const projectKeyNotFoundErrorMessage: string = `Project key not found for cycle element: ${element.label}`;
     logger.error(projectKeyNotFoundErrorMessage);
     vscode.window.showErrorMessage(projectKeyNotFoundErrorMessage);
-    return null;
-}
-
-/**
- * Finds the project key (serial) for a given project tree item by traversing upward in the tree hierarchy.
- * The input element can be of type Project, Version, Cycle, TestThemeNode, TestCaseSetNode, or TestCaseNode.
- *
- * @param {BaseTestBenchTreeItem} element The project tree item.
- * @returns {string | null} The project key as a string if found; otherwise null.
- */
-export function findProjectKeyOfProjectTreeItem(element: BaseTestBenchTreeItem): string | null {
-    logger.trace("Finding project key for project tree item:", element.label);
-    let current: BaseTestBenchTreeItem | null = element;
-    while (current) {
-        if (current.contextValue === TreeItemContextValues.PROJECT) {
-            logger.trace("Found project key:", current.item.key);
-            return current.item.key;
-        }
-        current = current.parent;
-    }
-    const projectKeyNotFoundErrorMessage: string = `Project key not found traversing up from tree element: ${element.label}`;
-    logger.error(projectKeyNotFoundErrorMessage);
     return null;
 }
 

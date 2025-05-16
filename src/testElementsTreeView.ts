@@ -15,7 +15,7 @@ import {
     getTestElementTreeView,
     getTestElementsTreeDataProvider as extensionGetTestElementsTreeDataProvider
 } from "./extension";
-import { TreeItemContextValues } from "./constants";
+import { ConfigKeys, TreeItemContextValues } from "./constants";
 
 type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
@@ -170,7 +170,7 @@ function getItemParentId(item: any, libraryKey: string | null | undefined): stri
         // "serial_uniqueID" is used for uniqueness even for elements with identical serials.
         return item.parent.uniqueID ? `${item.parent.serial}_${item.parent.uniqueID}` : item.parent.serial;
     }
-    // If the element has no parent, use the libraryKey as the parent.
+
     return libraryKey ? String(libraryKey) : null;
 }
 
@@ -205,7 +205,6 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
             testElementType,
             jsonTestElement.uniqueID
         );
-        //  Use the 'parent' property if valid; otherwise, use the libraryKey as the parent.
         const testElementParentId: string | null = getItemParentId(jsonTestElement, libraryKey);
 
         const isRegexMatch: boolean =
@@ -254,17 +253,18 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
      * Filtered elements become null and are removed from the tree.
      *
      * @param {TestElementData} testElement The element to filter.
-     * @param {boolean} inherited True if the element inherits a match from a parent.
+     * @param {boolean} doesInheritMatchFromParent True if the element inherits a match from a parent.
      * @returns {TestElementData | null} The filtered element or null if excluded.
      */
-    function filterTestElementsTree(testElement: TestElementData, inherited: boolean): TestElementData | null {
-        // Process and filter children recursively before filtering the current (parent) element.
+    function filterTestElementsTree(
+        testElement: TestElementData,
+        doesInheritMatchFromParent: boolean
+    ): TestElementData | null {
         let filteredChildren: TestElementData[] = [];
         if (testElement.children) {
             // Determine if the children should inherit inclusion:
             // If the current element directly matches the regex or is already inherited, mark children as inherited.
-            const childrenInherited: boolean = inherited || testElement.directRegexMatch;
-            // Store the result of filtering the children, which will be used to determine if the current element should be included.
+            const childrenInherited: boolean = doesInheritMatchFromParent || testElement.directRegexMatch;
             filteredChildren = testElement.children
                 .map((child) => filterTestElementsTree(child, childrenInherited))
                 .filter((child) => child !== null) as TestElementData[];
@@ -274,27 +274,20 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
             return null;
         }
 
-        // For subdivisions, filter out the subdivision element if it has no children that match the regex.
-        // Display the empty subdivision if it directly matches the regex.
+        // Display empty subdivisions if it directly matches the regex.
         if (testElement.elementType === "Subdivision") {
             if (filteredChildren.length === 0 && !testElement.directRegexMatch) {
                 return null;
             }
         }
 
-        // Include the current element if it
-        // 1- Inherits a match from a parent
-        // 2- Directly matches the regex
-        // 3- Has at least one regex matching child
-        if (inherited || testElement.directRegexMatch || filteredChildren.length > 0) {
+        if (doesInheritMatchFromParent || testElement.directRegexMatch || filteredChildren.length > 0) {
             return { ...testElement, children: filteredChildren };
         } else {
-            // Exclude the element if it neither directly matches nor has any matching descendants.
             return null;
         }
     }
 
-    // Apply filtering to each root and return only non-null elements.
     const filteredRoots: TestElementData[] = rootsOfTestElementView
         .map((root) => filterTestElementsTree(root, false))
         .filter((node): node is TestElementData => node !== null);
@@ -305,37 +298,34 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
      * @param {string} parentPath The accumulated parent path.
      */
     function assignHierarchicalNames(element: TestElementData, parentPath: string): void {
-        // Compute the current hierarchical path.
-        const currentPath: string = parentPath ? `${parentPath}/${element.name}` : element.name;
-        element.hierarchicalName = currentPath;
+        const currentHierarchicalPath: string = parentPath ? `${parentPath}/${element.name}` : element.name;
+        element.hierarchicalName = currentHierarchicalPath;
         if (element.children && element.children.length > 0) {
-            element.children.forEach((child: any) => assignHierarchicalNames(child, currentPath));
+            element.children.forEach((child: any) => assignHierarchicalNames(child, currentHierarchicalPath));
         }
     }
     filteredRoots.forEach((root) => assignHierarchicalNames(root, ""));
 
-    // Identify nested robot resources, which is not allowed, and warn the user if found.
+    // Nested robot resources can be created with the current TestBench Client, which is not allowed.
+    // Warn the user if found.
     const nestedRobotResources: string[] = [];
+
     /**
      * Recursively checks for nested robot resources.
-     * If a robot resource is found under another robot resource, raise a warning.
+     * If a robot resource is found under another robot resource, create a warning message in nestedRobotResources.
      * @param {TestElementData} testElement The element to check.
      */
     function checkForNestedRobotResources(testElement: TestElementData): void {
         if (testElement.directRegexMatch) {
-            // Check each child: if any child is also a robot resource, raise a warning.
             for (const child of testElement.children || []) {
                 if (child.directRegexMatch) {
-                    // Instead of storing the test elements, store a warning message.
                     nestedRobotResources.push(
                         `Robot resource '${testElement.name}' contains another robot resource '${child.name}'.`
                     );
                 }
-                // Continue checking children recursively.
                 checkForNestedRobotResources(child);
             }
         } else {
-            // If current element is not a robot resource, still check its children.
             for (const child of testElement.children || []) {
                 checkForNestedRobotResources(child);
             }
@@ -371,10 +361,8 @@ const iconMapping: Record<string, { light: string; dark: string }> = {
  * @returns {vscode.Uri} The icon URI.
  */
 function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscode.Uri; dark: vscode.Uri } {
-    const elementType: TestElementType = treeItem.testElementData?.elementType || "Other"; // Default to Other if undefined
+    const elementType: TestElementType = treeItem.testElementData?.elementType || "Other";
     logger.trace(`Getting icon for element type: ${elementType}`);
-
-    // Fallback to "Other" if the elementType is not defined or not in the iconMapping
     const iconPaths = iconMapping[elementType] || iconMapping["Other"];
 
     if (!iconPaths) {
@@ -395,10 +383,6 @@ function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscod
     return { light: lightIconUri, dark: darkIconUri };
 }
 
-/* =============================================================================
-   TestElementTreeItem Class and TestElementsTreeDataProvider
-   ============================================================================= */
-
 /**
  * TestElementTreeItem represents a test element in the VS Code tree view.
  */
@@ -410,21 +394,16 @@ export class TestElementTreeItem extends vscode.TreeItem {
      * @param {TestElementData} elementData The test element.
      */
     constructor(elementData: TestElementData) {
-        // Set the label to the element's name.
         const label: string = elementData?.name || "Placeholder";
-        // Determine collapsibility: Placeholder should not be collapsible
         const collapsibleState =
             elementData?.children && elementData.children.length > 0
                 ? vscode.TreeItemCollapsibleState.Collapsed
                 : vscode.TreeItemCollapsibleState.None;
 
         super(label, collapsibleState);
-
-        // Store elementData, ensure it's at least an empty object for placeholder
         this.testElementData = elementData || ({} as TestElementData);
 
-        // Set the context value to enable context menu contributions.
-        // This value is used in package.json to enable context menu contributions.
+        // Context value is used in package.json to enable context menu contributions.
         switch (elementData.elementType) {
             case "Subdivision":
                 this.contextValue = TreeItemContextValues.SUBDIVISION;
@@ -443,19 +422,18 @@ export class TestElementTreeItem extends vscode.TreeItem {
                 break;
         }
 
-        // Build a tooltip string with detailed information about the element.
-        let tooltip: string = `Type: ${this.testElementData.elementType || "N/A"}\nName: ${elementData.name || label}`;
+        let tooltipText: string = `Type: ${this.testElementData.elementType || "N/A"}\nName: ${elementData.name || label}`;
         if (elementData.uniqueID) {
-            tooltip += `\nUniqueID: ${this.testElementData.uniqueID}`;
+            tooltipText += `\nUniqueID: ${this.testElementData.uniqueID}`;
         }
         if (elementData.libraryKey) {
-            tooltip += `\nLibraryKey: ${elementData.libraryKey}`;
+            tooltipText += `\nLibraryKey: ${elementData.libraryKey}`;
         }
         if (elementData.details?.hasVersion !== undefined) {
-            tooltip += `\nHas Version: ${elementData.details.hasVersion}`;
+            tooltipText += `\nHas Version: ${elementData.details.hasVersion}`;
         }
         if (elementData.details?.status !== undefined) {
-            tooltip += `\nStatus: ${elementData.details.status}`;
+            tooltipText += `\nStatus: ${elementData.details.status}`;
         }
 
         // Append the original JSON representation (Useful for debugging).
@@ -465,12 +443,11 @@ export class TestElementTreeItem extends vscode.TreeItem {
         }
         */
 
-        this.tooltip = tooltip;
+        this.tooltip = tooltipText;
 
         // Display the uniqueID as a description next to the label.
         this.description = elementData.uniqueID || "";
 
-        // Set the initial icon based on the element type.
         this.setIcon(getIconUriForElementType(this));
     }
 
@@ -496,27 +473,26 @@ export async function constructAbsolutePathForTestElement(
         return undefined;
     }
 
-    // Build path from actual tree hierarchy
-    const pathParts: string[] = [];
+    const testElementPathSegments: string[] = [];
     let currentElement: TestElementData | undefined = testElementTreeItem.testElementData;
 
-    // Traverse the tree upwards to construct the path by following the parent references.
     while (currentElement) {
-        // Add the element name to the beginning of the array.
-        pathParts.unshift(currentElement.name);
+        testElementPathSegments.unshift(currentElement.name);
         currentElement = currentElement.parent;
     }
 
-    if (pathParts.length === 0) {
+    if (testElementPathSegments.length === 0) {
         logger.error(
             `No path parts found for test element ${testElementTreeItem.testElementData.name}. Returning undefined, cannot construct absolute path.`
         );
         return undefined;
     }
 
-    const normalizedPath: string = path.join(workspaceRootPath, ...pathParts);
-    logger.trace(`Constructed path from tree item ${testElementTreeItem.testElementData.name}: ${normalizedPath}`);
-    return normalizedPath;
+    const absoluteTestElementPath: string = path.join(workspaceRootPath, ...testElementPathSegments);
+    logger.trace(
+        `Constructed path from tree item ${testElementTreeItem.testElementData.name}: ${absoluteTestElementPath}`
+    );
+    return absoluteTestElementPath;
 }
 
 /**
@@ -573,7 +549,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     >();
     readonly onDidChangeTreeData: vscode.Event<TestElementTreeItem | undefined> = this._onDidChangeTreeData.event;
     private treeData: TestElementData[] = [];
-    // Private member to store the current TOV key
+
     private _currentTovKey: string = "";
     public getCurrentTovKey(): string {
         return this._currentTovKey;
@@ -588,33 +564,32 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         this.dataFetchAttempted = attempted;
     }
 
-    // Callback for message updates
-    private updateMessageCallback: (message: string | undefined) => void;
+    private updateTreeViewStatusMessageCallback: (message: string | undefined) => void;
 
-    // Constructor to accept the callback
     constructor(updateMessageCallback: (message: string | undefined) => void) {
-        this.updateMessageCallback = updateMessageCallback;
+        this.updateTreeViewStatusMessageCallback = updateMessageCallback;
     }
-    // Public method to set message via callback, can be used internally too
-    public setMessage(message: string | undefined): void {
-        this.updateMessageCallback(message);
+
+    public setTreViewMessage(message: string | undefined): void {
+        this.updateTreeViewStatusMessageCallback(message);
     }
-    // Method to update message based on current state, called by constructor or refresh
-    public updateMessage(): void {
+
+    public updateTreeViewStatusMessage(): void {
         if (this.isTreeDataEmpty()) {
             if (!this.dataFetchAttempted) {
-                // Check if data fetch has been attempted to set initial message
-                this.setMessage("Select a Test Object Version (TOV) from the 'Projects' view to load test elements.");
+                this.setTreViewMessage(
+                    "Select a Test Object Version (TOV) from the 'Projects' view to load test elements."
+                );
             } else {
                 const filterPatterns = getConfig().get("resourceRegexInTestbench2robotframework", []);
                 if (filterPatterns && filterPatterns.length > 0) {
-                    this.setMessage("No test elements match the current filter criteria.");
+                    this.setTreViewMessage("No test elements match the current filter criteria.");
                 } else {
-                    this.setMessage("No test elements found for the selected Test Object Version (TOV).");
+                    this.setTreViewMessage("No test elements found for the selected Test Object Version (TOV).");
                 }
             }
         } else {
-            this.setMessage(undefined); // Clear message if data is present
+            this.setTreViewMessage(undefined);
         }
     }
 
@@ -643,47 +618,45 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             );
             return childItems;
         } else {
-            // Root request
             if (this.isTreeDataEmpty()) {
                 logger.trace(
                     "TestElementsTreeDataProvider: No tree data found for root, returning empty. Message should be set."
                 );
-                // The message is set in refresh() or fetchTestElements()
-                return []; // Return empty array
+                return [];
             }
 
-            // If no parent is provided, return the root items.
-            const rootItems: TestElementTreeItem[] = await Promise.all(
+            const rootTreeItems: TestElementTreeItem[] = await Promise.all(
                 this.treeData.map(async (child) => {
                     const childItem: TestElementTreeItem = new TestElementTreeItem(child);
                     await updateTestElementIcon(childItem);
                     return childItem;
                 })
             );
-            return rootItems;
+            return rootTreeItems;
         }
     }
 
     /**
      * Refreshes the tree view with new data.
+     * Handles message updates based on the presence of data.
      * @param {any} flatTestElementsJsonData A flat array of JSON objects representing test elements.
      */
     refresh(flatTestElementsJsonData: any[]): void {
         this.treeData = buildTree(flatTestElementsJsonData);
-        // Update message based on treeData
-        // Check if the view instance is available
         const currentElementTreeView = getTestElementTreeView();
         if (currentElementTreeView) {
             if (this.isTreeDataEmpty()) {
-                const filterPatterns = getConfig().get("resourceRegexInTestbench2robotframework", []);
+                const filterPatterns = getConfig().get(ConfigKeys.TB2ROBOT_RESOURCE_REGEX, []);
                 if (filterPatterns && filterPatterns.length > 0) {
-                    this.updateMessageCallback("No test elements match the current filter criteria.");
+                    this.updateTreeViewStatusMessageCallback("No test elements match the current filter criteria.");
                 } else {
-                    this.updateMessageCallback("No test elements found for the selected Test Object Version (TOV).");
+                    this.updateTreeViewStatusMessageCallback(
+                        "No test elements found for the selected Test Object Version (TOV)."
+                    );
                 }
                 logger.trace(`Test Elements view message set: ${currentElementTreeView.message}`);
             } else {
-                this.updateMessageCallback(undefined); // Clear message if there's data
+                this.updateTreeViewStatusMessageCallback(undefined);
                 logger.trace("Test Elements view message cleared.");
             }
         }
@@ -705,7 +678,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         this.setDataFetchAttempted(true);
 
         const tovLabel: string = newTestElementsTreeViewTitle || tovKey;
-        this.updateMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
+        this.updateTreeViewStatusMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
 
         // Clear current data and trigger UI update to show loading message
         this.treeData = [];
@@ -716,39 +689,33 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
             this._currentTovKey = tovKey;
             this.refresh(testElementsJsonData);
             const currentElementTreeView = getTestElementTreeView();
-            // Update the title of the tree view if a new title is provided.
+
             if (newTestElementsTreeViewTitle && currentElementTreeView) {
                 currentElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
             }
             return true;
         } else {
-            // If fetching fails, clear the TOV key
             this._currentTovKey = "";
             vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
-            // Set error message on the view
-            this.updateMessageCallback("Error: Failed to fetch test elements. Please try again or check logs.");
+            this.updateTreeViewStatusMessageCallback(
+                "Error: Failed to fetch test elements. Please try again or check logs."
+            );
             this.treeData = [];
-            this._onDidChangeTreeData.fire(undefined); // Refresh to show empty state with message
+            this._onDidChangeTreeData.fire(undefined);
 
             return false;
         }
     }
 }
 
-/* =============================================================================
-   View Management Functions
-   ============================================================================= */
-
 /**
  * Hides the Test Elements tree view.
  */
 export async function hideTestElementsTreeView(): Promise<void> {
     if (getTestElementTreeView()) {
-        // If the treeView instance exists, it implies the view is registered/active.
         await vscode.commands.executeCommand("testElementsView.removeView");
     } else {
-        // Optional: Log if the view instance wasn't found.
-        logger.trace("Test Elements view instance not found, 'removeView' command not executed.");
+        logger.warn("Test Elements view instance not found, 'removeView' command not executed.");
     }
 }
 
@@ -758,12 +725,10 @@ export async function hideTestElementsTreeView(): Promise<void> {
 export async function displayTestElementsTreeView(): Promise<void> {
     if (getTestElementTreeView()) {
         await vscode.commands.executeCommand("testElementsView.focus");
+    } else {
+        logger.warn("Test Elements view instance not found, 'focus' command not executed.");
     }
 }
-
-/* =============================================================================
-   Test Element File Handling Functions
-   ============================================================================= */
 
 /**
  * Normalizes a given base target path by making sure it ends with ".resource" and removing any
@@ -774,8 +739,6 @@ export async function displayTestElementsTreeView(): Promise<void> {
  */
 function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
     logger.trace(`Adding .resource extension and trimming the following path: ${baseTargetPath}`);
-
-    // Append ".resource" if it is not already present at the end of the string.
     let targetPath: string = baseTargetPath.endsWith(".resource") ? baseTargetPath : baseTargetPath + ".resource";
 
     // Remove any whitespace that appears immediately before ".resource" and trim trailing whitespace.
@@ -785,7 +748,6 @@ function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
     targetPath = targetPath.replace(/^\s+/, "");
 
     logger.trace(`Normalized path after adding .resource and trimming : ${targetPath}`);
-
     return targetPath;
 }
 
@@ -799,7 +761,7 @@ function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
 async function isFilePresentLocally(filePath: string, caseSensitiveCheck: boolean = false): Promise<boolean> {
     logger.trace(`Checking if file exists: ${filePath}`);
     if (!caseSensitiveCheck) {
-        // Case-insensitive check: simply use stat.
+        // Check with stat is case-insensitive
         try {
             await fs.promises.stat(filePath);
             logger.trace(`File exists with case-insensitive check: ${filePath}`);
@@ -813,21 +775,20 @@ async function isFilePresentLocally(filePath: string, caseSensitiveCheck: boolea
         }
     }
 
-    // For a case-sensitive check on the entire path hierarchy:
-    // Resolve the absolute path.
-    const resolvedPath: string = path.resolve(filePath);
+    const absoluteFilePath: string = path.resolve(filePath);
     // Split the path into its parts. Filtering out any empty strings (e.g., due to leading separators).
-    const parts: string[] = resolvedPath.split(path.sep).filter((part) => part !== "");
+    const filePathSegments: string[] = absoluteFilePath.split(path.sep).filter((part) => part !== "");
 
-    logger.trace(`Resolved path: ${resolvedPath}`);
+    logger.trace(`Resolved path: ${absoluteFilePath}`);
 
     // Determine the starting point (the root)
     let currentPath: string;
-    if (path.isAbsolute(resolvedPath)) {
+    if (path.isAbsolute(absoluteFilePath)) {
         if (process.platform === "win32") {
             // On Windows, the first part is typically the drive letter (e.g., "C:")
-            currentPath = parts[0] + path.sep;
-            parts.shift(); // Remove the drive letter from the parts.
+            currentPath = filePathSegments[0] + path.sep;
+            // Remove the drive letter from the parts.
+            filePathSegments.shift();
         } else {
             currentPath = path.sep;
         }
@@ -836,11 +797,10 @@ async function isFilePresentLocally(filePath: string, caseSensitiveCheck: boolea
         currentPath = "";
     }
 
-    // Walk through each part and verify that it exists with the exact case.
-    for (const part of parts) {
-        let entries: string[];
+    for (const pathSegment of filePathSegments) {
+        let directoryEntries: string[];
         try {
-            entries = await fs.promises.readdir(currentPath);
+            directoryEntries = await fs.promises.readdir(currentPath);
             // logger.trace(`Entries in ${currentPath}: ${entries}`);
         } catch (err: any) {
             if (err.code === "ENOENT") {
@@ -849,16 +809,15 @@ async function isFilePresentLocally(filePath: string, caseSensitiveCheck: boolea
             }
             throw err;
         }
-        // Check if the current part exactly matches one of the entries.
-        if (!entries.includes(part)) {
-            logger.trace(`Returning false, part ${part} not found in ${currentPath}`);
+        if (!directoryEntries.includes(pathSegment)) {
+            logger.trace(`Returning false, part ${pathSegment} not found in ${currentPath}`);
             return false;
         }
-        logger.trace(`Part ${part} found in ${currentPath}`);
-        currentPath = path.join(currentPath, part);
+        logger.trace(`Part ${pathSegment} found in ${currentPath}`);
+        currentPath = path.join(currentPath, pathSegment);
     }
 
-    logger.trace(`File exists with exact case, returning true: ${resolvedPath}`);
+    logger.trace(`File exists with exact case, returning true: ${absoluteFilePath}`);
     return true;
 }
 
@@ -879,17 +838,13 @@ async function isSubdivisionLocallyAvailable(
         return false;
     }
 
-    // Determine if the subdivision is final (i.e., has no child subdivisions)
     const isFinalSubdivision: boolean = isFinalSubdivisionInTree(testElementTreeItem.testElementData);
 
     if (isFinalSubdivision) {
-        // For final subdivisions, check if the resource file exists.
         logger.trace(
             `Checking if the resource file for final subdivision '${testElementTreeItem.testElementData.name}' exists locally.`
         );
-        // Remove the "Robot-Resource" part from the path.
         let processedFinalSubdivisionPath: string = removeRobotResourceFromPathString(absolutePathOfTestElement);
-        // Append ".resource" and trim the path.
         processedFinalSubdivisionPath = appendResourceExtensionAndTrimPath(processedFinalSubdivisionPath);
         const isSubdivisionResourceFilePresent: boolean = await isFilePresentLocally(processedFinalSubdivisionPath);
         logger.trace(
@@ -897,34 +852,33 @@ async function isSubdivisionLocallyAvailable(
         );
         return isSubdivisionResourceFilePresent;
     } else {
-        // For non-final subdivisions, check if the subdivision folder exists
         logger.trace(
             `Checking if the non-final subdivision folder '${testElementTreeItem.testElementData.name}' exists locally.`
         );
         const processedNonFinalSubdivisionPath: string = removeRobotResourceFromPathString(absolutePathOfTestElement);
-        const isFolderPresent: boolean = await isFilePresentLocally(processedNonFinalSubdivisionPath);
+        const isSubdivisionFolderPresent: boolean = await isFilePresentLocally(processedNonFinalSubdivisionPath);
         logger.trace(
-            `Non-Final subdivision '${testElementTreeItem.testElementData.name}' exists locally: ${isFolderPresent}`
+            `Non-Final subdivision '${testElementTreeItem.testElementData.name}' exists locally: ${isSubdivisionFolderPresent}`
         );
-        return isFolderPresent;
+        return isSubdivisionFolderPresent;
     }
 }
 
 /**
- *  Creates a folder structure based on the provided target path.
- *  It checks each component of the path and creates directories as needed.
+ * Creates a folder structure based on the provided target path.
+ * It checks each component of the path and creates directories as needed.
  * @param {string} targetPath The target path to create the folder structure.
  * @returns {Promise<void>} A promise that resolves when the folder structure is created.
  */
 async function createFolderStructure(targetPath: string): Promise<void> {
     try {
-        // Normalize path and check each component
         const normalizedPath: string = path.normalize(targetPath);
-        const parts: string[] = normalizedPath.split(path.sep).filter((p) => p);
-        let currentPath: string = parts[0] + (process.platform === "win32" ? path.sep : ""); // Handle drive letter on Windows
+        const normalizedPathSegments: string[] = normalizedPath.split(path.sep).filter((p) => p);
+        // Handle drive letter on Windows
+        let currentPath: string = normalizedPathSegments[0] + (process.platform === "win32" ? path.sep : "");
 
-        for (let i = 1; i < parts.length; i++) {
-            currentPath = path.join(currentPath, parts[i]);
+        for (let i = 1; i < normalizedPathSegments.length; i++) {
+            currentPath = path.join(currentPath, normalizedPathSegments[i]);
 
             try {
                 const stats: fs.Stats = await fs.promises.stat(currentPath);
@@ -963,7 +917,6 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
             const resourcePath: string = appendResourceExtensionAndTrimPath(processedPath);
             await createFolderStructure(path.dirname(resourcePath));
 
-            // Check if the resource file exists, if not, create it with a header.
             if (!(await isFilePresentLocally(resourcePath))) {
                 const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${subdivisionTreeItem.testElementData.uniqueID}\n`;
                 await fs.promises.writeFile(resourcePath, fileContent);
@@ -974,11 +927,9 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
             );
             await vscode.window.showTextDocument(document);
         } else {
-            // For non-final subdivisions, create the folder structure.
             await createFolderStructure(processedPath);
             await vscode.commands.executeCommand("workbench.view.explorer");
 
-            // Handle children only if they're direct descendants
             if (subdivisionTreeItem.testElementData.children) {
                 for (const child of subdivisionTreeItem.testElementData.children) {
                     if (
@@ -991,7 +942,6 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
             }
         }
 
-        // Update the icon for the subdivision tree item.
         await updateTestElementIcon(subdivisionTreeItem);
         const teProvider = extensionGetTestElementsTreeDataProvider();
         teProvider?._onDidChangeTreeData.fire(undefined);
@@ -1002,7 +952,7 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
 }
 
 /**
- * Handles an interaction element by opening the resource file of its nearest final subdivision.
+ * Handles an interaction element by opening the resource file of its nearest final subdivision .resource file.
  * @param {TestElementTreeItem} treeItem The test element tree item representing an interaction.
  */
 export async function handleInteraction(treeItem: TestElementTreeItem): Promise<void> {
@@ -1012,7 +962,6 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
     }
     const testElement: TestElementData = treeItem.testElementData;
 
-    // For an interaction, open the parent's final subdivision .resource file.
     const finalSubdivisionAncestor: TestElementTreeItem | null = getFinalSubdivisionAncestor(treeItem);
     if (!finalSubdivisionAncestor) {
         // If no final subdivision is found: handle the case as if its parent subdivision is clicked.
@@ -1025,32 +974,29 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
             await handleSubdivision(subdivisionAncestor);
             return;
         } else {
-            return; // If no subdivision ancestor is found, do nothing.
+            return;
         }
     }
 
-    // Compute the hierarchical name if not already done.
     if (!finalSubdivisionAncestor.testElementData.hierarchicalName) {
         finalSubdivisionAncestor.testElementData.hierarchicalName = computeHierarchicalName(finalSubdivisionAncestor);
         logger.trace(
             `Computed hierarchical name for final subdivision: ${finalSubdivisionAncestor.testElementData.hierarchicalName}`
         );
     }
-    // Construct the target path for the final subdivision.
-    const finalSubdivisionAncestorPath: string | undefined =
+    const finalSubdivisionAncestorAbsolutePath: string | undefined =
         await constructAbsolutePathForTestElement(finalSubdivisionAncestor);
-    if (!finalSubdivisionAncestorPath) {
+    if (!finalSubdivisionAncestorAbsolutePath) {
         return;
     }
-    // Process the final subdivision path by removing [Robot-Resource] and appending ".resource" and trimming whitespace.
-    let processedFinalSubdivisionAncestorPath: string = removeRobotResourceFromPathString(finalSubdivisionAncestorPath);
+    let processedFinalSubdivisionAncestorPath: string = removeRobotResourceFromPathString(
+        finalSubdivisionAncestorAbsolutePath
+    );
     processedFinalSubdivisionAncestorPath = appendResourceExtensionAndTrimPath(processedFinalSubdivisionAncestorPath);
 
-    // If the resource file does not exist, create it with a header.
     if (!(await isFilePresentLocally(processedFinalSubdivisionAncestorPath))) {
         await createFolderStructure(path.dirname(processedFinalSubdivisionAncestorPath));
 
-        // Create the resource file with header content.
         const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${finalSubdivisionAncestor.testElementData.uniqueID}\n`;
 
         await fs.promises.writeFile(processedFinalSubdivisionAncestorPath, fileContent);
@@ -1060,14 +1006,14 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
             `Skipping creation of resource file at ${processedFinalSubdivisionAncestorPath} as it already exists.`
         );
     }
-    // Open the final subdivision resource file in the VS Code editor.
-    const document: vscode.TextDocument = await vscode.workspace.openTextDocument(
+
+    const finalSubdivisionResourceFileDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(
         vscode.Uri.file(processedFinalSubdivisionAncestorPath)
     );
-    await vscode.window.showTextDocument(document);
+    await vscode.window.showTextDocument(finalSubdivisionResourceFileDocument);
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 
-    // Trigger subdivision icon update after handling the interaction.
+    // Trigger subdivision icon update
     const teProvider = extensionGetTestElementsTreeDataProvider();
     teProvider?._onDidChangeTreeData.fire(undefined);
 }
@@ -1109,22 +1055,21 @@ export async function createInteractionUnderSubdivision(
 
     try {
         // Create a new interaction object
-        // TODO: These details will be probably filled in backend after the API is implemented.
+        // TODO: Adjust the implementation after API changes
         const newInteraction: any = {
             name: interactionName,
             elementType: "Interaction",
             uniqueID: `new-interaction-${Date.now()}`,
             parent: {
-                serial: subdivisionTreeItem.testElementData.id.split("_")[0], // Extract serial from parent ID
+                // Extract serial from parent ID
+                serial: subdivisionTreeItem.testElementData.id.split("_")[0],
                 uniqueID: subdivisionTreeItem.testElementData.uniqueID
             },
-            // Add other required properties for an interaction
             Interaction_key: {
                 serial: `new-interaction-${Date.now()}`
             }
         };
 
-        // Create the TestElementData object for the new interaction
         const interactionData: TestElementData = {
             id: generateTestElementTreeItemId(newInteraction, "Interaction", newInteraction.uniqueID),
             parentId: subdivisionTreeItem.testElementData.id,
@@ -1140,7 +1085,6 @@ export async function createInteractionUnderSubdivision(
             hierarchicalName: `${subdivisionTreeItem.testElementData.hierarchicalName}/${interactionName}`
         };
 
-        // Add the new interaction to the parent's children
         if (!subdivisionTreeItem.testElementData.children) {
             subdivisionTreeItem.testElementData.children = [];
         }
@@ -1153,10 +1097,6 @@ export async function createInteractionUnderSubdivision(
         return null;
     }
 }
-
-/* =============================================================================
-   Test Element Filtering and Hierarchy Functions
-   ============================================================================= */
 
 /**
  * Determines if a subdivision element is final (has no child subdivisions).
@@ -1172,7 +1112,6 @@ export function isFinalSubdivisionInTree(element: TestElementData): boolean {
         logger.trace(`Element ${element.name} has no children and is final.`);
         return true;
     }
-    // If any child is a subdivision, then this subdivision is not final.
     const isFinalSubdivision: boolean = !element.children.some(
         (child: { elementType: string }) => child.elementType === "Subdivision"
     );
@@ -1259,8 +1198,8 @@ export function removeRobotResourceFromPathString(pathStr: string): string {
 export function clearTestElementsTreeView(): void {
     const teProvider = extensionGetTestElementsTreeDataProvider();
     if (teProvider) {
-        teProvider.setCurrentTovKey(""); // Clear the current TOV key
-        teProvider.setDataFetchAttempted(false); // Reset the flag
-        teProvider.refresh([]); // refresh will handle messages via callback
+        teProvider.setCurrentTovKey("");
+        teProvider.setDataFetchAttempted(false);
+        teProvider.refresh([]);
     }
 }
