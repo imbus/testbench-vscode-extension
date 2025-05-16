@@ -33,42 +33,6 @@ import { importReportWithResultsToTestbench, withRetry } from "./testBenchConnec
 import { ExecutionMode } from "./testBenchTypes";
 
 /**
- * Prompts the user to select the report export method in quick pick format (Execution based or Specification based).
- * @returns {Promise<boolean | null>} A promise resolving to true for "Execution based", false for "Specification based",
- * or null if the user cancels.
- */
-export async function promptForReportGenerationMethodAndCheckIfExecBasedChosen(): Promise<boolean | null> {
-    return new Promise((resolve) => {
-        const quickPick = vscode.window.createQuickPick();
-        quickPick.items = [{ label: "Execution based" }, { label: "Specification based" }, { label: "Cancel" }];
-        quickPick.title = "Select Export Option";
-        quickPick.placeholder = "Select the export option for the reports.";
-
-        quickPick.onDidChangeSelection((selection) => {
-            if (selection[0]) {
-                if (selection[0].label === "Cancel") {
-                    logger.debug("User canceled the export method selection.");
-                    resolve(null);
-                } else {
-                    logger.debug(`Export method selected: ${selection[0].label}`);
-                    resolve(selection[0].label === "Execution based");
-                }
-                quickPick.hide();
-            }
-        });
-
-        // Handle case when the quick pick is hidden without user selection (e.g., if user clicks away)
-        quickPick.onDidHide(() => {
-            logger.debug("Export method selection dialog closed by the user.");
-            resolve(null);
-            quickPick.dispose();
-        });
-
-        quickPick.show();
-    });
-}
-
-/**
  * Saves the last generated report parameters to workspace storage.
  *
  * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.

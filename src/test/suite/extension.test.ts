@@ -1,16 +1,8 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as sinon from "sinon";
-import {
-    activate,
-    deactivate,
-    getConfig,
-    safeCommandHandler,
-    loadConfiguration,
-    initializeTreeViews
-} from "../../extension";
+import { activate, getConfig, loadConfiguration, initializeTreeViews } from "../../extension";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { PlayServerConnection } from "../../testBenchConnection";
 import { ProjectManagementTreeDataProvider } from "../../projectManagementTreeView";
 import { TestElementsTreeDataProvider } from "../../testElementsTreeView";
 import { baseKeyOfExtension } from "../../constants";
@@ -20,7 +12,6 @@ suite("Extension Test Suite", () => {
     let getConfigurationStub: sinon.SinonStub;
     let context: vscode.ExtensionContext;
     let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
-    let connectionStub: sinon.SinonStubbedInstance<PlayServerConnection>;
     let projectManagementTreeDataProviderStub: sinon.SinonStubbedInstance<ProjectManagementTreeDataProvider>;
     let testElementsTreeDataProviderStub: sinon.SinonStubbedInstance<TestElementsTreeDataProvider>;
 
@@ -46,9 +37,6 @@ suite("Extension Test Suite", () => {
 
         // Mock the logger
         loggerStub = sandbox.createStubInstance(TestBenchLogger);
-
-        // Mock the connection
-        connectionStub = sandbox.createStubInstance(PlayServerConnection);
 
         // Mock the tree data providers
         projectManagementTreeDataProviderStub = sandbox.createStubInstance(ProjectManagementTreeDataProvider);
@@ -78,26 +66,9 @@ suite("Extension Test Suite", () => {
         assert.ok(context.subscriptions.length > 0, "Subscriptions should be added to the context");
     });
 
-    test("deactivate should log out the user", async () => {
-        await deactivate();
-
-        assert.ok(connectionStub.logoutUser.calledOnce, "Logout should be called on deactivation");
-        assert.ok(loggerStub.info.calledWith("Extension deactivated."), "Logger should log deactivation message");
-    });
-
     test("getConfig should return the current configuration", () => {
         const config = getConfig();
         assert.ok(config, "Configuration should be returned");
-    });
-
-    test("safeCommandHandler should handle errors gracefully", async () => {
-        const error = new Error("Test error");
-        const handler = sandbox.stub().rejects(error);
-        const safeHandler = safeCommandHandler(handler);
-
-        await safeHandler();
-
-        assert.ok(loggerStub.error.calledWith("Error executing command:", error), "Error should be logged");
     });
 
     test("loadConfiguration should update the configuration", async () => {

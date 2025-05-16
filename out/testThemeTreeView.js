@@ -55,48 +55,39 @@ class TestThemeTreeDataProvider {
     getCurrentCycleKey() {
         return this._currentCycleKey;
     }
-    isCurrentCycle(cycleKey) {
-        return this._currentCycleKey === cycleKey;
-    }
     _currentProjectKey = null;
     /** Root elements for the Test Theme Tree view */
     rootElements = [];
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     expandedTreeItems = new Set();
-    // Callback for message updates
-    updateMessageCallback;
-    // Constructor to accept the callback
+    updateTreeViewStatusMessageCallback;
     constructor(updateMessageCallback) {
-        this.updateMessageCallback = updateMessageCallback;
+        this.updateTreeViewStatusMessageCallback = updateMessageCallback;
     }
-    // Public method to set message via callback
-    setMessage(message) {
-        this.updateMessageCallback(message);
+    setTreeViewStatusMessage(message) {
+        this.updateTreeViewStatusMessageCallback(message);
     }
     /**
      * Refreshes the test theme tree view.
      */
     refresh() {
         extension_1.logger.debug("Refreshing test theme tree view.");
-        // Store the keys of the expanded items to preserve state on refresh.
+        // Preserve expanded state on refresh.
         this.storeExpandedTreeItems(this.rootElements);
         const currentThemeTreeView = (0, extension_1.getTestThemeTreeViewInstance)();
-        // Update message in the test theme tree view
-        // Check if the view instance is available
         if (this.rootElements.length === 0) {
             if (this._currentCycleKey) {
-                this.updateMessageCallback("No test themes found for the current cycle.");
+                this.updateTreeViewStatusMessageCallback("No test themes found for the current cycle.");
             }
             else {
-                this.updateMessageCallback("Select a cycle to see test themes.");
+                this.updateTreeViewStatusMessageCallback("Select a cycle to see test themes.");
             }
             extension_1.logger.trace(`Test Themes view message set: ${currentThemeTreeView?.message}`);
         }
         else {
-            this.updateMessageCallback(undefined); // Clear message
+            this.updateTreeViewStatusMessageCallback(undefined);
             extension_1.logger.trace("Test Themes view message cleared.");
         }
-        // Explicitly fire with undefined to ensure a full refresh from the root.
         this._onDidChangeTreeData.fire(undefined);
     }
     /**
@@ -117,7 +108,6 @@ class TestThemeTreeDataProvider {
         if (!element) {
             if (!this.rootElements || this.rootElements.length === 0) {
                 extension_1.logger.trace("TestThemeTreeDataProvider: No root elements found, returning empty. Message should be set.");
-                // Message is set by refresh() or when setRoots() is called if children are empty.
                 return [];
             }
             return this.rootElements;
@@ -142,7 +132,7 @@ class TestThemeTreeDataProvider {
         // logger.trace("Setting root elements of the test theme tree to:", roots);
         this._currentCycleKey = cycleKey;
         this.rootElements = roots;
-        this.refresh(); // This will call _onDidChangeTreeData.fire(undefined)
+        this.refresh();
     }
     /**
      * Sets the selected tree item as the sole root of the test theme tree and refreshes the view.
@@ -150,7 +140,6 @@ class TestThemeTreeDataProvider {
      */
     makeRoot(element) {
         extension_1.logger.debug("Setting the selected element as the root of the test theme tree view:", element);
-        // Find the cycle key for the new root element if it's part of a cycle.
         let newCycleKey = null;
         if (element.parent && element.parent.contextValue === constants_1.TreeItemContextValues.CYCLE) {
             newCycleKey = element.parent.item?.key;
@@ -158,13 +147,8 @@ class TestThemeTreeDataProvider {
         else if (element.contextValue === constants_1.TreeItemContextValues.CYCLE) {
             newCycleKey = element.item?.key;
         }
-        // If a cycle key is found and is different, or if we are making a non-cycle element root, update _currentCycleKey.
         if (newCycleKey) {
             this._currentCycleKey = newCycleKey;
-        }
-        else {
-            // If the new root isn't directly tied to a known cycle in its parentage here,
-            // it might be an implicit change of context.
         }
         this.rootElements = [element];
         this.refresh();
@@ -179,7 +163,6 @@ class TestThemeTreeDataProvider {
         element.collapsibleState = expanded
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
-        // Store the key of the expanded item in the set.
         if (expanded && element.item?.key) {
             this.expandedTreeItems.add(element.item.key);
         }
@@ -211,7 +194,7 @@ class TestThemeTreeDataProvider {
         extension_1.logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
         this.rootElements = [];
-        this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
+        this.updateTreeViewStatusMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
         this.expandedTreeItems.clear();
         this._onDidChangeTreeData.fire();
     }
@@ -251,10 +234,10 @@ class TestThemeTreeDataProvider {
             }
             else {
                 const rootCycleNodeKey = eventData.rawCycleStructure.root.base.key;
-                this.rootElements = this.buildThemeTreeRecursive(rootCycleNodeKey, null, elementsByKey, eventData.rawCycleStructure.root.base.name);
+                this.rootElements = this.buildThemeTreeRecursively(rootCycleNodeKey, null, elementsByKey, eventData.rawCycleStructure.root.base.name);
             }
         }
-        this.refresh(); // Refresh the view with new elements
+        this.refresh();
     }
     /**
      * Checks if a cycle node is visible in the test theme tree.
@@ -279,7 +262,7 @@ class TestThemeTreeDataProvider {
      * @param {string} parentNameForLogging - The name of the parent item, used for logging purposes.
      * @returns {BaseTestBenchTreeItem[]} An array of `BaseTestBenchTreeItem` representing the children of the specified parent.
      */
-    buildThemeTreeRecursive(parentItemKey, parentTreeItem, elementsByKey, parentNameForLogging) {
+    buildThemeTreeRecursively(parentItemKey, parentTreeItem, elementsByKey, parentNameForLogging) {
         extension_1.logger.trace(`TestThemeTreeDataProvider: Building children for parentKey: ${parentItemKey} ('${parentNameForLogging}')`);
         const potentialChildrenData = Array.from(elementsByKey.values()).filter((node) => node?.base?.parentKey === parentItemKey && this.isCycleNodeVisibleInTestThemeTree(node));
         const childTreeItems = potentialChildrenData.map((nodeData) => {
@@ -289,9 +272,8 @@ class TestThemeTreeDataProvider {
             if (!treeItem) {
                 return null;
             }
-            // Recursively build children if this node has visible children
             if (hasVisibleChildren) {
-                treeItem.children = this.buildThemeTreeRecursive(nodeData.base.key, treeItem, elementsByKey, nodeData.base.name);
+                treeItem.children = this.buildThemeTreeRecursively(nodeData.base.key, treeItem, elementsByKey, nodeData.base.name);
             }
             else {
                 treeItem.children = [];
@@ -309,7 +291,7 @@ class TestThemeTreeDataProvider {
      * @param {boolean} hasVisibleChildren - Indicates if the item has children that are currently visible in the tree.
      * @returns A new {@link BaseTestBenchTreeItem} instance, or null if `nodeData` is invalid.
      */
-    createThemeTreeItem(nodeData, // Raw data for the theme item
+    createThemeTreeItem(nodeData, // Raw data for the test theme item
     contextValue, parent, hasVisibleChildren) {
         if (!nodeData ||
             !nodeData.base ||
@@ -328,7 +310,7 @@ class TestThemeTreeDataProvider {
                     : vscode.TreeItemCollapsibleState.None;
                 break;
             case constants_1.TreeItemContextValues.TEST_CASE_SET_NODE:
-                defaultCollapsibleState = hasVisibleChildren // if TEST_CASE_NODE were included and visible
+                defaultCollapsibleState = hasVisibleChildren
                     ? vscode.TreeItemCollapsibleState.Collapsed
                     : vscode.TreeItemCollapsibleState.None;
                 break;
@@ -354,13 +336,22 @@ exports.TestThemeTreeDataProvider = TestThemeTreeDataProvider;
  * Hides the test theme tree view.
  */
 async function hideTestThemeTreeView() {
-    // testThemeTree is the ID of the tree view in package.json
-    await vscode.commands.executeCommand("testThemeTree.removeView");
+    if ((0, extension_1.getTestThemeTreeViewInstance)()) {
+        await vscode.commands.executeCommand("testThemeTree.removeView");
+    }
+    else {
+        extension_1.logger.debug("Test Theme Tree View instance not found; 'removeView' command not executed.");
+    }
 }
 /**
  * Displays the test theme tree view.
  */
 async function displayTestThemeTreeView() {
-    await vscode.commands.executeCommand("testThemeTree.focus");
+    if ((0, extension_1.getTestThemeTreeViewInstance)()) {
+        await vscode.commands.executeCommand("testThemeTree.focus");
+    }
+    else {
+        extension_1.logger.debug("Test Theme Tree View instance not found; 'removeView' command not executed.");
+    }
 }
 //# sourceMappingURL=testThemeTreeView.js.map
