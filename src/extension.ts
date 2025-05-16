@@ -773,7 +773,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     });
 
     // --- Command: Display Interactions For Selected TOV ---
-    // TODO: This code throwed an error, analyze and fix it.
     registerSafeCommand(
         context,
         allExtensionCommands.displayInteractionsForSelectedTOV,
@@ -784,7 +783,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             const pmProvider = getProjectManagementTreeDataProvider();
             const teProvider = getTestElementsTreeDataProvider();
-            await client?.stop();
+            try {
+                await client?.stop();
+            } catch (error) {
+                logger.error(
+                    `$[${allExtensionCommands.displayInteractionsForSelectedTOV}]: Error stopping client: ${error}`
+                );
+            }
             // Check if the command is executed for a TOV element.
             if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();

@@ -311,7 +311,7 @@ export class PlayServerConnection {
                 logger.error("Failed to create session for old play server.");
                 return null;
             } else {
-                logger.trace(`Old play server session created successfully: ${oldPlayServerSession}`);
+                logger.trace(`Old play server session created successfully.`);
             }
 
             logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
