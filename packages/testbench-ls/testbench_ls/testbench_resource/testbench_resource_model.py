@@ -21,7 +21,7 @@ from robot.api.parsing import (
 from robot.parsing.model import Block, Statement
 
 
-class RobotResourceFile:
+class TestBenchResourceModel:
     def __init__(self, path: Path, load_existing=False):
         self._setting_section = None
         self._comment_section = None

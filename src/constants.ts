@@ -13,7 +13,7 @@ export const LANGUAGE_SERVER_SCRIPT_PATH = path.join(
     BUNDLED_PYTHON_SCRIPTS_DIR,
     "libs",
     "testbench_ls",
-    "language_server.py"
+    "extension_entry.py"
 );
 
 export const LANGUAGE_SERVER_DEBUG_PATH = path.join(
@@ -21,7 +21,7 @@ export const LANGUAGE_SERVER_DEBUG_PATH = path.join(
     "packages",
     "testbench-ls",
     "testbench_ls",
-    "language_server_debug.py"
+    "extension_debug_entry.py"
 );
 
 /** Prefix of the extension commands and settings in package.json */
