@@ -1,5 +1,7 @@
+import re
 from typing import Union
 
+from markdownify import MarkdownConverter
 from robot.api.parsing import (
     Arguments,
     Documentation,
@@ -118,11 +120,6 @@ def _robot_item_to_string(item):
                 yield from _robot_item_to_string(body_item)
     elif isinstance(item, Statement):
         yield "".join(token.value for token in item.tokens)
-
-
-import re
-
-from markdownify import MarkdownConverter
 
 
 class RobotDocumentationConverter(MarkdownConverter):
