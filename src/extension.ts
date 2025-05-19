@@ -30,7 +30,7 @@ import {
     TreeItemContextValues
 } from "./constants";
 import { CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
-import { client, initializeLanguageServer } from "./server";
+import { client, restartLanguageClient, stopLanguageClient } from "./server";
 import { hideTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { clearTestElementsTreeView, displayTestElementsTreeView } from "./testElementsTreeView";
 import {
@@ -275,25 +275,6 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
     if (_projectTreeView && _projectManagementTreeDataProvider) {
         const pmProviderInstance = _projectManagementTreeDataProvider;
         projectManagementTreeView.setupProjectTreeViewEventListeners(_projectTreeView, pmProviderInstance);
-
-        _projectTreeView.onDidChangeSelection(async (event) => {
-            if (event.selection.length > 0 && pmProviderInstance) {
-                await client?.stop();
-                const selectedElement: projectManagementTreeView.BaseTestBenchTreeItem = event.selection[0];
-                logger.trace(
-                    `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
-                );
-
-                const { projectName, tovName } = pmProviderInstance.getProjectAndTovNamesForItem(selectedElement);
-
-                logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
-                if (projectName && tovName) {
-                    await initializeLanguageServer(projectName, tovName);
-                } else {
-                    logger.warn("Could not determine context for LS restart from selection.");
-                }
-            }
-        });
     }
 }
 
@@ -414,9 +395,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(context, allExtensionCommands.logout, async () => {
         logger.debug(`[Cmd] Called: ${allExtensionCommands.logout}`);
         try {
-            const session = await vscode.authentication.getSession(
+            const session: vscode.AuthenticationSession | undefined = await vscode.authentication.getSession(
                 TESTBENCH_AUTH_PROVIDER_ID,
-                [], // No scopes needed for logout
+                [],
                 { createIfNone: false, silent: true }
             );
 
@@ -441,7 +422,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         } catch (error: any) {
             logger.error(`[Cmd] Error during logout:`, error);
             vscode.window.showErrorMessage(`TestBench Logout Error: ${error.message}`);
-            // Ensure clean state on error
             await handleTestBenchSessionChange(context);
         }
         await connection.logoutUser();
@@ -786,14 +766,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             const pmProvider = getProjectManagementTreeDataProvider();
             const teProvider = getTestElementsTreeDataProvider();
-            try {
-                await client?.stop();
-            } catch (error) {
-                logger.error(
-                    `$[${allExtensionCommands.displayInteractionsForSelectedTOV}]: Error stopping client: ${error}`
-                );
-            }
-            // Check if the command is executed for a TOV element.
+
             if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
                 if (tovKeyOfSelectedTreeElement && teProvider) {
@@ -804,12 +777,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     if (areTestElementsFetched) {
                         await projectManagementTreeView?.hideProjectManagementTreeView();
                         await displayTestElementsTreeView();
-                        const projectAndTovNameObj = pmProvider.getProjectAndTovNamesForItem(treeItem);
 
+                        // Clicking on the "Show Robotframework Resources" button will not trigger project management tree onDidChangeSelection event,
+                        // which restarts the language client.
+                        // Retrieve the project name and TOV name from the tree item for language client restart.
+                        const projectAndTovNameObj = pmProvider.getProjectAndTovNamesForItem(treeItem);
                         if (projectAndTovNameObj) {
                             const { projectName, tovName } = projectAndTovNameObj;
                             if (projectName && tovName) {
-                                await initializeLanguageServer(projectName, tovName);
+                                await restartLanguageClient(projectName, tovName);
                             }
                         }
                     } else {
@@ -1239,8 +1215,9 @@ export async function deactivate(): Promise<void> {
             setConnection(null);
         }
         if (client) {
-            await client?.stop();
-            logger.info("[Extension] Language server stopped.");
+            logger.info("[Extension] Attempting to stop language server on deactivation.");
+            await stopLanguageClient(true);
+            logger.info("[Extension] Language server stopped on deactivation.");
         }
         logger.info("Extension deactivated.");
     } catch (error) {
