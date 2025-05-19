@@ -1,8 +1,8 @@
 import logging
+import pathlib
 import re
 
 import requests  # type: ignore
-from testbench2robotframework.cli import generate_tests, fetch_results
 from lsprotocol.types import (
     INITIALIZE,
     TEXT_DOCUMENT_CODE_LENS,
@@ -26,11 +26,18 @@ from lsprotocol.types import (
 )
 from pygls.server import LanguageServer
 from robot.api.parsing import KeywordSection, SectionHeader, Token
+from testbench2robotframework.cli import fetch_results, generate_tests
 
 from testbench_ls import __version__
-import pathlib
+from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
-from .robot_utils import (
+from .testbench_api.testbench_patch import patch_interaction_details
+from .testbench_resource.resource_creation import (
+    create_keyword,
+    create_resource,
+)
+from .testbench_resource.resource_documentation import ResourceDocumentation
+from .testbench_resource.resource_utils import (
     get_keyword_arguments,
     get_keyword_arguments_position,
     get_keyword_documentation,
@@ -44,13 +51,7 @@ from .robot_utils import (
     get_variables_section_position,
     robot_model_to_string,
 )
-from .testbench_keysync.resource_creation import (
-    create_keyword,
-    create_resource,
-)
-from .testbench_keysync.resource_documentation import ResourceDocumentation
-from .testbench_keysync.resource_file import RobotResourceFile
-from .testbench_keysync.testbench_patch import patch_interaction_details
+from .testbench_resource.testbench_resource_model import TestBenchResourceModel
 
 
 class TestBenchLanguageServer(LanguageServer):
@@ -184,19 +185,21 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     code_lenses = []
     document_uri = params.text_document.uri
     document = testbench_ls.workspace.get_text_document(document_uri)
-    resource = RobotResourceFile.from_file(document.source)
-    if resource.tb_subdivision_uid:
-        pull_resource_lens = CodeLens(
-            range=Range(start=Position(line=0, character=0), end=Position(line=0, character=0)),
-            command=Command(
-                title="Pull TestBench Subdivision",
-                command="testbench_ls.pullSubdivision",
-                arguments=[document_uri, resource.tb_subdivision_uid],
-            ),
-        )
-        code_lenses.append(pull_resource_lens)
-    for keyword in resource.keywords:
-        keyword_uid = resource.get_kw_uid(keyword)
+    testbench_resource = TestBenchResourceModel.from_file(document.source)
+    logging.info(f"subdivion_uid: {testbench_resource.tb_subdivision_uid}")
+    if not testbench_resource.tb_subdivision_uid:
+        return code_lenses
+    pull_resource_lens = CodeLens(
+        range=Range(start=Position(line=0, character=0), end=Position(line=0, character=0)),
+        command=Command(
+            title="Pull TestBench Subdivision",
+            command="testbench_ls.pullSubdivision",
+            arguments=[document_uri, testbench_resource.tb_subdivision_uid],
+        ),
+    )
+    code_lenses.append(pull_resource_lens)
+    for keyword in testbench_resource.keywords:
+        keyword_uid = testbench_resource.get_kw_uid(keyword)
         if keyword_uid:
             keyword_line = keyword.lineno - 1
             code_lenses.append(
@@ -234,15 +237,9 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     document = testbench_ls.workspace.get_text_document(document_uri)
     logging.info(f"{ls.server_name} {ls.server_port}  {ls.login_name}  {ls.session_token}")
     new_resource = create_resource(
-        ls.server_name,
-        ls.server_port,
-        ls.login_name,
-        ls.session_token,
-        ls.project,
-        ls.tov,
         uid=subdivision_uid,
     )
-    existing_resource = RobotResourceFile.from_file(document.source)
+    existing_resource = TestBenchResourceModel.from_file(document.source)
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
     create_kw_section = not bool(get_keyword_section(existing_resource.file))
@@ -394,18 +391,12 @@ def create_keyword_edits(
 def pull_testbench_keyword(ls: LanguageServer, args):
     document_uri, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
-    resource = RobotResourceFile.from_file(document.source)
+    resource = TestBenchResourceModel.from_file(document.source)
     edits = []
     change_identifier = ChangeAnnotationIdentifier()
 
     existing_keyword = resource.get_keyword(keyword_uid)
     new_keyword = create_keyword(
-        ls.server_name,
-        ls.server_port,
-        ls.login_name,
-        ls.session_token,
-        ls.project,
-        ls.tov,
         keyword_uid,
     )
     edits.extend(create_keyword_edits(existing_keyword, new_keyword, change_identifier))
@@ -432,7 +423,7 @@ def pull_testbench_keyword(ls: LanguageServer, args):
 def push_testbench_keyword(ls: LanguageServer, args):
     document_uri, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
-    resource = RobotResourceFile.from_file(document.source)
+    resource = TestBenchResourceModel.from_file(document.source)
     robot_keyword = resource.get_keyword(keyword_uid)
     rd = ResourceDocumentation(document.path)
     new_docu = rd.get_keyword_documentation(keyword_uid)
@@ -440,13 +431,9 @@ def push_testbench_keyword(ls: LanguageServer, args):
         f"<html><body>{new_docu.replace('<br>', '<br/>').replace('<hr>', '<br/>')}</body></html>"
     )
     try:
+        tb_connection = TestBenchResourceConnection.singleton()
         response = patch_interaction_details(
-            ls.server_name,
-            ls.server_port,
-            ls.login_name,
-            ls.session_token,
-            ls.project,
-            ls.tov,
+            tb_connection,
             keyword_uid,
             robot_keyword.name,
             html_description,
@@ -455,7 +442,7 @@ def push_testbench_keyword(ls: LanguageServer, args):
         if http_error.response.status_code == 409:
             ls.send_notification(
                 "custom/notification",
-                {"message": f"Failed to push keyword: Element is locked in TestBench."},
+                {"message": "Failed to push keyword: Element is locked in TestBench."},
             )
         else:
             ls.send_notification(
@@ -559,6 +546,7 @@ def start_language_server(
     tov: str,
 ):
     logging.basicConfig(filename="pygls.log", filemode="w", level=logging.DEBUG)
+    TestBenchResourceConnection(server_name, server_port, login_name, session_token, project, tov)
     testbench_ls.set_server_name(server_name)
     testbench_ls.set_server_port(server_port)
     testbench_ls.set_login_name(login_name)

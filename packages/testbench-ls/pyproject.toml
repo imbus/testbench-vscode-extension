@@ -42,7 +42,7 @@ testbench-ls = "testbench_ls.cli:testbench_ls_cli"
 # Repository = ""
 
 [tool.setuptools]
-packages = ["testbench_ls", "testbench_ls.testbench_keysync"]
+packages = ["testbench_ls", "testbench_ls.testbench_api", "testbench_ls.testbench_resource"]
 
 [tool.setuptools.dynamic]
 version = {attr = "testbench_ls.__version__"}
