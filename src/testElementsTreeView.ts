@@ -19,6 +19,8 @@ import { ConfigKeys, TreeItemContextValues } from "./constants";
 
 type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
+export const fileContentOfRobotResourceSubdivisionFile = `*** Settings ***\nDocumentation    tb:uid:`;
+
 /**
  * Interface representing a test element from the json response of the server.
  * @property id Unique identifier computed from the key properties.
@@ -918,7 +920,7 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
             await createFolderStructure(path.dirname(resourcePath));
 
             if (!(await isFilePresentLocally(resourcePath))) {
-                const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${subdivisionTreeItem.testElementData.uniqueID}\n`;
+                const fileContent: string = `${fileContentOfRobotResourceSubdivisionFile}${subdivisionTreeItem.testElementData.uniqueID}\n`;
                 await fs.promises.writeFile(resourcePath, fileContent);
             }
 
@@ -952,7 +954,7 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
 }
 
 /**
- * Handles an interaction element by opening the resource file of its nearest final subdivision .resource file.
+ * Handles an interaction element by opening the resource file of its nearest final robotframework resource subdivision .resource file.
  * @param {TestElementTreeItem} treeItem The test element tree item representing an interaction.
  */
 export async function handleInteraction(treeItem: TestElementTreeItem): Promise<void> {
@@ -961,59 +963,67 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
         return;
     }
     const testElement: TestElementData = treeItem.testElementData;
+    const robotResourceAncestor: TestElementTreeItem | null = getRobotResourceAncestor(treeItem);
 
-    const finalSubdivisionAncestor: TestElementTreeItem | null = getFinalSubdivisionAncestor(treeItem);
-    if (!finalSubdivisionAncestor) {
-        // If no final subdivision is found: handle the case as if its parent subdivision is clicked.
+    if (!robotResourceAncestor) {
+        logger.warn(
+            `Interaction '${testElement.uniqueID}' has no Robot-Resource Subdivision ancestor. Falling back to nearest general Subdivision.`
+        );
         const subdivisionAncestor: TestElementTreeItem | null = getSubdivisionAncestor(treeItem);
         if (subdivisionAncestor) {
             logger.trace(
-                `Subdivision Ancestor of Interaction '${testElement.uniqueID}': `,
+                `Nearest Subdivision Ancestor (fallback) of Interaction '${testElement.uniqueID}': `,
                 subdivisionAncestor.testElementData
             );
             await handleSubdivision(subdivisionAncestor);
             return;
         } else {
+            vscode.window.showErrorMessage(
+                `Cannot determine resource file for interaction '${testElement.name}'. No subdivision ancestor found.`
+            );
+            logger.error(`No subdivision ancestor found for interaction '${testElement.name}'.`);
             return;
         }
     }
 
-    if (!finalSubdivisionAncestor.testElementData.hierarchicalName) {
-        finalSubdivisionAncestor.testElementData.hierarchicalName = computeHierarchicalName(finalSubdivisionAncestor);
+    if (!robotResourceAncestor.testElementData.hierarchicalName) {
+        robotResourceAncestor.testElementData.hierarchicalName = computeHierarchicalName(robotResourceAncestor);
         logger.trace(
-            `Computed hierarchical name for final subdivision: ${finalSubdivisionAncestor.testElementData.hierarchicalName}`
+            `Computed hierarchical name for robot resource subdivision: ${robotResourceAncestor.testElementData.hierarchicalName}`
         );
     }
-    const finalSubdivisionAncestorAbsolutePath: string | undefined =
-        await constructAbsolutePathForTestElement(finalSubdivisionAncestor);
-    if (!finalSubdivisionAncestorAbsolutePath) {
+    const robotResourceAncestorAbsolutePath: string | undefined =
+        await constructAbsolutePathForTestElement(robotResourceAncestor);
+    if (!robotResourceAncestorAbsolutePath) {
+        vscode.window.showErrorMessage(
+            `Could not determine path for resource: ${robotResourceAncestor.testElementData.name}`
+        );
         return;
     }
-    let processedFinalSubdivisionAncestorPath: string = removeRobotResourceFromPathString(
-        finalSubdivisionAncestorAbsolutePath
+
+    let processedRobotResourceAncestorPath: string = removeRobotResourceFromPathString(
+        robotResourceAncestorAbsolutePath
     );
-    processedFinalSubdivisionAncestorPath = appendResourceExtensionAndTrimPath(processedFinalSubdivisionAncestorPath);
+    processedRobotResourceAncestorPath = appendResourceExtensionAndTrimPath(processedRobotResourceAncestorPath);
 
-    if (!(await isFilePresentLocally(processedFinalSubdivisionAncestorPath))) {
-        await createFolderStructure(path.dirname(processedFinalSubdivisionAncestorPath));
+    if (!(await isFilePresentLocally(processedRobotResourceAncestorPath))) {
+        await createFolderStructure(path.dirname(processedRobotResourceAncestorPath));
+        const fileContent: string = `${fileContentOfRobotResourceSubdivisionFile}${robotResourceAncestor.testElementData.uniqueID}\n`;
 
-        const fileContent: string = `*** Settings ***\nDocumentation    tb:uid:${finalSubdivisionAncestor.testElementData.uniqueID}\n`;
-
-        await fs.promises.writeFile(processedFinalSubdivisionAncestorPath, fileContent);
-        logger.trace(`Resource file created at ${processedFinalSubdivisionAncestorPath}`);
+        await fs.promises.writeFile(processedRobotResourceAncestorPath, fileContent);
+        logger.trace(`Resource file created at ${processedRobotResourceAncestorPath}`);
     } else {
         logger.trace(
-            `Skipping creation of resource file at ${processedFinalSubdivisionAncestorPath} as it already exists.`
+            `Skipping creation of resource file at ${processedRobotResourceAncestorPath} as it already exists.`
         );
     }
 
-    const finalSubdivisionResourceFileDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(processedFinalSubdivisionAncestorPath)
+    const resourceFileDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(processedRobotResourceAncestorPath)
     );
-    await vscode.window.showTextDocument(finalSubdivisionResourceFileDocument);
+    await vscode.window.showTextDocument(resourceFileDocument);
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 
-    // Trigger subdivision icon update
     const teProvider = extensionGetTestElementsTreeDataProvider();
     teProvider?._onDidChangeTreeData.fire(undefined);
 }
@@ -1143,6 +1153,47 @@ export function getFinalSubdivisionAncestor(treeItem: TestElementTreeItem): Test
     }
     logger.trace(
         `No final subdivision ancestor found for test element ${testElement.name} with unique ID: ${testElement.uniqueID}`
+    );
+    return null;
+}
+
+/**
+ * Checks if the given test element represents a robot resource subdivision
+ * that directly matches a regular expression.
+ *
+ * @param {TestElementData} element The test element data to check.
+ * @returns True if the element is a "Subdivision" type and has a direct regex match, false otherwise.
+ */
+function isRobotResourceSubdivision(element: TestElementData): boolean {
+    if (element.elementType !== "Subdivision") {
+        return false;
+    }
+    return element.directRegexMatch;
+}
+
+/**
+ * Searches upwards from the given test element to find its nearest ancestor
+ * that represents a "Robot-Resource" subdivision.
+ *
+ * @param {TestElementTreeItem} treeItem The starting `TestElementTreeItem` from which to begin the search.
+ * @returns {TestElementTreeItem | null} The `TestElementTreeItem` representing the Robot-Resource subdivision ancestor if found,
+ * otherwise `null`.
+ */
+export function getRobotResourceAncestor(treeItem: TestElementTreeItem): TestElementTreeItem | null {
+    const testElement = treeItem.testElementData;
+    logger.trace(`Searching Robot-Resource subdivision ancestor for test element ${testElement.name}`);
+    let current = testElement.parent;
+    while (current) {
+        if (current.elementType === "Subdivision" && isRobotResourceSubdivision(current)) {
+            logger.trace(
+                `Found Robot-Resource subdivision ancestor for test element ${testElement.name}: ${current.name}`
+            );
+            return new TestElementTreeItem(current);
+        }
+        current = current.parent;
+    }
+    logger.trace(
+        `No Robot-Resource subdivision ancestor found for test element ${testElement.name} with unique ID: ${testElement.uniqueID}`
     );
     return null;
 }
