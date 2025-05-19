@@ -6,7 +6,14 @@
 
 import * as vscode from "vscode";
 import * as path from "path";
-import { client, initializeLanguageServer } from "./server";
+import {
+    getLatestLsContextRequestId,
+    latestLsContextRequestId,
+    restartLanguageClient,
+    setCurrentLsOperationId,
+    setLatestLsContextRequestId,
+    stopLanguageClient
+} from "./server";
 import { CycleNodeData, CycleStructure, Project, TreeNode } from "./testBenchTypes";
 import {
     connection,
@@ -1174,26 +1181,39 @@ export function setupProjectTreeViewEventListeners(
     });
 
     // React to selection changes in the project tree view
-    projectTreeView.onDidChangeSelection(async (event) => {
-        if (event.selection.length > 0) {
-            await client?.stop();
-            const selectedElement: BaseTestBenchTreeItem = event.selection[0];
-            logger.trace(
-                `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
-            );
+    const pmProvider = getProjectManagementTreeDataProvider();
+    if (getProjectTreeView()) {
+        getProjectTreeView()!.onDidChangeSelection(async (event) => {
+            if (event.selection.length > 0 && pmProvider) {
+                const selectedElement: BaseTestBenchTreeItem = event.selection[0];
+                logger.trace(
+                    `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
+                );
 
-            const projectAndTovNameObj = projectManagementProvider.getProjectAndTovNamesForItem(selectedElement);
-            if (projectAndTovNameObj) {
-                const { projectName, tovName } = projectAndTovNameObj;
+                const { projectName, tovName } = pmProvider.getProjectAndTovNamesForItem(selectedElement);
                 logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
+
                 if (projectName && tovName) {
-                    await initializeLanguageServer(projectName, tovName);
+                    await restartLanguageClient(projectName, tovName);
+                } else {
+                    // If only a project is selected (tovName is undefined), stop the LS.
+                    if (projectName && !tovName) {
+                        logger.info(
+                            `[ProjectSelect] Project '${projectName}' selected, but no TOV. Stopping active LS.`
+                        );
+                        setLatestLsContextRequestId(latestLsContextRequestId + 1);
+                        const thisStopOperationId: number = getLatestLsContextRequestId();
+                        setCurrentLsOperationId(thisStopOperationId);
+                        await stopLanguageClient();
+                    } else {
+                        logger.warn(
+                            "Could not determine context for LS restart from selection (Project or TOV missing)."
+                        );
+                    }
                 }
-            } else {
-                logger.warn("Could not determine context for LS restart from selection.");
             }
-        }
-    });
+        });
+    }
 }
 
 /**

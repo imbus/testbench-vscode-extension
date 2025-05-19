@@ -16,9 +16,8 @@ export const LANGUAGE_SERVER_SCRIPT_PATH: string = path.join(
 );
 
 export const LANGUAGE_SERVER_DEBUG_PATH: string = path.join(
-    EXTENSION_ROOT_DIR,
-    "packages",
-    "testbench-ls",
+    BUNDLED_PYTHON_SCRIPTS_DIR,
+    "libs",
     "testbench_ls",
     "extension_debug_entry.py"
 );
