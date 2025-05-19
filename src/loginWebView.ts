@@ -164,7 +164,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             `Are you sure you want to delete the profile "${profileToDelete.label}"?`,
             { modal: true },
             "Delete",
-            "Cancel"
+            "No"
         );
 
         if (confirmation === "Delete") {
