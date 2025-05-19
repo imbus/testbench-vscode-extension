@@ -3,8 +3,6 @@
  * @file projectManagementTreeView.ts
  * @description Provides the data provider and view management for the project management tree and test theme tree.
  * Project management tree displays the selected project and its test object versions and cycles.
- * Upon clicking on a test cycle element in project management tree, a test theme tree view is created under the project tree view
- * and the children elements of the test cycle (test themes and test case sets) are displayed in the test theme tree.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -42,7 +40,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BaseTestBenchTreeItem = exports.ProjectManagementTreeDataProvider = void 0;
 exports.findProjectKeyOfCycleElement = findProjectKeyOfCycleElement;
-exports.findProjectKeyOfProjectTreeItem = findProjectKeyOfProjectTreeItem;
 exports.findCycleKeyOfTreeElement = findCycleKeyOfTreeElement;
 exports.setupProjectTreeViewEventListeners = setupProjectTreeViewEventListeners;
 exports.hideProjectManagementTreeView = hideProjectManagementTreeView;
@@ -68,13 +65,12 @@ class ProjectManagementTreeDataProvider {
     onDidPrepareCycleDataForThemeTree = this._onDidPrepareCycleDataForThemeTree.event;
     // Callback for message updates
     updateMessageCallback;
-    // Injected TestThemeTreeDataProvider
     testThemeTreeDataProvider;
-    // Custom root
+    // Variables to temporarily set a custom root item in the tree view.
     customRootKey = null;
     customRootContextValue = null;
     customRootJsonData = null;
-    // Store keys of expanded nodes to restore expansion state of collapsible elements after a refresh.
+    // Store keys of expanded tree nodes to restore expansion state of collapsible elements after a refresh.
     expandedTreeItems = new Set();
     /**
      * Constructs a new ProjectManagementTreeDataProvider.
@@ -109,11 +105,10 @@ class ProjectManagementTreeDataProvider {
             this.updateMessageCallback(`Displaying custom root: ${tempLabel}`);
         }
         else {
-            // Default state before fetching root projects
-            this.updateMessageCallback("Loading projects..."); // Temporary loading message
+            this.updateMessageCallback("Loading projects...");
+            this._onDidChangeTreeData.fire(undefined); // Fire with undefined to refresh from the root
+            extension_1.logger.trace("Project management tree view refreshed.");
         }
-        this._onDidChangeTreeData.fire(undefined); // Fire with undefined to refresh from the root
-        extension_1.logger.trace("Project management tree view refreshed.");
     }
     /**
      * Returns the parent of a given tree item.
@@ -156,7 +151,6 @@ class ProjectManagementTreeDataProvider {
             extension_1.logger.trace("No cycle structure data returned from server (getRawCycleData).");
             return null;
         }
-        // Validate fetched data
         if (!cycleData.nodes || !cycleData.root?.base?.key) {
             extension_1.logger.error(`Workspaceed cycle structure for ${cycleElementLabel} is missing nodes or root key.`);
             return null;
@@ -179,7 +173,6 @@ class ProjectManagementTreeDataProvider {
         }
         const itemData = jsonData;
         let defaultCollapsibleState;
-        // Normalize data extraction
         if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
             extension_1.logger.warn(`Attempted to create project/version/cycle tree item with invalid data structure for context ${contextValue}:`, jsonData);
             return null;
@@ -211,7 +204,8 @@ class ProjectManagementTreeDataProvider {
                 break;
             }
             case constants_1.TreeItemContextValues.CYCLE:
-                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None; // Cycles in this tree are not directly expandable to show themes
+                // Cycles in this tree are not directly expandable to show themes
+                defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
                 break;
             default:
                 extension_1.logger.warn(`Unexpected contextValue '${contextValue}' in ProjectManagementTreeDataProvider.createTreeItem`);
@@ -241,7 +235,7 @@ class ProjectManagementTreeDataProvider {
             extension_1.logger.error(`Project key is missing for project item: ${projectElement.label}`);
             return [];
         }
-        const projectTree = await extension_1.connection.getProjectTreeOfProject(projectKey); // connection is checked
+        const projectTree = await extension_1.connection.getProjectTreeOfProject(projectKey);
         if (projectTree && projectTree.children && projectTree.children.length > 0) {
             return projectTree.children
                 .map((tovNode // tovNode is testBenchTypes.TreeNode
@@ -279,20 +273,17 @@ class ProjectManagementTreeDataProvider {
         extension_1.logger.debug("Fetching all projects for the root of Project Management Tree.");
         const projectList = await extension_1.connection.getProjectsList(); // connection is checked before calling this
         if (projectList && projectList.length > 0) {
-            // Clear message if projects found
             this.updateMessageCallback(undefined);
             return projectList
                 .map((project) => this.createTreeItem(project, constants_1.TreeItemContextValues.PROJECT, null))
                 .filter((item) => item !== null);
         }
         else if (projectList) {
-            // Empty list
             extension_1.logger.debug("No projects found on the server.");
             this.updateMessageCallback("No projects found on the server. Create a project in TestBench or check permissions.");
             return [];
         }
         else {
-            // Error during fetch
             extension_1.logger.error("Failed to fetch project list from the server.");
             this.updateMessageCallback("Error fetching projects. Please check connection or try refreshing.");
             vscode.window.showErrorMessage("Failed to fetch project list from TestBench. Check logs for details.");
@@ -311,7 +302,7 @@ class ProjectManagementTreeDataProvider {
      */
     async handleCycleExpansion(cycleElement) {
         extension_1.logger.trace(`Cycle node ${typeof cycleElement.label === "string" ? cycleElement.label : "N/A"} expanded in Project Tree.`);
-        return []; // Return empty as children are in another tree
+        return [];
     }
     /**
      * Gets the children of a given tree item.
@@ -323,7 +314,6 @@ class ProjectManagementTreeDataProvider {
      */
     async getChildren(element) {
         if (!extension_1.connection) {
-            // Handle "Not Connected" state with message
             this.updateMessageCallback("Not connected to TestBench. Please log in.");
             return [];
         }
@@ -487,17 +477,6 @@ class ProjectManagementTreeDataProvider {
                         ? vscode.TreeItemCollapsibleState.Collapsed
                         : vscode.TreeItemCollapsibleState.None;
                 }
-                /*
-                // Restore expansion if it was previously expanded (createTreeItem already does this)
-                const itemKeyForExpansion = treeItem.item?.base?.key || treeItem.item?.key; // CycleStructure items have key in base
-                if (
-                    itemKeyForExpansion &&
-                    this.expandedTreeItems.has(itemKeyForExpansion) &&
-                    treeItem.collapsibleState !== vscode.TreeItemCollapsibleState.None
-                ) {
-                    treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-                }
-                */
                 if (hasVisibleChildren) {
                     treeItem.children = buildTestThemeTreeRecursive(nodeData.base.key, treeItem);
                 }
@@ -510,8 +489,6 @@ class ProjectManagementTreeDataProvider {
         };
         const rootCycleKey = cycleData.root.base.key;
         const childrenOfCycleToReturn = buildTestThemeTreeRecursive(rootCycleKey, cycleElement);
-        // cycleElement.children = childrenOfCycleToReturn; // Do NOT assign here if this is for another tree.
-        // The project tree item itself does not have these as direct children.
         return childrenOfCycleToReturn;
     }
     /**
@@ -531,10 +508,8 @@ class ProjectManagementTreeDataProvider {
     makeRoot(treeItem) {
         extension_1.logger.debug("Setting selected element as a temporary root:", treeItem.label);
         if (treeItem && treeItem.item && treeItem.item.key && treeItem.contextValue) {
-            // Store the necessary information to reconstruct or fetch
             this.customRootKey = treeItem.item.key;
             this.customRootContextValue = treeItem.contextValue;
-            // Store a copy of the item's data.
             this.customRootJsonData = { ...treeItem.item }; // Shallow copy
             extension_1.logger.debug(`Item "${typeof treeItem.label === "string" ? treeItem.label : treeItem.item.name}" (Key: ${this.customRootKey}) is now set as custom root.`);
         }
@@ -544,7 +519,7 @@ class ProjectManagementTreeDataProvider {
             this.customRootJsonData = null;
             extension_1.logger.debug("Custom root cleared.");
         }
-        this._onDidChangeTreeData.fire(undefined); // Refresh the tree to show the new root or all projects
+        this._onDidChangeTreeData.fire(undefined);
     }
     /**
      * Handles expansion and collapse of a tree item.
@@ -566,13 +541,6 @@ class ProjectManagementTreeDataProvider {
         else {
             this.expandedTreeItems.delete(element.item.key);
         }
-        /*
-        // The test Cycles are not expandable anymore, but this code is left to be able to switch back to expandable cycles.
-        // If the element is a test cycle, expanding it initializes the test theme tree
-        if (expanded) {
-            await this.handleTestCycleClick(element);
-        }
-        */
     }
     /**
      * Handles a click on a test cycle element.
@@ -602,21 +570,17 @@ class ProjectManagementTreeDataProvider {
         const currentThemeTreeView = (0, extension_1.getTestThemeTreeViewInstance)();
         const currentElementTreeView = (0, extension_1.getTestElementTreeView)();
         const currentElementsProvider = (0, extension_1.getTestElementsTreeDataProvider)();
-        // Set loading message for Test Themes before fetching cycle children
         if (currentThemeTreeView && this.testThemeTreeDataProvider) {
-            // Check injected provider
-            // Message update on theme tree view is handled by its own provider via callback
-            this.testThemeTreeDataProvider.setMessage(`Loading test themes for cycle: ${currentCycleLabel}...`);
+            this.testThemeTreeDataProvider.setTreeViewStatusMessage(`Loading test themes for cycle: ${currentCycleLabel}...`);
         }
-        // Test Elements message
         if (currentElementTreeView && currentElementsProvider) {
             const tovParent = projectsTreeViewItem.parent;
             const tovLabel = tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
-            currentElementsProvider.setMessage(`Loading test elements for ${tovLabel}...`);
+            currentElementsProvider.setTreViewMessage(`Loading test elements for ${tovLabel}...`);
             currentElementsProvider.refresh([]);
         }
         // Hide the project management tree view and show the test theme tree and test elements tree views
-        // before fetching data for responsiveness
+        // BEFORE fetching data for responsiveness
         await hideProjectManagementTreeView();
         await (0, testThemeTreeView_1.displayTestThemeTreeView)();
         if ((0, extension_1.getTestElementsTreeDataProvider)()) {
@@ -628,10 +592,8 @@ class ProjectManagementTreeDataProvider {
             cancellable: false
         }, async (progress) => {
             progress.report({ increment: 0, message: "Fetching test themes..." });
-            // Fetch raw cycle data
             const rawCycleData = await this.getCycleJSONData(projectsTreeViewItem);
             progress.report({ increment: 40, message: "Preparing views..." });
-            // Fire the event with the raw data
             this._onDidPrepareCycleDataForThemeTree.fire({
                 projectKey: projectKey,
                 cycleKey: cycleKey,
@@ -661,7 +623,7 @@ class ProjectManagementTreeDataProvider {
                 else {
                     extension_1.logger.warn("Parent TOV key not found for the clicked cycle.");
                     const teProvider = (0, extension_1.getTestElementsTreeDataProvider)();
-                    teProvider?.refresh([]); // Clear if context is lost
+                    teProvider?.refresh([]);
                 }
             }
             else {
@@ -712,27 +674,6 @@ function findProjectKeyOfCycleElement(element) {
     return null;
 }
 /**
- * Finds the project key (serial) for a given project tree item by traversing upward in the tree hierarchy.
- * The input element can be of type Project, Version, Cycle, TestThemeNode, TestCaseSetNode, or TestCaseNode.
- *
- * @param {BaseTestBenchTreeItem} element The project tree item.
- * @returns {string | null} The project key as a string if found; otherwise null.
- */
-function findProjectKeyOfProjectTreeItem(element) {
-    extension_1.logger.trace("Finding project key for project tree item:", element.label);
-    let current = element;
-    while (current) {
-        if (current.contextValue === constants_1.TreeItemContextValues.PROJECT) {
-            extension_1.logger.trace("Found project key:", current.item.key);
-            return current.item.key;
-        }
-        current = current.parent;
-    }
-    const projectKeyNotFoundErrorMessage = `Project key not found traversing up from tree element: ${element.label}`;
-    extension_1.logger.error(projectKeyNotFoundErrorMessage);
-    return null;
-}
-/**
  * Finds the cycle key (serial) for a given tree element by traversing upward in the tree hierarchy.
  *
  * @param {BaseTestBenchTreeItem} element The tree item.
@@ -779,17 +720,14 @@ class BaseTestBenchTreeItem extends vscode.TreeItem {
         // item.base is specific to CycleStructure nodes (TestThemes, TestCaseSets)
         const itemDataForTooltip = item?.base || item;
         // Set the tooltip based on the context value.
-        // Tooltip for project, TOV and cycle elements looks like this: Type, Name, Status, Key
         if (contextValue === constants_1.TreeItemContextValues.PROJECT ||
             contextValue === constants_1.TreeItemContextValues.VERSION ||
             contextValue === constants_1.TreeItemContextValues.CYCLE) {
             this.tooltip = `Type: ${contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nKey: ${itemDataForTooltip.key}`;
-            // For a project, add TOVs and cycles count to the tooltip.
             if (contextValue === constants_1.TreeItemContextValues.PROJECT && item) {
                 this.tooltip += `\nTOVs: ${item.tovsCount || 0}\nCycles: ${item.cyclesCount || 0}`;
             }
         }
-        // Tooltip for test theme, test case set and test case looks like this: Numbering, Type, Name, Status, ID
         else if (contextValue === constants_1.TreeItemContextValues.TEST_THEME_NODE ||
             contextValue === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE ||
             contextValue === constants_1.TreeItemContextValues.TEST_CASE_NODE) {
@@ -811,7 +749,6 @@ class BaseTestBenchTreeItem extends vscode.TreeItem {
                 arguments: [this]
             };
         }
-        // Set the icon path based on the context value and status.
         this.updateIcon();
     }
     /**
@@ -863,7 +800,6 @@ class BaseTestBenchTreeItem extends vscode.TreeItem {
         // Map the context and status to the corresponding icon file name
         const typeIcons = iconMap[type] || iconMap["default"];
         const iconFileNames = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
-        // Return the full paths for light and dark mode icons
         return {
             light: path.join(iconFolderPath, iconFileNames.light),
             dark: path.join(iconFolderPath, iconFileNames.dark)
@@ -899,13 +835,6 @@ function setupProjectTreeViewEventListeners(projectTreeView, projectManagementPr
     projectTreeView.onDidExpandElement(async (event) => {
         await projectManagementProvider.handleExpansion(event.element, true);
         projectManagementProvider.rememberExpandedItem(event.element);
-        // If cycle expansion in project tree should also trigger theme tree population
-        // (independent of the click command), then handleTestCycleClick could be called here too,
-        // which would then fire the event.
-        /*
-        if (event.element.contextValue === TreeItemContextValues.CYCLE) {
-            await projectManagementProvider.handleTestCycleClick(event.element);
-         }*/
     });
     projectTreeView.onDidCollapseElement(async (event) => {
         await projectManagementProvider.handleExpansion(event.element, false);
@@ -917,15 +846,10 @@ function setupProjectTreeViewEventListeners(projectTreeView, projectManagementPr
             await server_1.client?.stop();
             const selectedElement = event.selection[0];
             extension_1.logger.trace(`Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`);
-            /* Do not handle click events here, as they are handled by the command in the tree item.
-            if (selectedElement && selectedElement.contextValue === TreeItemContextValues.CYCLE) {
-                await providerInstance.handleTestCycleClick(selectedElement);
-            }*/
             const projectAndTovNameObj = getProjectAndTovNamesFromSelection(selectedElement);
             if (projectAndTovNameObj) {
                 const { projectName, tovName } = projectAndTovNameObj;
                 extension_1.logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
-                // Restart language server with the selected project and TOV
                 if (projectName && tovName) {
                     await (0, server_1.initializeLanguageServer)(projectName, tovName);
                 }
@@ -940,14 +864,19 @@ function setupProjectTreeViewEventListeners(projectTreeView, projectManagementPr
  * Hides the project management tree view.
  */
 async function hideProjectManagementTreeView() {
-    // projectManagementTree is the ID of the tree view in package.json
-    await vscode.commands.executeCommand("projectManagementTree.removeView");
+    const projectTreeView = (0, extension_1.getProjectTreeView)();
+    if (projectTreeView && projectTreeView.visible) {
+        extension_1.logger.trace("Project management tree view is visible. Attempting to execute 'projectManagementTree.removeView'.");
+        await vscode.commands.executeCommand("projectManagementTree.removeView");
+    }
 }
 /**
  * Displays the project management tree view.
  */
 async function displayProjectManagementTreeView() {
-    await vscode.commands.executeCommand("projectManagementTree.focus");
+    if ((0, extension_1.getProjectTreeView)()) {
+        await vscode.commands.executeCommand("projectManagementTree.focus");
+    }
 }
 /**
  * Finds the project key (serial) for a given tree element by traversing upward in the tree hierarchy.
@@ -999,13 +928,11 @@ function getProjectAndTovNamesFromSelection(selectedItem) {
         }
         currentItem = currentItem.parent;
     }
-    // If the selected item is a Project
     if (selectedItem.contextValue === constants_1.TreeItemContextValues.PROJECT) {
         projectName = selectedItem.item.name;
-        tovName = undefined; // No specific TOV selected
+        tovName = undefined;
         extension_1.logger.trace(`Selected item is a Project. Project: ${projectName}, TOV: (none)`);
     }
-    // If the selected item is a TOV
     else if (selectedItem.contextValue === constants_1.TreeItemContextValues.VERSION) {
         tovName = selectedItem.item.name;
         if (selectedItem.parent && selectedItem.parent.contextValue === constants_1.TreeItemContextValues.PROJECT) {
@@ -1013,7 +940,6 @@ function getProjectAndTovNamesFromSelection(selectedItem) {
         }
         extension_1.logger.trace(`Selected item is a TOV. Project: ${projectName}, TOV: ${tovName}`);
     }
-    // A Cycle is selected
     else if (selectedItem.contextValue === constants_1.TreeItemContextValues.CYCLE) {
         if (selectedItem.parent && selectedItem.parent.contextValue === constants_1.TreeItemContextValues.VERSION) {
             tovName = selectedItem.parent.item.name;

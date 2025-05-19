@@ -5,9 +5,9 @@
 
 import * as vscode from "vscode";
 import { BaseTestBenchTreeItem, CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
-import { logger, getTestThemeTreeViewInstance } from "./extension";
-import { TreeItemContextValues } from "./constants";
-import { CycleNodeData } from "./testBenchTypes";
+import { logger, getTestThemeTreeViewInstance, connection } from "./extension";
+import { ContextKeys, TreeItemContextValues } from "./constants";
+import { CycleNodeData, CycleStructure } from "./testBenchTypes";
 
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display
@@ -22,11 +22,16 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     public getCurrentCycleKey(): string | null {
         return this._currentCycleKey;
     }
-    public isCurrentCycle(cycleKey: string): boolean {
-        return this._currentCycleKey === cycleKey;
+    private _currentProjectKey: string | null = null;
+    public getCurrentProjectKey(): string | null {
+        return this._currentProjectKey;
     }
 
-    private _currentProjectKey: string | null = null;
+    private _currentCycleLabel: string | null = null;
+
+    private isCustomRootActive: boolean = false;
+    private customRootItemInstance: BaseTestBenchTreeItem | null = null;
+    private originalCustomRootContextValue: string | null = null;
 
     /** Root elements for the Test Theme Tree view */
     rootElements: BaseTestBenchTreeItem[] = [];
@@ -34,42 +39,212 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     private expandedTreeItems: Set<string> = new Set<string>();
 
-    // Callback for message updates
-    private updateMessageCallback: (message: string | undefined) => void;
+    private updateTreeViewStatusMessageCallback: (message: string | undefined) => void;
 
-    // Constructor to accept the callback
     constructor(updateMessageCallback: (message: string | undefined) => void) {
-        this.updateMessageCallback = updateMessageCallback;
+        this.updateTreeViewStatusMessageCallback = updateMessageCallback;
+        vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
     }
-    // Public method to set message via callback
-    public setMessage(message: string | undefined): void {
-        this.updateMessageCallback(message);
+
+    public setTreeViewStatusMessage(message: string | undefined): void {
+        this.updateTreeViewStatusMessageCallback(message);
     }
 
     /**
      * Refreshes the test theme tree view.
+     * Fetches fresh data from the server for the current cycle,
+     * clears any custom root, and updates tree view messages.
+     * @param {boolean} isHardRefresh - If true, implies a user-initiated refresh (refresh button)) and not an internal refresh.
      */
-    refresh(): void {
-        logger.debug("Refreshing test theme tree view.");
-        // Store the keys of the expanded items to preserve state on refresh.
+    async refresh(isHardRefresh: boolean = false): Promise<void> {
+        logger.debug(
+            `Refreshing test theme tree view. Hard refresh: ${isHardRefresh}, Custom root active: ${this.isCustomRootActive}`
+        );
+
+        const currentCustomRootKeyBeforeRefresh =
+            this.isCustomRootActive && this.customRootItemInstance ? this.customRootItemInstance.item.base.key : null;
+
+        if (isHardRefresh && this.isCustomRootActive) {
+            logger.trace("Hard refresh requested with active custom root. Resetting to full cycle view.");
+            this.resetCustomRootInternally();
+        }
+
+        this.storeExpandedTreeItems(this.rootElements);
+
+        if (!this._currentCycleKey || !this._currentProjectKey) {
+            logger.warn("TestThemeTreeDataProvider: Cannot refresh without a current cycle and project key.");
+            this.clearTree();
+            this._onDidChangeTreeData.fire(undefined);
+            return;
+        }
+
+        const initialLoadingMessage =
+            this.isCustomRootActive && this.customRootItemInstance && !isHardRefresh
+                ? `Refreshing: ${this.customRootItemInstance.label}...`
+                : `Loading test themes for cycle: ${this._currentCycleLabel || this._currentCycleKey}...`;
+        this.setTreeViewStatusMessage(initialLoadingMessage);
+
+        if (!(this.isCustomRootActive && !isHardRefresh)) {
+            this.rootElements = [];
+        }
+        this._onDidChangeTreeData.fire(undefined);
+
+        let rawCycleStructure: CycleStructure | null = null;
+        let operationSuccessful = false;
+
+        try {
+            if (!connection) {
+                logger.error("TestThemeTreeDataProvider: No active connection to TestBench server.");
+                this.setTreeViewStatusMessage("Error: Not connected to TestBench server.");
+                if (!this.isCustomRootActive) {
+                    this.rootElements = [];
+                }
+                return;
+            }
+
+            rawCycleStructure = await connection.fetchCycleStructureOfCycleInProject(
+                this._currentProjectKey,
+                this._currentCycleKey
+            );
+
+            if (rawCycleStructure) {
+                operationSuccessful = true;
+                if (
+                    this.isCustomRootActive &&
+                    this.customRootItemInstance &&
+                    !isHardRefresh &&
+                    currentCustomRootKeyBeforeRefresh
+                ) {
+                    logger.debug(
+                        `Soft refreshing custom root: ${this.customRootItemInstance.label} (Key: ${currentCustomRootKeyBeforeRefresh})`
+                    );
+
+                    const elementsByKey: Map<string, CycleNodeData> = new Map<string, CycleNodeData>();
+                    rawCycleStructure.nodes.forEach((node: CycleNodeData) => {
+                        if (node?.base?.key) {
+                            elementsByKey.set(node.base.key, node);
+                        }
+                    });
+
+                    const updatedCustomRootNodeData = elementsByKey.get(currentCustomRootKeyBeforeRefresh);
+
+                    if (updatedCustomRootNodeData && this.customRootItemInstance) {
+                        this.customRootItemInstance.item = updatedCustomRootNodeData;
+                        const newLabel = updatedCustomRootNodeData.base.numbering
+                            ? `${updatedCustomRootNodeData.base.numbering} ${updatedCustomRootNodeData.base.name}`
+                            : updatedCustomRootNodeData.base.name;
+                        if (this.customRootItemInstance.label !== newLabel) {
+                            this.customRootItemInstance.label = newLabel;
+                        }
+                        this.customRootItemInstance.statusOfTreeItem = updatedCustomRootNodeData.exec?.status || "None";
+                        this.customRootItemInstance.updateIcon();
+
+                        this.customRootItemInstance.children = this.buildThemeTreeRecursively(
+                            currentCustomRootKeyBeforeRefresh,
+                            this.customRootItemInstance,
+                            elementsByKey,
+                            updatedCustomRootNodeData.base.name
+                        );
+
+                        if (this.customRootItemInstance.children && this.customRootItemInstance.children.length > 0) {
+                            this.customRootItemInstance.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                        } else {
+                            this.customRootItemInstance.collapsibleState = vscode.TreeItemCollapsibleState.None;
+                        }
+
+                        this.rootElements = [this.customRootItemInstance];
+                        this._onDidChangeTreeData.fire(this.customRootItemInstance);
+                    } else {
+                        logger.warn(
+                            `Custom root item (Key: ${currentCustomRootKeyBeforeRefresh}) not found in refreshed cycle structure. Resetting to full view.`
+                        );
+                        this.resetCustomRootInternally();
+                        this.populateFromCycleData({
+                            projectKey: this._currentProjectKey,
+                            cycleKey: this._currentCycleKey,
+                            cycleLabel: this._currentCycleLabel || this._currentCycleKey,
+                            rawCycleStructure: rawCycleStructure
+                        });
+                        operationSuccessful = true;
+                    }
+                } else {
+                    this.populateFromCycleData({
+                        projectKey: this._currentProjectKey,
+                        cycleKey: this._currentCycleKey,
+                        cycleLabel: this._currentCycleLabel || this._currentCycleKey,
+                        rawCycleStructure: rawCycleStructure
+                    });
+                    operationSuccessful = true;
+                }
+            } else {
+                logger.warn(`Failed to fetch cycle structure for cycle ${this._currentCycleKey} during refresh.`);
+                if (!this.isCustomRootActive) {
+                    this.rootElements = [];
+                }
+            }
+        } catch (error) {
+            logger.error(`Error during refresh data fetch for cycle ${this._currentCycleKey}:`, error);
+            if (!this.isCustomRootActive) {
+                this.rootElements = [];
+            }
+            rawCycleStructure = null;
+        } finally {
+            if (!this._currentCycleKey) {
+                this.setTreeViewStatusMessage("Select a cycle from the 'Projects' view to see test themes.");
+            } else if (operationSuccessful && this.rootElements.length === 0) {
+                this.setTreeViewStatusMessage(
+                    this._currentCycleLabel
+                        ? `No test themes found for cycle ${this._currentCycleLabel}.`
+                        : "No test themes found for the current cycle."
+                );
+            } else if (!operationSuccessful && connection) {
+                this.setTreeViewStatusMessage(
+                    `Error loading themes for ${this._currentCycleLabel || this._currentCycleKey}.`
+                );
+            } else if (!connection) {
+                this.setTreeViewStatusMessage("Error: Not connected to TestBench server.");
+            } else {
+                this.setTreeViewStatusMessage(undefined);
+            }
+
+            const alreadyFired: boolean = this.isCustomRootActive && !isHardRefresh && operationSuccessful;
+            const isDataFullyLoaded =
+                operationSuccessful && (!this.isCustomRootActive || isHardRefresh) && rawCycleStructure;
+
+            if (!alreadyFired && !isDataFullyLoaded) {
+                this._onDidChangeTreeData.fire(undefined);
+            }
+        }
+    }
+
+    /**
+     * Internal refresh logic after data population, to update messages and fire data change.
+     * Avoids re-fetching if called from populateFromCycleData.
+     */
+    private internalRefreshAfterPopulate(): void {
+        logger.debug("TestThemeTreeDataProvider: Internal refresh after populating data.");
         this.storeExpandedTreeItems(this.rootElements);
 
         const currentThemeTreeView = getTestThemeTreeViewInstance();
-        // Update message in the test theme tree view
-        // Check if the view instance is available
         if (this.rootElements.length === 0) {
             if (this._currentCycleKey) {
-                this.updateMessageCallback("No test themes found for the current cycle.");
+                this.updateTreeViewStatusMessageCallback(
+                    this._currentCycleLabel
+                        ? `No test themes found for cycle ${this._currentCycleLabel}.`
+                        : "No test themes found for the current cycle."
+                );
             } else {
-                this.updateMessageCallback("Select a cycle to see test themes.");
+                this.updateTreeViewStatusMessageCallback("Select a cycle to see test themes.");
             }
-            logger.trace(`Test Themes view message set: ${currentThemeTreeView?.message}`);
+            if (currentThemeTreeView) {
+                logger.trace(`Test Themes view message set: ${currentThemeTreeView.message}`);
+            }
         } else {
-            this.updateMessageCallback(undefined); // Clear message
-            logger.trace("Test Themes view message cleared.");
+            this.updateTreeViewStatusMessageCallback(undefined);
+            if (currentThemeTreeView) {
+                logger.trace("Test Themes view message cleared.");
+            }
         }
-
-        // Explicitly fire with undefined to ensure a full refresh from the root.
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -90,12 +265,17 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      */
     async getChildren(element?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
         if (!element) {
-            if (!this.rootElements || this.rootElements.length === 0) {
-                logger.trace(
-                    "TestThemeTreeDataProvider: No root elements found, returning empty. Message should be set."
-                );
-                // Message is set by refresh() or when setRoots() is called if children are empty.
-                return [];
+            if (this.isCustomRootActive && this.customRootItemInstance) {
+                if (
+                    this.customRootItemInstance.collapsibleState === vscode.TreeItemCollapsibleState.None &&
+                    this.customRootItemInstance.children &&
+                    this.customRootItemInstance.children.length > 0
+                ) {
+                    this.customRootItemInstance.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                } else if (this.customRootItemInstance.children && this.customRootItemInstance.children.length > 0) {
+                    this.customRootItemInstance.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                }
+                return [this.customRootItemInstance];
             }
             return this.rootElements;
         }
@@ -113,40 +293,111 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
     /**
      * Sets the root elements of the test theme tree and refreshes the view.
+     * This method is typically called when initially populating from cycle data.
      * @param {BaseTestBenchTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
+     * @param {string} projectKey The key of the project this cycle belongs to.
      * @param {string} cycleKey The key of the cycle these roots belong to.
+     * @param {string} cycleLabel The label/name of the cycle.
      */
-    setRoots(roots: BaseTestBenchTreeItem[], cycleKey: string): void {
-        // Output of roots is circular and large, so it is commented out.
-        // logger.trace("Setting root elements of the test theme tree to:", roots);
+    private setRoots(roots: BaseTestBenchTreeItem[], projectKey: string, cycleKey: string, cycleLabel: string): void {
+        logger.trace(
+            `TestThemeTreeDataProvider: Setting roots for projectKey: ${projectKey}, cycleKey: ${cycleKey}, cycleLabel: ${cycleLabel}`
+        );
+        this._currentProjectKey = projectKey;
         this._currentCycleKey = cycleKey;
+        this._currentCycleLabel = cycleLabel;
         this.rootElements = roots;
-        this.refresh(); // This will call _onDidChangeTreeData.fire(undefined)
+
+        const currentThemeTreeView = getTestThemeTreeViewInstance();
+        if (this.rootElements.length === 0) {
+            if (this._currentCycleKey) {
+                this.updateTreeViewStatusMessageCallback(
+                    this._currentCycleLabel
+                        ? `No test themes found for cycle ${this._currentCycleLabel}.`
+                        : "No test themes found for the current cycle."
+                );
+            } else {
+                this.updateTreeViewStatusMessageCallback("Select a cycle to see test themes.");
+            }
+            if (currentThemeTreeView) {
+                logger.trace(`Test Themes view message set: ${currentThemeTreeView.message}`);
+            }
+        } else {
+            this.updateTreeViewStatusMessageCallback(undefined);
+            if (currentThemeTreeView) {
+                logger.trace("Test Themes view message cleared.");
+            }
+        }
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
      * Sets the selected tree item as the sole root of the test theme tree and refreshes the view.
+     * This implements the "Make Root" button functionality.
+     * Make Root" only changes what's immediately displayed.
      * @param {BaseTestBenchTreeItem} element The TestbenchTreeItem to set as root.
      */
     makeRoot(element: BaseTestBenchTreeItem): void {
         logger.debug("Setting the selected element as the root of the test theme tree view:", element);
-        // Find the cycle key for the new root element if it's part of a cycle.
-        let newCycleKey: string | null = null;
-        if (element.parent && element.parent.contextValue === TreeItemContextValues.CYCLE) {
-            newCycleKey = element.parent.item?.key;
-        } else if (element.contextValue === TreeItemContextValues.CYCLE) {
-            newCycleKey = element.item?.key;
-        }
-        // If a cycle key is found and is different, or if we are making a non-cycle element root, update _currentCycleKey.
-        if (newCycleKey) {
-            this._currentCycleKey = newCycleKey;
-        } else {
-            // If the new root isn't directly tied to a known cycle in its parentage here,
-            // it might be an implicit change of context.
+
+        if (
+            this.customRootItemInstance &&
+            this.customRootItemInstance !== element &&
+            this.originalCustomRootContextValue
+        ) {
+            this.customRootItemInstance.contextValue = this.originalCustomRootContextValue;
         }
 
         this.rootElements = [element];
-        this.refresh();
+        this.isCustomRootActive = true;
+        this.customRootItemInstance = element;
+        this.originalCustomRootContextValue = element.contextValue ?? null;
+        element.contextValue = TreeItemContextValues.CUSTOM_ROOT_THEME;
+
+        if (element.children && element.children.length > 0) {
+            element.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+        } else {
+            element.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        }
+        element.parent = null;
+
+        vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, true);
+        this._onDidChangeTreeData.fire(undefined);
+        logger.info(`Item "${element.label}" is now set as custom root for Test Themes.`);
+    }
+
+    /**
+     * Resets the custom root, restoring the tree to display the full data for the current cycle.
+     */
+    public async resetCustomRoot(): Promise<void> {
+        logger.debug("Resetting custom root for Test Theme Tree.");
+        if (this.isCustomRootActive) {
+            const itemThatWasRoot: BaseTestBenchTreeItem | null = this.customRootItemInstance;
+            this.resetCustomRootInternally();
+            await this.refresh(true);
+            if (itemThatWasRoot) {
+                this._onDidChangeTreeData.fire(itemThatWasRoot);
+            }
+            logger.info("Test Theme Tree custom root has been reset.");
+        } else {
+            logger.trace("No custom root was active in Test Theme Tree to reset.");
+        }
+    }
+
+    /**
+     * Resets the custom root item for the theme tree view.
+     *
+     * This method restores the original context value of the custom root item if it exists,
+     * clears the custom root state, and updates the relevant VS Code context key.
+     */
+    private resetCustomRootInternally(): void {
+        if (this.customRootItemInstance && this.originalCustomRootContextValue) {
+            this.customRootItemInstance.contextValue = this.originalCustomRootContextValue;
+        }
+        this.isCustomRootActive = false;
+        this.customRootItemInstance = null;
+        this.originalCustomRootContextValue = null;
+        vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
     }
 
     /**
@@ -164,7 +415,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
 
-        // Store the key of the expanded item in the set.
         if (expanded && element.item?.key) {
             this.expandedTreeItems.add(element.item.key);
         } else if (element.item?.key) {
@@ -197,10 +447,13 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     clearTree(): void {
         logger.trace("Clearing the test theme tree.");
         this._currentCycleKey = null;
+        this._currentProjectKey = null;
+        this._currentCycleLabel = null;
+        this.resetCustomRootInternally();
         this.rootElements = [];
-        this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
+        this.updateTreeViewStatusMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
         this.expandedTreeItems.clear();
-        this._onDidChangeTreeData.fire();
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
@@ -217,6 +470,11 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         logger.trace(`TestThemeTreeDataProvider: Populating from cycle data for cycleKey: ${eventData.cycleKey}`);
         this._currentCycleKey = eventData.cycleKey;
         this._currentProjectKey = eventData.projectKey;
+        this._currentCycleLabel = eventData.cycleLabel;
+
+        if (this.isCustomRootActive) {
+            this.resetCustomRootInternally();
+        }
 
         if (
             !eventData.rawCycleStructure ||
@@ -242,7 +500,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 this.rootElements = [];
             } else {
                 const rootCycleNodeKey: string = eventData.rawCycleStructure.root.base.key;
-                this.rootElements = this.buildThemeTreeRecursive(
+                this.rootElements = this.buildThemeTreeRecursively(
                     rootCycleNodeKey,
                     null,
                     elementsByKey,
@@ -250,7 +508,10 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 );
             }
         }
-        this.refresh(); // Refresh the view with new elements
+
+        this.isCustomRootActive = false;
+        vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
+        this.internalRefreshAfterPopulate();
     }
 
     /**
@@ -277,7 +538,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @param {string} parentNameForLogging - The name of the parent item, used for logging purposes.
      * @returns {BaseTestBenchTreeItem[]} An array of `BaseTestBenchTreeItem` representing the children of the specified parent.
      */
-    private buildThemeTreeRecursive(
+    private buildThemeTreeRecursively(
         parentItemKey: string,
         parentTreeItem: BaseTestBenchTreeItem | null,
         elementsByKey: Map<string, CycleNodeData>,
@@ -308,9 +569,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 return null;
             }
 
-            // Recursively build children if this node has visible children
             if (hasVisibleChildren) {
-                treeItem.children = this.buildThemeTreeRecursive(
+                treeItem.children = this.buildThemeTreeRecursively(
                     nodeData.base.key,
                     treeItem,
                     elementsByKey,
@@ -337,7 +597,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @returns A new {@link BaseTestBenchTreeItem} instance, or null if `nodeData` is invalid.
      */
     private createThemeTreeItem(
-        nodeData: CycleNodeData, // Raw data for the theme item
+        nodeData: CycleNodeData, // Raw data for the test theme item
         contextValue: string,
         parent: BaseTestBenchTreeItem | null,
         hasVisibleChildren: boolean
@@ -366,7 +626,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                     : vscode.TreeItemCollapsibleState.None;
                 break;
             case TreeItemContextValues.TEST_CASE_SET_NODE:
-                defaultCollapsibleState = hasVisibleChildren // if TEST_CASE_NODE were included and visible
+                defaultCollapsibleState = hasVisibleChildren
                     ? vscode.TreeItemCollapsibleState.Collapsed
                     : vscode.TreeItemCollapsibleState.None;
                 break;

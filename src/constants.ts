@@ -32,31 +32,28 @@ export const WebviewMessageCommands = {
     UPDATE_SETTING: "updateSetting",
     SHOW_ERROR: "showError",
     UPDATE_CONTENT: "updateContent",
+    TRIGGER_COMMAND: "triggerCommand",
 
     // Profile Management UI
     PROFILE_UI_LOADED: "profileUiLoaded",
-    REQUEST_PROFILES_FROM_WEBVIEW: "requestProfilesFromWebview",
     LOGIN_WITH_PROFILE: "loginWithProfile",
     SAVE_NEW_PROFILE: "saveNewProfile",
     REQUEST_DELETE_CONFIRMATION: "requestDeleteConfirmation",
-    PERFORM_DELETE_PROFILE: "performDeleteProfile",
 
     // Host to Webview communication
     DISPLAY_PROFILES_IN_WEBVIEW: "displayProfilesInWebview",
-    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage",
-    PROFILE_OPERATION_COMPLETE: "profileOperationComplete"
-} as const; // 'as const' makes properties readonly and literal types
+    SHOW_WEBVIEW_MESSAGE: "showWebviewMessage"
+} as const;
 
 // --- Extension Configuration Setting Keys ---
 export const ConfigKeys = {
+    // TODO: Remove credentials from extension settings
     SERVER_NAME: "serverName",
     PORT_NUMBER: "portNumber",
     USERNAME: "username",
+
     STORE_PASSWORD_AFTER_LOGIN: "storePasswordAfterLogin",
     AUTO_LOGIN: "automaticLoginAfterExtensionActivation",
-    // TODO: Remove project and tov in the future
-    PROJECT: "project",
-    TOV: "tov",
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",
     CLEAR_REPORT_AFTER_PROCESSING: "clearReportAfterProcessing",
     LOGGER_LEVEL: "testBenchLogger",
@@ -78,19 +75,23 @@ export const ConfigKeys = {
 
 // --- Context Keys ---
 export const ContextKeys = {
-    CONNECTION_ACTIVE: "testbenchExtension.connectionActive"
+    CONNECTION_ACTIVE: "testbenchExtension.connectionActive",
+    PROJECT_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.projectTreeHasCustomRoot",
+    THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot"
 } as const;
 
 // --- Storage Keys ---
 export const StorageKeys = {
     SESSION_TOKEN: "sessionToken", // Secret Storage
-    PASSWORD: "password", // Secret Storage
     /**
      * Workspace state storage key for the last generated report parameters
      * to be able to use the report without the user selecting the report again while importing the report.
      */
     LAST_GENERATED_PARAMS: "testbenchExtension.lastGeneratedReportParams",
-    LAST_IMPORTED_REPORT_DETAILS: "testbenchExtension.lastImportedReportDetails" // Workspace state
+    // AuthenticationProvider constants
+    PROFILES_STORAGE_KEY: "testbench.profiles",
+    ACTIVE_PROFILE_ID_KEY: "testbench.activeProfileId",
+    PROFILE_PASSWORD_SECRET_PREFIX: "testbench.profile.password."
 } as const;
 
 // --- Tree Item Context Values ---
@@ -105,7 +106,9 @@ export const TreeItemContextValues = {
     INTERACTION: "interaction",
     DATA_TYPE: "dataType",
     CONDITION: "condition",
-    TEST_ELEMENT: "testElement"
+    TEST_ELEMENT: "testElement",
+    CUSTOM_ROOT_PROJECT: "customRoot.project",
+    CUSTOM_ROOT_THEME: "customRoot.theme"
 } as const;
 
 // --- Job Types ---
@@ -114,40 +117,35 @@ export const JobTypes = {
     IMPORT: "import"
 } as const;
 
-/** Name of the working folder (inside the workspace folder) used by TestBench to store and process files internally. */
+/** Internal folder name used to store and process files internally. */
 export const folderNameOfInternalTestbenchFolder: string = ".testbench";
 
 /**
- * All extension commands (as defined in package.json) to avoid typos.
+ * All extension commands as defined in package.json.
  */
 export const allExtensionCommands = {
     setWorkspace: `${baseKeyOfExtension}.setWorkspace`,
-    displayCommand: `${baseKeyOfExtension}.displayCommands`,
     login: `${baseKeyOfExtension}.login`,
     logout: `${baseKeyOfExtension}.logout`,
     generateTestCasesForCycle: `${baseKeyOfExtension}.generateTestCasesForCycle`,
     generateTestCasesForTestThemeOrTestCaseSet: `${baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`,
     readRFTestResultsAndCreateReportWithResults: `${baseKeyOfExtension}.readRFTestResultsAndCreateReportWithResults`,
     makeRoot: `${baseKeyOfExtension}.makeRoot`,
-    getServerVersions: `${baseKeyOfExtension}.getServerVersions`,
     showExtensionSettings: `${baseKeyOfExtension}.showExtensionSettings`,
-    fetchReportForSelectedTreeItem: `${baseKeyOfExtension}.fetchReportForSelectedTreeItem`,
     displayAllProjects: `${baseKeyOfExtension}.displayAllProjects`,
     importTestResultsToTestbench: `${baseKeyOfExtension}.importTestResultsToTestbench`,
     readAndImportTestResultsToTestbench: `${baseKeyOfExtension}.readAndImportTestResultsToTestbench`,
-    executeRobotFrameworkTests: `${baseKeyOfExtension}.executeRobotFrameworkTests`,
     refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
+    refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
-    refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
     displayInteractionsForSelectedTOV: `${baseKeyOfExtension}.displayInteractionsForSelectedTOV`,
     openOrCreateRobotResourceFile: `${baseKeyOfExtension}.openOrCreateRobotResourceFile`,
     createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
     modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
     handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`,
-    addNewProfile: `${baseKeyOfExtension}.addNewProfile`,
-    deleteProfile: `${baseKeyOfExtension}.deleteProfile`,
-    selectActiveProfile: `${baseKeyOfExtension}.selectActiveProfile`
+    resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
+    resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`
 };

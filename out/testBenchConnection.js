@@ -42,9 +42,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PlayServerConnection = void 0;
 exports.withRetry = withRetry;
-exports.performLogin = performLogin;
-exports.loginToNewPlayServerAndInitSessionToken = loginToNewPlayServerAndInitSessionToken;
-exports.clearStoredCredentials = clearStoredCredentials;
 exports.importReportWithResultsToTestbench = importReportWithResultsToTestbench;
 exports.selectReportWithResultsAndImportToTestbench = selectReportWithResultsAndImportToTestbench;
 exports.extractDataFromReport = extractDataFromReport;
@@ -53,13 +50,14 @@ const https = __importStar(require("https"));
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const reportHandler = __importStar(require("./reportHandler"));
-const base64 = __importStar(require("base-64")); // npm i --save-dev @types/base-64
+const base64 = __importStar(require("base-64"));
 const jszip_1 = __importDefault(require("jszip"));
 const axios_1 = __importDefault(require("axios"));
 const path_1 = __importDefault(require("path"));
 const extension_1 = require("./extension");
 const utils = __importStar(require("./utils"));
 const constants_1 = require("./constants");
+const testBenchTypes_1 = require("./testBenchTypes");
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 /**
@@ -90,7 +88,6 @@ class PlayServerConnection {
         this.sessionToken = sessionToken;
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         extension_1.logger.trace(`[PlayServerConnection] Initializing for server: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`);
-        // Create Axios instance for API calls to the server using the session token
         this.apiClient = axios_1.default.create({
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
@@ -98,7 +95,6 @@ class PlayServerConnection {
                 rejectUnauthorized: false // TODO: Use true in production.
             })
         });
-        // Only start keep-alive if a token is provided
         if (this.sessionToken) {
             // Start the keep-alive process immediately to prevent session timeout after 5 minutes
             this.startKeepAlive();
@@ -115,6 +111,7 @@ class PlayServerConnection {
     getServerPort() {
         return this.portNumber.toString();
     }
+    /** Returns the username. */
     getUsername() {
         return this.username;
     }
@@ -126,10 +123,7 @@ class PlayServerConnection {
     getApiClient() {
         return this.apiClient;
     }
-    /**
-     * Returns the current session token.
-     * @returns {string} The session token.
-     */
+    /** Returns the current session token. */
     getSessionToken() {
         return this.sessionToken;
     }
@@ -143,12 +137,11 @@ class PlayServerConnection {
         extension_1.logger.debug(`[PlayServerConnection] Attempting to log out user ${this.username} from server ${this.serverName}.`);
         if (!this.sessionToken) {
             extension_1.logger.warn("[PlayServerConnection] No session token available. Cannot perform server-side logout.");
-            this.stopKeepAlive(); // Stop keep-alive even if no token, as a precaution
-            return true; // No action needed, consider it "successful" in terms of cleanup
+            this.stopKeepAlive();
+            return true;
         }
         try {
             const logoutResponse = await withRetry(() => this.apiClient.delete(`/login/session/v1`, {
-                // apiClient is already configured with the token
                 headers: { accept: "application/vnd.testbench+json" }
             }), 3, 2000);
             if (logoutResponse.status === 204) {
@@ -170,55 +163,8 @@ class PlayServerConnection {
             return false;
         }
         finally {
-            this.stopKeepAlive(); // Always stop keep-alive after a logout attempt
-            // Do NOT clear session data here or call setConnection(null). That's for the auth provider / extension.ts
+            this.stopKeepAlive();
         }
-    }
-    /**
-     * Retrieves the session token from VS Code's secret storage.
-     *
-     * @param {vscode.ExtensionContext} context - The extension context.
-     * @returns {Promise<string | undefined>} The session token or undefined if not found.
-     */
-    async getSessionTokenFromSecretStorage(context) {
-        const token = await context.secrets.get(constants_1.StorageKeys.SESSION_TOKEN);
-        if (!token) {
-            extension_1.logger.error("Session token not found.");
-        }
-        return token;
-    }
-    /** Clears session data and resets API client and keep-alive timer. */
-    clearSessionData() {
-        this.baseURL = "";
-        this.serverName = "";
-        this.portNumber = 0;
-        this.sessionToken = "";
-        this.apiClient = axios_1.default.create();
-        this.keepAliveIntervalId = null;
-    }
-    /**
-     * Displays a quick pick list for selecting a project key.
-     *
-     * @param projectsData - The list of projects fetched from the server.
-     * @returns {Promise<string | null>} The selected project key or null if none selected.
-     */
-    async getProjectKeyFromProjectListQuickPickSelection(projectsData) {
-        // Extract project names from the projects data and display them in a quick pick list
-        const projectNames = projectsData.map((project) => project.name);
-        const selectedProjectName = await vscode.window.showQuickPick(projectNames, {
-            placeHolder: "Select a project"
-        });
-        if (!selectedProjectName) {
-            extension_1.logger.error("Selected project name not found.");
-            return null;
-        }
-        extension_1.logger.debug("Selected project name:", selectedProjectName);
-        const selectedProject = projectsData.find((project) => project.name === selectedProjectName);
-        if (!selectedProject) {
-            extension_1.logger.error("Selected project not found.");
-            return null;
-        }
-        return selectedProject.key;
     }
     /**
      * Fetches the list of projects from the TestBench server.
@@ -233,11 +179,10 @@ class PlayServerConnection {
         try {
             extension_1.logger.debug("Fetching projects list.");
             const projectsURL = `/projects/v1`;
-            // Wrap the project list get request in the withRetry helper.
             const projectsResponse = await withRetry(() => this.apiClient.get(projectsURL, {
                 headers: { accept: "application/vnd.testbench+json" }
-            }), 3, // maxRetries: try 3 additional times
-            2000 // delayMs: wait 2000ms between attempts
+            }), 3, // Try 3 additional times
+            2000 // delayMs
             );
             // Save the response from server to a file for analyzing the structure
             /*
@@ -291,8 +236,8 @@ class PlayServerConnection {
             const projectTreeURL = `/projects/${projectKey}/tree/v1`;
             const projectTreeResponse = await withRetry(() => this.apiClient.get(projectTreeURL, {
                 headers: { accept: "application/vnd.testbench+json" }
-            }), 3, // maxRetries: try 3 additional times
-            2000 // delayMs: wait 2000ms between attempts
+            }), 3, // maxRetries
+            2000 // delayMs
             );
             // Save the JSON to a file for analyzing the structure
             /*
@@ -325,6 +270,7 @@ class PlayServerConnection {
             return null;
         }
     }
+    // TODO: If this API call is implemented in the new play server, replace this method with the new API.
     /**
      * Fetches test elements using the Test Object Version (TOV) key from the old play server.
      *
@@ -348,10 +294,6 @@ class PlayServerConnection {
             extension_1.logger.trace("Creating session for old play server with URL:", oldPlayServerBaseUrl);
             const userNameFromConfig = this.username;
             const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
-            extension_1.logger.trace("@@@@ Username from config:", userNameFromConfig);
-            extension_1.logger.trace("@@@@ Session token:", this.sessionToken);
-            extension_1.logger.trace("@@@@ base64 encoded credentials:", encoded);
-            // Create session for API calls to the old play server
             const oldPlayServerSession = axios_1.default.create({
                 baseURL: oldPlayServerBaseUrl,
                 // Old play server, which runs on port 9443, uses BasicAuth.
@@ -361,7 +303,6 @@ class PlayServerConnection {
                     password: this.sessionToken
                 },
                 headers: {
-                    // Manually encode the credentials to Base64
                     Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
@@ -371,18 +312,18 @@ class PlayServerConnection {
                 })
             });
             if (!oldPlayServerSession) {
-                extension_1.logger.error("@@@@@ Failed to create session for old play server.");
+                extension_1.logger.error("Failed to create session for old play server.");
                 return null;
             }
             else {
-                extension_1.logger.trace(`@@@@@ Old play server session created successfully: ${oldPlayServerSession}`);
+                extension_1.logger.trace(`Old play server session created successfully: ${oldPlayServerSession}`);
             }
             extension_1.logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
-            const testElementsResponse = await withRetry(() => oldPlayServerSession.get(getTestElementsURL), 3, // maxRetries: try 3 additional times
-            2000, // delayMs: wait 2000ms between attempts
+            const testElementsResponse = await withRetry(() => oldPlayServerSession.get(getTestElementsURL), 3, // maxRetries
+            2000, // delayMs
             (error) => {
                 if (axios_1.default.isAxiosError(error) && error.response) {
-                    // Do not retry if the error is due to authentication or if the resource is not found.
+                    // Retry predicates
                     const nonRetryableStatusCodes = [401, 404];
                     if (nonRetryableStatusCodes.includes(error.response.status)) {
                         return false;
@@ -433,7 +374,7 @@ class PlayServerConnection {
     async fetchCycleStructureOfCycleInProject(projectKey, cycleKey) {
         const cycleStructureUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
         const requestBody = {
-            basedOnExecution: true,
+            executionMode: testBenchTypes_1.ExecutionMode.Execute,
             suppressFilteredData: false,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
@@ -445,11 +386,11 @@ class PlayServerConnection {
                     accept: "application/json",
                     "Content-Type": "application/json"
                 }
-            }), 3, // maxRetries: try 3 additional times
-            2000, // delayMs: wait 2000ms between attempts
+            }), 3, // maxRetries
+            2000, // delayMs
             (error) => {
                 if (axios_1.default.isAxiosError(error) && error.response) {
-                    // Do not retry if the error is due to a bad request, missing resource, or unprocessable data.
+                    // Retry predicates
                     const nonRetryableStatusCodes = [400, 404, 422];
                     if (nonRetryableStatusCodes.includes(error.response.status)) {
                         return false;
@@ -489,61 +430,6 @@ class PlayServerConnection {
         }
     }
     /**
-     * Logs out the user from the TestBench server.
-     * Clears session data, stops the keep-alive process.
-     * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
-     */
-    async logoutUser() {
-        extension_1.logger.debug("Logging out user.");
-        try {
-            const logoutResponse = await withRetry(() => this.apiClient.delete(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" }
-            }), 3, // maxRetries: try 3 additional times
-            2000 // delayMs: wait 2000ms between attempts
-            );
-            if (logoutResponse.status === 204) {
-                const logoutSuccessfulMessage = "Logout successful.";
-                extension_1.logger.debug(logoutSuccessfulMessage);
-                vscode.window.showInformationMessage(logoutSuccessfulMessage);
-            }
-            else {
-                const logoutFailedMessage = `Logout failed. Unexpected response status: ${logoutResponse.status}`;
-                extension_1.logger.error(logoutFailedMessage);
-                vscode.window.showWarningMessage(logoutFailedMessage);
-                return null;
-            }
-        }
-        catch (error) {
-            if (axios_1.default.isAxiosError(error)) {
-                const logoutErrorMessage = `Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`;
-                extension_1.logger.error(logoutErrorMessage);
-                vscode.window.showWarningMessage(logoutErrorMessage);
-                return null;
-            }
-            else {
-                extension_1.logger.error(`Unexpected error during logout: ${error}`);
-                return null;
-            }
-        }
-        finally {
-            // Regardless of the outcome of logout operation, stop the keep-alive process
-            this.stopKeepAlive();
-            this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
-            await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
-            const pmProvider = (0, extension_1.getProjectManagementTreeDataProvider)();
-            pmProvider?.clearTree();
-            (0, extension_1.setConnection)(null);
-            // Notify login webview about the logout success to change its HTML content
-            const lwvProvider = (0, extension_1.getLoginWebViewProvider)();
-            if (lwvProvider) {
-                await lwvProvider.updateWebviewHTMLContent();
-            }
-            else {
-                extension_1.logger.error("loginWebViewProvider is null. Cannot update webview content.");
-            }
-        }
-    }
-    /**
      * Imports a zip archive containing JSON-based test execution results to the TestBench server.
      *
      * @param {number} projectKey - The project key.
@@ -563,10 +449,10 @@ class PlayServerConnection {
                 },
                 // Handle all status codes manually
                 validateStatus: () => true
-            }), 3, // maxRetries: try 3 additional times
-            2000, // delayMs: wait 2000ms between attempts
+            }), 3, // maxRetries
+            2000, // delayMs
             (error) => {
-                // Do not retry if the error is due to a non-transient condition
+                // Retry predicates
                 if (axios_1.default.isAxiosError(error) && error.response) {
                     const nonRetryableStatusCodes = [403, 404, 422];
                     if (nonRetryableStatusCodes.includes(error.response.status)) {
@@ -578,7 +464,6 @@ class PlayServerConnection {
             switch (importZipResponse.status) {
                 case 201: {
                     extension_1.logger.debug("Report imported successfully.");
-                    // Extract the fileName from the response and return it
                     const fileName = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
@@ -642,10 +527,10 @@ class PlayServerConnection {
                     accept: "application/json"
                 },
                 validateStatus: () => true
-            }), 3, // maxRetries: try 3 additional times
-            2000, // delayMs: wait 2000ms between attempts
+            }), 3, // maxRetries
+            2000, // delayMs
             (error) => {
-                // Do not retry if the error has a non-transient status code.
+                // Retry predicates
                 if (axios_1.default.isAxiosError(error) && error.response) {
                     const nonRetryableStatusCodes = [400, 403, 404, 422];
                     if (nonRetryableStatusCodes.includes(error.response.status)) {
@@ -715,11 +600,10 @@ class PlayServerConnection {
      * If the keep-alive process is already running and it is triggered again, the previous one is stopped before starting a new one.
      */
     startKeepAlive() {
-        this.stopKeepAlive(); // Prevent multiple intervals if previously started.
+        this.stopKeepAlive();
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();
         }, this.keepAliveIntervalInSeconds);
-        // Send an immediate keep-alive request.
         this.sendKeepAliveRequest();
         extension_1.logger.trace("Keep-alive started.");
     }
@@ -746,16 +630,12 @@ class PlayServerConnection {
         try {
             await withRetry(() => this.apiClient.get(`/login/session/v1`, {
                 headers: { accept: "application/vnd.testbench+json" }
-            }), 5, // maxRetries: try 5 additional times
-            2000 // delayMs: wait 2000ms between attempts
+            }), 5, // maxRetries
+            2000 // delayMs
             );
             extension_1.logger.trace("Keep-alive request sent.");
         }
         catch (error) {
-            // IMPORTANT: If keep-alive fails and results in logout, it should signal this failure
-            // back to the AuthenticationProvider or a global listener to update the VS Code session state.
-            // This might involve emitting an event from PlayServerConnection or having the keep-alive
-            // failure directly trigger vscode.authentication.removeSession if possible.
             extension_1.logger.error("Keep-alive request failed after retries:", error);
             extension_1.logger.warn("Logging out the user after keep-alive failure.");
             await vscode.commands.executeCommand(`${constants_1.allExtensionCommands.logout}`);
@@ -769,32 +649,28 @@ exports.PlayServerConnection = PlayServerConnection;
  *
  * @template T - The type returned by the asynchronous function.
  * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
- * @param {number} maxRetries - Maximum number of retry attempts (default is 3).
+ * @param {number} maxAllowedRetryCount - Maximum number of retry attempts (default is 3).
  * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
  * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
  * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is false).
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
-async function withRetry(asyncFunction, maxRetries = 3, delayMs = 2000, shouldRetry, showProgressBar = true) {
-    let attempt = 0;
+async function withRetry(asyncFunction, maxAllowedRetryCount = 3, delayMs = 2000, shouldRetry, showProgressBar = true) {
+    let retryCount = 0;
     while (true) {
         try {
-            // Attempt to execute the function.
             return await asyncFunction();
         }
         catch (error) {
-            // Log the retry attempt and delay before retrying.
-            extension_1.logger.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`);
-            // Check if we should not retry based on the error type/condition.
+            extension_1.logger.warn(`Attempt ${retryCount} failed. Retrying in ${delayMs}ms...`);
             if (shouldRetry && !shouldRetry(error)) {
                 extension_1.logger.warn(`Error is not retryable. Aborting further retry attempts.`);
                 throw error;
             }
-            attempt++;
-            if (attempt > maxRetries) {
-                // If we've exceeded maxRetries, rethrow the error.
-                extension_1.logger.error(`Attempt ${attempt} failed. Maximum retries reached, aborting further retries.`);
+            retryCount++;
+            if (retryCount > maxAllowedRetryCount) {
+                extension_1.logger.error(`Attempt ${retryCount} failed. Maximum retries reached, aborting further retries.`);
                 throw error;
             }
             // Show the progress bar only if retries are happening and the flag is enabled.
@@ -804,340 +680,14 @@ async function withRetry(asyncFunction, maxRetries = 3, delayMs = 2000, shouldRe
                     title: "Retrying request",
                     cancellable: false
                 }, async (progress) => {
-                    progress.report({ message: `Attempt ${attempt} of ${maxRetries}` });
+                    progress.report({ message: `Attempt ${retryCount} of ${maxAllowedRetryCount}` });
                     await new Promise((resolve) => setTimeout(resolve, delayMs));
                 });
             }
             else {
-                // If progress bar is disabled, just wait for the delay.
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
             }
         }
-    }
-}
-/**
- * Prompts the user for general input with live validation.
- * Loops until valid input is provided, "quit" is typed, or the user cancels.
- *
- * @param {string} promptMessage - The prompt message.
- * @param {boolean} inputCanBeEmpty - Whether the input may be empty.
- * @param {boolean }maskSensitiveInputData - Whether to mask the input (e.g. for passwords).
- * @param {(value: string) => string | null} validateInputFunction - Optional validation function; should return an error message if invalid.
- * @returns {Promise<string | null>} The user input as a string, or null if aborted.
- */
-async function promptForInputAndValidate(promptMessage, inputCanBeEmpty = false, maskSensitiveInputData = false, validateInputFunction) {
-    while (true) {
-        const input = await vscode.window.showInputBox({
-            prompt: promptMessage,
-            password: maskSensitiveInputData,
-            ignoreFocusOut: true,
-            validateInput: (value) => {
-                if (!inputCanBeEmpty && value === "") {
-                    return "Value cannot be empty";
-                }
-                if (validateInputFunction) {
-                    return validateInputFunction(value);
-                }
-                return null;
-            }
-        });
-        if (input === undefined || input.toLowerCase() === "quit") {
-            vscode.window.showInformationMessage("Login process aborted");
-            return null;
-        }
-        if (!validateInputFunction || validateInputFunction(input) === null) {
-            return input;
-        }
-        vscode.window.showErrorMessage(validateInputFunction(input) || "Invalid input, please try again.");
-    }
-}
-/**
- * Performs the login process to the TestBench server by prompting the user for the server name, port number, username, and password.
- * Loops until login is successful or the user cancels.
- *
- * @param {vscode.ExtensionContext} context - The extension context.
- * @param {boolean} promptForNewCredentials - Whether to prompt for new credentials.
- * @param {boolean} performAutoLoginWithStoredCredentialsWithoutPrompting - (Optional) Whether to auto-login without prompting.
- * @returns {Promise<PlayServerConnection | null>} A PlayServerConnection if login is successful; otherwise, null.
- */
-async function performLogin(context, promptForNewCredentials = false, performAutoLoginWithStoredCredentialsWithoutPrompting) {
-    // Loop until the user successfully logs in or cancels the login process
-    while (true) {
-        // Retrieve the stored credentials if they exist
-        let password;
-        // Only retrieve the password if the user has choosen to store it after successful login
-        if ((0, extension_1.getConfig)().get("storePasswordAfterLogin", false)) {
-            password = await context.secrets.get(constants_1.StorageKeys.PASSWORD);
-        }
-        // If the user has not chosen to store the password, clear it from the secret storage
-        else {
-            clearStoredCredentials(context);
-        }
-        const userHasStoredCredentials = !!((0, extension_1.getConfig)().get(constants_1.ConfigKeys.SERVER_NAME) &&
-            (0, extension_1.getConfig)().get("username") &&
-            password &&
-            (0, extension_1.getConfig)().get("storePasswordAfterLogin", false));
-        let useStoredCredentials = false;
-        // If the user has stored credentials and can auto-login,
-        // and the user has not chosen to prompt for new credentials,
-        // and the user has not chosen to auto-login without prompting, then auto-login
-        if (userHasStoredCredentials &&
-            !promptForNewCredentials &&
-            !performAutoLoginWithStoredCredentialsWithoutPrompting) {
-            const choice = await vscode.window.showInformationMessage("Do you want to login using your previous credentials?", 
-            // Modal dialog is used so that the input box wont disappear, which forces the user to choose an option. Without it, login may be locked.
-            { modal: true }, "Yes", "No");
-            if (choice === "Yes") {
-                useStoredCredentials = true;
-            }
-            // User selected Cancel, which sets choice to undefined
-            else if (!choice) {
-                extension_1.logger.debug("Login process aborted.");
-                return null;
-            }
-            // Continue the function in case of "No"
-        }
-        else {
-            // Convert undefined value to false with !! if the optional parameter is not provided
-            useStoredCredentials = !!performAutoLoginWithStoredCredentialsWithoutPrompting;
-        }
-        let serverName;
-        let portNumber;
-        let username;
-        // If the user has stored credentials and wants to use them, retrieve them from the configuration, else prompt the user for new credentials
-        if (useStoredCredentials) {
-            serverName = (0, extension_1.getConfig)().get(constants_1.ConfigKeys.SERVER_NAME);
-            portNumber = (0, extension_1.getConfig)().get("portNumber");
-            username = (0, extension_1.getConfig)().get("username");
-        }
-        else {
-            const credentials = await promptForLoginCredentials();
-            if (!credentials) {
-                vscode.window.showInformationMessage("Login process aborted.");
-                extension_1.logger.debug("Login process aborted.");
-                return null;
-            }
-            ({ serverName, portNumber, username, password } = credentials);
-        }
-        // Attempt to login
-        const newConnection = await loginToNewPlayServerAndInitSessionToken(context, serverName, portNumber, username, password);
-        if (newConnection) {
-            return newConnection;
-        }
-        else {
-            // Login may fail due to a server problem or incorrect credentials.
-            const retry = await vscode.window.showInformationMessage("Login failed! Do you want to retry?", "Retry", "Cancel");
-            if (retry !== "Retry") {
-                vscode.window.showInformationMessage("Login process aborted.");
-                extension_1.logger.debug("Login process aborted.");
-                return null;
-            }
-            // Continue the loop to retry
-        }
-    }
-}
-/**
- * Prompts the user for login credentials.
- *
- * @returns {Promise<{ serverName: string; portNumber: number; username: string; password: string } | null>}
- * An object containing serverName, portNumber, username, and password or null if aborted.
- */
-async function promptForLoginCredentials() {
-    const serverNameInConfig = (0, extension_1.getConfig)().get(constants_1.ConfigKeys.SERVER_NAME, "testbench");
-    // Prompt user for server name, showing the default value only if it exists
-    const serverNameInput = await promptForInputAndValidate(`Enter the server name${serverNameInConfig ? ` (Default: ${serverNameInConfig})` : ""}`, true);
-    // If user cancels the input prompt, return null to cancel the login process
-    if ((!serverNameInput && !serverNameInConfig) || serverNameInput === undefined) {
-        extension_1.logger.trace("Login process aborted while entering server name.");
-        return null;
-    }
-    // Use user input if provided, otherwise fallback to configuration value
-    const serverName = serverNameInput || serverNameInConfig;
-    // Get port number from configuration (default: 9445)
-    const portInConfig = (0, extension_1.getConfig)().get("portNumber", 9445);
-    // Prompt user for port number, only showing the default if it's configured
-    const portInputAsString = await promptForInputAndValidate(`Enter the port number${portInConfig ? ` (Default: ${portInConfig})` : ""}`, true, false, (value) => (!/^\d+$/.test(value) ? "Port number must be a number" : null));
-    if ((!portInputAsString && !portInConfig) || portInputAsString === undefined) {
-        extension_1.logger.trace("Login process aborted while entering port number.");
-        return null;
-    }
-    const portNumber = portInputAsString ? parseInt(portInputAsString, 10) : portInConfig;
-    const serverVersionsResponse = await fetchServerVersions(serverName, portNumber);
-    if (!serverVersionsResponse) {
-        const serverVersionsErrorMessage = "Server not accessible with the provided server name and port.";
-        extension_1.logger.error(serverVersionsErrorMessage);
-        vscode.window.showErrorMessage(serverVersionsErrorMessage);
-        return null;
-    }
-    const usernameInput = await promptForInputAndValidate(`Enter your login name (Default: ${(0, extension_1.getConfig)().get("username", "undefined")})`, true);
-    if (!usernameInput) {
-        extension_1.logger.trace("Login process aborted while entering username.");
-        return null;
-    }
-    const username = usernameInput || (0, extension_1.getConfig)().get("username", "undefined");
-    const password = await promptForInputAndValidate("Enter your password", false, true);
-    if (!password) {
-        extension_1.logger.trace("Login process aborted while entering password.");
-        return null;
-    }
-    return { serverName, portNumber, username, password };
-}
-/**
- * // TODO: Remove
- * Logs in to the TestBench server and initializes a session token.
- *
- * @param {vscode.ExtensionContext} context - The extension context.
- * @param {string} serverName - The server name.
- * @param {number} portNumber - The port number.
- * @param {string} username - The username.
- * @param {string} password - The password.
- * @returns {Promise<PlayServerConnection | null>} A PlayServerConnection if login is successful; otherwise, null.
- */
-async function loginToNewPlayServerAndInitSessionToken(context, serverName, portNumber, username, password) {
-    const requestBody = {
-        login: username,
-        password: password,
-        force: true
-    };
-    try {
-        const connectionResult = await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: "Logging in",
-            cancellable: true
-        }, async (progress) => {
-            const baseURL = `https://${serverName}:${portNumber}/api`;
-            const loginURL = `${baseURL}/login/session/v1`;
-            extension_1.logger.trace("Sending login request to:", loginURL);
-            progress.report({ message: "Sending login request..." });
-            const loginResponse = await withRetry(() => axios_1.default.post(loginURL, requestBody, {
-                headers: {
-                    accept: "application/vnd.testbench+json",
-                    "Content-Type": "application/vnd.testbench+json"
-                },
-                httpsAgent: new https.Agent({ rejectUnauthorized: false })
-            }), 3, // maxRetries
-            2000, // delayMs
-            (error) => {
-                // Do not retry if the error is due to invalid credentials (HTTP 401)
-                if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
-                    return false;
-                }
-                return true;
-            });
-            // An exception is thrown automatically if the status code is not 2xx
-            if (loginResponse.status === 201) {
-                // Store password in secret storage after succesfull login if the user chooses to
-                if ((0, extension_1.getConfig)().get("storePasswordAfterLogin", false)) {
-                    await context.secrets.store(constants_1.StorageKeys.PASSWORD, password);
-                    extension_1.logger.trace("Password stored securely.");
-                }
-                else {
-                    extension_1.logger.trace("User chose not to store password.");
-                    // Clear the password from secret storage if it was previously stored
-                    clearStoredCredentials(context);
-                }
-                // Starts keep alive in the constructor of PlayServerConnection
-                const newConnection = new PlayServerConnection(serverName, portNumber, username, loginResponse.data.sessionToken);
-                // Set the global connection object, it can be null in case the login fails
-                (0, extension_1.setConnection)(newConnection);
-                // Set the connectionActive context value for changing the login icon to logout icon based on this value
-                await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, true);
-                const loginSuccessfulMessage = "Login successful.";
-                extension_1.logger.debug(loginSuccessfulMessage);
-                vscode.window.showInformationMessage(loginSuccessfulMessage);
-                return newConnection;
-            }
-            else {
-                await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
-                const loginFailedMessage = "Login failed. Unexpected status code: " + loginResponse.status;
-                extension_1.logger.error(loginFailedMessage);
-                vscode.window.showInformationMessage(loginFailedMessage);
-                return null;
-            }
-        });
-        return connectionResult;
-    }
-    catch (error) {
-        if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
-            extension_1.logger.error("Login failed: Invalid credentials.");
-            vscode.window.showInformationMessage("Login failed: Invalid credentials.");
-        }
-        else {
-            extension_1.logger.error("Error during login");
-            vscode.window.showInformationMessage("Error during login.");
-        }
-        await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
-        return null;
-    }
-}
-/**
- * // TODO: Remove
- * Clears stored user credentials from secret storage.
- *
- * @param {vscode.ExtensionContext} context - The extension context.
- */
-async function clearStoredCredentials(context) {
-    try {
-        await context.secrets.delete(constants_1.StorageKeys.PASSWORD);
-        extension_1.logger.debug("Credentials deleted from secret storage.");
-    }
-    catch (error) {
-        extension_1.logger.error("Failed to clear credentials:", error);
-    }
-}
-/**
- * Fetches the server versions from the TestBench server.
- * Used to verify the availability of server after receiving the server URL and port number in the login process.
- *
- * @param {string} serverName - The server name.
- * @param {number} portNumber - The port number.
- * @returns {Promise<testBenchTypes.ServerVersionsResponse | null>} The server versions data or null if an error occurs.
- */
-async function fetchServerVersions(serverName, portNumber) {
-    try {
-        const baseURL = `https://${serverName}:${portNumber}`;
-        const serverVersionsURL = `${baseURL}/api/serverVersions/v1`;
-        extension_1.logger.debug("Fetching server versions from URL:", serverVersionsURL);
-        const serverVersionsResponse = await withRetry(() => axios_1.default.get(serverVersionsURL, {
-            headers: { Accept: "application/vnd.testbench+json" },
-            httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: set to true in production
-        }), 3, // maxRetries: try 3 additional times
-        2000, // delayMs: wait 2000ms between attempts
-        // Retry only if the error is due to a non-transient condition
-        (error) => {
-            if (axios_1.default.isAxiosError(error) && error.response) {
-                // Do not retry if a 404 is received
-                const nonRetryableStatusCodes = [404];
-                if (nonRetryableStatusCodes.includes(error.response.status)) {
-                    return false;
-                }
-            }
-            return true;
-        });
-        extension_1.logger.debug(`TestBench Release Version: ${serverVersionsResponse.data.releaseVersion}, ` +
-            `Database Version: ${serverVersionsResponse.data.databaseVersion}, ` +
-            `Revision: ${serverVersionsResponse.data.revision}`);
-        return serverVersionsResponse.data;
-    }
-    catch (error) {
-        if (axios_1.default.isAxiosError(error)) {
-            if (error.response) {
-                extension_1.logger.error(`Error: Received status code ${error.response.status}`, error.response.data);
-                if (error.response.status === 404) {
-                    extension_1.logger.error(`TestBench version cannot be found at https://${serverName}:${portNumber}`);
-                }
-            }
-            else if (error.request) {
-                extension_1.logger.error("Error: No response received from server.", error.request);
-            }
-            else {
-                extension_1.logger.error("Error:", error.message);
-            }
-        }
-        else {
-            extension_1.logger.error("Unexpected error:", error);
-        }
-        return null;
     }
 }
 /**
@@ -1185,7 +735,6 @@ async function promptForReportZipFileWithResults() {
         return null;
     }
 }
-// TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
 /**
  * Imports a report (zip file with test results) to the TestBench server.
  *
@@ -1195,9 +744,7 @@ async function promptForReportZipFileWithResults() {
  * @param {string} reportWithResultsZipFilePath - The file path of the zip file containing the test results to import.
  * @returns {Promise<void | null>} A promise that resolves when the import is complete, or null if an error occurs.
  */
-async function importReportWithResultsToTestbench(connection, projectKeyString, // Now accepts projectKey
-cycleKeyString, // Now accepts cycleKey
-reportWithResultsZipFilePath) {
+async function importReportWithResultsToTestbench(connection, projectKeyString, cycleKeyString, reportWithResultsZipFilePath) {
     try {
         extension_1.logger.debug("Importing report with results to TestBench server.");
         const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
@@ -1215,7 +762,6 @@ reportWithResultsZipFilePath) {
         utils.saveJsonDataToFile(allTreeElementsPath, allTreeElementsInTreeView);
         console.log(`allTreeElements saved to ${allTreeElementsPath}`);
         */
-        // Use the passed-in keys (convert to numbers for API calls)
         const projectKey = Number(projectKeyString);
         const cycleKey = Number(cycleKeyString);
         if (isNaN(projectKey) || isNaN(cycleKey)) {
@@ -1230,14 +776,10 @@ reportWithResultsZipFilePath) {
             vscode.window.showErrorMessage(importErrorMessage);
             return null;
         }
-        // TODO: ignoreNonExecutedTestCases and checkPaths do not exists in feature branch
-        // Import the results to TestBench server
         const importData = {
             fileName: zipFilenameFromServer,
             reportRootUID: uniqueID,
             useExistingDefect: true,
-            ignoreNonExecutedTestCases: true,
-            checkPaths: true,
             discardTesterInformation: false,
             // defaultTester: "tester",
             filters: [
@@ -1251,12 +793,9 @@ reportWithResultsZipFilePath) {
             ]
         };
         try {
-            // Start the import job
             extension_1.logger.debug("Starting import execution results.");
             const importJobID = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
-            // Poll the job status until it is completed
             const importJobStatus = await reportHandler.pollJobStatus(projectKeyString, importJobID, constants_1.JobTypes.IMPORT);
-            // Check job completion status
             if (!importJobStatus || reportHandler.isImportJobFailed(importJobStatus)) {
                 const importJobFailedMessage = "Import job could not be completed.";
                 extension_1.logger.warn(importJobFailedMessage);
@@ -1301,12 +840,10 @@ async function selectReportWithResultsAndImportToTestbench(connection) {
         }
         progress.report({ message: "Extracting report context...", increment: 10 });
         const { projectKey, cycleKey } = await extractDataFromReport(resultZipFilePath);
-        // Validate extracted keys
         if (!projectKey || !cycleKey) {
             const missingDataContextMsg = "Could not extract necessary project or cycle key from the selected report file.";
             extension_1.logger.error(missingDataContextMsg);
             vscode.window.showErrorMessage(missingDataContextMsg);
-            // Clean up the selected file if it exists and configured, even on error
             await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
             return null;
         }
@@ -1324,24 +861,18 @@ async function selectReportWithResultsAndImportToTestbench(connection) {
  */
 async function extractDataFromReport(zipFilePath) {
     try {
-        // Read zip file from disk
         const zipData = await fs.promises.readFile(path_1.default.resolve(zipFilePath));
         const zip = new jszip_1.default();
-        // Load zip data
         const zipContents = await zip.loadAsync(zipData);
-        // Define file names
         const cycleStructureFileName = "cycle_structure.json";
         const projectFileName = "project.json";
-        // Extract JSON content
         const cycleStructureJson = await utils.extractAndParseJsonContent(zipContents, cycleStructureFileName);
         const projectJson = await utils.extractAndParseJsonContent(zipContents, projectFileName);
-        // Parse JSON and extract required fields
         const uniqueID = cycleStructureJson?.root?.base?.uniqueID || null;
         const projectKey = projectJson?.key || null;
         const cycleNameOfProject = projectJson?.projectContext?.cycleName || null;
         const cycleKey = projectJson?.projectContext?.cycleKey || null;
-        extension_1.logger.debug(`Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}` // Log cycleKey
-        );
+        extension_1.logger.debug(`Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`);
         return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
     }
     catch (error) {
@@ -1353,23 +884,22 @@ async function extractDataFromReport(zipFilePath) {
  * Logs in to the TestBench server with the provided credentials and returns session details.
  * This function focuses on the API interaction and does not handle UI or global state.
  *
- * @param serverName The server hostname or IP.
- * @param portNumber The server port.
- * @param username The TestBench username.
- * @param password The TestBench password.
- * @returns A promise resolving to TestBenchLoginResult if successful, otherwise null.
+ * @param {string} serverName The server hostname or IP.
+ * @param {number} portNumber The server port.
+ * @param {string} username The TestBench username.
+ * @param {string} password The TestBench password.
+ * @returns {Promise<TestBenchLoginResult | null>} A promise resolving to TestBenchLoginResult if successful, otherwise null.
  */
 async function loginToServerAndGetSessionDetails(serverName, portNumber, username, password) {
     const requestBody = {
         login: username,
         password: password,
-        force: true // Or make this configurable if needed
+        force: true
     };
     const baseURL = `https://${serverName}:${portNumber}/api`;
     const loginURL = `${baseURL}/login/session/v1`;
     extension_1.logger.trace(`[Connection] Sending login request to: ${loginURL} for user ${username}`);
     try {
-        // Using withRetry helper (assuming it's still in this file or imported)
         const loginResponse = await withRetry(() => axios_1.default.post(loginURL, requestBody, {
             headers: {
                 accept: "application/vnd.testbench+json",
@@ -1382,9 +912,9 @@ async function loginToServerAndGetSessionDetails(serverName, portNumber, usernam
             // shouldRetry predicate
             if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
                 extension_1.logger.warn("[Connection] Login attempt failed with 401 (Invalid Credentials). Not retrying.");
-                return false; // Do not retry on 401
+                return false;
             }
-            return true; // Retry on other errors (e.g., network issues)
+            return true;
         });
         if (loginResponse.status === 201 && loginResponse.data && loginResponse.data.sessionToken) {
             extension_1.logger.info(`[Connection] Login successful for user ${username} on ${serverName}.`);
@@ -1392,7 +922,6 @@ async function loginToServerAndGetSessionDetails(serverName, portNumber, usernam
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
                 loginName: loginResponse.data.login
-                // Add other relevant fields from LoginResponse if needed
             };
         }
         else {
@@ -1402,12 +931,12 @@ async function loginToServerAndGetSessionDetails(serverName, portNumber, usernam
     }
     catch (error) {
         if (axios_1.default.isAxiosError(error) && error.response && error.response.status === 401) {
-            // Already logged by shouldRetry, but good to catch specifically
+            extension_1.logger.error(`[Connection] Login failed for ${username} to ${serverName}: Invalid credentials.`);
         }
         else {
             extension_1.logger.error(`[Connection] Error during login for ${username} to ${serverName}:`, error.message);
         }
-        return null; // Ensure null is returned on any error
+        return null;
     }
 }
 //# sourceMappingURL=testBenchConnection.js.map

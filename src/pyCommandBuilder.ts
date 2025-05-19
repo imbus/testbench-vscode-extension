@@ -49,14 +49,12 @@ export class PyCommandBuilder {
                 return undefined;
             }
 
-            // Get the active environment path based on the workspace.
-            const environmentPath: EnvironmentPath | undefined = activeWorkspace
+            const activeEnvironmentPath: EnvironmentPath | undefined = activeWorkspace
                 ? pythonApi.environments.getActiveEnvironmentPath(activeWorkspace)
                 : pythonApi.environments.getActiveEnvironmentPath();
 
-            // Resolve the environment details.
             const environment: ResolvedEnvironment | undefined =
-                await pythonApi.environments.resolveEnvironment(environmentPath);
+                await pythonApi.environments.resolveEnvironment(activeEnvironmentPath);
             const pythonExecutablePath: string | undefined = environment?.executable.uri?.fsPath;
             if (!pythonExecutablePath) {
                 logger.error("Failed to resolve Python executable path from the active environment.");
@@ -87,7 +85,6 @@ export class PyCommandBuilder {
         logger.trace(`Python executable path: ${pythonExe}`);
 
         if (!pythonExe) {
-            // Return an empty string if the Python executable cannot be determined.
             return "";
         }
 

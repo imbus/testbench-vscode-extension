@@ -3,7 +3,7 @@
     "publisher": "imbus",
     "displayName": "TestBench Visual Studio Code Extension",
     "description": "A Visual Studio Code extension for TestBench.",
-    "icon": "resources/icons/iTB-EE-Logo-256x256.png",
+    "icon": "resources/icons/testbench-logo.png",
     "version": "0.0.1",
     "repository": {
         "type": "git",
@@ -290,36 +290,12 @@
                 }
             },
             {
-                "command": "testbenchExtension.showProfiles",
-                "title": "TestBench: Manage Profiles"
-            },
-            {
                 "command": "testbenchExtension.logout",
                 "title": "Logout",
                 "icon": {
                     "light": "resources/icons/logout.svg",
                     "dark": "resources/icons/logout.svg"
                 }
-            },
-            {
-                "command": "testbenchExtension.manageProfiles",
-                "title": "TestBench: Manage Connection Profiles",
-                "category": "Profiles"
-            },
-            {
-                "command": "testbenchExtension.selectActiveProfile",
-                "title": "TestBench: Select Active Connection Profile",
-                "category": "Profiles"
-            },
-            {
-                "command": "testbenchExtension.addNewProfile",
-                "title": "TestBench: Add New Connection Profile",
-                "category": "Profiles"
-            },
-            {
-                "command": "testbenchExtension.deleteProfile",
-                "title": "TestBench: Delete Connection Profile",
-                "category": "Profiles"
             },
             {
                 "command": "testbenchExtension.clearInternalTestbenchFolder",
@@ -340,16 +316,16 @@
                 "icon": "$(robotcode-robot)"
             },
             {
-                "command": "testbenchExtension.fetchReportForSelectedTreeItem",
-                "title": "Fetch Report",
-                "icon": {
-                    "light": "resources/icons/download-light.svg",
-                    "dark": "resources/icons/download-dark.svg"
-                }
-            },
-            {
                 "command": "testbenchExtension.makeRoot",
                 "title": "Make root"
+            },
+            {
+                "command": "testbenchExtension.resetProjectTreeViewRoot",
+                "title": "Reset Project View Root"
+            },
+            {
+                "command": "testbenchExtension.resetTestThemeTreeViewRoot",
+                "title": "Reset Test Theme View Root"
             },
             {
                 "command": "testbenchExtension.displayAllProjects",
@@ -384,14 +360,6 @@
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
                     "dark": "resources/icons/refresh-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.displayCommands",
-                "title": "TestBench: Display Commands",
-                "icon": {
-                    "light": "resources/icons/more-light.svg",
-                    "dark": "resources/icons/more-dark.svg"
                 }
             },
             {
@@ -581,7 +549,7 @@
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == tov || viewItem == Version || viewItem == TestThemeNode)",
+                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == TestThemeNode)",
                     "group": "navigation"
                 },
                 {
@@ -598,6 +566,18 @@
                     "command": "testbenchExtension.createInteractionUnderSubdivision",
                     "when": "view == testElementsView && viewItem == subdivision",
                     "group": "1_modification"
+                },
+                {
+                    "command": "testbenchExtension.resetProjectTreeViewRoot",
+                    "when": "view == projectManagementTree && viewItem == customRoot.project",
+                    "group": "navigation@1",
+                    "title": "Reset Custom Root"
+                },
+                {
+                    "command": "testbenchExtension.resetTestThemeTreeViewRoot",
+                    "when": "view == testThemeTree && viewItem == customRoot.theme",
+                    "group": "navigation@1",
+                    "title": "Reset Custom Root"
                 }
             ]
         },

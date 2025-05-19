@@ -5,10 +5,10 @@
  */
 
 import * as vscode from "vscode";
-import { v4 as uuidv4 } from "uuid"; // For generating unique profile IDs.
+import { v4 as uuidv4 } from "uuid";
 import { logger } from "./extension";
+import { StorageKeys } from "./constants";
 
-// Structure of a TestBench Profile
 export interface TestBenchProfile {
     id: string; // Unique identifier for the profile (e.g., a UUID)
     label: string; // User-friendly name for the profile (e.g., "Dev Server", "Client X Prod")
@@ -17,19 +17,17 @@ export interface TestBenchProfile {
     username: string;
 }
 
-// Constants for storage keys
-const PROFILES_STORAGE_KEY = "testbench.profiles";
-const ACTIVE_PROFILE_ID_KEY = "testbench.activeProfileId";
-const PROFILE_PASSWORD_SECRET_PREFIX = "testbench.profile.password."; // Prefix for storing passwords in SecretStorage
-
 /**
  * Retrieves all saved TestBench profiles.
- * @param context The extension context.
- * @returns A promise that resolves to an array of TestBenchProfile objects.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @returns {Promise<TestBenchProfile[]>} A promise that resolves to an array of TestBenchProfile objects.
  */
 export async function getProfiles(context: vscode.ExtensionContext): Promise<TestBenchProfile[]> {
     try {
-        const profiles = context.globalState.get<TestBenchProfile[]>(PROFILES_STORAGE_KEY, []);
+        const profiles: TestBenchProfile[] = context.globalState.get<TestBenchProfile[]>(
+            StorageKeys.PROFILES_STORAGE_KEY,
+            []
+        );
         logger.trace(`[ProfileManager] Retrieved ${profiles.length} profiles.`);
         return profiles;
     } catch (error) {
@@ -41,10 +39,10 @@ export async function getProfiles(context: vscode.ExtensionContext): Promise<Tes
 /**
  * Saves or updates a TestBench profile.
  * If it's a new profile (no id or id not found), a new id will be generated.
- * @param context The extension context.
+ * @param {vscode.ExtensionContext} context The extension context.
  * @param profile The profile data to save. The `id` can be omitted for new profiles.
- * @param password The password for the profile (optional, will be stored in SecretStorage).
- * @returns The ID of the saved profile.
+ * @param {string} password The password for the profile (optional, will be stored in SecretStorage).
+ * @returns {Promise<string>} The ID of the saved profile.
  */
 export async function saveProfile(
     context: vscode.ExtensionContext,
@@ -52,63 +50,62 @@ export async function saveProfile(
     password?: string
 ): Promise<string> {
     try {
-        const profiles = await getProfiles(context);
+        const profiles: TestBenchProfile[] = await getProfiles(context);
         let profileToSave: TestBenchProfile;
 
-        const existingProfileIndex = profile.id ? profiles.findIndex((p) => p.id === profile.id) : -1;
+        const existingProfileIndex: number = profile.id ? profiles.findIndex((p) => p.id === profile.id) : -1;
 
         if (existingProfileIndex !== -1 && profile.id) {
             // Update existing profile
-            profileToSave = { ...profiles[existingProfileIndex], ...profile }; // Ensure all fields are merged
+            profileToSave = { ...profiles[existingProfileIndex], ...profile };
             profiles[existingProfileIndex] = profileToSave;
             logger.trace(`[ProfileManager] Updating profile: ${profileToSave.label} (ID: ${profileToSave.id})`);
         } else {
             // Add new profile
-            const newId = uuidv4();
+            const newId: string = uuidv4();
             profileToSave = { ...profile, id: newId } as TestBenchProfile; // Cast because 'id' is now guaranteed
             profiles.push(profileToSave);
             logger.trace(`[ProfileManager] Adding new profile: ${profileToSave.label} (ID: ${profileToSave.id})`);
         }
 
-        await context.globalState.update(PROFILES_STORAGE_KEY, profiles);
+        await context.globalState.update(StorageKeys.PROFILES_STORAGE_KEY, profiles);
 
+        // Allow empty string password, but not undefined
         if (password !== undefined) {
-            // Allow empty string password, but not undefined
-            await context.secrets.store(PROFILE_PASSWORD_SECRET_PREFIX + profileToSave.id, password);
+            await context.secrets.store(StorageKeys.PROFILE_PASSWORD_SECRET_PREFIX + profileToSave.id, password);
             logger.trace(`[ProfileManager] Password stored for profile ID: ${profileToSave.id}`);
         }
         return profileToSave.id;
     } catch (error) {
         logger.error("[ProfileManager] Error saving profile:", error);
         vscode.window.showErrorMessage(`Failed to save profile: ${(error as Error).message}`);
-        throw error; // Re-throw to allow caller to handle
+        throw error;
     }
 }
 
 /**
  * Deletes a TestBench profile and its associated password.
- * @param context The extension context.
- * @param profileId The ID of the profile to delete.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} profileIdToDelete The ID of the profile to delete.
  */
-export async function deleteProfile(context: vscode.ExtensionContext, profileId: string): Promise<void> {
+export async function deleteProfile(context: vscode.ExtensionContext, profileIdToDelete: string): Promise<void> {
     try {
-        let profiles = await getProfiles(context);
-        const initialLength = profiles.length;
-        profiles = profiles.filter((p) => p.id !== profileId);
+        let profiles: TestBenchProfile[] = await getProfiles(context);
+        const initialLength: number = profiles.length;
+        profiles = profiles.filter((p) => p.id !== profileIdToDelete);
 
         if (profiles.length < initialLength) {
-            await context.globalState.update(PROFILES_STORAGE_KEY, profiles);
-            await context.secrets.delete(PROFILE_PASSWORD_SECRET_PREFIX + profileId);
-            logger.trace(`[ProfileManager] Deleted profile with ID: ${profileId}`);
+            await context.globalState.update(StorageKeys.PROFILES_STORAGE_KEY, profiles);
+            await context.secrets.delete(StorageKeys.PROFILE_PASSWORD_SECRET_PREFIX + profileIdToDelete);
+            logger.trace(`[ProfileManager] Deleted profile with ID: ${profileIdToDelete}`);
 
-            // If the deleted profile was the active one, clear the active profile setting
-            const activeProfileId = await getActiveProfileId(context);
-            if (activeProfileId === profileId) {
+            const activeProfileId: string | undefined = await getActiveProfileId(context);
+            if (activeProfileId === profileIdToDelete) {
                 await setActiveProfileId(context, undefined);
                 logger.trace("[ProfileManager] Cleared active profile as it was deleted.");
             }
         } else {
-            logger.warn(`[ProfileManager] Profile with ID ${profileId} not found for deletion.`);
+            logger.warn(`[ProfileManager] Profile with ID ${profileIdToDelete} not found for deletion.`);
         }
     } catch (error) {
         logger.error("[ProfileManager] Error deleting profile:", error);
@@ -118,8 +115,8 @@ export async function deleteProfile(context: vscode.ExtensionContext, profileId:
 
 /**
  * Retrieves the stored password for a given profile ID.
- * @param context The extension context.
- * @param profileId The ID of the profile.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} profileId The ID of the profile.
  * @returns A promise that resolves to the password string, or undefined if not found or an error occurs.
  */
 export async function getPasswordForProfile(
@@ -127,7 +124,9 @@ export async function getPasswordForProfile(
     profileId: string
 ): Promise<string | undefined> {
     try {
-        const password = await context.secrets.get(PROFILE_PASSWORD_SECRET_PREFIX + profileId);
+        const password: string | undefined = await context.secrets.get(
+            StorageKeys.PROFILE_PASSWORD_SECRET_PREFIX + profileId
+        );
         if (password) {
             logger.trace(`[ProfileManager] Password retrieved for profile ID: ${profileId}`);
         } else {
@@ -142,15 +141,15 @@ export async function getPasswordForProfile(
 
 /**
  * Sets the ID of the currently active TestBench profile.
- * @param context The extension context.
- * @param profileId The ID of the profile to set as active, or undefined to clear the active profile.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string | undefined} profileId The ID of the profile to set as active, or undefined to clear the active profile.
  */
 export async function setActiveProfileId(
     context: vscode.ExtensionContext,
     profileId: string | undefined
 ): Promise<void> {
     try {
-        await context.globalState.update(ACTIVE_PROFILE_ID_KEY, profileId);
+        await context.globalState.update(StorageKeys.ACTIVE_PROFILE_ID_KEY, profileId);
         if (profileId) {
             logger.trace(`[ProfileManager] Active profile ID set to: ${profileId}`);
         } else {
@@ -163,12 +162,12 @@ export async function setActiveProfileId(
 
 /**
  * Gets the ID of the currently active TestBench profile.
- * @param context The extension context.
- * @returns A promise that resolves to the active profile ID string, or undefined if none is set.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @returns {Promise<string | undefined>} A promise that resolves to the active profile ID string, or undefined if none is set.
  */
 export async function getActiveProfileId(context: vscode.ExtensionContext): Promise<string | undefined> {
     try {
-        const activeId = context.globalState.get<string | undefined>(ACTIVE_PROFILE_ID_KEY);
+        const activeId = context.globalState.get<string | undefined>(StorageKeys.ACTIVE_PROFILE_ID_KEY);
         logger.trace(`[ProfileManager] Retrieved active profile ID: ${activeId}`);
         return activeId;
     } catch (error) {
@@ -179,15 +178,15 @@ export async function getActiveProfileId(context: vscode.ExtensionContext): Prom
 
 /**
  * Retrieves the full details of the currently active TestBench profile.
- * @param context The extension context.
- * @returns A promise that resolves to the TestBenchProfile object if an active profile is set and found, otherwise undefined.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @returns {Promise<TestBenchProfile | undefined>} A promise that resolves to the TestBenchProfile object if an active profile is set and found, otherwise undefined.
  */
 export async function getActiveProfile(context: vscode.ExtensionContext): Promise<TestBenchProfile | undefined> {
     try {
-        const activeId = await getActiveProfileId(context);
+        const activeId: string | undefined = await getActiveProfileId(context);
         if (activeId) {
-            const profiles = await getProfiles(context);
-            const activeProfile = profiles.find((p) => p.id === activeId);
+            const profiles: TestBenchProfile[] = await getProfiles(context);
+            const activeProfile: TestBenchProfile | undefined = profiles.find((p) => p.id === activeId);
             if (activeProfile) {
                 logger.trace(`[ProfileManager] Active profile found: ${activeProfile.label}`);
                 return activeProfile;
@@ -195,7 +194,7 @@ export async function getActiveProfile(context: vscode.ExtensionContext): Promis
                 logger.warn(
                     `[ProfileManager] Active profile ID ${activeId} set, but profile not found in storage. Clearing active ID.`
                 );
-                await setActiveProfileId(context, undefined); // Clean up inconsistent state
+                await setActiveProfileId(context, undefined);
             }
         }
         logger.trace("[ProfileManager] No active profile found.");
@@ -208,7 +207,7 @@ export async function getActiveProfile(context: vscode.ExtensionContext): Promis
 
 /**
  * Clears the currently set active profile.
- * @param context The extension context.
+ * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function clearActiveProfile(context: vscode.ExtensionContext): Promise<void> {
     await setActiveProfileId(context, undefined);
@@ -216,11 +215,11 @@ export async function clearActiveProfile(context: vscode.ExtensionContext): Prom
 
 /**
  * Checks if a profile with the given credentials (server, port, username) already exists.
- * @param context The extension context.
- * @param serverName The server name to check.
- * @param portNumber The port number to check.
- * @param username The username to check.
- * @returns A promise that resolves to the existing TestBenchProfile if a duplicate is found, otherwise undefined.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} serverName The server name to check.
+ * @param {number} portNumber The port number to check.
+ * @param {string} username The username to check.
+ * @returns {Promise<TestBenchProfile | undefined>} A promise that resolves to the existing TestBenchProfile if a duplicate is found, otherwise undefined.
  */
 export async function findProfileByCredentials(
     context: vscode.ExtensionContext,
@@ -229,7 +228,7 @@ export async function findProfileByCredentials(
     username: string
 ): Promise<TestBenchProfile | undefined> {
     try {
-        const profiles = await getProfiles(context);
+        const profiles: TestBenchProfile[] = await getProfiles(context);
         for (const profile of profiles) {
             if (
                 profile.serverName.toLowerCase() === serverName.toLowerCase() &&
@@ -239,11 +238,11 @@ export async function findProfileByCredentials(
                 logger.trace(
                     `[ProfileManager] Found existing profile with matching server/user: ${profile.label} (ID: ${profile.id})`
                 );
-                return profile; // Found a profile with the same server, port, and username
+                return profile;
             }
         }
         logger.trace(`[ProfileManager] No existing profile found with the provided server/user.`);
-        return undefined; // No duplicate found
+        return undefined;
     } catch (error) {
         logger.error("[ProfileManager] Error checking for duplicate profile by server/user:", error);
         return undefined;
