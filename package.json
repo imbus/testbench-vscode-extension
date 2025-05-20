@@ -586,7 +586,7 @@
                 {
                     "id": "testBenchExplorer",
                     "title": "TestBench",
-                    "icon": "resources/icons/TBU_Logo_cropped.svg"
+                    "icon": "resources/icons/testbench-logo.svg"
                 }
             ]
         },
