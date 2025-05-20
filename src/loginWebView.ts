@@ -387,7 +387,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const iconUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", iconName)
         );
-        logger.trace(`[LoginWebView] Created icon URI: ${iconUri}`);
         return iconUri;
     }
 
@@ -687,27 +686,31 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         </h3>
                         <form id="addProfileForm">
                             <div class="form-group">
-                            <label for="profileLabel">Profile Label (e.g., "My Dev Server")</label>
-                            <input type="text" id="profileLabel" name="profileLabel" placeholder="Optional, e.g., Main TestBench">
+                                <label for="profileLabel">Profile Label (e.g., "My Dev Server")</label>
+                                <input type="text" id="profileLabel" name="profileLabel" placeholder="Optional, e.g., Main TestBench">
                             </div>
                             <div class="form-group">
-                            <label for="serverName">Server Hostname or IP Address</label>
-                            <input type="text" id="serverName" name="serverName" required placeholder="e.g., testbench.example.com">
+                                <label for="serverName">Server Hostname or IP Address</label>
+                                <input type="text" id="serverName" name="serverName" required placeholder="e.g., testbench.example.com">
                             </div>
                             <div class="form-group">
-                            <label for="portNumber">Port Number</label>
-                            <input type="number" id="portNumber" name="portNumber" value="9445" required placeholder="e.g., 9445">
+                                <label for="portNumber">Port Number</label>
+                                <input type="number" id="portNumber" name="portNumber" value="9445" required placeholder="e.g., 9445">
                             </div>
                             <div class="form-group">
-                            <label for="username">Username</label>
-                            <input type="text" id="username" name="username" required placeholder="Your TestBench username">
+                                <label for="username">Username</label>
+                                <input type="text" id="username" name="username" required placeholder="Your TestBench username">
                             </div>
                             <div class="form-group">
-                            <label for="password">Password</label>
-                            <div class="password-wrapper">
-                                <input type="password" id="password" name="password" placeholder="Enter password (stored securely)">
+                                <label for="password">Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="password" name="password" placeholder="Enter password">
                                 </div>
-                            <small style="color: var(--vscode-descriptionForeground); font-size: 0.85em; margin-top: 4px; display: block;">Password will be stored securely in VS Code's Secret Storage.</small>
+                                <small style="color: var(--vscode-descriptionForeground); font-size: 0.85em; margin-top: 4px; display: block;">Only non-empty passwords will be stored.</small>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="storePasswordCheckbox" name="storePassword" checked style="width: auto; height: auto; margin-right: 5px;">
+                                <label for="storePasswordCheckbox" style="margin-bottom: 0; font-weight: normal;">Store password for this profile</label>
                             </div>
                             <button type="button" id="saveProfileBtn">
                                 <span class="icon icon-save"></span>                
@@ -732,6 +735,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         const portNumberInput = document.getElementById('portNumber');
                         const usernameInput = document.getElementById('username');
                         const passwordInput = document.getElementById('password');
+                        const storePasswordCheckbox = document.getElementById('storePasswordCheckbox');
                         const saveProfileBtn = document.getElementById('saveProfileBtn');
                         const addProfileForm = document.getElementById('addProfileForm');
 
@@ -808,6 +812,40 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                             }
                         }
 
+                        saveProfileBtn.addEventListener('click', function() {                        
+                        if (!serverNameInput.value.trim() || !portNumberInput.value.trim() || !usernameInput.value.trim()) {
+                            displayMessage('error', 'Server, Port, and Username are required fields.');
+                            return;
+                        }
+                        if (isNaN(parseInt(portNumberInput.value, 10))) {
+                            displayMessage('error', 'Port must be a valid number.');
+                            portNumberInput.focus();
+                            return;
+                        }
+
+                        let passwordToSend = passwordInput.value;
+                        if (!storePasswordCheckbox.checked || passwordInput.value.trim() === '') {
+                            passwordToSend = undefined;
+                        }
+
+                        const payload = {
+                            label: profileLabelInput.value.trim() || \`<span class="math-inline">\\{usernameInput\\.value\\.trim\\(\\)\\}@</span>{serverNameInput.value.trim()}\`,
+                            portNumber: parseInt(portNumberInput.value, 10),
+                            username: usernameInput.value.trim(),
+                            password: passwordToSend
+                        };
+                        saveProfileBtn.disabled = true;
+                        saveProfileBtn.textContent = 'Saving...';
+
+                        vscode.postMessage({ command: '${WebviewMessageCommands.SAVE_NEW_PROFILE}', payload });
+                        setTimeout(() => {
+                                passwordInput.value = '';
+                                storePasswordCheckbox.checked = true;
+                                saveProfileBtn.disabled = false;
+                                saveProfileBtn.innerHTML = '<span class="icon icon-save"></span> Save New Profile';
+                            }, 1000);
+                        });
+
                         profilesListEl.addEventListener('click', function(event) {
                             const targetButton = event.target.closest('button');
 
@@ -841,7 +879,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                                 serverName: serverNameInput.value.trim(),
                                 portNumber: parseInt(portNumberInput.value, 10),
                                 username: usernameInput.value.trim(),
-                                password: passwordInput.value // Password can be empty, handled by auth provider
+                                password: passwordInput.value
                             };
 
                             saveProfileBtn.disabled = true;
@@ -851,10 +889,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         
                             setTimeout(() => {
                                 passwordInput.value = '';
-                                // addProfileForm.reset();
                                 saveProfileBtn.disabled = false;
                                 saveProfileBtn.innerHTML = '<span class="icon icon-save"></span> Save New Profile';
-                                // If using textContent and icon was via ::before, it's simpler: saveProfileBtn.textContent = 'Save New Profile';
                             }, 1000);
 
                         });

@@ -112,6 +112,8 @@ let currentConfigScope: vscode.Uri | undefined;
 // Global variable to store the active editor instance to determine the best scope for configuration.
 let activeEditor: vscode.TextEditor | undefined;
 
+let isHandlingSessionChange = false;
+
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
  * It takes a handler function as input and returns a new function that executes the original handler inside a try/catch block.
@@ -185,11 +187,6 @@ export async function loadConfiguration(context: vscode.ExtensionContext, newSco
     logger.trace(`Loading configuration from ${configSource}`);
 
     logger.updateCachedLogLevel();
-
-    // If storePassword is set to false, delete the stored password immediately.
-    if (!config.get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)) {
-        // TODO: Remove the password of the current user.
-    }
 }
 
 /**
@@ -316,20 +313,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 return;
             }
 
-            const passwordIsStored: boolean = !!(await profileManager.getPasswordForProfile(context, activeProfile.id));
-            const requiresPasswordAndNotStored: boolean =
-                !passwordIsStored && getConfig().get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false);
-
-            if (requiresPasswordAndNotStored) {
-                logger.warn(
-                    `[Cmd] Auto-login: Password storage enabled, but no password found for active profile "${activeProfile.label}". Auto-login will likely fail if password is required.`
-                );
-            } else if (!getConfig().get<boolean>(ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)) {
-                logger.info(
-                    `[Cmd] Auto-login: Password storage is disabled. Auto-login for profile "${activeProfile.label}" will only work if it does not require a password or server remembers session via other means.`
-                );
-            }
-
             if (!authProviderInstance) {
                 logger.error("[Cmd] Auto-login: AuthenticationProvider instance is not available.");
                 return;
@@ -350,7 +333,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     logger.info(
                         `[Cmd] Auto-login successful for profile: ${activeProfile.label} (session restored/created silently).`
                     );
-                    // The onDidChangeSessions listener in extension.ts handles further setup.
                 } else {
                     logger.info(
                         "[Cmd] Auto-login: No session restored/created silently. User may need to login manually."
@@ -358,9 +340,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 }
             } catch (error: any) {
                 logger.warn(
-                    `[Cmd] Auto-login attempt for profile "${activeProfile.label}" failed silently (this is expected if credentials/profile are incomplete or server issues prevent silent login): ${error.message}`
+                    `[Cmd] Auto-login attempt for profile "${activeProfile?.label || "unknown"}" failed silently (this is expected if credentials/profile are incomplete or server issues prevent silent login): ${error.message}`
                 );
-                await profileManager.clearActiveProfile(context);
             }
         } else {
             logger.trace("[Cmd] Auto-login is disabled in settings.");
@@ -378,7 +359,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 ["api_access"],
                 { createIfNone: true }
             );
-            // The onDidChangeSessions listener handles connection object setup
             if (session) {
                 logger.info(`[Cmd] Login successful, session ID: ${session.id}`);
                 initializeTreeViews(context);
@@ -412,7 +392,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 } else {
                     logger.error("[Cmd] AuthProvider instance not available for logout.");
                     vscode.window.showErrorMessage("Logout failed: Auth provider not initialized.");
-                    // Manual cleanup
                     await handleTestBenchSessionChange(context);
                 }
             } else {
@@ -984,6 +963,7 @@ async function handleTestBenchSessionChange(
                     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
                     getLoginWebViewProvider()?.updateWebviewHTMLContent();
                     await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
+
                     getProjectManagementTreeDataProvider()?.refresh(true);
                     getTestThemeTreeDataProvider()?.clearTree();
                     clearTestElementsTreeView();
@@ -1123,6 +1103,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.authentication.onDidChangeSessions(async (e) => {
             if (e.provider.id === TESTBENCH_AUTH_PROVIDER_ID) {
+                if (isHandlingSessionChange) {
+                    logger.trace(
+                        "[Extension] onDidChangeSessions: Already handling a session change, skipping this invocation."
+                    );
+                    return;
+                }
+                isHandlingSessionChange = true;
                 logger.info("[Extension] TestBench authentication sessions changed.");
                 try {
                     const currentSession = await vscode.authentication.getSession(
@@ -1137,6 +1124,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 } catch (error) {
                     logger.error("[Extension] Error getting session in onDidChangeSessions listener:", error);
                     await handleTestBenchSessionChange(context, undefined);
+                } finally {
+                    isHandlingSessionChange = false;
                 }
             }
         })
@@ -1192,11 +1181,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
         logger.info("[Extension] Auto-login configured. Triggering automatic login command.");
         // Note: Dont use await here, which would block the login webview display during autologin.
-        vscode.commands
-            .executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation)
-            .then(undefined, (err) => {
-                logger.error("[Extension] Error triggering auto-login command during activation:", err);
-            });
+        vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
     } else {
         logger.info("[Extension] Auto-login is disabled. Skipping automatic login command.");
     }
