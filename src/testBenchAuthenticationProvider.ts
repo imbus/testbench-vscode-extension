@@ -81,9 +81,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         scopes: readonly string[],
         options?: vscode.AuthenticationProviderSessionOptions
     ): Promise<vscode.AuthenticationSession> {
-        logger.trace(`[AuthProvider] createSession called. Scopes: ${scopes}, Options: ${JSON.stringify(options)}`);
-
-        logger.trace(`[AuthProvider] createSession called. Scopes: ${scopes}, Options: ${JSON.stringify(options)}`);
         const isSilent: boolean = this._isAttemptingSilentAutoLogin;
         if (this._isAttemptingSilentAutoLogin) {
             this._isAttemptingSilentAutoLogin = false;
@@ -124,7 +121,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 if (isSilent) {
                     throw new Error("No active profile available for silent auto-login.");
                 }
-                // Fallback to QuickPick if no hint or hint invalid
                 logger.trace("[AuthProvider] No valid pre-selected profile, proceeding with QuickPick.");
                 const profiles = await profileManager.getProfiles(this.context);
                 const quickPickItems: (vscode.QuickPickItem & { profile?: TestBenchProfile; isAddNew?: boolean })[] = [
