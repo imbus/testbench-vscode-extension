@@ -130,6 +130,7 @@ let authProviderInstance = null;
 let currentConfigScope;
 // Global variable to store the active editor instance to determine the best scope for configuration.
 let activeEditor;
+let isHandlingSessionChange = false;
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
  * It takes a handler function as input and returns a new function that executes the original handler inside a try/catch block.
@@ -196,10 +197,6 @@ async function loadConfiguration(context, newScope) {
         : "global (no workspace)";
     exports.logger.trace(`Loading configuration from ${configSource}`);
     exports.logger.updateCachedLogLevel();
-    // If storePassword is set to false, delete the stored password immediately.
-    if (!config.get(constants_1.ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)) {
-        // TODO: Remove the password of the current user.
-    }
 }
 /**
  * Initializes the Test Elements Tree View.
@@ -302,14 +299,6 @@ async function registerExtensionCommands(context) {
                 exports.logger.info("[Cmd] Auto-login: No last active profile found. Cannot auto-login.");
                 return;
             }
-            const passwordIsStored = !!(await profileManager.getPasswordForProfile(context, activeProfile.id));
-            const requiresPasswordAndNotStored = !passwordIsStored && getConfig().get(constants_1.ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false);
-            if (requiresPasswordAndNotStored) {
-                exports.logger.warn(`[Cmd] Auto-login: Password storage enabled, but no password found for active profile "${activeProfile.label}". Auto-login will likely fail if password is required.`);
-            }
-            else if (!getConfig().get(constants_1.ConfigKeys.STORE_PASSWORD_AFTER_LOGIN, false)) {
-                exports.logger.info(`[Cmd] Auto-login: Password storage is disabled. Auto-login for profile "${activeProfile.label}" will only work if it does not require a password or server remembers session via other means.`);
-            }
             if (!authProviderInstance) {
                 exports.logger.error("[Cmd] Auto-login: AuthenticationProvider instance is not available.");
                 return;
@@ -321,15 +310,13 @@ async function registerExtensionCommands(context) {
                 const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], { createIfNone: true });
                 if (session) {
                     exports.logger.info(`[Cmd] Auto-login successful for profile: ${activeProfile.label} (session restored/created silently).`);
-                    // The onDidChangeSessions listener in extension.ts handles further setup.
                 }
                 else {
                     exports.logger.info("[Cmd] Auto-login: No session restored/created silently. User may need to login manually.");
                 }
             }
             catch (error) {
-                exports.logger.warn(`[Cmd] Auto-login attempt for profile "${activeProfile.label}" failed silently (this is expected if credentials/profile are incomplete or server issues prevent silent login): ${error.message}`);
-                await profileManager.clearActiveProfile(context);
+                exports.logger.warn(`[Cmd] Auto-login attempt for profile "${activeProfile?.label || "unknown"}" failed silently (this is expected if credentials/profile are incomplete or server issues prevent silent login): ${error.message}`);
             }
         }
         else {
@@ -343,7 +330,6 @@ async function registerExtensionCommands(context) {
         try {
             // Triggers TestBenchAuthenticationProvider.createSession if no session exists
             const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], { createIfNone: true });
-            // The onDidChangeSessions listener handles connection object setup
             if (session) {
                 exports.logger.info(`[Cmd] Login successful, session ID: ${session.id}`);
                 initializeTreeViews(context);
@@ -370,7 +356,6 @@ async function registerExtensionCommands(context) {
                 else {
                     exports.logger.error("[Cmd] AuthProvider instance not available for logout.");
                     vscode.window.showErrorMessage("Logout failed: Auth provider not initialized.");
-                    // Manual cleanup
                     await handleTestBenchSessionChange(context);
                 }
             }
@@ -906,6 +891,11 @@ async function activate(context) {
     // Session Change Listener
     context.subscriptions.push(vscode.authentication.onDidChangeSessions(async (e) => {
         if (e.provider.id === testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID) {
+            if (isHandlingSessionChange) {
+                exports.logger.trace("[Extension] onDidChangeSessions: Already handling a session change, skipping this invocation.");
+                return;
+            }
+            isHandlingSessionChange = true;
             exports.logger.info("[Extension] TestBench authentication sessions changed.");
             try {
                 const currentSession = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], { createIfNone: false, silent: true });
@@ -915,6 +905,9 @@ async function activate(context) {
             catch (error) {
                 exports.logger.error("[Extension] Error getting session in onDidChangeSessions listener:", error);
                 await handleTestBenchSessionChange(context, undefined);
+            }
+            finally {
+                isHandlingSessionChange = false;
             }
         }
     }));
@@ -962,11 +955,7 @@ async function activate(context) {
     if (getConfig().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
         exports.logger.info("[Extension] Auto-login configured. Triggering automatic login command.");
         // Note: Dont use await here, which would block the login webview display during autologin.
-        vscode.commands
-            .executeCommand(constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation)
-            .then(undefined, (err) => {
-            exports.logger.error("[Extension] Error triggering auto-login command during activation:", err);
-        });
+        vscode.commands.executeCommand(constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation);
     }
     else {
         exports.logger.info("[Extension] Auto-login is disabled. Skipping automatic login command.");
