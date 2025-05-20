@@ -66,7 +66,7 @@ export function getLoginWebViewProvider(): loginWebView.LoginWebViewProvider | n
     return loginWebViewProvider;
 }
 
-/** Module-private variables to hold the tree data providers and views. */
+/** Global variables to hold the tree data providers and views. */
 export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
 export let testThemeTreeDataProvider: TestThemeTreeDataProvider | null = null;
 export let testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDataProvider | undefined;
@@ -81,7 +81,7 @@ let authProviderInstance: TestBenchAuthenticationProvider | null = null;
 let currentConfigScope: vscode.Uri | undefined;
 // Global variable to store the active editor instance to determine the best scope for configuration.
 let activeEditor: vscode.TextEditor | undefined;
-
+// Prevent multiple session change handling simultaneously
 let isHandlingSessionChange = false;
 
 /**
