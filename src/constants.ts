@@ -46,12 +46,6 @@ export const WebviewMessageCommands = {
 
 // --- Extension Configuration Setting Keys ---
 export const ConfigKeys = {
-    // TODO: Remove credentials from extension settings
-    SERVER_NAME: "serverName",
-    PORT_NUMBER: "portNumber",
-    USERNAME: "username",
-
-    STORE_PASSWORD_AFTER_LOGIN: "storePasswordAfterLogin",
     AUTO_LOGIN: "automaticLoginAfterExtensionActivation",
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",
     CLEAR_REPORT_AFTER_PROCESSING: "clearReportAfterProcessing",
