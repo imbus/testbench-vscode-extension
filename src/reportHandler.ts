@@ -782,7 +782,7 @@ async function runRobotFrameworkTestGenerationProcess(
     cancellationToken: vscode.CancellationToken
 ): Promise<void | null> {
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
-    const downloadedZip: string | null = await fetchReportZipFromServer(
+    const downloadedReportZipPath: string | null = await fetchReportZipFromServer(
         projectKey,
         cycleKey,
         folderNameOfInternalTestbenchFolder,
@@ -790,7 +790,7 @@ async function runRobotFrameworkTestGenerationProcess(
         progress,
         cancellationToken
     );
-    if (!downloadedZip) {
+    if (!downloadedReportZipPath) {
         logger.warn("Download cancelled or failed.");
         return null;
     }
@@ -805,8 +805,8 @@ async function runRobotFrameworkTestGenerationProcess(
     }
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
-        await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedZip);
-    await cleanUpReportFileIfConfiguredInSettings(downloadedZip);
+        await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
+    await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipPath);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         const testGenerationFailedMessage: string = "Test generation failed.";
         logger.error(testGenerationFailedMessage);
