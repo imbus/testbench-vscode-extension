@@ -270,27 +270,10 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
     }
     initializeTestElementsTreeView(context);
     if (_projectTreeView && _projectManagementTreeDataProvider) {
-        const pmProviderInstance = _projectManagementTreeDataProvider;
-        projectManagementTreeView.setupProjectTreeViewEventListeners(_projectTreeView, pmProviderInstance);
-
-        _projectTreeView.onDidChangeSelection(async (event) => {
-            if (event.selection.length > 0 && pmProviderInstance) {
-                await client?.stop();
-                const selectedElement: projectManagementTreeView.BaseTestBenchTreeItem = event.selection[0];
-                logger.trace(
-                    `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
-                );
-
-                const { projectName, tovName } = pmProviderInstance.getProjectAndTovNamesForItem(selectedElement);
-
-                logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
-                if (projectName && tovName) {
-                    await initializeLanguageServer(projectName, tovName);
-                } else {
-                    logger.warn("Could not determine context for LS restart from selection.");
-                }
-            }
-        });
+        projectManagementTreeView.setupProjectTreeViewEventListeners(
+            _projectTreeView,
+            _projectManagementTreeDataProvider
+        );
     }
 }
 
