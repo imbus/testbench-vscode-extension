@@ -69,7 +69,7 @@ export function getLoginWebViewProvider(): loginWebView.LoginWebViewProvider | n
     return loginWebViewProvider;
 }
 
-/** Global variables to hold the tree data providers and views. */
+/** Module-private variables to hold the tree data providers and views. */
 export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
 export let testThemeTreeDataProvider: TestThemeTreeDataProvider | null = null;
 export let testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDataProvider | undefined;
@@ -244,10 +244,10 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
         testThemeTreeDataProvider.clearTree();
     }
     initializeTestElementsTreeView(context);
-    if (_projectTreeView && _projectManagementTreeDataProvider) {
+    if (projectTreeView && projectManagementTreeDataProvider) {
         projectManagementTreeView.setupProjectTreeViewEventListeners(
-            _projectTreeView,
-            _projectManagementTreeDataProvider
+            projectTreeView,
+            projectManagementTreeDataProvider
         );
     }
 }
@@ -705,10 +705,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 `Command Called: ${allExtensionCommands.displayInteractionsForSelectedTOV} for tree item:`,
                 treeItem
             );
-            const pmProvider = getProjectManagementTreeDataProvider();
-            const teProvider = getTestElementsTreeDataProvider();
 
-            if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
+            if (projectManagementTreeDataProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
                 if (tovKeyOfSelectedTreeElement && testElementsTreeDataProvider) {
                     const areTestElementsFetched: boolean = await testElementsTreeDataProvider.fetchTestElements(
@@ -722,7 +720,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         // Clicking on the "Show Robotframework Resources" button will not trigger project management tree onDidChangeSelection event,
                         // which restarts the language client.
                         // Retrieve the project name and TOV name from the tree item for language client restart.
-                        const projectAndTovNameObj = pmProvider.getProjectAndTovNamesForItem(treeItem);
+                        const projectAndTovNameObj =
+                            projectManagementTreeDataProvider.getProjectAndTovNamesForItem(treeItem);
                         if (projectAndTovNameObj) {
                             const { projectName, tovName } = projectAndTovNameObj;
                             if (projectName && tovName) {
@@ -925,8 +924,8 @@ async function handleTestBenchSessionChange(
                     getLoginWebViewProvider()?.updateWebviewHTMLContent();
                     await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
 
-                    getProjectManagementTreeDataProvider()?.refresh(true);
-                    getTestThemeTreeDataProvider()?.clearTree();
+                    projectManagementTreeDataProvider?.refresh(true);
+                    testThemeTreeDataProvider?.clearTree();
                     clearTestElementsTreeView();
                 }
                 return;
