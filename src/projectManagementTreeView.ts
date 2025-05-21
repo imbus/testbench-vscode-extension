@@ -1126,7 +1126,7 @@ export class BaseTestBenchTreeItem extends vscode.TreeItem {
                 default: { light: "TestCase-light.svg", dark: "TestCase-dark.svg" }
             },
             default: {
-                default: { light: "TBU_Logo_cropped.svg", dark: "TBU_Logo_cropped.svg" }
+                default: { light: "testbench-logo.svg", dark: "testbench-logo.svg" }
             }
         };
 
