@@ -19,7 +19,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
     public static readonly id = TESTBENCH_AUTH_PROVIDER_ID;
     public static readonly label = TESTBENCH_AUTH_PROVIDER_LABEL;
 
-    // In-memory store for active sessions to avoid constant secret reads for getSessions
+    // Store active sessions to avoid constant secret reads for getSessions
     // Key: VS Code session ID, Value: TestBenchSessionData
     private activeSessions: Map<string, TestBenchSessionData> = new Map();
 
@@ -81,7 +81,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         scopes: readonly string[],
         options?: vscode.AuthenticationProviderSessionOptions
     ): Promise<vscode.AuthenticationSession> {
-        logger.trace(`[AuthProvider] createSession called. Scopes: ${scopes}, Options: ${JSON.stringify(options)}`);
         const isSilent: boolean = this._isAttemptingSilentAutoLogin;
         if (this._isAttemptingSilentAutoLogin) {
             this._isAttemptingSilentAutoLogin = false;
@@ -153,7 +152,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     }
                     // Temp profile object, might not have ID yet if not saved
                     targetProfile = {
-                        id: "", // Will be set by saveProfile
+                        id: "",
                         label:
                             newProfileDetails.label || `${newProfileDetails.username}@${newProfileDetails.serverName}`,
                         serverName: newProfileDetails.serverName,
@@ -162,10 +161,13 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     };
                     passwordToUse = newProfileDetails.password;
 
-                    const saveNewConnectionChoice = await vscode.window.showQuickPick(["Yes", "No"], {
-                        placeHolder: `Save new connection "${targetProfile.label}"?`,
-                        ignoreFocusOut: true
-                    });
+                    const saveNewConnectionChoice: string | undefined = await vscode.window.showQuickPick(
+                        ["Yes", "No"],
+                        {
+                            placeHolder: `Save new connection "${targetProfile.label}"?`,
+                            ignoreFocusOut: true
+                        }
+                    );
                     if (saveNewConnectionChoice === "Yes") {
                         const savedId: string = await profileManager.saveProfile(
                             this.context,
@@ -183,38 +185,56 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             }
 
             if (passwordToUse === undefined && targetProfile) {
-                // if password wasn't set during new profile creation
                 passwordToUse = await profileManager.getPasswordForProfile(this.context, targetProfile.id);
+
                 if (passwordToUse === undefined) {
-                    if (isSilent) {
-                        // For silent auto-login, if password is not found and is required, fail silently
-                        throw new Error(
-                            `Password for profile "${targetProfile.label}" not found in storage. Auto-login failed.`
-                        );
-                    }
-                    passwordToUse = await vscode.window.showInputBox({
-                        prompt: `Enter password for ${targetProfile.label}`,
+                    logger.info(
+                        `[AuthProvider] Profile "${targetProfile.label}" has no stored password. Prompting for password ${isSilent ? "(during auto-login attempt)" : ""}.`
+                    );
+                    const manuallyEnteredPassword: string | undefined = await vscode.window.showInputBox({
+                        prompt: `Enter password for ${targetProfile.label}${isSilent ? " (auto-login attempt)" : ""}`,
                         password: true,
                         ignoreFocusOut: true
                     });
-                    // Empty string is a valid password
-                    if (passwordToUse === undefined) {
+
+                    if (manuallyEnteredPassword === undefined) {
+                        throw new Error(`Password entry cancelled${isSilent ? " for auto-login" : ""}.`);
+                    }
+                    if (manuallyEnteredPassword === "") {
+                        // User entered an empty password
+                        throw new Error(
+                            `Password cannot be empty. Please enter a valid password or cancel${isSilent ? " (auto-login attempt)" : ""}.`
+                        );
+                    }
+                    passwordToUse = manuallyEnteredPassword;
+                } else if (passwordToUse === "") {
+                    logger.warn(
+                        `[AuthProvider] Retrieved an empty string password for profile "${targetProfile.label}".`
+                    );
+                    if (isSilent) {
+                        throw new Error(
+                            `Empty password stored for profile "${targetProfile.label}". Auto-login failed. Please update profile interactively.`
+                        );
+                    }
+                    const manuallyEnteredPassword: string | undefined = await vscode.window.showInputBox({
+                        prompt: `Enter password for ${targetProfile.label} (stored password was empty)`,
+                        password: true,
+                        ignoreFocusOut: true
+                    });
+                    if (manuallyEnteredPassword === undefined) {
                         throw new Error("Password entry cancelled.");
                     }
-                    if (targetProfile.id) {
-                        const storePasswordChoice = await vscode.window.showQuickPick(["Yes", "No"], {
-                            placeHolder: `Save password for profile "${targetProfile.label}"?`,
-                            ignoreFocusOut: true
-                        });
-                        if (storePasswordChoice === "Yes") {
-                            await profileManager.saveProfile(this.context, targetProfile, passwordToUse);
-                        }
+                    if (manuallyEnteredPassword === "") {
+                        throw new Error("Password cannot be empty. Please enter a valid password or cancel.");
                     }
+                    passwordToUse = manuallyEnteredPassword;
                 }
             }
-
             if (!targetProfile || passwordToUse === undefined) {
                 throw new Error("Profile details or password not available for login.");
+            }
+            if (passwordToUse === "") {
+                throw new Error("Cannot attempt login with an empty password.");
             }
 
             logger.info(`[AuthProvider] Attempting login to ${targetProfile.serverName} as ${targetProfile.username}`);
@@ -228,6 +248,24 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
                 await profileManager.clearActiveProfile(this.context);
                 throw new Error("TestBench login failed. Check credentials or server details.");
+            }
+            const initialPasswordFromStorage: string | undefined = await profileManager.getPasswordForProfile(
+                this.context,
+                targetProfile.id
+            );
+            const wasPasswordManuallyEnteredOrCorrected =
+                (initialPasswordFromStorage === undefined || initialPasswordFromStorage === "") &&
+                passwordToUse &&
+                passwordToUse.length > 0;
+
+            if (wasPasswordManuallyEnteredOrCorrected && targetProfile.id) {
+                const storePasswordAfterLoginChoice = await vscode.window.showQuickPick(["Yes", "No"], {
+                    placeHolder: `Save password for profile "${targetProfile.label}"?`,
+                    ignoreFocusOut: true
+                });
+                if (storePasswordAfterLoginChoice === "Yes") {
+                    await profileManager.saveProfile(this.context, targetProfile, passwordToUse);
+                }
             }
 
             const vsCodeSessionId: string = Date.now().toString() + Math.random().toString();
@@ -262,21 +300,22 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             };
         } catch (error: any) {
             logger.error(`[AuthProvider] createSession error${isSilent ? " (auto-login)" : ""}:`, error);
-            await profileManager.clearActiveProfile(this.context);
+            if (!isSilent) {
+                await profileManager.clearActiveProfile(this.context);
+            }
             throw error;
         }
     }
 
     /**
-     * Removes an authentication session.
+     * Removes a session with the specified session ID.
      *
-     * This method deletes the session from the internal `activeSessions` map.
-     * If the removed session was associated with the currently active profile,
-     * the active profile is cleared. Finally, it fires the `_onDidChangeSessions`
-     * event to notify VS Code about the session removal.
+     * This method deletes the session from the active sessions map and triggers
+     * an event to notify listeners about the removed session. If the session ID
+     * does not exist in the active sessions, a warning is logged.
      *
-     * @param {string} sessionId The ID of the session to remove.
-     * @returns A promise that resolves when the session has been removed and notifications have been sent.
+     * @param sessionId - The unique identifier of the session to be removed.
+     * @returns A promise that resolves when the session has been removed.
      */
     async removeSession(sessionId: string): Promise<void> {
         logger.trace(`[AuthProvider] removeSession called for ID ${sessionId}`);
@@ -284,14 +323,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         if (sessionData) {
             logger.info(`[AuthProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`);
             this.activeSessions.delete(sessionId);
-
-            const activeProfileId: string | undefined = await profileManager.getActiveProfileId(this.context);
-            if (activeProfileId === sessionData.profileId) {
-                await profileManager.clearActiveProfile(this.context);
-                logger.trace(
-                    `[AuthProvider] Cleared active profile as it matched removed session's profile ID: ${sessionData.profileId}`
-                );
-            }
 
             this._onDidChangeSessions.fire({
                 added: [],
@@ -340,12 +371,12 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         if (!username) {
             return undefined;
         }
-        const password: string | undefined = await vscode.window.showInputBox({
-            prompt: "Enter TestBench Password",
+
+        const passwordInput: string | undefined = await vscode.window.showInputBox({
+            prompt: "Enter TestBench Password (optional, can be left empty if you don't want to store it)",
             password: true,
             ignoreFocusOut: true
         });
-        // Let createSession handle if password is empty,
 
         const label: string | undefined = await vscode.window.showInputBox({
             prompt: "Enter a label for this connection (optional)",
@@ -357,7 +388,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             serverName,
             portNumber,
             username,
-            password: password === undefined ? "" : password, // Treat undefined password as empty for consistency if not cancelled earlier
+            password: passwordInput, // Treat undefined password as empty
             label: label || `${username}@${serverName}`
         };
     }
