@@ -20,7 +20,9 @@ import {
     connection,
     logger,
     projectManagementTreeDataProvider,
-    testThemeTreeDataProvider
+    testThemeTreeDataProvider,
+    ENABLE_ICON_MARKING_ON_GENERATE as ENABLE_ICON_MARKING_ON_TEST_GENERATION,
+    ALLOW_PERSISTENT_IMPORT_BUTTON
 } from "./extension";
 import {
     ConfigKeys,
@@ -703,24 +705,28 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     cycleKey: string,
     elementUID: string
 ): Promise<void | null> {
+    let testGenerationSuccessful: boolean = false;
     try {
         logger.debug("Generating tests for:", selectedTreeItem);
         const defaultExecutionMode: testBenchTypes.ExecutionMode = testBenchTypes.ExecutionMode.Execute;
         let UIDforRequest: string;
 
-        if (selectedTreeItem.contextValue === TreeItemContextValues.CYCLE) {
+        const effectiveContext: string | undefined =
+            selectedTreeItem.originalContextValue || selectedTreeItem.contextValue;
+
+        if (effectiveContext === TreeItemContextValues.CYCLE) {
             logger.debug("Generating tests for the entire cycle.");
             UIDforRequest = ""; // Empty string expected for root/all
         } else if (
-            selectedTreeItem.contextValue === TreeItemContextValues.TEST_THEME_NODE ||
-            selectedTreeItem.contextValue === TreeItemContextValues.TEST_CASE_SET_NODE
+            effectiveContext === TreeItemContextValues.TEST_THEME_NODE ||
+            effectiveContext === TreeItemContextValues.TEST_CASE_SET_NODE
         ) {
             // If it's a test theme or test case set, use its specific UID passed as elementUID.
             logger.debug(`Generating tests for specific element UID: ${elementUID}.`);
             UIDforRequest = elementUID;
         } else {
-            logger.error(`Unsupported item type for test generation: ${selectedTreeItem.contextValue}`);
-            vscode.window.showErrorMessage(`Cannot generate tests for item type: ${selectedTreeItem.contextValue}`);
+            logger.error(`Unsupported item type for test generation: ${effectiveContext}`);
+            vscode.window.showErrorMessage(`Cannot generate tests for item type: ${effectiveContext}`);
             return null;
         }
 
@@ -735,8 +741,8 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
                 title: `Generating Tests for ${itemLabel}`,
                 cancellable: true
             },
-            async (progress, cancellationToken) =>
-                runRobotFrameworkTestGenerationProcess(
+            async (progress, cancellationToken) => {
+                const testGenerationResult: boolean = await runRobotFrameworkTestGenerationProcess(
                     context,
                     projectKey,
                     cycleKey,
@@ -745,18 +751,47 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
                     cycleReportOptionsRequestParams,
                     progress,
                     cancellationToken
-                )
+                );
+                if (testGenerationResult) {
+                    testGenerationSuccessful = true;
+                }
+            }
         );
     } catch (error) {
         if (error instanceof vscode.CancellationError) {
-            logger.debug("Test generation cancelled by the user.");
-            vscode.window.showInformationMessage("Test generation cancelled by the user.");
+            const testGenerationCancelledMessage: string =
+                "[generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary] Test generation cancelled by the user.";
+            logger.debug(testGenerationCancelledMessage);
+            vscode.window.showInformationMessage(testGenerationCancelledMessage);
             return null;
         } else {
-            logger.error("Error during test generation:", error);
+            logger.error(
+                "[generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary] Error during test generation:",
+                error
+            );
             vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : error}`);
             return null;
         }
+    }
+
+    if (testGenerationSuccessful) {
+        if (ENABLE_ICON_MARKING_ON_TEST_GENERATION && testThemeTreeDataProvider) {
+            const effectiveContextForMarking: string | undefined =
+                selectedTreeItem.originalContextValue || selectedTreeItem.contextValue;
+            if (
+                effectiveContextForMarking === TreeItemContextValues.TEST_THEME_NODE ||
+                effectiveContextForMarking === TreeItemContextValues.TEST_CASE_SET_NODE
+            ) {
+                await testThemeTreeDataProvider.markItemAsGenerated(selectedTreeItem);
+            } else {
+                logger.warn(
+                    `[generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary] Item ${selectedTreeItem.label} is not a TestThemeNode or TestCaseSetNode based on effective context. Skipping marking.`
+                );
+            }
+        }
+        vscode.window.showInformationMessage("Robot Framework test generation successful.");
+        logger.info("Test generation successful.");
+        await vscode.commands.executeCommand("workbench.view.extension.test");
     }
 }
 
@@ -782,7 +817,7 @@ async function runRobotFrameworkTestGenerationProcess(
     cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
-): Promise<void | null> {
+): Promise<boolean> {
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
     const downloadedReportZipPath: string | null = await fetchReportZipFromServer(
         projectKey,
@@ -793,36 +828,35 @@ async function runRobotFrameworkTestGenerationProcess(
         cancellationToken
     );
     if (!downloadedReportZipPath) {
-        logger.warn("Download cancelled or failed.");
-        return null;
+        logger.warn("[runRobotFrameworkTestGenerationProcess] Download cancelled or failed.");
+        return false;
     }
 
     progress.report({ increment: 30, message: "Generating tests via testbench2robotframework." });
     const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
     if (!workspaceLocation) {
-        const workspaceLocationMissingErrorMessage: string = "Workspace location not configured.";
+        const workspaceLocationMissingErrorMessage: string =
+            "[runRobotFrameworkTestGenerationProcess] Workspace location not configured.";
         logger.error(workspaceLocationMissingErrorMessage);
         vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
-        return null;
+        return false;
     }
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
     await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipPath);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
-        const testGenerationFailedMessage: string = "Test generation failed.";
+        const testGenerationFailedMessage: string = "[runRobotFrameworkTestGenerationProcess] Test generation failed.";
         logger.error(testGenerationFailedMessage);
         vscode.window.showErrorMessage(testGenerationFailedMessage);
-        return null;
+        return false;
     }
 
     // Update the last generated report parameters workspaceState to be able to import the generated tests later
     await saveLastGeneratedReportParams(context, elementUID, projectKey, cycleKey, executionMode, false);
 
-    vscode.window.showInformationMessage("Robot Framework test generation successful.");
-    logger.debug("Test generation successful.");
-    await vscode.commands.executeCommand("workbench.view.extension.test");
-    return;
+    logger.trace("[runRobotFrameworkTestGenerationProcess] Test generation process completed successfully.");
+    return true;
 }
 
 /**
@@ -1155,7 +1189,8 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
  * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
-    context: vscode.ExtensionContext
+    context: vscode.ExtensionContext,
+    invokedOnItem: projectManagementTreeView.BaseTestBenchTreeItem
 ): Promise<void | null> {
     logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
     await vscode.window.withProgress(
@@ -1174,14 +1209,14 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 progress.report({ message: "Step 1/4: Retrieving parameters for import target...", increment: 10 });
                 logger.trace("Retrieving parameters for TestBench import target (Project/Cycle).");
-                const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
+                const lastGenerationParameters: testBenchTypes.LastGeneratedReportParams | undefined =
                     getLastGeneratedReportParams(context);
 
                 if (
-                    !retrievedParams ||
-                    !retrievedParams.projectKey ||
-                    !retrievedParams.cycleKey ||
-                    retrievedParams.alreadyImported === undefined
+                    !lastGenerationParameters ||
+                    !lastGenerationParameters.projectKey ||
+                    !lastGenerationParameters.cycleKey ||
+                    lastGenerationParameters.alreadyImported === undefined
                 ) {
                     const errorMsg: string =
                         "Cannot determine import target: Context information (project/cycle from last test generation) is missing. Please generate tests first in this workspace.";
@@ -1190,16 +1225,33 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     return null;
                 }
 
-                const {
-                    projectKey: targetProjectKey,
-                    cycleKey: targetCycleKey,
-                    alreadyImported: alreadyImported
-                } = retrievedParams;
+                if (
+                    !lastGenerationParameters ||
+                    lastGenerationParameters.UID !== (invokedOnItem.item.base?.uniqueID || invokedOnItem.item?.uniqueID)
+                ) {
+                    logger.error(
+                        "Mismatch between invoked item for import and last generated test parameters UID, or parameters missing."
+                    );
+                    vscode.window.showErrorMessage(
+                        "Import context is unclear or does not match last test generation. Please generate tests for this item again if needed."
+                    );
+                    return null;
+                }
+
+                const targetProjectKey = testThemeTreeDataProvider?.getCurrentProjectKey();
+                const targetCycleKey = testThemeTreeDataProvider?.getCurrentCycleKey();
+
+                if (!targetProjectKey || !targetCycleKey) {
+                    const errorMsg: string = `Could not determine project/cycle key for import from item: ${invokedOnItem.label}`;
+                    logger.error(errorMsg);
+                    vscode.window.showErrorMessage(errorMsg);
+                    return null;
+                }
                 logger.trace(
-                    `Target for TestBench import: Project Key '${targetProjectKey}', Cycle Key '${targetCycleKey}', already imported: ${alreadyImported}'.`
+                    `Target for TestBench import from item ${invokedOnItem.label}: Project Key '${targetProjectKey}', Cycle Key '${targetCycleKey}', already imported: ${lastGenerationParameters.alreadyImported}'.`
                 );
 
-                if (alreadyImported) {
+                if (lastGenerationParameters.alreadyImported) {
                     logger.warn(
                         `Attempting to re-import same report. targetProject='${targetProjectKey}', targetCycle='${targetCycleKey}'.`
                     );
@@ -1273,8 +1325,18 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 progress.report({ message: "Step 4/4: Cleaning up temporary files...", increment: 30 });
                 logger.debug(`Cleaning up generated report file: ${createdReportPath}`);
                 await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
-
                 await updateAlreadyImportedFlagOfLastImportedReport(context, true);
+
+                if (!ALLOW_PERSISTENT_IMPORT_BUTTON && testThemeTreeDataProvider) {
+                    logger.debug(
+                        `[ReportHandler] Import successful. Clearing marked state for item: ${invokedOnItem.label}`
+                    );
+                    await testThemeTreeDataProvider.clearMarkedItemStatus(invokedOnItem);
+                } else {
+                    logger.debug(
+                        `[ReportHandler] Import successful. Import command will persist on item: ${invokedOnItem.label} (ALLOW_PERSISTENT_IMPORT_COMMAND is true or provider missing).`
+                    );
+                }
 
                 logger.trace("Process Completed: Read, Create, and Import Test Results to Testbench.");
             } catch (error) {
