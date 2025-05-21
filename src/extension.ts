@@ -69,7 +69,7 @@ export function getLoginWebViewProvider(): loginWebView.LoginWebViewProvider | n
     return loginWebViewProvider;
 }
 
-/** Module-private variables to hold the tree data providers and views. */
+/** Global variables to hold the tree data providers and views. */
 export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
 export let testThemeTreeDataProvider: TestThemeTreeDataProvider | null = null;
 export let testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDataProvider | undefined;
@@ -87,6 +87,7 @@ let activeEditor: vscode.TextEditor | undefined;
 // Prevent multiple session change handling simultaneously
 let isHandlingSessionChange = false;
 
+// Prevent multiple session change handling simultaneously
 let isHandlingSessionChange = false;
 
 /**
