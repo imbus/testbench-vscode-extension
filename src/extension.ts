@@ -87,6 +87,8 @@ let activeEditor: vscode.TextEditor | undefined;
 // Prevent multiple session change handling simultaneously
 let isHandlingSessionChange = false;
 
+let isHandlingSessionChange = false;
+
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
  * It takes a handler function as input and returns a new function that executes the original handler inside a try/catch block.
@@ -923,8 +925,8 @@ async function handleTestBenchSessionChange(
                     getLoginWebViewProvider()?.updateWebviewHTMLContent();
                     await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
 
-                    projectManagementTreeDataProvider?.refresh(true);
-                    testThemeTreeDataProvider?.clearTree();
+                    getProjectManagementTreeDataProvider()?.refresh(true);
+                    getTestThemeTreeDataProvider()?.clearTree();
                     clearTestElementsTreeView();
                 }
                 return;
