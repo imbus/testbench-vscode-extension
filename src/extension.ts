@@ -83,7 +83,12 @@ let currentConfigScope: vscode.Uri | undefined;
 let activeEditor: vscode.TextEditor | undefined;
 
 // Prevent multiple session change handling simultaneously
-let isHandlingSessionChange = false;
+let isHandlingSessionChange: boolean = false;
+
+// Determines if the icon of the tree item should be changed after generating tests for that item.
+export const ENABLE_ICON_MARKING_ON_GENERATE: boolean = true;
+// Determines if the import button of the tree item should still persist after importing test results for that item.
+export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = false;
 
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
@@ -195,7 +200,7 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
         if (testThemeTreeView) {
             testThemeTreeView.message = message;
         }
-    });
+    }, context);
     testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
         treeDataProvider: testThemeTreeDataProvider
     });
@@ -515,17 +520,31 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     // --- Command: Read And Import Test Results To Testbench ---
     // A command that combines the reading of robotframework test results, creating a report file with results, and importing test results to testbench server.
-    registerSafeCommand(context, allExtensionCommands.readAndImportTestResultsToTestbench, async () => {
-        logger.debug(`Command Called: ${allExtensionCommands.readAndImportTestResultsToTestbench}`);
-        if (!connection) {
-            const noConnectionErrorMessage: string = "No connection available. Cannot import report.";
-            vscode.window.showErrorMessage(noConnectionErrorMessage);
-            logger.error(noConnectionErrorMessage);
-            return null;
-        }
+    registerSafeCommand(
+        context,
+        allExtensionCommands.readAndImportTestResultsToTestbench,
+        async (item?: projectManagementTreeView.BaseTestBenchTreeItem) => {
+            logger.debug(`Command Called: ${allExtensionCommands.readAndImportTestResultsToTestbench}`);
+            if (!connection) {
+                const noConnectionErrorMessage: string = "No connection available. Cannot import report.";
+                vscode.window.showErrorMessage(noConnectionErrorMessage);
+                logger.error(noConnectionErrorMessage);
+                return null;
+            }
 
-        await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context);
-    });
+            if (!item) {
+                logger.warn(
+                    `${allExtensionCommands.readAndImportTestResultsToTestbench} called without a tree item. This command should be invoked from a marked Test Theme/Set item.`
+                );
+                vscode.window.showWarningMessage(
+                    "Please invoke this command from a Test Theme or Test Case Set that has generated tests."
+                );
+                return null;
+            }
+
+            await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context, item);
+        }
+    );
 
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshProjectTreeView, async () => {

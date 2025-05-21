@@ -85,7 +85,8 @@ export const StorageKeys = {
     // AuthenticationProvider constants
     PROFILES_STORAGE_KEY: "testbench.profiles",
     ACTIVE_PROFILE_ID_KEY: "testbench.activeProfileId",
-    PROFILE_PASSWORD_SECRET_PREFIX: "testbench.profile.password."
+    PROFILE_PASSWORD_SECRET_PREFIX: "testbench.profile.password.",
+    MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem"
 } as const;
 
 // --- Tree Item Context Values ---
@@ -102,7 +103,9 @@ export const TreeItemContextValues = {
     CONDITION: "condition",
     TEST_ELEMENT: "testElement",
     CUSTOM_ROOT_PROJECT: "customRoot.project",
-    CUSTOM_ROOT_THEME: "customRoot.theme"
+    CUSTOM_ROOT_TEST_THEME: "customRoot.testTheme",
+    MARKED_TEST_THEME_NODE: "MarkedForImport.TestThemeNode",
+    MARKED_TEST_CASE_SET_NODE: "MarkedForImport.TestCaseSetNode"
 } as const;
 
 // --- Job Types ---
