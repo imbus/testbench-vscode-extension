@@ -276,18 +276,16 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
             return null;
         }
 
-        // Display empty subdivisions if it directly matches the regex.
-        if (testElement.elementType === "Subdivision") {
-            if (filteredChildren.length === 0 && !testElement.directRegexMatch) {
-                return null;
-            }
-        }
-
-        if (doesInheritMatchFromParent || testElement.directRegexMatch || filteredChildren.length > 0) {
-            return { ...testElement, children: filteredChildren };
-        } else {
+        // Hide non robot resources if they don't have visible children.
+        if (testElement.elementType === "Subdivision" && !testElement.directRegexMatch && doesInheritMatchFromParent) {
             return null;
         }
+
+        if (testElement.directRegexMatch || doesInheritMatchFromParent || filteredChildren.length > 0) {
+            return { ...testElement, children: filteredChildren };
+        }
+
+        return null;
     }
 
     const filteredRoots: TestElementData[] = rootsOfTestElementView
