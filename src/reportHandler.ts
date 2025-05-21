@@ -19,8 +19,8 @@ import {
     getConfig,
     connection,
     logger,
-    getProjectManagementTreeDataProvider,
-    getTestThemeTreeDataProvider
+    projectManagementTreeDataProvider,
+    testThemeTreeDataProvider
 } from "./extension";
 import {
     ConfigKeys,
@@ -647,11 +647,13 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         return null;
     }
 
-    const pmProvider = getProjectManagementTreeDataProvider();
-    if (pmProvider) {
-        const ttProvider = getTestThemeTreeDataProvider();
-        if (ttProvider && ttProvider["_currentCycleKey"] === cycleKey && ttProvider["_currentProjectKey"]) {
-            projectKey = ttProvider["_currentProjectKey"];
+    if (projectManagementTreeDataProvider) {
+        if (
+            testThemeTreeDataProvider &&
+            testThemeTreeDataProvider["_currentCycleKey"] === cycleKey &&
+            testThemeTreeDataProvider["_currentProjectKey"]
+        ) {
+            projectKey = testThemeTreeDataProvider["_currentProjectKey"];
         }
     }
 
