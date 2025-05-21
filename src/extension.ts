@@ -216,8 +216,8 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
             treeDataProvider: projectManagementTreeDataProvider,
             canSelectMany: false
         });
-    context.subscriptions.push(newProjectTreeView);
     projectTreeView = newProjectTreeView;
+    context.subscriptions.push(projectTreeView);
 
     if (projectManagementTreeDataProvider && testThemeTreeView && testThemeTreeDataProvider) {
         context.subscriptions.push(
