@@ -81,6 +81,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         scopes: readonly string[],
         options?: vscode.AuthenticationProviderSessionOptions
     ): Promise<vscode.AuthenticationSession> {
+        logger.trace(`[AuthProvider] createSession called. Scopes: ${scopes}, Options: ${JSON.stringify(options)}`);
         const isSilent: boolean = this._isAttemptingSilentAutoLogin;
         if (this._isAttemptingSilentAutoLogin) {
             this._isAttemptingSilentAutoLogin = false;
