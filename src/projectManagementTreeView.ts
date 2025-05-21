@@ -1263,21 +1263,16 @@ export function setupProjectTreeViewEventListeners(
     });
 
     // React to selection changes in the project tree view
-    if (projectTreeView) {
-        projectTreeView.onDidChangeSelection(async (event) => {
-            if (event.selection.length > 0 && projectManagementTreeDataProvider) {
+    const pmProvider = getProjectManagementTreeDataProvider();
+    if (getProjectTreeView()) {
+        getProjectTreeView()!.onDidChangeSelection(async (event) => {
+            if (event.selection.length > 0 && pmProvider) {
                 const selectedElement: BaseTestBenchTreeItem = event.selection[0];
                 logger.trace(
                     `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
                 );
 
-                const projectAndTovNameObj =
-                    projectManagementTreeDataProvider.getProjectAndTovNamesForItem(selectedElement);
-                if (!projectAndTovNameObj) {
-                    logger.warn("Project and TOV names not found for the selected element.");
-                    return;
-                }
-                const { projectName, tovName } = projectAndTovNameObj;
+                const { projectName, tovName } = pmProvider.getProjectAndTovNamesForItem(selectedElement);
                 logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
 
                 if (projectName && tovName) {

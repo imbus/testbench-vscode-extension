@@ -703,8 +703,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 `Command Called: ${allExtensionCommands.displayInteractionsForSelectedTOV} for tree item:`,
                 treeItem
             );
+            const pmProvider = getProjectManagementTreeDataProvider();
+            const teProvider = getTestElementsTreeDataProvider();
 
-            if (projectManagementTreeDataProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
+            if (pmProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
                 const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
                 if (tovKeyOfSelectedTreeElement && testElementsTreeDataProvider) {
                     const areTestElementsFetched: boolean = await testElementsTreeDataProvider.fetchTestElements(
@@ -718,8 +720,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         // Clicking on the "Show Robotframework Resources" button will not trigger project management tree onDidChangeSelection event,
                         // which restarts the language client.
                         // Retrieve the project name and TOV name from the tree item for language client restart.
-                        const projectAndTovNameObj =
-                            projectManagementTreeDataProvider.getProjectAndTovNamesForItem(treeItem);
+                        const projectAndTovNameObj = pmProvider.getProjectAndTovNamesForItem(treeItem);
                         if (projectAndTovNameObj) {
                             const { projectName, tovName } = projectAndTovNameObj;
                             if (projectName && tovName) {
