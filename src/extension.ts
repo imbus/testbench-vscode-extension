@@ -242,10 +242,10 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
         testThemeTreeDataProvider.clearTree();
     }
     initializeTestElementsTreeView(context);
-    if (projectTreeView && projectManagementTreeDataProvider) {
+    if (_projectTreeView && _projectManagementTreeDataProvider) {
         projectManagementTreeView.setupProjectTreeViewEventListeners(
-            projectTreeView,
-            projectManagementTreeDataProvider
+            _projectTreeView,
+            _projectManagementTreeDataProvider
         );
     }
 }
