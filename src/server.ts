@@ -38,29 +38,49 @@ export async function initializeLanguageServer(project: string, tov: string, ope
     logger.info(
         `[initializeLanguageServer] Operation ID ${operationId}: Initializing TestBench LS for Project: ${project}, TOV: ${tov}`
     );
-    if (client && client.state !== State.Stopped) {
+
+    if (getCurrentLsOperationId() !== operationId) {
         logger.warn(
-            `[initializeLanguageServer] Operation ID ${operationId}: Existing client found before initialization. This might indicate an issue if stopLanguageClient wasn't effective.`
+            `[initializeLanguageServer] Operation ID ${operationId} for ${project}/${tov} is stale (current is ${getCurrentLsOperationId()}). Aborting initialization.`
         );
-        try {
-            await stopLanguageClient();
-        } catch (e) {
-            logger.error("[initializeLanguageServer] Error disposing lingering client", e);
-        }
-        client = undefined;
+        return;
+    }
+
+    const existingClient = getLanguageClientInstance();
+    if (existingClient && existingClient.state !== State.Stopped) {
+        logger.warn(
+            `[initializeLanguageServer] Operation ID ${operationId}: Existing client found unexpectedly. Attempting to stop it.`
+        );
+        await stopLanguageClient(false).catch((e) =>
+            logger.error(
+                `[initializeLanguageServer] Error stopping unexpected existing client for Op ${operationId}: ${e.message}`
+            )
+        );
+    }
+    if (getCurrentLsOperationId() !== operationId) {
+        logger.warn(
+            `[initializeLanguageServer] Operation ID ${operationId} for ${project}/${tov} became stale after attempting to stop prior client. Aborting.`
+        );
+        return;
     }
 
     const pythonPath: string | undefined = await getInterpreterPath();
     if (!pythonPath) {
         logger.warn(
-            "[initializeLanguageServer] Python interpreter path not found. Language Server will not be started. Please ensure Python is configured correctly."
+            `[initializeLanguageServer] Operation ID ${operationId}: Python interpreter path not found. LS will not be started.`
         );
+        if (getCurrentLsOperationId() === operationId) {
+            setLanguageClientInstance(undefined);
+        }
         return;
     }
     if (!connection) {
         logger.info(
-            "[initializeLanguageServer] No active TestBench connection. Language Server will not be started yet."
+            `[initializeLanguageServer] Operation ID ${operationId}: No active TestBench connection. LS will not be started.`
         );
+        if (getCurrentLsOperationId() === operationId) {
+            setLanguageClientInstance(undefined);
+        }
         return;
     }
     const serverName: string = connection.getServerName();
@@ -100,112 +120,161 @@ export async function initializeLanguageServer(project: string, tov: string, ope
             fileEvents: [vscode.workspace.createFileSystemWatcher("**/*.resource", false, false)]
         }
     };
-    client = new LanguageClient("testbench-ls", "TestBench LS", serverOptions, clientOptions);
+
+    const newClientInstance = new LanguageClient("testbench-ls", "TestBench LS", serverOptions, clientOptions);
     logger.info(
         `[initializeLanguageServer] Operation ID ${operationId}: Starting TestBench LS with parameters - Project: ${project}, TOV: ${tov}, PythonPath: ${pythonPath}, ServerName: ${serverName}, ServerPort: ${serverPort}, Username: ${username}, SessionToken: ${sessionToken ? "****" : "undefined"}, ScriptPath: ${LANGUAGE_SERVER_SCRIPT_PATH}, DebugPath: ${LANGUAGE_SERVER_DEBUG_PATH}, ClientOptions: ${JSON.stringify(clientOptions)}`
     );
+
+    if (getCurrentLsOperationId() !== operationId) {
+        logger.warn(
+            `[initializeLanguageServer] Operation ID ${operationId} for ${project}/${tov} is stale before client assignment (current is ${getCurrentLsOperationId()}). Disposing newly created client without starting.`
+        );
+        await newClientInstance
+            .dispose()
+            .catch((e) =>
+                logger.error(
+                    `[initializeLanguageServer] Error disposing unstarted client for stale op ${operationId}: ${e.message}`
+                )
+            );
+        return;
+    }
+    setLanguageClientInstance(newClientInstance);
+
     try {
-        await client.start();
-        client.onNotification("custom/notification", (params) => {
-            vscode.window.showInformationMessage(`${params.message}`);
-        });
+        await newClientInstance.start();
+        logger.info(
+            `[initializeLanguageServer] Operation ID ${operationId}: LS for ${project}/${tov} started successfully.`
+        );
+
         if (getCurrentLsOperationId() !== operationId) {
             logger.warn(
-                `[initializeLanguageServer] Operation ID ${operationId} for ${project}/${tov} started, but is now stale (current is ${getCurrentLsOperationId()}). Stopping it.`
+                `[initializeLanguageServer] Operation ID ${operationId} for ${project}/${tov} started, but became stale (current is ${getCurrentLsOperationId()}). Stopping this LS.`
             );
-            await stopLanguageClient(false, client);
-            if (client && client.state === State.Stopped) {
-                if (getLanguageClientInstance() === client) {
-                    setLanguageClientInstance(undefined);
-                }
+            await newClientInstance
+                .stop()
+                .catch((e) =>
+                    logger.error(
+                        `[initializeLanguageServer] Error stopping stale (but started) client for op ${operationId}: ${e.message}`
+                    )
+                );
+            await newClientInstance
+                .dispose()
+                .catch((e) =>
+                    logger.error(
+                        `[initializeLanguageServer] Error disposing stale (but started) client for op ${operationId}: ${e.message}`
+                    )
+                );
+            if (getLanguageClientInstance() === newClientInstance) {
+                setLanguageClientInstance(undefined);
+            }
+        } else {
+            const currentGlobalClient = getLanguageClientInstance();
+            if (currentGlobalClient === newClientInstance) {
+                currentGlobalClient.onNotification("custom/notification", (params) => {
+                    vscode.window.showInformationMessage(`${params.message}`);
+                });
+            } else {
+                logger.warn(
+                    `[initializeLanguageServer] Operation ID ${operationId}: Client for ${project}/${tov} started but global client changed before notification setup. Global client is for op ${getCurrentLsOperationId()}.`
+                );
             }
         }
     } catch (error) {
+        const clientThatFailed = newClientInstance;
+
         if (getCurrentLsOperationId() !== operationId) {
             logger.warn(
                 `[initializeLanguageServer] Operation ID ${operationId} for ${project}/${tov} failed to start (likely superseded by ${getCurrentLsOperationId()}). Error: ${(error as Error).message}`
             );
-            if (getLanguageClientInstance() === client) {
-                setLanguageClientInstance(undefined);
-            }
         } else {
             logger.error(
                 `[initializeLanguageServer] Operation ID ${operationId}: Failed to start TestBench LS for Project: ${project}, TOV: ${tov}:`,
                 error
             );
             logger.error(
-                `[initializeLanguageServer] LS Init Params: pythonPath: ${pythonPath}, serverName: ${serverName}, serverPort: ${serverPort}, username: ${username}, sessionToken: ${sessionToken ? "****" : "undefined"}, project: ${project}, tov: ${tov}, scriptPath: ${LANGUAGE_SERVER_SCRIPT_PATH}, debugPath: ${LANGUAGE_SERVER_DEBUG_PATH}, clientOptions: ${JSON.stringify(
-                    clientOptions
-                )}`
+                `[initializeLanguageServer] Operation ID ${operationId}: Error message: ${(error as Error).message}`
             );
-            setLanguageClientInstance(undefined);
             throw error;
+        }
+
+        if (getLanguageClientInstance() === clientThatFailed) {
+            setLanguageClientInstance(undefined);
+        }
+        if (clientThatFailed && clientThatFailed.state !== State.Stopped) {
+            await clientThatFailed
+                .dispose()
+                .catch((e) =>
+                    logger.error(
+                        `[initializeLanguageServer] Error disposing client that failed to start for op ${operationId}: ${e.message}`
+                    )
+                );
         }
     }
 }
 
-export async function stopLanguageClient(
-    isDeactivating: boolean = false,
-    clientToStop?: LanguageClient
-): Promise<void> {
-    const currentClient = clientToStop || client;
+export async function stopLanguageClient(isDeactivating: boolean = false): Promise<void> {
+    const clientToStop = getLanguageClientInstance();
     logger.info(`[stopLanguageClient] Stopping TestBench LS. Deactivating: ${isDeactivating}.`);
 
-    if (!currentClient) {
+    if (!clientToStop) {
         logger.trace("[stopLanguageClient] No client instance to stop.");
         return;
     }
 
+    if (getLanguageClientInstance() === clientToStop) {
+        setLanguageClientInstance(undefined);
+    }
+
     try {
-        if (currentClient.state === State.Starting) {
-            logger.warn("[stopLanguageClient] Attempting to stop a client that is currently starting.");
-            if (!isDeactivating) {
-                logger.info("[stopLanguageClient] Client is starting. It will be disposed.");
-                if (client === currentClient) {
-                    client = undefined;
-                }
-                await currentClient.dispose();
-                logger.trace("[stopLanguageClient] Disposed of the client instance that was in a starting state.");
-                return;
-            } else {
-                await currentClient.dispose();
-                logger.info("[stopLanguageClient] Client disposed during deactivation.");
-                if (client === currentClient) {
-                    client = undefined;
-                }
-                return;
-            }
+        if (clientToStop.state === State.Starting) {
+            logger.warn("[stopLanguageClient] Attempting to dispose a client that is currently starting.");
+            await clientToStop.dispose();
+            logger.trace("[stopLanguageClient] Disposed of the client instance that was in a starting state.");
+            return;
         }
 
-        if (currentClient.state === State.Running) {
+        if (clientToStop.state === State.Running) {
             logger.trace("[stopLanguageClient] Stopping currently running client.");
-            await currentClient.stop();
+            await clientToStop.stop();
             logger.trace("[stopLanguageClient] Client stopped successfully.");
-            await currentClient.dispose();
-            if (client === currentClient) {
-                client = undefined;
-            }
-        } else if (currentClient.state === State.Stopped) {
-            logger.trace("[stopLanguageClient] Client is already stopped. Disposing.");
-            await currentClient.dispose();
-            if (client === currentClient) {
-                client = undefined;
-            }
+        }
+        if (clientToStop.state === State.Stopped) {
+            logger.trace("[stopLanguageClient] Client is stopped. Disposing.");
+            await clientToStop.dispose();
+            logger.trace("[stopLanguageClient] Client disposed.");
         }
     } catch (error: any) {
-        logger.error(`[stopLanguageClient] Error stopping/disposing language client: ${error.message}`, error);
-        if (currentClient) {
+        const errorMessage = error.message || String(error);
+        logger.error(`[stopLanguageClient] Error stopping/disposing language client: ${errorMessage}`, error);
+        if (
+            clientToStop &&
+            clientToStop.state !== State.Stopped &&
+            !errorMessage.includes("Client is not running") &&
+            !errorMessage.includes("Client is not stopping")
+        ) {
             try {
-                await currentClient.dispose();
-            } catch (disposeError) {
-                logger.error(`[stopLanguageClient] Error during final dispose attempt: ${disposeError}`);
-            }
-            if (client === currentClient) {
-                client = undefined;
+                logger.trace(
+                    `[stopLanguageClient] Attempting final dispose for client in state: ${clientToStop.state}`
+                );
+                await clientToStop.dispose();
+            } catch (disposeError: any) {
+                logger.error(`[stopLanguageClient] Error during final dispose attempt: ${disposeError.message}`);
             }
         }
-        if (!isDeactivating) {
-            throw error;
+        if (
+            !isDeactivating &&
+            !(
+                errorMessage.includes("Client is not running") ||
+                errorMessage.includes("Client is not stopping") ||
+                errorMessage.includes("Client is already stopping")
+            )
+        ) {
+            if (getCurrentLsOperationId() === latestLsContextRequestId) {
+                throw error;
+            } else {
+                logger.warn(`[stopLanguageClient] Suppressed re-throw for error on stale operation: ${errorMessage}`);
+            }
         }
     }
 }
@@ -225,15 +294,13 @@ export async function stopLanguageClient(
 export async function restartLanguageClient(projectName: string, tovName: string): Promise<void> {
     const thisOperationId = ++latestLsContextRequestId;
     setCurrentLsOperationId(thisOperationId);
-
     logger.trace(`[RestartLS] Request ${thisOperationId}: Queueing LS restart for ${projectName}/${tovName}`);
 
-    // Check if this operation is still the latest one the user requested.
-    if (currentLsOperationId !== thisOperationId) {
+    if (getCurrentLsOperationId() !== thisOperationId) {
         logger.trace(
-            `[RestartLS] Request ${thisOperationId}: Stale after debounce. Newer request ${currentLsOperationId} exists. Aborting.`
+            `[RestartLS] Request ${thisOperationId}: Stale immediately. Newer request ${getCurrentLsOperationId()} exists. Aborting.`
         );
-        return; // A newer request came in during the debounce period.
+        return;
     }
 
     try {
@@ -253,7 +320,7 @@ export async function restartLanguageClient(projectName: string, tovName: string
             `[RestartLS] Request ${thisOperationId}: LS successfully restarted/initialized for ${projectName}/${tovName}`
         );
     } catch (error) {
-        if (currentLsOperationId === thisOperationId) {
+        if (getCurrentLsOperationId() === thisOperationId) {
             logger.error(
                 `[RestartLS] Request ${thisOperationId}: Error during language client management for ${projectName}/${tovName}:`,
                 error
@@ -263,7 +330,7 @@ export async function restartLanguageClient(projectName: string, tovName: string
             );
         } else {
             logger.warn(
-                `[RestartLS] Request ${thisOperationId}: Error occurred in an outdated/cancelled operation for ${projectName}/${tovName}. Error:`,
+                `[RestartLS] Request ${thisOperationId}: Error caught in restartLanguageClient for an outdated/cancelled operation for ${projectName}/${tovName}. Error:`,
                 error
             );
         }
