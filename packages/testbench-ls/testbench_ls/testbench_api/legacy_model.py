@@ -1,8 +1,7 @@
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Union
-
-from pydantic import BaseModel
+from dataclasses import dataclass
 
 
 class Status(str, Enum):
@@ -30,45 +29,54 @@ class KindOfDataType(str, Enum):
     ACCEPTING_GLOBAL = "ACCEPTING_GLOBAL"
 
 
-class SerialKey(BaseModel):
+@dataclass
+class SerialKey:
     serial: int
 
 
+@dataclass
 class TOVKey(SerialKey):
     pass
 
 
+@dataclass
 class SubdivisionKey(SerialKey):
     pass
 
 
+@dataclass
 class UserKey(SerialKey):
     pass
 
 
+@dataclass
 class InteractionKey(SerialKey):
     pass
 
 
+@dataclass
 class ElementKey(SerialKey):
     pass
 
 
+@dataclass
 class DataTypeKey(SerialKey):
     pass
 
 
+@dataclass
 class ConditionKey(SerialKey):
     pass
 
 
-class TestElement(BaseModel):
+@dataclass
+class TestElement:
     name: str
     uniqueID: str
     hasVersion: bool
+    lockerKey: UserKey
     libraryTovKey: Optional[TOVKey] = None
     libraryKey: Optional[SubdivisionKey] = None
-    lockerKey: UserKey
     Interaction_key: Optional[InteractionKey] = None
     parent: Optional[ElementKey] = None
     status: Optional[Status] = None

@@ -1,6 +1,6 @@
 import nox
 
-@nox.session(python="3.9")
+@nox.session(python="3.10")
 def bundle_dependencies(session):
     session.install(
         "-t",
@@ -8,7 +8,8 @@ def bundle_dependencies(session):
         "--no-cache-dir",
         "--implementation",
         "py",
-        "--no-deps",
+        "--only-binary=:all:",
+        "--no-binary=:none:",
         "--upgrade",
         "-r"
         "requirements.txt",
