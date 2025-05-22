@@ -6,16 +6,23 @@
 
 import * as vscode from "vscode";
 import * as path from "path";
-import { client, initializeLanguageServer } from "./server";
+import {
+    getLatestLsContextRequestId,
+    latestLsContextRequestId,
+    restartLanguageClient,
+    setCurrentLsOperationId,
+    setLatestLsContextRequestId,
+    stopLanguageClient
+} from "./server";
 import { CycleNodeData, CycleStructure, Project, TreeNode } from "./testBenchTypes";
 import {
     connection,
     logger,
-    getProjectTreeView,
-    getTestElementTreeView,
-    getTestThemeTreeViewInstance,
-    getTestElementsTreeDataProvider,
-    getProjectManagementTreeDataProvider
+    projectManagementTreeDataProvider,
+    testElementsTreeDataProvider,
+    projectTreeView,
+    testThemeTreeView,
+    testElementTreeView
 } from "./extension";
 import { allExtensionCommands, ContextKeys, TreeItemContextValues } from "./constants";
 import { displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
@@ -226,40 +233,127 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     public getProjectAndTovNamesForItem(selectedTreeItem: BaseTestBenchTreeItem): {
         projectName: string | undefined;
         tovName: string | undefined;
-    } {
-        let projectName: string | undefined;
-        let tovName: string | undefined;
-        let currentTreeItem: BaseTestBenchTreeItem | null = selectedTreeItem;
-
-        while (currentTreeItem) {
-            const isTheCustomRoot = this.customRootItemInstance === currentTreeItem;
-            const originalContext = isTheCustomRoot
-                ? this.originalCustomRootContextValue
-                : currentTreeItem.contextValue;
-
-            if (originalContext === TreeItemContextValues.PROJECT) {
-                projectName = currentTreeItem.item.name;
-            } else if (originalContext === TreeItemContextValues.VERSION) {
-                tovName = currentTreeItem.item.name;
-            }
-            if (projectName && tovName) {
-                break;
-            }
-            currentTreeItem = currentTreeItem.parent;
+    } | null {
+        if (!selectedTreeItem || !selectedTreeItem.item) {
+            logger.trace("[LSP Context] Selected item or item.data is null in getProjectAndTovNamesForLSP.");
+            return null;
         }
 
-        if (tovName && !projectName && selectedTreeItem.parent) {
-            const parentItem = selectedTreeItem.parent;
-            const parentIsCustomProjectRoot =
-                this.customRootItemInstance === parentItem &&
-                this.originalCustomRootContextValue === TreeItemContextValues.PROJECT;
-            if (parentItem.contextValue === TreeItemContextValues.PROJECT || parentIsCustomProjectRoot) {
-                projectName = parentItem.item.name;
+        let projectName: string | undefined;
+        let tovName: string | undefined;
+
+        // Helper to get the 'original' context value if the item is the current custom root
+        const getEffectiveContext = (item: BaseTestBenchTreeItem): string | undefined => {
+            if (this.customRootKey && item.item?.key === this.customRootKey) {
+                return this.originalCustomRootContextValue || item.contextValue;
+            }
+            return item.contextValue;
+        };
+
+        // Helper to get the 'original' item data if the item is the current custom root
+        const getEffectiveItemData = (item: BaseTestBenchTreeItem): any => {
+            if (this.customRootKey && item.item?.key === this.customRootKey && this.customRootJsonData) {
+                return this.customRootJsonData;
+            }
+            return item.item;
+        };
+
+        let currentItemForTraversal: BaseTestBenchTreeItem | null = selectedTreeItem;
+
+        // Traverse up from the selected item to find Project and TOV
+        while (currentItemForTraversal) {
+            const effectiveContext = getEffectiveContext(currentItemForTraversal);
+            const effectiveData = getEffectiveItemData(currentItemForTraversal);
+
+            if (effectiveContext === TreeItemContextValues.PROJECT) {
+                projectName = effectiveData.name;
+            } else if (effectiveContext === TreeItemContextValues.VERSION) {
+                tovName = effectiveData.name;
+            }
+
+            // If we've found both, or found a project and already had a TOV, we can stop.
+            if ((projectName && tovName) || (effectiveContext === TreeItemContextValues.PROJECT && tovName)) {
+                break;
+            }
+            // If the current item is the custom root, and it's not a project,
+            // we might not find a project by traversing its 'parent' because it's acting as a root.
+            if (
+                this.customRootKey &&
+                currentItemForTraversal.item?.key === this.customRootKey &&
+                effectiveContext !== TreeItemContextValues.PROJECT
+            ) {
+                break; // Stop at custom root if it's not a project itself.
+            }
+
+            currentItemForTraversal = currentItemForTraversal.parent;
+        }
+
+        // If the selected item was a TOV (or a custom root that *was* a TOV) and we haven't found a project name yet
+        if (getEffectiveContext(selectedTreeItem) === TreeItemContextValues.VERSION && !projectName) {
+            if (
+                selectedTreeItem.parent &&
+                getEffectiveContext(selectedTreeItem.parent) === TreeItemContextValues.PROJECT
+            ) {
+                projectName = getEffectiveItemData(selectedTreeItem.parent).name;
+            } else {
+                // This case occurs if a TOV is made a custom root. Its original project parent isn't easily found
+                // by simple traversal of tree items *after* makeRoot.
+                // The ProjectManagementTreeDataProvider doesn't explicitly store the TOV's original project name when it becomes a custom root.
+                // For the LS to work reliably when a TOV is a custom root, this might need enhancement in makeRoot.
+                logger.warn(
+                    `[LSP Context] Selected item or custom root is a TOV ('${tovName}'). Project name could not be determined by simple parent traversal. LS might require project name.`
+                );
+            }
+        }
+
+        // If the selected item was a Cycle (or a custom root that *was* a Cycle)
+        if (getEffectiveContext(selectedTreeItem) === TreeItemContextValues.CYCLE) {
+            if (
+                selectedTreeItem.parent &&
+                getEffectiveContext(selectedTreeItem.parent) === TreeItemContextValues.VERSION
+            ) {
+                if (!tovName) {
+                    tovName = getEffectiveItemData(selectedTreeItem.parent).name;
+                }
+                if (
+                    selectedTreeItem.parent.parent &&
+                    getEffectiveContext(selectedTreeItem.parent.parent) === TreeItemContextValues.PROJECT
+                ) {
+                    if (!projectName) {
+                        projectName = getEffectiveItemData(selectedTreeItem.parent.parent).name;
+                    }
+                }
+            }
+        }
+
+        // If the custom root itself is a project, and we haven't found a project name through traversal (e.g. selected item is the custom root project)
+        if (
+            !projectName &&
+            this.customRootKey &&
+            this.originalCustomRootContextValue === TreeItemContextValues.PROJECT
+        ) {
+            if (selectedTreeItem.item?.key === this.customRootKey || !selectedTreeItem.parent) {
+                // if selected is the custom root or has no parent in current view
+                projectName = this.customRootJsonData.name;
+            }
+        }
+        // If the custom root itself is a TOV, and we haven't found a TOV name
+        if (!tovName && this.customRootKey && this.originalCustomRootContextValue === TreeItemContextValues.VERSION) {
+            if (selectedTreeItem.item?.key === this.customRootKey || !selectedTreeItem.parent) {
+                tovName = this.customRootJsonData.name;
+                // Try to get project name if this TOV custom root was selected
+                if (
+                    selectedTreeItem.item?.key === this.customRootKey &&
+                    selectedTreeItem.parent &&
+                    getEffectiveContext(selectedTreeItem.parent) === TreeItemContextValues.PROJECT
+                ) {
+                    projectName = getEffectiveItemData(selectedTreeItem.parent).name;
+                }
             }
         }
 
         logger.trace(
-            `Provider.getProjectAndTovNamesForItem called for '${selectedTreeItem.label}': Project='${projectName}', TOV='${tovName}'`
+            `[LSP Context Provider Method] Determined for ${selectedTreeItem.label}': Project ${projectName}', TOV='${tovName}'`
         );
         return { projectName, tovName };
     }
@@ -834,28 +928,24 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return;
         }
 
-        const currentThemeTreeView = getTestThemeTreeViewInstance();
-        const currentElementTreeView = getTestElementTreeView();
-        const currentElementsProvider = getTestElementsTreeDataProvider();
-
-        if (currentThemeTreeView && this.testThemeTreeDataProvider) {
+        if (testThemeTreeView && this.testThemeTreeDataProvider) {
             this.testThemeTreeDataProvider.setTreeViewStatusMessage(
                 `Loading test themes for cycle: ${currentCycleLabel}...`
             );
         }
-        if (currentElementTreeView && currentElementsProvider) {
+        if (testElementTreeView && testElementsTreeDataProvider) {
             const tovParent = projectsTreeViewItem.parent;
             const tovLabel: string =
                 tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
-            currentElementsProvider.setTreViewMessage(`Loading test elements for ${tovLabel}...`);
-            currentElementsProvider.refresh([]);
+            testElementsTreeDataProvider.setTreViewMessage(`Loading test elements for ${tovLabel}...`);
+            testElementsTreeDataProvider.refresh([]);
         }
 
         // Hide the project management tree view and show the test theme tree and test elements tree views
         // BEFORE fetching data for responsiveness
         await hideProjectManagementTreeView();
         await displayTestThemeTreeView();
-        if (getTestElementsTreeDataProvider()) {
+        if (testElementsTreeDataProvider) {
             await displayTestElementsTreeView();
         }
 
@@ -883,21 +973,21 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                 });
 
                 progress.report({ increment: 60, message: "Fetching test elements..." });
-                if (currentElementsProvider) {
+                if (testElementsTreeDataProvider) {
                     if (tovKeyOfSelectedCycleElement) {
                         logger.trace(
                             `Clicked cycle's parent TOV key: ${tovKeyOfSelectedCycleElement}. Fetching test elements.`
                         );
-                        const areTestElementsFetched: boolean = await currentElementsProvider.fetchTestElements(
+                        const areTestElementsFetched: boolean = await testElementsTreeDataProvider.fetchTestElements(
                             tovKeyOfSelectedCycleElement,
                             tovLabel
                         );
                         if (!areTestElementsFetched) {
-                            currentElementsProvider.refresh([]);
+                            testElementsTreeDataProvider.refresh([]);
                         }
                     } else {
                         logger.warn("Parent TOV key not found for the clicked cycle. Clearing test elements.");
-                        currentElementsProvider.refresh([]);
+                        testElementsTreeDataProvider.refresh([]);
                     }
                 } else {
                     logger.error("TestElementsTreeDataProvider is not available for fetching elements.");
@@ -939,10 +1029,9 @@ export function findProjectKeyOfCycleElement(element: BaseTestBenchTreeItem): st
     }
     let current: BaseTestBenchTreeItem | null = element;
     while (current) {
-        const pmProvider = getProjectManagementTreeDataProvider();
         const isCustomProjectRoot: boolean =
-            pmProvider?.customRootItemInstance === current &&
-            pmProvider?.originalCustomRootContextValue === TreeItemContextValues.PROJECT;
+            projectManagementTreeDataProvider?.customRootItemInstance === current &&
+            projectManagementTreeDataProvider?.originalCustomRootContextValue === TreeItemContextValues.PROJECT;
 
         if (current.contextValue === TreeItemContextValues.PROJECT || isCustomProjectRoot) {
             logger.trace(`Found project key for cycle element: ${current.item.key} (Item: ${current.label})`);
@@ -1174,33 +1263,50 @@ export function setupProjectTreeViewEventListeners(
     });
 
     // React to selection changes in the project tree view
-    projectTreeView.onDidChangeSelection(async (event) => {
-        if (event.selection.length > 0) {
-            await client?.stop();
-            const selectedElement: BaseTestBenchTreeItem = event.selection[0];
-            logger.trace(
-                `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
-            );
+    if (projectTreeView) {
+        projectTreeView.onDidChangeSelection(async (event) => {
+            if (event.selection.length > 0 && projectManagementTreeDataProvider) {
+                const selectedElement: BaseTestBenchTreeItem = event.selection[0];
+                logger.trace(
+                    `Selection changed in Project Tree: ${typeof selectedElement.label === "string" ? selectedElement.label : "N/A"}, context: ${selectedElement.contextValue}`
+                );
 
-            const projectAndTovNameObj = projectManagementProvider.getProjectAndTovNamesForItem(selectedElement);
-            if (projectAndTovNameObj) {
+                const projectAndTovNameObj =
+                    projectManagementTreeDataProvider.getProjectAndTovNamesForItem(selectedElement);
+                if (!projectAndTovNameObj) {
+                    logger.warn("Project and TOV names not found for the selected element.");
+                    return;
+                }
                 const { projectName, tovName } = projectAndTovNameObj;
                 logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
+
                 if (projectName && tovName) {
-                    await initializeLanguageServer(projectName, tovName);
+                    await restartLanguageClient(projectName, tovName);
+                } else {
+                    // If only a project is selected (tovName is undefined), stop the LS.
+                    if (projectName && !tovName) {
+                        logger.info(
+                            `[ProjectSelect] Project '${projectName}' selected, but no TOV. Stopping active LS.`
+                        );
+                        setLatestLsContextRequestId(latestLsContextRequestId + 1);
+                        const thisStopOperationId: number = getLatestLsContextRequestId();
+                        setCurrentLsOperationId(thisStopOperationId);
+                        await stopLanguageClient();
+                    } else {
+                        logger.warn(
+                            "Could not determine context for LS restart from selection (Project or TOV missing)."
+                        );
+                    }
                 }
-            } else {
-                logger.warn("Could not determine context for LS restart from selection.");
             }
-        }
-    });
+        });
+    }
 }
 
 /**
  * Hides the project management tree view.
  */
 export async function hideProjectManagementTreeView(): Promise<void> {
-    const projectTreeView = getProjectTreeView();
     if (projectTreeView && projectTreeView.visible) {
         logger.trace(
             "Project management tree view is visible. Attempting to execute 'projectManagementTree.removeView'."
@@ -1213,7 +1319,7 @@ export async function hideProjectManagementTreeView(): Promise<void> {
  * Displays the project management tree view.
  */
 export async function displayProjectManagementTreeView(): Promise<void> {
-    if (getProjectTreeView()) {
+    if (projectTreeView) {
         await vscode.commands.executeCommand("projectManagementTree.focus");
     }
 }

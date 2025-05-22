@@ -39,9 +39,12 @@ export async function getProfiles(context: vscode.ExtensionContext): Promise<Tes
 /**
  * Saves or updates a TestBench profile.
  * If it's a new profile (no id or id not found), a new id will be generated.
+ * Passwords that are empty strings will not be stored. To remove an existing password,
+ * pass `undefined` or an empty string for the password parameter.
  * @param {vscode.ExtensionContext} context The extension context.
  * @param profile The profile data to save. The `id` can be omitted for new profiles.
- * @param {string} password The password for the profile (optional, will be stored in SecretStorage).
+ * @param {string} [password] The password for the profile (optional). If undefined or an empty string,
+ * no password will be stored, and any existing password for this profile will be removed.
  * @returns {Promise<string>} The ID of the saved profile.
  */
 export async function saveProfile(
@@ -52,28 +55,28 @@ export async function saveProfile(
     try {
         const profiles: TestBenchProfile[] = await getProfiles(context);
         let profileToSave: TestBenchProfile;
-
         const existingProfileIndex: number = profile.id ? profiles.findIndex((p) => p.id === profile.id) : -1;
 
         if (existingProfileIndex !== -1 && profile.id) {
-            // Update existing profile
             profileToSave = { ...profiles[existingProfileIndex], ...profile };
             profiles[existingProfileIndex] = profileToSave;
             logger.trace(`[ProfileManager] Updating profile: ${profileToSave.label} (ID: ${profileToSave.id})`);
         } else {
-            // Add new profile
             const newId: string = uuidv4();
-            profileToSave = { ...profile, id: newId } as TestBenchProfile; // Cast because 'id' is now guaranteed
+            profileToSave = { ...profile, id: newId } as TestBenchProfile;
             profiles.push(profileToSave);
             logger.trace(`[ProfileManager] Adding new profile: ${profileToSave.label} (ID: ${profileToSave.id})`);
         }
 
         await context.globalState.update(StorageKeys.PROFILES_STORAGE_KEY, profiles);
-
-        // Allow empty string password, but not undefined
-        if (password !== undefined) {
+        if (password && password.length > 0) {
             await context.secrets.store(StorageKeys.PROFILE_PASSWORD_SECRET_PREFIX + profileToSave.id, password);
             logger.trace(`[ProfileManager] Password stored for profile ID: ${profileToSave.id}`);
+        } else {
+            await context.secrets.delete(StorageKeys.PROFILE_PASSWORD_SECRET_PREFIX + profileToSave.id);
+            logger.trace(
+                `[ProfileManager] Password not provided or empty for profile ID: ${profileToSave.id}. Any existing stored password removed.`
+            );
         }
         return profileToSave.id;
     } catch (error) {

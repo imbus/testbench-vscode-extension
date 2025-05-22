@@ -5,7 +5,7 @@
 
 import * as vscode from "vscode";
 import { BaseTestBenchTreeItem, CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
-import { logger, getTestThemeTreeViewInstance, connection } from "./extension";
+import { logger, connection, testThemeTreeView } from "./extension";
 import { ContextKeys, TreeItemContextValues } from "./constants";
 import { CycleNodeData, CycleStructure } from "./testBenchTypes";
 
@@ -225,7 +225,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         logger.debug("TestThemeTreeDataProvider: Internal refresh after populating data.");
         this.storeExpandedTreeItems(this.rootElements);
 
-        const currentThemeTreeView = getTestThemeTreeViewInstance();
         if (this.rootElements.length === 0) {
             if (this._currentCycleKey) {
                 this.updateTreeViewStatusMessageCallback(
@@ -236,12 +235,12 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             } else {
                 this.updateTreeViewStatusMessageCallback("Select a cycle to see test themes.");
             }
-            if (currentThemeTreeView) {
-                logger.trace(`Test Themes view message set: ${currentThemeTreeView.message}`);
+            if (testThemeTreeView) {
+                logger.trace(`Test Themes view message set: ${testThemeTreeView.message}`);
             }
         } else {
             this.updateTreeViewStatusMessageCallback(undefined);
-            if (currentThemeTreeView) {
+            if (testThemeTreeView) {
                 logger.trace("Test Themes view message cleared.");
             }
         }
@@ -308,7 +307,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         this._currentCycleLabel = cycleLabel;
         this.rootElements = roots;
 
-        const currentThemeTreeView = getTestThemeTreeViewInstance();
         if (this.rootElements.length === 0) {
             if (this._currentCycleKey) {
                 this.updateTreeViewStatusMessageCallback(
@@ -319,12 +317,12 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             } else {
                 this.updateTreeViewStatusMessageCallback("Select a cycle to see test themes.");
             }
-            if (currentThemeTreeView) {
-                logger.trace(`Test Themes view message set: ${currentThemeTreeView.message}`);
+            if (testThemeTreeView) {
+                logger.trace(`Test Themes view message set: ${testThemeTreeView.message}`);
             }
         } else {
             this.updateTreeViewStatusMessageCallback(undefined);
-            if (currentThemeTreeView) {
+            if (testThemeTreeView) {
                 logger.trace("Test Themes view message cleared.");
             }
         }
@@ -666,7 +664,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
  * Hides the test theme tree view.
  */
 export async function hideTestThemeTreeView(): Promise<void> {
-    if (getTestThemeTreeViewInstance()) {
+    if (testThemeTreeView) {
         await vscode.commands.executeCommand("testThemeTree.removeView");
     } else {
         logger.debug("Test Theme Tree View instance not found; 'removeView' command not executed.");
@@ -677,7 +675,7 @@ export async function hideTestThemeTreeView(): Promise<void> {
  * Displays the test theme tree view.
  */
 export async function displayTestThemeTreeView(): Promise<void> {
-    if (getTestThemeTreeViewInstance()) {
+    if (testThemeTreeView) {
         await vscode.commands.executeCommand("testThemeTree.focus");
     } else {
         logger.debug("Test Theme Tree View instance not found; 'removeView' command not executed.");

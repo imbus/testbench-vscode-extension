@@ -16,9 +16,8 @@ export const LANGUAGE_SERVER_SCRIPT_PATH: string = path.join(
 );
 
 export const LANGUAGE_SERVER_DEBUG_PATH: string = path.join(
-    EXTENSION_ROOT_DIR,
-    "packages",
-    "testbench-ls",
+    BUNDLED_PYTHON_SCRIPTS_DIR,
+    "libs",
     "testbench_ls",
     "extension_debug_entry.py"
 );
@@ -47,12 +46,6 @@ export const WebviewMessageCommands = {
 
 // --- Extension Configuration Setting Keys ---
 export const ConfigKeys = {
-    // TODO: Remove credentials from extension settings
-    SERVER_NAME: "serverName",
-    PORT_NUMBER: "portNumber",
-    USERNAME: "username",
-
-    STORE_PASSWORD_AFTER_LOGIN: "storePasswordAfterLogin",
     AUTO_LOGIN: "automaticLoginAfterExtensionActivation",
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",
     CLEAR_REPORT_AFTER_PROCESSING: "clearReportAfterProcessing",

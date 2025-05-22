@@ -316,7 +316,7 @@ class PlayServerConnection {
                 return null;
             }
             else {
-                extension_1.logger.trace(`Old play server session created successfully: ${oldPlayServerSession}`);
+                extension_1.logger.trace(`Old play server session created successfully.`);
             }
             extension_1.logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
             const testElementsResponse = await withRetry(() => oldPlayServerSession.get(getTestElementsURL), 3, // maxRetries

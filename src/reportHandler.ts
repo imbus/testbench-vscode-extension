@@ -19,8 +19,8 @@ import {
     getConfig,
     connection,
     logger,
-    getProjectManagementTreeDataProvider,
-    getTestThemeTreeDataProvider
+    projectManagementTreeDataProvider,
+    testThemeTreeDataProvider
 } from "./extension";
 import {
     ConfigKeys,
@@ -647,11 +647,13 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         return null;
     }
 
-    const pmProvider = getProjectManagementTreeDataProvider();
-    if (pmProvider) {
-        const ttProvider = getTestThemeTreeDataProvider();
-        if (ttProvider && ttProvider["_currentCycleKey"] === cycleKey && ttProvider["_currentProjectKey"]) {
-            projectKey = ttProvider["_currentProjectKey"];
+    if (projectManagementTreeDataProvider) {
+        if (
+            testThemeTreeDataProvider &&
+            testThemeTreeDataProvider["_currentCycleKey"] === cycleKey &&
+            testThemeTreeDataProvider["_currentProjectKey"]
+        ) {
+            projectKey = testThemeTreeDataProvider["_currentProjectKey"];
         }
     }
 
@@ -782,7 +784,7 @@ async function runRobotFrameworkTestGenerationProcess(
     cancellationToken: vscode.CancellationToken
 ): Promise<void | null> {
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
-    const downloadedZip: string | null = await fetchReportZipFromServer(
+    const downloadedReportZipPath: string | null = await fetchReportZipFromServer(
         projectKey,
         cycleKey,
         folderNameOfInternalTestbenchFolder,
@@ -790,7 +792,7 @@ async function runRobotFrameworkTestGenerationProcess(
         progress,
         cancellationToken
     );
-    if (!downloadedZip) {
+    if (!downloadedReportZipPath) {
         logger.warn("Download cancelled or failed.");
         return null;
     }
@@ -805,8 +807,8 @@ async function runRobotFrameworkTestGenerationProcess(
     }
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
-        await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedZip);
-    await cleanUpReportFileIfConfiguredInSettings(downloadedZip);
+        await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
+    await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipPath);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         const testGenerationFailedMessage: string = "Test generation failed.";
         logger.error(testGenerationFailedMessage);

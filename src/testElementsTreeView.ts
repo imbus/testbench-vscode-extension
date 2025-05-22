@@ -8,13 +8,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as utils from "./utils";
-import {
-    connection,
-    logger,
-    getConfig,
-    getTestElementTreeView,
-    getTestElementsTreeDataProvider as extensionGetTestElementsTreeDataProvider
-} from "./extension";
+import { connection, logger, getConfig, testElementsTreeDataProvider, testElementTreeView } from "./extension";
 import { ConfigKeys, TreeItemContextValues } from "./constants";
 
 type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
@@ -276,18 +270,16 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
             return null;
         }
 
-        // Display empty subdivisions if it directly matches the regex.
-        if (testElement.elementType === "Subdivision") {
-            if (filteredChildren.length === 0 && !testElement.directRegexMatch) {
-                return null;
-            }
-        }
-
-        if (doesInheritMatchFromParent || testElement.directRegexMatch || filteredChildren.length > 0) {
-            return { ...testElement, children: filteredChildren };
-        } else {
+        // Hide non robot resources if they don't have visible children.
+        if (testElement.elementType === "Subdivision" && !testElement.directRegexMatch && doesInheritMatchFromParent) {
             return null;
         }
+
+        if (testElement.directRegexMatch || doesInheritMatchFromParent || filteredChildren.length > 0) {
+            return { ...testElement, children: filteredChildren };
+        }
+
+        return null;
     }
 
     const filteredRoots: TestElementData[] = rootsOfTestElementView
@@ -645,8 +637,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
      */
     refresh(flatTestElementsJsonData: any[]): void {
         this.treeData = buildTree(flatTestElementsJsonData);
-        const currentElementTreeView = getTestElementTreeView();
-        if (currentElementTreeView) {
+        if (testElementTreeView) {
             if (this.isTreeDataEmpty()) {
                 const filterPatterns = getConfig().get(ConfigKeys.TB2ROBOT_RESOURCE_REGEX, []);
                 if (filterPatterns && filterPatterns.length > 0) {
@@ -656,7 +647,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
                         "No test elements found for the selected Test Object Version (TOV)."
                     );
                 }
-                logger.trace(`Test Elements view message set: ${currentElementTreeView.message}`);
+                logger.trace(`Test Elements view message set: ${testElementTreeView.message}`);
             } else {
                 this.updateTreeViewStatusMessageCallback(undefined);
                 logger.trace("Test Elements view message cleared.");
@@ -690,10 +681,9 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         if (testElementsJsonData) {
             this._currentTovKey = tovKey;
             this.refresh(testElementsJsonData);
-            const currentElementTreeView = getTestElementTreeView();
 
-            if (newTestElementsTreeViewTitle && currentElementTreeView) {
-                currentElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
+            if (newTestElementsTreeViewTitle && testElementTreeView) {
+                testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
             }
             return true;
         } else {
@@ -714,7 +704,7 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
  * Hides the Test Elements tree view.
  */
 export async function hideTestElementsTreeView(): Promise<void> {
-    if (getTestElementTreeView()) {
+    if (testElementTreeView) {
         await vscode.commands.executeCommand("testElementsView.removeView");
     } else {
         logger.warn("Test Elements view instance not found, 'removeView' command not executed.");
@@ -725,7 +715,7 @@ export async function hideTestElementsTreeView(): Promise<void> {
  * Displays the Test Elements tree view.
  */
 export async function displayTestElementsTreeView(): Promise<void> {
-    if (getTestElementTreeView()) {
+    if (testElementTreeView) {
         await vscode.commands.executeCommand("testElementsView.focus");
     } else {
         logger.warn("Test Elements view instance not found, 'focus' command not executed.");
@@ -945,8 +935,7 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
         }
 
         await updateTestElementIcon(subdivisionTreeItem);
-        const teProvider = extensionGetTestElementsTreeDataProvider();
-        teProvider?._onDidChangeTreeData.fire(undefined);
+        testElementsTreeDataProvider?._onDidChangeTreeData.fire(undefined);
     } catch (error: any) {
         logger.error(`Failed to handle subdivision: ${error}`);
         vscode.window.showErrorMessage(`Failed to create folder structure: ${error.message}`);
@@ -1024,8 +1013,7 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
     await vscode.window.showTextDocument(resourceFileDocument);
     await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 
-    const teProvider = extensionGetTestElementsTreeDataProvider();
-    teProvider?._onDidChangeTreeData.fire(undefined);
+    testElementsTreeDataProvider?._onDidChangeTreeData.fire(undefined);
 }
 
 /**
@@ -1247,10 +1235,9 @@ export function removeRobotResourceFromPathString(pathStr: string): string {
  * Clears the test elements tree view by refreshing it with an empty array.
  */
 export function clearTestElementsTreeView(): void {
-    const teProvider = extensionGetTestElementsTreeDataProvider();
-    if (teProvider) {
-        teProvider.setCurrentTovKey("");
-        teProvider.setDataFetchAttempted(false);
-        teProvider.refresh([]);
+    if (testElementsTreeDataProvider) {
+        testElementsTreeDataProvider.setCurrentTovKey("");
+        testElementsTreeDataProvider.setDataFetchAttempted(false);
+        testElementsTreeDataProvider.refresh([]);
     }
 }
