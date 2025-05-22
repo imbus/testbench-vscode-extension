@@ -848,7 +848,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             if (newInteraction) {
                 // TODO: After the API is implemented, use the API to create the interaction on the server
                 // For now, refresh the tree view to show the new interaction
-                testElementsTreeDataProvider._onDidChangeTreeData.fire(undefined);
+                testElementsTreeDataProvider._onDidChangeTreeDataEmitter.fire(undefined);
 
                 vscode.window.showInformationMessage(`Successfully created interaction '${interactionName}'`);
                 logger.debug(

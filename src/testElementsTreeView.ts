@@ -46,18 +46,26 @@ export interface TestElementData {
 }
 
 /**
- * Retrieves python resource regex patterns from the extension settings and converts them into JavaScript RegExps.
- * @returns {RegExp[]} An array of valid RegExp objects.
+ * Retrieves resource regex patterns from the extension settings
+ * and attempts to convert them from Python-style to JavaScript RegExp objects.
+ *
+ * Note: The conversion from Python regex to JavaScript regex may not cover all advanced Python regex features.
+ *
+ * @returns {RegExp[]} An array of valid JavaScript RegExp objects.
  */
 function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
     const pythonResourceRegexPatternsInExtensionSettings: string[] = getConfig().get(
-        "resourceRegexInTestbench2robotframework",
+        ConfigKeys.TB2ROBOT_RESOURCE_REGEX,
         []
     );
     logger.trace("Resource regex patterns from settings:", pythonResourceRegexPatternsInExtensionSettings);
 
-    // Note: A complete conversion from python regex to javascript regex is not working as expected. If we only use simple regex patterns, we can use the existing code.
-    // Convert Python-style named capture groups to JavaScript syntax, and handle other differences such as escaping.
+    /**
+     * Converts a simplr Python-style regex string to a more JavaScript-compatible regex string.
+     * This handles common differences like named capture groups.
+     * @param {string} pythonRegex The Python regex pattern string.
+     * @returns {string} The converted JavaScript regex pattern string.
+     */
     function convertPythonRegexToJs(pythonRegex: string): string {
         // Replace named capture group syntax ( Transform (?P<name>... into (?<name>... )
         let javascriptRegex: string = pythonRegex.replace(/\(\?P<([^>]+)>([^)]+)\)/g, "(?<$1>$2)");
@@ -144,8 +152,16 @@ function generateTestElementTreeItemId(item: any, elementType: TestElementType, 
         case "Subdivision":
         case "Interaction":
         case "Condition":
-        case "DataType":
-            return `${item[`${elementType}_key`].serial}_${uniqueID}`;
+        case "DataType": {
+            const specificKey = item[`${elementType}_key`];
+            if (specificKey && specificKey.serial) {
+                return `${specificKey.serial}_${uniqueID}`;
+            }
+            logger.warn(
+                `[generateTestElementTreeItemId] Element type ${elementType} for item ${uniqueID} missing specific key serial.`
+            );
+            return uniqueID;
+        }
         default:
             return uniqueID;
     }
@@ -164,17 +180,24 @@ function getItemParentId(item: any, libraryKey: string | null | undefined): stri
         // Use both the parent's serial and uniqueID to create the composite parentId.
         // During tree linking composite ids are matched (which start with parent's serial)
         // "serial_uniqueID" is used for uniqueness even for elements with identical serials.
-        return item.parent.uniqueID ? `${item.parent.serial}_${item.parent.uniqueID}` : item.parent.serial;
+        return item.parent.uniqueID ? `${item.parent.serial}_${item.parent.uniqueID}` : String(item.parent.serial);
     }
 
     return libraryKey ? String(libraryKey) : null;
 }
 
 /**
- * Builds a hierarchical tree from a flat array of JSON objects representing test elements.
- * Applies filtering based on element type and regex matching.
- * @param {any[]} flatJsonTestElements Flat array of JSON objects from the server.
- * @returns {TestElementData[]} An array of root TestElement objects forming the tree.
+ * Transforms a flat list of raw test elements from the server into a hierarchical tree structure (TestElementData[]).
+ * This involves:
+ * 1. Converting raw elements to TestElementData objects.
+ * 2. Mapping elements by their generated IDs.
+ * 3. Linking children to their parents to form the tree.
+ * 4. Filtering the tree based on element types and regex matches (from extension settings).
+ * 5. Assigning hierarchical names (full paths) to each element.
+ * 6. Checking for and warning about nested robot resources.
+ *
+ * @param {any[]} flatJsonTestElements An array of raw test element objects from the server.
+ * @returns {TestElementData[]} An array of root TestElementData objects representing the filtered and structured tree.
  */
 function buildTree(flatJsonTestElements: any[]): TestElementData[] {
     const resourceRegexPatternsInExtensionSettings: RegExp[] = getResourceRegexPatternsFromExtensionSettings();
@@ -182,16 +205,16 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
 
     // Build a map for all elements without filtering.
     // This map is used to assign children to their respective parents.
-    const elementIdToDataMap: { [id: string]: TestElementData } = {};
+    const elementIdToDataMap: Map<string, TestElementData> = new Map();
 
     // Process each JSON object and create a TestElement.
     flatJsonTestElements.forEach((jsonTestElement) => {
         let libraryKey: string | null = null;
         if (jsonTestElement.libraryKey) {
             if (typeof jsonTestElement.libraryKey === "object" && jsonTestElement.libraryKey.serial) {
-                libraryKey = jsonTestElement.libraryKey.serial;
+                libraryKey = String(jsonTestElement.libraryKey.serial);
             } else {
-                libraryKey = jsonTestElement.libraryKey;
+                libraryKey = String(jsonTestElement.libraryKey);
             }
         }
 
@@ -205,7 +228,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
 
         const isRegexMatch: boolean =
             resourceRegexPatternsInExtensionSettings.length > 0
-                ? matchesRegex(jsonTestElement.name, resourceRegexPatternsInExtensionSettings)
+                ? matchesRegex(jsonTestElement.name || "", resourceRegexPatternsInExtensionSettings)
                 : true;
 
         const testElement: TestElementData = {
@@ -221,20 +244,22 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
             children: []
         };
 
-        elementIdToDataMap[UniqueIDOfTestElement] = testElement;
+        elementIdToDataMap.set(UniqueIDOfTestElement, testElement);
     });
 
     // Build the full tree structure by assigning children to their respective parents.
     const rootsOfTestElementView: TestElementData[] = [];
-    Object.values(elementIdToDataMap).forEach((testElement) => {
+    elementIdToDataMap.forEach((testElement) => {
         if (testElement.parentId) {
-            const foundParentElement: TestElementData | undefined = Object.values(elementIdToDataMap).find((p) =>
-                p.id.startsWith(`${testElement.parentId}_`)
-            );
+            const foundParentElement = elementIdToDataMap.get(testElement.parentId);
             if (foundParentElement) {
+                foundParentElement.children = foundParentElement.children || [];
+                foundParentElement.children.push(testElement);
                 testElement.parent = foundParentElement;
-                foundParentElement.children!.push(testElement);
             } else {
+                logger.trace(
+                    `[TestElementsView] Element "${testElement.name}" (ID: ${testElement.id}) has parentId "${testElement.parentId}" but parent not found in map. Treating as root.`
+                );
                 rootsOfTestElementView.push(testElement);
             }
         } else {
@@ -244,6 +269,9 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
 
     /**
      * Recursively filters the tree based on element type and regex matching.
+     * - Excludes DataType and Condition elements.
+     * - Hides non-matching Subdivisions if they are under a matching parent and have no matching children.
+     * - Keeps elements that directly match regex, inherit a match, or have visible (filtered) children.
      * Also, if a robot resource (directRegexMatch true) is nested under another robot resource,
      * it is filtered out and a warning message is recorded.
      * Filtered elements become null and are removed from the tree.
@@ -252,7 +280,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
      * @param {boolean} doesInheritMatchFromParent True if the element inherits a match from a parent.
      * @returns {TestElementData | null} The filtered element or null if excluded.
      */
-    function filterTestElementsTree(
+    function filterAndStructureTree(
         testElement: TestElementData,
         doesInheritMatchFromParent: boolean
     ): TestElementData | null {
@@ -262,7 +290,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
             // If the current element directly matches the regex or is already inherited, mark children as inherited.
             const childrenInherited: boolean = doesInheritMatchFromParent || testElement.directRegexMatch;
             filteredChildren = testElement.children
-                .map((child) => filterTestElementsTree(child, childrenInherited))
+                .map((child) => filterAndStructureTree(child, childrenInherited))
                 .filter((child) => child !== null) as TestElementData[];
         }
 
@@ -283,7 +311,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
     }
 
     const filteredRoots: TestElementData[] = rootsOfTestElementView
-        .map((root) => filterTestElementsTree(root, false))
+        .map((root) => filterAndStructureTree(root, false))
         .filter((node): node is TestElementData => node !== null);
 
     /**
@@ -357,9 +385,9 @@ const iconMapping: Record<string, { light: string; dark: string }> = {
 function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscode.Uri; dark: vscode.Uri } {
     const elementType: TestElementType = treeItem.testElementData?.elementType || "Other";
     logger.trace(`Getting icon for element type: ${elementType}`);
-    const iconPaths = iconMapping[elementType] || iconMapping["Other"];
+    const iconFileNames = iconMapping[elementType] || iconMapping["Other"];
 
-    if (!iconPaths) {
+    if (!iconFileNames) {
         logger.error(`No icon mapping found for element type: ${elementType}. Falling back to default icon.`);
         const defaultIconPaths = iconMapping["Other"];
         const lightIconUri: vscode.Uri = vscode.Uri.file(
@@ -371,8 +399,12 @@ function getIconUriForElementType(treeItem: TestElementTreeItem): { light: vscod
         return { light: lightIconUri, dark: darkIconUri };
     }
 
-    const lightIconUri: vscode.Uri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", iconPaths.light));
-    const darkIconUri: vscode.Uri = vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", iconPaths.dark));
+    const lightIconUri: vscode.Uri = vscode.Uri.file(
+        path.join(__dirname, "..", "resources", "icons", iconFileNames.light)
+    );
+    const darkIconUri: vscode.Uri = vscode.Uri.file(
+        path.join(__dirname, "..", "resources", "icons", iconFileNames.dark)
+    );
 
     return { light: lightIconUri, dark: darkIconUri };
 }
@@ -416,28 +448,26 @@ export class TestElementTreeItem extends vscode.TreeItem {
                 break;
         }
 
-        let tooltipText: string = `Type: ${this.testElementData.elementType || "N/A"}\nName: ${elementData.name || label}`;
+        const tooltipLines: string[] = [
+            `Type: ${this.testElementData.elementType || "N/A"}`,
+            `Name: ${elementData.name || label}`
+        ];
         if (elementData.uniqueID) {
-            tooltipText += `\nUniqueID: ${this.testElementData.uniqueID}`;
+            tooltipLines.push(`UniqueID: ${this.testElementData.uniqueID}`);
         }
         if (elementData.libraryKey) {
-            tooltipText += `\nLibraryKey: ${elementData.libraryKey}`;
+            tooltipLines.push(`LibraryKey: ${elementData.libraryKey}`);
         }
         if (elementData.details?.hasVersion !== undefined) {
-            tooltipText += `\nHas Version: ${elementData.details.hasVersion}`;
+            tooltipLines.push(`Has Version: ${elementData.details.hasVersion}`);
         }
         if (elementData.details?.status !== undefined) {
-            tooltipText += `\nStatus: ${elementData.details.status}`;
+            tooltipLines.push(`Status: ${elementData.details.status}`);
         }
+        // Include raw JSON (Useful for debugging)
+        // if (elementData.jsonString) { tooltipLines.push(`\nJSON Data:\n${elementData.jsonString}`); }
 
-        // Append the original JSON representation (Useful for debugging).
-        /*
-        if (element.jsonString) {
-            tooltip += `\n\nJSON Data:\n${element.jsonString}`;
-        }
-        */
-
-        this.tooltip = tooltipText;
+        this.tooltip = new vscode.MarkdownString(tooltipLines.join("\n"));
 
         // Display the uniqueID as a description next to the label.
         this.description = elementData.uniqueID || "";
@@ -445,6 +475,10 @@ export class TestElementTreeItem extends vscode.TreeItem {
         this.setIcon(getIconUriForElementType(this));
     }
 
+    /**
+     * Updates the iconPath for this tree item.
+     * @param newIconPath An object containing URIs for the light and dark theme icons.
+     */
     public setIcon(newIconPath: { light: vscode.Uri; dark: vscode.Uri }): void {
         this.iconPath = newIconPath;
     }
@@ -467,24 +501,19 @@ export async function constructAbsolutePathForTestElement(
         return undefined;
     }
 
-    const testElementPathSegments: string[] = [];
-    let currentElement: TestElementData | undefined = testElementTreeItem.testElementData;
-
-    while (currentElement) {
-        testElementPathSegments.unshift(currentElement.name);
-        currentElement = currentElement.parent;
-    }
-
-    if (testElementPathSegments.length === 0) {
+    if (!testElementTreeItem.testElementData.hierarchicalName) {
         logger.error(
-            `No path parts found for test element ${testElementTreeItem.testElementData.name}. Returning undefined, cannot construct absolute path.`
+            `[constructAbsolutePathForTestElement] Test element "${testElementTreeItem.testElementData.name}" (ID: ${testElementTreeItem.testElementData.id}) has no hierarchical name. Cannot construct absolute path.`
         );
         return undefined;
     }
 
-    const absoluteTestElementPath: string = path.join(workspaceRootPath, ...testElementPathSegments);
+    const absoluteTestElementPath: string = path.join(
+        workspaceRootPath,
+        testElementTreeItem.testElementData.hierarchicalName
+    );
     logger.trace(
-        `Constructed path from tree item ${testElementTreeItem.testElementData.name}: ${absoluteTestElementPath}`
+        `[constructAbsolutePathForTestElement] Constructed absolute path for tree item "${testElementTreeItem.testElementData.name}": ${absoluteTestElementPath}`
     );
     return absoluteTestElementPath;
 }
@@ -497,39 +526,41 @@ export async function constructAbsolutePathForTestElement(
 export async function updateTestElementIcon(testElementTreeItem: TestElementTreeItem): Promise<void> {
     const absolutePathOfTestElement: string | undefined =
         await constructAbsolutePathForTestElement(testElementTreeItem);
+
     if (!absolutePathOfTestElement) {
+        logger.warn(
+            `[updateTestElementIcon] Cannot update icon for "${testElementTreeItem.label}": absolute path could not be determined.`
+        );
         return;
     }
 
     logger.trace(
-        `Updating icon for test element: ${testElementTreeItem.testElementData.name} with absolute path ${absolutePathOfTestElement}`
+        `[updateTestElementIcon] Updating icon for test element: ${testElementTreeItem.testElementData.name} with absolute path ${absolutePathOfTestElement}`
     );
     if (testElementTreeItem.testElementData.elementType !== "Subdivision") {
         testElementTreeItem.setIcon(getIconUriForElementType(testElementTreeItem));
     } else {
-        logger.trace(`Updating icon for subdivision: ${testElementTreeItem.testElementData.name}`);
-        const isLocal: boolean = await isSubdivisionLocallyAvailable(testElementTreeItem, absolutePathOfTestElement);
+        logger.trace(
+            `[updateTestElementIcon] Updating icon for subdivision: ${testElementTreeItem.testElementData.name}`
+        );
+        const isSubdivisionAvailableLocally: boolean = await isSubdivisionLocallyAvailable(
+            testElementTreeItem,
+            absolutePathOfTestElement
+        );
+        const iconKey = isSubdivisionAvailableLocally ? "LocalSubdivision" : "MissingSubdivision";
+        const iconFileNames = iconMapping[iconKey];
 
-        if (isLocal) {
-            const localIconUri = {
-                light: vscode.Uri.file(
-                    path.join(__dirname, "..", "resources", "icons", iconMapping["LocalSubdivision"].light)
-                ),
-                dark: vscode.Uri.file(
-                    path.join(__dirname, "..", "resources", "icons", iconMapping["LocalSubdivision"].dark)
-                )
-            };
-            testElementTreeItem.setIcon(localIconUri);
+        if (iconFileNames) {
+            testElementTreeItem.setIcon({
+                light: vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", iconFileNames.light)),
+                dark: vscode.Uri.file(path.join(__dirname, "..", "resources", "icons", iconFileNames.dark))
+            });
         } else {
-            const missingIconUri = {
-                light: vscode.Uri.file(
-                    path.join(__dirname, "..", "resources", "icons", iconMapping["MissingSubdivision"].light)
-                ),
-                dark: vscode.Uri.file(
-                    path.join(__dirname, "..", "resources", "icons", iconMapping["MissingSubdivision"].dark)
-                )
-            };
-            testElementTreeItem.setIcon(missingIconUri);
+            // Defensive fallback
+            testElementTreeItem.setIcon(getIconUriForElementType(testElementTreeItem));
+            logger.warn(
+                `[TestElementsView] Icon key "${iconKey}" not found in iconMapping for subdivision "${testElementTreeItem.label}".`
+            );
         }
     }
 }
@@ -538,74 +569,81 @@ export async function updateTestElementIcon(testElementTreeItem: TestElementTree
  * TestElementsTreeDataProvider implements the VS Code TreeDataProvider interface for test elements.
  */
 export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<TestElementTreeItem> {
-    public _onDidChangeTreeData: vscode.EventEmitter<TestElementTreeItem | undefined> = new vscode.EventEmitter<
+    public _onDidChangeTreeDataEmitter: vscode.EventEmitter<TestElementTreeItem | undefined> = new vscode.EventEmitter<
         TestElementTreeItem | undefined
     >();
-    readonly onDidChangeTreeData: vscode.Event<TestElementTreeItem | undefined> = this._onDidChangeTreeData.event;
-    private treeData: TestElementData[] = [];
+    readonly onDidChangeTreeData: vscode.Event<TestElementTreeItem | undefined> =
+        this._onDidChangeTreeDataEmitter.event;
+    private currentTreeData: TestElementData[] = [];
 
-    private _currentTovKey: string = "";
+    private currentSelectedTovKey: string = "";
     public getCurrentTovKey(): string {
-        return this._currentTovKey;
+        return this.currentSelectedTovKey;
     }
     public setCurrentTovKey(tovKey: string): void {
-        this._currentTovKey = tovKey;
+        this.currentSelectedTovKey = tovKey;
     }
 
     // Flag to be able to set a proper tree view message
-    private dataFetchAttempted: boolean = false;
-    public setDataFetchAttempted(attempted: boolean): void {
-        this.dataFetchAttempted = attempted;
+    public isDataFetchAttempted: boolean = false;
+
+    private treeViewMessageUpdater: (message: string | undefined) => void;
+
+    constructor(updateTreeViewMessageCallback: (message: string | undefined) => void) {
+        this.treeViewMessageUpdater = updateTreeViewMessageCallback;
     }
 
-    private updateTreeViewStatusMessageCallback: (message: string | undefined) => void;
-
-    constructor(updateMessageCallback: (message: string | undefined) => void) {
-        this.updateTreeViewStatusMessageCallback = updateMessageCallback;
-    }
-
-    public setTreViewMessage(message: string | undefined): void {
-        this.updateTreeViewStatusMessageCallback(message);
+    public setTreeViewMessage(message: string | undefined): void {
+        this.treeViewMessageUpdater(message);
     }
 
     public updateTreeViewStatusMessage(): void {
         if (this.isTreeDataEmpty()) {
-            if (!this.dataFetchAttempted) {
-                this.setTreViewMessage(
+            if (!this.isDataFetchAttempted) {
+                this.setTreeViewMessage(
                     "Select a Test Object Version (TOV) from the 'Projects' view to load test elements."
                 );
             } else {
-                const filterPatterns = getConfig().get("resourceRegexInTestbench2robotframework", []);
+                const filterPatterns: string[] = getConfig().get(ConfigKeys.TB2ROBOT_RESOURCE_REGEX, []);
                 if (filterPatterns && filterPatterns.length > 0) {
-                    this.setTreViewMessage("No test elements match the current filter criteria.");
+                    this.setTreeViewMessage("No test elements match the current filter criteria.");
                 } else {
-                    this.setTreViewMessage("No test elements found for the selected Test Object Version (TOV).");
+                    this.setTreeViewMessage("No test elements found for the selected Test Object Version (TOV).");
                 }
             }
         } else {
-            this.setTreViewMessage(undefined);
+            this.setTreeViewMessage(undefined);
         }
     }
 
+    /**
+     * Checks if the current tree data is empty.
+     * @returns {boolean} True if the tree data is empty; false otherwise.
+     */
     public isTreeDataEmpty(): boolean {
-        return !this.treeData || this.treeData.length === 0;
+        return !this.currentTreeData || this.currentTreeData.length === 0;
     }
 
+    /**
+     * Gets the TestElementTreeItem representation for the given TestElementData.
+     * @param {TestElementTreeItem} item The TestElementTreeItem from getChildren.
+     * @returns The same item.
+     */
     getTreeItem(item: TestElementTreeItem): vscode.TreeItem {
         return item;
     }
 
     /**
      * Returns the children for a given test element.
-     * @param {TestElementTreeItem} testElementTreeItem Optional parent TestElementTreeItem.
+     * @param {TestElementTreeItem} parentTestElement Optional parent TestElementTreeItem.
      * @returns {Thenable<TestElementTreeItem[]>} A promise resolving to an array of TestElementTreeItems.
      */
-    async getChildren(testElementTreeItem?: TestElementTreeItem): Promise<TestElementTreeItem[]> {
-        if (testElementTreeItem) {
-            const children: TestElementData[] = testElementTreeItem.testElementData.children || [];
+    async getChildren(parentTestElement?: TestElementTreeItem): Promise<TestElementTreeItem[]> {
+        if (parentTestElement) {
+            const childrenData: TestElementData[] = parentTestElement.testElementData.children || [];
             const childItems: TestElementTreeItem[] = await Promise.all(
-                children.map(async (child: any) => {
-                    const childItem = new TestElementTreeItem(child);
+                childrenData.map(async (childData: any) => {
+                    const childItem = new TestElementTreeItem(childData);
                     await updateTestElementIcon(childItem);
                     return childItem;
                 })
@@ -614,16 +652,16 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         } else {
             if (this.isTreeDataEmpty()) {
                 logger.trace(
-                    "TestElementsTreeDataProvider: No tree data found for root, returning empty. Message should be set."
+                    "[getChildren] TestElementsTreeDataProvider: No tree data found for root, returning empty. Message should be set."
                 );
                 return [];
             }
 
             const rootTreeItems: TestElementTreeItem[] = await Promise.all(
-                this.treeData.map(async (child) => {
-                    const childItem: TestElementTreeItem = new TestElementTreeItem(child);
-                    await updateTestElementIcon(childItem);
-                    return childItem;
+                this.currentTreeData.map(async (rootData) => {
+                    const rootTestElementItems: TestElementTreeItem = new TestElementTreeItem(rootData);
+                    await updateTestElementIcon(rootTestElementItems);
+                    return rootTestElementItems;
                 })
             );
             return rootTreeItems;
@@ -636,25 +674,23 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
      * @param {any} flatTestElementsJsonData A flat array of JSON objects representing test elements.
      */
     refresh(flatTestElementsJsonData: any[]): void {
-        this.treeData = buildTree(flatTestElementsJsonData);
+        this.currentTreeData = buildTree(flatTestElementsJsonData);
         if (testElementTreeView) {
             if (this.isTreeDataEmpty()) {
-                const filterPatterns = getConfig().get(ConfigKeys.TB2ROBOT_RESOURCE_REGEX, []);
+                const filterPatterns: string[] = getConfig().get(ConfigKeys.TB2ROBOT_RESOURCE_REGEX, []);
                 if (filterPatterns && filterPatterns.length > 0) {
-                    this.updateTreeViewStatusMessageCallback("No test elements match the current filter criteria.");
+                    this.treeViewMessageUpdater("No test elements match the current filter criteria.");
                 } else {
-                    this.updateTreeViewStatusMessageCallback(
-                        "No test elements found for the selected Test Object Version (TOV)."
-                    );
+                    this.treeViewMessageUpdater("No test elements found for the selected Test Object Version (TOV).");
                 }
                 logger.trace(`Test Elements view message set: ${testElementTreeView.message}`);
             } else {
-                this.updateTreeViewStatusMessageCallback(undefined);
+                this.treeViewMessageUpdater(undefined);
                 logger.trace("Test Elements view message cleared.");
             }
         }
 
-        this._onDidChangeTreeData.fire(undefined);
+        this._onDidChangeTreeDataEmitter.fire(undefined);
     }
 
     /**
@@ -668,33 +704,45 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         // const jsonPath = "ABSOLUTE-PATH-TO-JSON-FILE";
         // const testElementsJsonData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
 
-        this.setDataFetchAttempted(true);
+        this.isDataFetchAttempted = true;
 
         const tovLabel: string = newTestElementsTreeViewTitle || tovKey;
-        this.updateTreeViewStatusMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
+        this.treeViewMessageUpdater(`Loading test elements for TOV: ${tovLabel}...`);
 
         // Clear current data and trigger UI update to show loading message
-        this.treeData = [];
-        this._onDidChangeTreeData.fire(undefined);
+        this.currentTreeData = [];
+        this._onDidChangeTreeDataEmitter.fire(undefined);
 
-        const testElementsJsonData = await connection?.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
-        if (testElementsJsonData) {
-            this._currentTovKey = tovKey;
-            this.refresh(testElementsJsonData);
+        try {
+            const testElementsJsonData = await connection?.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
+            if (testElementsJsonData) {
+                this.currentSelectedTovKey = tovKey;
+                this.refresh(testElementsJsonData);
 
-            if (newTestElementsTreeViewTitle && testElementTreeView) {
-                testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
+                if (newTestElementsTreeViewTitle && testElementTreeView) {
+                    testElementTreeView.title = `Test Elements (${newTestElementsTreeViewTitle})`;
+                }
+                return true;
+            } else {
+                this.currentSelectedTovKey = "";
+                vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
+                this.treeViewMessageUpdater("Error: Failed to fetch test elements. Please try again or check logs.");
+                this.currentTreeData = [];
+                this._onDidChangeTreeDataEmitter.fire(undefined);
+
+                return false;
             }
-            return true;
-        } else {
-            this._currentTovKey = "";
-            vscode.window.showErrorMessage("Failed to fetch test elements from the server.");
-            this.updateTreeViewStatusMessageCallback(
-                "Error: Failed to fetch test elements. Please try again or check logs."
+        } catch (error) {
+            this.currentSelectedTovKey = "";
+            const errorMessage: string = error instanceof Error ? error.message : "Unknown error";
+            logger.error(
+                `[fetchTestElements] Failed to fetch test elements for TOV "${tovKey}": ${errorMessage}`,
+                error
             );
-            this.treeData = [];
-            this._onDidChangeTreeData.fire(undefined);
-
+            vscode.window.showErrorMessage(`Failed to fetch test elements for TOV "${tovLabel}".`);
+            this.setTreeViewMessage(`Error fetching elements for TOV "${tovLabel}". Please check logs or try again.`);
+            this.currentTreeData = [];
+            this._onDidChangeTreeDataEmitter.fire(undefined);
             return false;
         }
     }
@@ -751,18 +799,19 @@ function appendResourceExtensionAndTrimPath(baseTargetPath: string): string {
  * @returns A promise that resolves to true if the entire path exists with exact casing, false otherwise.
  */
 async function isFilePresentLocally(filePath: string, caseSensitiveCheck: boolean = false): Promise<boolean> {
-    logger.trace(`Checking if file exists: ${filePath}`);
+    logger.trace(`[isFilePresentLocally] Checking if file exists: ${filePath}`);
     if (!caseSensitiveCheck) {
         // Check with stat is case-insensitive
         try {
             await fs.promises.stat(filePath);
-            logger.trace(`File exists with case-insensitive check: ${filePath}`);
+            logger.trace(`[isFilePresentLocally] File exists with case-insensitive check: ${filePath}`);
             return true;
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                logger.trace(`File does not exist: ${filePath}`);
+                logger.trace(`[isFilePresentLocally] File does not exist: ${filePath}`);
                 return false;
             }
+            logger.error(`[isFilePresentLocally] Error stating file "${filePath}" (case-insensitive): ${err.message}`);
             throw err;
         }
     }
@@ -771,45 +820,47 @@ async function isFilePresentLocally(filePath: string, caseSensitiveCheck: boolea
     // Split the path into its parts. Filtering out any empty strings (e.g., due to leading separators).
     const filePathSegments: string[] = absoluteFilePath.split(path.sep).filter((part) => part !== "");
 
-    logger.trace(`Resolved path: ${absoluteFilePath}`);
+    logger.trace(`[isFilePresentLocally] Resolved path: ${absoluteFilePath}`);
 
     // Determine the starting point (the root)
-    let currentPath: string;
+    let currentConstructedPath: string;
     if (path.isAbsolute(absoluteFilePath)) {
         if (process.platform === "win32") {
             // On Windows, the first part is typically the drive letter (e.g., "C:")
-            currentPath = filePathSegments[0] + path.sep;
+            currentConstructedPath = filePathSegments[0] + path.sep;
             // Remove the drive letter from the parts.
             filePathSegments.shift();
         } else {
-            currentPath = path.sep;
+            currentConstructedPath = path.sep;
         }
     } else {
         // For relative paths, start with an empty string.
-        currentPath = "";
+        currentConstructedPath = "";
     }
 
     for (const pathSegment of filePathSegments) {
         let directoryEntries: string[];
         try {
-            directoryEntries = await fs.promises.readdir(currentPath);
+            directoryEntries = await fs.promises.readdir(currentConstructedPath);
             // logger.trace(`Entries in ${currentPath}: ${entries}`);
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                logger.trace(`Path does not exist: ${currentPath}`);
+                logger.trace(`[isFilePresentLocally] Path does not exist: ${currentConstructedPath}`);
                 return false;
             }
             throw err;
         }
         if (!directoryEntries.includes(pathSegment)) {
-            logger.trace(`Returning false, part ${pathSegment} not found in ${currentPath}`);
+            logger.trace(
+                `[isFilePresentLocally] Returning false, part ${pathSegment} not found in ${currentConstructedPath}`
+            );
             return false;
         }
-        logger.trace(`Part ${pathSegment} found in ${currentPath}`);
-        currentPath = path.join(currentPath, pathSegment);
+        logger.trace(`[isFilePresentLocally] Part ${pathSegment} found in ${currentConstructedPath}`);
+        currentConstructedPath = path.join(currentConstructedPath, pathSegment);
     }
 
-    logger.trace(`File exists with exact case, returning true: ${absoluteFilePath}`);
+    logger.trace(`[isFilePresentLocally] File exists with exact case, returning true: ${absoluteFilePath}`);
     return true;
 }
 
@@ -824,35 +875,28 @@ async function isSubdivisionLocallyAvailable(
     testElementTreeItem: TestElementTreeItem,
     absolutePathOfTestElement: string
 ): Promise<boolean> {
-    logger.trace(`Checking if subdivision exists locally: ${absolutePathOfTestElement}`);
+    logger.trace(
+        `[isSubdivisionLocallyAvailable] Checking if subdivision exists locally: ${absolutePathOfTestElement}`
+    );
     if (testElementTreeItem.testElementData.elementType !== "Subdivision") {
-        logger.trace(`Element is not a subdivision, returning false.`);
+        logger.trace(`[isSubdivisionLocallyAvailable] Element is not a subdivision, returning false.`);
         return false;
     }
 
     const isFinalSubdivision: boolean = isFinalSubdivisionInTree(testElementTreeItem.testElementData);
+    let pathToCheck: string = removeRobotResourceFromPathString(absolutePathOfTestElement);
 
     if (isFinalSubdivision) {
+        pathToCheck = appendResourceExtensionAndTrimPath(pathToCheck);
         logger.trace(
-            `Checking if the resource file for final subdivision '${testElementTreeItem.testElementData.name}' exists locally.`
+            `[isSubdivisionLocallyAvailable] Final subdivision "${testElementTreeItem.testElementData.name}". Checking for resource file: "${pathToCheck}"`
         );
-        let processedFinalSubdivisionPath: string = removeRobotResourceFromPathString(absolutePathOfTestElement);
-        processedFinalSubdivisionPath = appendResourceExtensionAndTrimPath(processedFinalSubdivisionPath);
-        const isSubdivisionResourceFilePresent: boolean = await isFilePresentLocally(processedFinalSubdivisionPath);
-        logger.trace(
-            `Final subdivision '${testElementTreeItem.testElementData.name}' exists locally as resource file: ${isSubdivisionResourceFilePresent}`
-        );
-        return isSubdivisionResourceFilePresent;
+        return isFilePresentLocally(pathToCheck);
     } else {
         logger.trace(
-            `Checking if the non-final subdivision folder '${testElementTreeItem.testElementData.name}' exists locally.`
+            `[isSubdivisionLocallyAvailable] Non-final subdivision "${testElementTreeItem.testElementData.name}". Checking for folder: "${pathToCheck}"`
         );
-        const processedNonFinalSubdivisionPath: string = removeRobotResourceFromPathString(absolutePathOfTestElement);
-        const isSubdivisionFolderPresent: boolean = await isFilePresentLocally(processedNonFinalSubdivisionPath);
-        logger.trace(
-            `Non-Final subdivision '${testElementTreeItem.testElementData.name}' exists locally: ${isSubdivisionFolderPresent}`
-        );
-        return isSubdivisionFolderPresent;
+        return isFilePresentLocally(pathToCheck);
     }
 }
 
@@ -875,19 +919,21 @@ async function createFolderStructure(targetPath: string): Promise<void> {
             try {
                 const stats: fs.Stats = await fs.promises.stat(currentPath);
                 if (!stats.isDirectory()) {
-                    throw new Error(`Path component exists but is not a directory: ${currentPath}`);
+                    throw new Error(
+                        `[createFolderStructure] Path component exists but is not a directory: ${currentPath}`
+                    );
                 }
             } catch (error: any) {
                 if (error.code === "ENOENT") {
                     await fs.promises.mkdir(currentPath, { recursive: true });
-                    logger.trace(`Created directory: ${currentPath}`);
+                    logger.trace(`[createFolderStructure] Created directory: ${currentPath}`);
                 } else {
                     throw error;
                 }
             }
         }
     } catch (error) {
-        logger.error(`Failed to create folder structure: ${error}`);
+        logger.error(`[createFolderStructure] Failed to create folder structure: ${error}`);
         throw error;
     }
 }
@@ -935,42 +981,44 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
         }
 
         await updateTestElementIcon(subdivisionTreeItem);
-        testElementsTreeDataProvider?._onDidChangeTreeData.fire(undefined);
+        testElementsTreeDataProvider?._onDidChangeTreeDataEmitter.fire(undefined);
     } catch (error: any) {
-        logger.error(`Failed to handle subdivision: ${error}`);
+        logger.error(`[handleSubdivision] Failed to handle subdivision: ${error}`);
         vscode.window.showErrorMessage(`Failed to create folder structure: ${error.message}`);
     }
 }
 
 /**
  * Handles an interaction element by opening the resource file of its nearest final robotframework resource subdivision .resource file.
- * @param {TestElementTreeItem} treeItem The test element tree item representing an interaction.
+ * @param {TestElementTreeItem} interactionTreeItem The test element tree item representing an interaction.
  */
-export async function handleInteraction(treeItem: TestElementTreeItem): Promise<void> {
+export async function handleInteraction(interactionTreeItem: TestElementTreeItem): Promise<void> {
     const workspaceRootPath: string | undefined = await utils.validateAndReturnWorkspaceLocation();
     if (!workspaceRootPath) {
         return;
     }
-    const testElement: TestElementData = treeItem.testElementData;
-    const robotResourceAncestor: TestElementTreeItem | null = getRobotResourceAncestor(treeItem);
+    const interactionData: TestElementData = interactionTreeItem.testElementData;
+    const robotResourceAncestor: TestElementTreeItem | null = getRobotResourceAncestor(interactionTreeItem);
 
     if (!robotResourceAncestor) {
         logger.warn(
-            `Interaction '${testElement.uniqueID}' has no Robot-Resource Subdivision ancestor. Falling back to nearest general Subdivision.`
+            `[handleInteraction] Interaction '${interactionData.uniqueID}' has no Robot-Resource Subdivision ancestor. Falling back to nearest general Subdivision.`
         );
-        const subdivisionAncestor: TestElementTreeItem | null = getSubdivisionAncestor(treeItem);
+        const subdivisionAncestor: TestElementTreeItem | null = getSubdivisionAncestor(interactionTreeItem);
         if (subdivisionAncestor) {
             logger.trace(
-                `Nearest Subdivision Ancestor (fallback) of Interaction '${testElement.uniqueID}': `,
+                `[handleInteraction] Nearest Subdivision Ancestor (fallback) of Interaction '${interactionData.uniqueID}': `,
                 subdivisionAncestor.testElementData
             );
             await handleSubdivision(subdivisionAncestor);
             return;
         } else {
             vscode.window.showErrorMessage(
-                `Cannot determine resource file for interaction '${testElement.name}'. No subdivision ancestor found.`
+                `Cannot determine resource file for interaction '${interactionData.name}'. No subdivision ancestor found.`
             );
-            logger.error(`No subdivision ancestor found for interaction '${testElement.name}'.`);
+            logger.error(
+                `[handleInteraction] No subdivision ancestor found for interaction '${interactionData.name}'.`
+            );
             return;
         }
     }
@@ -978,7 +1026,7 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
     if (!robotResourceAncestor.testElementData.hierarchicalName) {
         robotResourceAncestor.testElementData.hierarchicalName = computeHierarchicalName(robotResourceAncestor);
         logger.trace(
-            `Computed hierarchical name for robot resource subdivision: ${robotResourceAncestor.testElementData.hierarchicalName}`
+            `[handleInteraction] Computed hierarchical name for robot resource subdivision: ${robotResourceAncestor.testElementData.hierarchicalName}`
         );
     }
     const robotResourceAncestorAbsolutePath: string | undefined =
@@ -995,25 +1043,34 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
     );
     processedRobotResourceAncestorPath = appendResourceExtensionAndTrimPath(processedRobotResourceAncestorPath);
 
-    if (!(await isFilePresentLocally(processedRobotResourceAncestorPath))) {
-        await createFolderStructure(path.dirname(processedRobotResourceAncestorPath));
-        const fileContent: string = `${fileContentOfRobotResourceSubdivisionFile}${robotResourceAncestor.testElementData.uniqueID}\n`;
+    try {
+        if (!(await isFilePresentLocally(processedRobotResourceAncestorPath))) {
+            await createFolderStructure(path.dirname(processedRobotResourceAncestorPath));
+            const fileContent: string = `${fileContentOfRobotResourceSubdivisionFile}${robotResourceAncestor.testElementData.uniqueID}\n`;
+            await fs.promises.writeFile(processedRobotResourceAncestorPath, fileContent);
+            logger.trace(`[handleInteraction] Resource file created at ${processedRobotResourceAncestorPath}`);
+        } else {
+            logger.trace(
+                `[handleInteraction] Skipping creation of resource file at ${processedRobotResourceAncestorPath} as it already exists.`
+            );
+        }
 
-        await fs.promises.writeFile(processedRobotResourceAncestorPath, fileContent);
-        logger.trace(`Resource file created at ${processedRobotResourceAncestorPath}`);
-    } else {
-        logger.trace(
-            `Skipping creation of resource file at ${processedRobotResourceAncestorPath} as it already exists.`
+        const resourceFileDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(
+            vscode.Uri.file(processedRobotResourceAncestorPath)
+        );
+        await vscode.window.showTextDocument(resourceFileDocument);
+        await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
+
+        testElementsTreeDataProvider?._onDidChangeTreeDataEmitter.fire(undefined);
+    } catch (error: any) {
+        logger.error(
+            `[handleInteraction] Failed to handle interaction "${interactionData.name}": ${error.message}`,
+            error
+        );
+        vscode.window.showErrorMessage(
+            `Failed to open/create resource for interaction "${interactionData.name}": ${error.message}`
         );
     }
-
-    const resourceFileDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(processedRobotResourceAncestorPath)
-    );
-    await vscode.window.showTextDocument(resourceFileDocument);
-    await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
-
-    testElementsTreeDataProvider?._onDidChangeTreeData.fire(undefined);
 }
 
 /**
@@ -1021,14 +1078,19 @@ export async function handleInteraction(treeItem: TestElementTreeItem): Promise<
  * @param {string} targetPath The target file path.
  */
 export async function handleFallback(targetPath: string): Promise<void> {
-    if (!(await isFilePresentLocally(targetPath))) {
-        const dirName: string = path.dirname(targetPath);
-        await fs.promises.mkdir(dirName, { recursive: true });
-        await fs.promises.writeFile(targetPath, "");
+    try {
+        if (!(await isFilePresentLocally(targetPath))) {
+            const dirName: string = path.dirname(targetPath);
+            await fs.promises.mkdir(dirName, { recursive: true });
+            await fs.promises.writeFile(targetPath, "");
+        }
+        const document: vscode.TextDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
+        await vscode.window.showTextDocument(document);
+        await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
+    } catch (error: any) {
+        logger.error(`[handleFallback] Error in fallback file handling for "${targetPath}": ${error.message}`, error);
+        vscode.window.showErrorMessage(`Failed to open or create file "${targetPath}": ${error.message}`);
     }
-    const document: vscode.TextDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
-    await vscode.window.showTextDocument(document);
-    await vscode.commands.executeCommand("workbench.files.action.showActiveFileInExplorer");
 }
 
 /**
@@ -1090,7 +1152,7 @@ export async function createInteractionUnderSubdivision(
 
         return interactionData;
     } catch (error) {
-        logger.error("Error creating interaction tree item:", error);
+        logger.error("[createInteractionUnderSubdivision] Error creating interaction tree item:", error);
         vscode.window.showErrorMessage("Failed to create interaction: " + (error as Error).message);
         return null;
     }
@@ -1103,11 +1165,11 @@ export async function createInteractionUnderSubdivision(
  */
 export function isFinalSubdivisionInTree(element: TestElementData): boolean {
     if (element.elementType !== "Subdivision") {
-        logger.trace(`Element ${element.name} is not a subdivision.`);
+        logger.trace(`[isFinalSubdivisionInTree] Element ${element.name} is not a subdivision.`);
         return false;
     }
     if (!element.children) {
-        logger.trace(`Element ${element.name} has no children and is final.`);
+        logger.trace(`[isFinalSubdivisionInTree] Element ${element.name} has no children and is final.`);
         return true;
     }
     const isFinalSubdivision: boolean = !element.children.some(
@@ -1115,9 +1177,9 @@ export function isFinalSubdivisionInTree(element: TestElementData): boolean {
     );
 
     if (isFinalSubdivision) {
-        logger.trace(`Test element ${element.name} is a final subdivision.`);
+        logger.trace(`[isFinalSubdivisionInTree] Test element ${element.name} is a final subdivision.`);
     } else {
-        logger.trace(`Test element ${element.name} is not a final subdivision.`);
+        logger.trace(`[isFinalSubdivisionInTree] Test element ${element.name} is not a final subdivision.`);
     }
 
     return isFinalSubdivision;
@@ -1129,18 +1191,22 @@ export function isFinalSubdivisionInTree(element: TestElementData): boolean {
  * @returns {TestElementTreeItem | null} The nearest final subdivision ancestor, or null if not found.
  */
 export function getFinalSubdivisionAncestor(treeItem: TestElementTreeItem): TestElementTreeItem | null {
-    const testElement = treeItem.testElementData;
-    logger.trace(`Searching final subdivision ancestor for test element ${testElement.name}`);
-    let current = testElement.parent;
-    while (current) {
-        if (current.elementType === "Subdivision" && isFinalSubdivisionInTree(current)) {
-            logger.trace(`Found final subdivision ancestor for test element ${testElement.name}: ${current.name}`);
-            return new TestElementTreeItem(current);
+    const initialTestElementData: TestElementData = treeItem.testElementData;
+    logger.trace(
+        `[getFinalSubdivisionAncestor] Searching final subdivision ancestor for test element ${initialTestElementData.name}`
+    );
+    let currentAncestorData = initialTestElementData.parent;
+    while (currentAncestorData) {
+        if (currentAncestorData.elementType === "Subdivision" && isFinalSubdivisionInTree(currentAncestorData)) {
+            logger.trace(
+                `[getFinalSubdivisionAncestor] Found final subdivision ancestor for test element ${initialTestElementData.name}: ${currentAncestorData.name}`
+            );
+            return new TestElementTreeItem(currentAncestorData);
         }
-        current = current.parent;
+        currentAncestorData = currentAncestorData.parent;
     }
     logger.trace(
-        `No final subdivision ancestor found for test element ${testElement.name} with unique ID: ${testElement.uniqueID}`
+        `[getFinalSubdivisionAncestor] No final subdivision ancestor found for test element ${initialTestElementData.name} with unique ID: ${initialTestElementData.uniqueID}`
     );
     return null;
 }
@@ -1168,20 +1234,22 @@ function isRobotResourceSubdivision(element: TestElementData): boolean {
  * otherwise `null`.
  */
 export function getRobotResourceAncestor(treeItem: TestElementTreeItem): TestElementTreeItem | null {
-    const testElement = treeItem.testElementData;
-    logger.trace(`Searching Robot-Resource subdivision ancestor for test element ${testElement.name}`);
-    let current = testElement.parent;
-    while (current) {
-        if (current.elementType === "Subdivision" && isRobotResourceSubdivision(current)) {
+    const initialTestElementData = treeItem.testElementData;
+    logger.trace(
+        `[getRobotResourceAncestor] Searching Robot-Resource subdivision ancestor for test element ${initialTestElementData.name}`
+    );
+    let currentAncestorData = initialTestElementData.parent;
+    while (currentAncestorData) {
+        if (currentAncestorData.elementType === "Subdivision" && isRobotResourceSubdivision(currentAncestorData)) {
             logger.trace(
-                `Found Robot-Resource subdivision ancestor for test element ${testElement.name}: ${current.name}`
+                `[getRobotResourceAncestor] Found Robot-Resource subdivision ancestor for test element ${initialTestElementData.name}: ${currentAncestorData.name}`
             );
-            return new TestElementTreeItem(current);
+            return new TestElementTreeItem(currentAncestorData);
         }
-        current = current.parent;
+        currentAncestorData = currentAncestorData.parent;
     }
     logger.trace(
-        `No Robot-Resource subdivision ancestor found for test element ${testElement.name} with unique ID: ${testElement.uniqueID}`
+        `[getRobotResourceAncestor] No Robot-Resource subdivision ancestor found for test element ${initialTestElementData.name} with unique ID: ${initialTestElementData.uniqueID}`
     );
     return null;
 }
@@ -1192,18 +1260,22 @@ export function getRobotResourceAncestor(treeItem: TestElementTreeItem): TestEle
  * @returns {TestElementTreeItem | null} The nearest subdivision ancestor, or null if not found.
  */
 export function getSubdivisionAncestor(treeItem: TestElementTreeItem): TestElementTreeItem | null {
-    const testElement: TestElementData = treeItem.testElementData;
-    logger.trace(`Searching subdivision ancestor for test element ${testElement.name}`);
-    let current: TestElementData | undefined = testElement.parent;
-    while (current) {
-        if (current.elementType === "Subdivision") {
-            logger.trace(`Found subdivision ancestor for test element ${testElement.name}: ${current.name}`);
-            return new TestElementTreeItem(current);
+    const initialTestElementData: TestElementData = treeItem.testElementData;
+    logger.trace(
+        `[getSubdivisionAncestor] Searching subdivision ancestor for test element ${initialTestElementData.name}`
+    );
+    let currentAncestorData: TestElementData | undefined = initialTestElementData.parent;
+    while (currentAncestorData) {
+        if (currentAncestorData.elementType === "Subdivision") {
+            logger.trace(
+                `[getSubdivisionAncestor] Found subdivision ancestor for test element ${initialTestElementData.name}: ${currentAncestorData.name}`
+            );
+            return new TestElementTreeItem(currentAncestorData);
         }
-        current = current.parent;
+        currentAncestorData = currentAncestorData.parent;
     }
     logger.trace(
-        `No subdivision ancestor found for test element ${testElement.name} with unique ID: ${testElement.uniqueID}`
+        `[getSubdivisionAncestor] No subdivision ancestor found for test element ${initialTestElementData.name} with unique ID: ${initialTestElementData.uniqueID}`
     );
     return null;
 }
@@ -1214,10 +1286,12 @@ export function getSubdivisionAncestor(treeItem: TestElementTreeItem): TestEleme
  * @returns {string} The hierarchical name (e.g., "Root/Child").
  */
 export function computeHierarchicalName(treeItem: TestElementTreeItem): string {
-    const testElement: TestElementData = treeItem.testElementData;
-    return testElement.parent
-        ? computeHierarchicalName(new TestElementTreeItem(testElement.parent)) + "/" + testElement.name
-        : testElement.name;
+    const testElementData: TestElementData = treeItem.testElementData;
+    if (testElementData.parent) {
+        const parentTreeItem = new TestElementTreeItem(testElementData.parent);
+        return `${computeHierarchicalName(parentTreeItem)}/${testElementData.name}`;
+    }
+    return testElementData.name;
 }
 
 /**
@@ -1227,7 +1301,7 @@ export function computeHierarchicalName(treeItem: TestElementTreeItem): string {
  */
 export function removeRobotResourceFromPathString(pathStr: string): string {
     const cleanedPath: string = pathStr.replace(/\[Robot-Resource\]/g, "");
-    logger.trace(`Removed [Robot-Resource] from path ${pathStr}: ${cleanedPath}`);
+    logger.trace(`[removeRobotResourceFromPathString] Removed [Robot-Resource] from path ${pathStr}: ${cleanedPath}`);
     return cleanedPath;
 }
 
@@ -1237,7 +1311,7 @@ export function removeRobotResourceFromPathString(pathStr: string): string {
 export function clearTestElementsTreeView(): void {
     if (testElementsTreeDataProvider) {
         testElementsTreeDataProvider.setCurrentTovKey("");
-        testElementsTreeDataProvider.setDataFetchAttempted(false);
+        testElementsTreeDataProvider.isDataFetchAttempted = false;
         testElementsTreeDataProvider.refresh([]);
     }
 }
