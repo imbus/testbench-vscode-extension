@@ -4,9 +4,12 @@ import shutil
 
 @task
 def build_vsix(c):
-    shutil.rmtree("bundled/libs")
+    if not os.path.exists(".venv"):
+        c.run("python -m venv .venv")
+    if os.path.exists("bundled/libs"):
+        shutil.rmtree("bundled/libs")
     c.run("pip-compile")
-    c.run("python -m nox --session bundle_dependencies")
+    c.run("./.venv/Scrips/python -m nox --session bundle_dependencies")
     # for dir in os.listdir("bundled/libs"):
     #     if dir.startswith("robot"):
     #         shutil.rmtree(f"bundled/libs/{dir}")
@@ -15,7 +18,10 @@ def build_vsix(c):
 
 @task
 def update_dependencies(c):
-    shutil.rmtree("bundled/libs")
+    if not os.path.exists(".venv"):
+        c.run("python -m venv .venv")
+    if  os.path.exists("bundled/libs"):
+        shutil.rmtree("bundled/libs")
     c.run("pip-compile")
     c.run("python -m nox --session bundle_dependencies")
     

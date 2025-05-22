@@ -9,7 +9,7 @@ authors = [
     {name = "imbus AG", email = "support@imbus.de"},
 ]
 description = ""
-requires-python = ">= 3.9"
+requires-python = ">= 3.10"
 readme = "README.md"
 license = {text = "Apache 2.0 License"}
 dynamic = ["version"]
