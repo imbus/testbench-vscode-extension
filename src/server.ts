@@ -231,18 +231,21 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
             logger.warn("[stopLanguageClient] Attempting to dispose a client that is currently starting.");
             await clientToStop.dispose();
             logger.trace("[stopLanguageClient] Disposed of the client instance that was in a starting state.");
-            return;
-        }
-
-        if (clientToStop.state === State.Running) {
+        } else if (clientToStop.state === State.Running) {
             logger.trace("[stopLanguageClient] Stopping currently running client.");
             await clientToStop.stop();
-            logger.trace("[stopLanguageClient] Client stopped successfully.");
-        }
-        if (clientToStop.state === State.Stopped) {
-            logger.trace("[stopLanguageClient] Client is stopped. Disposing.");
+            logger.trace("[stopLanguageClient] Client stopped successfully. Now disposing.");
+            await clientToStop.dispose();
+            logger.trace("[stopLanguageClient] Client disposed after stopping.");
+        } else if (clientToStop.state === State.Stopped) {
+            logger.trace("[stopLanguageClient] Client is already stopped. Disposing.");
             await clientToStop.dispose();
             logger.trace("[stopLanguageClient] Client disposed.");
+        } else {
+            logger.warn(
+                `[stopLanguageClient] Client is in an unexpected state: ${clientToStop.state}. Attempting dispose.`
+            );
+            await clientToStop.dispose();
         }
     } catch (error: any) {
         const errorMessage = error.message || String(error);
@@ -251,23 +254,29 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
             clientToStop &&
             clientToStop.state !== State.Stopped &&
             !errorMessage.includes("Client is not running") &&
-            !errorMessage.includes("Client is not stopping")
+            !errorMessage.includes("Client is not stopping") &&
+            !errorMessage.includes("Client is already stopping") &&
+            !errorMessage.includes("already disposed")
         ) {
             try {
                 logger.trace(
-                    `[stopLanguageClient] Attempting final dispose for client in state: ${clientToStop.state}`
+                    `[stopLanguageClient] Attempting final dispose for client in state: ${clientToStop.state} after error.`
                 );
                 await clientToStop.dispose();
             } catch (disposeError: any) {
-                logger.error(`[stopLanguageClient] Error during final dispose attempt: ${disposeError.message}`);
+                logger.error(
+                    `[stopLanguageClient] Error during final dispose attempt after error: ${disposeError.message}`
+                );
             }
         }
+
         if (
             !isDeactivating &&
             !(
                 errorMessage.includes("Client is not running") ||
                 errorMessage.includes("Client is not stopping") ||
-                errorMessage.includes("Client is already stopping")
+                errorMessage.includes("Client is already stopping") ||
+                errorMessage.includes("already disposed")
             )
         ) {
             if (getCurrentLsOperationId() === latestLsContextRequestId) {
