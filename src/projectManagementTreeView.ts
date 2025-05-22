@@ -938,7 +938,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             const tovParent = projectsTreeViewItem.parent;
             const tovLabel: string =
                 tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
-            testElementsTreeDataProvider.setTreViewMessage(`Loading test elements for ${tovLabel}...`);
+            testElementsTreeDataProvider.setTreeViewMessage(`Loading test elements for ${tovLabel}...`);
             testElementsTreeDataProvider.refresh([]);
         }
 
