@@ -1,4 +1,3 @@
-from typing import Optional
 
 from TestBenchCliReporter.testbench import Connection
 
@@ -49,8 +48,8 @@ class TestBenchResourceConnection:
         self,
         project_name: str,
         tov_name: str,
-        cycle_name: Optional[str],
-    ) -> tuple[str, str, Optional[str]]:
+        cycle_name: str | None,
+    ) -> tuple[str, str, str | None]:
         project_key = self.connection.get_project_key_new_play(project_name)
         tov_key = self.connection.get_tov_key_new_play(project_key, tov_name)
         if not cycle_name:

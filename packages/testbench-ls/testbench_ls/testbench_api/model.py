@@ -6,194 +6,193 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Union
 
 
 class TestElementStatus(Enum):
-    InProgress = 'InProgress'
-    Released = 'Released'
+    InProgress = "InProgress"
+    Released = "Released"
 
 
 class ContentType(Enum):
-    txt = 'txt'
-    xml = 'xml'
+    txt = "txt"
+    xml = "xml"
 
 
 @dataclass
 class AdvancedContent:
-    contentType: Optional[ContentType] = None
-    contentExtID: Optional[str] = None
-    content: Optional[str] = None
+    contentType: ContentType | None = None
+    contentExtID: str | None = None
+    content: str | None = None
 
 
 @dataclass
 class OptionalAdvancedContent:
-    optional: Optional[AdvancedContent] = None
+    optional: AdvancedContent | None = None
 
 
 @dataclass
 class OptionalUser:
-    optional: Optional[str] = None
+    optional: str | None = None
 
 
 class ProjectStatus(Enum):
-    Planned = 'Planned'
-    Active = 'Active'
-    Finished = 'Finished'
-    Closed = 'Closed'
+    Planned = "Planned"
+    Active = "Active"
+    Finished = "Finished"
+    Closed = "Closed"
 
 
 class DefectMetricType(Enum):
-    Status = 'Status'
-    Priority = 'Priority'
-    Classification = 'Classification'
+    Status = "Status"
+    Priority = "Priority"
+    Classification = "Classification"
 
 
 class ProjectTreeNodeType(Enum):
-    Project = 'Project'
-    Version = 'Version'
-    Cycle = 'Cycle'
+    Project = "Project"
+    Version = "Version"
+    Cycle = "Cycle"
 
 
 class Severity(Enum):
-    Information = 'Information'
-    Warning = 'Warning'
-    Error = 'Error'
+    Information = "Information"
+    Warning = "Warning"
+    Error = "Error"
 
 
 class UDFType(Enum):
-    String = 'String'
-    Enumeration = 'Enumeration'
-    Boolean = 'Boolean'
+    String = "String"
+    Enumeration = "Enumeration"
+    Boolean = "Boolean"
 
 
 class TestLabelVisibilityType(Enum):
-    OnlyPrivate = 'OnlyPrivate'
-    OnlyPublic = 'OnlyPublic'
-    All = 'All'
+    OnlyPrivate = "OnlyPrivate"
+    OnlyPublic = "OnlyPublic"
+    All = "All"
 
 
 class AutStatus(Enum):
-    NotPlanned = 'NotPlanned'
-    Planned = 'Planned'
-    InProgress = 'InProgress'
-    InReview = 'InReview'
-    Released = 'Released'
+    NotPlanned = "NotPlanned"
+    Planned = "Planned"
+    InProgress = "InProgress"
+    InReview = "InReview"
+    Released = "Released"
 
 
 class SpecStatus(Enum):
-    NotPlanned = 'NotPlanned'
-    Planned = 'Planned'
-    InProgress = 'InProgress'
-    InReview = 'InReview'
-    Released = 'Released'
+    NotPlanned = "NotPlanned"
+    Planned = "Planned"
+    InProgress = "InProgress"
+    InReview = "InReview"
+    Released = "Released"
 
 
 class Priority(Enum):
-    Undefined = 'Undefined'
-    Low = 'Low'
-    Middle = 'Middle'
-    High = 'High'
+    Undefined = "Undefined"
+    Low = "Low"
+    Middle = "Middle"
+    High = "High"
 
 
 class ActivityStatus(Enum):
-    NotPlanned = 'NotPlanned'
-    Planned = 'Planned'
-    Assigned = 'Assigned'
-    Running = 'Running'
-    Skipped = 'Skipped'
-    Canceled = 'Canceled'
-    Performed = 'Performed'
+    NotPlanned = "NotPlanned"
+    Planned = "Planned"
+    Assigned = "Assigned"
+    Running = "Running"
+    Skipped = "Skipped"
+    Canceled = "Canceled"
+    Performed = "Performed"
 
 
 class ExecStatus(Enum):
-    NotBlocked = 'NotBlocked'
-    Blocked = 'Blocked'
+    NotBlocked = "NotBlocked"
+    Blocked = "Blocked"
 
 
 class VerdictStatus(Enum):
-    Undefined = 'Undefined'
-    ToVerify = 'ToVerify'
-    Fail = 'Fail'
-    Pass = 'Pass'
+    Undefined = "Undefined"
+    ToVerify = "ToVerify"
+    Fail = "Fail"
+    Pass = "Pass"
 
 
 class InteractionVerdict(Enum):
-    Pass = 'Pass'
-    Fail = 'Fail'
-    Skipped = 'Skipped'
-    ToVerify = 'ToVerify'
-    Warn = 'Warn'
-    Undefined = 'Undefined'
-    Blocked = 'Blocked'
+    Pass = "Pass"
+    Fail = "Fail"
+    Skipped = "Skipped"
+    ToVerify = "ToVerify"
+    Warn = "Warn"
+    Undefined = "Undefined"
+    Blocked = "Blocked"
 
 
 class SequencePhase(Enum):
-    Setup = 'Setup'
-    TestStep = 'TestStep'
-    Teardown = 'Teardown'
+    Setup = "Setup"
+    TestStep = "TestStep"
+    Teardown = "Teardown"
 
 
 class InteractionCallType(Enum):
-    Check = 'Check'
-    Flow = 'Flow'
+    Check = "Check"
+    Flow = "Flow"
 
 
 class InteractionType(Enum):
-    Atomic = 'Atomic'
-    Compound = 'Compound'
-    Textual = 'Textual'
+    Atomic = "Atomic"
+    Compound = "Compound"
+    Textual = "Textual"
 
 
 class OperationalState(Enum):
-    Enabled = 'Enabled'
-    Disabled = 'Disabled'
+    Enabled = "Enabled"
+    Disabled = "Disabled"
 
 
 class GlobalHumanRole(Enum):
-    Administrator = 'Administrator'
-    ProjectAdministrator = 'ProjectAdministrator'
-    ProjectUser = 'ProjectUser'
+    Administrator = "Administrator"
+    ProjectAdministrator = "ProjectAdministrator"
+    ProjectUser = "ProjectUser"
 
 
 class ProjectRole(Enum):
-    TestManager = 'TestManager'
-    TestDesigner = 'TestDesigner'
-    TestProgrammer = 'TestProgrammer'
-    Tester = 'Tester'
-    ReadOnlyDesigner = 'ReadOnlyDesigner'
-    ReadOnlyImplementer = 'ReadOnlyImplementer'
-    ReadOnlyTester = 'ReadOnlyTester'
+    TestManager = "TestManager"
+    TestDesigner = "TestDesigner"
+    TestProgrammer = "TestProgrammer"
+    Tester = "Tester"
+    ReadOnlyDesigner = "ReadOnlyDesigner"
+    ReadOnlyImplementer = "ReadOnlyImplementer"
+    ReadOnlyTester = "ReadOnlyTester"
 
 
 class TOVExchangeFormat(Enum):
-    xml = 'xml'
-    json = 'json'
-    inherited = 'inherited'
+    xml = "xml"
+    json = "json"
+    inherited = "inherited"
 
 
 class ImportResult(Enum):
-    Imported = 'Imported'
-    PartiallyImported = 'PartiallyImported'
-    NotImported = 'NotImported'
+    Imported = "Imported"
+    PartiallyImported = "PartiallyImported"
+    NotImported = "NotImported"
 
 
 class ExecutionMode(Enum):
-    execute = 'execute'
-    continue_ = 'continue'
-    view = 'view'
-    simulate = 'simulate'
+    execute = "execute"
+    continue_ = "continue"
+    view = "view"
+    simulate = "simulate"
 
 
 @dataclass
 class UserGlobalRoles:
-    roles: List[GlobalHumanRole]
+    roles: list[GlobalHumanRole]
 
 
 @dataclass
 class UserProjectRoles:
     userKey: str
-    roles: List[ProjectRole]
+    roles: list[ProjectRole]
 
 
 @dataclass
@@ -201,7 +200,7 @@ class ProjectUser:
     key: str
     name: str
     login: str
-    projectRoles: List[ProjectRole]
+    projectRoles: list[ProjectRole]
 
 
 @dataclass
@@ -215,8 +214,8 @@ class LicenseWarning:
 class LoginData:
     login: str
     password: str
-    force: Optional[bool] = None
-    context: Optional[str] = None
+    force: bool | None = None
+    context: str | None = None
 
 
 @dataclass
@@ -231,10 +230,10 @@ class LoginSession:
     userKey: str
     login: str
     sessionToken: str
-    globalRoles: List[str]
+    globalRoles: list[str]
     internalUserManagement: bool
     serverVersion: str
-    licenseWarning: Optional[LicenseWarning] = None
+    licenseWarning: LicenseWarning | None = None
 
 
 @dataclass
@@ -243,19 +242,19 @@ class TestLabel:
     name: str
     ownerKey: str
     visibility: bool
-    libraryKey: Optional[str] = None
+    libraryKey: str | None = None
 
 
 @dataclass
 class TestLabelDataForUpdate:
-    name: Optional[str] = None
-    visibility: Optional[bool] = None
+    name: str | None = None
+    visibility: bool | None = None
 
 
 @dataclass
 class TestLabelDataForInsert:
     name: str
-    adaptName: Optional[bool] = True
+    adaptName: bool | None = True
 
 
 @dataclass
@@ -265,7 +264,7 @@ class ProjectMember:
     userName: str
     projectKey: str
     projectName: str
-    roles: List[ProjectRole]
+    roles: list[ProjectRole]
 
 
 @dataclass
@@ -278,16 +277,16 @@ class ProjectSummary:
     tovsCount: int
     cyclesCount: int
     description: str
-    lockerKey: Optional[str] = None
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
+    lockerKey: str | None = None
+    startDate: str | None = None
+    endDate: str | None = None
 
 
 @dataclass
 class ProjectContext:
     tovName: str
-    cycleName: Optional[str] = None
-    executionMode: Optional[ExecutionMode] = None
+    cycleName: str | None = None
+    executionMode: ExecutionMode | None = None
 
 
 @dataclass
@@ -300,10 +299,10 @@ class ProjectDetails:
     tovsCount: int
     cyclesCount: int
     description: str
-    lockerKey: Optional[str] = None
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
-    projectContext: Optional[ProjectContext] = None
+    lockerKey: str | None = None
+    startDate: str | None = None
+    endDate: str | None = None
+    projectContext: ProjectContext | None = None
 
 
 @dataclass
@@ -359,20 +358,20 @@ class NewTOV(TOVCreation):
 @dataclass
 class TOVCloned(TOVCreation):
     tov: str
-    tovKey: Optional[str] = None
+    tovKey: str | None = None
 
 
 @dataclass
 class TOVClonedFromSameProject(TOVCreation):
     tov: str
-    tovKey: Optional[str] = None
+    tovKey: str | None = None
 
 
 @dataclass
 class TOVClonedFromDifferentProject(TOVCreation):
     project: str
     tov: str
-    tovKey: Optional[str] = None
+    tovKey: str | None = None
 
 
 @dataclass
@@ -411,8 +410,8 @@ class TOVImported(TOVCreation):
 class TOVDerivedFromSameProject(TOVCreation):
     baseTOV: str
     variantsDefinition: str
-    baseTOVKey: Optional[str] = None
-    variantsDefinitionKey: Optional[str] = None
+    baseTOVKey: str | None = None
+    variantsDefinitionKey: str | None = None
 
 
 @dataclass
@@ -420,15 +419,15 @@ class TOVDerivedFromDifferentProject(TOVCreation):
     project: str
     baseTOV: str
     variantsDefinition: str
-    baseTOVKey: Optional[str] = None
-    variantsDefinitionKey: Optional[str] = None
+    baseTOVKey: str | None = None
+    variantsDefinitionKey: str | None = None
 
 
 @dataclass
 class ProjectDetailsResponse:
     projectKey: str
     name: str
-    inspection: List[ProjectInspection]
+    inspection: list[ProjectInspection]
     testObjectName: str
     id: str
     customer: ProjectCustomer
@@ -440,8 +439,8 @@ class ProjectDetailsResponse:
     instantOfCreation: str
     onlyAdminsMayManageUDFs: bool
     variantsManagementEnabled: str
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
+    startDate: str | None = None
+    endDate: str | None = None
 
 
 @dataclass
@@ -454,9 +453,9 @@ class TOVSummary:
     cyclesCount: int
     description: str
     exchangeFormat: TOVExchangeFormat
-    lockerKey: Optional[str] = None
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
+    lockerKey: str | None = None
+    startDate: str | None = None
+    endDate: str | None = None
 
 
 @dataclass
@@ -469,9 +468,9 @@ class TOVDetails:
     cyclesCount: int
     description: str
     exchangeFormat: TOVExchangeFormat
-    lockerKey: Optional[str] = None
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
+    lockerKey: str | None = None
+    startDate: str | None = None
+    endDate: str | None = None
 
 
 @dataclass
@@ -487,13 +486,13 @@ class TOVResponse:
     testingIntelligence: bool
     instantOfCreation: str
     cloningVisibility: bool
-    endDate: Optional[str] = None
-    startDate: Optional[str] = None
+    endDate: str | None = None
+    startDate: str | None = None
 
 
 @dataclass
 class OptionalLocalDateTime:
-    optional: Optional[str] = None
+    optional: str | None = None
 
 
 @dataclass
@@ -504,8 +503,8 @@ class CycleSummary:
     status: ProjectStatus
     visibility: bool
     description: str
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
+    startDate: str | None = None
+    endDate: str | None = None
 
 
 @dataclass
@@ -516,8 +515,8 @@ class CycleDetails:
     status: ProjectStatus
     visibility: bool
     description: str
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
+    startDate: str | None = None
+    endDate: str | None = None
 
 
 @dataclass
@@ -550,11 +549,11 @@ class UserDataForInsert:
 
 @dataclass
 class UserDataForUpdate:
-    login: Optional[str] = None
-    name: Optional[str] = None
-    email: Optional[str] = None
-    passwordExpired: Optional[bool] = None
-    active: Optional[bool] = None
+    login: str | None = None
+    name: str | None = None
+    email: str | None = None
+    passwordExpired: bool | None = None
+    active: bool | None = None
 
 
 @dataclass
@@ -584,7 +583,7 @@ class ServerLocations:
 class ActionFailure:
     code: int
     message: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -642,9 +641,9 @@ class MetricsDistribution:
 
 @dataclass
 class DefectsDistribution:
-    statusDistribution: Optional[List[MetricsDistribution]] = None
-    priorityDistribution: Optional[List[MetricsDistribution]] = None
-    classDistribution: Optional[List[MetricsDistribution]] = None
+    statusDistribution: list[MetricsDistribution] | None = None
+    priorityDistribution: list[MetricsDistribution] | None = None
+    classDistribution: list[MetricsDistribution] | None = None
 
 
 @dataclass
@@ -653,7 +652,7 @@ class ConditionSummary:
     uniqueID: str
     name: str
     description: str
-    version: Optional[str] = None
+    version: str | None = None
 
 
 @dataclass
@@ -663,10 +662,10 @@ class SpecificationSummary:
     reviewComment: str
     status: SpecStatus
     priority: Priority
-    locker: Optional[UserReference] = None
-    responsible: Optional[UserReference] = None
-    dueDate: Optional[str] = None
-    reviewer: Optional[UserReference] = None
+    locker: UserReference | None = None
+    responsible: UserReference | None = None
+    dueDate: str | None = None
+    reviewer: UserReference | None = None
 
 
 @dataclass
@@ -676,25 +675,25 @@ class TestCaseSetSpecificationSummary:
     reviewComment: str
     status: SpecStatus
     priority: Priority
-    preConditions: List[ConditionSummary]
-    postConditions: List[ConditionSummary]
-    udfs: List[UserDefinedField]
-    keywords: List[Keyword]
-    references: List[str]
-    requirements: List[RequirementReference]
-    responsible: Optional[UserReference] = None
-    dueDate: Optional[str] = None
-    reviewer: Optional[UserReference] = None
+    preConditions: list[ConditionSummary]
+    postConditions: list[ConditionSummary]
+    udfs: list[UserDefinedField]
+    keywords: list[Keyword]
+    references: list[str]
+    requirements: list[RequirementReference]
+    responsible: UserReference | None = None
+    dueDate: str | None = None
+    reviewer: UserReference | None = None
 
 
 @dataclass
 class TestCaseSpecificationDetails:
     key: str
     comments: str
-    udfs: List[UserDefinedField]
-    keywords: List[Keyword]
-    requirements: List[RequirementReference]
-    version: Optional[str] = None
+    udfs: list[UserDefinedField]
+    keywords: list[Keyword]
+    requirements: list[RequirementReference]
+    version: str | None = None
 
 
 @dataclass
@@ -704,28 +703,28 @@ class TestThemeSpecification:
     reviewComment: str
     status: SpecStatus
     priority: Priority
-    udfs: List[UserDefinedField]
-    keywords: List[Keyword]
-    requirements: List[RequirementReference]
-    references: List[str]
-    dueDate: Optional[str] = None
-    reviewer: Optional[UserReference] = None
-    responsible: Optional[UserReference] = None
+    udfs: list[UserDefinedField]
+    keywords: list[Keyword]
+    requirements: list[RequirementReference]
+    references: list[str]
+    dueDate: str | None = None
+    reviewer: UserReference | None = None
+    responsible: UserReference | None = None
 
 
 @dataclass
 class TestCaseSetExecutionSummary:
     key: str
     comments: str
-    udfs: List[UserDefinedField]
-    keywords: List[Keyword]
+    udfs: list[UserDefinedField]
+    keywords: list[Keyword]
 
 
 @dataclass
 class TestCaseSpecificationSummary:
     key: str
     comments: str
-    requirements: List[RequirementReference]
+    requirements: list[RequirementReference]
 
 
 @dataclass
@@ -734,9 +733,9 @@ class TestCaseExecutionSummary:
     status: ActivityStatus
     execStatus: ExecStatus
     verdict: VerdictStatus
-    defects: List[str]
+    defects: list[str]
     comments: str
-    tester: Optional[UserReference] = None
+    tester: UserReference | None = None
 
 
 @dataclass
@@ -744,7 +743,7 @@ class TestCaseSummary:
     uniqueID: str
     index: int
     spec: TestCaseSpecificationSummary
-    exec: Optional[TestCaseExecutionSummary] = None
+    exec: TestCaseExecutionSummary | None = None
 
 
 @dataclass
@@ -757,12 +756,12 @@ class TestCaseExecutionDetails:
     actualDuration: int
     currentUser: UserReference
     comments: str
-    defects: List[str]
-    udfs: List[UserDefinedField]
-    keywords: List[Keyword]
-    references: List[str]
-    version: Optional[str] = None
-    tester: Optional[UserReference] = None
+    defects: list[str]
+    udfs: list[UserDefinedField]
+    keywords: list[Keyword]
+    references: list[str]
+    version: str | None = None
+    tester: UserReference | None = None
 
 
 @dataclass
@@ -772,8 +771,8 @@ class TestCaseSetDetails:
     uniqueID: str
     name: str
     spec: TestCaseSetSpecificationSummary
-    testCases: List[TestCaseSummary]
-    exec: Optional[TestCaseSetExecutionSummary] = None
+    testCases: list[TestCaseSummary]
+    exec: TestCaseSetExecutionSummary | None = None
 
 
 @dataclass
@@ -783,9 +782,9 @@ class InteractionExecutionSummary:
     duration: int
     currentUser: UserReference
     comments: str
-    references: List[str]
-    defects: List[str]
-    tester: Optional[UserReference] = None
+    references: list[str]
+    defects: list[str]
+    tester: UserReference | None = None
 
 
 @dataclass
@@ -795,16 +794,16 @@ class InteractionSpecificationSummary:
     callType: InteractionCallType
     description: str
     comments: str
-    references: List[str]
-    preConditions: List[ConditionSummary]
-    postConditions: List[ConditionSummary]
+    references: list[str]
+    preConditions: list[ConditionSummary]
+    postConditions: list[ConditionSummary]
 
 
 class KindOfDataType(Enum):
-    Regular = 'Regular'
-    Reference = 'Reference'
-    Global = 'Global'
-    AcceptingGlobal = 'AcceptingGlobal'
+    Regular = "Regular"
+    Reference = "Reference"
+    Global = "Global"
+    AcceptingGlobal = "AcceptingGlobal"
 
 
 @dataclass
@@ -814,83 +813,83 @@ class DataTypeSummary:
     name: str
     path: str
     uniqueID: str
-    version: Optional[str] = None
+    version: str | None = None
 
 
 class ParameterDefinitionType(Enum):
-    DetailedInstance = 'DetailedInstance'
-    InstanceTable = 'InstanceTable'
-    AtomicInstance = 'AtomicInstance'
+    DetailedInstance = "DetailedInstance"
+    InstanceTable = "InstanceTable"
+    AtomicInstance = "AtomicInstance"
 
 
 class ParameterEvaluationType(Enum):
-    CallByReference = 'CallByReference'
-    CallByValue = 'CallByValue'
-    CallByReferenceMandatory = 'CallByReferenceMandatory'
+    CallByReference = "CallByReference"
+    CallByValue = "CallByValue"
+    CallByReferenceMandatory = "CallByReferenceMandatory"
 
 
 class RepresentativeType(Enum):
-    Text = 'Text'
-    Placeholder = 'Placeholder'
-    Attachment = 'Attachment'
-    Hyperlink = 'Hyperlink'
-    Reference = 'Reference'
+    Text = "Text"
+    Placeholder = "Placeholder"
+    Attachment = "Attachment"
+    Hyperlink = "Hyperlink"
+    Reference = "Reference"
 
 
 class ArgumentValueType(Enum):
-    EquivalenceClass = 'EquivalenceClass'
-    Representative = 'Representative'
-    InstancesArray = 'InstancesArray'
-    CBRRepresentative = 'CBRRepresentative'
+    EquivalenceClass = "EquivalenceClass"
+    Representative = "Representative"
+    InstancesArray = "InstancesArray"
+    CBRRepresentative = "CBRRepresentative"
 
 
 class TestCaseDetailsOrigin(Enum):
-    Fallback = 'Fallback'
-    Generated = 'Generated'
-    Rejected = 'Rejected'
-    Restored = 'Restored'
-    Upgraded = 'Upgraded'
+    Fallback = "Fallback"
+    Generated = "Generated"
+    Rejected = "Rejected"
+    Restored = "Restored"
+    Upgraded = "Upgraded"
 
 
 class TestFilterType(Enum):
-    TestTheme = 'TestTheme'
-    TestCaseSet = 'TestCaseSet'
-    TestCase = 'TestCase'
+    TestTheme = "TestTheme"
+    TestCaseSet = "TestCaseSet"
+    TestCase = "TestCase"
 
 
 @dataclass
 class FilterInfo:
     name: str
     filterType: TestFilterType
-    testThemeUID: Optional[str] = None
+    testThemeUID: str | None = None
 
 
 @dataclass
 class TovStructureOptions:
-    treeRootUID: Optional[str] = None
-    suppressFilteredData: Optional[bool] = None
-    suppressEmptyTestThemes: Optional[bool] = None
-    filters: Optional[List[FilterInfo]] = None
+    treeRootUID: str | None = None
+    suppressFilteredData: bool | None = None
+    suppressEmptyTestThemes: bool | None = None
+    filters: list[FilterInfo] | None = None
 
 
 @dataclass
 class CycleStructureOptions:
-    treeRootUID: Optional[str] = None
-    basedOnExecution: Optional[bool] = None
-    suppressFilteredData: Optional[bool] = None
-    suppressNotExecutable: Optional[bool] = None
-    suppressEmptyTestThemes: Optional[bool] = None
-    filters: Optional[List[FilterInfo]] = None
+    treeRootUID: str | None = None
+    basedOnExecution: bool | None = None
+    suppressFilteredData: bool | None = None
+    suppressNotExecutable: bool | None = None
+    suppressEmptyTestThemes: bool | None = None
+    filters: list[FilterInfo] | None = None
 
 
 @dataclass
 class CycleReportOptions:
-    treeRootUID: Optional[str] = None
-    executionMode: Optional[ExecutionMode] = None
-    suppressFilteredData: Optional[bool] = None
-    suppressNotExecutable: Optional[bool] = None
-    suppressEmptyTestThemes: Optional[bool] = None
-    filters: Optional[List[FilterInfo]] = None
+    treeRootUID: str | None = None
+    executionMode: ExecutionMode | None = None
+    suppressFilteredData: bool | None = None
+    suppressNotExecutable: bool | None = None
+    suppressEmptyTestThemes: bool | None = None
+    filters: list[FilterInfo] | None = None
 
 
 @dataclass
@@ -901,8 +900,8 @@ class DefectAttribute:
 
 @dataclass
 class ProjectDefectField:
-    values: List[str]
-    defaultValue: Optional[str] = None
+    values: list[str]
+    defaultValue: str | None = None
 
 
 @dataclass
@@ -910,7 +909,7 @@ class DefectUDF:
     name: str
     udfType: UDFType
     isMandatory: bool
-    values: Optional[List[str]] = None
+    values: list[str] | None = None
 
 
 @dataclass
@@ -928,7 +927,7 @@ class TestStructureExecution:
 @dataclass
 class TestStructureItemExecution(TestStructureExecution):
     key: str
-    locker: Optional[UserReference] = None
+    locker: UserReference | None = None
 
 
 @dataclass
@@ -945,7 +944,7 @@ class TestStructureSpecification:
 class TestStructureItemSpecification(TestStructureSpecification):
     key: str
     status: SpecStatus
-    locker: Optional[UserReference] = None
+    locker: UserReference | None = None
 
 
 @dataclass
@@ -976,14 +975,14 @@ class TestCaseBaseInformation:
 class TestStructureAutomation:
     key: str
     status: AutStatus
-    locker: Optional[UserReference] = None
+    locker: UserReference | None = None
 
 
 class TestStructureElementType(Enum):
-    RootNode = 'RootNode'
-    TestThemeNode = 'TestThemeNode'
-    TestCaseSetNode = 'TestCaseSetNode'
-    TestCaseNode = 'TestCaseNode'
+    RootNode = "RootNode"
+    TestThemeNode = "TestThemeNode"
+    TestCaseSetNode = "TestCaseSetNode"
+    TestCaseNode = "TestCaseNode"
 
 
 @dataclass
@@ -1036,18 +1035,18 @@ class TestCaseExecutionImportResult:
     executionKey: str
     uid: str
     importResult: ImportResult
-    warnings: List[ActionFailure]
-    error: Optional[ActionFailure] = None
+    warnings: list[ActionFailure]
+    error: ActionFailure | None = None
 
 
 @dataclass
 class ExecutionImportOptions:
     fileName: str
-    treeRootUID: Optional[str] = None
-    useExistingDefect: Optional[bool] = None
-    discardTesterInformation: Optional[bool] = None
-    defaultTester: Optional[str] = None
-    filters: Optional[List[FilterInfo]] = None
+    treeRootUID: str | None = None
+    useExistingDefect: bool | None = None
+    discardTesterInformation: bool | None = None
+    defaultTester: str | None = None
+    filters: list[FilterInfo] | None = None
 
 
 @dataclass
@@ -1061,11 +1060,11 @@ class TestThemeExecution:
     status: ActivityStatus
     execStatus: ExecStatus
     verdict: VerdictStatus
-    udfs: List[UserDefinedField]
-    keywords: List[Keyword]
-    references: List[str]
-    comments: Optional[str] = None
-    responsible: Optional[UserReference] = None
+    udfs: list[UserDefinedField]
+    keywords: list[Keyword]
+    references: list[str]
+    comments: str | None = None
+    responsible: UserReference | None = None
 
 
 @dataclass
@@ -1075,36 +1074,36 @@ class TestThemeDetails:
     uniqueID: str
     numbering: str
     spec: TestThemeSpecification
-    exec: Optional[TestThemeExecution] = None
+    exec: TestThemeExecution | None = None
 
 
 @dataclass
 class TestObjectVersionCSVReportOptions:
-    reportRootUID: Optional[str] = None
-    fields: Optional[List[str]] = None
-    characterEncoding: Optional[str] = None
+    reportRootUID: str | None = None
+    fields: list[str] | None = None
+    characterEncoding: str | None = None
 
 
 @dataclass
 class TestCycleCSVReportOptions:
-    reportRootUID: Optional[str] = None
-    fields: Optional[List[str]] = None
-    characterEncoding: Optional[str] = None
-    basedOn: Optional[str] = None
+    reportRootUID: str | None = None
+    fields: list[str] | None = None
+    characterEncoding: str | None = None
+    basedOn: str | None = None
 
 
 class UDFLocation(Enum):
-    TestThemesInSpecification = 'TestThemesInSpecification'
-    TestCaseSetsInSpecification = 'TestCaseSetsInSpecification'
-    TestCasesInSpecification = 'TestCasesInSpecification'
-    TestThemesInExecution = 'TestThemesInExecution'
-    TestCaseSetsInExecution = 'TestCaseSetsInExecution'
-    TestCasesInExecution = 'TestCasesInExecution'
+    TestThemesInSpecification = "TestThemesInSpecification"
+    TestCaseSetsInSpecification = "TestCaseSetsInSpecification"
+    TestCasesInSpecification = "TestCasesInSpecification"
+    TestThemesInExecution = "TestThemesInExecution"
+    TestCaseSetsInExecution = "TestCaseSetsInExecution"
+    TestCasesInExecution = "TestCasesInExecution"
 
 
 class UDFAbsolutePosition(Enum):
-    First = 'First'
-    Last = 'Last'
+    First = "First"
+    Last = "Last"
 
 
 @dataclass
@@ -1119,16 +1118,16 @@ class BeforeUDF:
 
 @dataclass
 class UDFForUpdate:
-    name: Optional[str] = None
-    isMandatory: Optional[bool] = None
-    definedFor: Optional[List[UDFLocation]] = None
-    udfType: Optional[UDFType] = None
-    enumerationValues: Optional[List[UDFEnumerationValue]] = None
+    name: str | None = None
+    isMandatory: bool | None = None
+    definedFor: list[UDFLocation] | None = None
+    udfType: UDFType | None = None
+    enumerationValues: list[UDFEnumerationValue] | None = None
 
 
 @dataclass
 class UDFsMoveResponse:
-    targetKeys: List[str]
+    targetKeys: list[str]
 
 
 @dataclass
@@ -1136,7 +1135,7 @@ class TestFilter:
     key: str
     name: str
     owner: str
-    pluginName: Optional[str] = None
+    pluginName: str | None = None
 
 
 @dataclass
@@ -1236,8 +1235,8 @@ class UdfValueForImport:
 
 @dataclass
 class RichTextForImport:
-    html: Optional[str] = None
-    plain: Optional[str] = None
+    html: str | None = None
+    plain: str | None = None
 
 
 @dataclass
@@ -1245,7 +1244,7 @@ class ExecutionResultForImport:
     status: ActivityStatus
     execStatus: ExecStatus
     verdict: VerdictStatus
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 @dataclass
@@ -1254,10 +1253,10 @@ class TestCaseExecutionForImport:
     testCaseExecutionKey: str
     result: ExecutionResultForImport
     durationMillis: int
-    testerKey: Optional[str] = None
-    comments: Optional[RichTextForImport] = None
-    defects: Optional[List[str]] = None
-    udfs: Optional[List[UdfValueForImport]] = None
+    testerKey: str | None = None
+    comments: RichTextForImport | None = None
+    defects: list[str] | None = None
+    udfs: list[UdfValueForImport] | None = None
 
 
 @dataclass
@@ -1265,10 +1264,10 @@ class TestCaseSetExecutionForImport:
     testCaseSetKey: str
     executionKey: str
     durationMillis: int
-    testCases: List[TestCaseExecutionForImport]
-    testerKey: Optional[str] = None
-    comments: Optional[RichTextForImport] = None
-    udfs: Optional[List[UdfValueForImport]] = None
+    testCases: list[TestCaseExecutionForImport]
+    testerKey: str | None = None
+    comments: RichTextForImport | None = None
+    udfs: list[UdfValueForImport] | None = None
 
 
 @dataclass
@@ -1283,9 +1282,9 @@ class ParameterDetails:
     name: str
     definitionType: ParameterDefinitionType
     evaluationType: ParameterEvaluationType
-    dataTypeKey: Optional[str] = None
-    defaultValue: Optional[DefaultValue] = None
-    signatureID: Optional[str] = None
+    dataTypeKey: str | None = None
+    defaultValue: DefaultValue | None = None
+    signatureID: str | None = None
 
 
 @dataclass
@@ -1296,7 +1295,7 @@ class TOVNode:
     creationTime: str
     status: ProjectStatus
     visibility: bool
-    children: List[CycleNode]
+    children: list[CycleNode]
 
 
 @dataclass
@@ -1305,7 +1304,7 @@ class UDF:
     name: str
     projectKey: str
     isMandatory: bool
-    definedFor: List[UDFLocation]
+    definedFor: list[UDFLocation]
 
 
 @dataclass
@@ -1315,7 +1314,7 @@ class BooleanUDF(UDF):
 
 @dataclass
 class EnumerationUDF(UDF):
-    enumerationValues: List[UDFEnumerationValue]
+    enumerationValues: list[UDFEnumerationValue]
 
 
 @dataclass
@@ -1330,8 +1329,8 @@ class ParameterSummary:
     name: str
     evaluationType: ParameterEvaluationType
     valueType: RepresentativeType
-    dataType: Optional[DataTypeSummary] = None
-    value: Optional[str] = None
+    dataType: DataTypeSummary | None = None
+    value: str | None = None
 
 
 @dataclass
@@ -1342,20 +1341,20 @@ class InteractionDetails:
     interactionType: InteractionType
     path: str
     spec: InteractionSpecificationSummary
-    parameters: List[ParameterSummary]
-    interactions: List[InteractionDetails]
-    version: Optional[str] = None
-    exec: Optional[InteractionExecutionSummary] = None
+    parameters: list[ParameterSummary]
+    interactions: list[InteractionDetails]
+    version: str | None = None
+    exec: InteractionExecutionSummary | None = None
 
 
 @dataclass
 class TestCaseDetails:
     uniqueID: str
     spec: TestCaseSpecificationDetails
-    interactions: List[InteractionDetails]
-    parameters: List[ParameterSummary]
-    exec: Optional[TestCaseExecutionDetails] = None
-    origin: Optional[TestCaseDetailsOrigin] = None
+    interactions: list[InteractionDetails]
+    parameters: list[ParameterSummary]
+    exec: TestCaseExecutionDetails | None = None
+    origin: TestCaseDetailsOrigin | None = None
 
 
 @dataclass
@@ -1370,20 +1369,20 @@ class AssignedDefect:
     priority: str
     classification: str
     creationTime: str
-    references: List[str]
-    udfs: List[DefectAttribute]
-    version: Optional[str] = None
-    lastEditTime: Optional[str] = None
-    lastEditorKey: Optional[str] = None
-    defectManagementSystem: Optional[str] = None
-    defectManagementProject: Optional[str] = None
+    references: list[str]
+    udfs: list[DefectAttribute]
+    version: str | None = None
+    lastEditTime: str | None = None
+    lastEditorKey: str | None = None
+    defectManagementSystem: str | None = None
+    defectManagementProject: str | None = None
 
 
 @dataclass
 class ExternalDefectManagement:
     system: str
     project: str
-    udfs: List[DefectUDF]
+    udfs: list[DefectUDF]
 
 
 @dataclass
@@ -1391,43 +1390,43 @@ class DefectConfig:
     status: ProjectDefectField
     classification: ProjectDefectField
     priority: ProjectDefectField
-    external: Optional[ExternalDefectManagement] = None
+    external: ExternalDefectManagement | None = None
 
 
 @dataclass
 class RootNode(TestStructureTreeNode):
     base: TestStructureItemBaseInformation
-    filters: List[AttachedFilter]
+    filters: list[AttachedFilter]
 
 
 @dataclass
 class TestThemeNode(TestStructureTreeNode):
     base: TestStructureItemBaseInformation
-    filters: List[AttachedFilter]
-    spec: Optional[TestStructureItemSpecification] = None
-    aut: Optional[TestStructureAutomation] = None
-    exec: Optional[TestStructureItemExecution] = None
+    filters: list[AttachedFilter]
+    spec: TestStructureItemSpecification | None = None
+    aut: TestStructureAutomation | None = None
+    exec: TestStructureItemExecution | None = None
 
 
 @dataclass
 class TestCaseSetNode(TestStructureTreeNode):
     base: TestStructureItemBaseInformation
-    spec: Optional[TestStructureItemSpecification] = None
-    aut: Optional[TestStructureAutomation] = None
-    exec: Optional[TestStructureItemExecution] = None
+    spec: TestStructureItemSpecification | None = None
+    aut: TestStructureAutomation | None = None
+    exec: TestStructureItemExecution | None = None
 
 
 @dataclass
 class TestCaseNode(TestStructureTreeNode):
     base: TestCaseBaseInformation
-    spec: Optional[TestCaseSpecification] = None
-    exec: Optional[TestCaseExecution] = None
+    spec: TestCaseSpecification | None = None
+    exec: TestCaseExecution | None = None
 
 
 @dataclass
 class TestStructureTree:
-    nodes: List[Union[TestThemeNode, TestCaseSetNode, TestCaseNode]]
-    root: Optional[Union[RootNode, TestThemeNode, TestCaseSetNode, TestCaseNode]] = None
+    nodes: list[TestThemeNode | TestCaseSetNode | TestCaseNode]
+    root: RootNode | TestThemeNode | TestCaseSetNode | TestCaseNode | None = None
 
 
 @dataclass
@@ -1447,39 +1446,39 @@ class TestCaseSetExecutionImportResult:
     key: str
     executionKey: str
     finished: bool
-    testCases: List[TestCaseExecutionImportResult]
-    error: Optional[ActionFailure] = None
+    testCases: list[TestCaseExecutionImportResult]
+    error: ActionFailure | None = None
 
 
 @dataclass
 class UDFPosition:
-    after: Optional[AfterUDF] = None
-    before: Optional[BeforeUDF] = None
-    absolute: Optional[UDFAbsolutePosition] = None
+    after: AfterUDF | None = None
+    before: BeforeUDF | None = None
+    absolute: UDFAbsolutePosition | None = None
 
 
 @dataclass
 class UDFForMove:
-    udfKeys: List[str]
+    udfKeys: list[str]
     newPositions: UDFPosition
 
 
 @dataclass
 class StringUDFUpdatedResponse(UDFUpdatedResponse):
     stringUDF: StringUDF
-    affectedFilters: List[TestFilter]
+    affectedFilters: list[TestFilter]
 
 
 @dataclass
 class BooleanUDFUpdatedResponse(UDFUpdatedResponse):
     booleanUdf: BooleanUDF
-    affectedFilters: List[TestFilter]
+    affectedFilters: list[TestFilter]
 
 
 @dataclass
 class EnumerationUDFUpdatedResponse(UDFUpdatedResponse):
     enumerationUDF: EnumerationUDF
-    affectedFilters: List[TestFilter]
+    affectedFilters: list[TestFilter]
 
 
 @dataclass
@@ -1494,8 +1493,8 @@ class CycleResponse:
     status: ProjectStatus
     testingIntelligence: bool
     instantOfCreation: str
-    endDate: Optional[str] = None
-    startDate: Optional[str] = None
+    endDate: str | None = None
+    startDate: str | None = None
 
 
 @dataclass
@@ -1513,15 +1512,15 @@ class InteractionSummary:
     defaultCallType: InteractionCallType
     description: str
     path: str
-    parameters: List[ParameterDetails]
-    preConditions: List[ConditionSummary]
-    postConditions: List[ConditionSummary]
-    references: List[str]
-    locker: Optional[UserReference] = None
-    version: Optional[str] = None
-    parentUniqueID: Optional[str] = None
-    libraryKey: Optional[str] = None
-    advancedContent: Optional[AdvancedContent] = None
+    parameters: list[ParameterDetails]
+    preConditions: list[ConditionSummary]
+    postConditions: list[ConditionSummary]
+    references: list[str]
+    locker: UserReference | None = None
+    version: str | None = None
+    parentUniqueID: str | None = None
+    libraryKey: str | None = None
+    advancedContent: AdvancedContent | None = None
 
 
 @dataclass
@@ -1532,7 +1531,7 @@ class ProjectNode:
     creationTime: str
     status: ProjectStatus
     visibility: bool
-    children: List[TOVNode]
+    children: list[TOVNode]
 
 
 @dataclass
@@ -1541,8 +1540,8 @@ class ReportingJob:
     projectKey: str
     owner: str
     start: str
-    progress: Optional[JobProgress] = None
-    completion: Optional[ReportingCompletion] = None
+    progress: JobProgress | None = None
+    completion: ReportingCompletion | None = None
 
 
 @dataclass
@@ -1551,90 +1550,90 @@ class ExecutionImportingJob:
     projectKey: str
     owner: str
     start: str
-    progress: Optional[JobProgress] = None
-    completion: Optional[ExecutionImportingCompletion] = None
+    progress: JobProgress | None = None
+    completion: ExecutionImportingCompletion | None = None
 
 
 @dataclass
 class ExecutionImportingSuccess(ExecutionImportingResult):
-    testCaseSets: List[TestCaseSetExecutionImportResult]
+    testCaseSets: list[TestCaseSetExecutionImportResult]
 
 
 @dataclass
 class UDFForInsert:
     name: str
     isMandatory: bool
-    definedFor: List[UDFLocation]
+    definedFor: list[UDFLocation]
     udfType: UDFType
-    enumerationName: Optional[List[str]] = None
-    position: Optional[UDFPosition] = None
+    enumerationName: list[str] | None = None
+    position: UDFPosition | None = None
 
 
 @dataclass
 class RichTextInfo:
     html: str
-    images: List[ImageInfo]
+    images: list[ImageInfo]
 
 
 @dataclass
 class InteractionDetailsForUpdate:
-    name: Optional[str] = None
-    description: Optional[RichTextInfo] = None
-    callType: Optional[InteractionCallType] = None
-    locker: Optional[OptionalUser] = None
-    advancedContent: Optional[OptionalAdvancedContent] = None
+    name: str | None = None
+    description: RichTextInfo | None = None
+    callType: InteractionCallType | None = None
+    locker: OptionalUser | None = None
+    advancedContent: OptionalAdvancedContent | None = None
 
 
 @dataclass
 class SpecificationDetailsForUpdate:
-    responsible: Optional[OptionalUser] = None
-    reviewer: Optional[OptionalUser] = None
-    locker: Optional[OptionalUser] = None
-    priority: Optional[Priority] = None
-    dueDate: Optional[OptionalLocalDateTime] = None
-    description: Optional[RichTextInfo] = None
-    reviewComment: Optional[RichTextInfo] = None
+    responsible: OptionalUser | None = None
+    reviewer: OptionalUser | None = None
+    locker: OptionalUser | None = None
+    priority: Priority | None = None
+    dueDate: OptionalLocalDateTime | None = None
+    description: RichTextInfo | None = None
+    reviewComment: RichTextInfo | None = None
 
 
 @dataclass
 class ProjectDetailsForUpdate:
-    name: Optional[str] = None
-    testObjectName: Optional[str] = None
-    id: Optional[str] = None
-    customerName: Optional[str] = None
-    customerAddress: Optional[str] = None
-    contactPerson: Optional[str] = None
-    testLab: Optional[str] = None
-    placeOfInspection: Optional[str] = None
-    status: Optional[ProjectStatus] = None
-    isVisibleToTester: Optional[bool] = None
-    isTestingIntelligenceActive: Optional[bool] = None
-    description: Optional[RichTextInfo] = None
-    startDate: Optional[OptionalLocalDateTime] = None
-    endDate: Optional[OptionalLocalDateTime] = None
-    inspections: Optional[List[str]] = None
-    variantsManagementEnabled: Optional[OperationalState] = None
+    name: str | None = None
+    testObjectName: str | None = None
+    id: str | None = None
+    customerName: str | None = None
+    customerAddress: str | None = None
+    contactPerson: str | None = None
+    testLab: str | None = None
+    placeOfInspection: str | None = None
+    status: ProjectStatus | None = None
+    isVisibleToTester: bool | None = None
+    isTestingIntelligenceActive: bool | None = None
+    description: RichTextInfo | None = None
+    startDate: OptionalLocalDateTime | None = None
+    endDate: OptionalLocalDateTime | None = None
+    inspections: list[str] | None = None
+    variantsManagementEnabled: OperationalState | None = None
 
 
 @dataclass
 class TOVForUpdate:
-    name: Optional[str] = None
-    endDate: Optional[OptionalLocalDateTime] = None
-    visible: Optional[bool] = None
-    description: Optional[RichTextInfo] = None
-    isBaseTov: Optional[bool] = None
-    status: Optional[ProjectStatus] = None
-    testingIntelligence: Optional[bool] = None
-    startDate: Optional[OptionalLocalDateTime] = None
-    cloningVisibility: Optional[bool] = None
+    name: str | None = None
+    endDate: OptionalLocalDateTime | None = None
+    visible: bool | None = None
+    description: RichTextInfo | None = None
+    isBaseTov: bool | None = None
+    status: ProjectStatus | None = None
+    testingIntelligence: bool | None = None
+    startDate: OptionalLocalDateTime | None = None
+    cloningVisibility: bool | None = None
 
 
 @dataclass
 class CycleForUpdate:
-    name: Optional[str] = None
-    endDate: Optional[OptionalLocalDateTime] = None
-    visible: Optional[bool] = None
-    description: Optional[RichTextInfo] = None
-    status: Optional[ProjectStatus] = None
-    testingIntelligence: Optional[bool] = None
-    startDate: Optional[OptionalLocalDateTime] = None
+    name: str | None = None
+    endDate: OptionalLocalDateTime | None = None
+    visible: bool | None = None
+    description: RichTextInfo | None = None
+    status: ProjectStatus | None = None
+    testingIntelligence: bool | None = None
+    startDate: OptionalLocalDateTime | None = None
