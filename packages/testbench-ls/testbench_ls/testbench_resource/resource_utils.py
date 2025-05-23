@@ -1,5 +1,4 @@
 import re
-from typing import Union
 
 from markdownify import MarkdownConverter
 from robot.api.parsing import (
@@ -106,7 +105,7 @@ def get_keyword_tags_position(keyword: Keyword) -> tuple[int]:
     return (tags.lineno - 1, tags.col_offset, tags.end_lineno - 1, tags.end_col_offset)
 
 
-def robot_model_to_string(model_item: Union[Block, Statement]) -> str:
+def robot_model_to_string(model_item: Block | Statement) -> str:
     return "".join(_robot_item_to_string(model_item))  # .rstrip()
 
 
