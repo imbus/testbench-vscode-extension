@@ -9,7 +9,7 @@ authors = [
     {name = "imbus AG", email = "support@imbus.de"},
 ]
 description = ""
-requires-python = ">= 3.9"
+requires-python = ">= 3.10"
 readme = "README.md"
 license = {text = "Apache 2.0 License"}
 dynamic = ["version"]
@@ -18,7 +18,7 @@ dependencies = [
   "pygls >= 1.3",
   "requests",
   "testbench-cli-reporter >= 2.0.0a4",
-  "markdownify"
+  "markdownify",
 ]
 
 [project.optional-dependencies]
@@ -59,7 +59,7 @@ ignore = [
 
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 ignore_missing_imports = true
 no_implicit_optional = true
 strict_optional = true
@@ -70,7 +70,7 @@ pretty = true
 
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 lint.select = [
   "A",

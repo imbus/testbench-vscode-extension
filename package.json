@@ -474,11 +474,6 @@
                     "when": "view == projectManagementTree"
                 },
                 {
-                    "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "group": "navigation@2",
-                    "when": "view == testThemeTree"
-                },
-                {
                     "command": "testbenchExtension.showExtensionSettings",
                     "group": "navigation@8",
                     "when": "view == projectManagementTree || view == testbenchExtension.webView"
@@ -501,8 +496,14 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode)",
+                    "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode')",
                     "group": "inline@2"
+                },
+                {
+                    "command": "testbenchExtension.readAndImportTestResultsToTestbench",
+                    "when": "view == testThemeTree && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode')",
+                    "group": "inline@1",
+                    "title": "Read & Import RF Results"
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
@@ -532,7 +533,7 @@
                 },
                 {
                     "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "view == testThemeTree && viewItem == customRoot.theme",
+                    "when": "view == testThemeTree && viewItem == customRoot.testTheme",
                     "group": "navigation@1",
                     "title": "Reset Custom Root"
                 }
@@ -604,7 +605,7 @@
         "@typescript-eslint/parser": "^8.9.0",
         "@vscode/test-cli": "^0.0.10",
         "@vscode/test-electron": "^2.4.1",
-        "@vscode/vsce": "^3.4.1",
+        "@vscode/vsce": "^3.4.2",
         "conventional-changelog-conventionalcommits": "^8.0.0",
         "eslint": "^9.20.1",
         "globals": "^15.15.0",

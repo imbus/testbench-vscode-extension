@@ -1,8 +1,6 @@
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Union
-
-from pydantic import BaseModel
 
 
 class Status(str, Enum):
@@ -14,7 +12,7 @@ class Status(str, Enum):
     SIX = "6"
 
     @classmethod
-    def _missing_(cls, value: Union[str, int]) -> "Status":
+    def _missing_(cls, value: str | int) -> "Status":
         if isinstance(value, int):
             str_value = str(value)
             for member in cls:
@@ -30,52 +28,61 @@ class KindOfDataType(str, Enum):
     ACCEPTING_GLOBAL = "ACCEPTING_GLOBAL"
 
 
-class SerialKey(BaseModel):
+@dataclass
+class SerialKey:
     serial: int
 
 
+@dataclass
 class TOVKey(SerialKey):
     pass
 
 
+@dataclass
 class SubdivisionKey(SerialKey):
     pass
 
 
+@dataclass
 class UserKey(SerialKey):
     pass
 
 
+@dataclass
 class InteractionKey(SerialKey):
     pass
 
 
+@dataclass
 class ElementKey(SerialKey):
     pass
 
 
+@dataclass
 class DataTypeKey(SerialKey):
     pass
 
 
+@dataclass
 class ConditionKey(SerialKey):
     pass
 
 
-class TestElement(BaseModel):
+@dataclass
+class TestElement:
     name: str
     uniqueID: str
     hasVersion: bool
-    libraryTovKey: Optional[TOVKey] = None
-    libraryKey: Optional[SubdivisionKey] = None
     lockerKey: UserKey
-    Interaction_key: Optional[InteractionKey] = None
-    parent: Optional[ElementKey] = None
-    status: Optional[Status] = None
-    DataType_key: Optional[DataTypeKey] = None
-    kindOfDataType: Optional[KindOfDataType] = None
-    Condition_key: Optional[ConditionKey] = None
-    Subdivision_key: Optional[SubdivisionKey] = None
+    libraryTovKey: TOVKey | None = None
+    libraryKey: SubdivisionKey | None = None
+    Interaction_key: InteractionKey | None = None
+    parent: ElementKey | None = None
+    status: Status | None = None
+    DataType_key: DataTypeKey | None = None
+    kindOfDataType: KindOfDataType | None = None
+    Condition_key: ConditionKey | None = None
+    Subdivision_key: SubdivisionKey | None = None
 
 
 def is_interaction(test_element: TestElement) -> bool:
