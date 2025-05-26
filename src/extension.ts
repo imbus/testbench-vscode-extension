@@ -999,6 +999,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             const treeRootUID = await vscode.window.showInputBox({
                 prompt: "Enter the Tree Root UID (optional)",
                 placeHolder: "e.g., iTB-TT-299 (leave empty for default)",
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 validateInput: (value) => {
                     // Tree Root UID is optional, so empty values are allowed
                     return null;
