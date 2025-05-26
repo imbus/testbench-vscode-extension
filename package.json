@@ -273,6 +273,22 @@
                 "icon": "$(robotcode-robot)"
             },
             {
+                "command": "projectManagementTree.removeView",
+                "title": "Hide Project Management Tree"
+            },
+            {
+                "command": "testThemeTree.removeView",
+                "title": "Hide Test Theme Tree"
+            },
+            {
+                "command": "projectManagementTree.focus",
+                "title": "Focus Project Management Tree"
+            },
+            {
+                "command": "testThemeTree.focus",
+                "title": "Focus Test Theme Tree"
+            },
+            {
                 "command": "testbenchExtension.makeRoot",
                 "title": "Make root"
             },
