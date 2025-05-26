@@ -285,6 +285,14 @@
                 "title": "Reset Test Theme View Root"
             },
             {
+                "command": "testbenchExtension.getFilters",
+                "title": "TestBench: Get Filters"
+            },
+            {
+                "command": "testbenchExtension.fetchTovStructure",
+                "title": "TestBench: Get TOV Structure"
+            },
+            {
                 "command": "testbenchExtension.displayAllProjects",
                 "title": "Display Projects",
                 "icon": {
