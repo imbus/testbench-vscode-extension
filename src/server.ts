@@ -431,8 +431,8 @@ export async function restartLanguageClient(projectName: string, tovName: string
         `[LS Restart - Op ${thisOperationId}] Requested for ${projectName}/${tovName}. Global OpId set to ${thisOperationId}.`
     );
 
-    // Brief pause to allow any other immediate requests to also update latestLsContextRequestId
-    await new Promise((resolve) => setTimeout(resolve, 50)); // Debounce slightly
+    // Debounce slightly to allow any other immediate requests to also update latestLsContextRequestId
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     if (getCurrentLsOperationId() !== thisOperationId) {
         logger.warn(
