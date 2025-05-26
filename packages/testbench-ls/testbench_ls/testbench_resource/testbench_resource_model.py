@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-from typing import Optional
 
 from robot.api.parsing import (
     Arguments,
@@ -21,7 +20,7 @@ from robot.api.parsing import (
 from robot.parsing.model import Block, Statement
 
 
-class RobotResourceFile:
+class TestBenchResourceModel:
     def __init__(self, path: Path, load_existing=False):
         self._setting_section = None
         self._comment_section = None
@@ -183,9 +182,9 @@ class RobotResourceFile:
     def add_keyword(
         self,
         name,
-        args: Optional[list[str]] = None,
-        tags: Optional[list[str]] = None,
-        documentation: Optional[str] = None,
+        args: list[str] | None = None,
+        tags: list[str] | None = None,
+        documentation: str | None = None,
     ):
         if name in self.keyword_names:
             return
@@ -217,7 +216,7 @@ class RobotResourceFile:
             kw.body.insert(0, doc)
         self.keyword_section.body.append(kw)
 
-    def get_keyword(self, uid: str) -> Optional[Keyword]:
+    def get_keyword(self, uid: str) -> Keyword | None:
         for kw in self.keywords:
             tags = self.get_kw_tags(kw)
             if f"tb:uid:{uid}" in tags:

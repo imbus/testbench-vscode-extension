@@ -1,4 +1,3 @@
-from typing import Optional
 
 from robot.libdocpkg import LibraryDocumentation
 from robot.libdocpkg.model import KeywordDoc
@@ -17,7 +16,7 @@ class ResourceDocumentation:
         return self._keyword_documentations
 
     def get_keyword_documentation(self, keyword_uid: str) -> str:
-        keyword_doc: Optional[KeywordDoc] = next(
+        keyword_doc: KeywordDoc | None = next(
             filter(
                 lambda keyword: f"tb:uid:{keyword_uid}" in keyword.tags, self.keyword_documentations
             ),
