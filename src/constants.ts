@@ -144,5 +144,7 @@ export const allExtensionCommands = {
     modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
     handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`,
     resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
-    resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`
+    resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
+    getFilters: `${baseKeyOfExtension}.getFilters`,
+    fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`
 };

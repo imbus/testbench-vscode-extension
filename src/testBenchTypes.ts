@@ -220,3 +220,27 @@ export interface LoginResponse {
     serverVersion: string;
     licenseWarning: string | null;
 }
+
+export interface TovStructureOptions {
+    treeRootUID?: string;
+    suppressFilteredData: boolean;
+    suppressEmptyTestThemes: boolean;
+    filters: TovFilter[];
+}
+
+export interface TovFilter {
+    name: string;
+    filterType: "TestTheme";
+    testThemeUID: string;
+}
+
+export interface TovStructureNode {
+    [key: string]: any;
+}
+
+export interface TovStructureItem {
+    root: TovStructureNode;
+    nodes: TovStructureNode[];
+}
+
+export type TovStructure = TovStructureItem[];

@@ -40,6 +40,7 @@ import {
 } from "./testBenchAuthenticationProvider";
 import * as profileManager from "./profileManager";
 import { PlayServerConnection } from "./testBenchConnection";
+import { TovStructureOptions } from "./testBenchTypes";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -892,6 +893,65 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.log("Trace", "User selected following json files:", chosenQuickPickItems);
 
         await reportHandler.createNewReportWithSelectedItems(zipPath, chosenQuickPickItems);
+    });
+
+    // TODO: Remove / reimplement after testing
+    // --- Command: Get Filters ---
+    registerSafeCommand(context, allExtensionCommands.getFilters, async () => {
+        logger.debug(`Command Called: ${allExtensionCommands.getFilters}`);
+        if (!connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            logger.error(`${allExtensionCommands.getFilters} command called without connection.`);
+            return;
+        }
+        try {
+            const filters: string = await connection.getFiltersFromOldPlayServer();
+            logger.info("Filters retrieved successfully:", JSON.stringify(filters, null, 2));
+            vscode.window.showInformationMessage(`Filters: ${JSON.stringify(filters, null, 2)}`);
+        } catch (error) {
+            logger.error("Error retrieving filters:", error);
+            vscode.window.showErrorMessage(`Failed to retrieve filters: ${(error as Error).message}`);
+        }
+    });
+
+    // TODO: Remove / reimplement after testing
+    // --- Command: Get TOV Structure ---
+    registerSafeCommand(context, allExtensionCommands.fetchTovStructure, async () => {
+        logger.debug(`Command Called: ${allExtensionCommands.fetchTovStructure}`);
+        if (!connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            logger.error(`${allExtensionCommands.fetchTovStructure} command called without connection.`);
+            return;
+        }
+        try {
+            // Example Values for the API call
+            const exampleTovStructureOptions: TovStructureOptions = {
+                treeRootUID: "iTB-TT-299",
+                suppressFilteredData: false,
+                suppressEmptyTestThemes: true,
+                filters: [
+                    /*
+                    {
+                        name: "Example Filter",
+                        filterType: "TestTheme",
+                        testThemeUID: "theme-456"
+                    }*/
+                ]
+            };
+            const exampleProjectKey: string = "30";
+            const exampleTOVKey: string = "176";
+
+            const tovStructure: any = await connection.fetchTovStructure(
+                exampleProjectKey,
+                exampleTOVKey,
+                exampleTovStructureOptions
+            );
+            logger.info("TOV structure retrieved successfully:", JSON.stringify(tovStructure, null, 2));
+            vscode.window.showInformationMessage(`TOV Structure: ${JSON.stringify(tovStructure, null, 2)}`);
+        } catch (error) {
+            logger.error("Error fetching tov structure:", error);
+            vscode.window.showErrorMessage(`Failed to retrieve tov structure: ${(error as Error).message}`);
+        }
     });
 }
 
