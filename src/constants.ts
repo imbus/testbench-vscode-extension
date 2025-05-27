@@ -39,6 +39,10 @@ export const WebviewMessageCommands = {
     LOGIN_WITH_PROFILE: "loginWithProfile",
     SAVE_NEW_PROFILE: "saveNewProfile",
     REQUEST_DELETE_CONFIRMATION: "requestDeleteConfirmation",
+    // Edit profile functionality
+    EDIT_PROFILE: "editProfile",
+    UPDATE_PROFILE: "updateProfile",
+    CANCEL_EDIT_PROFILE: "cancelEditProfile",
 
     // Host to Webview communication
     DISPLAY_PROFILES_IN_WEBVIEW: "displayProfilesInWebview",
