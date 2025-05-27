@@ -1152,9 +1152,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 function handleSaveProfile() {
                     if (!serverNameInput.value.trim() || !portNumberInput.value.trim() || !usernameInput.value.trim()) {
                         displayMessage('error', 'Server, Port, and Username are required fields.');
-                        if (!serverNameInput.value.trim()) serverNameInput.focus();
-                        else if (!portNumberInput.value.trim()) portNumberInput.focus();
-                        else if (!usernameInput.value.trim()) usernameInput.focus();
+                        if (!serverNameInput.value.trim()) {serverNameInput.focus();}
+                        else if (!portNumberInput.value.trim()) {portNumberInput.focus();}
+                        else if (!usernameInput.value.trim()) {usernameInput.focus();}
                         return;
                     }
                     if (isNaN(parseInt(portNumberInput.value, 10))) {
@@ -1164,8 +1164,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     }
 
                     const payload = {
-                        label: profileLabelInput.value.trim() ||
-                            \`\\<span class="math-inline">\\{usernameInput\\.value\\.trim\\(\\)\\}@\\</span>{serverNameInput.value.trim()}\`,
+                        label: profileLabelInput.value.trim() || \`\${usernameInput.value.trim()}@\${serverNameInput.value.trim()}\`,
                         serverName: serverNameInput.value.trim(),
                         portNumber: parseInt(portNumberInput.value, 10),
                         username: usernameInput.value.trim(),
