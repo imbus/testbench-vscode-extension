@@ -266,7 +266,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         // Open the settings with the extension filter.
         await vscode.commands.executeCommand("workbench.action.openSettings2", {
-            query: "@ext:imbus.testbench-visual-studio-code-extension"
+            query: "@ext:imbus.testbench-extension"
         });
         // Open the "workspace" tab in settings view (The default settings view is the user tab in settings)
         await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
@@ -850,7 +850,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(context, allExtensionCommands.openIssueReporter, async () => {
         logger.debug(`Command Called: ${allExtensionCommands.openIssueReporter}`);
         vscode.commands.executeCommand("workbench.action.openIssueReporter", {
-            extensionId: "imbus.testbench-visual-studio-code-extension"
+            extensionId: "imbus.testbench-extension"
         });
     });
 

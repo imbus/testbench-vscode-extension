@@ -1,7 +1,7 @@
 {
-    "name": "testbench-visual-studio-code-extension",
+    "name": "testbench-extension",
     "publisher": "imbus",
-    "displayName": "TestBench Visual Studio Code Extension",
+    "displayName": "TestBench Extension",
     "description": "A Visual Studio Code extension for TestBench.",
     "icon": "resources/icons/testbench-logo.png",
     "version": "0.0.1",
