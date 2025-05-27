@@ -420,6 +420,23 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      */
     private async handleUpdateProfile(payload: EditingProfileData): Promise<void> {
         logger.info(`[LoginWebView] Attempting to update profile: ${payload.label || payload.id}`);
+
+        const confirmation = await vscode.window.showWarningMessage(
+            `Are you sure you want to overwrite the profile "${payload.label || payload.id}"?`,
+            { modal: true },
+            "Save Changes",
+            "No"
+        );
+
+        if (confirmation !== "Save Changes") {
+            logger.info(`[LoginWebView] User cancelled update for profile: ${payload.label}`);
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "info",
+                text: "Profile update cancelled."
+            });
+            return;
+        }
+
         try {
             if (!payload.id || !payload.serverName || !payload.portNumber || !payload.username) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -451,11 +468,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
 
             const updatedProfileId = await profileManager.saveProfile(this.extensionContext, payload, payload.password);
-
             logger.info(`[LoginWebView] Profile updated successfully with ID: ${updatedProfileId}`);
 
             this.editingProfileId = null;
-
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "success",
                 text: `Profile "${payload.label}" updated successfully.`
