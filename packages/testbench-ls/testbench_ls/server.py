@@ -102,20 +102,22 @@ testbench_ls = TestBenchLanguageServer()
 def generate_test_suites(ls: LanguageServer, kwargs):
     """Generate Robot Framework test suites via testbench2robotframework."""
     kwargs, *_ = kwargs
+    # logging.info(f"clean: {kwargs.get('clean')}")
+    # logging.info(f"compound_interaction_logging: {kwargs.get('compound_interaction_logging')}")
     generate_tests.callback(
-        clean=None,
-        compound_interaction_logging=None,
-        config=None,
-        fully_qualified=None,
-        library_regex=(),
-        library_root=(),
-        log_suite_numbering=False,
-        output_directory=None,
-        resource_directory=None,
-        resource_regex=(),
-        resource_root=(),
-        library_mapping={},
-        resource_mapping={},
+        clean=kwargs.get("clean"),
+        compound_interaction_logging=kwargs.get("compound_interaction_logging"),
+        config=kwargs.get("coinfig"),
+        fully_qualified=kwargs.get("fully_qualified"),
+        library_regex=kwargs.get("library_regex", ()),
+        library_root=kwargs.get("library_root", ()),
+        log_suite_numbering=kwargs.get("log_suite_numbering"),
+        output_directory=pathlib.Path(kwargs.get("output_directory")),
+        resource_directory=pathlib.Path(kwargs.get("resource_directory")),
+        resource_regex=kwargs.get("resource_regex", ()),
+        resource_root=kwargs.get("resource_root", ()),
+        library_mapping=kwargs.get("library_mapping", {}),
+        resource_mapping=kwargs.get("resource_mapping", {}),
         testbench_report=pathlib.Path(kwargs.get("testbench_report")),
     )
 
