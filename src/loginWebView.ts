@@ -191,14 +191,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Asynchronously fetches user profiles and sends them to the webview.
+     * Asynchronously fetches user profiles and sends them to the webview sorted alphabetically by label.
      * If successful, it posts the profiles for display.
      * If an error occurs, it logs the error and posts an error message to the webview.
      */
     private async sendProfilesToWebview(): Promise<void> {
         try {
             const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
-            this.postMessageToWebview(WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW, profiles);
+            const sortedProfiles = profiles.sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase()));
+            this.postMessageToWebview(WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW, sortedProfiles);
         } catch (error: any) {
             logger.error("[LoginWebView] Error fetching profiles for webview:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -457,17 +458,43 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 padding-bottom: 8px;
                 border-bottom: 1px solid var(--vscode-focusBorder, var(--vscode-settings-dropdownBorder));
                 font-weight: 600;
-                display: flex; /* To align icon and text */
+                display: flex; /* Align icon and text */
                 align-items: center;
             }
             ul#profilesList {
                 list-style: none;
                 padding: 0;
-                max-height: 250px;
+                min-height: 120px;
+                max-height: 350px;
                 overflow-y: auto;
+                /* Always reserve space for scrollbar */
+                scrollbar-gutter: stable;
                 border: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
                 border-radius: 4px;
+                scrollbar-width: thin;
             }
+            ul#profilesList::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            ul#profilesList:hover::-webkit-scrollbar-thumb:hover {
+                background-color: var(--vscode-scrollbarSlider-hoverBackground);
+            }
+
+            ul#profilesList::-webkit-scrollbar-track {
+                background: transparent;
+                border-radius: 4px;
+            }
+
+            ul#profilesList::-webkit-scrollbar-thumb {
+                background-color: var(--vscode-scrollbarSlider-background);
+                border-radius: 4px;
+            }
+
+            ul#profilesList::-webkit-scrollbar-thumb:hover {
+                background-color: var(--vscode-scrollbarSlider-hoverBackground);
+            }
+
             ul#profilesList li {
                 padding: 10px 12px;
                 margin-bottom: -1px;
@@ -477,6 +504,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 align-items: center;
                 background-color: var(--vscode-list-hoverBackground);
                 transition: background-color 0.2s ease-in-out;
+                min-height: 60px;
             }
             ul#profilesList li:last-child {
                 border-bottom: none;
@@ -487,6 +515,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             ul#profilesList li .profile-details {
                 flex-grow: 1;
                 margin-right: 10px;
+                min-width: 0; /* Allow text truncation if needed */
             }
             ul#profilesList li .profile-label {
                 font-weight: bold;
@@ -502,6 +531,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 display: flex;
                 gap: 8px;
                 align-items: center;
+                flex-shrink: 0; /* Prevent the actions from shrinking */
             }
             .profile-actions button {
                 padding: 6px 8px;
@@ -512,12 +542,28 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 min-width: 32px;
                 min-height: 32px;
                 border-radius: 4px;
+                flex-shrink: 0; /* Prevent buttons from shrinking */
             }
             .profile-actions button .icon {
-                width: 16px;
-                height: 16px;
-                margin: 0;
+                width: 16px !important;
+                height: 16px !important;
+                margin: 0 !important;
+                background-size: 16px 16px !important;
             }
+
+            h2 .icon, h3 .icon {
+                width: 16px !important;
+                height: 16px !important;
+                background-size: 16px 16px !important;
+                flex-shrink: 0;
+            }
+
+            #saveProfileBtn .icon {
+                width: 16px !important;
+                height: 16px !important;
+                background-size: 16px 16px !important;
+            }
+
             button {
                 background-color: var(--vscode-button-background);
                 color: var(--vscode-button-foreground);
@@ -659,17 +705,21 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
             .icon {
                 display: inline-block;
-                width: 16px;
-                height: 16px; 
+                width: 16px !important;
+                height: 16px !important;
                 margin-right: 8px;
                 vertical-align: middle;
                 background-repeat: no-repeat;
                 background-position: center;
-                background-size: contain;
+                background-size: 16px 16px !important; /* Fixed size */
+                flex-shrink: 0; /* Prevent shrinking */
             }
             
             button .icon {
                 margin-right: 6px;
+                width: 16px !important;
+                height: 16px !important;
+                background-size: 16px 16px !important;
             }
             
             @media (prefers-color-scheme: light) {
@@ -913,9 +963,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                             if (profilesListEl) {
                                 profilesListEl.style.display = 'block';
                             }
-                            profiles.forEach(profile => {
+                            
+                            // Sort profiles alphabetically by label
+                            const sortedProfiles = [...profiles].sort((a, b) => 
+                                a.label.toLowerCase().localeCompare(b.label.toLowerCase())
+                            );
+                            
+                            sortedProfiles.forEach(profile => {
                                 const li = document.createElement('li');
-                                li.setAttribute('tabindex', '0'); // Make list items focusable
+                                li.setAttribute('tabindex', '0');
                                 li.setAttribute('aria-label', \`Profile: \${profile.label}, user \${profile.username} at \${profile.serverName}\`);
 
                                 li.innerHTML = \`
