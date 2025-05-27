@@ -364,6 +364,168 @@ export class PlayServerConnection {
         }
     }
 
+    // TODO: If this API call is implemented in the new play server, replace this method with the new API.
+    /**
+     * Returns all filters that can be accessed by the connected user.
+     */
+    async getFiltersFromOldPlayServer(): Promise<any | null> {
+        logger.debug("Fetching filters");
+        if (!this.sessionToken) {
+            logger.error("Session token is null. Cannot fetch filters");
+            return null;
+        }
+
+        try {
+            const oldPlayServerPortNumber: number = 9443;
+            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
+            const getFiltersURL: string = `${oldPlayServerBaseUrl}/filters`;
+
+            logger.trace("Creating session for old play server with URL:", oldPlayServerBaseUrl);
+
+            const userNameFromConfig: string = this.username;
+            const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
+            const oldPlayServerSession: axios.AxiosInstance = axios.create({
+                baseURL: oldPlayServerBaseUrl,
+                // Old play server, which runs on port 9443, uses BasicAuth.
+                // Use loginName as username, and use sessionToken as the password
+                auth: {
+                    username: this.username,
+                    password: this.sessionToken
+                },
+                headers: {
+                    Authorization: `Basic ${encoded}`,
+                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
+                },
+                // Ignore self-signed certificates
+                httpsAgent: new https.Agent({
+                    rejectUnauthorized: false //TODO: This should only be used in a development environment
+                })
+            });
+
+            if (!oldPlayServerSession) {
+                logger.error("Failed to create session for old play server.");
+                return null;
+            } else {
+                logger.trace(`Old play server session created successfully.`);
+            }
+
+            logger.trace(`Sending GET request to ${getFiltersURL}`);
+            const getFiltersResponse: AxiosResponse = await withRetry(
+                () => oldPlayServerSession.get(getFiltersURL),
+                3, // maxRetries
+                2000, // delayMs
+                (error) => {
+                    if (axios.isAxiosError(error) && error.response) {
+                        // Retry predicates
+                        const nonRetryableStatusCodes: number[] = [401, 404];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            );
+
+            // Save the JSON to a file for analyzing the structure
+            /*
+            const savePath = await vscode.window.showSaveDialog({
+                saveLabel: "Save Test Elements JSON Response From Server",
+                filters: {
+                    "JSON Files": ["json"],
+                    "All Files": ["*"],
+                },
+            });
+            if (savePath) {
+                const filePath = savePath.fsPath;
+                utils.saveJsonDataToFile(filePath, getFiltersResponse.data);
+                vscode.window.showInformationMessage(`Response saved to ${filePath}`);
+            } else {
+                vscode.window.showErrorMessage("No file path selected.");
+            }
+            */
+
+            logger.trace("Response status of get filters request:", getFiltersResponse.status);
+            if (getFiltersResponse.data) {
+                logger.trace("Fetched filters data:", getFiltersResponse.data);
+                return getFiltersResponse.data;
+            } else {
+                logger.error("Filters data is null or undefined.");
+                return null;
+            }
+        } catch (error) {
+            logger.error("Error fetching filters:", error);
+            vscode.window.showErrorMessage("Error fetching filters. Please check the logs for details.");
+            return null;
+        }
+    }
+
+    /**
+     * Fetches the test structure of a specific Test Object Version (TOV) from the TestBench server.
+     *
+     * @param {string} projectKey - The project key as a string.
+     * @param {string} tovKey - The Test Object Version key as a string.
+     * @param {testBenchTypes.TovStructureOptions} tovStructureOptions - The TOV structure options.
+     * @returns {Promise<testBenchTypes.TovStructure | null>} The TOV structure or null if an error occurs.
+     */
+    async fetchTovStructure(
+        projectKey: string,
+        tovKey: string,
+        tovStructureOptions: testBenchTypes.TovStructureOptions
+    ): Promise<testBenchTypes.TovStructure | null> {
+        const tovStructureUrl: string = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+
+        try {
+            const tovStructureResponse: AxiosResponse<testBenchTypes.TovStructure> = await withRetry(
+                () =>
+                    this.apiClient.post(tovStructureUrl, tovStructureOptions, {
+                        headers: {
+                            accept: "application/json",
+                            "Content-Type": "application/json"
+                        }
+                    }),
+                3, // maxRetries
+                2000, // delayMs
+                (error) => {
+                    if (axios.isAxiosError(error) && error.response) {
+                        // Retry predicates - don't retry on client errors
+                        const nonRetryableStatusCodes = [404, 422];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            );
+
+            logger.trace(`TOV structure response for TOV key ${tovKey}:`, tovStructureResponse.status);
+            if (tovStructureResponse.data) {
+                logger.trace(`Received TOV structure for TOV key ${tovKey}:`, tovStructureResponse.data);
+                return tovStructureResponse.data;
+            } else {
+                logger.error(`Unexpected response code: ${tovStructureResponse.status}`);
+                return null;
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response) {
+                switch (error.response.status) {
+                    case 404:
+                        logger.error(
+                            `TOV structure fetch failed: Project (${projectKey}) or TOV (${tovKey}) not found.`
+                        );
+                        break;
+                    case 422:
+                        logger.error(`TOV structure fetch failed: Invalid tree root UID, filter, or test theme UID.`);
+                        break;
+                    default:
+                        logger.error(`TOV structure fetch failed with status ${error.response.status}:`, error.message);
+                }
+            } else {
+                logger.error("Error fetching TOV structure:", error);
+            }
+            return null;
+        }
+    }
+
     /**
      * Fetches the cycle structure of a specific cycle within a project from the TestBench server.
      *

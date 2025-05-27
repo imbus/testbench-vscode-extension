@@ -51,6 +51,7 @@ const constants_1 = require("./constants");
 class TestThemeTreeDataProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
+    extensionContext;
     _currentCycleKey = null;
     getCurrentCycleKey() {
         return this._currentCycleKey;
@@ -67,10 +68,17 @@ class TestThemeTreeDataProvider {
     rootElements = [];
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     expandedTreeItems = new Set();
+    currentMarkedItemInfo = null;
     updateTreeViewStatusMessageCallback;
-    constructor(updateMessageCallback) {
+    constructor(updateMessageCallback, context) {
+        this.extensionContext = context;
         this.updateTreeViewStatusMessageCallback = updateMessageCallback;
         vscode.commands.executeCommand("setContext", constants_1.ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
+        const storedMarkedItem = this.extensionContext.workspaceState.get(constants_1.StorageKeys.MARKED_TEST_GENERATION_ITEM);
+        if (storedMarkedItem) {
+            this.currentMarkedItemInfo = storedMarkedItem;
+            extension_1.logger.trace(`[TestThemeTreeDataProvider] Loaded marked item from workspace state: ${storedMarkedItem.key}`);
+        }
     }
     setTreeViewStatusMessage(message) {
         this.updateTreeViewStatusMessageCallback(message);
@@ -203,6 +211,20 @@ class TestThemeTreeDataProvider {
             else {
                 this.setTreeViewStatusMessage(undefined);
             }
+            if (this.currentMarkedItemInfo) {
+                const item = this.findItemByKey(this.currentMarkedItemInfo.key, this.rootElements);
+                if (item) {
+                    if (this.currentMarkedItemInfo.originalContextValue === constants_1.TreeItemContextValues.TEST_THEME_NODE) {
+                        item.contextValue = constants_1.TreeItemContextValues.MARKED_TEST_THEME_NODE;
+                    }
+                    else if (this.currentMarkedItemInfo.originalContextValue === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE) {
+                        item.contextValue = constants_1.TreeItemContextValues.MARKED_TEST_CASE_SET_NODE;
+                    }
+                    item._isMarkedForImport = true;
+                    item.updateIcon();
+                    this._onDidChangeTreeData.fire(item);
+                }
+            }
             const alreadyFired = this.isCustomRootActive && !isHardRefresh && operationSuccessful;
             const isDataFullyLoaded = operationSuccessful && (!this.isCustomRootActive || isHardRefresh) && rawCycleStructure;
             if (!alreadyFired && !isDataFullyLoaded) {
@@ -217,7 +239,6 @@ class TestThemeTreeDataProvider {
     internalRefreshAfterPopulate() {
         extension_1.logger.debug("TestThemeTreeDataProvider: Internal refresh after populating data.");
         this.storeExpandedTreeItems(this.rootElements);
-        const currentThemeTreeView = (0, extension_1.getTestThemeTreeViewInstance)();
         if (this.rootElements.length === 0) {
             if (this._currentCycleKey) {
                 this.updateTreeViewStatusMessageCallback(this._currentCycleLabel
@@ -227,13 +248,13 @@ class TestThemeTreeDataProvider {
             else {
                 this.updateTreeViewStatusMessageCallback("Select a cycle to see test themes.");
             }
-            if (currentThemeTreeView) {
-                extension_1.logger.trace(`Test Themes view message set: ${currentThemeTreeView.message}`);
+            if (extension_1.testThemeTreeView) {
+                extension_1.logger.trace(`Test Themes view message set: ${extension_1.testThemeTreeView.message}`);
             }
         }
         else {
             this.updateTreeViewStatusMessageCallback(undefined);
-            if (currentThemeTreeView) {
+            if (extension_1.testThemeTreeView) {
                 extension_1.logger.trace("Test Themes view message cleared.");
             }
         }
@@ -279,6 +300,100 @@ class TestThemeTreeDataProvider {
         return element;
     }
     /**
+     * Recursively finds an item in a tree of `BaseTestBenchTreeItem` objects by its key.
+     *
+     * @param {string} key - The key to search for.
+     * @param {BaseTestBenchTreeItem[]} items - The array of `BaseTestBenchTreeItem` objects to search within.
+     * @returns {BaseTestBenchTreeItem | null} The `BaseTestBenchTreeItem` if found, otherwise `null`.
+     */
+    findItemByKey(key, items) {
+        for (const item of items) {
+            if (item.item?.key === key || item.item?.base?.key === key) {
+                return item;
+            }
+            if (item.children) {
+                const found = this.findItemByKey(key, item.children);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+    /**
+     * Clears the marked state of the previously marked item in the tree view and refreshes the view.
+     * @param {string} oldMarkedItemKey - Optional key of the item to clear. If not provided, uses the key of the current marked item.
+     */
+    async clearOldMarkedItemAndRefresh(oldMarkedItemKey) {
+        const keyToClear = oldMarkedItemKey || this.currentMarkedItemInfo?.key;
+        if (keyToClear) {
+            const item = this.findItemByKey(keyToClear, this.rootElements);
+            if (item && item.originalContextValue) {
+                extension_1.logger.trace(`[TestThemeTreeDataProvider] Clearing marked state for item: ${item.label}`);
+                item._isMarkedForImport = false;
+                item.contextValue = item.originalContextValue;
+                item.updateIcon();
+                this._onDidChangeTreeData.fire(item);
+            }
+        }
+    }
+    /**
+     * Marks a specified `BaseTestBenchTreeItem` as "generated".
+     * This involves updating its `contextValue` and icon, persisting the marked state,
+     * and clearing any previously marked item.
+     * @param {BaseTestBenchTreeItem} itemToMark The tree item to be marked.
+     */
+    async markItemAsGenerated(itemToMark) {
+        if (!itemToMark || (!itemToMark.item?.key && !itemToMark.item?.base?.key)) {
+            extension_1.logger.warn("[TestThemeTreeDataProvider] Attempted to mark an invalid item.");
+            return;
+        }
+        const itemKey = itemToMark.item.key || itemToMark.item.base.key;
+        const originalContext = itemToMark.originalContextValue || itemToMark.contextValue; // Fallback if original not set yet
+        if (!originalContext) {
+            extension_1.logger.error(`[TestThemeTreeDataProvider] Cannot mark item ${itemKey}, originalContextValue is missing.`);
+            return;
+        }
+        await this.clearOldMarkedItemAndRefresh();
+        itemToMark._isMarkedForImport = true;
+        if (originalContext === constants_1.TreeItemContextValues.TEST_THEME_NODE) {
+            itemToMark.contextValue = constants_1.TreeItemContextValues.MARKED_TEST_THEME_NODE;
+        }
+        else if (originalContext === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE) {
+            itemToMark.contextValue = constants_1.TreeItemContextValues.MARKED_TEST_CASE_SET_NODE;
+        }
+        else {
+            extension_1.logger.warn(`[TestThemeTreeDataProvider] Trying to mark item with unhandled original context: ${originalContext}`);
+            // Revert if we can't set a valid marked context
+            itemToMark._isMarkedForImport = false;
+            this._onDidChangeTreeData.fire(itemToMark);
+            return;
+        }
+        itemToMark.updateIcon();
+        this.currentMarkedItemInfo = { key: itemKey, originalContextValue: originalContext };
+        await this.extensionContext.workspaceState.update(constants_1.StorageKeys.MARKED_TEST_GENERATION_ITEM, this.currentMarkedItemInfo);
+        extension_1.logger.info(`[TestThemeTreeDataProvider] Marked item ${itemKey} as generated. Context: ${itemToMark.contextValue}`);
+        this._onDidChangeTreeData.fire(itemToMark);
+    }
+    /**
+     * Clears the marked status of a specified tree item.
+     * It removes the item's marked state from storage and refreshes the view.
+     *
+     * @param {BaseTestBenchTreeItem} itemToClear - The tree item whose marked status needs to be cleared.
+     * @returns A promise that resolves when the operation is complete.
+     */
+    async clearMarkedItemStatus(itemToClear) {
+        if (!itemToClear || (!itemToClear.item?.key && !itemToClear.item?.base?.key)) {
+            extension_1.logger.warn("[clearMarkedItemStatus] Attempted to clear marked status for an invalid item.");
+            return;
+        }
+        const itemKey = itemToClear.item.key || itemToClear.item.base.key;
+        await this.clearOldMarkedItemAndRefresh(itemKey);
+        this.currentMarkedItemInfo = null;
+        await this.extensionContext.workspaceState.update(constants_1.StorageKeys.MARKED_TEST_GENERATION_ITEM, undefined);
+        extension_1.logger.info(`[clearMarkedItemStatus] Cleared marked status for item ${itemKey}.`);
+    }
+    /**
      * Sets the root elements of the test theme tree and refreshes the view.
      * This method is typically called when initially populating from cycle data.
      * @param {BaseTestBenchTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
@@ -292,7 +407,6 @@ class TestThemeTreeDataProvider {
         this._currentCycleKey = cycleKey;
         this._currentCycleLabel = cycleLabel;
         this.rootElements = roots;
-        const currentThemeTreeView = (0, extension_1.getTestThemeTreeViewInstance)();
         if (this.rootElements.length === 0) {
             if (this._currentCycleKey) {
                 this.updateTreeViewStatusMessageCallback(this._currentCycleLabel
@@ -302,13 +416,13 @@ class TestThemeTreeDataProvider {
             else {
                 this.updateTreeViewStatusMessageCallback("Select a cycle to see test themes.");
             }
-            if (currentThemeTreeView) {
-                extension_1.logger.trace(`Test Themes view message set: ${currentThemeTreeView.message}`);
+            if (extension_1.testThemeTreeView) {
+                extension_1.logger.trace(`Test Themes view message set: ${extension_1.testThemeTreeView.message}`);
             }
         }
         else {
             this.updateTreeViewStatusMessageCallback(undefined);
-            if (currentThemeTreeView) {
+            if (extension_1.testThemeTreeView) {
                 extension_1.logger.trace("Test Themes view message cleared.");
             }
         }
@@ -331,7 +445,7 @@ class TestThemeTreeDataProvider {
         this.isCustomRootActive = true;
         this.customRootItemInstance = element;
         this.originalCustomRootContextValue = element.contextValue ?? null;
-        element.contextValue = constants_1.TreeItemContextValues.CUSTOM_ROOT_THEME;
+        element.contextValue = constants_1.TreeItemContextValues.CUSTOM_ROOT_TEST_THEME;
         if (element.children && element.children.length > 0) {
             element.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
         }
@@ -418,6 +532,7 @@ class TestThemeTreeDataProvider {
         this._currentCycleKey = null;
         this._currentProjectKey = null;
         this._currentCycleLabel = null;
+        // this.currentMarkedItemInfo = null;
         this.resetCustomRootInternally();
         this.rootElements = [];
         this.updateTreeViewStatusMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
@@ -518,24 +633,24 @@ class TestThemeTreeDataProvider {
      * Creates a tree item for the Test Theme view.
      *
      * @param {CycleNodeData} nodeData - The raw data for the theme item.
-     * @param {string} contextValue - The context value determining the item's type and behavior.
+     * @param {string} originalContextValue - The context value determining the item's type and behavior.
      * @param {BaseTestBenchTreeItem | null} parent - The parent tree item, or null if it's a root item.
      * @param {boolean} hasVisibleChildren - Indicates if the item has children that are currently visible in the tree.
      * @returns A new {@link BaseTestBenchTreeItem} instance, or null if `nodeData` is invalid.
      */
     createThemeTreeItem(nodeData, // Raw data for the test theme item
-    contextValue, parent, hasVisibleChildren) {
+    originalContextValue, parent, hasVisibleChildren) {
         if (!nodeData ||
             !nodeData.base ||
             typeof nodeData.base.key === "undefined" ||
             typeof nodeData.base.name === "undefined") {
-            extension_1.logger.warn(`TestThemeTreeDataProvider: Attempted to create theme tree item with invalid data structure for context ${contextValue}:`, nodeData);
+            extension_1.logger.warn(`TestThemeTreeDataProvider: Attempted to create theme tree item with invalid data structure for context ${originalContextValue}:`, nodeData);
             return null;
         }
         const itemName = nodeData.base.name;
         const label = nodeData.base.numbering ? `${nodeData.base.numbering} ${itemName}` : itemName;
         let defaultCollapsibleState;
-        switch (contextValue) {
+        switch (originalContextValue) {
             case constants_1.TreeItemContextValues.TEST_THEME_NODE:
                 defaultCollapsibleState = hasVisibleChildren
                     ? vscode.TreeItemCollapsibleState.Collapsed
@@ -546,12 +661,22 @@ class TestThemeTreeDataProvider {
                     ? vscode.TreeItemCollapsibleState.Collapsed
                     : vscode.TreeItemCollapsibleState.None;
                 break;
-            // TEST_CASE_NODE is filtered out by isCycleNodeVisibleInTestThemeTree
             default:
-                extension_1.logger.warn(`TestThemeTreeDataProvider: Unexpected contextValue '${contextValue}' during item creation.`);
+                extension_1.logger.warn(`TestThemeTreeDataProvider: Unexpected contextValue '${originalContextValue}' during item creation.`);
                 defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
         }
-        const treeItem = new projectManagementTreeView_1.BaseTestBenchTreeItem(label, contextValue, defaultCollapsibleState, nodeData, parent);
+        const itemKeyFromNode = nodeData.base.key;
+        const treeItem = new projectManagementTreeView_1.BaseTestBenchTreeItem(label, originalContextValue, defaultCollapsibleState, nodeData, parent);
+        if (this.currentMarkedItemInfo && this.currentMarkedItemInfo.key === itemKeyFromNode) {
+            treeItem._isMarkedForImport = true;
+            if (this.currentMarkedItemInfo.originalContextValue === constants_1.TreeItemContextValues.TEST_THEME_NODE) {
+                treeItem.contextValue = constants_1.TreeItemContextValues.MARKED_TEST_THEME_NODE;
+            }
+            else if (this.currentMarkedItemInfo.originalContextValue === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE) {
+                treeItem.contextValue = constants_1.TreeItemContextValues.MARKED_TEST_CASE_SET_NODE;
+            }
+        }
+        treeItem.updateIcon();
         // Restore Expansion State
         const itemKeyForExpansion = treeItem.item?.base?.key; // Key is in item.base for CycleStructure nodes
         if (itemKeyForExpansion &&
@@ -568,7 +693,7 @@ exports.TestThemeTreeDataProvider = TestThemeTreeDataProvider;
  * Hides the test theme tree view.
  */
 async function hideTestThemeTreeView() {
-    if ((0, extension_1.getTestThemeTreeViewInstance)()) {
+    if (extension_1.testThemeTreeView) {
         await vscode.commands.executeCommand("testThemeTree.removeView");
     }
     else {
@@ -579,7 +704,7 @@ async function hideTestThemeTreeView() {
  * Displays the test theme tree view.
  */
 async function displayTestThemeTreeView() {
-    if ((0, extension_1.getTestThemeTreeViewInstance)()) {
+    if (extension_1.testThemeTreeView) {
         await vscode.commands.executeCommand("testThemeTree.focus");
     }
     else {

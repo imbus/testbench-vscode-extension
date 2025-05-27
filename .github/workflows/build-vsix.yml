@@ -5,10 +5,12 @@ on:
         branches:
             - main # Name of the branch to trigger the workflow. Multiple branches can be specified each on a new line
             - playground
+            - fix-ls-errors
     pull_request:
         branches:
             - main
             - playground
+            - fix-ls-errors
 
 jobs:
     build:
@@ -36,7 +38,7 @@ jobs:
             - name: Set up Python
               uses: actions/setup-python@v5
               with:
-                  python-version: "3.9"
+                  python-version: "3.10"
                   cache: "pip" # Enable caching of pip downloaded packages
 
             # Install Python build tools

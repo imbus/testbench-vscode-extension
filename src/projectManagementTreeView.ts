@@ -22,7 +22,8 @@ import {
     testElementsTreeDataProvider,
     projectTreeView,
     testThemeTreeView,
-    testElementTreeView
+    testElementTreeView,
+    ENABLE_ICON_MARKING_ON_GENERATE
 } from "./extension";
 import { allExtensionCommands, ContextKeys, TreeItemContextValues } from "./constants";
 import { displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
@@ -937,7 +938,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             const tovParent = projectsTreeViewItem.parent;
             const tovLabel: string =
                 tovParent && typeof tovParent.label === "string" ? tovParent.label : "selected TOV";
-            testElementsTreeDataProvider.setTreViewMessage(`Loading test elements for ${tovLabel}...`);
+            testElementsTreeDataProvider.setTreeViewMessage(`Loading test elements for ${tovLabel}...`);
             testElementsTreeDataProvider.refresh([]);
         }
 
@@ -1054,7 +1055,8 @@ export function findCycleKeyOfTreeElement(element: BaseTestBenchTreeItem): strin
     logger.trace("Finding cycle key for tree element:", element.label);
     let current: BaseTestBenchTreeItem | null = element;
     while (current) {
-        if (current.contextValue === "Cycle") {
+        const effectiveContextValue: string | undefined = current.originalContextValue || current.contextValue;
+        if (effectiveContextValue === TreeItemContextValues.CYCLE) {
             logger.trace("Found cycle key:", current.item.key);
             return current.item.key;
         }
@@ -1062,7 +1064,6 @@ export function findCycleKeyOfTreeElement(element: BaseTestBenchTreeItem): strin
     }
     const cycleKeyNotFoundErrorMessage: string = `Cycle key not found in tree element: ${element.label}`;
     logger.error(cycleKeyNotFoundErrorMessage);
-    vscode.window.showErrorMessage(cycleKeyNotFoundErrorMessage);
     return null;
 }
 
@@ -1074,6 +1075,7 @@ export class BaseTestBenchTreeItem extends vscode.TreeItem {
     public children?: BaseTestBenchTreeItem[];
     public statusOfTreeItem: string;
     public originalContextValue?: string;
+    public _isMarkedForImport: boolean = false;
 
     /**
      * Constructs a new TestbenchTreeItem.
@@ -1139,7 +1141,7 @@ export class BaseTestBenchTreeItem extends vscode.TreeItem {
             this.description = itemDataForTooltip?.uniqueID || "";
         } else if (
             contextValue === TreeItemContextValues.CUSTOM_ROOT_PROJECT ||
-            contextValue === TreeItemContextValues.CUSTOM_ROOT_THEME
+            contextValue === TreeItemContextValues.CUSTOM_ROOT_TEST_THEME
         ) {
             this.tooltip = `Custom Root View\nType: ${this.originalContextValue || "N/A"}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}`;
         }
@@ -1165,18 +1167,32 @@ export class BaseTestBenchTreeItem extends vscode.TreeItem {
      */
     private getIconPath(): { light: string; dark: string } {
         const iconFolderPath: string = path.join(__dirname, "..", "resources", "icons");
-        let typeForIconLookup: string | undefined = this.contextValue;
+        let contextValueForIconLookup: string | undefined = this.contextValue;
+        let isTreeItemMarkedForImport: boolean = false;
         if (
-            this.contextValue === TreeItemContextValues.CUSTOM_ROOT_PROJECT ||
-            this.contextValue === TreeItemContextValues.CUSTOM_ROOT_THEME
+            this.contextValue === TreeItemContextValues.MARKED_TEST_THEME_NODE ||
+            this.contextValue === TreeItemContextValues.MARKED_TEST_CASE_SET_NODE
         ) {
-            typeForIconLookup = this.originalContextValue || this.contextValue;
+            contextValueForIconLookup = this.originalContextValue;
+            isTreeItemMarkedForImport = true;
+        } else if (
+            (this.contextValue === TreeItemContextValues.CUSTOM_ROOT_PROJECT ||
+                this.contextValue === TreeItemContextValues.CUSTOM_ROOT_TEST_THEME) &&
+            this._isMarkedForImport
+        ) {
+            contextValueForIconLookup = this.originalContextValue;
+            isTreeItemMarkedForImport = true;
+        } else {
+            contextValueForIconLookup = this.originalContextValue || this.contextValue;
         }
 
         const status: string = this.statusOfTreeItem?.toLowerCase() || "default"; // (Active, Planned, Finished, Closed etc.)
 
         // Map the context and status to the corresponding icon file name
-        const iconMap: Record<string, Record<string, { light: string; dark: string }>> = {
+        const iconMap: Record<
+            string,
+            Record<string, { light: string; dark: string; markedLight?: string; markedDark?: string }>
+        > = {
             [TreeItemContextValues.PROJECT]: {
                 active: { light: "project-light.svg", dark: "project-dark.svg" },
                 planned: { light: "project-light.svg", dark: "project-dark.svg" },
@@ -1199,22 +1215,40 @@ export class BaseTestBenchTreeItem extends vscode.TreeItem {
                 default: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" }
             },
             [TreeItemContextValues.TEST_THEME_NODE]: {
-                default: { light: "TestThemeOriginal-light.svg", dark: "TestThemeOriginal-dark.svg" }
+                default: {
+                    light: "TestThemeOriginal-light.svg",
+                    dark: "TestThemeOriginal-dark.svg",
+                    markedLight: "TestThemeOriginal-marked-light.svg",
+                    markedDark: "TestThemeOriginal-marked-dark.svg"
+                }
             },
             [TreeItemContextValues.TEST_CASE_SET_NODE]: {
-                default: { light: "TestCaseSetOriginal-light.svg", dark: "TestCaseSetOriginal-dark.svg" }
+                default: {
+                    light: "TestCaseSetOriginal-light.svg",
+                    dark: "TestCaseSetOriginal-dark.svg",
+                    markedLight: "TestCaseSetOriginal-marked-light.svg",
+                    markedDark: "TestCaseSetOriginal-marked-dark.svg"
+                }
             },
             [TreeItemContextValues.TEST_CASE_NODE]: {
                 default: { light: "TestCase-light.svg", dark: "TestCase-dark.svg" }
             },
             default: {
-                default: { light: "TBU_Logo_cropped.svg", dark: "TBU_Logo_cropped.svg" }
+                default: { light: "testbench-logo.svg", dark: "testbench-logo.svg" }
             }
         };
 
         // Map the context and status to the corresponding icon file name
-        const typeIcons = iconMap[typeForIconLookup as keyof typeof iconMap] || iconMap["default"];
-        const iconFileNames = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
+        const typeIcons = iconMap[contextValueForIconLookup as keyof typeof iconMap] || iconMap["default"];
+        let iconFileNames = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
+
+        if (ENABLE_ICON_MARKING_ON_GENERATE && (this._isMarkedForImport || isTreeItemMarkedForImport)) {
+            if (iconFileNames.markedLight && iconFileNames.markedDark) {
+                iconFileNames = { light: iconFileNames.markedLight, dark: iconFileNames.markedDark };
+            } else {
+                logger.warn(`[getIconPath] Marked icons not defined for type: ${contextValueForIconLookup}`);
+            }
+        }
 
         return {
             light: path.join(iconFolderPath, iconFileNames.light),
@@ -1334,7 +1368,8 @@ export function findProjectKeyForElement(element: BaseTestBenchTreeItem): string
     logger.trace("Finding project key for element:", element.label);
     let current: BaseTestBenchTreeItem | null = element;
     while (current) {
-        if (current.contextValue === TreeItemContextValues.PROJECT) {
+        const effectiveContextValue: string | undefined = current.originalContextValue || current.contextValue;
+        if (effectiveContextValue === TreeItemContextValues.PROJECT) {
             logger.trace("Found project key for element:", current.item.key);
             return current.item.key;
         }

@@ -40,17 +40,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.connection = exports.logger = void 0;
+exports.ALLOW_PERSISTENT_IMPORT_BUTTON = exports.ENABLE_ICON_MARKING_ON_GENERATE = exports.testElementTreeView = exports.testThemeTreeView = exports.projectTreeView = exports.testElementsTreeDataProvider = exports.testThemeTreeDataProvider = exports.projectManagementTreeDataProvider = exports.connection = exports.logger = void 0;
 exports.getConfig = getConfig;
 exports.setLogger = setLogger;
 exports.setConnection = setConnection;
 exports.getLoginWebViewProvider = getLoginWebViewProvider;
-exports.getProjectManagementTreeDataProvider = getProjectManagementTreeDataProvider;
-exports.getTestThemeTreeDataProvider = getTestThemeTreeDataProvider;
-exports.getTestElementsTreeDataProvider = getTestElementsTreeDataProvider;
-exports.getProjectTreeView = getProjectTreeView;
-exports.getTestThemeTreeViewInstance = getTestThemeTreeViewInstance;
-exports.getTestElementTreeView = getTestElementTreeView;
 exports.safeCommandHandler = safeCommandHandler;
 exports.loadConfiguration = loadConfiguration;
 exports.initializeTreeViews = initializeTreeViews;
@@ -98,39 +92,21 @@ let loginWebViewProvider = null;
 function getLoginWebViewProvider() {
     return loginWebViewProvider;
 }
-/** Module-private variables to hold the tree data providers and views. */
-let _projectManagementTreeDataProvider = null;
-let _testThemeTreeDataProvider = null;
-let _testElementsTreeDataProvider;
-let _projectTreeView;
-let _testThemeTreeView;
-let _testElementTreeView;
-/** Getter functions for providers and views */
-function getProjectManagementTreeDataProvider() {
-    return _projectManagementTreeDataProvider;
-}
-function getTestThemeTreeDataProvider() {
-    return _testThemeTreeDataProvider;
-}
-function getTestElementsTreeDataProvider() {
-    return _testElementsTreeDataProvider;
-}
-function getProjectTreeView() {
-    return _projectTreeView;
-}
-function getTestThemeTreeViewInstance() {
-    return _testThemeTreeView;
-}
-function getTestElementTreeView() {
-    return _testElementTreeView;
-}
+/** Global variables to hold the tree data providers and views. */
+exports.projectManagementTreeDataProvider = null;
+exports.testThemeTreeDataProvider = null;
 // Global variable to store the authentication provider instance
 let authProviderInstance = null;
 // Global variable to store the current configuration scope (workspace or global).
 let currentConfigScope;
 // Global variable to store the active editor instance to determine the best scope for configuration.
 let activeEditor;
+// Prevent multiple session change handling simultaneously
 let isHandlingSessionChange = false;
+// Determines if the icon of the tree item should be changed after generating tests for that item.
+exports.ENABLE_ICON_MARKING_ON_GENERATE = true;
+// Determines if the import button of the tree item should still persist after importing test results for that item.
+exports.ALLOW_PERSISTENT_IMPORT_BUTTON = false;
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
  * It takes a handler function as input and returns a new function that executes the original handler inside a try/catch block.
@@ -208,17 +184,17 @@ async function loadConfiguration(context, newScope) {
  * @param {vscode.ExtensionContext} context - The extension context provided by VS Code, used for managing disposables.
  */
 function initializeTestElementsTreeView(context) {
-    _testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider((message) => {
-        if (_testElementTreeView) {
-            _testElementTreeView.message = message;
+    exports.testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider((message) => {
+        if (exports.testElementTreeView) {
+            exports.testElementTreeView.message = message;
         }
     });
-    _testElementTreeView = vscode.window.createTreeView("testElementsView", {
-        treeDataProvider: _testElementsTreeDataProvider
+    exports.testElementTreeView = vscode.window.createTreeView("testElementsView", {
+        treeDataProvider: exports.testElementsTreeDataProvider
     });
-    context.subscriptions.push(_testElementTreeView);
-    if (_testElementsTreeDataProvider.isTreeDataEmpty()) {
-        _testElementsTreeDataProvider.updateTreeViewStatusMessage();
+    context.subscriptions.push(exports.testElementTreeView);
+    if (exports.testElementsTreeDataProvider.isTreeDataEmpty()) {
+        exports.testElementsTreeDataProvider.updateTreeViewStatusMessage();
     }
 }
 /**
@@ -227,45 +203,44 @@ function initializeTestElementsTreeView(context) {
  * @param {vscode.ExtensionContext} context The extension context.
  */
 function initializeTreeViews(context) {
-    _testThemeTreeDataProvider = new testThemeTreeView_1.TestThemeTreeDataProvider((message) => {
-        if (_testThemeTreeView) {
-            _testThemeTreeView.message = message;
+    exports.testThemeTreeDataProvider = new testThemeTreeView_1.TestThemeTreeDataProvider((message) => {
+        if (exports.testThemeTreeView) {
+            exports.testThemeTreeView.message = message;
         }
+    }, context);
+    exports.testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
+        treeDataProvider: exports.testThemeTreeDataProvider
     });
-    _testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
-        treeDataProvider: _testThemeTreeDataProvider
-    });
-    context.subscriptions.push(_testThemeTreeView);
-    _projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider((message) => {
-        if (_projectTreeView) {
-            _projectTreeView.message = message;
+    context.subscriptions.push(exports.testThemeTreeView);
+    exports.projectManagementTreeDataProvider = new projectManagementTreeView.ProjectManagementTreeDataProvider((message) => {
+        if (exports.projectTreeView) {
+            exports.projectTreeView.message = message;
         }
-    }, _testThemeTreeDataProvider);
+    }, exports.testThemeTreeDataProvider);
     const newProjectTreeView = vscode.window.createTreeView("projectManagementTree", {
-        treeDataProvider: _projectManagementTreeDataProvider,
+        treeDataProvider: exports.projectManagementTreeDataProvider,
         canSelectMany: false
     });
-    context.subscriptions.push(newProjectTreeView);
-    _projectTreeView = newProjectTreeView;
-    if (_projectManagementTreeDataProvider && _testThemeTreeView && _testThemeTreeDataProvider) {
-        context.subscriptions.push(_projectManagementTreeDataProvider.onDidPrepareCycleDataForThemeTree(async (eventData) => {
-            if (_testThemeTreeDataProvider && _testThemeTreeView) {
+    exports.projectTreeView = newProjectTreeView;
+    context.subscriptions.push(exports.projectTreeView);
+    if (exports.projectManagementTreeDataProvider && exports.testThemeTreeView && exports.testThemeTreeDataProvider) {
+        context.subscriptions.push(exports.projectManagementTreeDataProvider.onDidPrepareCycleDataForThemeTree(async (eventData) => {
+            if (exports.testThemeTreeDataProvider && exports.testThemeTreeView) {
                 exports.logger.debug(`[Prepare Cycle Event] Cycle data prepared for ${eventData.cycleLabel}. Updating Test Theme Tree.`);
-                _testThemeTreeView.title = `Test Themes (${eventData.cycleLabel})`;
-                exports.logger.trace(`Test Themes view title updated to: ${_testThemeTreeView.title}`);
-                _testThemeTreeDataProvider.clearTree();
-                _testThemeTreeDataProvider.populateFromCycleData(eventData);
+                exports.testThemeTreeView.title = `Test Themes (${eventData.cycleLabel})`;
+                exports.logger.trace(`Test Themes view title updated to: ${exports.testThemeTreeView.title}`);
+                exports.testThemeTreeDataProvider.clearTree();
+                exports.testThemeTreeDataProvider.populateFromCycleData(eventData);
             }
         }));
     }
-    _projectManagementTreeDataProvider?.refresh(true);
-    if (_testThemeTreeDataProvider && _testThemeTreeView) {
-        _testThemeTreeDataProvider.clearTree();
+    exports.projectManagementTreeDataProvider?.refresh(true);
+    if (exports.testThemeTreeDataProvider && exports.testThemeTreeView) {
+        exports.testThemeTreeDataProvider.clearTree();
     }
     initializeTestElementsTreeView(context);
-    if (_projectTreeView && _projectManagementTreeDataProvider) {
-        const pmProviderInstance = _projectManagementTreeDataProvider;
-        projectManagementTreeView.setupProjectTreeViewEventListeners(_projectTreeView, pmProviderInstance);
+    if (exports.projectTreeView && exports.projectManagementTreeDataProvider) {
+        projectManagementTreeView.setupProjectTreeViewEventListeners(exports.projectTreeView, exports.projectManagementTreeDataProvider);
     }
 }
 /**
@@ -333,7 +308,7 @@ async function registerExtensionCommands(context) {
             if (session) {
                 exports.logger.info(`[Cmd] Login successful, session ID: ${session.id}`);
                 initializeTreeViews(context);
-                getProjectManagementTreeDataProvider()?.refresh(true);
+                exports.projectManagementTreeDataProvider?.refresh(true);
             }
         }
         catch (error) {
@@ -375,12 +350,11 @@ async function registerExtensionCommands(context) {
     // Handles the click event on a cycle element in the project management tree view.
     registerSafeCommand(context, constants_1.allExtensionCommands.handleProjectCycleClick, async (cycleItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.handleProjectCycleClick}`);
-        const pmProvider = getProjectManagementTreeDataProvider();
-        if (pmProvider) {
+        if (exports.projectManagementTreeDataProvider) {
             // Avoid displaying old data in the tree views by clearing if fetching fails.
-            getTestThemeTreeDataProvider()?.clearTree();
+            exports.testThemeTreeDataProvider?.clearTree();
             (0, testElementsTreeView_1.clearTestElementsTreeView)();
-            await pmProvider.handleTestCycleClick(cycleItem);
+            await exports.projectManagementTreeDataProvider.handleTestCycleClick(cycleItem);
         }
         else {
             exports.logger.error("Cycle click cannot be processed: Project management tree data provider is not initialized.");
@@ -412,10 +386,9 @@ async function registerExtensionCommands(context) {
         if (config.get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR)) {
             await vscode.commands.executeCommand(constants_1.allExtensionCommands.clearInternalTestbenchFolder);
         }
-        const ttProvider = getTestThemeTreeDataProvider();
         let cycleKey = null;
-        if (ttProvider) {
-            cycleKey = ttProvider.getCurrentCycleKey();
+        if (exports.testThemeTreeDataProvider) {
+            cycleKey = exports.testThemeTreeDataProvider.getCurrentCycleKey();
             if (cycleKey) {
                 exports.logger.trace(`Using cycle key '${cycleKey}' from TestThemeTreeDataProvider for test generation.`);
             }
@@ -473,7 +446,7 @@ async function registerExtensionCommands(context) {
     });
     // --- Command: Read And Import Test Results To Testbench ---
     // A command that combines the reading of robotframework test results, creating a report file with results, and importing test results to testbench server.
-    registerSafeCommand(context, constants_1.allExtensionCommands.readAndImportTestResultsToTestbench, async () => {
+    registerSafeCommand(context, constants_1.allExtensionCommands.readAndImportTestResultsToTestbench, async (item) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.readAndImportTestResultsToTestbench}`);
         if (!exports.connection) {
             const noConnectionErrorMessage = "No connection available. Cannot import report.";
@@ -481,15 +454,18 @@ async function registerExtensionCommands(context) {
             exports.logger.error(noConnectionErrorMessage);
             return null;
         }
-        await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context);
+        if (!item) {
+            exports.logger.warn(`${constants_1.allExtensionCommands.readAndImportTestResultsToTestbench} called without a tree item. This command should be invoked from a marked Test Theme/Set item.`);
+            vscode.window.showWarningMessage("Please invoke this command from a Test Theme or Test Case Set that has generated tests.");
+            return null;
+        }
+        await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context, item);
     });
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshProjectTreeView, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.refreshProjectTreeView}`);
-        const pmProvider = getProjectManagementTreeDataProvider();
-        const pTreeView = getProjectTreeView();
-        if (pmProvider && pTreeView) {
-            pmProvider.refresh(false);
+        if (exports.projectManagementTreeDataProvider && exports.projectTreeView) {
+            exports.projectManagementTreeDataProvider.refresh(false);
         }
         else {
             exports.logger.warn(`Project Management Tree Data Provider or Project Tree View not initialized. Cannot refresh.`);
@@ -498,29 +474,27 @@ async function registerExtensionCommands(context) {
     // --- Command: Refresh Test Theme Tree View ---
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshTestThemeTreeView, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.refreshTestThemeTreeView}`);
-        const ttProvider = getTestThemeTreeDataProvider();
-        const ttView = getTestThemeTreeViewInstance();
-        if (!ttProvider) {
+        if (!exports.testThemeTreeDataProvider) {
             exports.logger.warn("Test Theme Tree Data Provider not initialized. Cannot refresh.");
             vscode.window.showErrorMessage("Test Theme Tree is not available to refresh.");
             return;
         }
-        if (!ttProvider.getCurrentCycleKey() || !ttProvider.getCurrentProjectKey()) {
+        if (!exports.testThemeTreeDataProvider.getCurrentCycleKey() || !exports.testThemeTreeDataProvider.getCurrentProjectKey()) {
             exports.logger.info("Test Theme Tree: No current cycle selected to refresh. Clearing tree.");
-            ttProvider.clearTree();
-            if (ttView) {
-                ttView.title = "Test Themes";
+            exports.testThemeTreeDataProvider.clearTree();
+            if (exports.testThemeTreeView) {
+                exports.testThemeTreeView.title = "Test Themes";
             }
             return;
         }
         try {
-            await ttProvider.refresh(false);
+            await exports.testThemeTreeDataProvider.refresh(false);
             exports.logger.info("Test Theme Tree view refresh initiated and completed via provider.");
         }
         catch (error) {
             exports.logger.error("Error during Test Theme Tree view refresh command execution:", error);
             vscode.window.showErrorMessage("Failed to refresh Test Themes. Check logs for details.");
-            ttProvider.setTreeViewStatusMessage("Error refreshing test themes.");
+            exports.testThemeTreeDataProvider.setTreeViewStatusMessage("Error refreshing test themes.");
         }
     });
     // --- Command: Make Root ---
@@ -532,8 +506,6 @@ async function registerExtensionCommands(context) {
             exports.logger.warn("MakeRoot command called with null treeItem.");
             return;
         }
-        const pmProvider = getProjectManagementTreeDataProvider();
-        const ttProvider = getTestThemeTreeDataProvider();
         // Check if the item belongs to the Project Management Tree
         if (treeItem.contextValue &&
             [
@@ -541,8 +513,8 @@ async function registerExtensionCommands(context) {
                 constants_1.TreeItemContextValues.VERSION,
                 constants_1.TreeItemContextValues.CYCLE
             ].includes(treeItem.contextValue)) {
-            if (pmProvider) {
-                pmProvider.makeRoot(treeItem);
+            if (exports.projectManagementTreeDataProvider) {
+                exports.projectManagementTreeDataProvider.makeRoot(treeItem);
             }
             else {
                 const makeRootNoProviderErrorMessage = "MakeRoot command called without projectManagementTreeDataProvider.";
@@ -551,12 +523,12 @@ async function registerExtensionCommands(context) {
             }
         }
         // Check if the item belongs to the Test Theme Tree
-        else if (ttProvider &&
+        else if (exports.testThemeTreeDataProvider &&
             treeItem.contextValue &&
             [constants_1.TreeItemContextValues.TEST_THEME_NODE, constants_1.TreeItemContextValues.TEST_CASE_SET_NODE].includes(treeItem.contextValue)) {
             // Delegate to testThemeTreeDataProvider if it's a test theme item
-            if (typeof ttProvider.makeRoot === "function") {
-                ttProvider.makeRoot(treeItem);
+            if (typeof exports.testThemeTreeDataProvider.makeRoot === "function") {
+                exports.testThemeTreeDataProvider.makeRoot(treeItem);
             }
             else {
                 exports.logger.warn(`MakeRoot: testThemeTreeDataProvider does not have a makeRoot method or item type (${treeItem.contextValue}) is not supported for makeRoot in test theme tree.`);
@@ -571,9 +543,8 @@ async function registerExtensionCommands(context) {
     // --- Command: Reset Project Tree View Root ---
     registerSafeCommand(context, constants_1.allExtensionCommands.resetProjectTreeViewRoot, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.resetProjectTreeViewRoot}`);
-        const pmProvider = getProjectManagementTreeDataProvider();
-        if (pmProvider) {
-            pmProvider.resetCustomRoot();
+        if (exports.projectManagementTreeDataProvider) {
+            exports.projectManagementTreeDataProvider.resetCustomRoot();
         }
         else {
             exports.logger.warn("ProjectManagementTreeDataProvider not available to reset custom root.");
@@ -583,9 +554,8 @@ async function registerExtensionCommands(context) {
     // --- Command: Reset Test Theme Tree View Root ---
     registerSafeCommand(context, constants_1.allExtensionCommands.resetTestThemeTreeViewRoot, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.resetTestThemeTreeViewRoot}`);
-        const ttProvider = getTestThemeTreeDataProvider();
-        if (ttProvider) {
-            await ttProvider.resetCustomRoot();
+        if (exports.testThemeTreeDataProvider) {
+            await exports.testThemeTreeDataProvider.resetCustomRoot();
         }
         else {
             exports.logger.warn("TestThemeTreeDataProvider not available to reset custom root.");
@@ -609,34 +579,31 @@ async function registerExtensionCommands(context) {
     // Refreshes the test elements tree view with the latest test elements for the selected TOV.
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshTestElementsTree, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.refreshTestElementsTree}`);
-        const teProvider = getTestElementsTreeDataProvider();
-        if (!teProvider) {
+        if (!exports.testElementsTreeDataProvider) {
             exports.logger.warn("Test Elements Tree Data Provider not initialized. Cannot refresh Test Elements Tree.");
             return;
         }
-        const currentTovKey = teProvider.getCurrentTovKey();
+        const currentTovKey = exports.testElementsTreeDataProvider.getCurrentTovKey();
         if (!currentTovKey) {
             vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
             return;
         }
-        await teProvider.fetchTestElements(currentTovKey);
+        await exports.testElementsTreeDataProvider.fetchTestElements(currentTovKey);
     });
     // --- Command: Display Interactions For Selected TOV ---
     registerSafeCommand(context, constants_1.allExtensionCommands.displayInteractionsForSelectedTOV, async (treeItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.displayInteractionsForSelectedTOV} for tree item:`, treeItem);
-        const pmProvider = getProjectManagementTreeDataProvider();
-        const teProvider = getTestElementsTreeDataProvider();
-        if (pmProvider && treeItem.contextValue === constants_1.TreeItemContextValues.VERSION) {
+        if (exports.projectManagementTreeDataProvider && treeItem.contextValue === constants_1.TreeItemContextValues.VERSION) {
             const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
-            if (tovKeyOfSelectedTreeElement && teProvider) {
-                const areTestElementsFetched = await teProvider.fetchTestElements(tovKeyOfSelectedTreeElement, typeof treeItem.label === "string" ? treeItem.label : undefined);
+            if (tovKeyOfSelectedTreeElement && exports.testElementsTreeDataProvider) {
+                const areTestElementsFetched = await exports.testElementsTreeDataProvider.fetchTestElements(tovKeyOfSelectedTreeElement, typeof treeItem.label === "string" ? treeItem.label : undefined);
                 if (areTestElementsFetched) {
                     await projectManagementTreeView?.hideProjectManagementTreeView();
                     await (0, testElementsTreeView_1.displayTestElementsTreeView)();
                     // Clicking on the "Show Robotframework Resources" button will not trigger project management tree onDidChangeSelection event,
                     // which restarts the language client.
                     // Retrieve the project name and TOV name from the tree item for language client restart.
-                    const projectAndTovNameObj = pmProvider.getProjectAndTovNamesForItem(treeItem);
+                    const projectAndTovNameObj = exports.projectManagementTreeDataProvider.getProjectAndTovNamesForItem(treeItem);
                     if (projectAndTovNameObj) {
                         const { projectName, tovName } = projectAndTovNameObj;
                         if (projectName && tovName) {
@@ -691,8 +658,7 @@ async function registerExtensionCommands(context) {
             exports.logger.error(`${constants_1.allExtensionCommands.createInteractionUnderSubdivision} command called without connection.`);
             return;
         }
-        const teProvider = getTestElementsTreeDataProvider();
-        if (!teProvider) {
+        if (!exports.testElementsTreeDataProvider) {
             return;
         }
         const interactionName = await vscode.window.showInputBox({
@@ -712,7 +678,7 @@ async function registerExtensionCommands(context) {
         if (newInteraction) {
             // TODO: After the API is implemented, use the API to create the interaction on the server
             // For now, refresh the tree view to show the new interaction
-            teProvider._onDidChangeTreeData.fire(undefined);
+            exports.testElementsTreeDataProvider._onDidChangeTreeDataEmitter.fire(undefined);
             vscode.window.showInformationMessage(`Successfully created interaction '${interactionName}'`);
             exports.logger.debug(`Created new interaction '${interactionName}' under subdivision '${subdivisionTreeItem.testElementData.name}'`);
         }
@@ -747,6 +713,229 @@ async function registerExtensionCommands(context) {
         const chosenQuickPickItems = await reportHandler.showMultiSelectQuickPick(quickPickItems);
         exports.logger.log("Trace", "User selected following json files:", chosenQuickPickItems);
         await reportHandler.createNewReportWithSelectedItems(zipPath, chosenQuickPickItems);
+    });
+    // TODO: Remove / reimplement after testing
+    // --- Command: Get Filters ---
+    registerSafeCommand(context, constants_1.allExtensionCommands.getFilters, async () => {
+        exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.getFilters}`);
+        if (!exports.connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.error(`${constants_1.allExtensionCommands.getFilters} command called without connection.`);
+            return;
+        }
+        try {
+            const filters = await exports.connection.getFiltersFromOldPlayServer();
+            if (!filters || !Array.isArray(filters) || filters.length === 0) {
+                vscode.window.showInformationMessage("No filters found.");
+                exports.logger.trace("No filters retrieved from server or empty filters array.");
+                return;
+            }
+            exports.logger.trace("Filters retrieved successfully:", JSON.stringify(filters, null, 2));
+            // Create QuickPick items from the filters
+            const quickPickItems = filters.map((filter) => ({
+                label: filter.name || "Unnamed Filter",
+                description: `Type: ${filter.type || "Unknown"} | ${filter.public ? "Public" : "Private"}`,
+                detail: `Key: ${filter.key?.serial || "No Key"}`,
+                // Store the entire filter object in the detail for later access
+                filterData: filter
+            }));
+            // Show QuickPick to user
+            const selectedItem = await vscode.window.showQuickPick(quickPickItems, {
+                placeHolder: "Select a filter to view its content",
+                title: "Available Filters"
+            });
+            if (selectedItem && selectedItem.filterData) {
+                const selectedFilter = selectedItem.filterData;
+                const content = selectedFilter.content || "No content available";
+                // Display the filter content in a message box
+                const action = await vscode.window.showInformationMessage(`Filter: ${selectedFilter.name}\n\nContent:\n${content}`, { modal: true }, "Copy to Clipboard");
+                // Optional: Copy content to clipboard if user clicks the button
+                if (action === "Copy to Clipboard") {
+                    await vscode.env.clipboard.writeText(content);
+                    vscode.window.showInformationMessage("Filter content copied to clipboard.");
+                }
+                exports.logger.info(`User selected filter: ${selectedFilter.name} with content: ${content}`);
+            }
+            else {
+                exports.logger.info("User cancelled filter selection or no filter was selected.");
+            }
+        }
+        catch (error) {
+            exports.logger.error("Error retrieving filters:", error);
+            vscode.window.showErrorMessage(`Failed to retrieve filters: ${error.message}`);
+        }
+    });
+    // TODO: Remove / reimplement after testing
+    // --- Command: Get TOV Structure ---
+    registerSafeCommand(context, constants_1.allExtensionCommands.fetchTovStructure, async () => {
+        exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.fetchTovStructure}`);
+        if (!exports.connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.error(`${constants_1.allExtensionCommands.fetchTovStructure} command called without connection.`);
+            return;
+        }
+        try {
+            // Get Project Key from user input
+            const projectKey = await vscode.window.showInputBox({
+                prompt: "Enter the Project Key",
+                placeHolder: "e.g., 30",
+                validateInput: (value) => {
+                    if (!value || value.trim() === "") {
+                        return "Project Key cannot be empty";
+                    }
+                    if (!/^\d+$/.test(value.trim())) {
+                        return "Project Key must be a number";
+                    }
+                    return null;
+                }
+            });
+            if (!projectKey) {
+                exports.logger.info("User cancelled project key input.");
+                return;
+            }
+            // Get TOV Key from user input
+            const tovKey = await vscode.window.showInputBox({
+                prompt: "Enter the TOV (Test Object Version) Key",
+                placeHolder: "e.g., 176",
+                validateInput: (value) => {
+                    if (!value || value.trim() === "") {
+                        return "TOV Key cannot be empty";
+                    }
+                    if (!/^\d+$/.test(value.trim())) {
+                        return "TOV Key must be a number";
+                    }
+                    return null;
+                }
+            });
+            if (!tovKey) {
+                exports.logger.info("User cancelled TOV key input.");
+                return;
+            }
+            // Get Tree Root UID from user input
+            const treeRootUID = await vscode.window.showInputBox({
+                prompt: "Enter the Tree Root UID (optional)",
+                placeHolder: "e.g., iTB-TT-299 (leave empty for default)",
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                validateInput: (value) => {
+                    // Tree Root UID is optional, so empty values are allowed
+                    return null;
+                }
+            });
+            // Get filters from server and let user select
+            let selectedFilters = [];
+            try {
+                const filters = await exports.connection.getFiltersFromOldPlayServer();
+                if (filters && Array.isArray(filters) && filters.length > 0) {
+                    // Ask user if they want to apply filters
+                    const applyFilters = await vscode.window.showQuickPick(["No filters", "Select filters"], {
+                        placeHolder: "Do you want to apply filters to the TOV structure?",
+                        title: "Filter Selection"
+                    });
+                    if (applyFilters === "Select filters") {
+                        // Create QuickPick items from the filters with multi-select capability
+                        const quickPickItems = filters.map((filter) => ({
+                            label: filter.name || "Unnamed Filter",
+                            description: `Type: ${filter.type || "Unknown"} | ${filter.public ? "Public" : "Private"}`,
+                            detail: `Key: ${filter.key?.serial || "No Key"}`,
+                            filterData: filter
+                        }));
+                        // Create a multi-select QuickPick
+                        const quickPick = vscode.window.createQuickPick();
+                        quickPick.items = quickPickItems;
+                        quickPick.canSelectMany = true;
+                        quickPick.placeholder = "Select filters to apply (you can select multiple)";
+                        quickPick.title = "Select Filters for TOV Structure";
+                        quickPick.show();
+                        const selectedItems = await new Promise((resolve) => {
+                            quickPick.onDidAccept(() => {
+                                resolve([...quickPick.selectedItems]);
+                                quickPick.hide();
+                            });
+                            quickPick.onDidHide(() => {
+                                resolve([]);
+                                quickPick.dispose();
+                            });
+                        });
+                        // Convert selected items to filter format expected by the API
+                        selectedFilters = selectedItems
+                            .map((item) => {
+                            const filterData = item.filterData;
+                            return {
+                                name: filterData.name,
+                                filterType: filterData.type,
+                                testThemeUID: filterData.type === "TestTheme" ? filterData.key?.serial : undefined
+                            };
+                        })
+                            .filter((filter) => filter.filterType); // Remove any invalid filters
+                        exports.logger.info(`User selected ${selectedFilters.length} filters:`, selectedFilters);
+                    }
+                }
+                else {
+                    exports.logger.info("No filters available from server for TOV structure.");
+                }
+            }
+            catch (filterError) {
+                exports.logger.warn("Could not retrieve filters for TOV structure, proceeding without filters:", filterError);
+                vscode.window.showWarningMessage("Could not retrieve filters. Proceeding without filters.");
+            }
+            // Build TOV Structure Options with user inputs
+            const tovStructureOptions = {
+                treeRootUID: treeRootUID?.trim() || "iTB-TT-299", // Use default if empty
+                suppressFilteredData: false,
+                suppressEmptyTestThemes: true,
+                filters: selectedFilters
+            };
+            exports.logger.info(`Fetching TOV structure with options:`, {
+                projectKey: projectKey.trim(),
+                tovKey: tovKey.trim(),
+                options: tovStructureOptions
+            });
+            // Show progress while fetching
+            const tovStructure = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "Fetching TOV Structure",
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ message: "Retrieving TOV structure from server..." });
+                return await exports.connection?.fetchTovStructure(projectKey.trim(), tovKey.trim(), tovStructureOptions);
+            });
+            if (tovStructure) {
+                exports.logger.info("TOV structure retrieved successfully:", JSON.stringify(tovStructure, null, 2));
+                // Show result in information message with option to save
+                const action = await vscode.window.showInformationMessage(`TOV Structure retrieved successfully for Project ${projectKey}, TOV ${tovKey}.\n\nFilters applied: ${selectedFilters.length}\nTree Root UID: ${tovStructureOptions.treeRootUID}`, { modal: true }, "View Details", "Save to File");
+                if (action === "View Details") {
+                    // Show detailed structure in a new document
+                    const doc = await vscode.workspace.openTextDocument({
+                        content: JSON.stringify(tovStructure, null, 2),
+                        language: "json"
+                    });
+                    await vscode.window.showTextDocument(doc);
+                }
+                else if (action === "Save to File") {
+                    // Let user save the structure to a file
+                    const saveUri = await vscode.window.showSaveDialog({
+                        filters: {
+                            "JSON Files": ["json"],
+                            "All Files": ["*"]
+                        },
+                        defaultUri: vscode.Uri.file(`tov_structure_${projectKey}_${tovKey}.json`)
+                    });
+                    if (saveUri) {
+                        const content = JSON.stringify(tovStructure, null, 2);
+                        await vscode.workspace.fs.writeFile(saveUri, Buffer.from(content, "utf8"));
+                        vscode.window.showInformationMessage(`TOV structure saved to ${saveUri.fsPath}`);
+                    }
+                }
+            }
+            else {
+                // Undefined is expected if no TOV structure is found or filtering results in no data
+                exports.logger.warn("TOV structure retrieval returned null or undefined.");
+            }
+        }
+        catch (error) {
+            exports.logger.error("Error fetching TOV structure:", error);
+            vscode.window.showErrorMessage(`Failed to retrieve TOV structure: ${error.message}`);
+        }
     });
 }
 /**
@@ -789,8 +978,8 @@ async function handleTestBenchSessionChange(context, existingSession) {
                     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, true);
                     getLoginWebViewProvider()?.updateWebviewHTMLContent();
                     await vscode.commands.executeCommand(constants_1.allExtensionCommands.displayAllProjects);
-                    getProjectManagementTreeDataProvider()?.refresh(true);
-                    getTestThemeTreeDataProvider()?.clearTree();
+                    exports.projectManagementTreeDataProvider?.refresh(true);
+                    exports.testThemeTreeDataProvider?.clearTree();
                     (0, testElementsTreeView_1.clearTestElementsTreeView)();
                 }
                 return;
@@ -809,16 +998,16 @@ async function handleTestBenchSessionChange(context, existingSession) {
                 // This is a new login session (e.g., startup auto-login, or manual login from disconnected state)
                 exports.logger.info("[Extension] New session established. Setting default view to 'Projects' and refreshing data.");
                 await vscode.commands.executeCommand(constants_1.allExtensionCommands.displayAllProjects);
-                getProjectManagementTreeDataProvider()?.refresh(true);
-                getTestThemeTreeDataProvider()?.clearTree();
+                exports.projectManagementTreeDataProvider?.refresh(true);
+                exports.testThemeTreeDataProvider?.clearTree();
                 (0, testElementsTreeView_1.clearTestElementsTreeView)();
             }
             else {
                 // Session changed while already connected (e.g., profile switch if supported, or token refresh)
                 exports.logger.info("[Extension] Session changed while already connected. Resetting view to 'Projects' and refreshing data.");
                 await vscode.commands.executeCommand(constants_1.allExtensionCommands.displayAllProjects);
-                getProjectManagementTreeDataProvider()?.refresh(true);
-                getTestThemeTreeDataProvider()?.clearTree();
+                exports.projectManagementTreeDataProvider?.refresh(true);
+                exports.testThemeTreeDataProvider?.clearTree();
                 (0, testElementsTreeView_1.clearTestElementsTreeView)();
             }
         }
@@ -833,8 +1022,8 @@ async function handleTestBenchSessionChange(context, existingSession) {
             await projectManagementTreeView?.hideProjectManagementTreeView();
             await (0, testThemeTreeView_1.hideTestThemeTreeView)();
             await testElementsTreeView?.hideTestElementsTreeView();
-            getProjectManagementTreeDataProvider()?.clearTree();
-            getTestThemeTreeDataProvider()?.clearTree();
+            exports.projectManagementTreeDataProvider?.clearTree();
+            exports.testThemeTreeDataProvider?.clearTree();
             (0, testElementsTreeView_1.clearTestElementsTreeView)();
         }
     }
@@ -849,8 +1038,8 @@ async function handleTestBenchSessionChange(context, existingSession) {
         await projectManagementTreeView?.hideProjectManagementTreeView();
         await (0, testThemeTreeView_1.hideTestThemeTreeView)();
         await testElementsTreeView?.hideTestElementsTreeView();
-        getProjectManagementTreeDataProvider()?.clearTree();
-        getTestThemeTreeDataProvider()?.clearTree();
+        exports.projectManagementTreeDataProvider?.clearTree();
+        exports.testThemeTreeDataProvider?.clearTree();
         (0, testElementsTreeView_1.clearTestElementsTreeView)();
     }
 }

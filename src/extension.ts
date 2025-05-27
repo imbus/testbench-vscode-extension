@@ -37,6 +37,7 @@ import {
 } from "./testBenchAuthenticationProvider";
 import * as profileManager from "./profileManager";
 import { PlayServerConnection } from "./testBenchConnection";
+import { TovStructureOptions } from "./testBenchTypes";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -81,8 +82,14 @@ let authProviderInstance: TestBenchAuthenticationProvider | null = null;
 let currentConfigScope: vscode.Uri | undefined;
 // Global variable to store the active editor instance to determine the best scope for configuration.
 let activeEditor: vscode.TextEditor | undefined;
+
 // Prevent multiple session change handling simultaneously
-let isHandlingSessionChange = false;
+let isHandlingSessionChange: boolean = false;
+
+// Determines if the icon of the tree item should be changed after generating tests for that item.
+export const ENABLE_ICON_MARKING_ON_GENERATE: boolean = true;
+// Determines if the import button of the tree item should still persist after importing test results for that item.
+export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = false;
 
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
@@ -194,7 +201,7 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
         if (testThemeTreeView) {
             testThemeTreeView.message = message;
         }
-    });
+    }, context);
     testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
         treeDataProvider: testThemeTreeDataProvider
     });
@@ -210,8 +217,8 @@ export function initializeTreeViews(context: vscode.ExtensionContext): void {
             treeDataProvider: projectManagementTreeDataProvider,
             canSelectMany: false
         });
-    context.subscriptions.push(newProjectTreeView);
     projectTreeView = newProjectTreeView;
+    context.subscriptions.push(projectTreeView);
 
     if (projectManagementTreeDataProvider && testThemeTreeView && testThemeTreeDataProvider) {
         context.subscriptions.push(
@@ -514,17 +521,31 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     // --- Command: Read And Import Test Results To Testbench ---
     // A command that combines the reading of robotframework test results, creating a report file with results, and importing test results to testbench server.
-    registerSafeCommand(context, allExtensionCommands.readAndImportTestResultsToTestbench, async () => {
-        logger.debug(`Command Called: ${allExtensionCommands.readAndImportTestResultsToTestbench}`);
-        if (!connection) {
-            const noConnectionErrorMessage: string = "No connection available. Cannot import report.";
-            vscode.window.showErrorMessage(noConnectionErrorMessage);
-            logger.error(noConnectionErrorMessage);
-            return null;
-        }
+    registerSafeCommand(
+        context,
+        allExtensionCommands.readAndImportTestResultsToTestbench,
+        async (item?: projectManagementTreeView.BaseTestBenchTreeItem) => {
+            logger.debug(`Command Called: ${allExtensionCommands.readAndImportTestResultsToTestbench}`);
+            if (!connection) {
+                const noConnectionErrorMessage: string = "No connection available. Cannot import report.";
+                vscode.window.showErrorMessage(noConnectionErrorMessage);
+                logger.error(noConnectionErrorMessage);
+                return null;
+            }
 
-        await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context);
-    });
+            if (!item) {
+                logger.warn(
+                    `${allExtensionCommands.readAndImportTestResultsToTestbench} called without a tree item. This command should be invoked from a marked Test Theme/Set item.`
+                );
+                vscode.window.showWarningMessage(
+                    "Please invoke this command from a Test Theme or Test Case Set that has generated tests."
+                );
+                return null;
+            }
+
+            await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context, item);
+        }
+    );
 
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, allExtensionCommands.refreshProjectTreeView, async () => {
@@ -814,7 +835,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             if (newInteraction) {
                 // TODO: After the API is implemented, use the API to create the interaction on the server
                 // For now, refresh the tree view to show the new interaction
-                testElementsTreeDataProvider._onDidChangeTreeData.fire(undefined);
+                testElementsTreeDataProvider._onDidChangeTreeDataEmitter.fire(undefined);
 
                 vscode.window.showInformationMessage(`Successfully created interaction '${interactionName}'`);
                 logger.debug(
@@ -858,6 +879,269 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.log("Trace", "User selected following json files:", chosenQuickPickItems);
 
         await reportHandler.createNewReportWithSelectedItems(zipPath, chosenQuickPickItems);
+    });
+
+    // TODO: Remove / reimplement after testing
+    // --- Command: Get Filters ---
+    registerSafeCommand(context, allExtensionCommands.getFilters, async () => {
+        logger.debug(`Command Called: ${allExtensionCommands.getFilters}`);
+        if (!connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            logger.error(`${allExtensionCommands.getFilters} command called without connection.`);
+            return;
+        }
+        try {
+            const filters = await connection.getFiltersFromOldPlayServer();
+            if (!filters || !Array.isArray(filters) || filters.length === 0) {
+                vscode.window.showInformationMessage("No filters found.");
+                logger.trace("No filters retrieved from server or empty filters array.");
+                return;
+            }
+
+            logger.trace("Filters retrieved successfully:", JSON.stringify(filters, null, 2));
+
+            // Create QuickPick items from the filters
+            const quickPickItems: vscode.QuickPickItem[] = filters.map(
+                (filter: any) =>
+                    ({
+                        label: filter.name || "Unnamed Filter",
+                        description: `Type: ${filter.type || "Unknown"} | ${filter.public ? "Public" : "Private"}`,
+                        detail: `Key: ${filter.key?.serial || "No Key"}`,
+                        // Store the entire filter object in the detail for later access
+                        filterData: filter
+                    }) as vscode.QuickPickItem & { filterData: any }
+            );
+
+            // Show QuickPick to user
+            const selectedItem = await vscode.window.showQuickPick(quickPickItems, {
+                placeHolder: "Select a filter to view its content",
+                title: "Available Filters"
+            });
+
+            if (selectedItem && (selectedItem as any).filterData) {
+                const selectedFilter = (selectedItem as any).filterData;
+                const content = selectedFilter.content || "No content available";
+
+                // Display the filter content in a message box
+                const action = await vscode.window.showInformationMessage(
+                    `Filter: ${selectedFilter.name}\n\nContent:\n${content}`,
+                    { modal: true },
+                    "Copy to Clipboard"
+                );
+
+                // Optional: Copy content to clipboard if user clicks the button
+                if (action === "Copy to Clipboard") {
+                    await vscode.env.clipboard.writeText(content);
+                    vscode.window.showInformationMessage("Filter content copied to clipboard.");
+                }
+
+                logger.info(`User selected filter: ${selectedFilter.name} with content: ${content}`);
+            } else {
+                logger.info("User cancelled filter selection or no filter was selected.");
+            }
+        } catch (error) {
+            logger.error("Error retrieving filters:", error);
+            vscode.window.showErrorMessage(`Failed to retrieve filters: ${(error as Error).message}`);
+        }
+    });
+
+    // TODO: Remove / reimplement after testing
+    // --- Command: Get TOV Structure ---
+    registerSafeCommand(context, allExtensionCommands.fetchTovStructure, async () => {
+        logger.debug(`Command Called: ${allExtensionCommands.fetchTovStructure}`);
+        if (!connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            logger.error(`${allExtensionCommands.fetchTovStructure} command called without connection.`);
+            return;
+        }
+        try {
+            // Get Project Key from user input
+            const projectKey = await vscode.window.showInputBox({
+                prompt: "Enter the Project Key",
+                placeHolder: "e.g., 30",
+                validateInput: (value) => {
+                    if (!value || value.trim() === "") {
+                        return "Project Key cannot be empty";
+                    }
+                    if (!/^\d+$/.test(value.trim())) {
+                        return "Project Key must be a number";
+                    }
+                    return null;
+                }
+            });
+
+            if (!projectKey) {
+                logger.info("User cancelled project key input.");
+                return;
+            }
+
+            // Get TOV Key from user input
+            const tovKey = await vscode.window.showInputBox({
+                prompt: "Enter the TOV (Test Object Version) Key",
+                placeHolder: "e.g., 176",
+                validateInput: (value) => {
+                    if (!value || value.trim() === "") {
+                        return "TOV Key cannot be empty";
+                    }
+                    if (!/^\d+$/.test(value.trim())) {
+                        return "TOV Key must be a number";
+                    }
+                    return null;
+                }
+            });
+
+            if (!tovKey) {
+                logger.info("User cancelled TOV key input.");
+                return;
+            }
+
+            // Get Tree Root UID from user input
+            const treeRootUID = await vscode.window.showInputBox({
+                prompt: "Enter the Tree Root UID (optional)",
+                placeHolder: "e.g., iTB-TT-299 (leave empty for default)",
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                validateInput: (value) => {
+                    // Tree Root UID is optional, so empty values are allowed
+                    return null;
+                }
+            });
+
+            // Get filters from server and let user select
+            let selectedFilters: any[] = [];
+
+            try {
+                const filters = await connection.getFiltersFromOldPlayServer();
+
+                if (filters && Array.isArray(filters) && filters.length > 0) {
+                    // Ask user if they want to apply filters
+                    const applyFilters = await vscode.window.showQuickPick(["No filters", "Select filters"], {
+                        placeHolder: "Do you want to apply filters to the TOV structure?",
+                        title: "Filter Selection"
+                    });
+
+                    if (applyFilters === "Select filters") {
+                        // Create QuickPick items from the filters with multi-select capability
+                        const quickPickItems: vscode.QuickPickItem[] = filters.map(
+                            (filter: any) =>
+                                ({
+                                    label: filter.name || "Unnamed Filter",
+                                    description: `Type: ${filter.type || "Unknown"} | ${filter.public ? "Public" : "Private"}`,
+                                    detail: `Key: ${filter.key?.serial || "No Key"}`,
+                                    filterData: filter
+                                }) as vscode.QuickPickItem & { filterData: any }
+                        );
+
+                        // Create a multi-select QuickPick
+                        const quickPick = vscode.window.createQuickPick();
+                        quickPick.items = quickPickItems;
+                        quickPick.canSelectMany = true;
+                        quickPick.placeholder = "Select filters to apply (you can select multiple)";
+                        quickPick.title = "Select Filters for TOV Structure";
+
+                        quickPick.show();
+
+                        const selectedItems = await new Promise<vscode.QuickPickItem[]>((resolve) => {
+                            quickPick.onDidAccept(() => {
+                                resolve([...quickPick.selectedItems]);
+                                quickPick.hide();
+                            });
+                            quickPick.onDidHide(() => {
+                                resolve([]);
+                                quickPick.dispose();
+                            });
+                        });
+
+                        // Convert selected items to filter format expected by the API
+                        selectedFilters = selectedItems
+                            .map((item: any) => {
+                                const filterData = item.filterData;
+                                return {
+                                    name: filterData.name,
+                                    filterType: filterData.type,
+                                    testThemeUID: filterData.type === "TestTheme" ? filterData.key?.serial : undefined
+                                };
+                            })
+                            .filter((filter) => filter.filterType); // Remove any invalid filters
+
+                        logger.info(`User selected ${selectedFilters.length} filters:`, selectedFilters);
+                    }
+                } else {
+                    logger.info("No filters available from server for TOV structure.");
+                }
+            } catch (filterError) {
+                logger.warn("Could not retrieve filters for TOV structure, proceeding without filters:", filterError);
+                vscode.window.showWarningMessage("Could not retrieve filters. Proceeding without filters.");
+            }
+
+            // Build TOV Structure Options with user inputs
+            const tovStructureOptions: TovStructureOptions = {
+                treeRootUID: treeRootUID?.trim() || "iTB-TT-299", // Use default if empty
+                suppressFilteredData: false,
+                suppressEmptyTestThemes: true,
+                filters: selectedFilters
+            };
+
+            logger.info(`Fetching TOV structure with options:`, {
+                projectKey: projectKey.trim(),
+                tovKey: tovKey.trim(),
+                options: tovStructureOptions
+            });
+
+            // Show progress while fetching
+            const tovStructure = await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Fetching TOV Structure",
+                    cancellable: false
+                },
+                async (progress) => {
+                    progress.report({ message: "Retrieving TOV structure from server..." });
+                    return await connection?.fetchTovStructure(projectKey.trim(), tovKey.trim(), tovStructureOptions);
+                }
+            );
+
+            if (tovStructure) {
+                logger.info("TOV structure retrieved successfully:", JSON.stringify(tovStructure, null, 2));
+
+                // Show result in information message with option to save
+                const action = await vscode.window.showInformationMessage(
+                    `TOV Structure retrieved successfully for Project ${projectKey}, TOV ${tovKey}.\n\nFilters applied: ${selectedFilters.length}\nTree Root UID: ${tovStructureOptions.treeRootUID}`,
+                    { modal: true },
+                    "View Details",
+                    "Save to File"
+                );
+
+                if (action === "View Details") {
+                    // Show detailed structure in a new document
+                    const doc = await vscode.workspace.openTextDocument({
+                        content: JSON.stringify(tovStructure, null, 2),
+                        language: "json"
+                    });
+                    await vscode.window.showTextDocument(doc);
+                } else if (action === "Save to File") {
+                    // Let user save the structure to a file
+                    const saveUri = await vscode.window.showSaveDialog({
+                        filters: {
+                            "JSON Files": ["json"],
+                            "All Files": ["*"]
+                        },
+                        defaultUri: vscode.Uri.file(`tov_structure_${projectKey}_${tovKey}.json`)
+                    });
+
+                    if (saveUri) {
+                        const content = JSON.stringify(tovStructure, null, 2);
+                        await vscode.workspace.fs.writeFile(saveUri, Buffer.from(content, "utf8"));
+                        vscode.window.showInformationMessage(`TOV structure saved to ${saveUri.fsPath}`);
+                    }
+                }
+            } else {
+                // Undefined is expected if no TOV structure is found or filtering results in no data
+                logger.warn("TOV structure retrieval returned null or undefined.");
+            }
+        } catch (error) {
+            logger.error("Error fetching TOV structure:", error);
+            vscode.window.showErrorMessage(`Failed to retrieve TOV structure: ${(error as Error).message}`);
+        }
     });
 }
 
