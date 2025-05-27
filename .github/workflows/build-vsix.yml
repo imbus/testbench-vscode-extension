@@ -5,12 +5,12 @@ on:
         branches:
             - main # Name of the branch to trigger the workflow. Multiple branches can be specified each on a new line
             - playground
-            - fix-ls-errors
+            - feature
     pull_request:
         branches:
             - main
             - playground
-            - fix-ls-errors
+            - feature
 
 jobs:
     build:
