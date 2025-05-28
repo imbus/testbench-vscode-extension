@@ -606,6 +606,18 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
                     border-radius: 6px;
                     background-color: var(--vscode-list-inactiveSelectionBackground);
+                    min-width: 0;
+                    overflow: hidden;
+                }
+                @media (max-width: 320px) {
+                    body {
+                        padding: 10px;
+                        gap: 15px;
+                    }
+                    
+                    .profile-section, .add-profile-section {
+                        padding: 12px;
+                    }
                 }
                 h2, h3 {
                     color: var(--vscode-settings-headerForeground);
@@ -624,6 +636,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     border-radius: 4px;
                     transition: max-height 0.2s ease-in-out;
                 }  
+
                 ul#profilesList li {
                     box-sizing: border-box;
                     padding: 10px 12px;
@@ -635,6 +648,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     background-color: var(--vscode-list-hoverBackground);
                     transition: background-color 0.2s ease-in-out;
                     min-height: 60px;
+                    flex-wrap: nowrap; 
+                    overflow: hidden;
+                    min-width: 0;
                 }
                 ul#profilesList li:last-child {
                     border-bottom: none;
@@ -644,24 +660,35 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 }
                 ul#profilesList li .profile-details {
                     flex-grow: 1;
+                    flex-shrink: 1;
                     margin-right: 10px;
                     min-width: 0;
+                    overflow: hidden;
                 }
                 ul#profilesList li .profile-label {
                     font-weight: bold;
                     color: var(--vscode-list-activeSelectionForeground);
                     font-size: 1.05em;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 100%;
                 }
                 ul#profilesList li .profile-info {
                     font-size: 0.9em;
                     color: var(--vscode-descriptionForeground);
                     margin-top: 3px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 100%;
                 }
                 .profile-actions {
                     display: flex;
-                    gap: 8px;
+                    gap: 6px;
                     align-items: center;
                     flex-shrink: 0;
+                    min-width: fit-content;
                 }
                 .profile-actions button {
                     padding: 6px 8px;
@@ -673,6 +700,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     min-height: 32px;
                     border-radius: 4px;
                     flex-shrink: 0;
+                    max-width: 32px;
                 }
                 button {
                     background-color: var(--vscode-button-background);
@@ -728,6 +756,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 }
                 .form-group {
                     margin-bottom: 15px;
+                    min-width: 0;
                 }
                 .form-group label {
                     display: block;
@@ -744,6 +773,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     border: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
                     background-color: var(--vscode-input-background);
                     color: var(--vscode-input-foreground);
+                    box-sizing: border-box;
+                    min-width: 0;
                 }
                 .form-group input:focus {
                     border-color: var(--vscode-focusBorder);
@@ -753,9 +784,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     position: relative;
                     display: flex;
                     align-items: center;
+                    min-width: 0;
                 }
                 .password-wrapper input[type="password"] {
                     flex-grow: 1;
+                    flex-shrink: 1;
+                    min-width: 0;
                 }
                 .password-toggle {
                     position: absolute;
@@ -774,6 +808,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     display: flex;
                     align-items: center;
                     gap: 8px;
+                    overflow-wrap: break-word;
+                    hyphens: auto;
                 }
                 #messages.hidden {
                     display: none;
@@ -814,6 +850,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     align-items: center;
                     justify-content: center;
                     margin: 10px 0;
+                    word-wrap: break-word;
+                    hyphens: auto;
                 }
                 .profile-section {
                     padding: 15px;
@@ -877,10 +915,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     display: flex;
                     gap: 10px;
                     margin-top: 10px;
+                    flex-wrap: wrap;
                 }
                 
                 .edit-actions button {
                     flex: 1;
+                    min-width: 120px;
                 }
                 
                 #cancelEditBtn {
@@ -911,6 +951,42 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     .icon-login { background-image: url(${loginIconDarkUri}); }
                     .icon-edit { background-image: url(${editIconDarkUri}); }
                     .icon-delete { background-image: url(${deleteIconDarkUri}); }
+                }
+
+                /* Responsive breakpoints for very small screens */
+                @media (max-width: 300px) {
+                    ul#profilesList li {
+                        padding: 8px 10px;
+                    }
+                    
+                    .profile-actions {
+                        gap: 4px;
+                    }
+                    
+                    .profile-actions button {
+                        min-width: 28px;
+                        min-height: 28px;
+                        max-width: 28px;
+                        padding: 4px 6px;
+                    }
+                    
+                    .profile-actions button .icon {
+                        width: 14px;
+                        height: 14px;
+                        background-size: 14px 14px;
+                    }
+                }
+
+                @media (max-width: 280px) {
+                    .edit-actions {
+                        flex-direction: column; /* Stack buttons vertically on very small screens */
+                        gap: 8px;
+                    }
+                    
+                    .edit-actions button {
+                        flex: none;
+                        width: 100%;
+                    }
                 }
                 
                 /* VS Code theme fallbacks */
@@ -1336,6 +1412,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         display: inline-flex;
                         align-items: center;
                         justify-content: center;
+                        max-width: 100%;
+                        box-sizing: border-box;
                     }
                 </style>
             </head>
