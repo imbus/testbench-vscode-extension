@@ -295,7 +295,24 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            // Dont include password check when comparing existing profiles
+            // Check for duplicate label
+            if (profileData.label && profileData.label.trim()) {
+                const existingProfileByLabel: profileManager.TestBenchProfile | undefined =
+                    await profileManager.findProfileByLabel(this.extensionContext, profileData.label.trim());
+
+                if (existingProfileByLabel) {
+                    this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                        type: "warning",
+                        text: `A profile with the label "${profileData.label}" already exists. Profile labels must be unique.`
+                    });
+                    logger.warn(
+                        `[LoginWebView] Attempt to save profile with duplicate label prevented: ${profileData.label}`
+                    );
+                    return;
+                }
+            }
+
+            // Don't include password check when comparing existing profiles
             const existingProfile: profileManager.TestBenchProfile | undefined =
                 await profileManager.findProfileByCredentials(
                     this.extensionContext,
@@ -421,22 +438,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     private async handleUpdateProfile(payload: EditingProfileData): Promise<void> {
         logger.info(`[LoginWebView] Attempting to update profile: ${payload.label || payload.id}`);
 
-        const confirmation = await vscode.window.showWarningMessage(
-            `Are you sure you want to overwrite the profile "${payload.label || payload.id}"?`,
-            { modal: true },
-            "Save Changes",
-            "No"
-        );
-
-        if (confirmation !== "Save Changes") {
-            logger.info(`[LoginWebView] User cancelled update for profile: ${payload.label}`);
-            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
-                type: "info",
-                text: "Profile update cancelled."
-            });
-            return;
-        }
-
         try {
             if (!payload.id || !payload.serverName || !payload.portNumber || !payload.username) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -444,6 +445,23 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     text: "Profile ID, Server, Port, and Username are required."
                 });
                 return;
+            }
+
+            // Check for duplicate label (excluding the current profile being edited)
+            if (payload.label && payload.label.trim()) {
+                const existingProfileByLabel: profileManager.TestBenchProfile | undefined =
+                    await profileManager.findProfileByLabel(this.extensionContext, payload.label.trim(), payload.id);
+
+                if (existingProfileByLabel) {
+                    this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                        type: "warning",
+                        text: `Another profile with the label "${payload.label}" already exists. Profile labels must be unique.`
+                    });
+                    logger.warn(
+                        `[LoginWebView] Attempt to update to duplicate label prevented. Existing profile: ${existingProfileByLabel.label}`
+                    );
+                    return;
+                }
             }
 
             // Check if another profile already exists with the same server/port/username combination
@@ -467,6 +485,29 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
+            // Show confirmation dialog after validations
+            const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
+            const originalUneditedProfile: profileManager.TestBenchProfile | undefined = profiles.find(
+                (p) => p.id === payload.id
+            );
+            const originalUneditedLabel = originalUneditedProfile?.label || payload.id;
+
+            const confirmation = await vscode.window.showWarningMessage(
+                `Are you sure you want to overwrite the profile "${originalUneditedLabel}"?`,
+                { modal: true },
+                "Save Changes",
+                "No"
+            );
+
+            if (confirmation !== "Save Changes") {
+                logger.info(`[LoginWebView] User cancelled update for profile: ${payload.label}`);
+                this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                    type: "info",
+                    text: "Profile update cancelled."
+                });
+                return;
+            }
+
             const updatedProfileId = await profileManager.saveProfile(this.extensionContext, payload, payload.password);
             logger.info(`[LoginWebView] Profile updated successfully with ID: ${updatedProfileId}`);
 
@@ -486,7 +527,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             });
         }
     }
-
     /**
      * Handles cancelling the edit operation.
      * Clears the editing state and resets the form.

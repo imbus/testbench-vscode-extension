@@ -150,6 +150,19 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     if (!newProfileDetails) {
                         throw new Error("Profile creation cancelled.");
                     }
+
+                    // Check for duplicate label if provided
+                    if (newProfileDetails.label && newProfileDetails.label.trim()) {
+                        const existingProfileByLabel: profileManager.TestBenchProfile | undefined =
+                            await profileManager.findProfileByLabel(this.context, newProfileDetails.label.trim());
+
+                        if (existingProfileByLabel) {
+                            throw new Error(
+                                `A profile with the label "${newProfileDetails.label}" already exists. Profile labels must be unique.`
+                            );
+                        }
+                    }
+
                     // Temp profile object, might not have ID yet if not saved
                     targetProfile = {
                         id: "",
