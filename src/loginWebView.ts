@@ -153,6 +153,16 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      */
     private async handleRequestDeleteConfirmation(profileId: string): Promise<void> {
         logger.info(`[LoginWebView] Received request for delete confirmation for profile ID: ${profileId}`);
+        // Prevent deletion of profile currently being edited
+        if (this.editingProfileId === profileId) {
+            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                type: "warning",
+                text: "Cannot delete profile while editing it. Please save or cancel your changes first."
+            });
+            logger.warn(`[LoginWebView] Attempted to delete profile ${profileId} while it's being edited.`);
+            return;
+        }
+
         if (!profileId) {
             logger.warn("[LoginWebView] No profileId provided for delete confirmation.");
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -205,6 +215,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
     /**
      * Asynchronously fetches user profiles and sends them to the webview sorted alphabetically by label.
+     * Send the editing state to the webview if a profile is being edited.
      * If successful, it posts the profiles for display.
      * If an error occurs, it logs the error and posts an error message to the webview.
      */
@@ -212,7 +223,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         try {
             const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
             const sortedProfiles = profiles.sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase()));
-            this.postMessageToWebview(WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW, sortedProfiles);
+
+            this.postMessageToWebview(WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW, {
+                profiles: sortedProfiles,
+                editingProfileId: this.editingProfileId
+            });
         } catch (error: any) {
             logger.error("[LoginWebView] Error fetching profiles for webview:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -413,10 +428,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
             const storedPassword = await profileManager.getPasswordForProfile(this.extensionContext, profileId);
             this.editingProfileId = profileId;
+
+            // Send edit mode data and refresh profiles to update UI state
             this.postMessageToWebview("enterEditMode", {
                 profile: profileToEdit,
                 hasStoredPassword: !!storedPassword
             });
+
+            // Refresh profiles to disable delete button for the editing profile
+            await this.sendProfilesToWebview();
 
             logger.info(`[LoginWebView] Edit mode activated for profile: ${profileToEdit.label}`);
         } catch (error: any) {
@@ -542,6 +562,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             type: "info",
             text: "Edit cancelled."
         });
+
+        // Refresh profiles to re-enable delete button
+        await this.sendProfilesToWebview();
 
         logger.info("[LoginWebView] Edit mode cancelled and form reset.");
     }
@@ -722,6 +745,54 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     overflow: hidden;
                     text-overflow: ellipsis;
                     max-width: 100%;
+                }
+                ul#profilesList li.profile-being-edited {
+                    background-color: var(--vscode-list-focusBackground);
+                    border-left: 3px solid var(--vscode-gitDecoration-modifiedResourceForeground, #E1C16E);
+                    padding-left: 9px; /* Adjust for border */
+                }
+                ul#profilesList li .profile-actions button:disabled {
+                    opacity: 0.3;
+                    cursor: not-allowed;
+                    background-color: var(--vscode-button-secondaryBackground);
+                    color: var(--vscode-descriptionForeground);
+                }
+                ul#profilesList li .profile-actions button:disabled:hover {
+                    background-color: var(--vscode-button-secondaryBackground);
+                    opacity: 0.3;
+                }
+                .editing-indicator {
+                    font-size: 0.8em;
+                    color: var(--vscode-gitDecoration-modifiedResourceForeground, #E1C16E);
+                    font-weight: normal;
+                    margin-left: 8px;
+                    opacity: 0.8;
+                }
+                ul#profilesList li .profile-actions button.delete-btn:disabled {
+                    background-color: var(--vscode-button-secondaryBackground);
+                    color: var(--vscode-descriptionForeground);
+                    border-color: var(--vscode-button-secondaryBackground);
+                    opacity: 0.3;
+                }
+                ul#profilesList li.profile-being-edited:focus-within {
+                    outline: 2px solid var(--vscode-gitDecoration-modifiedResourceForeground);
+                    outline-offset: 2px;
+                }
+                ul#profilesList li .profile-actions button[disabled][title]:hover::after {
+                    content: attr(title);
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background-color: var(--vscode-editorHoverWidget-background);
+                    color: var(--vscode-editorHoverWidget-foreground);
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 0.8em;
+                    white-space: nowrap;
+                    z-index: 1000;
+                    pointer-events: none;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
                 }
                 .profile-actions {
                     display: flex;
@@ -1165,14 +1236,23 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         messagesEl.classList.add('hidden');
                         }, 7000);
                     }
-                }
-    
-                function renderProfiles(profiles) {
+                }    
+
+                function renderProfiles(data) {
+                    let profiles, editingProfileId;
+                    if (Array.isArray(data)) {
+                        profiles = data;
+                        editingProfileId = null;
+                    } else {
+                        profiles = data.profiles || [];
+                        editingProfileId = data.editingProfileId || null;
+                    }
+
                     if (profilesLoadingMessageEl) {
                         profilesLoadingMessageEl.style.display = 'none';
                     }
                     profilesListEl.innerHTML = '';
-    
+
                     if (!profiles || profiles.length === 0) {
                         if (noProfilesMessageEl) {
                             noProfilesMessageEl.style.display = 'block';
@@ -1188,13 +1268,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                             profilesListEl.style.display = 'block';
                         }
 
-                        // few-profiles class to control scrollbar visibility
-                        if (profiles.length <= 2) {
-                            profilesListEl.classList.add('few-profiles');
-                        } else {
-                            profilesListEl.classList.remove('few-profiles');
-                        }
-                        
                         // Sort profiles alphabetically by label
                         const sortedProfiles = [...profiles].sort((a, b) => 
                             a.label.toLowerCase().localeCompare(b.label.toLowerCase())
@@ -1202,22 +1275,43 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         
                         sortedProfiles.forEach(profile => {
                             const li = document.createElement('li');
+                            const isBeingEdited = editingProfileId === profile.id;
+                            
+                            // Add visual indication for profile being edited
+                            if (isBeingEdited) {
+                                li.classList.add('profile-being-edited');
+                            }
+                            
                             li.setAttribute('tabindex', '0');
                             li.setAttribute('aria-label', \`Profile: \${profile.label}, user \${profile.username} at \${profile.serverName}\`);
-    
+
                             li.innerHTML = \`
                             <div class="profile-details">
-                                <div class="profile-label">\${profile.label}</div>
+                                <div class="profile-label">
+                                    \${profile.label}
+                                    \${isBeingEdited ? '<span class="editing-indicator">(editing)</span>' : ''}
+                                </div>
                                 <div class="profile-info">\${profile.username}@\${profile.serverName}:\${profile.portNumber}</div>
                             </div>
                             <div class="profile-actions">
-                                <button class="login-btn" data-profile-id="\${profile.id}" aria-label="Login with profile \${profile.label}" title="Login with this profile">
+                                <button class="login-btn" data-profile-id="\${profile.id}" 
+                                        aria-label="Login with profile \${profile.label}" 
+                                        title="Login with this profile"
+                                        \${isBeingEdited ? 'disabled' : ''}>
                                     <span class="icon icon-login"></span>
                                 </button>
-                                <button class="edit-btn" data-profile-id="\${profile.id}" aria-label="Edit profile \${profile.label}" title="Edit this profile">
+                                <button class="edit-btn" data-profile-id="\${profile.id}" 
+                                        aria-label="Edit profile \${profile.label}" 
+                                        title="Edit this profile"
+                                        \${isBeingEdited ? 'disabled' : ''}
+                                        style="\${isBeingEdited ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
                                     <span class="icon icon-edit"></span>
                                 </button>
-                                <button class="delete-btn" data-profile-id="\${profile.id}" aria-label="Delete profile \${profile.label}" title="Delete this profile">
+                                <button class="delete-btn" data-profile-id="\${profile.id}" 
+                                        aria-label="Delete profile \${profile.label}" 
+                                        title="\${isBeingEdited ? 'Cannot delete while editing' : 'Delete this profile'}"
+                                        \${isBeingEdited ? 'disabled' : ''}
+                                        style="\${isBeingEdited ? 'opacity: 0.3; cursor: not-allowed;' : ''}">
                                     <span class="icon icon-delete"></span>
                                 </button>
                             </div>
@@ -1331,14 +1425,20 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     
                 profilesListEl.addEventListener('click', function(event) {
                     const targetButton = event.target.closest('button');
-                    if (targetButton) {
+                    if (targetButton && !targetButton.disabled) {
                         const profileId = targetButton.dataset.profileId;
                         if (targetButton.classList.contains('login-btn')) {
-                            vscode.postMessage({ command: '${WebviewMessageCommands.LOGIN_WITH_PROFILE}', payload: { profileId } });
+                            vscode.postMessage({ command: 'loginWithProfile', payload: { profileId } });
                         } else if (targetButton.classList.contains('edit-btn')) {
-                            vscode.postMessage({ command: '${WebviewMessageCommands.EDIT_PROFILE}', payload: { profileId } });
+                            vscode.postMessage({ command: 'editProfile', payload: { profileId } });
                         } else if (targetButton.classList.contains('delete-btn')) {
-                            vscode.postMessage({ command: '${WebviewMessageCommands.REQUEST_DELETE_CONFIRMATION}', payload: { profileId } });
+                            vscode.postMessage({ command: 'requestDeleteConfirmation', payload: { profileId } });
+                        }
+                    } else if (targetButton && targetButton.disabled) {
+                        if (targetButton.classList.contains('delete-btn')) {
+                            displayMessage('info', 'Cannot delete profile while editing it. Please save or cancel your changes first.');
+                        } else if (targetButton.classList.contains('login-btn') || targetButton.classList.contains('edit-btn')) {
+                            displayMessage('info', 'Please save or cancel your current changes before performing other actions.');
                         }
                     }
                 });
