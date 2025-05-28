@@ -702,6 +702,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     outline: 1px solid var(--vscode-focusBorder);
                     outline-offset: 2px;
                 }
+                button .icon {
+                    margin-right: 6px;
+                }
+                .profile-actions button .icon {
+                    margin-right: 0;
+                }                    
                 #saveProfileBtn, .login-btn {
                     background-color: var(--vscode-button-primaryBackground, var(--vscode-button-background));
                     color: var(--vscode-button-primaryForeground, var(--vscode-button-foreground));
@@ -819,10 +825,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     background-position: center;
                     background-size: 16px 16px;
                     flex-shrink: 0;
-                }
-                button .icon {
-                    margin-right: 6px;
-                }
+                }                
 
                 /* Edit mode styles */
                 .edit-mode .add-profile-section {
