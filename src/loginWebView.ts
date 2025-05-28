@@ -618,14 +618,17 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 }
                 ul#profilesList {
                     list-style: none;
-                    padding: 0;
-                    min-height: 120px;
-                    max-height: 350px;
+                    padding: 0;                    
+                    max-height: min(60vh, 400px);
                     overflow-y: auto;
-                    scrollbar-gutter: stable;
                     border: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
                     border-radius: 4px;
                     scrollbar-width: thin;
+                    transition: max-height 0.2s ease-in-out;
+                }
+                /* Hide scrollbar when there are 2 or fewer profiles */
+                ul#profilesList:has(li:nth-child(-n+2):last-child) {
+                    overflow-y: hidden;
                 }
                 ul#profilesList::-webkit-scrollbar {
                     width: 8px;
@@ -637,11 +640,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 ul#profilesList::-webkit-scrollbar-thumb {
                     background-color: var(--vscode-scrollbarSlider-background);
                     border-radius: 4px;
+                    border: 1px solid var(--vscode-scrollbarSlider-border, transparent);
                 }
                 ul#profilesList::-webkit-scrollbar-thumb:hover {
                     background-color: var(--vscode-scrollbarSlider-hoverBackground);
                 }
                 ul#profilesList li {
+                    box-sizing: border-box;
                     padding: 10px 12px;
                     margin-bottom: -1px;
                     border-bottom: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
@@ -825,6 +830,19 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     color: var(--vscode-descriptionForeground);
                     border: 1px dashed var(--vscode-input-border);
                     border-radius: 4px;
+                    min-height: auto;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 10px 0;
+                }
+                .profile-section {
+                    padding: 15px;
+                    border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
+                    border-radius: 6px;
+                    background-color: var(--vscode-list-inactiveSelectionBackground);
+                    /* Remove any fixed heights that might cause gaps */
+                    min-height: auto;
                 }
                 .icon {
                     width: 16px;
@@ -834,7 +852,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     background-position: center;
                     background-size: 16px 16px;
                     flex-shrink: 0;
-                }                
+                }            
 
                 /* Edit mode styles */
                 .edit-mode .add-profile-section {
@@ -1073,6 +1091,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         }
                         if (profilesListEl) {
                             profilesListEl.style.display = 'block';
+                        }
+
+                        // few-profiles class to control scrollbar visibility
+                        if (profiles.length <= 2) {
+                            profilesListEl.classList.add('few-profiles');
+                        } else {
+                            profilesListEl.classList.remove('few-profiles');
                         }
                         
                         // Sort profiles alphabetically by label
