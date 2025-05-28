@@ -592,6 +592,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     box-sizing: border-box;
                     gap: 20px;
                 }
+                body[data-vscode-theme-kind="vscode-dark"] {
+                    background-color: #2d2d30;
+                }
+                body[data-vscode-theme-kind="vscode-light"] {
+                    background-color: #f8f8f8;
+                }
+                body[data-vscode-theme-kind="vscode-high-contrast"] {
+                    background-color: #1e1e1e;
+                }
                 .profile-section, .add-profile-section {
                     padding: 15px;
                     border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
@@ -1298,6 +1307,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         height: 100vh;
                         box-sizing: border-box;
                         gap: 20px;
+                    }
+                    body[data-vscode-theme-kind="vscode-dark"] {
+                        background-color: #2d2d30;
+                    }
+                    body[data-vscode-theme-kind="vscode-light"] {
+                        background-color: #f8f8f8;
+                    }
+                    body[data-vscode-theme-kind="vscode-high-contrast"] {
+                        background-color: #1e1e1e;
                     }
                     .container { display: flex; flex-direction: column; align-items: center; }
                     img { width: 48px; height: 48px; margin-bottom: 15px; }
