@@ -620,31 +620,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     list-style: none;
                     padding: 0;                    
                     max-height: min(60vh, 400px);
-                    overflow-y: auto;
                     border: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
                     border-radius: 4px;
-                    scrollbar-width: thin;
                     transition: max-height 0.2s ease-in-out;
-                }
-                /* Hide scrollbar when there are 2 or fewer profiles */
-                ul#profilesList:has(li:nth-child(-n+2):last-child) {
-                    overflow-y: hidden;
-                }
-                ul#profilesList::-webkit-scrollbar {
-                    width: 8px;
-                }
-                ul#profilesList::-webkit-scrollbar-track {
-                    background: transparent;
-                    border-radius: 4px;
-                }
-                ul#profilesList::-webkit-scrollbar-thumb {
-                    background-color: var(--vscode-scrollbarSlider-background);
-                    border-radius: 4px;
-                    border: 1px solid var(--vscode-scrollbarSlider-border, transparent);
-                }
-                ul#profilesList::-webkit-scrollbar-thumb:hover {
-                    background-color: var(--vscode-scrollbarSlider-hoverBackground);
-                }
+                }  
                 ul#profilesList li {
                     box-sizing: border-box;
                     padding: 10px 12px;
