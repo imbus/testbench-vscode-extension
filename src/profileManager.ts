@@ -46,16 +46,24 @@ export async function getProfiles(context: vscode.ExtensionContext): Promise<Tes
  * @param {string} [password] The password for the profile (optional). If undefined or an empty string,
  * no password will be stored, and any existing password for this profile will be removed.
  * @returns {Promise<string>} The ID of the saved profile.
+ * @throws {Error} If a profile with the same label already exists (excluding the current profile for updates).
  */
 export async function saveProfile(
     context: vscode.ExtensionContext,
-    profile: Omit<TestBenchProfile, "id"> & { id?: string }, // Allow id to be optional for new profiles
+    profile: Omit<TestBenchProfile, "id"> & { id?: string }, // Optional id for new profiles
     password?: string
 ): Promise<string> {
     try {
         const profiles: TestBenchProfile[] = await getProfiles(context);
         let profileToSave: TestBenchProfile;
         const existingProfileIndex: number = profile.id ? profiles.findIndex((p) => p.id === profile.id) : -1;
+
+        const duplicateProfile = await findProfileByLabel(context, profile.label, profile.id);
+        if (duplicateProfile) {
+            const errorMessage = `A profile with the label "${profile.label}" already exists. Profile labels must be unique.`;
+            logger.warn(`[ProfileManager] ${errorMessage}`);
+            throw new Error(errorMessage);
+        }
 
         if (existingProfileIndex !== -1 && profile.id) {
             profileToSave = { ...profiles[existingProfileIndex], ...profile };
@@ -248,6 +256,43 @@ export async function findProfileByCredentials(
         return undefined;
     } catch (error) {
         logger.error("[ProfileManager] Error checking for duplicate profile by server/user:", error);
+        return undefined;
+    }
+}
+
+/**
+ * Checks if a profile with the given label already exists.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} label The label to check.
+ * @param {string} excludeProfileId Optional profile ID to exclude from the check (Used for label editing in Login UI).
+ * @returns {Promise<TestBenchProfile | undefined>} A promise that resolves to the existing TestBenchProfile if a duplicate is found, otherwise undefined.
+ */
+export async function findProfileByLabel(
+    context: vscode.ExtensionContext,
+    label: string,
+    excludeProfileId?: string
+): Promise<TestBenchProfile | undefined> {
+    try {
+        const profiles: TestBenchProfile[] = await getProfiles(context);
+        const normalizedLabel = label.trim().toLowerCase();
+
+        for (const profile of profiles) {
+            if (excludeProfileId && profile.id === excludeProfileId) {
+                continue;
+            }
+
+            if (profile.label.trim().toLowerCase() === normalizedLabel) {
+                logger.trace(
+                    `[ProfileManager] Found existing profile with matching label: ${profile.label} (ID: ${profile.id})`
+                );
+                return profile;
+            }
+        }
+
+        logger.trace(`[ProfileManager] No existing profile found with label: ${label}`);
+        return undefined;
+    } catch (error) {
+        logger.error("[ProfileManager] Error checking for duplicate profile by label:", error);
         return undefined;
     }
 }
