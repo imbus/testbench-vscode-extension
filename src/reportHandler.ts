@@ -31,7 +31,7 @@ import {
     TreeItemContextValues,
     folderNameOfInternalTestbenchFolder
 } from "./constants";
-import { importReportWithResultsToTestbench, withRetry } from "./testBenchConnection";
+import { extractDataFromReport, PlayServerConnection, withRetry } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
 
 /**
@@ -68,34 +68,6 @@ async function saveLastGeneratedReportParams(
         );
     } catch (error) {
         logger.error("Failed to save last generated report params to workspace state:", error);
-    }
-}
-
-/**
- * Updates only the alreadyImported flag in the last generated report parameters stored in workspaceState
- * to track if the report was already imported.
- *
- * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.
- * @param {boolean} alreadyImported The new alreadyImported flag value.
- */
-async function updateAlreadyImportedFlagOfLastImportedReport(
-    context: vscode.ExtensionContext,
-    alreadyImported: boolean
-): Promise<void> {
-    try {
-        const existingParams: testBenchTypes.LastGeneratedReportParams | undefined =
-            context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(StorageKeys.LAST_GENERATED_PARAMS);
-        if (!existingParams) {
-            logger.warn(
-                "No last generated report parameters found in workspace state. Cannot update alreadyImported flag."
-            );
-            return;
-        }
-        existingParams.alreadyImported = alreadyImported;
-        await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, existingParams);
-        logger.debug(`Updated alreadyImported flag to ${alreadyImported} in workspace state.`);
-    } catch (error) {
-        logger.error("Failed to update alreadyImported flag in workspace state:", error);
     }
 }
 
@@ -1184,6 +1156,157 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 }
 
 /**
+ * Gets the appropriate reportRootUID for import based on the selected item
+ */
+function getReportRootUIDForImport(item: projectManagementTreeView.BaseTestBenchTreeItem): string | undefined {
+    if (testThemeTreeDataProvider && typeof testThemeTreeDataProvider.getReportRootUIDForItem === "function") {
+        return testThemeTreeDataProvider.getReportRootUIDForItem(item);
+    }
+
+    // Fallback to items own UID
+    return item.item?.base?.uniqueID || item.item?.uniqueID;
+}
+
+/**
+ * Imports a report with results to the TestBench server, using a specific UID for the report root.
+ *
+ * @param {PlayServerConnection} connection The connection to the TestBench server.
+ * @param {string} projectKeyString The project key as a string.
+ * @param {string} cycleKeyString The cycle key as a string.
+ * @param {string} reportWithResultsZipFilePath The path to the report zip file with results.
+ * @param {string} reportRootUID The specific UID for the report root element.
+ * @returns {Promise<void | null>} Resolves when the import is complete, or null if an error occurs.
+ */
+async function importReportWithResultsToTestbenchWithSpecificUID(
+    connection: PlayServerConnection,
+    projectKeyString: string,
+    cycleKeyString: string,
+    reportWithResultsZipFilePath: string,
+    reportRootUID: string
+): Promise<void | null> {
+    try {
+        logger.debug(`Importing report with results to TestBench server for specific UID: ${reportRootUID}`);
+
+        const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
+        if (!uniqueID) {
+            const extractionErrorMsg: string = "Error extracting unique ID from the zip file.";
+            vscode.window.showErrorMessage(extractionErrorMsg);
+            logger.error(extractionErrorMsg);
+            return null;
+        }
+
+        const projectKey: number = Number(projectKeyString);
+        const cycleKey: number = Number(cycleKeyString);
+
+        if (isNaN(projectKey) || isNaN(cycleKey)) {
+            logger.error(
+                `Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`
+            );
+            vscode.window.showErrorMessage("Internal error: Invalid project or cycle identifier for import.");
+            return null;
+        }
+
+        const zipFilenameFromServer: string = await connection.importExecutionResultsAndReturnImportedFileName(
+            projectKey,
+            reportWithResultsZipFilePath
+        );
+
+        if (!zipFilenameFromServer) {
+            const importErrorMessage: string = "Error importing the result file to the server.";
+            logger.error(importErrorMessage);
+            vscode.window.showErrorMessage(importErrorMessage);
+            return null;
+        }
+
+        // Enhanced ImportData with specific reportRootUID
+        const importData: testBenchTypes.ImportData = {
+            fileName: zipFilenameFromServer,
+            reportRootUID: reportRootUID, // Use the specific UID for targeted import
+            useExistingDefect: true,
+            discardTesterInformation: false,
+            filters: []
+        };
+
+        try {
+            logger.debug(`Starting import execution results for specific element with UID: ${reportRootUID}`);
+            const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
+            const importJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
+                projectKeyString,
+                importJobID,
+                JobTypes.IMPORT
+            );
+
+            if (!importJobStatus || isImportJobFailed(importJobStatus)) {
+                const importJobFailedMessage: string = `Import job for element "${reportRootUID}" could not be completed.`;
+                logger.warn(importJobFailedMessage);
+                vscode.window.showErrorMessage(importJobFailedMessage);
+                return null;
+            } else if (isImportJobCompletedSuccessfully(importJobStatus)) {
+                vscode.window.showInformationMessage(`Import completed successfully for "${reportRootUID}".`);
+            } else {
+                logger.warn("Import job finished polling but status is unknown.", importJobStatus);
+                vscode.window.showWarningMessage("Import job status unknown after polling.");
+            }
+        } catch (error: any) {
+            logger.error(`Error during import job for specific element ${reportRootUID}:`, error.message);
+            return null;
+        }
+    } catch (error: any) {
+        logger.error("Error importing report for specific element:", error.message);
+        vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Checks if a specific sub-element was already imported
+ */
+async function checkIfSubElementWasImported(context: vscode.ExtensionContext, reportRootUID: string): Promise<boolean> {
+    try {
+        const importedSubElements: Set<string> = context.workspaceState.get<Set<string>>(
+            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY,
+            new Set()
+        );
+        return importedSubElements.has(reportRootUID);
+    } catch (error) {
+        logger.error("Error checking sub-element import status:", error);
+        return false;
+    }
+}
+
+/**
+ * Marks a specific sub-element as imported
+ */
+async function markSubElementAsImported(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
+    try {
+        const importedSubElements: Set<string> = context.workspaceState.get<Set<string>>(
+            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY,
+            new Set()
+        );
+        importedSubElements.add(reportRootUID);
+        await context.workspaceState.update(
+            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY,
+            Array.from(importedSubElements)
+        );
+        logger.debug(`Marked sub-element ${reportRootUID} as imported.`);
+    } catch (error) {
+        logger.error("Error marking sub-element as imported:", error);
+    }
+}
+
+/**
+ * Clears the imported sub-elements tracking (useful when starting fresh test generation)
+ */
+export async function clearImportedSubElementsTracking(context: vscode.ExtensionContext): Promise<void> {
+    try {
+        await context.workspaceState.update(StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY, undefined);
+        logger.debug("Cleared imported sub-elements tracking.");
+    } catch (error) {
+        logger.error("Error clearing imported sub-elements tracking:", error);
+    }
+}
+
+/**
  * Reads test results, creates a report zip with test results, and imports it to the TestBench server.
  *
  * @param {vscode.ExtensionContext} context The extension context.
@@ -1212,12 +1335,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 const lastGenerationParameters: testBenchTypes.LastGeneratedReportParams | undefined =
                     getLastGeneratedReportParams(context);
 
-                if (
-                    !lastGenerationParameters ||
-                    !lastGenerationParameters.projectKey ||
-                    !lastGenerationParameters.cycleKey ||
-                    lastGenerationParameters.alreadyImported === undefined
-                ) {
+                if (!lastGenerationParameters?.projectKey || !lastGenerationParameters?.cycleKey) {
                     const errorMsg: string =
                         "Cannot determine import target: Context information (project/cycle from last test generation) is missing. Please generate tests first in this workspace.";
                     logger.error(errorMsg);
@@ -1225,16 +1343,11 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     return null;
                 }
 
-                if (
-                    !lastGenerationParameters ||
-                    lastGenerationParameters.UID !== (invokedOnItem.item.base?.uniqueID || invokedOnItem.item?.uniqueID)
-                ) {
-                    logger.error(
-                        "Mismatch between invoked item for import and last generated test parameters UID, or parameters missing."
-                    );
-                    vscode.window.showErrorMessage(
-                        "Import context is unclear or does not match last test generation. Please generate tests for this item again if needed."
-                    );
+                const reportRootUIDOfInvokedItem: string | undefined = getReportRootUIDForImport(invokedOnItem);
+                if (!reportRootUIDOfInvokedItem) {
+                    const errorMsg: string = `Cannot determine report root UID for item: ${invokedOnItem.label}. This item may not be eligible for import.`;
+                    logger.error(errorMsg);
+                    vscode.window.showErrorMessage(errorMsg);
                     return null;
                 }
 
@@ -1247,25 +1360,23 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     vscode.window.showErrorMessage(errorMsg);
                     return null;
                 }
-                logger.trace(
-                    `Target for TestBench import from item ${invokedOnItem.label}: Project Key '${targetProjectKey}', Cycle Key '${targetCycleKey}', already imported: ${lastGenerationParameters.alreadyImported}'.`
-                );
 
-                if (lastGenerationParameters.alreadyImported) {
-                    logger.warn(
-                        `Attempting to re-import same report. targetProject='${targetProjectKey}', targetCycle='${targetCycleKey}'.`
-                    );
+                const wasSubElementImported: boolean = await checkIfSubElementWasImported(
+                    context,
+                    reportRootUIDOfInvokedItem
+                );
+                if (wasSubElementImported) {
+                    logger.warn(`Attempting to re-import sub-element with UID '${reportRootUIDOfInvokedItem}'.`);
                     const reimportPromptChoice = await vscode.window.showWarningMessage(
-                        `You are about to import results to Project ${targetProjectKey}, Cycle ${targetCycleKey} again. This seems to be the same operation as before. Do you want to proceed?`,
+                        `You are about to import results for "${invokedOnItem.label}" again. Do you want to proceed?`,
                         { modal: true },
                         "Yes, Import Again",
                         "Cancel"
                     );
                     if (reimportPromptChoice !== "Yes, Import Again") {
-                        logger.trace("User cancelled re-import of the same data to the same target.");
+                        logger.trace("User cancelled re-import of the same sub-element.");
                         return null;
                     }
-                    logger.trace("User chose to proceed with re-importing.");
                 }
 
                 if (cancellationToken.isCancellationRequested) {
@@ -1274,47 +1385,32 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 }
 
                 progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });
-                logger.trace(
-                    "Calling fetchTestResultsAndCreateReportWithResultsWithTb2Robot to get report sources and created path."
-                );
 
                 const reportCreationDetails = await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
                     progress
                 );
 
-                if (cancellationToken.isCancellationRequested) {
-                    logger.trace("Cancelled after report creation attempt.");
-                    return null;
-                }
-
-                if (!reportCreationDetails || !reportCreationDetails.createdReportPath) {
+                if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("Failed to create report with results, or process was cancelled. Aborting import.");
                     return null;
                 }
-                const { createdReportPath, outputXmlPathUsed, baseReportPathUsed } = reportCreationDetails;
-                logger.trace(
-                    `Successfully created report with results: ${createdReportPath}. Based on output.xml: '${outputXmlPathUsed}' and base report: '${baseReportPathUsed}'.`
-                );
 
+                const { createdReportPath } = reportCreationDetails;
                 const reportFileNameForDisplay: string = path.basename(createdReportPath);
 
-                if (cancellationToken.isCancellationRequested) {
-                    logger.trace("Cancelled after re-import check.");
-                    return null;
-                }
+                progress.report({ message: "Step 3/4: Importing specific element to TestBench...", increment: 30 });
 
-                progress.report({ message: "Step 3/4: Importing to TestBench...", increment: 30 });
-
-                const importTargetMessage: string = `Importing report '${reportFileNameForDisplay}' to TestBench Project: ${targetProjectKey}, Cycle: ${targetCycleKey}.`;
+                const importTargetMessage: string = `Importing "${invokedOnItem.label}" from report '${reportFileNameForDisplay}' to TestBench Project: ${targetProjectKey}, Cycle: ${targetCycleKey}.`;
                 logger.trace(importTargetMessage);
                 vscode.window.showInformationMessage(importTargetMessage);
 
-                await importReportWithResultsToTestbench(
+                await importReportWithResultsToTestbenchWithSpecificUID(
                     connection!,
                     targetProjectKey,
                     targetCycleKey,
-                    createdReportPath
+                    createdReportPath,
+                    reportRootUIDOfInvokedItem
                 );
 
                 if (cancellationToken.isCancellationRequested) {
@@ -1322,10 +1418,11 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     return null;
                 }
 
-                progress.report({ message: "Step 4/4: Cleaning up temporary files...", increment: 30 });
-                logger.debug(`Cleaning up generated report file: ${createdReportPath}`);
+                progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
+
+                await markSubElementAsImported(context, reportRootUIDOfInvokedItem);
+
                 await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
-                await updateAlreadyImportedFlagOfLastImportedReport(context, true);
 
                 if (!ALLOW_PERSISTENT_IMPORT_BUTTON && testThemeTreeDataProvider) {
                     logger.debug(
@@ -1334,13 +1431,13 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     await testThemeTreeDataProvider.clearMarkedItemStatus(invokedOnItem);
                 } else {
                     logger.debug(
-                        `[ReportHandler] Import successful. Import command will persist on item: ${invokedOnItem.label} (ALLOW_PERSISTENT_IMPORT_COMMAND is true or provider missing).`
+                        `[ReportHandler] Import successful. Import command will persist on item: ${invokedOnItem.label}`
                     );
                 }
 
-                logger.trace("Process Completed: Read, Create, and Import Test Results to Testbench.");
+                logger.trace("Process Completed: Read, Create, and Import specific element to Testbench.");
             } catch (error) {
-                const errorMsg: string = `An error occurred during the main import process: ${error instanceof Error ? error.message : String(error)}`;
+                const errorMsg: string = `An error occurred during the import process: ${error instanceof Error ? error.message : String(error)}`;
                 logger.error(errorMsg, error);
                 vscode.window.showErrorMessage(errorMsg);
                 return null;
@@ -1348,7 +1445,6 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
         }
     );
 }
-
 /**
  * Starts robotframework test generation for a cycle element.
  *

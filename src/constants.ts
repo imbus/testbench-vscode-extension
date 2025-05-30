@@ -89,7 +89,8 @@ export const StorageKeys = {
     PROFILES_STORAGE_KEY: "testbenchExtension.profiles",
     ACTIVE_PROFILE_ID_KEY: "testbenchExtension.activeProfileId",
     PROFILE_PASSWORD_SECRET_PREFIX: "testbenchExtension.profile.password.",
-    MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem"
+    MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem",
+    SUB_ELEMENT_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubElements"
 } as const;
 
 // --- Tree Item Context Values ---
@@ -149,5 +150,6 @@ export const allExtensionCommands = {
     resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
     resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
     getFilters: `${baseKeyOfExtension}.getFilters`,
-    fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`
+    fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
+    clearImportedSubElementsTracking: `${baseKeyOfExtension}.clearImportedSubElementsTracking`
 };
