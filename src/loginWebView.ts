@@ -1130,7 +1130,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             <section class="profile-section" aria-labelledby="profilesHeading">
                 <h2 id="profilesHeading">
                     <span class="icon icon-profiles-header"></span>
-                    Available Profiles
+                    TestBench Connections
                 </h2>
                 <div id="profilesLoadingMessage" style="padding: 10px; text-align: center;">
                     <vscode-progress-ring></vscode-progress-ring>
