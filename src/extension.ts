@@ -82,7 +82,7 @@ let isHandlingSessionChange: boolean = false;
 // Determines if the icon of the tree item should be changed after generating tests for that item.
 export const ENABLE_ICON_MARKING_ON_GENERATE: boolean = true;
 // Determines if the import button of the tree item should still persist after importing test results for that item.
-export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = false;
+export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = true;
 
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
