@@ -1218,10 +1218,9 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             return null;
         }
 
-        // Enhanced ImportData with specific reportRootUID
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
-            reportRootUID: reportRootUID, // Use the specific UID for targeted import
+            reportRootUID: reportRootUID,
             useExistingDefect: true,
             discardTesterInformation: false,
             filters: []

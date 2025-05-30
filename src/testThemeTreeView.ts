@@ -469,7 +469,13 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     }
 
     /**
-     * Clears the marked state of items and refreshes the view
+     * Clears the visual marking from a previously marked tree item and its associated sub-items
+     * from generated hierarchies, then refreshes the tree view.
+     *
+     * @param oldMarkedTreeItemKey - Optional. The key of the specific tree item whose marking should be cleared.
+     *                               If omitted, the item identified by `this.currentMarkedItemInfo` (if any) will be targeted.
+     * @returns A promise that resolves once the clearing operations are attempted and the tree refresh is initiated.
+     *          The promise does not wait for the tree view to visually update.
      */
     private async clearOldMarkedItemAndRefresh(oldMarkedTreeItemKey?: string): Promise<void> {
         const keyToClear: string | undefined = oldMarkedTreeItemKey || this.currentMarkedItemInfo?.key;
@@ -547,6 +553,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     /**
      * Recursively marks descendants with import functionality.
      * Only marks TestThemeNode and TestCaseSetNode descendants.
+     *
+     * @param parentItem The parent tree item whose descendants are to be marked.
      */
     private markDescendantsRecursively(parentItem: BaseTestBenchTreeItem): void {
         if (!parentItem.children) {
@@ -578,7 +586,11 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     }
 
     /**
-     * Updates the context value for import functionality
+     * Updates the context value of a tree item based on its original context
+     * to visually mark it for an import operation.
+     *
+     * @param item The tree item whose context value is to be updated.
+     * @param originalContext The original context value of the tree item.
      */
     private updateItemContextForImport(item: BaseTestBenchTreeItem, originalContext: string): void {
         if (originalContext === TreeItemContextValues.TEST_THEME_NODE) {
@@ -589,7 +601,10 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     }
 
     /**
-     * Enhanced method to apply marking during tree building/refresh
+     * Applies import marking to a tree item if it meets certain criteria.
+     * If the item is eligible for import and is a test theme or test case set node,
+     * it's marked for import, its context is updated, and its icon is refreshed.
+     * @param treeItem The tree item to potentially mark for import.
      */
     private applyImportMarkingToItem(treeItem: BaseTestBenchTreeItem): void {
         const treeItemKey = treeItem.item?.base?.key || treeItem.item?.key;
@@ -612,7 +627,14 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     }
 
     /**
-     * Gets the appropriate reportRootUID for import based on the selected item
+     * Gets the report root unique identifier (UID) for a given tree item.
+     *
+     * This UID is determined based on whether the item was directly generated
+     * or if it's eligible for import functionality.
+     *
+     * @param item The tree item for which to find the report root UID.
+     * @returns The uniqueID of the item if it's a directly generated item or an item
+     *          eligible for import, otherwise undefined.
      */
     public getReportRootUIDForItem(item: BaseTestBenchTreeItem): string | undefined {
         const itemKey = item.item?.base?.key || item.item?.key;

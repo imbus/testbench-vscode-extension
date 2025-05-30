@@ -297,10 +297,6 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             ) {
                 projectName = getEffectiveItemData(selectedTreeItem.parent).name;
             } else {
-                // This case occurs if a TOV is made a custom root. Its original project parent isn't easily found
-                // by simple traversal of tree items *after* makeRoot.
-                // The ProjectManagementTreeDataProvider doesn't explicitly store the TOV's original project name when it becomes a custom root.
-                // For the LS to work reliably when a TOV is a custom root, this might need enhancement in makeRoot.
                 logger.warn(
                     `[LSP Context] Selected item or custom root is a TOV ('${tovName}'). Project name could not be determined by simple parent traversal. LS might require project name.`
                 );
