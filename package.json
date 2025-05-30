@@ -101,37 +101,39 @@
                 }
             },
             {
-                "title": "Testbench2robotframework",
+                "title": "TestBench2RobotFramework",
                 "properties": {
-                    "testbenchExtension.configurationPathInTestbench2robotframework": {
-                        "type": "string",
-                        "description": "Path to the configuration file of testbench2robotframework library. The path is relative to the workspace location.",
+                    "testbenchExtension.UseConfigurationFile": {
+                        "type": "boolean",
+                        "propertyNames": true,
+                        "description": "If enabled, testbench2robotframework will prioritize the settings specified in the pyproject.toml over those specified in the extension settings.",
+                        "default": false,
                         "order": 10,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.cleanFilesBeforeTestGenerationInTestbench2robotframework": {
+                    "testbenchExtension.cleanFilesBeforeTestGeneration": {
                         "type": "boolean",
                         "default": true,
                         "description": "Deletes all files present in the output directory before new test suites are created.",
                         "order": 11,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.fullyQualifiedKeywordsInTestbench2robotframework": {
+                    "testbenchExtension.fullyQualifiedKeywords": {
                         "type": "boolean",
                         "default": false,
                         "description": "Option to call Robot Framework keywords by their fully qualified name in the generated test suites.",
                         "order": 12,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.outputDirectoryInTestbench2robotframework": {
+                    "testbenchExtension.outputDirectory": {
                         "type": "string",
-                        "description": "Directory or ZIP archive containing the generated test suites for the generate tests command. The path is relative to the workspace location.",
+                        "description": "Directory or ZIP archive containing the generated test suites. The path is relative to the workspace location.",
                         "order": 13,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.compoundInteractionLoggingInTestbench2robotframework": {
+                    "testbenchExtension.compoundInteractionLogging": {
                         "type": "string",
-                        "description": "Mode for logging compound interactions.",
+                        "description": "Mode for logging compound TestBench interactions.",
                         "order": 14,
                         "default": "GROUP",
                         "enum": [
@@ -144,34 +146,34 @@
                             "Comment",
                             "None"
                         ],
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.logSuiteNumberingInTestbench2robotframework": {
+                    "testbenchExtension.logSuiteNumbering": {
                         "type": "boolean",
                         "default": false,
                         "description": "Enables logging of the test suite numbering.",
                         "order": 15,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.resourceDirectoryPathInTestbench2robotframework": {
+                    "testbenchExtension.resourceDirectoryPath": {
                         "type": "string",
                         "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location.",
                         "order": 16,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.libraryRegexInTestbench2robotframework": {
+                    "testbenchExtension.libraryMarker": {
                         "type": "array",
-                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
+                        "description": "Marker that can be used to identify TestBench Subdivisions that correspond to Robot Framework libraries. Subdivisions that end with this marker will be considered as Robot Framework libraries.",
                         "items": {
                             "type": "string"
                         },
                         "default": [
-                            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Library].*"
+                            "[Robot-Library]"
                         ],
                         "order": 17,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.libraryRootInTestbench2robotframework": {
+                    "testbenchExtension.libraryRoot": {
                         "type": "array",
                         "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
                         "items": {
@@ -182,21 +184,21 @@
                             "RF-Library"
                         ],
                         "order": 18,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.resourceRegexInTestbench2robotframework": {
+                    "testbenchExtension.resourceMarker": {
                         "type": "array",
-                        "description": "Regex that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources.",
+                        "description": "Marker that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources. Subdivisions that end with this marker will be considered as Robot Framework resources.",
                         "items": {
                             "type": "string"
                         },
                         "default": [
-                            "(?:.*.)?(?P<resourceName>[^.]+?)s*[Robot-Resource].*"
+                            "[Robot-Resource]"
                         ],
                         "order": 19,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.resourceRootInTestbench2robotframework": {
+                    "testbenchExtension.resourceRoot": {
                         "type": "array",
                         "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
                         "items": {
@@ -206,33 +208,34 @@
                             "RF-Resource"
                         ],
                         "order": 20,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.libraryMappingInTestbench2robotframework": {
+                    "testbenchExtension.libraryMapping": {
                         "type": "array",
-                        "description": "Library mapping.",
+                        "markdownDescription": "Optional mapping of TestBench Subdivisions to Robot Framework libraries. Must be specified in the format:\n`<TestBench Subdivision Name>:<Robot Framework Library import>`",
                         "items": {
                             "type": "string"
                         },
                         "default": [],
                         "order": 21,
-                        "scope": "resource"
+                        "scope": "window"
                     },
-                    "testbenchExtension.resourceMappingInTestbench2robotframework": {
+                    "testbenchExtension.resourceMapping": {
                         "type": "array",
-                        "description": "Resource mapping.",
+                        "markdownDescription": "Optional mapping of TestBench Subdivisions to Robot Framework resources. Must be specified in the format:\n`<TestBench Subdivision Name>:<Robot Framework Resource import>.`",
                         "items": {
                             "type": "string"
                         },
                         "default": [],
                         "order": 22,
-                        "scope": "resource"
+                        "scope": "window"
                     },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
                         "description": "The relative file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when importing results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
+                        "default": "results/output.xml",
                         "order": 23,
-                        "scope": "resource"
+                        "scope": "window"
                     }
                 }
             }

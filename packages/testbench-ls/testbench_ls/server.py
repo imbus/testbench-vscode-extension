@@ -26,7 +26,8 @@ from lsprotocol.types import (
 )
 from pygls.server import LanguageServer
 from robot.api.parsing import KeywordSection, SectionHeader, Token
-from testbench2robotframework.cli import fetch_results, generate_tests
+from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
+from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
 from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
@@ -98,28 +99,57 @@ class TestBenchLanguageServer(LanguageServer):
 testbench_ls = TestBenchLanguageServer()
 
 
+def parse_subdivision_mapping(ls: LanguageServer, values: list[str]) -> dict[str, str]:
+    subdivision_mapping = {}
+    for value in values:
+        try:
+            subdivision, import_value = value.split(":", 1)
+            subdivision_mapping[subdivision] = import_value
+        except ValueError:
+            ls.send_notification(
+                "custom/notification",
+                {"message": "Each subdivision and library mapping must be in 'name:value' format."},
+            )
+    return subdivision_mapping
+
+
 @testbench_ls.command("testbench_ls.generateTestSuites")
 def generate_test_suites(ls: LanguageServer, kwargs):
     """Generate Robot Framework test suites via testbench2robotframework."""
     kwargs, *_ = kwargs
-    # logging.info(f"clean: {kwargs.get('clean')}")
-    # logging.info(f"compound_interaction_logging: {kwargs.get('compound_interaction_logging')}")
-    generate_tests.callback(
-        clean=kwargs.get("clean"),
-        compound_interaction_logging=kwargs.get("compound_interaction_logging"),
-        config=kwargs.get("coinfig"),
-        fully_qualified=kwargs.get("fully_qualified"),
-        library_regex=kwargs.get("library_regex", ()),
-        library_root=kwargs.get("library_root", ()),
-        log_suite_numbering=kwargs.get("log_suite_numbering"),
-        output_directory=pathlib.Path(kwargs.get("output_directory")),
-        resource_directory=pathlib.Path(kwargs.get("resource_directory")),
-        resource_regex=kwargs.get("resource_regex", ()),
-        resource_root=kwargs.get("resource_root", ()),
-        library_mapping=kwargs.get("library_mapping", {}),
-        resource_mapping=kwargs.get("resource_mapping", {}),
-        testbench_report=pathlib.Path(kwargs.get("testbench_report")),
-    )
+    toml_settings = get_tb2robot_file_configuration(None)
+    settings = {
+        "clean": kwargs.get("clean"),
+        "compound-interaction-logging": kwargs.get("compound_interaction_logging"),
+        "config": None,
+        "fully-qualified": kwargs.get("fully_qualified"),
+        "library-regex": (
+            rf"(?:.*\.)?(?P<resourceName>[^.]+?)\s*{re.escape(marker)}.*"
+            for marker in kwargs.get("library_marker", ())
+        ),
+        "library-root": kwargs.get("library_root", ()),
+        "log-suite-numbering": kwargs.get("log_suite_numbering"),
+        "output-directory": pathlib.Path(kwargs.get("output_directory")).as_posix(),
+        "resource-directory": pathlib.Path(kwargs.get("resource_directory"), "").as_posix(),
+        "resource-regex": (
+            rf"(?:.*\.)?(?P<resourceName>[^.]+?)\s*{re.escape(marker)}.*"
+            for marker in kwargs.get("resource_marker", ())
+        ),
+        "resource-root": kwargs.get("resource_root", ()),
+        "library-mapping": parse_subdivision_mapping(ls, kwargs.get("library_mapping", [])),
+        "resource-mapping": parse_subdivision_mapping(ls, kwargs.get("resource_mapping", [])),
+    }
+    report_path = pathlib.Path(kwargs.get("testbench_report"))
+    if kwargs.get("use_config_file"):
+        testbench2robotframework(report_path, toml_settings)
+    else:
+        if kwargs.get("output_directory") == "":
+            ls.send_notification(
+                "custom/notification",
+                {"message": "Output Directory of TestBench2RobotFramework cannot be empty."},
+            )
+            return
+        testbench2robotframework(report_path, settings)
 
 
 @testbench_ls.command("testbench_ls.fetchResults")

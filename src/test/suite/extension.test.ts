@@ -1,11 +1,12 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as sinon from "sinon";
-import { activate, getConfig, loadConfiguration, initializeTreeViews } from "../../extension";
+import { activate, initializeTreeViews } from "../../extension";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { ProjectManagementTreeDataProvider } from "../../projectManagementTreeView";
 import { TestElementsTreeDataProvider } from "../../testElementsTreeView";
 import { baseKeyOfExtension } from "../../constants";
+import { getExtensionConfiguration } from "../../configuration";
 
 suite("Extension Test Suite", () => {
     let sandbox: sinon.SinonSandbox;
@@ -66,15 +67,9 @@ suite("Extension Test Suite", () => {
         assert.ok(context.subscriptions.length > 0, "Subscriptions should be added to the context");
     });
 
-    test("getConfig should return the current configuration", () => {
-        const config = getConfig();
+    test("getExtensionConfiguration should return the current configuration", () => {
+        const config = getExtensionConfiguration();
         assert.ok(config, "Configuration should be returned");
-    });
-
-    test("loadConfiguration should update the configuration", async () => {
-        await loadConfiguration(context);
-
-        assert.ok(getConfigurationStub.calledWith(baseKeyOfExtension), "Configuration should be loaded");
     });
 
     test("initializeTreeViews should initialize the tree views", () => {

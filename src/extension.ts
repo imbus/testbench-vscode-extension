@@ -41,16 +41,17 @@ import {
 import * as profileManager from "./profileManager";
 import { PlayServerConnection } from "./testBenchConnection";
 import { TovStructureOptions } from "./testBenchTypes";
+import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
 
 /* =============================================================================
    Constants, Global Variables & Exports
    ============================================================================= */
 
 /** Workspace configuration for the extension. */
-let config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
-export function getConfig(): vscode.WorkspaceConfiguration {
-    return config;
-}
+// let extensionConfiguration: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
+// export function getExtensionConfiguration(): vscode.WorkspaceConfiguration {
+//     return extensionConfiguration;
+// }
 
 /** Global logger instance. */
 export let logger: testBenchLogger.TestBenchLogger;
@@ -80,13 +81,6 @@ export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElement
 
 // Global variable to store the authentication provider instance
 let authProviderInstance: TestBenchAuthenticationProvider | null = null;
-
-// Global variable to store the current configuration scope (workspace or global).
-let currentConfigScope: vscode.Uri | undefined;
-// Global variable to store the active editor instance to determine the best scope for configuration.
-let activeEditor: vscode.TextEditor | undefined;
-// Prevent multiple session change handling simultaneously
-let isHandlingSessionChange = false;
 
 // Prevent multiple session change handling simultaneously
 let isHandlingSessionChange: boolean = false;
@@ -143,32 +137,6 @@ function registerSafeCommand(
         }
     });
     context.subscriptions.push(disposable);
-}
-
-/**
- * Loads the latest extension configuration and updates the global configuration object.
- * Handles the storage of credentials based on the configuration settings.
- *
- * @param {vscode.ExtensionContext} context The extension context.
- */
-export async function loadConfiguration(context: vscode.ExtensionContext, newScope?: vscode.Uri): Promise<void> {
-    if (newScope === undefined) {
-        if (activeEditor) {
-            newScope = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)?.uri;
-        } else if (vscode.workspace.workspaceFolders?.length === 1) {
-            newScope = vscode.workspace.workspaceFolders[0].uri;
-        }
-    }
-
-    currentConfigScope = newScope;
-    config = vscode.workspace.getConfiguration(baseKeyOfExtension, currentConfigScope);
-
-    const configSource: string = currentConfigScope
-        ? `workspace folder: ${vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name}`
-        : "global (no workspace)";
-    logger.trace(`Loading configuration from ${configSource}`);
-
-    logger.updateCachedLogLevel();
 }
 
 /**
@@ -287,7 +255,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(context, allExtensionCommands.automaticLoginAfterExtensionActivation, async () => {
         logger.debug(`[Cmd] Called: ${allExtensionCommands.automaticLoginAfterExtensionActivation}`);
 
-        if (getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
+        if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
             logger.info("[Cmd] Auto-login is enabled. Attempting silent login with last active profile...");
 
             const activeProfile: profileManager.TestBenchProfile | undefined =
@@ -434,7 +402,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 return;
             }
 
-            if (config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
+            if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
                 await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
 
@@ -455,7 +423,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 );
                 return;
             }
-            if (config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
+            if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
                 await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
             }
 
@@ -697,7 +665,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         await utils.clearInternalTestbenchFolder(
             testbenchWorkingDirectoryPath,
             [testBenchLogger.folderNameOfLogs], // Exclude log files from deletion
-            !config.get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR) // Ask for confirmation if not set to clear before test generation
+            !getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR) // Ask for confirmation if not set to clear before test generation
         );
     });
 
@@ -1305,31 +1273,7 @@ async function handleTestBenchSessionChange(
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
-
-    // Initialize with the best scope
-    activeEditor = vscode.window.activeTextEditor;
-    // Initialize with global scope by default
-    currentConfigScope = undefined;
-
-    // Respond to configuration changes in the extension settings.
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(async (e) => {
-            if (e.affectsConfiguration(baseKeyOfExtension)) {
-                await loadConfiguration(context);
-                logger.info("Configuration updated after changes were detected.");
-            }
-        })
-    );
-    // Respond to changes in the active text editor to automatically update the configuration scope.
-    // This is useful for multi-root workspaces where the user may switch between different folders.
-    context.subscriptions.push(
-        vscode.window.onDidChangeActiveTextEditor(async (editor) => {
-            activeEditor = editor;
-            await loadConfiguration(context);
-        })
-    );
-
-    await loadConfiguration(context);
+    initializeConfigurationWatcher();
 
     // Register AuthenticationProvider
     authProviderInstance = new TestBenchAuthenticationProvider(context);
@@ -1411,7 +1355,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             logger.info("[Extension] No existing TestBench session found during initial check.");
             // If auto-login is enabled, it will be triggered next.
             // If not, user needs to login manually.
-            if (!getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
+            if (!getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
             }
@@ -1422,7 +1366,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     // Trigger Automatic Login Command if configured
-    if (getConfig().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
+    if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
         logger.info("[Extension] Auto-login configured. Triggering automatic login command.");
         // Note: Dont use await here, which would block the login webview display during autologin.
         vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
