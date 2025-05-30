@@ -47,12 +47,6 @@ import { getExtensionConfiguration, initializeConfigurationWatcher } from "./con
    Constants, Global Variables & Exports
    ============================================================================= */
 
-/** Workspace configuration for the extension. */
-// let extensionConfiguration: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
-// export function getExtensionConfiguration(): vscode.WorkspaceConfiguration {
-//     return extensionConfiguration;
-// }
-
 /** Global logger instance. */
 export let logger: testBenchLogger.TestBenchLogger;
 export function setLogger(newLogger: testBenchLogger.TestBenchLogger): void {
