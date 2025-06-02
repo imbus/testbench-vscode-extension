@@ -3,14 +3,10 @@ name: Build VSIX Package
 on:
     push:
         branches:
-            - main # Name of the branch to trigger the workflow. Multiple branches can be specified each on a new line
-            - playground
-            - fix-ls-errors
+            - "**" # Trigger on all branches
     pull_request:
         branches:
-            - main
-            - playground
-            - fix-ls-errors
+            - "**"
 
 jobs:
     build:
@@ -87,7 +83,7 @@ jobs:
             - name: Upload VSIX Artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: testbench-visual-studio-code-extension-${{ github.run_number }} # Name of the artifact
+                  name: testbench-extension-${{ github.run_number }} # Name of the artifact
                   path: ${{ steps.verify_vsix.outputs.VSIX_PATH }} # Use the exact path from the verify step
                   if-no-files-found: error # Fail if no VSIX file is found
                   overwrite: true # Overwrite the artifact if it already exists

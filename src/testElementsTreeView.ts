@@ -166,16 +166,16 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
 
     // Build a map for all elements without filtering.
     // This map is used to assign children to their respective parents.
-    const elementIdToDataMap: Map<string, TestElementData> = new Map();
+    const elementIdToDataMap: { [id: string]: TestElementData } = {};
 
     // Process each JSON object and create a TestElement.
     flatJsonTestElements.forEach((jsonTestElement) => {
         let libraryKey: string | null = null;
         if (jsonTestElement.libraryKey) {
             if (typeof jsonTestElement.libraryKey === "object" && jsonTestElement.libraryKey.serial) {
-                libraryKey = String(jsonTestElement.libraryKey.serial);
+                libraryKey = jsonTestElement.libraryKey.serial;
             } else {
-                libraryKey = String(jsonTestElement.libraryKey);
+                libraryKey = jsonTestElement.libraryKey;
             }
         }
 
@@ -189,7 +189,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
 
         const isRegexMatch: boolean =
             resourceRegexPatternsInExtensionSettings.length > 0
-                ? matchesRegex(jsonTestElement.name || "", resourceRegexPatternsInExtensionSettings)
+                ? matchesRegex(jsonTestElement.name, resourceRegexPatternsInExtensionSettings)
                 : true;
 
         const testElement: TestElementData = {
@@ -205,22 +205,20 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
             children: []
         };
 
-        elementIdToDataMap.set(UniqueIDOfTestElement, testElement);
+        elementIdToDataMap[UniqueIDOfTestElement] = testElement;
     });
 
     // Build the full tree structure by assigning children to their respective parents.
     const rootsOfTestElementView: TestElementData[] = [];
-    elementIdToDataMap.forEach((testElement) => {
+    Object.values(elementIdToDataMap).forEach((testElement) => {
         if (testElement.parentId) {
-            const foundParentElement = elementIdToDataMap.get(testElement.parentId);
+            const foundParentElement: TestElementData | undefined = Object.values(elementIdToDataMap).find((p) =>
+                p.id.startsWith(`${testElement.parentId}_`)
+            );
             if (foundParentElement) {
-                foundParentElement.children = foundParentElement.children || [];
-                foundParentElement.children.push(testElement);
                 testElement.parent = foundParentElement;
+                foundParentElement.children!.push(testElement);
             } else {
-                logger.trace(
-                    `[TestElementsView] Element "${testElement.name}" (ID: ${testElement.id}) has parentId "${testElement.parentId}" but parent not found in map. Treating as root.`
-                );
                 rootsOfTestElementView.push(testElement);
             }
         } else {
@@ -230,9 +228,6 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
 
     /**
      * Recursively filters the tree based on element type and regex matching.
-     * - Excludes DataType and Condition elements.
-     * - Hides non-matching Subdivisions if they are under a matching parent and have no matching children.
-     * - Keeps elements that directly match regex, inherit a match, or have visible (filtered) children.
      * Also, if a robot resource (directRegexMatch true) is nested under another robot resource,
      * it is filtered out and a warning message is recorded.
      * Filtered elements become null and are removed from the tree.
@@ -241,7 +236,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
      * @param {boolean} doesInheritMatchFromParent True if the element inherits a match from a parent.
      * @returns {TestElementData | null} The filtered element or null if excluded.
      */
-    function filterAndStructureTree(
+    function filterTestElementsTree(
         testElement: TestElementData,
         doesInheritMatchFromParent: boolean
     ): TestElementData | null {
@@ -251,7 +246,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
             // If the current element directly matches the regex or is already inherited, mark children as inherited.
             const childrenInherited: boolean = doesInheritMatchFromParent || testElement.directRegexMatch;
             filteredChildren = testElement.children
-                .map((child) => filterAndStructureTree(child, childrenInherited))
+                .map((child) => filterTestElementsTree(child, childrenInherited))
                 .filter((child) => child !== null) as TestElementData[];
         }
 
@@ -272,7 +267,7 @@ function buildTree(flatJsonTestElements: any[]): TestElementData[] {
     }
 
     const filteredRoots: TestElementData[] = rootsOfTestElementView
-        .map((root) => filterAndStructureTree(root, false))
+        .map((root) => filterTestElementsTree(root, false))
         .filter((node): node is TestElementData => node !== null);
 
     /**

@@ -79,7 +79,7 @@ let isHandlingSessionChange: boolean = false;
 // Determines if the icon of the tree item should be changed after generating tests for that item.
 export const ENABLE_ICON_MARKING_ON_GENERATE: boolean = true;
 // Determines if the import button of the tree item should still persist after importing test results for that item.
-export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = false;
+export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = true;
 
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
@@ -230,7 +230,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         // Open the settings with the extension filter.
         await vscode.commands.executeCommand("workbench.action.openSettings2", {
-            query: "@ext:imbus.testbench-visual-studio-code-extension"
+            query: "@ext:imbus.testbench-extension"
         });
         // Open the "workspace" tab in settings view (The default settings view is the user tab in settings)
         await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
@@ -814,7 +814,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(context, allExtensionCommands.openIssueReporter, async () => {
         logger.debug(`Command Called: ${allExtensionCommands.openIssueReporter}`);
         vscode.commands.executeCommand("workbench.action.openIssueReporter", {
-            extensionId: "imbus.testbench-visual-studio-code-extension"
+            extensionId: "imbus.testbench-extension"
         });
     });
 

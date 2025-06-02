@@ -66,6 +66,9 @@ function setLanguageClientInstance(newInstance: LanguageClient | undefined): voi
 
 /**
  * Checks if the current operation is still valid (not superseded by a newer operation)
+ * by comparing the operation ID with the global current operation ID.
+ * @param operationId The ID of the operation to check
+ * @return True if the operation is current, false if it has been superseded
  */
 function isOperationCurrent(operationId: number): boolean {
     return getCurrentLsOperationId() === operationId;
@@ -83,7 +86,11 @@ function clearPendingRestart(): void {
 }
 
 /**
- * Creates a promise that times out after the specified duration
+ * Creates a promise that times out after the specified duration.
+ * If the timeout occurs, it rejects with an error indicating the operation name and duration.
+ * @param timeoutMs The timeout duration in milliseconds
+ * @param operationName A name for the operation, used in error messages
+ * @return A promise that rejects with a timeout error after the specified duration
  */
 function createTimeoutPromise(timeoutMs: number, operationName: string): Promise<never> {
     return new Promise<never>((_, reject) =>
@@ -93,6 +100,12 @@ function createTimeoutPromise(timeoutMs: number, operationName: string): Promise
 
 /**
  * Wraps an async operation with timeout protection
+ * If the operation does not complete within the specified timeout,
+ * it rejects with a timeout error.
+ * @param operation The async operation to execute
+ * @param timeoutMs The timeout duration in milliseconds
+ * @param operationName A descriptive name for the operation, used in error messages
+ * @return A promise that resolves with the operation result or rejects with a timeout error
  */
 async function withTimeout<T>(operation: () => Promise<T>, timeoutMs: number, operationName: string): Promise<T> {
     return Promise.race([operation(), createTimeoutPromise(timeoutMs, operationName)]);
@@ -133,14 +146,24 @@ async function validateLsPrerequisites(
 }
 
 /**
- * Validates Python interpreter availability
+ * Validates the Python interpreter path.
+ * Logs a warning and potentially resets the language client if the path is not found.
+ *
+ * @param operationId - The unique identifier for the operation.
+ * @param projectName - The name of the project.
+ * @param tovName - The name of the TOV.
+ * @returns A promise that resolves to the Python interpreter path if found, otherwise null.
  */
-async function validatePythonInterpreter(operationId: number, project: string, tov: string): Promise<string | null> {
+async function validatePythonInterpreter(
+    operationId: number,
+    projectName: string,
+    tovName: string
+): Promise<string | null> {
     const pythonPath = await getInterpreterPath();
     if (!pythonPath) {
         logger.warn(
             `[validateLsPrerequisites - Op ${operationId}] Python interpreter path not found. ` +
-                `LS will not be started for ${project}/${tov}.`
+                `LS will not be started for ${projectName}/${tovName}.`
         );
         if (isOperationCurrent(operationId)) {
             setLanguageClientInstance(undefined);
@@ -153,13 +176,22 @@ async function validatePythonInterpreter(operationId: number, project: string, t
 }
 
 /**
- * Validates TestBench connection availability
+ * Validates the active TestBench connection.
+ *
+ * @param operationId - The unique identifier for the current operation.
+ * @param projectName - The name of the project.
+ * @param tovName - The name of the TOV.
+ * @returns The TestBench connection details if a connection is active, otherwise null.
  */
-function validateTestBenchConnection(operationId: number, project: string, tov: string): TbConnectionDetails | null {
+function validateTestBenchConnection(
+    operationId: number,
+    projectName: string,
+    tovName: string
+): TbConnectionDetails | null {
     if (!connection) {
         logger.warn(
             `[validateLsPrerequisites - Op ${operationId}] No active TestBench connection. ` +
-                `LS will not be started for ${project}/${tov}.`
+                `LS will not be started for ${projectName}/${tovName}.`
         );
         if (isOperationCurrent(operationId)) {
             setLanguageClientInstance(undefined);
@@ -182,18 +214,31 @@ function validateTestBenchConnection(operationId: number, project: string, tov: 
 }
 
 /**
- * Builds the ServerOptions for the LanguageClient
+ * Constructs server options for starting the language server.
+ *
+ * @param pythonPath - The path to the Python executable.
+ * @param tbConnectionDetails - Details required to connect to the server.
+ * @param projectName - The name of the project.
+ * @param tovName - The name of the TOV.
+ * @returns ServerOptions configured for both run and debug modes.
  */
 function buildServerOptions(
     pythonPath: string,
     tbConnectionDetails: TbConnectionDetails,
-    project: string,
-    tov: string
+    projectName: string,
+    tovName: string
 ): ServerOptions {
     logger.trace(`[buildServerOptions] Building ServerOptions with Python: ${pythonPath}`);
 
     const { serverName, serverPort, username, sessionToken } = tbConnectionDetails;
-    const commonArgs = [serverName || "", serverPort || "", username || "", sessionToken || "", project, tov || ""];
+    const commonArgs = [
+        serverName || "",
+        serverPort || "",
+        username || "",
+        sessionToken || "",
+        projectName,
+        tovName || ""
+    ];
 
     return {
         run: {
@@ -208,7 +253,9 @@ function buildServerOptions(
 }
 
 /**
- * Builds the LanguageClientOptions for the LanguageClient
+ * Builds `LanguageClientOptions` for the TestBench language client.
+ *
+ * @returns The configured `LanguageClientOptions`.
  */
 function buildClientOptions(): LanguageClientOptions {
     logger.trace("[buildClientOptions] Building ClientOptions.");
@@ -229,7 +276,13 @@ function buildClientOptions(): LanguageClientOptions {
 }
 
 /**
- * Safely disposes a language client with error handling
+ * Safely disposes of a LanguageClient instance, handling potential timeouts and errors.
+ *
+ * @param client - The LanguageClient to dispose.
+ * @param operationId - An identifier for the operation, used in logging.
+ * @param context - A string describing the context of the disposal, used in logging.
+ * @returns A promise that resolves when the disposal attempt is complete.
+ *          Disposal errors are caught and logged, but not re-thrown.
  */
 async function safeClientDispose(client: LanguageClient, operationId: number, context: string): Promise<void> {
     try {
@@ -243,7 +296,13 @@ async function safeClientDispose(client: LanguageClient, operationId: number, co
 }
 
 /**
- * Safely stops a language client with error handling
+ * Attempts to stop the language client within a predefined timeout.
+ * Errors encountered during the stop operation are caught and logged, but not re-thrown.
+ *
+ * @param client The LanguageClient instance to stop.
+ * @param operationId An identifier for the current operation, used for logging.
+ * @param context A string providing context for the stop operation, used in log messages.
+ * @returns A promise that resolves once the stop attempt (including handling any errors or timeouts) is complete.
  */
 async function safeClientStop(client: LanguageClient, operationId: number, context: string): Promise<void> {
     try {
@@ -257,7 +316,11 @@ async function safeClientStop(client: LanguageClient, operationId: number, conte
 }
 
 /**
- * Handles client cleanup based on its current state
+ * Handles a language client based on its current state, performing actions like stopping or disposing.
+ *
+ * @param clientToStop - The language client to manage.
+ * @param operationId - An identifier for the operation, used for logging.
+ * @returns A promise that resolves when the client has been handled.
  */
 async function handleClientByState(clientToStop: LanguageClient, operationId: number): Promise<void> {
     const state = clientToStop.state;
@@ -294,7 +357,17 @@ async function handleClientByState(clientToStop: LanguageClient, operationId: nu
 }
 
 /**
- * Determines if an error should be re-thrown based on context
+ * Determines whether an error should be rethrown based on its message,
+ * deactivation status, and operation ID.
+ *
+ * Errors are not rethrown if the system is deactivating, if the error message
+ * indicates a non-fatal issue (e.g., client not running, timeout), or if
+ * the error does not pertain to the current operation.
+ *
+ * @param errorMessage - The error message string.
+ * @param isDeactivating - A boolean flag indicating if the relevant component is deactivating.
+ * @param operationId - The ID of the operation that encountered the error.
+ * @returns `true` if the error should be rethrown, `false` otherwise.
  */
 function shouldRethrowError(errorMessage: string, isDeactivating: boolean, operationId: number): boolean {
     const nonFatalErrorMessages = [
@@ -312,7 +385,14 @@ function shouldRethrowError(errorMessage: string, isDeactivating: boolean, opera
 }
 
 /**
- * Enhanced stopping of the currently active language client with better error handling
+ * Stops the language client.
+ *
+ * This function attempts to gracefully stop and dispose of the active language client instance.
+ * It handles different client states and includes error handling and logging.
+ *
+ * @param isDeactivating - Optional. If true, indicates the stop is part of a deactivation process,
+ * which may affect error handling. Defaults to false.
+ * @returns A promise that resolves when the client has been stopped or an attempt has been made.
  */
 export async function stopLanguageClient(isDeactivating: boolean = false): Promise<void> {
     const clientToStop = getLanguageClientInstance();
@@ -388,29 +468,49 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
 }
 
 /**
- * Sets up notification handlers for the language client
+ * Sets up notification handlers for the language client.
+ * It listens for "custom/notification" and displays an information message.
+ *
+ * @param client - The language client to set up notifications for.
+ * @param projectName - The name of the project associated with the client.
+ * @param tovName - The name of the TOV (Test Object Version) associated with the client.
+ * @param operationId - An identifier for the current operation, used for logging.
  */
-function setupClientNotifications(client: LanguageClient, project: string, tov: string, operationId: number): void {
+function setupClientNotifications(
+    client: LanguageClient,
+    projectName: string,
+    tovName: string,
+    operationId: number
+): void {
     client.onNotification("custom/notification", (params) => {
         logger.info(`[startAndMonitorClient - Op ${operationId}] Received custom notification: ${params.message}`);
         vscode.window.showInformationMessage(`TestBench LS: ${params.message}`);
     });
 
-    logger.info(`[startAndMonitorClient - Op ${operationId}] Notification handlers set up for LS ${project}/${tov}.`);
+    logger.info(
+        `[startAndMonitorClient - Op ${operationId}] Notification handlers set up for LS ${projectName}/${tovName}.`
+    );
 }
 
 /**
- * Validates that the client is still current after successful start
+ * Validates if the language client operation is still current after the client has started.
+ * If the operation is stale, it stops and disposes of the client.
+ *
+ * @param newClient - The language client instance to validate.
+ * @param operationId - The ID of the operation that started the client.
+ * @param projectName - The project name.
+ * @param tovName - The TOV name.
+ * @returns True if the client is current and valid, false otherwise.
  */
 async function validateClientAfterStart(
     newClient: LanguageClient,
     operationId: number,
-    project: string,
-    tov: string
+    projectName: string,
+    tovName: string
 ): Promise<boolean> {
     if (!isOperationCurrent(operationId)) {
         logger.warn(
-            `[startAndMonitorClient - Op ${operationId}] LS for ${project}/${tov} started, ` +
+            `[startAndMonitorClient - Op ${operationId}] LS for ${projectName}/${tovName} started, ` +
                 `but became stale (current is ${getCurrentLsOperationId()}). Stopping this LS.`
         );
 
@@ -428,24 +528,37 @@ async function validateClientAfterStart(
 /**
  * Handles client start failure with appropriate cleanup
  */
+/**
+ * Handles failures encountered during the startup of a new LanguageClient.
+ *
+ * It logs the error, cleans up the failed client instance, and re-throws the error
+ * if the operation is still considered the current one.
+ *
+ * @param newClient - The LanguageClient instance that failed to start.
+ * @param error - The error object representing the cause of the failure.
+ * @param operationId - The unique identifier for the client start operation.
+ * @param projectName - The name.
+ * @param tovName - The TOV name.
+ * @returns A promise that resolves when cleanup is complete. The promise may reject if the error is re-thrown.
+ */
 async function handleClientStartFailure(
     newClient: LanguageClient,
     error: Error,
     operationId: number,
-    project: string,
-    tov: string
+    projectName: string,
+    tovName: string
 ): Promise<void> {
     const errorMessage = error.message;
 
     if (!isOperationCurrent(operationId)) {
         logger.warn(
-            `[startAndMonitorClient - Op ${operationId}] LS for ${project}/${tov} failed to start ` +
+            `[startAndMonitorClient - Op ${operationId}] LS for ${projectName}/${tovName} failed to start ` +
                 `(likely superseded by Op ${getCurrentLsOperationId()}). Error: ${errorMessage}`
         );
     } else {
         logger.error(
             `[startAndMonitorClient - Op ${operationId}] Failed to start TestBench LS for ` +
-                `Project: ${project}, TOV: ${tov}. Error: ${errorMessage}`,
+                `Project: ${projectName}, TOV: ${tovName}. Error: ${errorMessage}`,
             error
         );
     }
@@ -466,24 +579,35 @@ async function handleClientStartFailure(
 }
 
 /**
- * Enhanced client starting with better monitoring and error handling
+ * Starts a new language client and monitors its initialization.
+ * It handles timeouts during startup and ensures the client is still
+ * the current one after starting before setting up notifications.
+ * Logs the process and handles any startup failures.
+ *
+ * @param newClient - The language client instance to start.
+ * @param projectName - The project name.
+ * @param tovName - The TOV name.
+ * @param operationId - A unique identifier for this operation, used for logging.
+ * @returns A promise that resolves when the client has been started and monitored, or when an error occurs.
  */
 async function startAndMonitorClient(
     newClient: LanguageClient,
-    project: string,
-    tov: string,
+    projectName: string,
+    tovName: string,
     operationId: number
 ): Promise<void> {
-    logger.info(`[startAndMonitorClient - Op ${operationId}] Attempting to start LS for ${project}/${tov}.`);
+    logger.info(`[startAndMonitorClient - Op ${operationId}] Attempting to start LS for ${projectName}/${tovName}.`);
 
     try {
         // Start client with timeout protection
         await withTimeout(() => newClient.start(), CLIENT_START_TIMEOUT_MS, "Language server start");
 
-        logger.info(`[startAndMonitorClient - Op ${operationId}] LS for ${project}/${tov} started successfully.`);
+        logger.info(
+            `[startAndMonitorClient - Op ${operationId}] LS for ${projectName}/${tovName} started successfully.`
+        );
 
         // Validate that the client is still current after successful start
-        const isStillCurrent = await validateClientAfterStart(newClient, operationId, project, tov);
+        const isStillCurrent = await validateClientAfterStart(newClient, operationId, projectName, tovName);
         if (!isStillCurrent) {
             return;
         }
@@ -491,36 +615,43 @@ async function startAndMonitorClient(
         // Set up notifications only if this is still the current global client
         const currentGlobalClient = getLanguageClientInstance();
         if (currentGlobalClient === newClient) {
-            setupClientNotifications(newClient, project, tov, operationId);
+            setupClientNotifications(newClient, projectName, tovName, operationId);
         } else {
             logger.warn(
-                `[startAndMonitorClient - Op ${operationId}] LS for ${project}/${tov} started, ` +
+                `[startAndMonitorClient - Op ${operationId}] LS for ${projectName}/${tovName} started, ` +
                     `but global client instance changed (current is for op ${getCurrentLsOperationId()}) ` +
                     `before notification setup. This instance may be orphaned or soon replaced.`
             );
         }
     } catch (error) {
-        await handleClientStartFailure(newClient, error as Error, operationId, project, tov);
+        await handleClientStartFailure(newClient, error as Error, operationId, projectName, tovName);
     }
 }
 
 /**
- * Creates and validates a new language client instance
+ * Creates a new LanguageClient instance.
+ *
+ * @param pythonPath - Path to the Python interpreter.
+ * @param tbConnectionDetails - Connection details for the TestBench server.
+ * @param projectName - The project name.
+ * @param tovName - The TOV name.
+ * @param operationId - An identifier for the operation, used for logging.
+ * @returns A new LanguageClient instance configured for TestBench.
  */
 function createLanguageClient(
     pythonPath: string,
     tbConnectionDetails: TbConnectionDetails,
-    project: string,
-    tov: string,
+    projectName: string,
+    tovName: string,
     operationId: number
 ): LanguageClient {
-    const serverOptions = buildServerOptions(pythonPath, tbConnectionDetails, project, tov);
+    const serverOptions = buildServerOptions(pythonPath, tbConnectionDetails, projectName, tovName);
     const clientOptions = buildClientOptions();
 
     const newClientInstance = new LanguageClient("testbench-ls", "TestBench LS", serverOptions, clientOptions);
 
     logger.info(
-        `[LS Manager - Op ${operationId}] New LanguageClient instance created for ${project}/${tov}. ` +
+        `[LS Manager - Op ${operationId}] New LanguageClient instance created for ${projectName}/${tovName}. ` +
             `PythonPath: ${pythonPath}, ServerName: ${tbConnectionDetails.serverName}, ` +
             `ServerPort: ${tbConnectionDetails.serverPort}, Username: ${tbConnectionDetails.username}, ` +
             `SessionToken: ${tbConnectionDetails.sessionToken ? "****" : "undefined"}, ` +
@@ -536,15 +667,22 @@ function createLanguageClient(
 }
 
 /**
- * Handles cleanup of existing client before starting new one
+ * Handles an existing language client instance if found.
+ * It attempts to stop any active existing client and then checks if the current operation is still valid.
+ *
+ * @param operationId - The unique identifier for the current operation.
+ * @param projectName - The project name.
+ * @param tovName - The TOV name.
+ * @returns A promise that resolves to `true` if the operation can proceed (either no existing client or it was stopped successfully and operation is current),
+ * or `false` if the operation became stale after attempting to stop a prior client.
  */
-async function handleExistingClient(operationId: number, project: string, tov: string): Promise<boolean> {
+async function handleExistingClient(operationId: number, projectName: string, tovName: string): Promise<boolean> {
     const existingClient = getLanguageClientInstance();
 
     if (existingClient && existingClient.state !== State.Stopped) {
         logger.warn(
             `[initializeLanguageServer - Op ${operationId}] Existing client found unexpectedly ` +
-                `(State: ${existingClient.state}). Attempting to stop it before initializing new one for ${project}/${tov}.`
+                `(State: ${existingClient.state}). Attempting to stop it before initializing new one for ${projectName}/${tovName}.`
         );
 
         try {
@@ -555,7 +693,7 @@ async function handleExistingClient(operationId: number, project: string, tov: s
         } catch (e) {
             logger.error(
                 `[initializeLanguageServer - Op ${operationId}] Error stopping unexpected existing client ` +
-                    `for ${project}/${tov}: ${(e as Error).message}`
+                    `for ${projectName}/${tovName}: ${(e as Error).message}`
             );
         }
     }
@@ -563,7 +701,7 @@ async function handleExistingClient(operationId: number, project: string, tov: s
     // Check if operation is still current after stopping existing client
     if (!isOperationCurrent(operationId)) {
         logger.warn(
-            `[initializeLanguageServer - Op ${operationId}] Initialization for ${project}/${tov} ` +
+            `[initializeLanguageServer - Op ${operationId}] Initialization for ${projectName}/${tovName} ` +
                 `became stale after attempting to stop prior client (current global OpId is ${getCurrentLsOperationId()}). Aborting.`
         );
         return false;
@@ -573,7 +711,18 @@ async function handleExistingClient(operationId: number, project: string, tov: s
 }
 
 /**
- * Enhanced language server initialization with better lifecycle management
+ * Initializes the TestBench Language Server for a given project and TOV.
+ *
+ * Handles the lifecycle of the language server client, including:
+ * - Checking for stale operations.
+ * - Managing existing client instances.
+ * - Validating prerequisites like Python path and connection details.
+ * - Creating, assigning, and starting a new language client instance.
+ *
+ * @param project - The project identifier.
+ * @param tov - The TOV identifier.
+ * @param operationId - A unique identifier for this initialization operation to prevent race conditions.
+ * @returns A promise that resolves when the initialization process is complete or aborted.
  */
 export async function initializeLanguageServer(project: string, tov: string, operationId: number): Promise<void> {
     logger.info(
@@ -628,7 +777,12 @@ export async function initializeLanguageServer(project: string, tov: string, ope
 }
 
 /**
- * Schedules a deferred restart operation
+ * Schedules a deferred language server restart for the specified project and TOV.
+ * The requests are debounced: any existing pending restart is cleared,
+ * and only the latest call for the same project/TOV combination will execute after a delay.
+ *
+ * @param projectName - The name of the project for which the restart is scheduled.
+ * @param tovName - The name of the TOV for which the restart is scheduled.
  */
 function scheduleDeferredRestart(projectName: string, tovName: string): void {
     logger.info(`[LS Restart] Language server busy, deferring restart for ${projectName}/${tovName}`);
@@ -646,7 +800,14 @@ function scheduleDeferredRestart(projectName: string, tovName: string): void {
 }
 
 /**
- * Schedules a debounced restart operation
+ * Schedules a debounced restart operation for a specific project and TOV.
+ *
+ * Clears any previously scheduled restart and sets a new one.
+ * If multiple calls are made within a short period (defined by `RESTART_DEBOUNCE_MS`),
+ * only the latest call will eventually trigger the `executeRestart` function.
+ *
+ * @param projectName - The name of the project for which the restart is scheduled.
+ * @param tovName - The name of the TOV associated with the project.
  */
 function scheduleDebouncedRestart(projectName: string, tovName: string): void {
     clearPendingRestart();
@@ -661,7 +822,14 @@ function scheduleDebouncedRestart(projectName: string, tovName: string): void {
 }
 
 /**
- * Executes the actual restart operation with proper state management
+ * Restarts the language server for a specified project and TOV.
+ * If a restart operation is already in progress, this request is skipped.
+ * The function attempts to stop the current language client and then initialize a new one.
+ *
+ * @param projectName The name of the project context for the language server.
+ * @param tovName The name of the TOV context for the language server.
+ * @returns A promise that resolves once the restart attempt has concluded,
+ *          regardless of whether it was skipped, successful, or encountered an error.
  */
 async function executeRestart(projectName: string, tovName: string): Promise<void> {
     if (isLanguageServerBusy) {
@@ -675,8 +843,6 @@ async function executeRestart(projectName: string, tovName: string): Promise<voi
 
     try {
         logger.info(`[LS Restart - Op ${thisOperationId}] Starting restart for ${projectName}/${tovName}`);
-
-        // Stop existing client with enhanced error handling
         try {
             await stopLanguageClient();
             logger.info(`[LS Restart - Op ${thisOperationId}] Previous client stopped.`);
@@ -712,7 +878,13 @@ async function executeRestart(projectName: string, tovName: string): Promise<voi
 }
 
 /**
- * Enhanced restart function with improved debouncing and state management
+ * Restarts the language client for a given project and TOV.
+ * If the language server is busy, the restart is deferred.
+ * Rapid successive calls are debounced.
+ *
+ * @param projectName - The name of the project.
+ * @param tovName - The name of the TOV.
+ * @returns A promise that resolves when the restart process is initiated or scheduled.
  */
 export async function restartLanguageClient(projectName: string, tovName: string): Promise<void> {
     logger.info(`[LS Restart] Request for ${projectName}/${tovName}. Current busy state: ${isLanguageServerBusy}`);

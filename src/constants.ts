@@ -38,6 +38,10 @@ export const WebviewMessageCommands = {
     LOGIN_WITH_PROFILE: "loginWithProfile",
     SAVE_NEW_PROFILE: "saveNewProfile",
     REQUEST_DELETE_CONFIRMATION: "requestDeleteConfirmation",
+    // Edit profile functionality
+    EDIT_PROFILE: "editProfile",
+    UPDATE_PROFILE: "updateProfile",
+    CANCEL_EDIT_PROFILE: "cancelEditProfile",
 
     // Host to Webview communication
     DISPLAY_PROFILES_IN_WEBVIEW: "displayProfilesInWebview",
@@ -85,7 +89,8 @@ export const StorageKeys = {
     PROFILES_STORAGE_KEY: "testbenchExtension.profiles",
     ACTIVE_PROFILE_ID_KEY: "testbenchExtension.activeProfileId",
     PROFILE_PASSWORD_SECRET_PREFIX: "testbenchExtension.profile.password.",
-    MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem"
+    MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem",
+    SUB_ELEMENT_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubElements"
 } as const;
 
 // --- Tree Item Context Values ---
@@ -145,5 +150,6 @@ export const allExtensionCommands = {
     resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
     resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
     getFilters: `${baseKeyOfExtension}.getFilters`,
-    fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`
+    fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
+    clearImportedSubElementsTracking: `${baseKeyOfExtension}.clearImportedSubElementsTracking`
 };
