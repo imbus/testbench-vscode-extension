@@ -62,9 +62,9 @@ export class TestElementTreeBuilder {
                 return `${item.parent.serial}_${item.parent.uniqueID}`;
             } else {
                 this.logger.warn(
-                    `[Builder.getParentId] Parent reference for item (name: ${item.name}, uniqueID: ${item.uniqueID}) is MISSING 'parent.uniqueID'. Parent serial: ${item.parent.serial}. This WILL cause linking failure if parent ID in map is composite. Treating as unparented for robust linking.`
+                    `[Builder.getParentId] Parent reference for item (name: ${item.name}, uniqueID: ${item.uniqueID}) is MISSING 'parent.uniqueID'. Parent serial: ${item.parent.serial}. Falling back to using parent serial as parentId.`
                 );
-                return null;
+                return String(item.parent.serial);
             }
         }
         if (libraryKey) {
@@ -196,7 +196,9 @@ export class TestElementTreeBuilder {
                 return null;
             }
             if (element.elementType === "Subdivision" && !element.directRegexMatch && inheritedMatch) {
-                return null;
+                if (validChildren.length === 0) {
+                    return null;
+                }
             }
             if (element.directRegexMatch || inheritedMatch || validChildren.length > 0) {
                 //

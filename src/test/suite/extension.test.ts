@@ -3,8 +3,8 @@ import * as vscode from "vscode";
 import * as sinon from "sinon";
 import { activate, initializeTreeViews } from "../../extension";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { ProjectManagementTreeDataProvider } from "../../projectManagementTreeView";
-import { TestElementsTreeDataProvider } from "../../testElementsTreeView";
+import { ProjectManagementTreeDataProvider } from "../../views/projectManagementTreeView";
+import { TestElementsTreeDataProvider } from "../../views/testElementsView/testElementsTreeView";
 import { baseKeyOfExtension } from "../../constants";
 import { getExtensionConfiguration } from "../../configuration";
 

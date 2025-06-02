@@ -38,9 +38,10 @@ const vscode = __importStar(require("vscode"));
 const sinon = __importStar(require("sinon"));
 const extension_1 = require("../../extension");
 const testBenchLogger_1 = require("../../testBenchLogger");
-const projectManagementTreeView_1 = require("../../projectManagementTreeView");
-const testElementsTreeView_1 = require("../../testElementsTreeView");
+const projectManagementTreeView_1 = require("../../views/projectManagementTreeView");
+const testElementsTreeView_1 = require("../../views/testElementsView/testElementsTreeView");
 const constants_1 = require("../../constants");
+const configuration_1 = require("../../configuration");
 suite("Extension Test Suite", () => {
     let sandbox;
     let getConfigurationStub;
@@ -89,13 +90,9 @@ suite("Extension Test Suite", () => {
         assert.ok(getConfigurationStub.calledWith(constants_1.baseKeyOfExtension), "Configuration should be loaded");
         assert.ok(context.subscriptions.length > 0, "Subscriptions should be added to the context");
     });
-    test("getConfig should return the current configuration", () => {
-        const config = (0, extension_1.getConfig)();
+    test("getExtensionConfiguration should return the current configuration", () => {
+        const config = (0, configuration_1.getExtensionConfiguration)();
         assert.ok(config, "Configuration should be returned");
-    });
-    test("loadConfiguration should update the configuration", async () => {
-        await (0, extension_1.loadConfiguration)(context);
-        assert.ok(getConfigurationStub.calledWith(constants_1.baseKeyOfExtension), "Configuration should be loaded");
     });
     test("initializeTreeViews should initialize the tree views", () => {
         (0, extension_1.initializeTreeViews)(context);

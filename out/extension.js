@@ -41,12 +41,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ALLOW_PERSISTENT_IMPORT_BUTTON = exports.ENABLE_ICON_MARKING_ON_GENERATE = exports.testElementTreeView = exports.testThemeTreeView = exports.projectTreeView = exports.testElementsTreeDataProvider = exports.testThemeTreeDataProvider = exports.projectManagementTreeDataProvider = exports.connection = exports.logger = void 0;
-exports.getConfig = getConfig;
 exports.setLogger = setLogger;
 exports.setConnection = setConnection;
 exports.getLoginWebViewProvider = getLoginWebViewProvider;
 exports.safeCommandHandler = safeCommandHandler;
-exports.loadConfiguration = loadConfiguration;
 exports.initializeTreeViews = initializeTreeViews;
 exports.activate = activate;
 exports.deactivate = deactivate;
@@ -59,26 +57,24 @@ const vscode = __importStar(require("vscode"));
 const testBenchLogger = __importStar(require("./testBenchLogger"));
 const testBenchConnection = __importStar(require("./testBenchConnection"));
 const reportHandler = __importStar(require("./reportHandler"));
-const projectManagementTreeView = __importStar(require("./projectManagementTreeView"));
-const testElementsTreeView = __importStar(require("./testElementsTreeView"));
+const projectManagementTreeView = __importStar(require("./views/projectManagementTreeView"));
+const testElementsTreeView = __importStar(require("./views/testElementsView/testElementsTreeView"));
 const loginWebView = __importStar(require("./loginWebView"));
 const utils = __importStar(require("./utils"));
 const path_1 = __importDefault(require("path"));
 const constants_1 = require("./constants");
 const server_1 = require("./server");
-const testThemeTreeView_1 = require("./testThemeTreeView");
-const testElementsTreeView_1 = require("./testElementsTreeView");
+const testThemeTreeView_1 = require("./views/testThemeTreeView");
+const testElementsTreeView_1 = require("./views/testElementsView/testElementsTreeView");
 const testBenchAuthenticationProvider_1 = require("./testBenchAuthenticationProvider");
 const profileManager = __importStar(require("./profileManager"));
 const testBenchConnection_1 = require("./testBenchConnection");
-/* =============================================================================
-   Constants, Global Variables & Exports
-   ============================================================================= */
-/** Workspace configuration for the extension. */
-let config = vscode.workspace.getConfiguration(constants_1.baseKeyOfExtension);
-function getConfig() {
-    return config;
-}
+const configuration_1 = require("./configuration");
+const projectDataService_1 = require("./services/projectDataService");
+const testElementDataService_1 = require("./services/testElementDataService");
+const markedItemStateService_1 = require("./services/markedItemStateService");
+const resourceFileService_1 = require("./services/resourceFileService");
+const testElementTreeBuilder_1 = require("./views/testElementsView/testElementTreeBuilder");
 function setLogger(newLogger) {
     exports.logger = newLogger;
 }
@@ -97,16 +93,12 @@ exports.projectManagementTreeDataProvider = null;
 exports.testThemeTreeDataProvider = null;
 // Global variable to store the authentication provider instance
 let authProviderInstance = null;
-// Global variable to store the current configuration scope (workspace or global).
-let currentConfigScope;
-// Global variable to store the active editor instance to determine the best scope for configuration.
-let activeEditor;
 // Prevent multiple session change handling simultaneously
 let isHandlingSessionChange = false;
 // Determines if the icon of the tree item should be changed after generating tests for that item.
 exports.ENABLE_ICON_MARKING_ON_GENERATE = true;
 // Determines if the import button of the tree item should still persist after importing test results for that item.
-exports.ALLOW_PERSISTENT_IMPORT_BUTTON = false;
+exports.ALLOW_PERSISTENT_IMPORT_BUTTON = true;
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
  * It takes a handler function as input and returns a new function that executes the original handler inside a try/catch block.
@@ -152,29 +144,6 @@ function registerSafeCommand(context, commandId, callback) {
     context.subscriptions.push(disposable);
 }
 /**
- * Loads the latest extension configuration and updates the global configuration object.
- * Handles the storage of credentials based on the configuration settings.
- *
- * @param {vscode.ExtensionContext} context The extension context.
- */
-async function loadConfiguration(context, newScope) {
-    if (newScope === undefined) {
-        if (activeEditor) {
-            newScope = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)?.uri;
-        }
-        else if (vscode.workspace.workspaceFolders?.length === 1) {
-            newScope = vscode.workspace.workspaceFolders[0].uri;
-        }
-    }
-    currentConfigScope = newScope;
-    config = vscode.workspace.getConfiguration(constants_1.baseKeyOfExtension, currentConfigScope);
-    const configSource = currentConfigScope
-        ? `workspace folder: ${vscode.workspace.getWorkspaceFolder(currentConfigScope)?.name}`
-        : "global (no workspace)";
-    exports.logger.trace(`Loading configuration from ${configSource}`);
-    exports.logger.updateCachedLogLevel();
-}
-/**
  * Initializes the Test Elements Tree View.
  *
  * This function sets up the tree data provider for the test elements,
@@ -184,11 +153,14 @@ async function loadConfiguration(context, newScope) {
  * @param {vscode.ExtensionContext} context - The extension context provided by VS Code, used for managing disposables.
  */
 function initializeTestElementsTreeView(context) {
+    const testElementDataService = new testElementDataService_1.TestElementDataService(() => exports.connection, exports.logger);
+    const resourceFileService = new resourceFileService_1.ResourceFileService(exports.logger);
+    const testElementTreeBuilder = new testElementTreeBuilder_1.TestElementTreeBuilder(exports.logger);
     exports.testElementsTreeDataProvider = new testElementsTreeView.TestElementsTreeDataProvider((message) => {
         if (exports.testElementTreeView) {
             exports.testElementTreeView.message = message;
         }
-    });
+    }, testElementDataService, resourceFileService, context, testElementTreeBuilder);
     exports.testElementTreeView = vscode.window.createTreeView("testElementsView", {
         treeDataProvider: exports.testElementsTreeDataProvider
     });
@@ -202,12 +174,15 @@ function initializeTestElementsTreeView(context) {
  *
  * @param {vscode.ExtensionContext} context The extension context.
  */
-function initializeTreeViews(context) {
+async function initializeTreeViews(context) {
+    const projectDataService = new projectDataService_1.ProjectDataService(() => exports.connection, exports.logger);
+    const markedItemStateService = new markedItemStateService_1.MarkedItemStateService(context, exports.logger);
+    await markedItemStateService.initialize();
     exports.testThemeTreeDataProvider = new testThemeTreeView_1.TestThemeTreeDataProvider((message) => {
         if (exports.testThemeTreeView) {
             exports.testThemeTreeView.message = message;
         }
-    }, context);
+    }, context, projectDataService, markedItemStateService);
     exports.testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
         treeDataProvider: exports.testThemeTreeDataProvider
     });
@@ -216,7 +191,7 @@ function initializeTreeViews(context) {
         if (exports.projectTreeView) {
             exports.projectTreeView.message = message;
         }
-    }, exports.testThemeTreeDataProvider);
+    }, exports.testThemeTreeDataProvider, context, projectDataService);
     const newProjectTreeView = vscode.window.createTreeView("projectManagementTree", {
         treeDataProvider: exports.projectManagementTreeDataProvider,
         canSelectMany: false
@@ -254,7 +229,7 @@ async function registerExtensionCommands(context) {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.showExtensionSettings}`);
         // Open the settings with the extension filter.
         await vscode.commands.executeCommand("workbench.action.openSettings2", {
-            query: "@ext:imbus.testbench-visual-studio-code-extension"
+            query: "@ext:imbus.testbench-extension"
         });
         // Open the "workspace" tab in settings view (The default settings view is the user tab in settings)
         await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings");
@@ -267,7 +242,7 @@ async function registerExtensionCommands(context) {
     // --- Command: Automatic Login After Extension Start ---
     registerSafeCommand(context, constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation, async () => {
         exports.logger.debug(`[Cmd] Called: ${constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation}`);
-        if (getConfig().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
+        if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
             exports.logger.info("[Cmd] Auto-login is enabled. Attempting silent login with last active profile...");
             const activeProfile = await profileManager.getActiveProfile(context);
             if (!activeProfile) {
@@ -370,7 +345,7 @@ async function registerExtensionCommands(context) {
             exports.logger.error(`${constants_1.allExtensionCommands.generateTestCasesForCycle} command called without connection.`);
             return;
         }
-        if (config.get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR)) {
+        if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR)) {
             await vscode.commands.executeCommand(constants_1.allExtensionCommands.clearInternalTestbenchFolder);
         }
         await reportHandler.startTestGenerationForCycle(context, item);
@@ -383,7 +358,7 @@ async function registerExtensionCommands(context) {
             exports.logger.error(`${constants_1.allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet} command called without connection.`);
             return;
         }
-        if (config.get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR)) {
+        if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR)) {
             await vscode.commands.executeCommand(constants_1.allExtensionCommands.clearInternalTestbenchFolder);
         }
         let cycleKey = null;
@@ -508,11 +483,7 @@ async function registerExtensionCommands(context) {
         }
         // Check if the item belongs to the Project Management Tree
         if (treeItem.contextValue &&
-            [
-                constants_1.TreeItemContextValues.PROJECT,
-                constants_1.TreeItemContextValues.VERSION,
-                constants_1.TreeItemContextValues.CYCLE
-            ].includes(treeItem.contextValue)) {
+            [constants_1.TreeItemContextValues.PROJECT, constants_1.TreeItemContextValues.VERSION, constants_1.TreeItemContextValues.CYCLE].includes(treeItem.contextValue)) {
             if (exports.projectManagementTreeDataProvider) {
                 exports.projectManagementTreeDataProvider.makeRoot(treeItem);
             }
@@ -572,7 +543,7 @@ async function registerExtensionCommands(context) {
         }
         const testbenchWorkingDirectoryPath = path_1.default.join(workspaceLocation, constants_1.folderNameOfInternalTestbenchFolder);
         await utils.clearInternalTestbenchFolder(testbenchWorkingDirectoryPath, [testBenchLogger.folderNameOfLogs], // Exclude log files from deletion
-        !config.get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR) // Ask for confirmation if not set to clear before test generation
+        !(0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR) // Ask for confirmation if not set to clear before test generation
         );
     });
     // --- Command: Refresh Test Elements Tree ---
@@ -620,33 +591,16 @@ async function registerExtensionCommands(context) {
     });
     // --- Command: Go To Resource File ---
     // Opens or creates the robot resource file associated with the selected test element.
-    registerSafeCommand(context, constants_1.allExtensionCommands.openOrCreateRobotResourceFile, async (treeItem) => {
+    registerSafeCommand(
+    //
+    context, constants_1.allExtensionCommands.openOrCreateRobotResourceFile, async (treeItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.openOrCreateRobotResourceFile} for tree item:`, treeItem);
-        if (!treeItem || !treeItem.testElementData) {
-            exports.logger.trace("Invalid tree item or element in Open Robot Resource File command.");
-            return;
+        if (exports.testElementsTreeDataProvider) {
+            await exports.testElementsTreeDataProvider.handleGoToResourceCommand(treeItem);
         }
-        // Construct the target path based on the hierarchical name of the test element.
-        const absolutePathOfSelectedTestElement = await testElementsTreeView.constructAbsolutePathForTestElement(treeItem);
-        if (!absolutePathOfSelectedTestElement) {
-            return;
-        }
-        exports.logger.trace(`Opening Robot Resource File - absolute path for test element tree item (${treeItem.testElementData.name}) resolved as: ${absolutePathOfSelectedTestElement}`);
-        try {
-            switch (treeItem.testElementData.elementType) {
-                case "Subdivision":
-                    await testElementsTreeView.handleSubdivision(treeItem);
-                    break;
-                case "Interaction":
-                    await testElementsTreeView.handleInteraction(treeItem);
-                    break;
-                default:
-                    await testElementsTreeView.handleFallback(absolutePathOfSelectedTestElement);
-            }
-        }
-        catch (error) {
-            vscode.window.showErrorMessage(`Error in Open Robot Resource File command: ${error.message}`);
-            exports.logger.error(`${constants_1.allExtensionCommands.openOrCreateRobotResourceFile} command failed: ${error.message}`);
+        else {
+            exports.logger.error("TestElementsTreeDataProvider not initialized. Cannot handle Go To Resource File command.");
+            vscode.window.showErrorMessage("Test Elements view is not ready. Please try again.");
         }
     });
     // --- Command: Create Interaction Under Subdivision ---
@@ -674,7 +628,7 @@ async function registerExtensionCommands(context) {
         if (!interactionName) {
             return; // User cancelled input box
         }
-        const newInteraction = await testElementsTreeView.createInteractionUnderSubdivision(subdivisionTreeItem, interactionName);
+        const newInteraction = await exports.testElementsTreeDataProvider.createInteractionUnderSubdivision(subdivisionTreeItem, interactionName);
         if (newInteraction) {
             // TODO: After the API is implemented, use the API to create the interaction on the server
             // For now, refresh the tree view to show the new interaction
@@ -688,7 +642,7 @@ async function registerExtensionCommands(context) {
     registerSafeCommand(context, constants_1.allExtensionCommands.openIssueReporter, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.openIssueReporter}`);
         vscode.commands.executeCommand("workbench.action.openIssueReporter", {
-            extensionId: "imbus.testbench-visual-studio-code-extension"
+            extensionId: "imbus.testbench-extension"
         });
     });
     // --- Command: Modify Report With Results Zip ---
@@ -1054,24 +1008,7 @@ async function handleTestBenchSessionChange(context, existingSession) {
 async function activate(context) {
     exports.logger = new testBenchLogger.TestBenchLogger();
     exports.logger.info("Extension activated.");
-    // Initialize with the best scope
-    activeEditor = vscode.window.activeTextEditor;
-    // Initialize with global scope by default
-    currentConfigScope = undefined;
-    // Respond to configuration changes in the extension settings.
-    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
-        if (e.affectsConfiguration(constants_1.baseKeyOfExtension)) {
-            await loadConfiguration(context);
-            exports.logger.info("Configuration updated after changes were detected.");
-        }
-    }));
-    // Respond to changes in the active text editor to automatically update the configuration scope.
-    // This is useful for multi-root workspaces where the user may switch between different folders.
-    context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(async (editor) => {
-        activeEditor = editor;
-        await loadConfiguration(context);
-    }));
-    await loadConfiguration(context);
+    (0, configuration_1.initializeConfigurationWatcher)();
     // Register AuthenticationProvider
     authProviderInstance = new testBenchAuthenticationProvider_1.TestBenchAuthenticationProvider(context);
     context.subscriptions.push(vscode.authentication.registerAuthenticationProvider(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_LABEL, authProviderInstance, { supportsMultipleAccounts: false } // No support for multiple simultaneous TestBench logins
@@ -1100,7 +1037,7 @@ async function activate(context) {
             }
         }
     }));
-    initializeTreeViews(context);
+    await initializeTreeViews(context);
     // Set the initial connection context state. Before any login attempt, connection is null.
     // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
     // CONNECTION_ACTIVE is also used to enable or disable the login and logout buttons in the status bar,
@@ -1130,7 +1067,7 @@ async function activate(context) {
             exports.logger.info("[Extension] No existing TestBench session found during initial check.");
             // If auto-login is enabled, it will be triggered next.
             // If not, user needs to login manually.
-            if (!getConfig().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
+            if (!(0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
             }
@@ -1141,7 +1078,7 @@ async function activate(context) {
         await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
     }
     // Trigger Automatic Login Command if configured
-    if (getConfig().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
+    if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
         exports.logger.info("[Extension] Auto-login configured. Triggering automatic login command.");
         // Note: Dont use await here, which would block the login webview display during autologin.
         vscode.commands.executeCommand(constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation);

@@ -41,6 +41,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.tb2robotLib = void 0;
 const vscode = __importStar(require("vscode"));
 const extension_1 = require("./extension");
+const constants_1 = require("./constants");
+const configuration_1 = require("./configuration");
 /**
  * Class representing the Testbench2Robotframework library wrapper.
  */
@@ -54,7 +56,34 @@ class tb2robotLib {
     static async startTb2robotframeworkTestGeneration(reportPath) {
         let isGenerateTestsCommandSuccessful = false;
         try {
+            const use_config_file = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.USE_CONFIG_FILE_SETTING);
+            const clean = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_CLEAN);
+            const compound_interaction_logging = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_COMPOUND_LOGGING);
+            const fully_qualified = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_FULLY_QUALIFIED);
+            const libraryMapping = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_LIBRARY_MAPPING);
+            const libraryMarker = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_LIBRARY_MARKER);
+            const libraryRoot = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_LIBRARY_ROOT);
+            const logSuiteNumbering = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING);
+            const outputDirectory = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+            const resourceDirectory = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_RESOURCE_DIR);
+            const resourceMapping = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_RESOURCE_MAPPING);
+            const resourceMarker = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+            const resourceRoot = (0, configuration_1.getExtensionSetting)(constants_1.ConfigKeys.TB2ROBOT_RESOURCE_ROOT);
             await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
+                use_config_file: use_config_file,
+                clean: clean,
+                compound_interaction_logging: compound_interaction_logging,
+                config: use_config_file,
+                fully_qualified: fully_qualified,
+                library_marker: libraryMarker,
+                library_root: libraryRoot,
+                log_suite_numbering: logSuiteNumbering,
+                output_directory: outputDirectory,
+                resource_directory: resourceDirectory,
+                resource_marker: resourceMarker,
+                resource_root: resourceRoot,
+                library_mapping: libraryMapping,
+                resource_mapping: resourceMapping,
                 testbench_report: reportPath
             });
             isGenerateTestsCommandSuccessful = true;
