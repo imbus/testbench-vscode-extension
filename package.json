@@ -534,7 +534,7 @@
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == TestThemeNode)",
+                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == TestThemeNode || viewItem == 'MarkedForImport.TestThemeNode')",
                     "group": "navigation"
                 },
                 {

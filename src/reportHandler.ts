@@ -10,7 +10,7 @@ import * as fsPromise from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 import * as testBenchTypes from "./testBenchTypes";
-import * as projectManagementTreeView from "./projectManagementTreeView";
+import * as projectManagementTreeView from "./views/projectManagementTreeView";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import JSZip from "jszip";
@@ -33,6 +33,7 @@ import {
 import { extractDataFromReport, PlayServerConnection, withRetry } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionConfiguration } from "./configuration";
+import { BaseTestBenchTreeItem } from "./views/common/baseTreeItem";
 
 /**
  * Saves the last generated report parameters to workspace storage.
@@ -595,12 +596,12 @@ export async function fetchReportZipFromServer(
  * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @param {projectManagementTreeView.BaseTestBenchTreeItem} selectedTreeItem The selected tree item.
+ * @param {BaseTestBenchTreeItem} selectedTreeItem The selected tree item.
  * @returns {Promise<void | null>} Resolves when test generation is complete, or null if errors occur.
  */
 export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
-    selectedTreeItem: projectManagementTreeView.BaseTestBenchTreeItem,
+    selectedTreeItem: BaseTestBenchTreeItem,
     providedCycleKey?: string
 ): Promise<void | null> {
     logger.debug("Generating tests for non-cycle element:", selectedTreeItem);
@@ -662,7 +663,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  * Generates Robot Framework tests using testbench2robotframework library.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @param {projectManagementTreeView.BaseTestBenchTreeItem} selectedTreeItem The selected tree item.
+ * @param {BaseTestBenchTreeItem} selectedTreeItem The selected tree item.
  * @param {string} itemLabel The label of the selected item.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
@@ -671,7 +672,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  */
 export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
     context: vscode.ExtensionContext,
-    selectedTreeItem: projectManagementTreeView.BaseTestBenchTreeItem,
+    selectedTreeItem: BaseTestBenchTreeItem,
     itemLabel: string,
     projectKey: string,
     cycleKey: string,
@@ -1158,7 +1159,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 /**
  * Gets the appropriate reportRootUID for import based on the selected item
  */
-function getReportRootUIDForImport(item: projectManagementTreeView.BaseTestBenchTreeItem): string | undefined {
+function getReportRootUIDForImport(item: BaseTestBenchTreeItem): string | undefined {
     logger.debug(`[getReportRootUIDForImport] Getting report root UID for item: ${item.label}`);
     logger.trace(`[getReportRootUIDForImport] Item details:`, {
         label: item.label,
@@ -1339,7 +1340,7 @@ export async function clearImportedSubElementsTracking(context: vscode.Extension
  */
 export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     context: vscode.ExtensionContext,
-    invokedOnItem: projectManagementTreeView.BaseTestBenchTreeItem
+    invokedOnItem: BaseTestBenchTreeItem
 ): Promise<void | null> {
     logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
     logger.trace(`Invoked on item: ${invokedOnItem.label}`);
@@ -1488,11 +1489,11 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
  * Starts robotframework test generation for a cycle element.
  *
  * @param {vscode.ExtensionContext} context The extension context.
- * @param {projectManagementTreeView.BaseTestBenchTreeItem} selectedCycleTreeItem The selected cycle tree item.
+ * @param {BaseTestBenchTreeItem} selectedCycleTreeItem The selected cycle tree item.
  */
 export async function startTestGenerationForCycle(
     context: vscode.ExtensionContext,
-    selectedCycleTreeItem: projectManagementTreeView.BaseTestBenchTreeItem
+    selectedCycleTreeItem: BaseTestBenchTreeItem
 ): Promise<void | null> {
     try {
         if (!connection) {

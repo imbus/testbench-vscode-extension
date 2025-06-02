@@ -4,24 +4,13 @@
  */
 
 import * as vscode from "vscode";
-import { BaseTestBenchTreeItem, CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
-import { logger, connection, testThemeTreeView } from "./extension";
-import { ContextKeys, StorageKeys, TreeItemContextValues } from "./constants";
-import { CycleNodeData, CycleStructure } from "./testBenchTypes";
-
-interface MarkedItemInfo {
-    key: string;
-    originalContextValue: string;
-    isDirectlyGenerated: boolean;
-    uniqueID: string;
-}
-
-interface GeneratedItemHierarchy {
-    rootKey: string;
-    rootUID: string;
-    markedSubItemUIDs: Set<string>;
-    markedSubItemsWithUID: Map<string, string>;
-}
+import { CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
+import { BaseTestBenchTreeItem } from "./common/baseTreeItem";
+import { logger, testThemeTreeView } from "../extension";
+import { ContextKeys, TreeItemContextValues } from "../constants";
+import { CycleNodeData, CycleStructure } from "../testBenchTypes";
+import { ProjectDataService } from "../services/projectDataService";
+import { MarkedItemStateService } from "../services/markedItemStateService";
 
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display
@@ -32,7 +21,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         new vscode.EventEmitter<BaseTestBenchTreeItem | void>();
     readonly onDidChangeTreeData: vscode.Event<BaseTestBenchTreeItem | void> = this._onDidChangeTreeData.event;
 
-    private extensionContext: vscode.ExtensionContext;
+    private readonly projectDataService: ProjectDataService;
+    private readonly markedItemStateService: MarkedItemStateService;
 
     private _currentCycleKey: string | null = null;
     public getCurrentCycleKey(): string | null {
@@ -51,126 +41,21 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     public rootElements: BaseTestBenchTreeItem[] = [];
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     private expandedTreeItems: Set<string> = new Set<string>();
-    private currentMarkedItemInfo: MarkedItemInfo | null = null;
-    private generatedItemHierarchies: Map<string, GeneratedItemHierarchy> = new Map();
 
     private updateTreeViewStatusMessageCallback: (message: string | undefined) => void;
 
-    private isTestThemeTreeInitialized: boolean = false;
-    private initializationPromise: Promise<void> | null = null;
-
-    constructor(updateMessageCallback: (message: string | undefined) => void, context: vscode.ExtensionContext) {
-        this.extensionContext = context;
+    constructor(
+        updateMessageCallback: (message: string | undefined) => void,
+        private readonly extensionContext: vscode.ExtensionContext,
+        projectDataService: ProjectDataService,
+        markedItemStateService: MarkedItemStateService
+    ) {
         this.updateTreeViewStatusMessageCallback = updateMessageCallback;
+        this.projectDataService = projectDataService;
+        this.markedItemStateService = markedItemStateService;
         vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
 
-        this.initializationPromise = this.initialize();
-    }
-
-    private async initialize(): Promise<void> {
-        await this.loadMarkedItemsFromStorage();
-        this.isTestThemeTreeInitialized = true;
-        this._onDidChangeTreeData.fire();
-        logger.trace("[TestThemeTreeDataProvider] Initialization complete, marked items loaded.");
-    }
-
-    /**
-     * Loads marked items and hierarchies from workspace storage
-     */
-    private async loadMarkedItemsFromStorage(): Promise<void> {
-        try {
-            const storedMarkedItem = this.extensionContext.workspaceState.get<MarkedItemInfo>(
-                StorageKeys.MARKED_TEST_GENERATION_ITEM
-            );
-            if (storedMarkedItem) {
-                if (
-                    storedMarkedItem.key &&
-                    storedMarkedItem.originalContextValue &&
-                    storedMarkedItem.uniqueID !== undefined
-                ) {
-                    this.currentMarkedItemInfo = {
-                        key: storedMarkedItem.key,
-                        originalContextValue: storedMarkedItem.originalContextValue,
-
-                        isDirectlyGenerated: storedMarkedItem.isDirectlyGenerated ?? true,
-                        uniqueID: storedMarkedItem.uniqueID
-                    };
-                    logger.trace(
-                        `[TestThemeTreeDataProvider] Loaded marked item from workspace state: ${storedMarkedItem.key} (UID: ${storedMarkedItem.uniqueID})`
-                    );
-                } else {
-                    logger.warn(
-                        "[TestThemeTreeDataProvider] Stored marked item is missing required properties, ignoring."
-                    );
-                    this.currentMarkedItemInfo = null;
-                }
-            }
-
-            const storedHierarchies = this.extensionContext.workspaceState.get<Array<[string, any]>>(
-                `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`
-            );
-            if (storedHierarchies && Array.isArray(storedHierarchies)) {
-                this.generatedItemHierarchies = new Map();
-                for (const [key, hierarchyData] of storedHierarchies) {
-                    if (hierarchyData.rootKey && hierarchyData.rootUID && hierarchyData.markedSubItemUIDs) {
-                        const hierarchy: GeneratedItemHierarchy = {
-                            rootKey: hierarchyData.rootKey,
-                            rootUID: hierarchyData.rootUID,
-                            markedSubItemUIDs: new Set(
-                                Array.isArray(hierarchyData.markedSubItemUIDs) ? hierarchyData.markedSubItemUIDs : []
-                            ),
-                            markedSubItemsWithUID: new Map(
-                                Array.isArray(hierarchyData.markedSubItemsWithUID)
-                                    ? hierarchyData.markedSubItemsWithUID
-                                    : []
-                            )
-                        };
-                        this.generatedItemHierarchies.set(key, hierarchy);
-                    }
-                }
-                logger.trace(
-                    `[TestThemeTreeDataProvider] Loaded ${this.generatedItemHierarchies.size} generated item hierarchies from storage`
-                );
-            }
-        } catch (error) {
-            logger.error("[TestThemeTreeDataProvider] Error loading marked items from storage:", error);
-            this.generatedItemHierarchies = new Map();
-            this.currentMarkedItemInfo = null;
-        }
-    }
-
-    /**
-     * Saves marked items and hierarchies to workspace storage
-     */
-    private async saveMarkedItemsToStorage(): Promise<void> {
-        try {
-            await this.extensionContext.workspaceState.update(
-                StorageKeys.MARKED_TEST_GENERATION_ITEM,
-                this.currentMarkedItemInfo
-            );
-
-            // Convert Sets and Maps to Arrays for storage
-            const hierarchiesForStorage = Array.from(this.generatedItemHierarchies.entries()).map(
-                ([key, hierarchy]) => [
-                    key,
-                    {
-                        rootKey: hierarchy.rootKey,
-                        rootUID: hierarchy.rootUID,
-                        markedSubItemUIDs: Array.from(hierarchy.markedSubItemUIDs),
-                        markedSubItemsWithUID: Array.from(hierarchy.markedSubItemsWithUID.entries())
-                    }
-                ]
-            );
-
-            await this.extensionContext.workspaceState.update(
-                `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`,
-                hierarchiesForStorage
-            );
-
-            logger.trace("[TestThemeTreeDataProvider] Saved marked items to storage successfully");
-        } catch (error) {
-            logger.error("[TestThemeTreeDataProvider] Error saving marked items to storage:", error);
-        }
+        logger.trace("[TestThemeTreeDataProvider] Initialized with services.");
     }
 
     public setTreeViewStatusMessage(message: string | undefined): void {
@@ -179,7 +64,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
     /**
      * Determines if a tree item should show import button based on the generated hierarchies.
-     * This checks if the item is currently marked or if it belongs to a hierarchy of marked items.
      * @param {string} itemKey - The key of the item to check.
      * @param {string | undefined} itemUID - The unique identifier of the item, if available.
      * @return {Object} An object containing:
@@ -190,22 +74,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         itemKey: string,
         itemUID: string | undefined
     ): { shouldShow: boolean; rootUID?: string } {
-        if (
-            this.currentMarkedItemInfo &&
-            this.currentMarkedItemInfo.key === itemKey &&
-            this.currentMarkedItemInfo.uniqueID === itemUID
-        ) {
-            return { shouldShow: true, rootUID: itemUID };
-        }
-
-        if (itemUID) {
-            for (const hierarchy of this.generatedItemHierarchies.values()) {
-                if (hierarchy.markedSubItemUIDs && hierarchy.markedSubItemUIDs.has(itemUID)) {
-                    return { shouldShow: true, rootUID: itemUID };
-                }
-            }
-        }
-        return { shouldShow: false };
+        return this.markedItemStateService.getItemImportState(itemKey, itemUID);
     }
 
     /**
@@ -251,16 +120,16 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         let operationSuccessful = false;
 
         try {
-            if (!connection) {
-                logger.error("TestThemeTreeDataProvider: No active connection to TestBench server.");
-                this.setTreeViewStatusMessage("Error: Not connected to TestBench server.");
+            if (!this.projectDataService) {
+                logger.error("[TestThemeTreeDataProvider] ProjectDataService is not available.");
+                this.setTreeViewStatusMessage("Error: Data service not available.");
                 if (!this.isCustomRootActive) {
                     this.rootElements = [];
                 }
                 return;
             }
 
-            rawCycleStructure = await connection.fetchCycleStructureOfCycleInProject(
+            rawCycleStructure = await this.projectDataService.fetchCycleStructure(
                 this._currentProjectKey,
                 this._currentCycleKey
             );
@@ -351,11 +220,11 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                         ? `No test themes found for cycle ${this._currentCycleLabel}.`
                         : "No test themes found for the current cycle."
                 );
-            } else if (!operationSuccessful && connection) {
+            } else if (!operationSuccessful && this.projectDataService) {
                 this.setTreeViewStatusMessage(
                     `Error loading themes for ${this._currentCycleLabel || this._currentCycleKey}.`
                 );
-            } else if (!connection) {
+            } else if (!this.projectDataService) {
                 this.setTreeViewStatusMessage("Error: Not connected to TestBench server.");
             } else {
                 this.setTreeViewStatusMessage(undefined);
@@ -436,97 +305,79 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     }
 
     /**
-     * Restores marking state only to originally marked items
+     * Iterates through the given tree items and updates their UI (_isMarkedForImport, contextValue, icon)
+     * based on the current state provided by MarkedItemStateService.
      */
-    private restoreMarkingState(): void {
-        logger.debug("[restoreMarkingState] Starting marking state restoration");
+    private updateTreeItemsMarkingRecursive(items: BaseTestBenchTreeItem[]): boolean {
+        let uiChanged = false;
+        for (const item of items) {
+            const itemKey = item.item?.base?.key || item.item?.key;
+            const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
 
-        if (!this.currentMarkedItemInfo && this.generatedItemHierarchies.size === 0) {
-            logger.trace("[restoreMarkingState] No marked items to restore");
-            return;
-        }
+            if (itemKey && itemUID) {
+                const importState = this.markedItemStateService.getItemImportState(itemKey, itemUID);
+                const oldIsMarked = item._isMarkedForImport;
+                const oldContextValue = item.contextValue;
 
-        let restoredCount = 0;
-
-        // Restore the directly marked item
-        if (this.currentMarkedItemInfo) {
-            const directlyMarkedItem = this.findTreeItemByKeyAndUID(
-                this.currentMarkedItemInfo.key,
-                this.currentMarkedItemInfo.uniqueID,
-                this.rootElements
-            );
-
-            if (directlyMarkedItem) {
-                if (this.currentMarkedItemInfo.originalContextValue === TreeItemContextValues.TEST_THEME_NODE) {
-                    directlyMarkedItem.contextValue = TreeItemContextValues.MARKED_TEST_THEME_NODE;
-                } else if (
-                    this.currentMarkedItemInfo.originalContextValue === TreeItemContextValues.TEST_CASE_SET_NODE
-                ) {
-                    directlyMarkedItem.contextValue = TreeItemContextValues.MARKED_TEST_CASE_SET_NODE;
-                }
-                directlyMarkedItem._isMarkedForImport = true;
-                directlyMarkedItem.updateIcon();
-                restoredCount++;
-                logger.trace(`[restoreMarkingState] Restored directly marked item: ${directlyMarkedItem.label}`);
-            } else {
-                logger.warn(
-                    `[restoreMarkingState] Could not find directly marked item with key: ${this.currentMarkedItemInfo.key}, UID: ${this.currentMarkedItemInfo.uniqueID}`
-                );
-            }
-        }
-
-        // Restore marked descendant items
-        if (this.currentMarkedItemInfo) {
-            const activeRootKey: string = this.currentMarkedItemInfo.key;
-            const hierarchy: GeneratedItemHierarchy | undefined = this.generatedItemHierarchies.get(activeRootKey);
-
-            if (hierarchy) {
-                logger.trace(
-                    `[restoreMarkingState] Processing descendants for active hierarchy rooted by key: ${activeRootKey} (UID: ${this.currentMarkedItemInfo.uniqueID})`
-                );
-                for (const [descendantKey, descendantUID] of hierarchy.markedSubItemsWithUID.entries()) {
-                    const descendantTreeItem: BaseTestBenchTreeItem | null = this.findTreeItemByKeyAndUID(
-                        descendantKey,
-                        descendantUID,
-                        this.rootElements
-                    );
-                    if (descendantTreeItem) {
-                        const originalContext: string | undefined =
-                            descendantTreeItem.originalContextValue || descendantTreeItem.contextValue;
-                        if (
-                            originalContext === TreeItemContextValues.TEST_THEME_NODE ||
-                            originalContext === TreeItemContextValues.TEST_CASE_SET_NODE
-                        ) {
-                            descendantTreeItem._isMarkedForImport = true;
-                            this.updateItemContextForImport(descendantTreeItem, originalContext);
-                            descendantTreeItem.updateIcon();
-                            restoredCount++;
-                            logger.trace(
-                                `[restoreMarkingState] Restored descendant item: ${descendantTreeItem.label} (Key: ${descendantKey}, UID: ${descendantUID}) from hierarchy of rootKey: ${activeRootKey}`
-                            );
-                        }
+                if (importState.shouldShow) {
+                    item._isMarkedForImport = true;
+                    if (item.originalContextValue) {
+                        // Must be set during item creation
+                        this.updateItemContextForImport(item, item.originalContextValue);
                     } else {
-                        logger.debug(
-                            `[restoreMarkingState] Descendant item not found for hierarchy ${activeRootKey}: Key=${descendantKey}, UID=${descendantUID}`
+                        logger.error(
+                            `[TestThemeTreeDataProvider] CRITICAL: Item ${item.label} (UID: ${itemUID}) has no originalContextValue during marking.`
+                        );
+                        // Attempt fallback, but this indicates a problem elsewhere
+                        let baseContext = item.contextValue; // Current context value
+                        if (item.contextValue === TreeItemContextValues.MARKED_TEST_THEME_NODE) {
+                            baseContext = TreeItemContextValues.TEST_THEME_NODE;
+                        } else if (item.contextValue === TreeItemContextValues.MARKED_TEST_CASE_SET_NODE) {
+                            baseContext = TreeItemContextValues.TEST_CASE_SET_NODE;
+                        }
+                        this.updateItemContextForImport(item, baseContext!);
+                    }
+                } else {
+                    // Item should NOT be marked
+                    item._isMarkedForImport = false;
+                    if (item.originalContextValue) {
+                        // Must be set during item creation
+                        item.contextValue = item.originalContextValue;
+                    } else {
+                        // If originalContextValue is missing, means it was previously a marked type. Revert it.
+                        // This fallback logic is defensive. Ideally, originalContextValue is always present.
+                        if (item.contextValue === TreeItemContextValues.MARKED_TEST_THEME_NODE) {
+                            item.contextValue = TreeItemContextValues.TEST_THEME_NODE;
+                        } else if (item.contextValue === TreeItemContextValues.MARKED_TEST_CASE_SET_NODE) {
+                            item.contextValue = TreeItemContextValues.TEST_CASE_SET_NODE;
+                        }
+                        logger.warn(
+                            `[TestThemeTreeDataProvider] Item ${item.label} (UID: ${itemUID}) should be unmarked but originalContextValue is missing. Attempted to infer base context.`
                         );
                     }
                 }
-            } else if (this.generatedItemHierarchies.size > 0) {
-                logger.warn(
-                    `[restoreMarkingState] currentMarkedItemInfo key '${activeRootKey}' not found in generatedItemHierarchies, but hierarchies map is not empty. Size: ${this.generatedItemHierarchies.size}.`
-                );
+                item.updateIcon(); // Update icon based on new state
+
+                if (oldIsMarked !== item._isMarkedForImport || oldContextValue !== item.contextValue) {
+                    uiChanged = true;
+                }
             }
-        } else if (this.generatedItemHierarchies.size > 0) {
-            logger.warn(
-                `[restoreMarkingState] No currentMarkedItemInfo, but generatedItemHierarchies is not empty (size: ${this.generatedItemHierarchies.size}). Skipping descendant restoration.`
-            );
-        }
 
-        logger.info(`[restoreMarkingState] Restored marking for ${restoredCount} items`);
-
-        if (restoredCount > 0) {
-            this._onDidChangeTreeData.fire(undefined);
+            if (item.children && item.children.length > 0) {
+                if (this.updateTreeItemsMarkingRecursive(item.children)) {
+                    uiChanged = true;
+                }
+            }
         }
+        return uiChanged;
+    }
+
+    /**
+     * Restores marking state only to originally marked items
+     */
+    private restoreMarkingState(): void {
+        logger.debug("[TestThemeTreeDataProvider] Restoring marking state for visible items (restoreMarkingState).");
+        this.updateTreeItemsMarkingRecursive(this.rootElements);
     }
 
     /**
@@ -545,9 +396,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @returns {Promise<BaseTestBenchTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
      */
     async getChildren(element?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
-        if (!this.isTestThemeTreeInitialized && this.initializationPromise) {
-            await this.initializationPromise;
-        }
         if (!element) {
             if (this.isCustomRootActive && this.customRootItemInstance) {
                 return [this.customRootItemInstance];
@@ -586,53 +434,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             }
         }
         return null;
-    }
-
-    /**
-     * Clears marking from a single item
-     */
-    private clearItemMarking(treeItem: BaseTestBenchTreeItem): void {
-        if (treeItem.originalContextValue) {
-            treeItem._isMarkedForImport = false;
-            treeItem.contextValue = treeItem.originalContextValue;
-            treeItem.updateIcon();
-        }
-    }
-
-    /**
-     * Clears the visual marking from a previously marked tree item and its associated sub-items
-     * from generated hierarchies, then refreshes the tree view.
-     *
-     * @param oldMarkedTreeItemKey - Optional. The key of the specific tree item whose marking should be cleared.
-     *                               If omitted, the item identified by `this.currentMarkedItemInfo` (if any) will be targeted.
-     * @returns A promise that resolves once the clearing operations are attempted and the tree refresh is initiated.
-     *          The promise does not wait for the tree view to visually update.
-     */
-    private async clearOldMarkedItemAndRefresh(oldMarkedTreeItemKey?: string): Promise<void> {
-        const keyToClear: string | undefined = oldMarkedTreeItemKey || this.currentMarkedItemInfo?.key;
-        const uidToClear: string | undefined = oldMarkedTreeItemKey ? undefined : this.currentMarkedItemInfo?.uniqueID;
-
-        if (keyToClear) {
-            const treeItem: BaseTestBenchTreeItem | null = uidToClear
-                ? this.findTreeItemByKeyAndUID(keyToClear, uidToClear, this.rootElements)
-                : this.findItemByKey(keyToClear, this.rootElements);
-
-            if (treeItem && treeItem.originalContextValue) {
-                this.clearItemMarking(treeItem);
-            }
-
-            for (const hierarchy of this.generatedItemHierarchies.values()) {
-                if (hierarchy.markedSubItemsWithUID) {
-                    for (const [subItemKey, subItemUID] of hierarchy.markedSubItemsWithUID.entries()) {
-                        const subItem = this.findTreeItemByKeyAndUID(subItemKey, subItemUID, this.rootElements);
-                        if (subItem) {
-                            this.clearItemMarking(subItem);
-                        }
-                    }
-                }
-            }
-            this._onDidChangeTreeData.fire(undefined);
-        }
     }
 
     /**
@@ -694,7 +495,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      */
     public async markItemAsGenerated(treeItemToMark: BaseTestBenchTreeItem): Promise<void> {
         if (!treeItemToMark || (!treeItemToMark.item?.key && !treeItemToMark.item?.base?.key)) {
-            logger.warn("[TestThemeTreeDataProvider] Attempted to mark an invalid item.");
+            logger.warn("[TestThemeTreeDataProvider] Attempted to mark an invalid item for generation.");
             return;
         }
 
@@ -704,47 +505,50 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
         if (!originalContext || !itemUID) {
             logger.error(
-                `[TestThemeTreeDataProvider] Cannot mark item ${itemKey}, required properties missing (UID or originalContext).`
+                `[TestThemeTreeDataProvider] Cannot mark item ${itemKey} as generated, required properties missing (UID or originalContext).`
             );
             return;
         }
 
-        await this.clearOldMarkedItemAndRefresh();
+        logger.debug(`[TestThemeTreeDataProvider] Marking item as generated: ${itemKey} (UID: ${itemUID})`);
 
-        this.generatedItemHierarchies.clear();
-
-        treeItemToMark._isMarkedForImport = true;
-        this.updateItemContextForImport(treeItemToMark, originalContext);
-        treeItemToMark.updateIcon();
+        // 1. Update the state in the service.
+        // The service's markItem method should handle clearing previous markings if only one root marking is allowed.
         const descendantUIDs = this.collectDescendantUIDs(treeItemToMark);
         const descendantKeysWithUIDs = this.collectDescendantKeysWithUIDs(treeItemToMark);
 
-        const hierarchy: GeneratedItemHierarchy = {
-            rootKey: itemKey,
-            rootUID: itemUID,
-            markedSubItemUIDs: new Set(descendantUIDs),
-            markedSubItemsWithUID: new Map(descendantKeysWithUIDs)
-        };
-        this.generatedItemHierarchies.set(itemKey, hierarchy);
-        this.markDescendantsRecursively(treeItemToMark);
+        // Ensure clearMarking in the service clears all hierarchies and current info if that's the design.
+        // Or ensure markItem itself does this before setting the new one.
+        // Based on MarkedItemStateService.markItem, it clears internally before setting the new one.
+        // So, explicit clearMarking() before markItem() is redundant but not harmful if markItem is idempotent regarding clearing.
+        // For clarity that we intend to replace all markings:
+        await this.markedItemStateService.clearMarking();
+        await this.markedItemStateService.markItem(
+            itemKey,
+            itemUID,
+            originalContext,
+            true, // isDirectlyGenerated for the main item
+            descendantUIDs,
+            descendantKeysWithUIDs
+        );
 
-        this.currentMarkedItemInfo = {
-            key: itemKey,
-            originalContextValue: originalContext,
-            isDirectlyGenerated: true,
-            uniqueID: itemUID
-        };
-        await this.saveMarkedItemsToStorage();
+        // 2. Synchronize the entire visible tree UI with the new state from the service.
+        const uiActuallyChanged = this.updateTreeItemsMarkingRecursive(this.rootElements);
 
         logger.info(
-            `[TestThemeTreeDataProvider] Marked item ${itemKey} (UID: ${itemUID}) and ${descendantUIDs.length} descendants for import functionality. All other persisted hierarchies cleared.`
+            `[TestThemeTreeDataProvider] Item ${itemKey} (UID: ${itemUID}) and its descendants marked as generated. State saved by service. UI updated: ${uiActuallyChanged}`
         );
-        this._onDidChangeTreeData.fire(undefined);
+
+        // 3. Notify VS Code to refresh the tree view if UI actually changed.
+        if (uiActuallyChanged) {
+            this._onDidChangeTreeData.fire(undefined);
+        }
     }
 
     /**
      * Recursively marks descendants of the given tree item.
      * Only marks TestThemeNode and TestCaseSetNode descendants.
+     * State is managed by the service.
      *
      * @param parentItem The parent tree item whose descendants are to be marked.
      */
@@ -764,15 +568,23 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 continue;
             }
 
+            // Check with service if this descendant should be marked.
+            // This requires markedItemStateService to have a way to check individual sub-items.
+            // For simplicity here, we assume if the parent root was marked, all its collectible descendants were intended to be.
+            // The service call `markItem` already stored the list of all descendants.
+            // `getItemImportState` should correctly report these.
+            const childUID = child.item?.base?.uniqueID || child.item?.uniqueID;
+            const importState = this.markedItemStateService.getItemImportState(childKey, childUID);
+
             if (
-                originalContext === TreeItemContextValues.TEST_THEME_NODE ||
-                originalContext === TreeItemContextValues.TEST_CASE_SET_NODE
+                importState.shouldShow &&
+                (originalContext === TreeItemContextValues.TEST_THEME_NODE ||
+                    originalContext === TreeItemContextValues.TEST_CASE_SET_NODE)
             ) {
                 child._isMarkedForImport = true;
                 this.updateItemContextForImport(child, originalContext);
                 child.updateIcon();
             }
-
             this.markDescendantsRecursively(child);
         }
     }
@@ -800,23 +612,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @param {string | undefined} itemUID - The unique identifier of the item, if available.
      * @return {boolean} True if the item is marked, false otherwise.
      */
-    private isItemActuallyMarked(itemKey: string, itemUID: string | undefined): boolean {
-        if (
-            this.currentMarkedItemInfo &&
-            this.currentMarkedItemInfo.key === itemKey &&
-            this.currentMarkedItemInfo.uniqueID === itemUID
-        ) {
-            return true;
-        }
-
-        if (itemUID) {
-            for (const hierarchy of this.generatedItemHierarchies.values()) {
-                if (hierarchy.markedSubItemUIDs && hierarchy.markedSubItemUIDs.has(itemUID)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    public isItemActuallyMarked(itemKey: string, itemUID: string | undefined): boolean {
+        return this.markedItemStateService.getItemImportState(itemKey, itemUID).shouldShow;
     }
 
     /**
@@ -832,36 +629,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     public getReportRootUIDForItem(item: BaseTestBenchTreeItem): string | undefined {
         const itemKey = item.item?.base?.key || item.item?.key;
         const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
-
-        if (!itemKey || !itemUID) {
-            logger.trace(`[getReportRootUIDForItem] Item key or UID is missing for item: ${item.label}`);
-            return undefined;
-        }
-
-        const importInfo = this.shouldTreeItemDisplayImportButton(itemKey, itemUID);
-        if (importInfo.shouldShow) {
-            logger.trace(
-                `[getReportRootUIDForItem] Using item's own UID for targeted import: ${itemUID} (item: ${item.label})`
-            );
-            return itemUID;
-        }
-
-        if (
-            this.currentMarkedItemInfo &&
-            this.currentMarkedItemInfo.key === itemKey &&
-            this.currentMarkedItemInfo.uniqueID === itemUID &&
-            this.currentMarkedItemInfo.isDirectlyGenerated
-        ) {
-            logger.trace(
-                `[getReportRootUIDForItem] Using directly generated item's UID: ${itemUID} (item: ${item.label})`
-            );
-            return itemUID;
-        }
-
-        logger.trace(
-            `[getReportRootUIDForItem] No import functionality or direct generation found for item: ${item.label}`
-        );
-        return undefined;
+        return this.markedItemStateService.getReportRootUID(itemKey!, itemUID);
     }
 
     /**
@@ -871,35 +639,27 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @param {BaseTestBenchTreeItem} itemToClear - The tree item whose marked status needs to be cleared.
      * @returns A promise that resolves when the operation is complete.
      */
-    public async clearMarkedItemStatus(itemToClear: BaseTestBenchTreeItem): Promise<void> {
-        if (!itemToClear || (!itemToClear.item?.key && !itemToClear.item?.base?.key)) {
-            logger.warn("[clearMarkedItemStatus] Attempted to clear marked status for an invalid item.");
+    public async clearMarkedItemStatus(itemToClear?: BaseTestBenchTreeItem): Promise<void> {
+        const itemKeyToClearInService = itemToClear ? itemToClear.item.key || itemToClear.item.base.key : undefined;
+
+        if (itemToClear && !itemKeyToClearInService) {
+            logger.warn("[TestThemeTreeDataProvider] Attempted to clear marked status for an item with no key.");
             return;
         }
 
-        const itemKey = itemToClear.item.key || itemToClear.item.base.key;
-        let hierarchyToRemove: string | null = null;
+        logger.debug(
+            `[TestThemeTreeDataProvider] Clearing marked status for service key: ${itemKeyToClearInService || "all"}`
+        );
+        await this.markedItemStateService.clearMarking(itemKeyToClearInService);
 
-        if (this.generatedItemHierarchies.has(itemKey)) {
-            hierarchyToRemove = itemKey;
-        } else {
-            for (const [rootKey, hierarchy] of this.generatedItemHierarchies) {
-                if (hierarchy.markedSubItemUIDs.has(itemKey)) {
-                    hierarchyToRemove = rootKey;
-                    break;
-                }
-            }
+        const uiActuallyChanged = this.updateTreeItemsMarkingRecursive(this.rootElements);
+
+        logger.info(
+            `[TestThemeTreeDataProvider] Cleared marked status for item ${itemKeyToClearInService || "all"}. UI updated: ${uiActuallyChanged}`
+        ); //
+        if (uiActuallyChanged) {
+            this._onDidChangeTreeData.fire(undefined);
         }
-
-        if (hierarchyToRemove) {
-            this.generatedItemHierarchies.delete(hierarchyToRemove);
-        }
-
-        await this.clearOldMarkedItemAndRefresh(itemKey);
-        this.currentMarkedItemInfo = null;
-        await this.saveMarkedItemsToStorage();
-
-        logger.info(`[clearMarkedItemStatus] Cleared marked status for item ${itemKey} and its hierarchy.`);
     }
 
     /**
@@ -1241,6 +1001,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             originalContextValue,
             defaultCollapsibleState,
             nodeData,
+            this.extensionContext,
             parent
         );
 

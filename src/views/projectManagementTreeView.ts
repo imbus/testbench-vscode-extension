@@ -5,7 +5,6 @@
  */
 
 import * as vscode from "vscode";
-import * as path from "path";
 import {
     getLatestLsContextRequestId,
     latestLsContextRequestId,
@@ -13,8 +12,8 @@ import {
     setCurrentLsOperationId,
     setLatestLsContextRequestId,
     stopLanguageClient
-} from "./server";
-import { CycleNodeData, CycleStructure, Project, TreeNode } from "./testBenchTypes";
+} from "../server";
+import { CycleNodeData, CycleStructure, Project, TreeNode } from "../testBenchTypes";
 import {
     connection,
     logger,
@@ -22,12 +21,13 @@ import {
     testElementsTreeDataProvider,
     projectTreeView,
     testThemeTreeView,
-    testElementTreeView,
-    ENABLE_ICON_MARKING_ON_GENERATE
-} from "./extension";
-import { allExtensionCommands, ContextKeys, TreeItemContextValues } from "./constants";
+    testElementTreeView
+} from "../extension";
+import { ContextKeys, TreeItemContextValues } from "../constants";
 import { displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
-import { displayTestElementsTreeView } from "./testElementsTreeView";
+import { displayTestElementsTreeView } from "./testElementsView/testElementsTreeView";
+import { BaseTestBenchTreeItem } from "./common/baseTreeItem";
+import { ProjectDataService } from "../services/projectDataService";
 
 // Event payload for when cycle data is prepared for the Test Theme tree
 export interface CycleDataForThemeTreeEvent {
@@ -67,6 +67,8 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
 
     // Store keys of expanded tree nodes to restore expansion state of collapsible elements after a refresh.
     private expandedTreeItems: Set<string> = new Set<string>();
+    private readonly extensionContext: vscode.ExtensionContext;
+    private readonly projectDataService: ProjectDataService;
 
     /**
      * Constructs a new ProjectManagementTreeDataProvider.
@@ -75,10 +77,14 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      */
     constructor(
         updateMessageCallback: (message: string | undefined) => void,
-        testThemeTreeDataProviderInstance: TestThemeTreeDataProvider | null
+        testThemeTreeDataProviderInstance: TestThemeTreeDataProvider | null,
+        extensionContext: vscode.ExtensionContext,
+        projectDataService: ProjectDataService
     ) {
         this.updateMessageCallback = updateMessageCallback;
         this.testThemeTreeDataProvider = testThemeTreeDataProviderInstance;
+        this.extensionContext = extensionContext;
+        this.projectDataService = projectDataService;
         vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
         logger.trace("ProjectManagementTreeDataProvider initialized.");
     }
@@ -95,9 +101,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             this.resetCustomRootInternally();
         }
 
-        if (!connection) {
-            this.updateMessageCallback("Not connected to TestBench. Please log in.");
-        } else if (this.customRootKey && this.customRootJsonData) {
+        if (this.customRootKey && this.customRootJsonData) {
             this.updateMessageCallback(undefined);
         } else {
             this.updateMessageCallback("Loading projects...");
@@ -155,10 +159,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return null;
         }
 
-        const cycleData: CycleStructure | null = await connection.fetchCycleStructureOfCycleInProject(
-            projectKey,
-            cycleKey
-        );
+        const cycleData = await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
 
         if (!cycleData) {
             logger.trace("No cycle structure data returned from server (getRawCycleData).");
@@ -432,6 +433,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             contextValue,
             defaultCollapsibleState,
             itemData,
+            this.extensionContext,
             parent
         );
 
@@ -463,7 +465,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             return [];
         }
 
-        const projectTree: TreeNode | null = await connection!.getProjectTreeOfProject(projectKey);
+        const projectTree: TreeNode | null = await this.projectDataService.getProjectTree(projectKey);
 
         if (projectTree && projectTree.children && projectTree.children.length > 0) {
             return projectTree.children
@@ -506,7 +508,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      */
     private async getRootProjects(): Promise<BaseTestBenchTreeItem[]> {
         logger.debug("Fetching all projects for the root of Project Management Tree.");
-        const projectList: Project[] | null = await connection!.getProjectsList();
+        const projectList: Project[] | null = await this.projectDataService.getProjectsList();
 
         if (projectList && projectList.length > 0) {
             this.updateMessageCallback(undefined);
@@ -553,10 +555,6 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @returns {Promise<BaseTestBenchTreeItem[]>} A promise that resolves to an array of TestbenchTreeItems.
      */
     async getChildren(treeElement?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
-        if (!connection) {
-            this.updateMessageCallback("Not connected to TestBench. Please log in.");
-            return [];
-        }
         try {
             if (!treeElement) {
                 // Requesting root level items
@@ -1061,207 +1059,6 @@ export function findCycleKeyOfTreeElement(element: BaseTestBenchTreeItem): strin
     const cycleKeyNotFoundErrorMessage: string = `Cycle key not found in tree element: ${element.label}`;
     logger.error(cycleKeyNotFoundErrorMessage);
     return null;
-}
-
-/**
- * Represents a tree item (Project, TOV, Cycle, TestThemeNode, TestCaseSetNode, etc.) in the tree view.
- */
-export class BaseTestBenchTreeItem extends vscode.TreeItem {
-    public parent: BaseTestBenchTreeItem | null;
-    public children?: BaseTestBenchTreeItem[];
-    public statusOfTreeItem: string;
-    public originalContextValue?: string;
-    public _isMarkedForImport: boolean = false;
-
-    /**
-     * Constructs a new TestbenchTreeItem.
-     *
-     * @param {string} label The label to display.
-     * @param {string} contextValue The type of the tree item.
-     * @param {vscode.TreeItemCollapsibleState} collapsibleState The initial collapsible state.
-     * @param {any} item The original data of the tree item.
-     * @param {BaseTestBenchTreeItem | null} parent The parent tree item.
-     */
-    constructor(
-        label: string,
-        contextValue: string,
-        collapsibleState: vscode.TreeItemCollapsibleState,
-        public item: any,
-        parent: BaseTestBenchTreeItem | null = null
-    ) {
-        super(label, collapsibleState);
-        this.contextValue = contextValue;
-        this.originalContextValue = contextValue;
-        this.parent = parent;
-        this.statusOfTreeItem = item.exec?.status || item.status || "None"; // Possible values: Active, Planned, Finished, Closed, etc.
-
-        // item.base is specific to CycleStructure nodes (TestThemes, TestCaseSets)
-        const itemDataForTooltip = item?.base || item;
-
-        // Set the tooltip based on the context value.
-        if (
-            contextValue === TreeItemContextValues.PROJECT ||
-            contextValue === TreeItemContextValues.VERSION ||
-            contextValue === TreeItemContextValues.CYCLE ||
-            (this.originalContextValue &&
-                (
-                    [
-                        TreeItemContextValues.PROJECT,
-                        TreeItemContextValues.VERSION,
-                        TreeItemContextValues.CYCLE
-                    ] as string[]
-                ).includes(this.originalContextValue))
-        ) {
-            this.tooltip = `Type: ${this.originalContextValue || contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nKey: ${itemDataForTooltip.key}`;
-            if (
-                (this.originalContextValue === TreeItemContextValues.PROJECT ||
-                    contextValue === TreeItemContextValues.PROJECT) &&
-                item
-            ) {
-                this.tooltip += `\nTOVs: ${item.tovsCount || 0}\nCycles: ${item.cyclesCount || 0}`;
-            }
-        } else if (
-            contextValue === TreeItemContextValues.TEST_THEME_NODE ||
-            contextValue === TreeItemContextValues.TEST_CASE_SET_NODE ||
-            contextValue === TreeItemContextValues.TEST_CASE_NODE ||
-            (this.originalContextValue &&
-                (
-                    [TreeItemContextValues.TEST_THEME_NODE, TreeItemContextValues.TEST_CASE_SET_NODE] as string[]
-                ).includes(this.originalContextValue))
-        ) {
-            if (itemDataForTooltip?.numbering) {
-                this.tooltip = `Numbering: ${itemDataForTooltip.numbering}\nType: ${itemDataForTooltip.elementType || this.originalContextValue || contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nID: ${itemDataForTooltip.uniqueID}`;
-            } else {
-                this.tooltip = `Type: ${itemDataForTooltip.elementType || this.originalContextValue || contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nID: ${itemDataForTooltip.uniqueID}`;
-            }
-            this.description = itemDataForTooltip?.uniqueID || "";
-        } else if (
-            contextValue === TreeItemContextValues.CUSTOM_ROOT_PROJECT ||
-            contextValue === TreeItemContextValues.CUSTOM_ROOT_TEST_THEME
-        ) {
-            this.tooltip = `Custom Root View\nType: ${this.originalContextValue || "N/A"}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}`;
-        }
-
-        // Set the command to be executed when the tree item is clicked.
-        // Without this command, an already clicked cycle item is not clickable again.
-        if (contextValue === TreeItemContextValues.CYCLE) {
-            this.command = {
-                command: allExtensionCommands.handleProjectCycleClick,
-                title: "Show Test Themes",
-                arguments: [this]
-            };
-        }
-
-        this.updateIcon();
-    }
-
-    /**
-     * Determines the icon path for the tree item based on its type and status.
-     * Currently this is not used fully, but it allows to have different icons for different statuses of the tree items like the TestBench Client.
-     *
-     * @returns The absolute icon path to the icon file.
-     */
-    private getIconPath(): { light: string; dark: string } {
-        const iconFolderPath: string = path.join(__dirname, "..", "resources", "icons");
-        let contextValueForIconLookup: string | undefined = this.contextValue;
-        let isTreeItemMarkedForImport: boolean = false;
-        if (
-            this.contextValue === TreeItemContextValues.MARKED_TEST_THEME_NODE ||
-            this.contextValue === TreeItemContextValues.MARKED_TEST_CASE_SET_NODE
-        ) {
-            contextValueForIconLookup = this.originalContextValue;
-            isTreeItemMarkedForImport = true;
-        } else if (
-            (this.contextValue === TreeItemContextValues.CUSTOM_ROOT_PROJECT ||
-                this.contextValue === TreeItemContextValues.CUSTOM_ROOT_TEST_THEME) &&
-            this._isMarkedForImport
-        ) {
-            contextValueForIconLookup = this.originalContextValue;
-            isTreeItemMarkedForImport = true;
-        } else {
-            contextValueForIconLookup = this.originalContextValue || this.contextValue;
-        }
-
-        const status: string = this.statusOfTreeItem?.toLowerCase() || "default"; // (Active, Planned, Finished, Closed etc.)
-
-        // Map the context and status to the corresponding icon file name
-        const iconMap: Record<
-            string,
-            Record<string, { light: string; dark: string; markedLight?: string; markedDark?: string }>
-        > = {
-            [TreeItemContextValues.PROJECT]: {
-                active: { light: "project-light.svg", dark: "project-dark.svg" },
-                planned: { light: "project-light.svg", dark: "project-dark.svg" },
-                finished: { light: "project-light.svg", dark: "project-dark.svg" },
-                closed: { light: "project-light.svg", dark: "project-dark.svg" },
-                default: { light: "project-light.svg", dark: "project-dark.svg" }
-            },
-            [TreeItemContextValues.VERSION]: {
-                active: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" },
-                planned: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" },
-                finished: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" },
-                closed: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" },
-                default: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" }
-            },
-            [TreeItemContextValues.CYCLE]: {
-                active: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" },
-                planned: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" },
-                finished: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" },
-                closed: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" },
-                default: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" }
-            },
-            [TreeItemContextValues.TEST_THEME_NODE]: {
-                default: {
-                    light: "TestThemeOriginal-light.svg",
-                    dark: "TestThemeOriginal-dark.svg",
-                    markedLight: "TestThemeOriginal-marked-light.svg",
-                    markedDark: "TestThemeOriginal-marked-dark.svg"
-                }
-            },
-            [TreeItemContextValues.TEST_CASE_SET_NODE]: {
-                default: {
-                    light: "TestCaseSetOriginal-light.svg",
-                    dark: "TestCaseSetOriginal-dark.svg",
-                    markedLight: "TestCaseSetOriginal-marked-light.svg",
-                    markedDark: "TestCaseSetOriginal-marked-dark.svg"
-                }
-            },
-            [TreeItemContextValues.TEST_CASE_NODE]: {
-                default: { light: "TestCase-light.svg", dark: "TestCase-dark.svg" }
-            },
-            default: {
-                default: { light: "testbench-logo.svg", dark: "testbench-logo.svg" }
-            }
-        };
-
-        // Map the context and status to the corresponding icon file name
-        const typeIcons = iconMap[contextValueForIconLookup as keyof typeof iconMap] || iconMap["default"];
-        let iconFileNames = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
-
-        if (ENABLE_ICON_MARKING_ON_GENERATE && (this._isMarkedForImport || isTreeItemMarkedForImport)) {
-            if (iconFileNames.markedLight && iconFileNames.markedDark) {
-                iconFileNames = { light: iconFileNames.markedLight, dark: iconFileNames.markedDark };
-            } else {
-                logger.warn(`[getIconPath] Marked icons not defined for type: ${contextValueForIconLookup}`);
-            }
-        }
-
-        return {
-            light: path.join(iconFolderPath, iconFileNames.light),
-            dark: path.join(iconFolderPath, iconFileNames.dark)
-        };
-    }
-
-    /**
-     * Updates the tree item's icon.
-     */
-    updateIcon(): void {
-        const iconPaths = this.getIconPath();
-        this.iconPath = {
-            light: vscode.Uri.file(iconPaths.light),
-            dark: vscode.Uri.file(iconPaths.dark)
-        };
-    }
 }
 
 /**
