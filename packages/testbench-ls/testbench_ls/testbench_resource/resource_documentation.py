@@ -1,4 +1,3 @@
-
 from robot.libdocpkg import LibraryDocumentation
 from robot.libdocpkg.model import KeywordDoc
 

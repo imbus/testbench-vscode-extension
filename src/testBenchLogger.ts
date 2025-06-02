@@ -6,7 +6,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as utils from "./utils";
-import { getConfig } from "./extension";
+import { getExtensionConfiguration } from "./configuration";
 import { ConfigKeys, folderNameOfInternalTestbenchFolder } from "./constants";
 
 // Use the native promises API for filesystem operations.
@@ -73,7 +73,7 @@ export class TestBenchLogger {
         this.logFolderPath = path.join(__dirname, folderNameOfLogs);
         this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
         this.outputLogToTerminal = outputToTerminal === true;
-        this.cachedLogLevel = getConfig().get(ConfigKeys.LOGGER_LEVEL, "No logging");
+        this.cachedLogLevel = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
         // Begin asynchronous initialization
         this.initPromise = this.initialize();
     }
@@ -110,7 +110,7 @@ export class TestBenchLogger {
      * @returns {boolean} True if the log level was updated, false otherwise.
      */
     public updateCachedLogLevel(): boolean {
-        const newLogLevel: string = getConfig().get("testBenchLogger", "No logging");
+        const newLogLevel: string = getExtensionConfiguration().get("testBenchLogger", "No logging");
         if (this.cachedLogLevel !== newLogLevel) {
             const oldLogLevel: string = this.cachedLogLevel;
             this.cachedLogLevel = newLogLevel;

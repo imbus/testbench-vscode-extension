@@ -8,8 +8,9 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as utils from "./utils";
-import { connection, logger, getConfig, testElementsTreeDataProvider, testElementTreeView } from "./extension";
+import { connection, logger, testElementsTreeDataProvider, testElementTreeView } from "./extension";
 import { ConfigKeys, TreeItemContextValues } from "./constants";
+import { getExtensionConfiguration, getExtensionSetting } from "./configuration";
 
 type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
@@ -54,55 +55,15 @@ export interface TestElementData {
  * @returns {RegExp[]} An array of valid JavaScript RegExp objects.
  */
 function getResourceRegexPatternsFromExtensionSettings(): RegExp[] {
-    const pythonResourceRegexPatternsInExtensionSettings: string[] = getConfig().get(
-        ConfigKeys.TB2ROBOT_RESOURCE_REGEX,
-        []
-    );
-    logger.trace("Resource regex patterns from settings:", pythonResourceRegexPatternsInExtensionSettings);
-
-    /**
-     * Converts a simplr Python-style regex string to a more JavaScript-compatible regex string.
-     * This handles common differences like named capture groups.
-     * @param {string} pythonRegex The Python regex pattern string.
-     * @returns {string} The converted JavaScript regex pattern string.
-     */
-    function convertPythonRegexToJs(pythonRegex: string): string {
-        // Replace named capture group syntax ( Transform (?P<name>... into (?<name>... )
-        let javascriptRegex: string = pythonRegex.replace(/\(\?P<([^>]+)>([^)]+)\)/g, "(?<$1>$2)");
-
-        // Replace \s* with \s*
-        javascriptRegex = javascriptRegex.replace(/\\s\*/g, "\\s*");
-
-        // Replace [Robot-Resource] with \[Robot-Resource\]
-        javascriptRegex = javascriptRegex.replace(/\[Robot-Resource\]/g, "\\[Robot-Resource\\]");
-
-        // Replace .* with .*
-        javascriptRegex = javascriptRegex.replace(/\.\*/g, "\\.*");
-
-        // Replace . with \.
-        javascriptRegex = javascriptRegex.replace(/(?<!\\)\./g, "\\.");
-
-        return javascriptRegex;
+    const resourceMarkers: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+    if (resourceMarkers === undefined) {
+        return [];
     }
-
-    const JSlibraryRegexPatterns: RegExp[] = pythonResourceRegexPatternsInExtensionSettings
-        .map((pythonRegexPattern) => {
-            logger.trace(`Converting python regex pattern: ${pythonRegexPattern}`);
-            const convertedJSPattern: string = convertPythonRegexToJs(pythonRegexPattern);
-            logger.trace(`Converted to javascript regex pattern: ${convertedJSPattern}`);
-            try {
-                const regex: RegExp = new RegExp(convertedJSPattern, "u");
-                logger.trace(`Created JS regex: ${regex}`);
-                return regex;
-            } catch (error) {
-                logger.error(`Invalid JS regex pattern: ${convertedJSPattern}`, error);
-                return null;
-            }
-        })
-        .filter((regex): regex is RegExp => regex !== null);
-
-    logger.trace("Final JS regex patterns to use:", JSlibraryRegexPatterns);
-    return JSlibraryRegexPatterns;
+    const resourceRegexPatterns: RegExp[] = resourceMarkers.map((marker) => {
+        const escapedResourceMarker = marker.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+        return new RegExp(`(?:.*\\.)?(?<resourceName>[^.]+?)\\s*${escapedResourceMarker}.*`);
+    });
+    return resourceRegexPatterns;
 }
 
 /**
@@ -599,7 +560,10 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
                     "Select a Test Object Version (TOV) from the 'Projects' view to load test elements."
                 );
             } else {
-                const filterPatterns: string[] = getConfig().get(ConfigKeys.TB2ROBOT_RESOURCE_REGEX, []);
+                const filterPatterns: string[] = getExtensionConfiguration().get(
+                    ConfigKeys.TB2ROBOT_RESOURCE_MARKER,
+                    []
+                );
                 if (filterPatterns && filterPatterns.length > 0) {
                     this.setTreeViewMessage("No test elements match the current filter criteria.");
                 } else {
@@ -672,7 +636,10 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
         this.currentTreeData = buildTree(flatTestElementsJsonData);
         if (testElementTreeView) {
             if (this.isTreeDataEmpty()) {
-                const filterPatterns: string[] = getConfig().get(ConfigKeys.TB2ROBOT_RESOURCE_REGEX, []);
+                const filterPatterns: string[] = getExtensionConfiguration().get(
+                    ConfigKeys.TB2ROBOT_RESOURCE_MARKER,
+                    []
+                );
                 if (filterPatterns && filterPatterns.length > 0) {
                     this.treeViewMessageUpdater("No test elements match the current filter criteria.");
                 } else {

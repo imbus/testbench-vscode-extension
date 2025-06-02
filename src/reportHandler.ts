@@ -16,7 +16,6 @@ import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import JSZip from "jszip";
 import axios, { AxiosResponse } from "axios";
 import {
-    getConfig,
     connection,
     logger,
     projectManagementTreeDataProvider,
@@ -33,6 +32,7 @@ import {
 } from "./constants";
 import { extractDataFromReport, PlayServerConnection, withRetry } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
+import { getExtensionConfiguration } from "./configuration";
 
 /**
  * Saves the last generated report parameters to workspace storage.
@@ -837,7 +837,7 @@ async function runRobotFrameworkTestGenerationProcess(
  * @param {string} reportZipFilePath The path of the report zip file.
  */
 export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath: string): Promise<void> {
-    if (getConfig().get<boolean>(ConfigKeys.CLEAR_REPORT_AFTER_PROCESSING)) {
+    if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_REPORT_AFTER_PROCESSING)) {
         await removeReportZipFile(reportZipFilePath);
     } else {
         logger.debug("Report ZIP file removal skipped per the extension settings.");
@@ -939,7 +939,7 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
 
     // To use relative paths to the workspace root,
     // get the workspace location to construct the full path of outputXmlFilePath.
-    const outputXMLFileRelativePathInExtensionSettings: string | undefined = getConfig().get<string>(
+    const outputXMLFileRelativePathInExtensionSettings: string | undefined = getExtensionConfiguration().get<string>(
         ConfigKeys.TB2ROBOT_OUTPUT_XML_PATH
     );
     const outputXMLFileAbsolutePath: string | null = await utils.constructAbsolutePathFromRelativePath(
