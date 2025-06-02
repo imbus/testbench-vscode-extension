@@ -1342,7 +1342,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     invokedOnItem: projectManagementTreeView.BaseTestBenchTreeItem
 ): Promise<void | null> {
     logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
-    logger.trace(`@@@@ Invoked on item: ${invokedOnItem.label}`);
+    logger.trace(`Invoked on item: ${invokedOnItem.label}`);
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
