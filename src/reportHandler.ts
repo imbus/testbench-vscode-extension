@@ -1159,12 +1159,27 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
  * Gets the appropriate reportRootUID for import based on the selected item
  */
 function getReportRootUIDForImport(item: projectManagementTreeView.BaseTestBenchTreeItem): string | undefined {
-    if (testThemeTreeDataProvider && typeof testThemeTreeDataProvider.getReportRootUIDForItem === "function") {
-        return testThemeTreeDataProvider.getReportRootUIDForItem(item);
+    logger.debug(`[getReportRootUIDForImport] Getting report root UID for item: ${item.label}`);
+    logger.trace(`[getReportRootUIDForImport] Item details:`, {
+        label: item.label,
+        contextValue: item.contextValue,
+        originalContextValue: item.originalContextValue,
+        itemKey: item.item?.base?.key || item.item?.key,
+        itemUID: item.item?.base?.uniqueID || item.item?.uniqueID
+    });
+
+    if (testThemeTreeDataProvider) {
+        const reportRootUID = testThemeTreeDataProvider.getReportRootUIDForItem(item);
+        logger.debug(
+            `[getReportRootUIDForImport] TestThemeTreeDataProvider returned UID: ${reportRootUID} for item: ${item.label}`
+        );
+        return reportRootUID;
     }
 
     // Fallback to items own UID
-    return item.item?.base?.uniqueID || item.item?.uniqueID;
+    const fallbackUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+    logger.debug(`[getReportRootUIDForImport] Using fallback UID: ${fallbackUID} for item: ${item.label}`);
+    return fallbackUID;
 }
 
 /**
@@ -1185,7 +1200,9 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
     reportRootUID: string
 ): Promise<void | null> {
     try {
-        logger.debug(`Importing report with results to TestBench server for specific UID: ${reportRootUID}`);
+        logger.debug(`[Import] Starting import for specific UID: ${reportRootUID}`);
+        logger.debug(`[Import] Report file: ${reportWithResultsZipFilePath}`);
+        logger.debug(`[Import] Target: Project ${projectKeyString}, Cycle ${cycleKeyString}`);
 
         const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
         if (!uniqueID) {
@@ -1194,6 +1211,9 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             logger.error(extractionErrorMsg);
             return null;
         }
+
+        logger.debug(`[Import] Extracted report cycle root UID from zip: ${uniqueID}`);
+        logger.debug(`[Import] Using specific target UID for import: ${reportRootUID}`);
 
         const projectKey: number = Number(projectKeyString);
         const cycleKey: number = Number(cycleKeyString);
@@ -1262,11 +1282,15 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
  */
 async function checkIfSubElementWasImported(context: vscode.ExtensionContext, reportRootUID: string): Promise<boolean> {
     try {
-        const importedSubElements: Set<string> = context.workspaceState.get<Set<string>>(
-            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY,
-            new Set()
+        const storedArray: string[] | undefined = context.workspaceState.get<string[]>(
+            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY
         );
-        return importedSubElements.has(reportRootUID);
+
+        if (storedArray && Array.isArray(storedArray)) {
+            const importedSubElementsSet: Set<string> = new Set(storedArray);
+            return importedSubElementsSet.has(reportRootUID);
+        }
+        return false;
     } catch (error) {
         logger.error("Error checking sub-element import status:", error);
         return false;
@@ -1278,10 +1302,13 @@ async function checkIfSubElementWasImported(context: vscode.ExtensionContext, re
  */
 async function markSubElementAsImported(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
     try {
-        const importedSubElements: Set<string> = context.workspaceState.get<Set<string>>(
-            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY,
-            new Set()
+        const storedArray: string[] | undefined = context.workspaceState.get<string[]>(
+            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY
         );
+        // Convert Array to a Set for lookups
+        const importedSubElements: Set<string> =
+            storedArray && Array.isArray(storedArray) ? new Set(storedArray) : new Set();
+
         importedSubElements.add(reportRootUID);
         await context.workspaceState.update(
             StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY,
@@ -1315,6 +1342,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     invokedOnItem: projectManagementTreeView.BaseTestBenchTreeItem
 ): Promise<void | null> {
     logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
+    logger.trace(`@@@@ Invoked on item: ${invokedOnItem.label}`);
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -1381,6 +1409,18 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 if (cancellationToken.isCancellationRequested) {
                     logger.trace("Cancelled after param retrieval.");
                     return null;
+                }
+
+                // Validate that we're not accidentally using a parent's UID
+                const itemOwnUID = invokedOnItem.item?.base?.uniqueID || invokedOnItem.item?.uniqueID;
+                if (reportRootUIDOfInvokedItem !== itemOwnUID) {
+                    logger.warn(
+                        `[Import Process] Report root UID (${reportRootUIDOfInvokedItem}) differs from item's own UID (${itemOwnUID}). This might indicate an issue with UID resolution.`
+                    );
+                } else {
+                    logger.debug(
+                        `[Import Process] Confirmed: Using item's own UID for targeted import: ${reportRootUIDOfInvokedItem}`
+                    );
                 }
 
                 progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });

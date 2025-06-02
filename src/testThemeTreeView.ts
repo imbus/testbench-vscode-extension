@@ -642,21 +642,32 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             return undefined;
         }
 
+        // Always use the item's own UID for targeted import
+        // This ensures that when importing a child element, we use that specific child's UID
+        // rather than the original root element's UID
+        const importInfo = this.shouldShowImportFunctionality(itemKey);
+        if (importInfo.shouldShow) {
+            const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+            logger.trace(
+                `[getReportRootUIDForItem] Using item's own UID for targeted import: ${itemUID} (item: ${item.label})`
+            );
+            return itemUID;
+        }
+
         // If this item was directly generated, use its own UID
         if (
             this.currentMarkedItemInfo &&
             this.currentMarkedItemInfo.key === itemKey &&
             this.currentMarkedItemInfo.isDirectlyGenerated
         ) {
-            return item.item?.base?.uniqueID || item.item?.uniqueID;
+            const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+            logger.trace(
+                `[getReportRootUIDForItem] Using directly generated item's UID: ${itemUID} (item: ${item.label})`
+            );
+            return itemUID;
         }
 
-        // For sub items, use its own UID for targeted import
-        const importInfo = this.shouldShowImportFunctionality(itemKey);
-        if (importInfo.shouldShow) {
-            return item.item?.base?.uniqueID || item.item?.uniqueID;
-        }
-
+        logger.trace(`[getReportRootUIDForItem] No import functionality available for item: ${item.label}`);
         return undefined;
     }
 

@@ -20,7 +20,6 @@ import * as utils from "./utils";
 import path from "path";
 import {
     allExtensionCommands,
-    baseKeyOfExtension,
     ConfigKeys,
     ContextKeys,
     folderNameOfInternalTestbenchFolder,
