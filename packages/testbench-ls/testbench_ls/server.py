@@ -32,6 +32,7 @@ from testbench2robotframework.testbench2robotframework import testbench2robotfra
 from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
+from .messages import ERROR_CONTEXT_NOT_SET, ERROR_CONTEXT_MISMATCH, ERROR_EMPTY_OUTPUT_DIRECTORY, ERROR_SUBDIVISON_MAPPING_FORMAT, ERROR_PUSH_KEYWORD, ERROR_KEYWORD_IS_LOCKED
 from .testbench_api.testbench_patch import patch_interaction_details
 from .testbench_resource.resource_creation import (
     create_keyword,
@@ -113,10 +114,7 @@ def parse_subdivision_mapping(ls: LanguageServer, values: list[str]) -> dict[str
             subdivision, import_value = value.split(":", 1)
             subdivision_mapping[subdivision] = import_value
         except ValueError:
-            ls.send_notification(
-                "custom/notification",
-                {"message": "Each subdivision and library mapping must be in 'name:value' format."},
-            )
+            send_notification(ls, ERROR_SUBDIVISON_MAPPING_FORMAT)
     return subdivision_mapping
 
 
@@ -151,10 +149,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         testbench2robotframework(report_path, toml_settings)
     else:
         if kwargs.get("output_directory") == "":
-            ls.send_notification(
-                "custom/notification",
-                {"message": "Output Directory of TestBench2RobotFramework cannot be empty."},
-            )
+            send_notification(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
             return
         testbench2robotframework(report_path, settings)
 
@@ -283,11 +278,11 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     if not project or not tov:
         send_notification(
             ls,
-            f"TestBench context not set: Specify the context in the comment section of your resource file in the format 'tb:context:<project>/<tov>'."
+            ERROR_CONTEXT_NOT_SET
         )
         return
     if project != ls.project or tov != ls.tov:
-        send_notification(ls, f"Mismatching TestBench context: Use the project view to select the tov that corresponds to your resource file.")
+        send_notification(ls, ERROR_CONTEXT_MISMATCH)
         return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
@@ -487,15 +482,9 @@ def push_testbench_keyword(ls: LanguageServer, args):
         )
     except requests.exceptions.HTTPError as http_error:
         if http_error.response.status_code == 409:
-            ls.send_notification(
-                "custom/notification",
-                {"message": "Failed to push keyword: Element is locked in TestBench."},
-            )
+            send_notification(ls,f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
-            ls.send_notification(
-                "custom/notification",
-                {"message": f"Failed to push keyword: {http_error.response.text}"},
-            )
+            send_notification(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
 
 
 # @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
