@@ -98,6 +98,13 @@ class TestBenchLanguageServer(LanguageServer):
 
 testbench_ls = TestBenchLanguageServer()
 
+def send_notification(ls: LanguageServer, message: str):
+    """Send a notification to the client."""
+    ls.send_notification(
+        "custom/notification",
+        {"message": message},
+    )
+
 
 def parse_subdivision_mapping(ls: LanguageServer, values: list[str]) -> dict[str, str]:
     subdivision_mapping = {}
@@ -272,13 +279,15 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     )
     existing_resource = TestBenchResourceModel.from_file(document.source)
     project, tov = existing_resource.tb_tov_context
-    if project != ls.project or tov != ls.tov:
-        ls.send_notification(
-            "custom/notification",
-            {
-                "message": f"Mismatching TestBench context: Selected context is '{ls.project}/{ls.tov}' instead of '{project}/{tov}'.",
-            },
+    logging.info(f"Project: {project}, TOV: {tov}")
+    if not project or not tov:
+        send_notification(
+            ls,
+            f"TestBench context not set: Specify the context in the comment section of your resource file in the format 'tb:context:<project>/<tov>'."
         )
+        return
+    if project != ls.project or tov != ls.tov:
+        send_notification(ls, f"Mismatching TestBench context: Use the project view to select the tov that corresponds to your resource file.")
         return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
@@ -289,7 +298,6 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         else:
             _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
         edits.extend(keyword_section_edit(kw_section_start, change_identifier))
-
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     for new_keyword in new_resource.keyword_section.body:
@@ -299,7 +307,6 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
             edits.extend(create_keyword_edits(existing_keyword, new_keyword, change_identifier))
         else:
             edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
-
     if edits:
         edit = WorkspaceEdit(
             document_changes=[
