@@ -105,10 +105,19 @@ class TestBenchResourceModel:
 
     @property
     def tb_subdivision_uid(self) -> str:
-        uid_match = re.match(r".*tb:uid:(?P<tb_uid>.*$)", "".join(self.comments), re.MULTILINE)
+        uid_match = re.search(r".*tb:uid:(?P<tb_uid>.*$)", "".join(self.comments), re.MULTILINE)
         if uid_match:
             return uid_match.group("tb_uid")
         return ""
+    
+    @property
+    def tb_tov_context(self) -> tuple[str, str]:
+        context_match = re.search(r".*tb:context:(?P<tb_context>.*$)", "".join(self.comments), re.MULTILINE)
+        if context_match:
+            return tuple(context_match.group("tb_context").split("/", 1))
+        import logging
+        logging.info(f"No match {''.join(self.comments)}")
+        return ("", "")
 
     @property
     def keyword_names(self) -> list[str]:

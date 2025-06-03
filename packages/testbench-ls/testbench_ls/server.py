@@ -271,6 +271,15 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         uid=subdivision_uid,
     )
     existing_resource = TestBenchResourceModel.from_file(document.source)
+    project, tov = existing_resource.tb_tov_context
+    if project != ls.project or tov != ls.tov:
+        ls.send_notification(
+            "custom/notification",
+            {
+                "message": f"Mismatching TestBench context: Selected context is '{ls.project}/{ls.tov}' instead of '{project}/{tov}'.",
+            },
+        )
+        return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
     create_kw_section = not bool(get_keyword_section(existing_resource.file))
