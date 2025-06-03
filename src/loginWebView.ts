@@ -812,7 +812,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     border-radius: 4px; 
                     flex-shrink: 0; 
                     max-width: 32px;
+                    position: relative;
                 }
+                  ul#profilesList li.profile-being-edited .profile-actions button[disabled][title]:hover::after {
+                    display: none;
+                }  
                 button {
                     background-color: var(--vscode-button-background);
                     color: var(--vscode-button-foreground);
