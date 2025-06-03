@@ -1099,24 +1099,24 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 body[data-vscode-theme-kind="vscode-dark"] .delete-btn,
                 body[data-vscode-theme-kind="vscode-high-contrast"] .login-btn,
                 body[data-vscode-theme-kind="vscode-high-contrast"] .edit-btn,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .delete-btn { 
-                    background-color: var(--vscode-button-primaryBackground, var(--vscode-button-background));
-                    color: var(--vscode-button-primaryForeground, var(--vscode-button-foreground)); 
-                    border-color: var(--vscode-button-primaryBackground, var(--vscode-button-border)); 
+                body[data-vscode-theme-kind="vscode-high-contrast"] .delete-btn {
+                    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+                    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+                    border-color: var(--vscode-button-secondaryBackground, var(--vscode-button-border));
                 }
-                
+
                 /* Dark Mode & High Contrast (Dark) Hovers for login and edit buttons */
                 body[data-vscode-theme-kind="vscode-dark"] .login-btn:hover,
                 body[data-vscode-theme-kind="vscode-dark"] .edit-btn:hover,
                 body[data-vscode-theme-kind="vscode-high-contrast"] .login-btn:hover,
                 body[data-vscode-theme-kind="vscode-high-contrast"] .edit-btn:hover {
-                    background-color: var(--vscode-button-primaryHoverBackground, var(--vscode-button-hoverBackground));
+                    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
                 }
 
                 /* Explicit Dark Mode & High Contrast (Dark) Hover for delete button to be red */
                 body[data-vscode-theme-kind="vscode-dark"] button.delete-btn:hover,
                 body[data-vscode-theme-kind="vscode-high-contrast"] button.delete-btn:hover {
-                    background-color: var(--vscode-errorForeground); 
+                    background-color: var(--vscode-errorForeground);
                     color: var(--vscode-button-primaryForeground, white);
                     border-color: var(--vscode-errorForeground);
                     opacity: 0.8;
