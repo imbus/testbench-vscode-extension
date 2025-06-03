@@ -28,6 +28,7 @@ import { displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testTheme
 import { displayTestElementsTreeView } from "./testElementsView/testElementsTreeView";
 import { BaseTestBenchTreeItem } from "./common/baseTreeItem";
 import { ProjectDataService } from "../services/projectDataService";
+import { BaseTreeDataProvider } from "./common/baseTreeDataProvider";
 
 // Event payload for when cycle data is prepared for the Test Theme tree
 export interface CycleDataForThemeTreeEvent {
@@ -42,91 +43,89 @@ export interface CycleDataForThemeTreeEvent {
  * This tree view displays the selected project, its test object versions, and cycles.
  * When a test cycle element is clicked, its children (test themes and test case sets) are offloaded to the test theme tree view.
  */
-export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvider<BaseTestBenchTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<
-        BaseTestBenchTreeItem | BaseTestBenchTreeItem[] | void | undefined
-    > = // Allow undefined for root refresh
-        new vscode.EventEmitter<BaseTestBenchTreeItem | BaseTestBenchTreeItem[] | void | undefined>();
-    readonly onDidChangeTreeData: vscode.Event<BaseTestBenchTreeItem | BaseTestBenchTreeItem[] | void | undefined> =
-        this._onDidChangeTreeData.event;
-
+export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<BaseTestBenchTreeItem> {
     private _onDidPrepareCycleDataForThemeTree: vscode.EventEmitter<CycleDataForThemeTreeEvent> =
         new vscode.EventEmitter<CycleDataForThemeTreeEvent>();
     public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
         this._onDidPrepareCycleDataForThemeTree.event;
 
-    // Callback for message updates
-    private updateMessageCallback: (message: string | undefined) => void;
+    private readonly projectDataService: ProjectDataService;
     private testThemeTreeDataProvider: TestThemeTreeDataProvider | null;
 
-    // Variables to temporarily set a custom root item in the tree view.
-    private customRootKey: string | null = null;
-    private customRootJsonData: any | null = null;
-    public customRootItemInstance: BaseTestBenchTreeItem | null = null;
-    public originalCustomRootContextValue: string | null = null;
-
-    // Store keys of expanded tree nodes to restore expansion state of collapsible elements after a refresh.
-    private expandedTreeItems: Set<string> = new Set<string>();
-    private readonly extensionContext: vscode.ExtensionContext;
-    private readonly projectDataService: ProjectDataService;
-
-    /**
-     * Constructs a new ProjectManagementTreeDataProvider.
-     * @param {function} updateMessageCallback Callback to update the message in the tree view.
-     * @param {TestThemeTreeDataProvider} testThemeTreeDataProviderInstance Instance of the TestThemeTreeDataProvider.
-     */
     constructor(
         updateMessageCallback: (message: string | undefined) => void,
         testThemeTreeDataProviderInstance: TestThemeTreeDataProvider | null,
         extensionContext: vscode.ExtensionContext,
         projectDataService: ProjectDataService
     ) {
-        this.updateMessageCallback = updateMessageCallback;
-        this.testThemeTreeDataProvider = testThemeTreeDataProviderInstance;
-        this.extensionContext = extensionContext;
+        super(extensionContext, updateMessageCallback);
         this.projectDataService = projectDataService;
-        vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
-        logger.trace("ProjectManagementTreeDataProvider initialized.");
+        this.testThemeTreeDataProvider = testThemeTreeDataProviderInstance;
+        logger.trace("[ProjectManagementTreeDataProvider] Initialized.");
+    }
+
+    protected getContextKeyForCustomRootSet(): string {
+        return ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT;
+    }
+
+    protected getActualContextValueForCustomRootItem(): string {
+        return TreeItemContextValues.CUSTOM_ROOT_PROJECT;
+    }
+
+    protected async getChildrenForTreeView(element?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
+        if (!element) {
+            return await this.getRootProjects();
+        }
+        if (element.contextValue === TreeItemContextValues.PROJECT) {
+            return await this.getChildrenForProject(element);
+        }
+        if (element.contextValue === TreeItemContextValues.VERSION) {
+            return this.getChildrenForVersion(element);
+        }
+        if (element.contextValue === TreeItemContextValues.CYCLE) {
+            return [];
+        }
+        return element.children || [];
+    }
+
+    protected async getChildrenOfCustomRoot(
+        customRootElement: BaseTestBenchTreeItem
+    ): Promise<BaseTestBenchTreeItem[]> {
+        const originalContext = this.originalCustomRootContextValue || customRootElement.contextValue;
+        logger.debug(
+            `[ProjectManagementTreeDataProvider] Fetching children for custom root item: ${customRootElement.label} (Original type: ${originalContext})`
+        );
+
+        if (originalContext === TreeItemContextValues.PROJECT) {
+            return await this.getChildrenForProject(customRootElement);
+        } else if (originalContext === TreeItemContextValues.VERSION) {
+            return this.getChildrenForVersion(customRootElement);
+        } else if (originalContext === TreeItemContextValues.CYCLE) {
+            return [];
+        }
+        logger.warn(
+            `[ProjectManagementTreeDataProvider] Custom root item ${customRootElement.label} is of unhandled original type for children: ${originalContext}`
+        );
+        return [];
     }
 
     /**
-     * Refreshes the tree view.
-     * If isHardRefresh is true, it resets the custom root item.
-     * @param {boolean} isHardRefresh Optional flag to force a hard refresh.
+     * Refreshes the project management tree view.
+     * @param isHardRefresh Optional flag to force a hard refresh.
      */
-    refresh(isHardRefresh: boolean = false): void {
-        logger.debug(`Refreshing project management tree view. Hard refresh: ${isHardRefresh}`);
-
-        if (isHardRefresh && this.customRootKey !== null) {
+    public refresh(isHardRefresh: boolean = false): void {
+        logger.debug(`[ProjectManagementTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
+        if (isHardRefresh && this.isCustomRootActive) {
             this.resetCustomRootInternally();
         }
 
-        if (this.customRootKey && this.customRootJsonData) {
+        if (this.isCustomRootActive && this.customRootItemInstance) {
             this.updateMessageCallback(undefined);
         } else {
             this.updateMessageCallback("Loading projects...");
         }
-
         this._onDidChangeTreeData.fire(undefined);
-        logger.trace("Project management tree view refresh triggered.");
-    }
-
-    /**
-     * Returns the parent of a given tree item.
-     *
-     * @param {BaseTestBenchTreeItem} element The tree item.
-     * @returns {BaseTestBenchTreeItem | null} The parent tree item or null.
-     */
-    getParent(element: BaseTestBenchTreeItem): BaseTestBenchTreeItem | null {
-        if (this.customRootItemInstance && element.parent === this.customRootItemInstance) {
-            return this.customRootItemInstance;
-        }
-
-        if (this.customRootItemInstance && element === this.customRootItemInstance) {
-            return null;
-        }
-
-        return element.parent;
+        logger.trace("[ProjectManagementTreeDataProvider] Tree view refresh triggered.");
     }
 
     /**
@@ -228,130 +227,90 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
     }
 
     /**
-     * Determines the project name and TOV name for a given tree item, considering custom root.
+     * Determines the project name and TOV name for a given tree item,
+     * considering custom root state.
      * @param {BaseTestBenchTreeItem} selectedTreeItem The BaseTestBenchTreeItem.
-     * @returns An object with projectName and tovName.
+     * @returns An object with projectName and tovName, or null if resolution fails.
      */
     public getProjectAndTovNamesForItem(selectedTreeItem: BaseTestBenchTreeItem): {
         projectName: string | undefined;
         tovName: string | undefined;
     } | null {
         if (!selectedTreeItem || !selectedTreeItem.item) {
-            logger.trace("[LSP Context] Selected item or item.data is null in getProjectAndTovNamesForLSP.");
+            logger.trace(
+                "[ProjectManagementTreeDataProvider.getProjectAndTovNamesForItem] Selected item or item.data is null."
+            );
             return null;
         }
 
         let projectName: string | undefined;
         let tovName: string | undefined;
 
-        // Helper to get the 'original' context value if the item is the current custom root
         const getEffectiveContext = (item: BaseTestBenchTreeItem): string | undefined => {
-            if (this.customRootKey && item.item?.key === this.customRootKey) {
-                return this.originalCustomRootContextValue || item.contextValue;
+            if (
+                this.isCustomRootActive &&
+                this.customRootItemInstance === item &&
+                this.originalCustomRootContextValue
+            ) {
+                return this.originalCustomRootContextValue;
             }
             return item.contextValue;
         };
 
-        // Helper to get the 'original' item data if the item is the current custom root
-        const getEffectiveItemData = (item: BaseTestBenchTreeItem): any => {
-            if (this.customRootKey && item.item?.key === this.customRootKey && this.customRootJsonData) {
-                return this.customRootJsonData;
-            }
-            return item.item;
+        const getEffectiveItemName = (item: BaseTestBenchTreeItem): string | undefined => {
+            return item.item?.name;
         };
 
         let currentItemForTraversal: BaseTestBenchTreeItem | null = selectedTreeItem;
 
-        // Traverse up from the selected item to find Project and TOV
         while (currentItemForTraversal) {
             const effectiveContext = getEffectiveContext(currentItemForTraversal);
-            const effectiveData = getEffectiveItemData(currentItemForTraversal);
+            const currentItemName = getEffectiveItemName(currentItemForTraversal);
 
             if (effectiveContext === TreeItemContextValues.PROJECT) {
-                projectName = effectiveData.name;
+                projectName = currentItemName;
             } else if (effectiveContext === TreeItemContextValues.VERSION) {
-                tovName = effectiveData.name;
+                tovName = currentItemName;
             }
 
-            // If we've found both, or found a project and already had a TOV, we can stop.
-            if ((projectName && tovName) || (effectiveContext === TreeItemContextValues.PROJECT && tovName)) {
+            if (projectName && tovName) {
                 break;
             }
-            // If the current item is the custom root, and it's not a project,
-            // we might not find a project by traversing its 'parent' because it's acting as a root.
-            if (
-                this.customRootKey &&
-                currentItemForTraversal.item?.key === this.customRootKey &&
-                effectiveContext !== TreeItemContextValues.PROJECT
-            ) {
-                break; // Stop at custom root if it's not a project itself.
+            if (this.isCustomRootActive && this.customRootItemInstance === currentItemForTraversal) {
+                break;
             }
-
             currentItemForTraversal = currentItemForTraversal.parent;
         }
 
-        // If the selected item was a TOV (or a custom root that *was* a TOV) and we haven't found a project name yet
-        if (getEffectiveContext(selectedTreeItem) === TreeItemContextValues.VERSION && !projectName) {
-            if (
-                selectedTreeItem.parent &&
-                getEffectiveContext(selectedTreeItem.parent) === TreeItemContextValues.PROJECT
-            ) {
-                projectName = getEffectiveItemData(selectedTreeItem.parent).name;
-            } else {
-                logger.warn(
-                    `[LSP Context] Selected item or custom root is a TOV ('${tovName}'). Project name could not be determined by simple parent traversal. LS might require project name.`
-                );
-            }
+        const selectedEffectiveContext = getEffectiveContext(selectedTreeItem);
+        const selectedItemName = getEffectiveItemName(selectedTreeItem);
+
+        if (selectedEffectiveContext === TreeItemContextValues.VERSION && !projectName) {
+            tovName = tovName || selectedItemName;
         }
 
-        // If the selected item was a Cycle (or a custom root that *was* a Cycle)
-        if (getEffectiveContext(selectedTreeItem) === TreeItemContextValues.CYCLE) {
-            if (
-                selectedTreeItem.parent &&
-                getEffectiveContext(selectedTreeItem.parent) === TreeItemContextValues.VERSION
-            ) {
-                if (!tovName) {
-                    tovName = getEffectiveItemData(selectedTreeItem.parent).name;
-                }
-                if (
-                    selectedTreeItem.parent.parent &&
-                    getEffectiveContext(selectedTreeItem.parent.parent) === TreeItemContextValues.PROJECT
-                ) {
-                    if (!projectName) {
-                        projectName = getEffectiveItemData(selectedTreeItem.parent.parent).name;
+        if (selectedEffectiveContext === TreeItemContextValues.PROJECT) {
+            projectName = projectName || selectedItemName;
+        }
+
+        if (selectedEffectiveContext === TreeItemContextValues.CYCLE) {
+            const parent = selectedTreeItem.parent;
+            if (parent) {
+                const parentEffectiveContext = getEffectiveContext(parent);
+                if (parentEffectiveContext === TreeItemContextValues.VERSION) {
+                    tovName = tovName || getEffectiveItemName(parent);
+                    if (parent.parent) {
+                        const grandparentEffectiveContext = getEffectiveContext(parent.parent);
+                        if (grandparentEffectiveContext === TreeItemContextValues.PROJECT) {
+                            projectName = projectName || getEffectiveItemName(parent.parent);
+                        }
                     }
                 }
             }
         }
 
-        // If the custom root itself is a project, and we haven't found a project name through traversal (e.g. selected item is the custom root project)
-        if (
-            !projectName &&
-            this.customRootKey &&
-            this.originalCustomRootContextValue === TreeItemContextValues.PROJECT
-        ) {
-            if (selectedTreeItem.item?.key === this.customRootKey || !selectedTreeItem.parent) {
-                // if selected is the custom root or has no parent in current view
-                projectName = this.customRootJsonData.name;
-            }
-        }
-        // If the custom root itself is a TOV, and we haven't found a TOV name
-        if (!tovName && this.customRootKey && this.originalCustomRootContextValue === TreeItemContextValues.VERSION) {
-            if (selectedTreeItem.item?.key === this.customRootKey || !selectedTreeItem.parent) {
-                tovName = this.customRootJsonData.name;
-                // Try to get project name if this TOV custom root was selected
-                if (
-                    selectedTreeItem.item?.key === this.customRootKey &&
-                    selectedTreeItem.parent &&
-                    getEffectiveContext(selectedTreeItem.parent) === TreeItemContextValues.PROJECT
-                ) {
-                    projectName = getEffectiveItemData(selectedTreeItem.parent).name;
-                }
-            }
-        }
-
         logger.trace(
-            `[LSP Context Provider Method] Determined for ${selectedTreeItem.label}': Project ${projectName}', TOV='${tovName}'`
+            `[ProjectManagementTreeDataProvider.getProjectAndTovNamesForItem] Determined for "${selectedItemName}": Project='${projectName}', TOV='${tovName}'`
         );
         return { projectName, tovName };
     }
@@ -365,48 +324,31 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * @param {BaseTestBenchTreeItem | null} parent The parent tree item.
      * @returns {BaseTestBenchTreeItem | null} A new TestbenchTreeItem or null.
      */
-    private createTreeItem(
+    private createTreeItemFromData(
         jsonData: any,
         contextValue: string,
         parent: BaseTestBenchTreeItem | null
     ): BaseTestBenchTreeItem | null {
         if (!jsonData) {
-            logger.warn("Attempted to create tree item with invalid jsonData (null or undefined).");
             return null;
         }
-
         const itemData: any = jsonData;
         let defaultCollapsibleState: vscode.TreeItemCollapsibleState;
 
-        if (!itemData || typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
-            logger.warn(
-                `Attempted to create project/version/cycle tree item with invalid data structure for context ${contextValue}:`,
-                jsonData
-            );
+        if (typeof itemData.key === "undefined" || typeof itemData.name === "undefined") {
+            logger.warn(`[ProjectManagementTreeDataProvider] Invalid data for context ${contextValue}:`, jsonData);
             return null;
         }
-        const itemKey: string | undefined = itemData.key;
-        const itemName: string | undefined = itemData.name;
-        const label: string = itemName!;
+        const label: string = itemData.name!;
 
-        if (itemKey === undefined || itemName === undefined) {
-            logger.warn(
-                `Attempted to create tree item with missing key or name. Context: ${contextValue}, Key: ${itemKey}, Name: ${itemName}`,
-                jsonData
-            );
-            return null;
-        }
-
-        // Determine default collapsible state based on type and potential children
         switch (contextValue) {
             case TreeItemContextValues.PROJECT: {
                 const projectData = itemData as Project;
-                const hasProjectChildren =
+                defaultCollapsibleState =
                     (projectData.tovsCount && projectData.tovsCount > 0) ||
-                    (projectData.cyclesCount && projectData.cyclesCount > 0);
-                defaultCollapsibleState = hasProjectChildren
-                    ? vscode.TreeItemCollapsibleState.Collapsed
-                    : vscode.TreeItemCollapsibleState.None;
+                    (projectData.cyclesCount && projectData.cyclesCount > 0)
+                        ? vscode.TreeItemCollapsibleState.Collapsed
+                        : vscode.TreeItemCollapsibleState.None;
                 break;
             }
             case TreeItemContextValues.VERSION: {
@@ -418,17 +360,16 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                 break;
             }
             case TreeItemContextValues.CYCLE:
-                // Cycles in this tree are not directly expandable to show themes
                 defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
                 break;
             default:
                 logger.warn(
-                    `Unexpected contextValue '${contextValue}' in ProjectManagementTreeDataProvider.createTreeItem`
+                    `[ProjectManagementTreeDataProvider] Unexpected contextValue '${contextValue}' in createTreeItemFromData`
                 );
                 defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
         }
 
-        const treeItem: BaseTestBenchTreeItem = new BaseTestBenchTreeItem(
+        const treeItem = new BaseTestBenchTreeItem(
             label,
             contextValue,
             defaultCollapsibleState,
@@ -437,17 +378,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             parent
         );
 
-        // Restore Expansion State
-        const itemKeyForExpansion = treeItem.item?.key;
-        if (
-            itemKeyForExpansion &&
-            this.expandedTreeItems.has(itemKeyForExpansion) &&
-            treeItem.collapsibleState !== vscode.TreeItemCollapsibleState.None
-        ) {
-            treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-            logger.trace(`Restoring expanded state for item: ${treeItem.label} (Key: ${itemKeyForExpansion})`);
-        }
-
+        this.applyStoredExpansionState(treeItem);
         return treeItem;
     }
 
@@ -472,7 +403,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                 .map(
                     (
                         tovNode // tovNode is testBenchTypes.TreeNode
-                    ) => this.createTreeItem(tovNode, tovNode.nodeType, projectElement) // tovNode.nodeType should be "Version"
+                    ) => this.createTreeItemFromData(tovNode, tovNode.nodeType, projectElement) // tovNode.nodeType should be "Version"
                 )
                 .filter((item: BaseTestBenchTreeItem | null): item is BaseTestBenchTreeItem => item !== null);
         }
@@ -496,7 +427,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
             .map(
                 (
                     cycleNode: TreeNode // cycleNode is a testBenchTypes.TreeNode
-                ) => this.createTreeItem(cycleNode, cycleNode.nodeType, versionElement) // cycleNode.nodeType should be "Cycle"
+                ) => this.createTreeItemFromData(cycleNode, cycleNode.nodeType, versionElement) // cycleNode.nodeType should be "Cycle"
             )
             .filter((item: BaseTestBenchTreeItem | null): item is BaseTestBenchTreeItem => item !== null);
     }
@@ -513,7 +444,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
         if (projectList && projectList.length > 0) {
             this.updateMessageCallback(undefined);
             return projectList
-                .map((project) => this.createTreeItem(project, TreeItemContextValues.PROJECT, null))
+                .map((project) => this.createTreeItemFromData(project, TreeItemContextValues.PROJECT, null))
                 .filter((item): item is BaseTestBenchTreeItem => item !== null);
         } else if (projectList) {
             logger.debug("No projects found on the server.");
@@ -738,7 +669,7 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
                         this.isCycleNodeVisibleInTestThemeTree(childNodeCandidate)
                 );
 
-                const treeItem: BaseTestBenchTreeItem | null = this.createTreeItem(
+                const treeItem: BaseTestBenchTreeItem | null = this.createTreeItemFromData(
                     nodeData,
                     nodeData.elementType,
                     parentTreeItem
@@ -784,87 +715,6 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      */
     getTreeItem(element: BaseTestBenchTreeItem): vscode.TreeItem {
         return element;
-    }
-
-    /**
-     * Sets the selected tree item as the root and refreshes the tree.
-     *
-     * @param {BaseTestBenchTreeItem} treeItem The tree item to set as root.
-     */
-    makeRoot(treeItem: BaseTestBenchTreeItem): void {
-        logger.debug("Setting selected element as a temporary root:", treeItem.label);
-        if (treeItem && treeItem.item && treeItem.item.key && treeItem.contextValue) {
-            if (
-                this.customRootItemInstance &&
-                this.customRootItemInstance !== treeItem &&
-                this.originalCustomRootContextValue
-            ) {
-                this.customRootItemInstance.contextValue = this.originalCustomRootContextValue;
-            }
-
-            this.customRootKey = treeItem.item.key;
-            this.customRootJsonData = { ...treeItem.item };
-            this.customRootItemInstance = treeItem;
-            this.originalCustomRootContextValue = treeItem.contextValue;
-            treeItem.contextValue = TreeItemContextValues.CUSTOM_ROOT_PROJECT;
-
-            if (
-                this.originalCustomRootContextValue === TreeItemContextValues.PROJECT ||
-                this.originalCustomRootContextValue === TreeItemContextValues.VERSION
-            ) {
-                treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-            } else {
-                treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
-            }
-            treeItem.parent = null;
-
-            vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, true);
-            logger.debug(
-                `Item "${typeof treeItem.label === "string" ? treeItem.label : treeItem.item.name}" (Key: ${this.customRootKey}) is now set as custom root.`
-            );
-        } else {
-            this.resetCustomRootInternally();
-            logger.debug("Custom root cleared due to invalid item for makeRoot.");
-        }
-        this._onDidChangeTreeData.fire(undefined);
-    }
-
-    /**
-     * Resets the custom root configuration internally.
-     * Clears any custom root settings, restores the original context
-     * if applicable, and updates the UI to reflect that no custom root is active.
-     * It also clears the record of expanded tree items and updates any associated messages.
-     */
-    private resetCustomRootInternally(): void {
-        const oldCustomRootInstance = this.customRootItemInstance;
-        if (oldCustomRootInstance && this.originalCustomRootContextValue) {
-            oldCustomRootInstance.contextValue = this.originalCustomRootContextValue;
-        }
-        this.customRootKey = null;
-        this.customRootJsonData = null;
-        this.customRootItemInstance = null;
-        this.originalCustomRootContextValue = null;
-        this.expandedTreeItems.clear();
-        vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
-        this.updateMessageCallback(undefined);
-    }
-
-    /**
-     * Resets the custom root, restoring the tree to display all projects.
-     */
-    public resetCustomRoot(): void {
-        logger.debug("Resetting custom root for Project Management Tree.");
-        if (this.customRootKey !== null) {
-            this.resetCustomRootInternally();
-            this._onDidChangeTreeData.fire(undefined);
-            const itemThatWasRoot: BaseTestBenchTreeItem | null = this.customRootItemInstance;
-            if (itemThatWasRoot) {
-                this._onDidChangeTreeData.fire(itemThatWasRoot);
-            }
-            logger.info("Project Management Tree custom root has been reset.");
-        } else {
-            logger.trace("No custom root was active in Project Management Tree to reset.");
-        }
     }
 
     /**
@@ -996,14 +846,13 @@ export class ProjectManagementTreeDataProvider implements vscode.TreeDataProvide
      * Clears the project management tree.
      */
     public clearTree(): void {
-        logger.trace("Clearing project management tree.");
-        this.resetCustomRootInternally();
+        logger.trace("[ProjectManagementTreeDataProvider] Clearing tree.");
+        super.clearTree();
         if (!connection) {
             this.updateMessageCallback("Not connected to TestBench. Please log in.");
         } else {
             this.updateMessageCallback("Project data cleared. Refresh or select a project.");
         }
-        this._onDidChangeTreeData.fire(undefined);
     }
 }
 
