@@ -267,7 +267,6 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
 def pull_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
-    logging.info(f"{ls.server_name} {ls.server_port}  {ls.login_name}  {ls.session_token}")
     new_resource = create_resource(
         uid=subdivision_uid,
     )
