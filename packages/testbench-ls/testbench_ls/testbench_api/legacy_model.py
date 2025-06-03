@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from .model_utils import from_dict
+
 
 class Status(str, Enum):
     ONE = "1"
@@ -30,7 +32,7 @@ class KindOfDataType(str, Enum):
 
 @dataclass
 class SerialKey:
-    serial: int
+    serial: int | None = None
 
 
 @dataclass
@@ -69,6 +71,16 @@ class ConditionKey(SerialKey):
 
 
 @dataclass
+class ForeignLibraryTovKey(SerialKey):
+    pass
+
+
+@dataclass
+class ForeignLibraryKey(SerialKey):
+    pass
+
+
+@dataclass
 class TestElement:
     name: str
     uniqueID: str
@@ -76,6 +88,8 @@ class TestElement:
     lockerKey: UserKey
     libraryTovKey: TOVKey | None = None
     libraryKey: SubdivisionKey | None = None
+    foreignLibraryTovKey: ForeignLibraryTovKey | None = None
+    foreignLibraryKey: ForeignLibraryKey | None = None
     Interaction_key: InteractionKey | None = None
     parent: ElementKey | None = None
     status: Status | None = None
@@ -102,7 +116,7 @@ def get_test_element_uid(test_elements: list[TestElement], test_element_key: str
             ),
             test_elements,
         ),
-        {},
+        from_dict(TestElement, {}),
     )
     return element.uniqueID
 
