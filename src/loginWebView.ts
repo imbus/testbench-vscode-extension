@@ -300,7 +300,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     private async handleSaveNewProfile(
         profileData: Omit<TestBenchProfile, "id"> & { password?: string }
     ): Promise<void> {
-        logger.info(`[LoginWebView] Attempting to save new profile: ${profileData.label || "No Label"}`);
+        logger.info(`[LoginWebView] Attempting to save new connection: ${profileData.label || "No Label"}`);
         try {
             if (!profileData.serverName || !profileData.portNumber || !profileData.username) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -1136,11 +1136,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 </h2>
                 <div id="profilesLoadingMessage" style="padding: 10px; text-align: center;">
                     <vscode-progress-ring></vscode-progress-ring>
-                    <p style="color: var(--vscode-descriptionForeground); margin-top: 5px;">Loading profiles...</p>
+                    <p style="color: var(--vscode-descriptionForeground); margin-top: 5px;">Loading connections...</p>
                 </div>
                 <ul id="profilesList" aria-live="polite">
                 </ul>
-                <p id="noProfilesMessage" style="display: none;">No profiles configured yet.<br>Use the form below to add one.</p>
+                <p id="noProfilesMessage" style="display: none;">No connections configured yet.<br>Use the form below to add one.</p>
             </section>
     
             <section class="add-profile-section" aria-labelledby="addProfileHeading">
@@ -1174,12 +1174,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     </div>
                     <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
                         <input type="checkbox" id="storePasswordCheckbox" name="storePassword" checked style="width: auto; height: auto; margin-right: 5px;">
-                        <label for="storePasswordCheckbox" style="margin-bottom: 0; font-weight: normal;">Store password for this profile</label>
+                        <label for="storePasswordCheckbox" style="margin-bottom: 0; font-weight: normal;">Store password for this connection</label>
                     </div>
                     
                     <button type="button" id="saveProfileBtn">
                         <span class="icon icon-save"></span>                
-                        <span id="saveButtonText">Save New Profile</span>
+                        <span id="saveButtonText">Save New Connection</span>
                     </button>
                     
                     <div class="edit-actions" id="editActions" style="display: none;">
@@ -1366,7 +1366,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     if (sectionIcon) {
                         sectionIcon.className = 'icon icon-add-profile-header';
                     }
-                    saveButtonText.textContent = 'Save New Profile';
+                    saveButtonText.textContent = 'Save New Connection';
                     
                     // Hide cancel button
                     editActionsDiv.style.display = 'none';
@@ -1399,13 +1399,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         password: storePasswordCheckbox.checked ? passwordInput.value : undefined
                     };
                     if (isEditMode && currentEditingProfileId) {
-                        // Update existing profile
+                        // Update existing connection
                         payload.id = currentEditingProfileId;
                         saveProfileBtn.disabled = true;
                         saveButtonText.textContent = 'Updating...';
                         vscode.postMessage({ command: '${WebviewMessageCommands.UPDATE_PROFILE}', payload });
                     } else {
-                        // Save new profile
+                        // Save new connection
                         saveProfileBtn.disabled = true;
                         saveButtonText.textContent = 'Saving...';
                         vscode.postMessage({ command: '${WebviewMessageCommands.SAVE_NEW_PROFILE}', payload });
@@ -1417,7 +1417,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         if (isEditMode) {
                             saveButtonText.textContent = 'Save Changes';
                         } else {
-                            saveButtonText.textContent = 'Save New Profile';
+                            saveButtonText.textContent = 'Save New Connection';
                         }
                     }, 1000);
                 }
@@ -1467,7 +1467,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                                 if (isEditMode) {
                                     saveButtonText.textContent = 'Save Changes';
                                 } else {
-                                    saveButtonText.textContent = 'Save New Profile';
+                                    saveButtonText.textContent = 'Save New Connection';
                                 }
                             }
                             break;
