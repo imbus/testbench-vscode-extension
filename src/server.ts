@@ -484,7 +484,7 @@ function setupClientNotifications(
 ): void {
     client.onNotification("custom/notification", (params) => {
         logger.info(`[startAndMonitorClient - Op ${operationId}] Received custom notification: ${params.message}`);
-        vscode.window.showInformationMessage(`TestBench LS: ${params.message}`);
+        vscode.window.showInformationMessage(`${params.message}`);
     });
 
     logger.info(
