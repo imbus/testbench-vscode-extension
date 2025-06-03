@@ -612,12 +612,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const nonce: string = getNonce();
         const cspSource: string = webview.cspSource;
         const contentSecurityPolicy: string = `
-            default-src 'none';
-            img-src ${cspSource} https: data:;
-            script-src 'nonce-${nonce}';
-            style-src ${cspSource} 'unsafe-inline' 'self'; 
-            font-src ${cspSource};
-        `;
+        default-src 'none';
+        img-src ${cspSource} https: data:;
+        script-src 'nonce-${nonce}';
+        style-src ${cspSource} 'unsafe-inline' 'self'; 
+        font-src ${cspSource};
+    `;
 
         const profilesHeaderIconDarkUri = this.createIconUri(webview, "profiles-dark.svg");
         const profilesHeaderIconLightUri = this.createIconUri(webview, "profiles-light.svg");
@@ -635,902 +635,905 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const deleteIconDarkUri = this.createIconUri(webview, "remove-profile-dark.svg");
 
         return `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8"/>
-            <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>TestBench Profile Management</title>
-            <style>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TestBench Profile Management</title>
+        <style>
+            /* Css custom properties */
+            :root {
+                /* Spacing scale */
+                --spacing-xs: 4px;
+                --spacing-sm: 6px;
+                --spacing-md: 8px;
+                --spacing-lg: 10px;
+                --spacing-xl: 12px;
+                --spacing-2xl: 15px;
+                --spacing-3xl: 20px;
+                
+                /* Icon sizing */
+                --icon-size: 16px;
+                --icon-size-sm: 14px;
+                
+                /* Button sizing */
+                --btn-min-size: 32px;
+                --btn-min-size-sm: 28px;
+                --btn-padding: 8px 15px;
+                --btn-padding-sm: 6px 8px;
+                --btn-padding-xs: 4px 6px;
+                
+                /* Border radius */
+                --border-radius: 4px;
+                --border-radius-sm: 3px;
+                --border-radius-lg: 6px;
+                
+                /* Colors using CSS custom properties with fallbacks */
+                --color-primary-bg: var(--vscode-button-primaryBackground, var(--vscode-button-background));
+                --color-primary-fg: var(--vscode-button-primaryForeground, var(--vscode-button-foreground));
+                --color-primary-hover: var(--vscode-button-primaryHoverBackground, var(--vscode-button-hoverBackground));
+                
+                --color-secondary-bg: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+                --color-secondary-fg: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+                --color-secondary-hover: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+                
+                --color-error: var(--vscode-errorForeground);
+                --color-error-fg: var(--vscode-button-primaryForeground, white);
+                
+                --color-border: var(--vscode-button-border, var(--vscode-contrastBorder));
+                --color-focus: var(--vscode-focusBorder);
+                --color-input-border: var(--vscode-input-border, var(--vscode-settings-textInputBorder));
+                
+                /* Theme-specific background colors */
+                --bg-body: var(--vscode-side-bar-background, var(--vscode-editor-background));
+                --bg-section: var(--vscode-list-inactiveSelectionBackground);
+                --bg-list-hover: var(--vscode-list-hoverBackground);
+                --bg-list-focus: var(--vscode-list-focusBackground);
+                --bg-input: var(--vscode-input-background);
+                
+                /* Text colors */
+                --text-primary: var(--vscode-editor-foreground);
+                --text-secondary: var(--vscode-descriptionForeground);
+                --text-header: var(--vscode-settings-headerForeground);
+                --text-input: var(--vscode-input-foreground);
+            }
+
+            /* Theme-specific icon URLs */
+            [data-vscode-theme-kind="vscode-light"],
+            :root {
+                --icon-profiles-header: url(${profilesHeaderIconLightUri});
+                --icon-add-profile-header: url(${addProfileHeaderIconLightUri});
+                --icon-edit-profile-header: url(${editProfileHeaderIconLightUri});
+                --icon-save: url(${saveProfileButtonIconLightUri});
+                --icon-login: url(${loginIconLightUri});
+                --icon-edit: url(${editIconLightUri});
+                --icon-delete: url(${deleteIconLightUri});
+            }
+
+            [data-vscode-theme-kind="vscode-dark"],
+            [data-vscode-theme-kind="vscode-high-contrast"] {
+                --bg-body: #2d2d30;
+                --icon-profiles-header: url(${profilesHeaderIconDarkUri});
+                --icon-add-profile-header: url(${addProfileHeaderIconDarkUri});
+                --icon-edit-profile-header: url(${editProfileHeaderIconDarkUri});
+                --icon-save: url(${saveProfileButtonIconDarkUri});
+                --icon-login: url(${loginIconDarkUri});
+                --icon-edit: url(${editIconDarkUri});
+                --icon-delete: url(${deleteIconDarkUri});
+            }
+
+            [data-vscode-theme-kind="vscode-light"] {
+                --bg-body: #f8f8f8;
+                /* Light theme specific button colors */
+                --color-secondary-bg: var(--vscode-input-background, #ffffff);
+                --color-secondary-fg: var(--vscode-foreground, #000000);
+                --color-border: var(--vscode-input-border, #d0d0d0);
+                --bg-list-hover: var(--vscode-list-hoverBackground, #f0f0f0);
+            }
+
+            [data-vscode-theme-kind="vscode-high-contrast"] {
+                --bg-body: #1e1e1e;
+            }
+
+            /* Base styles */
+            body {
+                font-family: var(--vscode-font-family);
+                font-size: var(--vscode-font-size);
+                color: var(--text-primary);
+                background-color: var(--bg-body);
+                padding: var(--spacing-2xl);
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+                box-sizing: border-box;
+                gap: var(--spacing-3xl);
+                margin: 0;
+            }
+
+            /* Layout components */
+            .scrollable-content {
+                flex-grow: 1;
+                overflow-y: auto;
+                padding-right: 5px;
+            }
+
+            .profile-section,
+            .add-profile-section {
+                padding: var(--spacing-2xl);
+                border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
+                border-radius: var(--border-radius-lg);
+                background-color: var(--bg-section);
+                min-width: 0;
+                overflow: hidden;
+                min-height: auto;
+            }
+
+            /* Typography */
+            h2, h3 {
+                color: var(--text-header);
+                margin: 0 0 var(--spacing-2xl) 0;
+                padding-bottom: var(--spacing-md);
+                border-bottom: 1px solid var(--color-focus, var(--vscode-settings-dropdownBorder));
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+            }
+
+            .form-group label,
+            .profile-label {
+                color: var(--text-primary) !important;
+            }
+
+            /* Icon system */
+            .icon {
+                width: var(--icon-size);
+                height: var(--icon-size);
+                margin-right: var(--spacing-md);
+                background: no-repeat center / var(--icon-size);
+                flex-shrink: 0;
+            }
+
+            .icon-profiles-header { background-image: var(--icon-profiles-header); }
+            .icon-add-profile-header { background-image: var(--icon-add-profile-header); }
+            .icon-edit-profile-header { background-image: var(--icon-edit-profile-header); }
+            .icon-save { background-image: var(--icon-save); }
+            .icon-login { background-image: var(--icon-login); }
+            .icon-edit { background-image: var(--icon-edit); }
+            .icon-delete { background-image: var(--icon-delete); }
+
+            /* Remove margin for profile action icons */
+            .profile-actions .icon {
+                margin-right: 0;
+            }
+
+            /* Button system */
+            button {
+                background-color: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                border: 1px solid var(--color-border);
+                padding: var(--btn-padding);
+                cursor: pointer;
+                border-radius: var(--border-radius);
+                font-weight: 500;
+                transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            button:hover {
+                background-color: var(--vscode-button-hoverBackground);
+                border-color: var(--color-focus);
+            }
+
+            button:focus {
+                outline: 1px solid var(--color-focus);
+                outline-offset: 2px;
+            }
+
+            button .icon {
+                margin-right: var(--spacing-sm);
+            }
+
+            /* Button variants */
+            #saveProfileBtn {
+                background-color: var(--color-primary-bg);
+                color: var(--color-primary-fg);
+                border-color: var(--color-primary-bg);
+            }
+
+            #saveProfileBtn:hover {
+                background-color: var(--color-primary-hover);
+            }
+
+            .login-btn,
+            .edit-btn,
+            .delete-btn,
+            #cancelEditBtn {
+                background-color: var(--color-secondary-bg);
+                color: var(--color-secondary-fg);
+                border-color: var(--color-secondary-bg);
+            }
+
+            .login-btn:hover,
+            .edit-btn:hover,
+            #cancelEditBtn:hover {
+                background-color: var(--color-secondary-hover);
+            }
+
+            .delete-btn:hover {
+                background-color: var(--color-error);
+                color: var(--color-error-fg);
+                border-color: var(--color-error);
+                opacity: 0.8;
+            }
+
+            /* Profile list component */
+            #profilesList {
+                list-style: none;
+                padding: 0;
+                max-height: min(60vh, 400px);
+                border: 1px solid var(--color-input-border);
+                border-radius: var(--border-radius);
+                transition: max-height 0.2s ease-in-out;
+            }
+
+            #profilesList li {
+                box-sizing: border-box;
+                padding: var(--spacing-lg) var(--spacing-xl);
+                margin-bottom: -1px;
+                border-bottom: 1px solid var(--color-input-border);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background-color: var(--bg-list-hover);
+                transition: background-color 0.2s ease-in-out;
+                min-height: 60px;
+                flex-wrap: nowrap;
+                overflow: hidden;
+                min-width: 0;
+            }
+
+            #profilesList li:last-child {
+                border-bottom: none;
+            }
+
+            #profilesList li:hover {
+                background-color: var(--bg-list-focus);
+            }
+
+            .profile-details {
+                flex-grow: 1;
+                flex-shrink: 1;
+                margin-right: var(--spacing-lg);
+                min-width: 0;
+                overflow: hidden;
+            }
+
+            .profile-label {
+                font-weight: bold;
+                color: var(--vscode-foreground);
+                font-size: 1.05em;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 100%;
+            }
+
+            .profile-info {
+                font-size: 0.9em;
+                color: var(--text-secondary);
+                margin-top: 3px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 100%;
+            }
+
+            .profile-being-edited {
+                background-color: var(--bg-list-focus);
+                border-left: 3px solid var(--vscode-gitDecoration-modifiedResourceForeground, #E1C16E);
+                padding-left: 9px;
+            }
+
+            .profile-being-edited:focus-within {
+                outline: 2px solid var(--vscode-gitDecoration-modifiedResourceForeground);
+                outline-offset: 2px;
+            }
+
+            .editing-indicator {
+                font-size: 0.8em;
+                color: var(--vscode-gitDecoration-modifiedResourceForeground, #E1C16E);
+                font-weight: normal;
+                margin-left: var(--spacing-md);
+                opacity: 0.8;
+            }
+
+            /* Profile actions */
+            .profile-actions {
+                display: flex;
+                gap: var(--spacing-sm);
+                align-items: center;
+                flex-shrink: 0;
+                min-width: fit-content;
+            }
+
+            .profile-actions button {
+                padding: var(--btn-padding-sm);
+                font-size: 0.9em;
+                min-width: var(--btn-min-size);
+                min-height: var(--btn-min-size);
+                max-width: var(--btn-min-size);
+                position: relative;
+            }
+
+            .profile-actions button:disabled {
+                opacity: 0.3;
+                cursor: not-allowed;
+                background-color: var(--color-secondary-bg);
+                color: var(--text-secondary);
+            }
+
+            .profile-actions button:disabled:hover {
+                background-color: var(--color-secondary-bg);
+                opacity: 0.3;
+            }
+
+            .delete-btn:disabled {
+                background-color: var(--color-secondary-bg);
+                color: var(--text-secondary);
+                border-color: var(--color-secondary-bg);
+                opacity: 0.3;
+            }
+
+            /* Form component */
+            .form-group {
+                margin-bottom: var(--spacing-2xl);
+                min-width: 0;
+            }
+
+            .form-group label {
+                display: block;
+                margin-bottom: 5px;
+                font-size: 0.95em;
+                font-weight: 500;
+            }
+
+            .form-group input[type="text"],
+            .form-group input[type="number"],
+            .form-group input[type="password"] {
+                width: calc(100% - 12px);
+                padding: var(--spacing-md) var(--spacing-sm);
+                border-radius: var(--border-radius-sm);
+                border: 1px solid var(--color-input-border);
+                background-color: var(--bg-input);
+                color: var(--text-input);
+                box-sizing: border-box;
+                min-width: 0;
+            }
+
+            .form-group input:focus {
+                border-color: var(--color-focus);
+                box-shadow: 0 0 0 1px var(--color-focus);
+            }
+
+            .password-wrapper {
+                position: relative;
+                display: flex;
+                align-items: center;
+                min-width: 0;
+            }
+
+            .password-wrapper input[type="password"] {
+                flex-grow: 1;
+                flex-shrink: 1;
+                min-width: 0;
+            }
+
+            .password-toggle {
+                position: absolute;
+                right: var(--spacing-md);
+                cursor: pointer;
+                background: none;
+                border: none;
+                color: var(--vscode-icon-foreground);
+            }
+
+            /* Edit mode */
+            .edit-mode .add-profile-section {
+                border-color: var(--vscode-gitDecoration-modifiedResourceForeground);
+            }
+
+            .edit-mode .add-profile-section h3 {
+                color: var(--vscode-gitDecoration-modifiedResourceForeground);
+            }
+
+            .edit-actions {
+                display: flex;
+                gap: var(--spacing-lg);
+                margin-top: var(--spacing-lg);
+                flex-wrap: wrap;
+            }
+
+            .edit-actions button {
+                flex: 1;
+                min-width: 120px;
+            }
+
+            /* Messages */
+            #messages {
+                margin-top: var(--spacing-2xl);
+                padding: var(--spacing-lg) var(--spacing-xl);
+                border-radius: var(--border-radius);
+                word-break: break-word;
+                font-size: 0.95em;
+                display: flex;
+                align-items: center;
+                gap: var(--spacing-md);
+                overflow-wrap: break-word;
+                hyphens: auto;
+            }
+
+            #messages.hidden {
+                display: none;
+            }
+
+            .message-info {
+                background-color: var(--vscode-inputValidation-infoBackground);
+                color: var(--vscode-inputValidation-infoForeground);
+                border: 1px solid var(--vscode-inputValidation-infoBorder);
+            }
+
+            .message-success {
+                background-color: var(--vscode-editorGutter-addedBackground);
+                color: var(--vscode-notification-infoForeground);
+                border: 1px solid var(--vscode-gitDecoration-addedResourceForeground);
+            }
+
+            .message-error {
+                background-color: var(--vscode-inputValidation-errorBackground);
+                color: var(--vscode-inputValidation-errorForeground);
+                border: 1px solid var(--vscode-inputValidation-errorBorder);
+            }
+
+            .message-warning {
+                background-color: var(--vscode-inputValidation-warningBackground, #warning_color_background_fallback);
+                color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
+                border: 1px solid var(--vscode-inputValidation-warningBorder, #warning_color_border_fallback);
+            }
+
+            #noProfilesMessage {
+                padding: var(--spacing-2xl);
+                text-align: center;
+                color: var(--text-secondary);
+                border: 1px dashed var(--color-input-border);
+                border-radius: var(--border-radius);
+                min-height: auto;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: var(--spacing-lg) 0;
+                word-wrap: break-word;
+                hyphens: auto;
+            }
+
+            /* Responsive design*/
+            /* Mobile-first approach with consolidated breakpoints */
+            @media (max-width: 320px) {
                 body {
-                    font-family: var(--vscode-font-family);
-                    font-size: var(--vscode-font-size);
-                    color: var(--vscode-editor-foreground);
-                    background-color: var(--vscode-side-bar-background, var(--vscode-editor-background));
-                    padding: 15px;
-                    display: flex;
-                    flex-direction: column;
-                    height: 100vh;
-                    box-sizing: border-box;
-                    gap: 20px;
+                    padding: var(--spacing-lg);
+                    gap: var(--spacing-2xl);
                 }
-                body[data-vscode-theme-kind="vscode-dark"] {
-                    background-color: #2d2d30;
-                }
-                body[data-vscode-theme-kind="vscode-light"] {
-                    background-color: #f8f8f8;
-                }
-                body[data-vscode-theme-kind="vscode-high-contrast"] {
-                    background-color: #1e1e1e;
-                }
-                .profile-section, .add-profile-section {
-                    padding: 15px;
-                    border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
-                    border-radius: 6px;
-                    background-color: var(--vscode-list-inactiveSelectionBackground);
-                    min-width: 0;
-                    overflow: hidden;
-                }
-                @media (max-width: 320px) {
-                    body {
-                        padding: 10px;
-                        gap: 15px;
-                    }
-                    
-                    .profile-section, .add-profile-section {
-                        padding: 12px;
-                    }
-                }
-                h2, h3 {
-                    color: var(--vscode-settings-headerForeground);
-                    margin: 0 0 15px 0;
-                    padding-bottom: 8px;
-                    border-bottom: 1px solid var(--vscode-focusBorder, var(--vscode-settings-dropdownBorder));
-                    font-weight: 600;
-                    display: flex;
-                    align-items: center;
-                }
-                ul#profilesList {
-                    list-style: none;
-                    padding: 0;                    
-                    max-height: min(60vh, 400px);
-                    border: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
-                    border-radius: 4px;
-                    transition: max-height 0.2s ease-in-out;
-                }  
 
-                ul#profilesList li {
-                    box-sizing: border-box;
-                    padding: 10px 12px;
-                    margin-bottom: -1px;
-                    border-bottom: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    background-color: var(--vscode-list-hoverBackground);
-                    transition: background-color 0.2s ease-in-out;
-                    min-height: 60px;
-                    flex-wrap: nowrap; 
-                    overflow: hidden;
-                    min-width: 0;
+                .profile-section,
+                .add-profile-section {
+                    padding: var(--spacing-xl);
                 }
-                ul#profilesList li:last-child {
-                    border-bottom: none;
+            }
+
+            @media (max-width: 300px) {
+                #profilesList li {
+                    padding: var(--spacing-md) var(--spacing-lg);
                 }
-                ul#profilesList li:hover {
-                    background-color: var(--vscode-list-focusBackground);
-                }
-                ul#profilesList li .profile-details {
-                    flex-grow: 1;
-                    flex-shrink: 1;
-                    margin-right: 10px;
-                    min-width: 0;
-                    overflow: hidden;
-                }
-                ul#profilesList li .profile-label {
-                    font-weight: bold;
-                    color: var(--vscode-foreground);
-                    font-size: 1.05em;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    max-width: 100%;
-                }                
-                ul#profilesList li .profile-info {
-                    font-size: 0.9em;
-                    color: var(--vscode-descriptionForeground);
-                    margin-top: 3px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    max-width: 100%;
-                }
-                ul#profilesList li.profile-being-edited {
-                    background-color: var(--vscode-list-focusBackground);
-                    border-left: 3px solid var(--vscode-gitDecoration-modifiedResourceForeground, #E1C16E);
-                    padding-left: 9px; /* Adjust for border */
-                }
-                ul#profilesList li .profile-actions button:disabled {
-                    opacity: 0.3;
-                    cursor: not-allowed;
-                    background-color: var(--vscode-button-secondaryBackground);
-                    color: var(--vscode-descriptionForeground);
-                }
-                ul#profilesList li .profile-actions button:disabled:hover {
-                    background-color: var(--vscode-button-secondaryBackground);
-                    opacity: 0.3;
-                }
-                .editing-indicator {
-                    font-size: 0.8em;
-                    color: var(--vscode-gitDecoration-modifiedResourceForeground, #E1C16E);
-                    font-weight: normal;
-                    margin-left: 8px;
-                    opacity: 0.8;
-                }
-                ul#profilesList li .profile-actions button.delete-btn:disabled {
-                    background-color: var(--vscode-button-secondaryBackground);
-                    color: var(--vscode-descriptionForeground);
-                    border-color: var(--vscode-button-secondaryBackground);
-                    opacity: 0.3;
-                }
-                ul#profilesList li.profile-being-edited:focus-within {
-                    outline: 2px solid var(--vscode-gitDecoration-modifiedResourceForeground);
-                    outline-offset: 2px;
-                }
-                ul#profilesList li .profile-actions button[disabled][title]:hover::after {
-                    content: attr(title);
-                    position: absolute;
-                    bottom: 100%;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background-color: var(--vscode-editorHoverWidget-background);
-                    color: var(--vscode-editorHoverWidget-foreground);
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    font-size: 0.8em;
-                    white-space: nowrap;
-                    z-index: 1000;
-                    pointer-events: none;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                }
+
                 .profile-actions {
-                    display: flex;
-                    gap: 6px;
-                    align-items: center;
-                    flex-shrink: 0;
-                    min-width: fit-content;
+                    gap: var(--spacing-xs);
                 }
+
                 .profile-actions button {
-                    padding: 6px 8px; 
-                    font-size: 0.9em;
-                    display: flex;
-                    align-items: center; 
-                    justify-content: center; 
-                    min-width: 32px; 
-                    min-height: 32px; 
-                    border-radius: 4px; 
-                    flex-shrink: 0; 
-                    max-width: 32px;
-                    position: relative;
+                    min-width: var(--btn-min-size-sm);
+                    min-height: var(--btn-min-size-sm);
+                    max-width: var(--btn-min-size-sm);
+                    padding: var(--btn-padding-xs);
                 }
-                  ul#profilesList li.profile-being-edited .profile-actions button[disabled][title]:hover::after {
-                    display: none;
-                }  
-                button {
-                    background-color: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder));
-                    padding: 8px 15px;
-                    cursor: pointer;
-                    border-radius: 4px;
-                    font-weight: 500;
-                    transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                button:hover {
-                    background-color: var(--vscode-button-hoverBackground);
-                    border-color: var(--vscode-focusBorder);
-                }
-                button:focus {
-                    outline: 1px solid var(--vscode-focusBorder);
-                    outline-offset: 2px;
-                }
-                button .icon {
-                    margin-right: 6px;
-                }
+
                 .profile-actions button .icon {
-                    margin-right: 0;
-                }                   
-                #saveProfileBtn {
-                    background-color: var(--vscode-button-primaryBackground, var(--vscode-button-background));
-                    color: var(--vscode-button-primaryForeground, var(--vscode-button-foreground));
-                    border-color: var(--vscode-button-primaryBackground, var(--vscode-button-border));
+                    width: var(--icon-size-sm);
+                    height: var(--icon-size-sm);
+                    background-size: var(--icon-size-sm);
                 }
-                #saveProfileBtn:hover {
-                    background-color: var(--vscode-button-primaryHoverBackground, var(--vscode-button-hoverBackground));
-                }
-                .login-btn,
-                .edit-btn,
-                .delete-btn {
-                    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background)); 
-                    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
-                    border-color: var(--vscode-button-secondaryBackground, var(--vscode-button-border)); 
-                }
-                .login-btn:hover,
-                .edit-btn:hover {
-                    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
-                }
-                button.delete-btn:hover { 
-                    background-color: var(--vscode-errorForeground);
-                    color: var(--vscode-button-primaryForeground, white); 
-                    border-color: var(--vscode-errorForeground); 
-                    opacity: 0.8;
-                }
-                .form-group {
-                    margin-bottom: 15px;
-                    min-width: 0;
-                }
-                .form-group label {
-                    display: block;
-                    margin-bottom: 5px;
-                    font-size: 0.95em;
-                    font-weight: 500;
-                }
-                .form-group input[type="text"],
-                .form-group input[type="number"],
-                .form-group input[type="password"] {
-                    width: calc(100% - 12px);
-                    padding: 8px 6px;
-                    border-radius: 3px;
-                    border: 1px solid var(--vscode-input-border, var(--vscode-settings-textInputBorder));
-                    background-color: var(--vscode-input-background);
-                    color: var(--vscode-input-foreground);
-                    box-sizing: border-box;
-                    min-width: 0;
-                }
-                .form-group input:focus {
-                    border-color: var(--vscode-focusBorder);
-                    box-shadow: 0 0 0 1px var(--vscode-focusBorder);
-                }
-                .password-wrapper {
-                    position: relative;
-                    display: flex;
-                    align-items: center;
-                    min-width: 0;
-                }
-                .password-wrapper input[type="password"] {
-                    flex-grow: 1;
-                    flex-shrink: 1;
-                    min-width: 0;
-                }
-                .password-toggle {
-                    position: absolute;
-                    right: 8px;
-                    cursor: pointer;
-                    background: none;
-                    border: none;
-                    color: var(--vscode-icon-foreground);
-                }
-                #messages {
-                    margin-top: 15px;
-                    padding: 10px 12px;
-                    border-radius: 4px;
-                    word-break: break-word;
-                    font-size: 0.95em;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    overflow-wrap: break-word;
-                    hyphens: auto;
-                }
-                #messages.hidden {
-                    display: none;
-                }
-                .message-info {
-                    background-color: var(--vscode-inputValidation-infoBackground);
-                    color: var(--vscode-inputValidation-infoForeground);
-                    border: 1px solid var(--vscode-inputValidation-infoBorder);
-                }
-                .message-success {
-                    background-color: var(--vscode-editorGutter-addedBackground);
-                    color: var(--vscode-notification-infoForeground);
-                    border: 1px solid var(--vscode-gitDecoration-addedResourceForeground);
-                }
-                .message-error {
-                    background-color: var(--vscode-inputValidation-errorBackground);
-                    color: var(--vscode-inputValidation-errorForeground);
-                    border: 1px solid var(--vscode-inputValidation-errorBorder);
-                }
-                .message-warning {
-                    background-color: var(--vscode-inputValidation-warningBackground, #warning_color_background_fallback);
-                    color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
-                    border: 1px solid var(--vscode-inputValidation-warningBorder, #warning_color_border_fallback);
-                }
-                .scrollable-content {
-                    flex-grow: 1;
-                    overflow-y: auto;
-                    padding-right: 5px;
-                }
-                #noProfilesMessage {
-                    padding: 15px;
-                    text-align: center;
-                    color: var(--vscode-descriptionForeground);
-                    border: 1px dashed var(--vscode-input-border);
-                    border-radius: 4px;
-                    min-height: auto;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin: 10px 0;
-                    word-wrap: break-word;
-                    hyphens: auto;
-                }
-                .profile-section {
-                    padding: 15px;
-                    border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
-                    border-radius: 6px;
-                    background-color: var(--vscode-list-inactiveSelectionBackground);
-                    /* Remove any fixed heights that might cause gaps */
-                    min-height: auto;
-                }
-                .icon {
-                    width: 16px;
-                    height: 16px;
-                    margin-right: 8px;
-                    background-repeat: no-repeat;
-                    background-position: center;
-                    background-size: 16px 16px;
-                    flex-shrink: 0;
-                }            
+            }
 
-                /* Edit mode styles */
-                .edit-mode .add-profile-section {
-                    border-color: var(--vscode-gitDecoration-modifiedResourceForeground);
-                }
-                
-                .edit-mode .add-profile-section h3 {
-                    color: var(--vscode-gitDecoration-modifiedResourceForeground);
-                }
-                                
+            @media (max-width: 280px) {
                 .edit-actions {
-                    display: flex;
-                    gap: 10px;
-                    margin-top: 10px;
-                    flex-wrap: wrap;
+                    flex-direction: column;
+                    gap: var(--spacing-md);
                 }
-                
+
                 .edit-actions button {
-                    flex: 1;
-                    min-width: 120px;
+                    flex: none;
+                    width: 100%;
                 }
-                
-                #cancelEditBtn {
-                    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
-                    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
-                    border-color: var(--vscode-button-secondaryBackground, var(--vscode-button-border));
-                }
-                #cancelEditBtn:hover {
-                    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
-                }
-                
-                /* Theme-based icon styles */
-                @media (prefers-color-scheme: light) {
-                    .icon-profiles-header { background-image: url(${profilesHeaderIconLightUri}); }
-                    .icon-add-profile-header { background-image: url(${addProfileHeaderIconLightUri}); }
-                    .icon-edit-profile-header { background-image: url(${editProfileHeaderIconLightUri}); }
-                    .icon-save { background-image: url(${saveProfileButtonIconLightUri}); }
-                    .icon-login { background-image: url(${loginIconLightUri}); }
-                    .icon-edit { background-image: url(${editIconLightUri}); }
-                    .icon-delete { background-image: url(${deleteIconLightUri}); }
-                }
-                
-                @media (prefers-color-scheme: dark) {
-                    .icon-profiles-header { background-image: url(${profilesHeaderIconDarkUri}); }
-                    .icon-add-profile-header { background-image: url(${addProfileHeaderIconDarkUri}); }
-                    .icon-edit-profile-header { background-image: url(${editProfileHeaderIconDarkUri}); }
-                    .icon-save { background-image: url(${saveProfileButtonIconDarkUri}); }
-                    .icon-login { background-image: url(${loginIconDarkUri}); }
-                    .icon-edit { background-image: url(${editIconDarkUri}); }
-                    .icon-delete { background-image: url(${deleteIconDarkUri}); }
-                }
+            }
+        </style>
+    </head>
+    <!-- Rest of the HTML remains exactly the same -->
+    <body>
+        <!-- HTML content unchanged -->
+        <div class="scrollable-content">
+        <section class="profile-section" aria-labelledby="profilesHeading">
+            <h2 id="profilesHeading">
+                <span class="icon icon-profiles-header"></span>
+                TestBench Connections
+            </h2>
+            <div id="profilesLoadingMessage" style="padding: 10px; text-align: center;">
+                <vscode-progress-ring></vscode-progress-ring>
+                <p style="color: var(--vscode-descriptionForeground); margin-top: 5px;">Loading connections...</p>
+            </div>
+            <ul id="profilesList" aria-live="polite">
+            </ul>
+            <p id="noProfilesMessage" style="display: none;">No connections configured yet.<br>Use the form below to add one.</p>
+        </section>
 
-                /* Responsive breakpoints for very small screens */
-                @media (max-width: 300px) {
-                    ul#profilesList li {
-                        padding: 8px 10px;
-                    }
-                    
-                    .profile-actions {
-                        gap: 4px;
-                    }
-                    
-                    .profile-actions button {
-                        min-width: 28px;
-                        min-height: 28px;
-                        max-width: 28px;
-                        padding: 4px 6px;
-                    }
-                    
-                    .profile-actions button .icon {
-                        width: 14px;
-                        height: 14px;
-                        background-size: 14px 14px;
-                    }
-                }
-
-                @media (max-width: 280px) {
-                    .edit-actions {
-                        flex-direction: column; /* Stack buttons vertically on very small screens */
-                        gap: 8px;
-                    }
-                    
-                    .edit-actions button {
-                        flex: none;
-                        width: 100%;
-                    }
-                }
-                
-                /* VS Code theme fallbacks */
-                body[data-vscode-theme-kind="vscode-light"] .icon-profiles-header { background-image: url(${profilesHeaderIconLightUri}); }
-                body[data-vscode-theme-kind="vscode-light"] .icon-add-profile-header { background-image: url(${addProfileHeaderIconLightUri}); }
-                body[data-vscode-theme-kind="vscode-light"] .icon-edit-profile-header { background-image: url(${editProfileHeaderIconLightUri}); }
-                body[data-vscode-theme-kind="vscode-light"] .icon-save { background-image: url(${saveProfileButtonIconLightUri}); }
-                body[data-vscode-theme-kind="vscode-light"] .icon-login { background-image: url(${loginIconLightUri}); }
-                body[data-vscode-theme-kind="vscode-light"] .icon-edit { background-image: url(${editIconLightUri}); }
-                body[data-vscode-theme-kind="vscode-light"] .icon-delete { background-image: url(${deleteIconLightUri}); }
-        
-                body[data-vscode-theme-kind="vscode-dark"] .icon-profiles-header,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .icon-profiles-header { background-image: url(${profilesHeaderIconDarkUri}); }
-                body[data-vscode-theme-kind="vscode-dark"] .icon-add-profile-header,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .icon-add-profile-header { background-image: url(${addProfileHeaderIconDarkUri}); }
-                body[data-vscode-theme-kind="vscode-dark"] .icon-edit-profile-header,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .icon-edit-profile-header { background-image: url(${editProfileHeaderIconDarkUri}); }
-                body[data-vscode-theme-kind="vscode-dark"] .icon-save,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .icon-save { background-image: url(${saveProfileButtonIconDarkUri}); }
-                body[data-vscode-theme-kind="vscode-dark"] .icon-login,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .icon-login { background-image: url(${loginIconDarkUri}); }
-                body[data-vscode-theme-kind="vscode-dark"] .icon-edit,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .icon-edit { background-image: url(${editIconDarkUri}); }
-                body[data-vscode-theme-kind="vscode-dark"] .icon-delete,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .icon-delete { background-image: url(${deleteIconDarkUri}); }
-
-                /* --- Dark Mode & High Contrast (Dark) Overrides --- */
-                body[data-vscode-theme-kind="vscode-dark"] .login-btn,
-                body[data-vscode-theme-kind="vscode-dark"] .edit-btn,
-                body[data-vscode-theme-kind="vscode-dark"] .delete-btn,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .login-btn,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .edit-btn,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .delete-btn {
-                    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
-                    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
-                    border-color: var(--vscode-button-secondaryBackground, var(--vscode-button-border));
-                }
-
-                /* Dark Mode & High Contrast (Dark) Hovers for login and edit buttons */
-                body[data-vscode-theme-kind="vscode-dark"] .login-btn:hover,
-                body[data-vscode-theme-kind="vscode-dark"] .edit-btn:hover,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .login-btn:hover,
-                body[data-vscode-theme-kind="vscode-high-contrast"] .edit-btn:hover {
-                    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
-                }
-
-                /* Explicit Dark Mode & High Contrast (Dark) Hover for delete button to be red */
-                body[data-vscode-theme-kind="vscode-dark"] button.delete-btn:hover,
-                body[data-vscode-theme-kind="vscode-high-contrast"] button.delete-btn:hover {
-                    background-color: var(--vscode-errorForeground);
-                    color: var(--vscode-button-primaryForeground, white);
-                    border-color: var(--vscode-errorForeground);
-                    opacity: 0.8;
-                }
-
-                /* For light themes specifically */
-                /* Ensure both form labels and profile labels use the same color in ALL themes */
-                .form-group label,
-                ul#profilesList li .profile-label {
-                    color: var(--vscode-editor-foreground) !important;
-                }
-
-                /* Theme-specific fallbacks to ensure consistency */
-                body[data-vscode-theme-kind="vscode-light"] .form-group label,
-                body[data-vscode-theme-kind="vscode-light"] ul#profilesList li .profile-label {
-                    color: var(--vscode-editor-foreground, #000000) !important;
-                }
-
-                body[data-vscode-theme-kind="vscode-dark"] .form-group label,
-                body[data-vscode-theme-kind="vscode-dark"] ul#profilesList li .profile-label {
-                    color: var(--vscode-editor-foreground, #ffffff) !important;
-                }
-
-                body[data-vscode-theme-kind="vscode-high-contrast"] .form-group label,
-                body[data-vscode-theme-kind="vscode-high-contrast"] ul#profilesList li .profile-label {
-                    color: var(--vscode-editor-foreground, #ffffff) !important;
-                }
-                
-                body[data-vscode-theme-kind="vscode-light"] .login-btn,
-                body[data-vscode-theme-kind="vscode-light"] .edit-btn,
-                body[data-vscode-theme-kind="vscode-light"] .delete-btn {
-                    background-color: var(--vscode-input-background, #ffffff);
-                    color: var(--vscode-foreground, #000000);
-                    border-color: var(--vscode-input-border, #d0d0d0);
-                }
-
-                body[data-vscode-theme-kind="vscode-light"] .login-btn:hover,
-                body[data-vscode-theme-kind="vscode-light"] .edit-btn:hover {
-                    background-color: var(--vscode-list-hoverBackground, #f0f0f0);
-                }
-
-                body[data-vscode-theme-kind="vscode-light"] button.delete-btn:hover {
-                    background-color: var(--vscode-errorForeground);
-                    color: white;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="scrollable-content">
-            <section class="profile-section" aria-labelledby="profilesHeading">
-                <h2 id="profilesHeading">
-                    <span class="icon icon-profiles-header"></span>
-                    TestBench Connections
-                </h2>
-                <div id="profilesLoadingMessage" style="padding: 10px; text-align: center;">
-                    <vscode-progress-ring></vscode-progress-ring>
-                    <p style="color: var(--vscode-descriptionForeground); margin-top: 5px;">Loading connections...</p>
+        <section class="add-profile-section" aria-labelledby="addProfileHeading">
+            <h3 id="addProfileHeading">
+                <span class="icon icon-add-profile-header"></span>
+                <span id="sectionTitle">Add New Connection</span>
+            </h3>
+            <form id="addProfileForm">
+                <div class="form-group">
+                    <label for="profileLabel">Connection Label (e.g., "My TestBench Connection")</label>
+                    <input type="text" id="profileLabel" name="profileLabel" placeholder="Optional, e.g., Main TestBench">
                 </div>
-                <ul id="profilesList" aria-live="polite">
-                </ul>
-                <p id="noProfilesMessage" style="display: none;">No connections configured yet.<br>Use the form below to add one.</p>
-            </section>
-    
-            <section class="add-profile-section" aria-labelledby="addProfileHeading">
-                <h3 id="addProfileHeading">
-                    <span class="icon icon-add-profile-header"></span>
-                    <span id="sectionTitle">Add New Connection</span>
-                </h3>
-                <form id="addProfileForm">
-                    <div class="form-group">
-                        <label for="profileLabel">Connection Label (e.g., "My TestBench Connection")</label>
-                        <input type="text" id="profileLabel" name="profileLabel" placeholder="Optional, e.g., Main TestBench">
+                <div class="form-group">
+                    <label for="serverName">Server Hostname or IP Address</label>
+                    <input type="text" id="serverName" name="serverName" required placeholder="e.g., testbench.example.com">
+                </div>
+                <div class="form-group">
+                    <label for="portNumber">Port Number</label>
+                    <input type="number" id="portNumber" name="portNumber" value="9445" required placeholder="e.g., 9445">
+                </div>
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required placeholder="Your TestBench username">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="password" name="password" placeholder="Enter password">
                     </div>
-                    <div class="form-group">
-                        <label for="serverName">Server Hostname or IP Address</label>
-                        <input type="text" id="serverName" name="serverName" required placeholder="e.g., testbench.example.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="portNumber">Port Number</label>
-                        <input type="number" id="portNumber" name="portNumber" value="9445" required placeholder="e.g., 9445">
-                    </div>
-                    <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" name="username" required placeholder="Your TestBench username">
-                    </div>
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="password" name="password" placeholder="Enter password">
-                        </div>
-                        <small style="color: var(--vscode-descriptionForeground); font-size: 0.85em; margin-top: 4px; display: block;">Only non-empty passwords will be stored.</small>
-                    </div>
-                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" id="storePasswordCheckbox" name="storePassword" checked style="width: auto; height: auto; margin-right: 5px;">
-                        <label for="storePasswordCheckbox" style="margin-bottom: 0; font-weight: normal;">Store password for this connection</label>
-                    </div>
-                    
-                    <button type="button" id="saveProfileBtn">
-                        <span class="icon icon-save"></span>                
-                        <span id="saveButtonText">Save New Connection</span>
+                    <small style="color: var(--vscode-descriptionForeground); font-size: 0.85em; margin-top: 4px; display: block;">Only non-empty passwords will be stored.</small>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="storePasswordCheckbox" name="storePassword" checked style="width: auto; height: auto; margin-right: 5px;">
+                    <label for="storePasswordCheckbox" style="margin-bottom: 0; font-weight: normal;">Store password for this connection</label>
+                </div>
+                
+                <button type="button" id="saveProfileBtn">
+                    <span class="icon icon-save"></span>                
+                    <span id="saveButtonText">Save New Connection</span>
+                </button>
+                
+                <div class="edit-actions" id="editActions" style="display: none;">
+                    <button type="button" id="cancelEditBtn">
+                        Cancel Edit
                     </button>
-                    
-                    <div class="edit-actions" id="editActions" style="display: none;">
-                        <button type="button" id="cancelEditBtn">
-                            Cancel Edit
-                        </button>
-                    </div>
+                </div>
 
-                </form>
-            </section>
-        </div>
-        <div id="messages" class="hidden" role="alert" aria-live="assertive"></div>
-    
-            <script nonce="${nonce}">
-            (function() {
-                const vscode = acquireVsCodeApi();
-                const profilesListEl = document.getElementById('profilesList');
-                const noProfilesMessageEl = document.getElementById('noProfilesMessage');
-                const profilesLoadingMessageEl = document.getElementById('profilesLoadingMessage');
-                const messagesEl = document.getElementById('messages');
-                const cancelEditBtn = document.getElementById('cancelEditBtn');
-                const editActionsDiv = document.getElementById('editActions');
-                const sectionTitle = document.getElementById('sectionTitle');
-                const sectionIcon = document.querySelector('.add-profile-section h3 .icon');
-                const saveButtonText = document.getElementById('saveButtonText');
+            </form>
+        </section>
+    </div>
+    <div id="messages" class="hidden" role="alert" aria-live="assertive"></div>
 
-                let currentEditingProfileId = null;
-                let isEditMode = false;
-    
-                // Form elements
-                const profileLabelInput = document.getElementById('profileLabel');
-                const serverNameInput = document.getElementById('serverName');
-                const portNumberInput = document.getElementById('portNumber');
-                const usernameInput = document.getElementById('username');
-                const passwordInput = document.getElementById('password');
-                const storePasswordCheckbox = document.getElementById('storePasswordCheckbox');
-                const saveProfileBtn = document.getElementById('saveProfileBtn');
-                const addProfileForm = document.getElementById('addProfileForm');
-    
-                if (!profilesListEl || !saveProfileBtn || !noProfilesMessageEl || !messagesEl || !addProfileForm || !profilesLoadingMessageEl) {
-                    console.error('[WebviewScript] Critical UI elements not found. Aborting script setup.');
-                    return;
-                }
-    
-                function displayMessage(type, text) {
-                    messagesEl.textContent = text;
-                    messagesEl.className = 'message-' + type;
-                    messagesEl.classList.remove('hidden');
-                    messagesEl.setAttribute('role', type === 'error' ? 'alert' : 'status');
-    
-                    // Clear message after a delay
-                    if (type !== 'error') {
-                        setTimeout(() => {
-                        messagesEl.textContent = '';
-                        messagesEl.className = '';
-                        messagesEl.classList.add('hidden');
-                        }, 7000);
-                    }
-                }    
+        <script nonce="${nonce}">
+        // JavaScript remains exactly the same
+        (function() {
+            const vscode = acquireVsCodeApi();
+            const profilesListEl = document.getElementById('profilesList');
+            const noProfilesMessageEl = document.getElementById('noProfilesMessage');
+            const profilesLoadingMessageEl = document.getElementById('profilesLoadingMessage');
+            const messagesEl = document.getElementById('messages');
+            const cancelEditBtn = document.getElementById('cancelEditBtn');
+            const editActionsDiv = document.getElementById('editActions');
+            const sectionTitle = document.getElementById('sectionTitle');
+            const sectionIcon = document.querySelector('.add-profile-section h3 .icon');
+            const saveButtonText = document.getElementById('saveButtonText');
 
-                function renderProfiles(data) {
-                    let profiles, editingProfileId;
-                    if (Array.isArray(data)) {
-                        profiles = data;
-                        editingProfileId = null;
-                    } else {
-                        profiles = data.profiles || [];
-                        editingProfileId = data.editingProfileId || null;
-                    }
+            let currentEditingProfileId = null;
+            let isEditMode = false;
 
-                    if (profilesLoadingMessageEl) {
-                        profilesLoadingMessageEl.style.display = 'none';
-                    }
-                    profilesListEl.innerHTML = '';
+            // Form elements
+            const profileLabelInput = document.getElementById('profileLabel');
+            const serverNameInput = document.getElementById('serverName');
+            const portNumberInput = document.getElementById('portNumber');
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const storePasswordCheckbox = document.getElementById('storePasswordCheckbox');
+            const saveProfileBtn = document.getElementById('saveProfileBtn');
+            const addProfileForm = document.getElementById('addProfileForm');
 
-                    if (!profiles || profiles.length === 0) {
-                        if (noProfilesMessageEl) {
-                            noProfilesMessageEl.style.display = 'block';
-                        }
-                        if (profilesListEl) {
-                            profilesListEl.style.display = 'none';
-                        }
-                    } else {
-                        if (noProfilesMessageEl) {
-                            noProfilesMessageEl.style.display = 'none';
-                        }
-                        if (profilesListEl) {
-                            profilesListEl.style.display = 'block';
-                        }
+            if (!profilesListEl || !saveProfileBtn || !noProfilesMessageEl || !messagesEl || !addProfileForm || !profilesLoadingMessageEl) {
+                console.error('[WebviewScript] Critical UI elements not found. Aborting script setup.');
+                return;
+            }
 
-                        // Sort profiles alphabetically by label
-                        const sortedProfiles = [...profiles].sort((a, b) => 
-                            a.label.toLowerCase().localeCompare(b.label.toLowerCase())
-                        );
-                        
-                        sortedProfiles.forEach(profile => {
-                            const li = document.createElement('li');
-                            const isBeingEdited = editingProfileId === profile.id;
-                            
-                            // Add visual indication for profile being edited
-                            if (isBeingEdited) {
-                                li.classList.add('profile-being-edited');
-                            }
-                            
-                            li.setAttribute('tabindex', '0');
-                            li.setAttribute('aria-label', \`Profile: \${profile.label}, user \${profile.username} at \${profile.serverName}\`);
+            function displayMessage(type, text) {
+                messagesEl.textContent = text;
+                messagesEl.className = 'message-' + type;
+                messagesEl.classList.remove('hidden');
+                messagesEl.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
-                            li.innerHTML = \`
-                            <div class="profile-details">
-                                <div class="profile-label">
-                                    \${profile.label}
-                                    \${isBeingEdited ? '<span class="editing-indicator">(editing)</span>' : ''}
-                                </div>
-                                <div class="profile-info">\${profile.username}@\${profile.serverName}:\${profile.portNumber}</div>
-                            </div>
-                            <div class="profile-actions">
-                                <button class="login-btn" data-profile-id="\${profile.id}" 
-                                        aria-label="Login with profile \${profile.label}" 
-                                        title="Login with this connection"
-                                        \${isBeingEdited ? 'disabled' : ''}>
-                                    <span class="icon icon-login"></span>
-                                </button>
-                                <button class="edit-btn" data-profile-id="\${profile.id}" 
-                                        aria-label="Edit connection \${profile.label}" 
-                                        title="Edit this connection"
-                                        \${isBeingEdited ? 'disabled' : ''}
-                                        style="\${isBeingEdited ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
-                                    <span class="icon icon-edit"></span>
-                                </button>
-                                <button class="delete-btn" data-profile-id="\${profile.id}" 
-                                        aria-label="Delete profile \${profile.label}" 
-                                        title="\${isBeingEdited ? 'Cannot delete while editing' : 'Delete this connection'}"
-                                        \${isBeingEdited ? 'disabled' : ''}
-                                        style="\${isBeingEdited ? 'opacity: 0.3; cursor: not-allowed;' : ''}">
-                                    <span class="icon icon-delete"></span>
-                                </button>
-                            </div>
-                            \`;
-                            profilesListEl.appendChild(li);
-                        });
-                    }
-                }
-
-                function enterEditMode(profile, hasStoredPassword) {
-                    console.log('[WebviewScript] Entering edit mode for profile:', profile);
-                    isEditMode = true;
-                    currentEditingProfileId = profile.id;
-                    
-                    // Update UI state
-                    document.body.classList.add('edit-mode');
-                    sectionTitle.textContent = 'Edit connection';
-                    if (sectionIcon) {
-                        sectionIcon.className = 'icon icon-edit-profile-header';
-                    }
-                    saveButtonText.textContent = 'Save Changes';
-                    
-                    // Show cancel button
-                    editActionsDiv.style.display = 'block';
-                    
-                    // Populate form with profile data
-                    profileLabelInput.value = profile.label || '';
-                    serverNameInput.value = profile.serverName || '';
-                    portNumberInput.value = profile.portNumber || '';
-                    usernameInput.value = profile.username || '';
-                    passwordInput.value = ''; // Don't pre-fill password for security
-                    
-                    // Update checkbox state
-                    storePasswordCheckbox.checked = hasStoredPassword;
-                    
-                    // Focus on the label field
-                    profileLabelInput.focus();
-                    
-                    displayMessage('info', \`Editing connection: \${profile.label}\`);
-                }
-
-                function exitEditMode() {
-                    console.log('[WebviewScript] Exiting edit mode');
-                    isEditMode = false;
-                    currentEditingProfileId = null;
-                    
-                    // Reset UI state
-                    document.body.classList.remove('edit-mode');
-                    sectionTitle.textContent = 'Add New Connection';
-                    if (sectionIcon) {
-                        sectionIcon.className = 'icon icon-add-profile-header';
-                    }
-                    saveButtonText.textContent = 'Save New Connection';
-                    
-                    // Hide cancel button
-                    editActionsDiv.style.display = 'none';
-                    
-                    // Clear and reset form
-                    addProfileForm.reset();
-                    portNumberInput.value = '9445'; // Reset default port
-                    storePasswordCheckbox.checked = true; // Reset default
-                }
-    
-                function handleSaveProfile() {
-                    if (!serverNameInput.value.trim() || !portNumberInput.value.trim() || !usernameInput.value.trim()) {
-                        displayMessage('error', 'Server, Port, and Username are required fields.');
-                        if (!serverNameInput.value.trim()) {serverNameInput.focus();}
-                        else if (!portNumberInput.value.trim()) {portNumberInput.focus();}
-                        else if (!usernameInput.value.trim()) {usernameInput.focus();}
-                        return;
-                    }
-                    if (isNaN(parseInt(portNumberInput.value, 10))) {
-                        displayMessage('error', 'Port must be a valid number.');
-                        portNumberInput.focus();
-                        return;
-                    }
-
-                    const payload = {
-                        label: profileLabelInput.value.trim() || \`\${usernameInput.value.trim()}@\${serverNameInput.value.trim()}\`,
-                        serverName: serverNameInput.value.trim(),
-                        portNumber: parseInt(portNumberInput.value, 10),
-                        username: usernameInput.value.trim(),
-                        password: storePasswordCheckbox.checked ? passwordInput.value : undefined
-                    };
-                    if (isEditMode && currentEditingProfileId) {
-                        // Update existing connection
-                        payload.id = currentEditingProfileId;
-                        saveProfileBtn.disabled = true;
-                        saveButtonText.textContent = 'Updating...';
-                        vscode.postMessage({ command: '${WebviewMessageCommands.UPDATE_PROFILE}', payload });
-                    } else {
-                        // Save new connection
-                        saveProfileBtn.disabled = true;
-                        saveButtonText.textContent = 'Saving...';
-                        vscode.postMessage({ command: '${WebviewMessageCommands.SAVE_NEW_PROFILE}', payload });
-                    }
-
+                // Clear message after a delay
+                if (type !== 'error') {
                     setTimeout(() => {
-                        passwordInput.value = '';
-                        saveProfileBtn.disabled = false;
-                        if (isEditMode) {
-                            saveButtonText.textContent = 'Save Changes';
-                        } else {
-                            saveButtonText.textContent = 'Save New Connection';
-                        }
-                    }, 1000);
+                    messagesEl.textContent = '';
+                    messagesEl.className = '';
+                    messagesEl.classList.add('hidden');
+                    }, 7000);
                 }
-    
-                // Event listeners
-                saveProfileBtn.addEventListener('click', handleSaveProfile);
-    
-                profilesListEl.addEventListener('click', function(event) {
-                    const targetButton = event.target.closest('button');
-                    if (targetButton && !targetButton.disabled) {
-                        const profileId = targetButton.dataset.profileId;
-                        if (targetButton.classList.contains('login-btn')) {
-                            vscode.postMessage({ command: 'loginWithProfile', payload: { profileId } });
-                        } else if (targetButton.classList.contains('edit-btn')) {
-                            vscode.postMessage({ command: 'editProfile', payload: { profileId } });
-                        } else if (targetButton.classList.contains('delete-btn')) {
-                            vscode.postMessage({ command: 'requestDeleteConfirmation', payload: { profileId } });
-                        }
-                    } else if (targetButton && targetButton.disabled) {
-                        if (targetButton.classList.contains('delete-btn')) {
-                            displayMessage('info', 'Cannot delete profile while editing it. Please save or cancel your changes first.');
-                        } else if (targetButton.classList.contains('login-btn') || targetButton.classList.contains('edit-btn')) {
-                            displayMessage('info', 'Please save or cancel your current changes before performing other actions.');
-                        }
-                    }
-                });
+            }    
 
-                if (cancelEditBtn) {
-                    cancelEditBtn.addEventListener('click', function() {
-                        vscode.postMessage({ command: '${WebviewMessageCommands.CANCEL_EDIT_PROFILE}' });
+            function renderProfiles(data) {
+                let profiles, editingProfileId;
+                if (Array.isArray(data)) {
+                    profiles = data;
+                    editingProfileId = null;
+                } else {
+                    profiles = data.profiles || [];
+                    editingProfileId = data.editingProfileId || null;
+                }
+
+                if (profilesLoadingMessageEl) {
+                    profilesLoadingMessageEl.style.display = 'none';
+                }
+                profilesListEl.innerHTML = '';
+
+                if (!profiles || profiles.length === 0) {
+                    if (noProfilesMessageEl) {
+                        noProfilesMessageEl.style.display = 'block';
+                    }
+                    if (profilesListEl) {
+                        profilesListEl.style.display = 'none';
+                    }
+                } else {
+                    if (noProfilesMessageEl) {
+                        noProfilesMessageEl.style.display = 'none';
+                    }
+                    if (profilesListEl) {
+                        profilesListEl.style.display = 'block';
+                    }
+
+                    // Sort profiles alphabetically by label
+                    const sortedProfiles = [...profiles].sort((a, b) => 
+                        a.label.toLowerCase().localeCompare(b.label.toLowerCase())
+                    );
+                    
+                    sortedProfiles.forEach(profile => {
+                        const li = document.createElement('li');
+                        const isBeingEdited = editingProfileId === profile.id;
+                        
+                        // Add visual indication for profile being edited
+                        if (isBeingEdited) {
+                            li.classList.add('profile-being-edited');
+                        }
+                        
+                        li.setAttribute('tabindex', '0');
+                        li.setAttribute('aria-label', \`Profile: \${profile.label}, user \${profile.username} at \${profile.serverName}\`);
+
+                        li.innerHTML = \`
+                        <div class="profile-details">
+                            <div class="profile-label">
+                                \${profile.label}
+                                \${isBeingEdited ? '<span class="editing-indicator">(editing)</span>' : ''}
+                            </div>
+                            <div class="profile-info">\${profile.username}@\${profile.serverName}:\${profile.portNumber}</div>
+                        </div>
+                        <div class="profile-actions">
+                            <button class="login-btn" data-profile-id="\${profile.id}" 
+                                    aria-label="Login with profile \${profile.label}" 
+                                    title="Login with this connection"
+                                    \${isBeingEdited ? 'disabled' : ''}>
+                                <span class="icon icon-login"></span>
+                            </button>
+                            <button class="edit-btn" data-profile-id="\${profile.id}" 
+                                    aria-label="Edit connection \${profile.label}" 
+                                    title="Edit this connection"
+                                    \${isBeingEdited ? 'disabled' : ''}
+                                    style="\${isBeingEdited ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
+                                <span class="icon icon-edit"></span>
+                            </button>
+                            <button class="delete-btn" data-profile-id="\${profile.id}" 
+                                    aria-label="Delete profile \${profile.label}" 
+                                    title="\${isBeingEdited ? 'Cannot delete while editing' : 'Delete this connection'}"
+                                    \${isBeingEdited ? 'disabled' : ''}
+                                    style="\${isBeingEdited ? 'opacity: 0.3; cursor: not-allowed;' : ''}">
+                                <span class="icon icon-delete"></span>
+                            </button>
+                        </div>
+                        \`;
+                        profilesListEl.appendChild(li);
                     });
                 }
-                
-                // Handle messages from the extension host
-                window.addEventListener('message', event => {
-                    const message = event.data;
-                    console.log('[WebviewScript] Message received from host:', message);
-                    switch (message.command) {
-                        case '${WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW}':
-                            renderProfiles(message.payload);
-                            break;
-                        case '${WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE}':
-                            displayMessage(message.payload.type, message.payload.text);
-                            // Reset button states
-                            if (saveProfileBtn) {
-                                saveProfileBtn.disabled = false;
-                                if (isEditMode) {
-                                    saveButtonText.textContent = 'Save Changes';
-                                } else {
-                                    saveButtonText.textContent = 'Save New Connection';
-                                }
-                            }
-                            break;
-                        case 'enterEditMode':
-                            enterEditMode(message.payload.profile, message.payload.hasStoredPassword);
-                            break;
-                        case 'exitEditMode':
-                            exitEditMode();
-                            break;
-                    }
-                });
-    
-                // Tell the extension the UI is ready
-                console.log('[WebviewScript] Requesting initial profiles via PROFILE_UI_LOADED.');
-                vscode.postMessage({ command: '${WebviewMessageCommands.PROFILE_UI_LOADED}' });
-                messagesEl.classList.add('hidden');
-            }());
-            </script>
-        </body>
-        </html>`;
-    }
+            }
 
+            function enterEditMode(profile, hasStoredPassword) {
+                console.log('[WebviewScript] Entering edit mode for profile:', profile);
+                isEditMode = true;
+                currentEditingProfileId = profile.id;
+                
+                // Update UI state
+                document.body.classList.add('edit-mode');
+                sectionTitle.textContent = 'Edit connection';
+                if (sectionIcon) {
+                    sectionIcon.className = 'icon icon-edit-profile-header';
+                }
+                saveButtonText.textContent = 'Save Changes';
+                
+                // Show cancel button
+                editActionsDiv.style.display = 'block';
+                
+                // Populate form with profile data
+                profileLabelInput.value = profile.label || '';
+                serverNameInput.value = profile.serverName || '';
+                portNumberInput.value = profile.portNumber || '';
+                usernameInput.value = profile.username || '';
+                passwordInput.value = ''; // Don't pre-fill password for security
+                
+                // Update checkbox state
+                storePasswordCheckbox.checked = hasStoredPassword;
+                
+                // Focus on the label field
+                profileLabelInput.focus();
+                
+                displayMessage('info', \`Editing connection: \${profile.label}\`);
+            }
+
+            function exitEditMode() {
+                console.log('[WebviewScript] Exiting edit mode');
+                isEditMode = false;
+                currentEditingProfileId = null;
+                
+                // Reset UI state
+                document.body.classList.remove('edit-mode');
+                sectionTitle.textContent = 'Add New Connection';
+                if (sectionIcon) {
+                    sectionIcon.className = 'icon icon-add-profile-header';
+                }
+                saveButtonText.textContent = 'Save New Connection';
+                
+                // Hide cancel button
+                editActionsDiv.style.display = 'none';
+                
+                // Clear and reset form
+                addProfileForm.reset();
+                portNumberInput.value = '9445'; // Reset default port
+                storePasswordCheckbox.checked = true; // Reset default
+            }
+
+            function handleSaveProfile() {
+                if (!serverNameInput.value.trim() || !portNumberInput.value.trim() || !usernameInput.value.trim()) {
+                    displayMessage('error', 'Server, Port, and Username are required fields.');
+                    if (!serverNameInput.value.trim()) {serverNameInput.focus();}
+                    else if (!portNumberInput.value.trim()) {portNumberInput.focus();}
+                    else if (!usernameInput.value.trim()) {usernameInput.focus();}
+                    return;
+                }
+                if (isNaN(parseInt(portNumberInput.value, 10))) {
+                    displayMessage('error', 'Port must be a valid number.');
+                    portNumberInput.focus();
+                    return;
+                }
+
+                const payload = {
+                    label: profileLabelInput.value.trim() || \`\${usernameInput.value.trim()}@\${serverNameInput.value.trim()}\`,
+                    serverName: serverNameInput.value.trim(),
+                    portNumber: parseInt(portNumberInput.value, 10),
+                    username: usernameInput.value.trim(),
+                    password: storePasswordCheckbox.checked ? passwordInput.value : undefined
+                };
+                if (isEditMode && currentEditingProfileId) {
+                    // Update existing connection
+                    payload.id = currentEditingProfileId;
+                    saveProfileBtn.disabled = true;
+                    saveButtonText.textContent = 'Updating...';
+                    vscode.postMessage({ command: '${WebviewMessageCommands.UPDATE_PROFILE}', payload });
+                } else {
+                    // Save new connection
+                    saveProfileBtn.disabled = true;
+                    saveButtonText.textContent = 'Saving...';
+                    vscode.postMessage({ command: '${WebviewMessageCommands.SAVE_NEW_PROFILE}', payload });
+                }
+
+                setTimeout(() => {
+                    passwordInput.value = '';
+                    saveProfileBtn.disabled = false;
+                    if (isEditMode) {
+                        saveButtonText.textContent = 'Save Changes';
+                    } else {
+                        saveButtonText.textContent = 'Save New Connection';
+                    }
+                }, 1000);
+            }
+
+            // Event listeners
+            saveProfileBtn.addEventListener('click', handleSaveProfile);
+
+            profilesListEl.addEventListener('click', function(event) {
+                const targetButton = event.target.closest('button');
+                if (targetButton && !targetButton.disabled) {
+                    const profileId = targetButton.dataset.profileId;
+                    if (targetButton.classList.contains('login-btn')) {
+                        vscode.postMessage({ command: 'loginWithProfile', payload: { profileId } });
+                    } else if (targetButton.classList.contains('edit-btn')) {
+                        vscode.postMessage({ command: 'editProfile', payload: { profileId } });
+                    } else if (targetButton.classList.contains('delete-btn')) {
+                        vscode.postMessage({ command: 'requestDeleteConfirmation', payload: { profileId } });
+                    }
+                } else if (targetButton && targetButton.disabled) {
+                    if (targetButton.classList.contains('delete-btn')) {
+                        displayMessage('info', 'Cannot delete profile while editing it. Please save or cancel your changes first.');
+                    } else if (targetButton.classList.contains('login-btn') || targetButton.classList.contains('edit-btn')) {
+                        displayMessage('info', 'Please save or cancel your current changes before performing other actions.');
+                    }
+                }
+            });
+
+            if (cancelEditBtn) {
+                cancelEditBtn.addEventListener('click', function() {
+                    vscode.postMessage({ command: '${WebviewMessageCommands.CANCEL_EDIT_PROFILE}' });
+                });
+            }
+            
+            // Handle messages from the extension host
+            window.addEventListener('message', event => {
+                const message = event.data;
+                console.log('[WebviewScript] Message received from host:', message);
+                switch (message.command) {
+                    case '${WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW}':
+                        renderProfiles(message.payload);
+                        break;
+                    case '${WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE}':
+                        displayMessage(message.payload.type, message.payload.text);
+                        // Reset button states
+                        if (saveProfileBtn) {
+                            saveProfileBtn.disabled = false;
+                            if (isEditMode) {
+                                saveButtonText.textContent = 'Save Changes';
+                            } else {
+                                saveButtonText.textContent = 'Save New Connection';
+                            }
+                        }
+                        break;
+                    case 'enterEditMode':
+                        enterEditMode(message.payload.profile, message.payload.hasStoredPassword);
+                        break;
+                    case 'exitEditMode':
+                        exitEditMode();
+                        break;
+                }
+            });
+
+            // Tell the extension the UI is ready
+            console.log('[WebviewScript] Requesting initial profiles via PROFILE_UI_LOADED.');
+            vscode.postMessage({ command: '${WebviewMessageCommands.PROFILE_UI_LOADED}' });
+            messagesEl.classList.add('hidden');
+        }());
+        </script>
+    </body>
+    </html>`;
+    }
     /**
      * Generates the HTML content for a webview page indicating that the user is already logged in.
      * This page displays a success message, the TestBench logo, and a sign-out button.
