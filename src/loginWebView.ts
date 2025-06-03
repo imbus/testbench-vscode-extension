@@ -730,13 +730,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 }
                 ul#profilesList li .profile-label {
                     font-weight: bold;
-                    color: var(--vscode-list-activeSelectionForeground);
+                    color: var(--vscode-foreground);
                     font-size: 1.05em;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     max-width: 100%;
-                }
+                }                
                 ul#profilesList li .profile-info {
                     font-size: 0.9em;
                     color: var(--vscode-descriptionForeground);
@@ -1124,6 +1124,47 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     color: var(--vscode-button-primaryForeground, white);
                     border-color: var(--vscode-errorForeground);
                     opacity: 0.8;
+                }
+
+                /* For light themes specifically */
+                /* Ensure both form labels and profile labels use the same color in ALL themes */
+                .form-group label,
+                ul#profilesList li .profile-label {
+                    color: var(--vscode-editor-foreground) !important;
+                }
+
+                /* Theme-specific fallbacks to ensure consistency */
+                body[data-vscode-theme-kind="vscode-light"] .form-group label,
+                body[data-vscode-theme-kind="vscode-light"] ul#profilesList li .profile-label {
+                    color: var(--vscode-editor-foreground, #000000) !important;
+                }
+
+                body[data-vscode-theme-kind="vscode-dark"] .form-group label,
+                body[data-vscode-theme-kind="vscode-dark"] ul#profilesList li .profile-label {
+                    color: var(--vscode-editor-foreground, #ffffff) !important;
+                }
+
+                body[data-vscode-theme-kind="vscode-high-contrast"] .form-group label,
+                body[data-vscode-theme-kind="vscode-high-contrast"] ul#profilesList li .profile-label {
+                    color: var(--vscode-editor-foreground, #ffffff) !important;
+                }
+                
+                body[data-vscode-theme-kind="vscode-light"] .login-btn,
+                body[data-vscode-theme-kind="vscode-light"] .edit-btn,
+                body[data-vscode-theme-kind="vscode-light"] .delete-btn {
+                    background-color: var(--vscode-input-background, #ffffff);
+                    color: var(--vscode-foreground, #000000);
+                    border-color: var(--vscode-input-border, #d0d0d0);
+                }
+
+                body[data-vscode-theme-kind="vscode-light"] .login-btn:hover,
+                body[data-vscode-theme-kind="vscode-light"] .edit-btn:hover {
+                    background-color: var(--vscode-list-hoverBackground, #f0f0f0);
+                }
+
+                body[data-vscode-theme-kind="vscode-light"] button.delete-btn:hover {
+                    background-color: var(--vscode-errorForeground);
+                    color: white;
                 }
             </style>
         </head>
