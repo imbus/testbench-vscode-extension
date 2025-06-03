@@ -990,11 +990,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 .edit-mode .add-profile-section h3 {
                     color: var(--vscode-gitDecoration-modifiedResourceForeground);
                 }
-
-                /* Thin black outline for light themes in saveButtonText */
-                body[data-vscode-theme-kind="vscode-light"] #saveButtonText {
-                    text-shadow: -0.6px -0.6px 0 #000, 0.6px -0.6px 0 #000, -0.6px 0.6px 0 #000, 0.6px 0.6px 0 #000;
-                }
                                 
                 .edit-actions {
                     display: flex;
