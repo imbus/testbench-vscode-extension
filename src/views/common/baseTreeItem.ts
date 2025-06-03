@@ -152,7 +152,6 @@ export class BaseTestBenchTreeItem extends vscode.TreeItem {
         let iconFileNames = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
 
         if (ENABLE_ICON_MARKING_ON_GENERATE && (this._isMarkedForImport || isTreeItemMarkedForImport)) {
-            //
             if (iconFileNames.markedLight && iconFileNames.markedDark) {
                 iconFileNames = { light: iconFileNames.markedLight, dark: iconFileNames.markedDark };
             } else {

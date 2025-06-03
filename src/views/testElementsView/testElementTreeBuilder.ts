@@ -26,6 +26,7 @@ export class TestElementTreeBuilder {
             return [];
         }
         const patterns: RegExp[] = resourceMarkers.map((marker) => {
+            // eslint-disable-next-line no-useless-escape
             const escapedResourceMarker = marker.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
             return new RegExp(`(?:.*\\.)?(?<resourceName>[^.]+?)\\s*${escapedResourceMarker}.*`);
         });
@@ -201,7 +202,6 @@ export class TestElementTreeBuilder {
                 }
             }
             if (element.directRegexMatch || inheritedMatch || validChildren.length > 0) {
-                //
                 element.children = validChildren;
                 return element;
             }

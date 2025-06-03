@@ -1,5 +1,5 @@
 /**
- * @file testElementsTreeView.ts
+ * @file src/views/testEleemntsView/testElementsTreeView.ts
  * @description Provides a VS Code TreeDataProvider implementation to display test elements
  * retrieved from the TestBench server.
  */
@@ -336,17 +336,13 @@ export class TestElementsTreeDataProvider implements vscode.TreeDataProvider<Tes
     }
 
     private handleFetchTestElementsFailure(tovLabel: string, error?: any) {
-        this.currentSelectedTovKey = ""; //
+        this.currentSelectedTovKey = "";
         const errorMessage = error instanceof Error ? error.message : "Unknown error during fetch";
-        logger.error(
-            //
-            `[fetchTestElements] Failed to fetch test elements for TOV "${tovLabel}": ${errorMessage}`, //
-            error
-        );
-        vscode.window.showErrorMessage(`Failed to fetch test elements for TOV "${tovLabel}".`); //
-        this.setTreeViewMessage(`Error fetching elements for TOV "${tovLabel}". Check logs or try again.`); //
-        this.currentTreeData = []; //
-        this._onDidChangeTreeDataEmitter.fire(undefined); //
+        logger.error(`[fetchTestElements] Failed to fetch test elements for TOV "${tovLabel}": ${errorMessage}`, error);
+        vscode.window.showErrorMessage(`Failed to fetch test elements for TOV "${tovLabel}".`);
+        this.setTreeViewMessage(`Error fetching elements for TOV "${tovLabel}". Check logs or try again.`);
+        this.currentTreeData = [];
+        this._onDidChangeTreeDataEmitter.fire(undefined);
     }
 
     /**
