@@ -435,7 +435,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 hasStoredPassword: !!storedPassword
             });
 
-            // Refresh profiles to disable delete button for the editing profile
+            // Refresh profiles to disable delete button for the editing connection
             await this.sendProfilesToWebview();
 
             logger.info(`[LoginWebView] Edit mode activated for profile: ${profileToEdit.label}`);
@@ -1285,7 +1285,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                                     <span class="icon icon-login"></span>
                                 </button>
                                 <button class="edit-btn" data-profile-id="\${profile.id}" 
-                                        aria-label="Edit profile \${profile.label}" 
+                                        aria-label="Edit connection \${profile.label}" 
                                         title="Edit this connection"
                                         \${isBeingEdited ? 'disabled' : ''}
                                         style="\${isBeingEdited ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
@@ -1312,7 +1312,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     
                     // Update UI state
                     document.body.classList.add('edit-mode');
-                    sectionTitle.textContent = 'Edit Profile';
+                    sectionTitle.textContent = 'Edit connection';
                     if (sectionIcon) {
                         sectionIcon.className = 'icon icon-edit-profile-header';
                     }
@@ -1334,7 +1334,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     // Focus on the label field
                     profileLabelInput.focus();
                     
-                    displayMessage('info', \`Editing profile: \${profile.label}\`);
+                    displayMessage('info', \`Editing connection: \${profile.label}\`);
                 }
 
                 function exitEditMode() {
@@ -1344,7 +1344,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     
                     // Reset UI state
                     document.body.classList.remove('edit-mode');
-                    sectionTitle.textContent = 'Add New Profile';
+                    sectionTitle.textContent = 'Add New Connection';
                     if (sectionIcon) {
                         sectionIcon.className = 'icon icon-add-profile-header';
                     }
