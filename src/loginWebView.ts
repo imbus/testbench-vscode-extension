@@ -802,15 +802,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     min-width: fit-content;
                 }
                 .profile-actions button {
-                    padding: 6px 8px;
+                    padding: 6px 8px; 
                     font-size: 0.9em;
                     display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-width: 32px;
-                    min-height: 32px;
-                    border-radius: 4px;
-                    flex-shrink: 0;
+                    align-items: center; 
+                    justify-content: center; 
+                    min-width: 32px; 
+                    min-height: 32px; 
+                    border-radius: 4px; 
+                    flex-shrink: 0; 
                     max-width: 32px;
                 }
                 button {
@@ -839,31 +839,26 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 }
                 .profile-actions button .icon {
                     margin-right: 0;
-                }                    
-                #saveProfileBtn, .login-btn {
+                }                   
+                #saveProfileBtn {
                     background-color: var(--vscode-button-primaryBackground, var(--vscode-button-background));
                     color: var(--vscode-button-primaryForeground, var(--vscode-button-foreground));
+                    border-color: var(--vscode-button-primaryBackground, var(--vscode-button-border));
                 }
-                #saveProfileBtn:hover, .login-btn:hover {
+                #saveProfileBtn:hover {
                     background-color: var(--vscode-button-primaryHoverBackground, var(--vscode-button-hoverBackground));
                 }
-                .edit-btn {
+                 .login-btn,
+                .edit-btn,
+                .delete-btn {
                     background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
                     color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
                     border-color: var(--vscode-button-secondaryBackground, var(--vscode-button-border));
                 }
-                .edit-btn:hover {
+                .login-btn:hover,
+                .edit-btn:hover,
+                .delete-btn:hover {
                     background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
-                    opacity: 0.9;
-                }
-                button.delete-btn {
-                    background-color: var(--vscode-button-secondaryBackground, var(--vscode-errorForeground));
-                    color: var(--vscode-button-secondaryForeground, white);
-                    border-color: var(--vscode-button-secondaryBackground, var(--vscode-errorForeground));
-                }
-                button.delete-btn:hover {
-                    background-color: var(--vscode-errorForeground);
-                    opacity: 0.8;
                 }
                 .form-group {
                     margin-bottom: 15px;
@@ -1004,10 +999,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 }
                 
                 #cancelEditBtn {
-                    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
-                    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+                    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background)); 
+                    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground)); 
+                    border-color: var(--vscode-button-secondaryBackground, var(--vscode-button-border)); 
                 }
-                
                 #cancelEditBtn:hover {
                     background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
                 }
@@ -1092,6 +1087,26 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 body[data-vscode-theme-kind="vscode-high-contrast"] .icon-edit { background-image: url(${editIconDarkUri}); }
                 body[data-vscode-theme-kind="vscode-dark"] .icon-delete,
                 body[data-vscode-theme-kind="vscode-high-contrast"] .icon-delete { background-image: url(${deleteIconDarkUri}); }
+
+                 body[data-vscode-theme-kind="vscode-dark"] .login-btn,
+                body[data-vscode-theme-kind="vscode-dark"] .edit-btn,
+                body[data-vscode-theme-kind="vscode-dark"] .delete-btn,
+                body[data-vscode-theme-kind="vscode-high-contrast"] .login-btn,
+                body[data-vscode-theme-kind="vscode-high-contrast"] .edit-btn,
+                body[data-vscode-theme-kind="vscode-high-contrast"] .delete-btn {
+                    background-color: var(--vscode-button-primaryBackground, var(--vscode-button-background));
+                    color: var(--vscode-button-primaryForeground, var(--vscode-button-foreground));
+                    border-color: var(--vscode-button-primaryBackground, var(--vscode-button-border));
+                }
+
+                body[data-vscode-theme-kind="vscode-dark"] .login-btn:hover,
+                body[data-vscode-theme-kind="vscode-dark"] .edit-btn:hover,
+                body[data-vscode-theme-kind="vscode-dark"] .delete-btn:hover,
+                body[data-vscode-theme-kind="vscode-high-contrast"] .login-btn:hover,
+                body[data-vscode-theme-kind="vscode-high-contrast"] .edit-btn:hover,
+                body[data-vscode-theme-kind="vscode-high-contrast"] .delete-btn:hover {
+                    background-color: var(--vscode-button-primaryHoverBackground, var(--vscode-button-hoverBackground));
+                }
             </style>
         </head>
         <body>
@@ -1510,19 +1525,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     img { width: 48px; height: 48px; margin-bottom: 15px; }
                     p { color: var(--vscode-descriptionForeground); }
                     button {
-                        background-color: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
                         border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder));
-                        padding: 8px 15px;
-                        cursor: pointer;
-                        border-radius: 4px;
-                        font-weight: 500;
+                        padding: 8px 15px; 
+                        cursor: pointer; 
+                        border-radius: 4px; 
+                        font-weight: 500; 
                         transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
-                        display: inline-flex;
+                        display: inline-flex; 
                         align-items: center;
-                        justify-content: center;
-                        max-width: 100%;
-                        box-sizing: border-box;
+                        justify-content: center; 
                     }
                 </style>
             </head>
