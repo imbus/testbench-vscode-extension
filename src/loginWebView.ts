@@ -1265,20 +1265,20 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                             <div class="profile-actions">
                                 <button class="login-btn" data-profile-id="\${profile.id}" 
                                         aria-label="Login with profile \${profile.label}" 
-                                        title="Login with this profile"
+                                        title="Login with this connection"
                                         \${isBeingEdited ? 'disabled' : ''}>
                                     <span class="icon icon-login"></span>
                                 </button>
                                 <button class="edit-btn" data-profile-id="\${profile.id}" 
                                         aria-label="Edit profile \${profile.label}" 
-                                        title="Edit this profile"
+                                        title="Edit this connection"
                                         \${isBeingEdited ? 'disabled' : ''}
                                         style="\${isBeingEdited ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
                                     <span class="icon icon-edit"></span>
                                 </button>
                                 <button class="delete-btn" data-profile-id="\${profile.id}" 
                                         aria-label="Delete profile \${profile.label}" 
-                                        title="\${isBeingEdited ? 'Cannot delete while editing' : 'Delete this profile'}"
+                                        title="\${isBeingEdited ? 'Cannot delete while editing' : 'Delete this connection'}"
                                         \${isBeingEdited ? 'disabled' : ''}
                                         style="\${isBeingEdited ? 'opacity: 0.3; cursor: not-allowed;' : ''}">
                                     <span class="icon icon-delete"></span>
