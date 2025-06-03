@@ -996,32 +996,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     text-shadow: -0.6px -0.6px 0 #000, 0.6px -0.6px 0 #000, -0.6px 0.6px 0 #000, 0.6px 0.6px 0 #000;
                 }
                                 
-                .edit-mode #saveProfileBtn {
-                    background-color: var(--vscode-gitDecoration-modifiedResourceForeground);
-                    border-color: var(--vscode-gitDecoration-modifiedResourceForeground);
-                }
-
-                /* "Save Changes" icon color on light theme */
-                body.vscode-light.edit-mode #saveProfileBtn {
-                    background-color: #E1C16E;
-                    // border-color:     #000000;
-                    // color:            #FFFFFF;
-                    filter:           none; /* clear any brightness filters */
-                }
-
-                /* "Save Changes" icon color on dark theme */
-                body.vscode-dark.edit-mode #saveProfileBtn {
-                    background-color: #E1C16E;
-                    // border-color:     #000000;
-                    color:            #000000;
-                    filter:           none;
-                }
-                    
-                .edit-mode #saveProfileBtn:hover {
-                    background-color: var(--vscode-gitDecoration-modifiedResourceForeground);
-                    opacity: 0.8;
-                }
-                                
                 .edit-actions {
                     display: flex;
                     gap: 10px;
@@ -1144,11 +1118,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             <section class="add-profile-section" aria-labelledby="addProfileHeading">
                 <h3 id="addProfileHeading">
                     <span class="icon icon-add-profile-header"></span>
-                    <span id="sectionTitle">Add New Profile</span>
+                    <span id="sectionTitle">Add New Connection</span>
                 </h3>
                 <form id="addProfileForm">
                     <div class="form-group">
-                        <label for="profileLabel">Profile Label (e.g., "My Dev Server")</label>
+                        <label for="profileLabel">Connection Label (e.g., "My TestBench Connection")</label>
                         <input type="text" id="profileLabel" name="profileLabel" placeholder="Optional, e.g., Main TestBench">
                     </div>
                     <div class="form-group">
