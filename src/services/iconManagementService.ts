@@ -36,7 +36,6 @@ export class IconManagementService {
      * Initialize the icon registry with all known icon configurations
      */
     private initializeIconRegistry(): void {
-        // Project Management Icons
         this.registerIconSet("projectManagement", {
             [TreeItemContextValues.PROJECT]: {
                 active: { light: "project-light.svg", dark: "project-dark.svg" },
@@ -50,7 +49,6 @@ export class IconManagementService {
             }
         });
 
-        // Test Theme Icons
         this.registerIconSet("testTheme", {
             [TreeItemContextValues.TEST_THEME_NODE]: {
                 default: {
@@ -73,7 +71,6 @@ export class IconManagementService {
             }
         });
 
-        // Test Element Icons
         this.registerIconSet("testElement", {
             DataType: {
                 default: { light: "dataType-light.svg", dark: "dataType-dark.svg" }
@@ -98,7 +95,6 @@ export class IconManagementService {
             }
         });
 
-        // Default/Fallback Icons
         this.registerIconSet("default", {
             default: {
                 default: { light: "testbench-logo.svg", dark: "testbench-logo.svg" }
@@ -132,8 +128,6 @@ export class IconManagementService {
         try {
             const iconDef = this.findIconDefinition(context, category);
             let iconFiles = iconDef;
-
-            // Use marked icons if available and item is marked
             if (context.isMarked && iconDef.markedLight && iconDef.markedDark) {
                 iconFiles = {
                     light: iconDef.markedLight,
@@ -168,7 +162,7 @@ export class IconManagementService {
             contextValueForIcon = context.originalContextValue;
         }
 
-        // Try to find in the specified category first
+        // Try to find in the specified category
         const categoryMap = this.iconRegistry.get(category);
         if (categoryMap) {
             const iconDef = this.findInCategory(categoryMap, contextValueForIcon, context.status);
@@ -187,7 +181,6 @@ export class IconManagementService {
             }
         }
 
-        // Return default fallback
         const defaultCategory = this.iconRegistry.get("default");
         const fallback = defaultCategory?.get(this.createIconKey("default", "default"));
 
@@ -206,7 +199,7 @@ export class IconManagementService {
         contextValue: string,
         status?: string
     ): IconDefinition | null {
-        // Try with specific status first
+        // Try with specific status
         if (status) {
             const withStatus = categoryMap.get(this.createIconKey(contextValue, status.toLowerCase()));
             if (withStatus) {
@@ -214,7 +207,7 @@ export class IconManagementService {
             }
         }
 
-        // Try with default status
+        // Try default status
         const withDefault = categoryMap.get(this.createIconKey(contextValue, "default"));
         if (withDefault) {
             return withDefault;

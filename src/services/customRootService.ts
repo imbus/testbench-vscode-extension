@@ -51,21 +51,15 @@ export class CustomRootService<T extends BaseTreeItem> {
             customContextValue: this.customContextValue
         };
 
-        // Update the item
         item.setAsCustomRoot(true);
         item.contextValue = this.customContextValue;
 
-        // Ensure it's expanded if it has children
         if (item.children && item.children.length > 0) {
             item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
         }
 
-        // Update VS Code context
         vscode.commands.executeCommand("setContext", this.contextKey, true);
-
-        // Notify listeners
         this.onStateChange?.(this.state);
-
         this.logger.info(`[CustomRootService] Custom root set to: ${item.label}`);
     }
 
@@ -215,16 +209,9 @@ export class CustomRootService<T extends BaseTreeItem> {
             originalContextValue: null,
             customContextValue: this.customContextValue
         };
-
-        // Update VS Code context
         vscode.commands.executeCommand("setContext", this.contextKey, false);
-
-        // Clear expansion state
         this.clearExpansionState();
-
-        // Notify listeners
         this.onStateChange?.(this.state);
-
         this.logger.info(`[CustomRootService] Custom root state cleared`);
     }
 
@@ -232,7 +219,6 @@ export class CustomRootService<T extends BaseTreeItem> {
      * Validate if an item can be set as custom root
      */
     public canSetAsRoot(item: T): boolean {
-        // Add validation logic here if needed
         return item !== null && item.getUniqueId() !== undefined;
     }
 
@@ -243,8 +229,6 @@ export class CustomRootService<T extends BaseTreeItem> {
         if (!this.state.isActive || !this.state.rootItem) {
             return [];
         }
-
-        // Ensure custom root is properly expanded
         if (this.state.rootItem.collapsibleState === vscode.TreeItemCollapsibleState.None) {
             const children = this.state.rootItem.children;
             if (children && children.length > 0) {

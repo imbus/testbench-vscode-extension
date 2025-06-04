@@ -12,7 +12,9 @@ import { ResourceFileService } from "../../services/resourceFileService";
 import { TestElementTreeBuilder } from "./testElementTreeBuilder";
 import { ConfigKeys } from "../../constants";
 import { getExtensionConfiguration } from "../../configuration";
-import { removeRobotResourceFromPathString, fileContentOfRobotResourceSubdivisionFile } from "./testElementsTreeView";
+import { IconManagementService } from "../../services/iconManagementService";
+
+export const fileContentOfRobotResourceSubdivisionFile = `*** Settings ***\nDocumentation    tb:uid:`;
 
 function appendResourceExtensionAndTrimPathLocal(baseTargetPath: string, logger: TestBenchLogger): string {
     logger.trace(`Adding .resource extension and trimming path: ${baseTargetPath}`);
@@ -21,6 +23,17 @@ function appendResourceExtensionAndTrimPathLocal(baseTargetPath: string, logger:
     targetPath = targetPath.trimStart();
     logger.trace(`Normalized path: ${targetPath}`);
     return targetPath;
+}
+
+/**
+ * Removes all occurrences of "[Robot-Resource]" from a given path string.
+ * @param {string} pathStr The original path string.
+ * @returns {string} The cleaned path string.
+ */
+function removeRobotResourceFromPathString(pathStr: string, logger: TestBenchLogger): string {
+    const cleanedPath: string = pathStr.replace(/\[Robot-Resource\]/g, "");
+    logger.trace(`[removeRobotResourceFromPathString] Removed [Robot-Resource] from path ${pathStr}: ${cleanedPath}`);
+    return cleanedPath;
 }
 
 export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestElementTreeItem> {
@@ -33,6 +46,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         updateMessageCallback: (message: string | undefined) => void,
         private readonly testElementDataService: TestElementDataService,
         private readonly resourceFileService: ResourceFileService,
+        private readonly iconManagementService: IconManagementService,
         private readonly testElementTreeBuilder: TestElementTreeBuilder
     ) {
         const providerOptions: TreeDataProviderOptions = {
@@ -148,7 +162,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             const absolutePath = await this.resourceFileService.constructAbsolutePath(hierarchicalName);
             if (absolutePath) {
                 const isFinal = item.isFinalSubdivision();
-                let pathToCheck = removeRobotResourceFromPathString(absolutePath);
+                let pathToCheck = removeRobotResourceFromPathString(absolutePath, this.logger);
                 if (isFinal) {
                     pathToCheck = appendResourceExtensionAndTrimPathLocal(pathToCheck, this.logger);
                 }
@@ -171,7 +185,13 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     protected createTreeItemFromData(data: TestElementData, parent: TestElementTreeItem | null): TestElementTreeItem {
-        const item = new TestElementTreeItem(data, this.extensionContext, parent);
+        const item = new TestElementTreeItem(
+            data,
+            this.extensionContext,
+            this.logger,
+            this.iconManagementService,
+            parent
+        );
         this.applyStoredExpansionState(item);
         return item;
     }
@@ -199,7 +219,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
         try {
             if (item.testElementData.elementType === "Subdivision") {
-                const processedPath = removeRobotResourceFromPathString(absolutePath);
+                const processedPath = removeRobotResourceFromPathString(absolutePath, this.logger);
                 if (item.isFinalSubdivision()) {
                     const resourcePath = appendResourceExtensionAndTrimPathLocal(processedPath, this.logger);
                     const uid = item.getUID();

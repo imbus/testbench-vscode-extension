@@ -3,10 +3,10 @@ import * as vscode from "vscode";
 import * as sinon from "sinon";
 import { activate, initializeTreeViews } from "../../extension";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { ProjectManagementTreeDataProvider } from "../../views/projectManagementTreeView";
-import { TestElementsTreeDataProvider } from "../../views/testElements/testElementsTreeView";
 import { baseKeyOfExtension } from "../../constants";
 import { getExtensionConfiguration } from "../../configuration";
+import { ProjectManagementTreeDataProvider } from "../../views/projectManagement/projectManagementTreeDataProvider";
+import { TestElementsTreeDataProvider } from "../../views/testElements/testElementsTreeDataProvider";
 
 suite("Extension Test Suite", () => {
     let sandbox: sinon.SinonSandbox;

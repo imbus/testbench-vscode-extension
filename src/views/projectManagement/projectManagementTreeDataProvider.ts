@@ -10,6 +10,7 @@ import { ProjectManagementTreeItem } from "./projectManagementTreeItem";
 import { ProjectDataService } from "../../services/projectDataService";
 import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
+import { IconManagementService } from "../../services/iconManagementService";
 
 export interface CycleDataForThemeTreeEvent {
     projectKey: string;
@@ -26,6 +27,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     constructor(
         extensionContext: vscode.ExtensionContext,
         logger: TestBenchLogger,
+        private readonly iconService: IconManagementService,
         updateMessageCallback: (message: string | undefined) => void,
         private readonly projectDataService: ProjectDataService
     ) {
@@ -58,7 +60,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             .map((project) => this.createTreeItemFromData(project, null))
             .filter((item): item is ProjectManagementTreeItem => item !== null);
 
-        this.updateMessageCallback(undefined); // Clear loading message
+        this.updateMessageCallback(undefined);
         return projectItems;
     }
 
@@ -100,6 +102,8 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             collapsibleState,
             data,
             this.extensionContext,
+            this.logger,
+            this.iconService,
             parent
         );
         this.applyStoredExpansionState(treeItem);

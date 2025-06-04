@@ -5,6 +5,8 @@
 
 import * as vscode from "vscode";
 import { logger } from "../../extension";
+import { IconManagementService } from "../../services/iconManagementService";
+import { TestBenchLogger } from "../../testBenchLogger";
 
 export interface TreeItemIconConfig {
     light: string;
@@ -27,13 +29,13 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
     public parent: BaseTreeItem | null;
     public children?: BaseTreeItem[];
     public readonly originalContextValue: string;
-    public readonly extensionContext: vscode.ExtensionContext;
-
-    // State management
     public state: TreeItemState = {};
-
-    // Data reference
     public itemData: any;
+
+    // Dependencies are injected
+    protected readonly logger: TestBenchLogger;
+    protected readonly iconService: IconManagementService;
+    protected readonly extensionContext: vscode.ExtensionContext;
 
     constructor(
         label: string,
@@ -41,15 +43,18 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
         collapsibleState: vscode.TreeItemCollapsibleState,
         itemData: any,
         extensionContext: vscode.ExtensionContext,
+        logger: TestBenchLogger,
+        iconService: IconManagementService,
         parent: BaseTreeItem | null = null
     ) {
         super(label, collapsibleState);
-
         this.originalContextValue = contextValue;
         this.contextValue = contextValue;
-        this.extensionContext = extensionContext;
-        this.parent = parent;
         this.itemData = itemData;
+        this.extensionContext = extensionContext;
+        this.logger = logger;
+        this.iconService = iconService;
+        this.parent = parent;
 
         this.initializeState();
         this.setupTooltip();
@@ -69,26 +74,26 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
     }
 
     /**
-     * Extract status from item data - can be overridden by subclasses
+     * Extract status from item data
      */
     protected extractStatus(): string {
         return this.itemData?.exec?.status || this.itemData?.status || this.itemData?.base?.status || "None";
     }
 
     /**
-     * Setup tooltip - can be customized by subclasses
+     * Setup tooltip
      */
     protected setupTooltip(): void {
         this.tooltip = this.buildTooltipContent();
     }
 
     /**
-     * Build tooltip content - can be overridden by subclasses
+     * Build tooltip content
      */
     protected abstract buildTooltipContent(): string | vscode.MarkdownString;
 
     /**
-     * Get icon category for this tree item type - override in subclasses
+     * Get icon category for this tree item type
      */
     protected abstract getIconCategory(): string;
 
@@ -97,14 +102,11 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
      */
     public updateIcon(): void {
         try {
-            // This will be injected by the tree data provider
-            const iconService = (this.extensionContext as any).iconManagementService;
-            if (!iconService) {
-                logger.warn(`[BaseTreeItem] No icon management service available for ${this.label}`);
+            if (!this.iconService) {
+                this.logger.warn(`[BaseTreeItem] IconService not available for ${String(this.label)}`);
                 this.setFallbackIcon();
                 return;
             }
-
             const iconContext = {
                 contextValue: this.contextValue!,
                 status: this.state.status,
@@ -112,10 +114,9 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
                 isCustomRoot: this.state.isCustomRoot,
                 originalContextValue: this.originalContextValue
             };
-
-            this.iconPath = iconService.getIconUris(iconContext, this.getIconCategory());
+            this.iconPath = this.iconService.getIconUris(iconContext, this.getIconCategory());
         } catch (error) {
-            logger.error(`Error updating icon for ${this.label}:`, error);
+            this.logger.error(`Error updating icon for ${String(this.label)}:`, error);
             this.setFallbackIcon();
         }
     }
@@ -124,10 +125,16 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
      * Set fallback icon when icon update fails
      */
     protected setFallbackIcon(): void {
-        this.iconPath = {
-            light: vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", "testbench-logo.svg"),
-            dark: vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", "testbench-logo.svg")
-        };
+        if (this.iconService) {
+            this.iconPath = this.iconService.getIconUris({ contextValue: "default", status: "default" }, "default");
+        } else {
+            // Fallback
+            const fallbackIconName = "other.svg";
+            this.iconPath = {
+                light: vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", fallbackIconName),
+                dark: vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", fallbackIconName)
+            };
+        }
     }
 
     /**
@@ -137,7 +144,6 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
         this.state = { ...this.state, ...newState };
         this.updateIcon();
 
-        // Update VS Code tree item properties based on state
         if (newState.isExpanded !== undefined) {
             this.collapsibleState = newState.isExpanded
                 ? vscode.TreeItemCollapsibleState.Expanded

@@ -12,18 +12,21 @@ import { MarkedItemStateService } from "../../services/markedItemStateService";
 import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { CycleNodeData, CycleStructure } from "../../testBenchTypes";
 import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
+import { IconManagementService } from "../../services/iconManagementService";
 
 export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTreeItem> {
     private currentCycleKey: string | null = null;
     private currentProjectKey: string | null = null;
     private currentCycleLabel: string | null = null;
+    private readonly iconService: IconManagementService;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
         logger: TestBenchLogger,
         updateMessageCallback: (message: string | undefined) => void,
         private readonly projectDataService: ProjectDataService,
-        private readonly markedItemStateService: MarkedItemStateService
+        private readonly markedItemStateService: MarkedItemStateService,
+        iconManagementService: IconManagementService
         // IconManagementService is injected into BaseTreeItem via extensionContext
     ) {
         const providerOptions: TreeDataProviderOptions = {
@@ -33,6 +36,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             enableExpansionTracking: true
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
+        this.iconService = iconManagementService;
         this.logger.trace("[TestThemeTreeDataProvider] Initialized");
     }
 
@@ -80,7 +84,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         );
         if (cycleStructure) {
             const newRootElements = this.buildTreeFromCycleStructure(cycleStructure);
-            // Since updateElements is not called directly here, manually apply expansion
             const applyExpansionRecursive = (items: TestThemeTreeItem[]) => {
                 for (const item of items) {
                     this.applyStoredExpansionState(item);
@@ -118,10 +121,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
         const treeItem = new TestThemeTreeItem(
             label,
-            data.elementType, // Original context for icon/logic
+            data.elementType,
             collapsibleState,
             data,
             this.extensionContext,
+            this.logger,
+            this.iconService,
             parent
         );
 
@@ -137,11 +142,11 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         return treeItem;
     }
 
+    // Helper to get the current set of all nodes being processed
+    // This depends on how you store the full cycleStructure when populateFromCycleData is called
+    // For now, let's assume fetchRootElements populates something accessible or we re-fetch if needed.
+    // This is a simplification; ideally, you'd have the full structure available.
     private getRawNodesFromCurrentRoot(): CycleNodeData[] {
-        // Helper to get the current set of all nodes being processed
-        // This depends on how you store the full cycleStructure when populateFromCycleData is called
-        // For now, let's assume fetchRootElements populates something accessible or we re-fetch if needed.
-        // This is a simplification; ideally, you'd have the full structure available.
         const activeRoot = this.isCustomRootActive()
             ? this.getCurrentCustomRoot()?.itemData
             : (this.rootElements[0]?.itemData as CycleNodeData); // This is flawed if multiple roots
@@ -191,13 +196,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                 if (treeItem) {
                     const grandChildren = this.buildTreeRecursively(nodeData.base.key, treeItem, elementsByKey);
                     treeItem.children = grandChildren;
-                    // Update collapsible state based on actual children
                     if (grandChildren.length > 0) {
                         treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
                     } else {
                         treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
                     }
-                    this.applyStoredExpansionState(treeItem); // Apply after children are set
+                    this.applyStoredExpansionState(treeItem);
                     children.push(treeItem);
                 }
             }

@@ -5,9 +5,9 @@
 
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { TestElementData, TestElementType } from "./testElementsTreeView";
 import { ConfigKeys } from "../../constants";
 import { getExtensionSetting } from "../../configuration";
+import { TestElementType, TestElementData } from "./testElementTreeItem";
 
 export class TestElementTreeBuilder {
     private readonly logger: TestBenchLogger;

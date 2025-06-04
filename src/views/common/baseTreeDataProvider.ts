@@ -7,6 +7,8 @@ import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { BaseTreeItem as BaseTreeItem } from "./baseTreeItem";
 import { CustomRootService } from "../../services/customRootService";
+import { TestThemeTreeDataProvider } from "../testTheme/testThemeTreeDataProvider";
+import { TestElementsTreeDataProvider } from "../testElements/testElementsTreeDataProvider";
 
 export interface TreeDataProviderOptions {
     contextKey: string;
@@ -16,7 +18,7 @@ export interface TreeDataProviderOptions {
 }
 
 export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vscode.TreeDataProvider<T> {
-    protected _onDidChangeTreeData: vscode.EventEmitter<T | T[] | undefined | void> = new vscode.EventEmitter<
+    public _onDidChangeTreeData: vscode.EventEmitter<T | T[] | undefined | void> = new vscode.EventEmitter<
         T | T[] | undefined | void
     >();
     public readonly onDidChangeTreeData: vscode.Event<T | T[] | undefined | void> = this._onDidChangeTreeData.event;
@@ -114,10 +116,20 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
      * Clear tree data
      */
     public clearTree(): void {
-        this.logger.debug("[BaseTreeDataProvider] Clearing tree");
-        this.customRootService.resetCustomRoot();
+        this.logger.debug(`[${this.constructor.name}] Clearing tree`);
+        if (this.options.enableCustomRoot) {
+            this.customRootService.resetCustomRoot();
+        }
         this.rootElements = [];
-        this.updateMessageCallback("Tree cleared");
+        if (this instanceof TestThemeTreeDataProvider) {
+            this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
+        } else if (this instanceof TestElementsTreeDataProvider) {
+            this.updateMessageCallback(
+                "Select a Test Object Version (TOV) from the 'Projects' view to load test elements."
+            );
+        } else {
+            this.updateMessageCallback(undefined);
+        }
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -205,7 +217,6 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
      * Handle custom root state changes
      */
     protected onCustomRootStateChange(state: any): void {
-        // Override in subclasses if needed
         this.logger.trace(`[BaseTreeDataProvider] Custom root state changed:`, state);
     }
 
@@ -273,6 +284,11 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
      */
     public getCurrentCustomRoot(): T | null {
         return this.customRootService.getCurrentRoot();
+    }
+
+    public showTreeStatusMessage(message: string | undefined): void {
+        this.updateMessageCallback(message);
+        this.logger.trace(`[${this.constructor.name}] Status message updated to "${message}"`);
     }
 
     /**

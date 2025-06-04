@@ -38,10 +38,10 @@ const vscode = __importStar(require("vscode"));
 const sinon = __importStar(require("sinon"));
 const extension_1 = require("../../extension");
 const testBenchLogger_1 = require("../../testBenchLogger");
-const projectManagementTreeView_1 = require("../../views/projectManagementTreeView");
-const testElementsTreeView_1 = require("../../views/testElements/testElementsTreeView");
 const constants_1 = require("../../constants");
 const configuration_1 = require("../../configuration");
+const projectManagementTreeDataProvider_1 = require("../../views/projectManagement/projectManagementTreeDataProvider");
+const testElementsTreeDataProvider_1 = require("../../views/testElements/testElementsTreeDataProvider");
 suite("Extension Test Suite", () => {
     let sandbox;
     let getConfigurationStub;
@@ -69,8 +69,8 @@ suite("Extension Test Suite", () => {
         // Mock the logger
         loggerStub = sandbox.createStubInstance(testBenchLogger_1.TestBenchLogger);
         // Mock the tree data providers
-        projectManagementTreeDataProviderStub = sandbox.createStubInstance(projectManagementTreeView_1.ProjectManagementTreeDataProvider);
-        testElementsTreeDataProviderStub = sandbox.createStubInstance(testElementsTreeView_1.TestElementsTreeDataProvider);
+        projectManagementTreeDataProviderStub = sandbox.createStubInstance(projectManagementTreeDataProvider_1.ProjectManagementTreeDataProvider);
+        testElementsTreeDataProviderStub = sandbox.createStubInstance(testElementsTreeDataProvider_1.TestElementsTreeDataProvider);
         // Stub the VS Code API
         sandbox.stub(vscode.workspace, "getConfiguration").returns({
             get: sandbox.stub().returns("defaultValue"),

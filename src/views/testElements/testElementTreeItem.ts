@@ -6,6 +6,8 @@
 import * as vscode from "vscode";
 import { BaseTreeItem } from "../common/baseTreeItem";
 import { TreeItemContextValues } from "../../constants";
+import { IconManagementService } from "../../services/iconManagementService";
+import { TestBenchLogger } from "../../testBenchLogger";
 
 export type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
@@ -30,6 +32,8 @@ export class TestElementTreeItem extends BaseTreeItem {
     constructor(
         testElementData: TestElementData,
         extensionContext: vscode.ExtensionContext,
+        logger: TestBenchLogger,
+        iconService: IconManagementService,
         parent: TestElementTreeItem | null = null
     ) {
         const label = testElementData?.name || "Placeholder";
@@ -38,11 +42,17 @@ export class TestElementTreeItem extends BaseTreeItem {
                 ? vscode.TreeItemCollapsibleState.Collapsed
                 : vscode.TreeItemCollapsibleState.None;
 
-        super(label, testElementData.elementType, collapsibleState, testElementData, extensionContext, parent);
-
+        super(
+            label,
+            testElementData.elementType,
+            collapsibleState,
+            testElementData,
+            extensionContext,
+            logger,
+            iconService,
+            parent
+        );
         this.testElementData = testElementData;
-
-        // Set context value based on element type
         this.contextValue = this.getContextValueForElementType(testElementData.elementType);
 
         // Display the uniqueID as a description next to the label

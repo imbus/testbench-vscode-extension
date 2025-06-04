@@ -6,6 +6,8 @@
 import * as vscode from "vscode";
 import { BaseTreeItem } from "../common/baseTreeItem";
 import { TreeItemContextValues } from "../../constants";
+import { IconManagementService } from "../../services/iconManagementService";
+import { TestBenchLogger } from "../../testBenchLogger";
 
 export class TestThemeTreeItem extends BaseTreeItem {
     constructor(
@@ -14,41 +16,46 @@ export class TestThemeTreeItem extends BaseTreeItem {
         collapsibleState: vscode.TreeItemCollapsibleState,
         itemData: any,
         extensionContext: vscode.ExtensionContext,
+        private readonly loggerFromFactory: TestBenchLogger,
+        private readonly iconServiceFromFactory: IconManagementService,
         parent: TestThemeTreeItem | null = null
     ) {
-        super(label, contextValue, collapsibleState, itemData, extensionContext, parent);
-
-        // Set description to show unique ID
+        super(
+            label,
+            contextValue,
+            collapsibleState,
+            itemData,
+            extensionContext,
+            loggerFromFactory,
+            iconServiceFromFactory,
+            parent
+        );
         this.description = this.getUID() || "";
     }
 
     protected buildTooltipContent(): string {
         const itemDataForTooltip = this.itemData?.base || this.itemData;
-        const lines: string[] = [];
+        const tooltipContextLines: string[] = [];
 
-        // Add numbering if available
         if (itemDataForTooltip?.numbering) {
-            lines.push(`Numbering: ${itemDataForTooltip.numbering}`);
+            tooltipContextLines.push(`Numbering: ${itemDataForTooltip.numbering}`);
         }
 
         // Add type information
-        lines.push(`Type: ${itemDataForTooltip.elementType || this.originalContextValue}`);
+        tooltipContextLines.push(`Type: ${itemDataForTooltip.elementType || this.originalContextValue}`);
 
-        // Add name
         if (itemDataForTooltip.name) {
-            lines.push(`Name: ${itemDataForTooltip.name}`);
+            tooltipContextLines.push(`Name: ${itemDataForTooltip.name}`);
         }
 
-        // Add status
-        lines.push(`Status: ${this.state.status}`);
+        tooltipContextLines.push(`Status: ${this.state.status}`);
 
-        // Add unique ID
         const uid = this.getUID();
         if (uid) {
-            lines.push(`ID: ${uid}`);
+            tooltipContextLines.push(`ID: ${uid}`);
         }
 
-        return lines.join("\n");
+        return tooltipContextLines.join("\n");
     }
 
     protected getIconCategory(): string {
@@ -60,14 +67,12 @@ export class TestThemeTreeItem extends BaseTreeItem {
      */
     public updateContextForMarking(marked: boolean): void {
         if (marked) {
-            // Update context value for marked state
             if (this.originalContextValue === TreeItemContextValues.TEST_THEME_NODE) {
                 this.contextValue = TreeItemContextValues.MARKED_TEST_THEME_NODE;
             } else if (this.originalContextValue === TreeItemContextValues.TEST_CASE_SET_NODE) {
                 this.contextValue = TreeItemContextValues.MARKED_TEST_CASE_SET_NODE;
             }
         } else {
-            // Restore original context value
             this.contextValue = this.originalContextValue;
         }
 

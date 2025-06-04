@@ -6,6 +6,8 @@
 import * as vscode from "vscode";
 import { BaseTreeItem } from "../common/baseTreeItem";
 import { TreeItemContextValues, allExtensionCommands } from "../../constants";
+import { IconManagementService } from "../../services/iconManagementService";
+import { TestBenchLogger } from "../../testBenchLogger";
 
 export class ProjectManagementTreeItem extends BaseTreeItem {
     constructor(
@@ -14,9 +16,20 @@ export class ProjectManagementTreeItem extends BaseTreeItem {
         collapsibleState: vscode.TreeItemCollapsibleState,
         itemData: any,
         extensionContext: vscode.ExtensionContext,
+        private readonly loggerFromFactory: TestBenchLogger,
+        private readonly iconServiceFromFactory: IconManagementService,
         parent: ProjectManagementTreeItem | null = null
     ) {
-        super(label, contextValue, collapsibleState, itemData, extensionContext, parent);
+        super(
+            label,
+            contextValue,
+            collapsibleState,
+            itemData,
+            extensionContext,
+            loggerFromFactory,
+            iconServiceFromFactory,
+            parent
+        );
 
         // Set command for cycle items
         if (contextValue === TreeItemContextValues.CYCLE) {
@@ -30,36 +43,33 @@ export class ProjectManagementTreeItem extends BaseTreeItem {
 
     protected buildTooltipContent(): string {
         const itemDataForTooltip = this.itemData?.base || this.itemData;
-        const lines: string[] = [];
+        const tooltipContentLines: string[] = [];
 
         // Add type information
-        lines.push(`Type: ${this.originalContextValue}`);
+        tooltipContentLines.push(`Type: ${this.originalContextValue}`);
 
-        // Add name
         if (itemDataForTooltip.name) {
-            lines.push(`Name: ${itemDataForTooltip.name}`);
+            tooltipContentLines.push(`Name: ${itemDataForTooltip.name}`);
         }
 
-        // Add status
-        lines.push(`Status: ${this.state.status}`);
+        tooltipContentLines.push(`Status: ${this.state.status}`);
 
-        // Add key
         if (itemDataForTooltip.key) {
-            lines.push(`Key: ${itemDataForTooltip.key}`);
+            tooltipContentLines.push(`Key: ${itemDataForTooltip.key}`);
         }
 
         // Add project-specific information
         if (this.originalContextValue === TreeItemContextValues.PROJECT && this.itemData) {
-            lines.push(`TOVs: ${this.itemData.tovsCount || 0}`);
-            lines.push(`Cycles: ${this.itemData.cyclesCount || 0}`);
+            tooltipContentLines.push(`TOVs: ${this.itemData.tovsCount || 0}`);
+            tooltipContentLines.push(`Cycles: ${this.itemData.cyclesCount || 0}`);
         }
 
         // Add unique ID for cycles and versions
         if (itemDataForTooltip.uniqueID) {
-            lines.push(`Unique ID: ${itemDataForTooltip.uniqueID}`);
+            tooltipContentLines.push(`Unique ID: ${itemDataForTooltip.uniqueID}`);
         }
 
-        return lines.join("\n");
+        return tooltipContentLines.join("\n");
     }
 
     protected getIconCategory(): string {

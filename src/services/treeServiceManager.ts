@@ -14,8 +14,6 @@ import { TestElementDataService } from "./testElementDataService";
 import { ResourceFileService } from "./resourceFileService";
 import { MarkedItemStateService } from "./markedItemStateService";
 import { PlayServerConnection } from "../testBenchConnection";
-
-// Import tree data providers
 import { ProjectManagementTreeDataProvider } from "../views/projectManagement/projectManagementTreeDataProvider";
 import { TestThemeTreeDataProvider } from "../views/testTheme/testThemeTreeDataProvider";
 import { TestElementsTreeDataProvider } from "../views/testElements/testElementsTreeDataProvider";
@@ -94,19 +92,6 @@ export type ServiceStatus = "active" | "inactive" | "initializing" | "waiting_fo
  * way to manage all services required by tree view providers. It handles service
  * initialization, health monitoring, and provides factory methods for creating
  * tree data providers with proper dependency injection.
- *
- * @example
- * ```typescript
- * const serviceManager = new TreeServiceManager({
- *     extensionContext: context,
- *     logger: logger,
- *     getConnection: () => connection
- * });
- *
- * await serviceManager.initialize();
- * const factory = serviceManager.createServiceFactory();
- * const projectProvider = factory.createProjectManagementProvider(updateCallback);
- * ```
  */
 export class TreeServiceManager {
     // Core services - readonly to prevent external modification
@@ -196,12 +181,8 @@ export class TreeServiceManager {
      * @private
      */
     private async _initializeAsyncServices(): Promise<void> {
-        // Initialize marked item state service
         await this.markedItemStateService.initialize();
         this.dependencies.logger.trace("[TreeServiceManager] MarkedItemStateService initialized");
-
-        // Add other async service initializations here as needed
-        // await this.someOtherService.initialize();
     }
 
     /**
@@ -326,13 +307,8 @@ export class TreeServiceManager {
         const timestamp = new Date();
 
         try {
-            // Validate core dependencies
             this._validateCoreDependencies(issues);
-
-            // Validate workspace availability
             this._validateWorkspaceAvailability(issues);
-
-            // Validate icon files
             await this._validateIconFiles(issues);
         } catch (error) {
             issues.push(`Validation error: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -409,12 +385,7 @@ export class TreeServiceManager {
         this.dependencies.logger.debug("[TreeServiceManager] Resetting all service state...");
 
         try {
-            // Clear marked item state
             await this.markedItemStateService.clearMarking();
-
-            // Add other state resets here as needed
-            // await this.otherService.resetState();
-
             this.dependencies.logger.info("[TreeServiceManager] All service state reset successfully");
         } catch (error) {
             this.dependencies.logger.error("[TreeServiceManager] Error resetting service state:", error);
@@ -449,7 +420,6 @@ export class TreeServiceManager {
      * @returns Service factory with methods to create different types of providers
      */
     public createServiceFactory(): TreeServiceFactory {
-        // Ensure services are initialized before creating providers
         if (!this._isInitialized) {
             this.dependencies.logger.warn("[TreeServiceManager] Creating factory before initialization is complete");
         }
@@ -459,6 +429,7 @@ export class TreeServiceManager {
                 return new ProjectManagementTreeDataProvider(
                     this.dependencies.extensionContext,
                     this.dependencies.logger,
+                    this.iconManagementService,
                     updateMessageCallback,
                     this.projectDataService
                 );
@@ -470,7 +441,8 @@ export class TreeServiceManager {
                     this.dependencies.logger,
                     updateMessageCallback,
                     this.projectDataService,
-                    this.markedItemStateService
+                    this.markedItemStateService,
+                    this.iconManagementService
                 );
             },
 
@@ -483,6 +455,7 @@ export class TreeServiceManager {
                     updateMessageCallback,
                     this.testElementDataService,
                     this.resourceFileService,
+                    this.iconManagementService,
                     treeBuilder
                 );
             }
@@ -499,7 +472,6 @@ export class TreeServiceManager {
         this.dependencies.logger.debug("[TreeServiceManager] Disposing services...");
 
         try {
-            // Dispose of any disposable resources
             this._disposables.forEach((disposable) => {
                 try {
                     disposable.dispose();
@@ -509,7 +481,6 @@ export class TreeServiceManager {
             });
             this._disposables.length = 0;
 
-            // Call dispose methods on services that have them
             // Note: Add dispose calls here when services implement IDisposable
             // this.markedItemStateService.dispose?.();
             // this.iconManagementService.dispose?.();
