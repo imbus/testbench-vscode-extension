@@ -62,11 +62,36 @@ export class TestBenchLogger {
     }
 
     /**
+     * Gets the current log level as a string.
+     * @returns {string} The current log level (e.g., "Trace", "Debug", "Info", etc.)
+     */
+    public get level(): string {
+        return this.cachedLogLevel;
+    }
+
+    /**
+     * Gets the numeric value of the current log level.
+     * @returns {number} The numeric log level (0-5)
+     */
+    public getLevelNumber(): number {
+        return this.levels[this.cachedLogLevel] || 0;
+    }
+
+    /**
+     * Checks if the logger is configured to log at the specified level.
+     * @param {string} logLevel - The log level to check
+     * @returns {boolean} True if the specified level would be logged
+     */
+    public isLevelEnabled(logLevel: string): boolean {
+        return this.cachedLogLevel !== "No logging" && this.levels[logLevel] >= this.levels[this.cachedLogLevel];
+    }
+
+    /**
      * Creates an instance of the TestBenchLogger.
      *
      * @param {boolean | undefined} outputToTerminal Optional flag to output log messages to the terminal.
      *
-     * The constructor sets default log paths (using the extension’s directory) and then asynchronously
+     * The constructor sets default log paths (using the extension's directory) and then asynchronously
      * attempts to update them based on the configured workspace location. It also caches the log level from the configuration.
      */
     constructor(outputToTerminal?: boolean) {

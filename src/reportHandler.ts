@@ -33,7 +33,7 @@ import {
 import { extractDataFromReport, PlayServerConnection, withRetry } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionConfiguration } from "./configuration";
-import { BaseTestBenchTreeItem } from "./views/common/baseTreeItem";
+import { TestThemeTreeItem } from "./views/testTheme/testThemeTreeItem";
 
 /**
  * Saves the last generated report parameters to workspace storage.
@@ -596,16 +596,16 @@ export async function fetchReportZipFromServer(
  * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @param {BaseTestBenchTreeItem} selectedTreeItem The selected tree item.
+ * @param {TestThemeTreeItem} selectedTreeItem The selected tree item.
  * @returns {Promise<void | null>} Resolves when test generation is complete, or null if errors occur.
  */
 export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     context: vscode.ExtensionContext,
-    selectedTreeItem: BaseTestBenchTreeItem,
+    selectedTreeItem: TestThemeTreeItem,
     providedCycleKey?: string
 ): Promise<void | null> {
     logger.debug("Generating tests for non-cycle element:", selectedTreeItem);
-    const treeElementUID = selectedTreeItem.item?.base?.uniqueID;
+    const treeElementUID = selectedTreeItem.itemData?.base?.uniqueID;
     let cycleKey: string | null = providedCycleKey || null;
     let projectKey: string | null = null;
 
@@ -663,7 +663,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  * Generates Robot Framework tests using testbench2robotframework library.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @param {BaseTestBenchTreeItem} selectedTreeItem The selected tree item.
+ * @param {TestThemeTreeItem} selectedTreeItem The selected tree item.
  * @param {string} itemLabel The label of the selected item.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
@@ -672,7 +672,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  */
 export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
     context: vscode.ExtensionContext,
-    selectedTreeItem: BaseTestBenchTreeItem,
+    selectedTreeItem: TestThemeTreeItem,
     itemLabel: string,
     projectKey: string,
     cycleKey: string,
@@ -1159,14 +1159,14 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 /**
  * Gets the appropriate reportRootUID for import based on the selected item
  */
-function getReportRootUIDForImport(item: BaseTestBenchTreeItem): string | undefined {
+function getReportRootUIDForImport(item: TestThemeTreeItem): string | undefined {
     logger.debug(`[getReportRootUIDForImport] Getting report root UID for item: ${item.label}`);
     logger.trace(`[getReportRootUIDForImport] Item details:`, {
         label: item.label,
         contextValue: item.contextValue,
         originalContextValue: item.originalContextValue,
-        itemKey: item.item?.base?.key || item.item?.key,
-        itemUID: item.item?.base?.uniqueID || item.item?.uniqueID
+        itemKey: item.itemData?.base?.key || item.itemData?.key,
+        itemUID: item.itemData?.base?.uniqueID || item.itemData?.uniqueID
     });
 
     if (testThemeTreeDataProvider) {
@@ -1178,7 +1178,7 @@ function getReportRootUIDForImport(item: BaseTestBenchTreeItem): string | undefi
     }
 
     // Fallback to items own UID
-    const fallbackUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+    const fallbackUID = item.itemData?.base?.uniqueID || item.itemData?.uniqueID;
     logger.debug(`[getReportRootUIDForImport] Using fallback UID: ${fallbackUID} for item: ${item.label}`);
     return fallbackUID;
 }
@@ -1340,7 +1340,7 @@ export async function clearImportedSubElementsTracking(context: vscode.Extension
  */
 export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     context: vscode.ExtensionContext,
-    invokedOnItem: BaseTestBenchTreeItem
+    invokedOnItem: TestThemeTreeItem
 ): Promise<void | null> {
     logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
     logger.trace(`Invoked on item: ${invokedOnItem.label}`);
@@ -1413,7 +1413,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 }
 
                 // Validate that we're not accidentally using a parent's UID
-                const itemOwnUID = invokedOnItem.item?.base?.uniqueID || invokedOnItem.item?.uniqueID;
+                const itemOwnUID = invokedOnItem.itemData?.base?.uniqueID || invokedOnItem.itemData?.uniqueID;
                 if (reportRootUIDOfInvokedItem !== itemOwnUID) {
                     logger.warn(
                         `[Import Process] Report root UID (${reportRootUIDOfInvokedItem}) differs from item's own UID (${itemOwnUID}). This might indicate an issue with UID resolution.`
@@ -1489,11 +1489,11 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
  * Starts robotframework test generation for a cycle element.
  *
  * @param {vscode.ExtensionContext} context The extension context.
- * @param {BaseTestBenchTreeItem} selectedCycleTreeItem The selected cycle tree item.
+ * @param {TestThemeTreeItem} selectedCycleTreeItem The selected cycle tree item.
  */
 export async function startTestGenerationForCycle(
     context: vscode.ExtensionContext,
-    selectedCycleTreeItem: BaseTestBenchTreeItem
+    selectedCycleTreeItem: TestThemeTreeItem
 ): Promise<void | null> {
     try {
         if (!connection) {
@@ -1502,7 +1502,7 @@ export async function startTestGenerationForCycle(
             logger.error(connectionErrorMessage);
             return null;
         }
-        const cycleKey = selectedCycleTreeItem.item.key;
+        const cycleKey = selectedCycleTreeItem.itemData.key;
         if (!cycleKey) {
             const cycleKeyMissingMessage: string = "Cycle key is missing for test generation.";
             logger.error(cycleKeyMissingMessage);
@@ -1524,7 +1524,7 @@ export async function startTestGenerationForCycle(
             return null;
         }
 
-        const cycleUID = selectedCycleTreeItem.item?.uniqueID || selectedCycleTreeItem.item?.key || "";
+        const cycleUID = selectedCycleTreeItem.itemData?.uniqueID || selectedCycleTreeItem.itemData?.key || "";
         if (!cycleUID) {
             logger.warn(
                 `Could not determine UID or Key for cycle: ${selectedCycleTreeItem.label}. Using empty string.`

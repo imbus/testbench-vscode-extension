@@ -8,9 +8,7 @@ import * as vscode from "vscode";
 import { logger } from "./extension";
 
 import { ConfigKeys } from "./constants";
-import { log } from "console";
-import { baseKeyOfExtension } from "./constants";
-import { getExtensionConfiguration, getExtensionSetting } from "./configuration";
+import { getExtensionSetting } from "./configuration";
 
 /**
  * Class representing the Testbench2Robotframework library wrapper.

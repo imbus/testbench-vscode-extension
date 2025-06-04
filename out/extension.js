@@ -58,14 +58,14 @@ const testBenchLogger = __importStar(require("./testBenchLogger"));
 const testBenchConnection = __importStar(require("./testBenchConnection"));
 const reportHandler = __importStar(require("./reportHandler"));
 const projectManagementTreeView = __importStar(require("./views/projectManagementTreeView"));
-const testElementsTreeView = __importStar(require("./views/testElementsView/testElementsTreeView"));
+const testElementsTreeView = __importStar(require("./views/testElements/testElementsTreeView"));
 const loginWebView = __importStar(require("./loginWebView"));
 const utils = __importStar(require("./utils"));
 const path_1 = __importDefault(require("path"));
 const constants_1 = require("./constants");
 const server_1 = require("./server");
 const testThemeTreeView_1 = require("./views/testThemeTreeView");
-const testElementsTreeView_1 = require("./views/testElementsView/testElementsTreeView");
+const testElementsTreeView_1 = require("./views/testElements/testElementsTreeView");
 const testBenchAuthenticationProvider_1 = require("./testBenchAuthenticationProvider");
 const profileManager = __importStar(require("./profileManager"));
 const testBenchConnection_1 = require("./testBenchConnection");
@@ -74,7 +74,7 @@ const projectDataService_1 = require("./services/projectDataService");
 const testElementDataService_1 = require("./services/testElementDataService");
 const markedItemStateService_1 = require("./services/markedItemStateService");
 const resourceFileService_1 = require("./services/resourceFileService");
-const testElementTreeBuilder_1 = require("./views/testElementsView/testElementTreeBuilder");
+const testElementTreeBuilder_1 = require("./views/testElements/testElementTreeBuilder");
 function setLogger(newLogger) {
     exports.logger = newLogger;
 }
@@ -378,7 +378,7 @@ async function registerExtensionCommands(context) {
         }
         if (!cycleKey) {
             vscode.window.showErrorMessage(`Error: Cycle key not found for the selected item '${treeItem.label}'. Cannot generate tests.`);
-            exports.logger.error(`Cycle key not found for tree element: ${treeItem.label} (UID: ${treeItem.item?.uniqueID || treeItem.item?.key})`);
+            exports.logger.error(`Cycle key not found for tree element: ${treeItem.label} (UID: ${treeItem.itemData?.uniqueID || treeItem.itemData?.key})`);
             return;
         }
         await reportHandler.generateRobotFrameworkTestsForTestThemeOrTestCaseSet(context, treeItem, cycleKey);
@@ -565,7 +565,7 @@ async function registerExtensionCommands(context) {
     registerSafeCommand(context, constants_1.allExtensionCommands.displayInteractionsForSelectedTOV, async (treeItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.displayInteractionsForSelectedTOV} for tree item:`, treeItem);
         if (exports.projectManagementTreeDataProvider && treeItem.contextValue === constants_1.TreeItemContextValues.VERSION) {
-            const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
+            const tovKeyOfSelectedTreeElement = treeItem.itemData?.key?.toString();
             if (tovKeyOfSelectedTreeElement && exports.testElementsTreeDataProvider) {
                 const areTestElementsFetched = await exports.testElementsTreeDataProvider.fetchTestElements(tovKeyOfSelectedTreeElement, typeof treeItem.label === "string" ? treeItem.label : undefined);
                 if (areTestElementsFetched) {

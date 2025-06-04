@@ -5,21 +5,21 @@
 
 import * as vscode from "vscode";
 import { CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
-import { BaseTestBenchTreeItem } from "./common/baseTreeItem";
 import { logger, testThemeTreeView } from "../extension";
 import { ContextKeys, TreeItemContextValues } from "../constants";
 import { CycleNodeData, CycleStructure } from "../testBenchTypes";
 import { ProjectDataService } from "../services/projectDataService";
 import { MarkedItemStateService } from "../services/markedItemStateService";
+import { TestThemeTreeItem } from "./testTheme/testThemeTreeItem";
 
 /**
  * TestThemeTreeDataProvider implements the TreeDataProvider interface to display
  * TestTheme items in the Test Theme Tree view.
  */
-export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTestBenchTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<BaseTestBenchTreeItem | void> =
-        new vscode.EventEmitter<BaseTestBenchTreeItem | void>();
-    readonly onDidChangeTreeData: vscode.Event<BaseTestBenchTreeItem | void> = this._onDidChangeTreeData.event;
+export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<TestThemeTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<TestThemeTreeItem | void> =
+        new vscode.EventEmitter<TestThemeTreeItem | void>();
+    readonly onDidChangeTreeData: vscode.Event<TestThemeTreeItem | void> = this._onDidChangeTreeData.event;
 
     private readonly projectDataService: ProjectDataService;
     private readonly markedItemStateService: MarkedItemStateService;
@@ -35,10 +35,10 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
     private _currentCycleLabel: string | null = null;
     private isCustomRootActive: boolean = false;
-    private customRootItemInstance: BaseTestBenchTreeItem | null = null;
+    private customRootItemInstance: TestThemeTreeItem | null = null;
     private originalCustomRootContextValue: string | null = null;
     /** Root elements for the Test Theme Tree view */
-    public rootElements: BaseTestBenchTreeItem[] = [];
+    public rootElements: TestThemeTreeItem[] = [];
     /** Set to store keys of expanded items so that refresh can restore expansion state */
     private expandedTreeItems: Set<string> = new Set<string>();
 
@@ -89,7 +89,9 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         );
 
         const currentCustomRootKeyBeforeRefresh =
-            this.isCustomRootActive && this.customRootItemInstance ? this.customRootItemInstance.item.base.key : null;
+            this.isCustomRootActive && this.customRootItemInstance
+                ? this.customRootItemInstance.itemData.base.key
+                : null;
 
         if (isHardRefresh && this.isCustomRootActive) {
             logger.trace("Hard refresh requested with active custom root. Resetting to full cycle view.");
@@ -152,17 +154,17 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                     const updatedCustomRootNodeData = elementsByKey.get(currentCustomRootKeyBeforeRefresh);
 
                     if (updatedCustomRootNodeData && this.customRootItemInstance) {
-                        this.customRootItemInstance.item = updatedCustomRootNodeData;
+                        this.customRootItemInstance.itemData = updatedCustomRootNodeData;
                         const newLabel = updatedCustomRootNodeData.base.numbering
                             ? `${updatedCustomRootNodeData.base.numbering} ${updatedCustomRootNodeData.base.name}`
                             : updatedCustomRootNodeData.base.name;
                         if (this.customRootItemInstance.label !== newLabel) {
                             this.customRootItemInstance.label = newLabel;
                         }
-                        this.customRootItemInstance.statusOfTreeItem = updatedCustomRootNodeData.exec?.status || "None";
+                        this.customRootItemInstance.state.status = updatedCustomRootNodeData.exec?.status || "None";
                         this.customRootItemInstance.updateIcon();
 
-                        this.customRootItemInstance.children = this.buildThemeTreeRecursively(
+                        this.customRootItemInstance.children = this.buildTestThemeTreeRecursively(
                             currentCustomRootKeyBeforeRefresh,
                             this.customRootItemInstance,
                             elementsByKey,
@@ -279,23 +281,27 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * This method traverses the tree recursively, searching for an item with a specific key and UID.
      * @param {string} treeItemKey - The key to search for.
      * @param {string} treeItemUID - The unique identifier to search for.
-     * @return {BaseTestBenchTreeItem | null} The `BaseTestBenchTreeItem` if found, otherwise `null`.
+     * @return {TestThemeTreeItem | null} The `BaseTestBenchTreeItem` if found, otherwise `null`.
      */
     private findTreeItemByKeyAndUID(
         treeItemKey: string,
         treeItemUID: string,
-        items: BaseTestBenchTreeItem[]
-    ): BaseTestBenchTreeItem | null {
+        items: TestThemeTreeItem[]
+    ): TestThemeTreeItem | null {
         for (const item of items) {
-            const itemKey = item.item?.key || item.item?.base?.key;
-            const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+            const itemKey = item.itemData?.key || item.itemData?.base?.key;
+            const itemUID = item.itemData?.base?.uniqueID || item.itemData?.uniqueID;
 
             if (itemKey === treeItemKey && itemUID === treeItemUID) {
                 return item;
             }
 
             if (item.children) {
-                const foundTreeItem = this.findTreeItemByKeyAndUID(treeItemKey, treeItemUID, item.children);
+                const foundTreeItem = this.findTreeItemByKeyAndUID(
+                    treeItemKey,
+                    treeItemUID,
+                    item.children as TestThemeTreeItem[]
+                );
                 if (foundTreeItem) {
                     return foundTreeItem;
                 }
@@ -308,19 +314,19 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * Iterates through the given tree items and updates their UI (_isMarkedForImport, contextValue, icon)
      * based on the current state provided by MarkedItemStateService.
      */
-    private updateTreeItemsMarkingRecursive(items: BaseTestBenchTreeItem[]): boolean {
+    private updateTreeItemsMarkingRecursive(items: TestThemeTreeItem[]): boolean {
         let uiChanged = false;
         for (const item of items) {
-            const itemKey = item.item?.base?.key || item.item?.key;
-            const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+            const itemKey = item.itemData?.base?.key || item.itemData?.key;
+            const itemUID = item.itemData?.base?.uniqueID || item.itemData?.uniqueID;
 
             if (itemKey && itemUID) {
                 const importState = this.markedItemStateService.getItemImportState(itemKey, itemUID);
-                const oldIsMarked = item._isMarkedForImport;
+                const oldIsMarked = item.state.isMarked;
                 const oldContextValue = item.contextValue;
 
                 if (importState.shouldShow) {
-                    item._isMarkedForImport = true;
+                    item.state.isMarked = true;
                     if (item.originalContextValue) {
                         // Must be set during item creation
                         this.updateItemContextForImport(item, item.originalContextValue);
@@ -339,7 +345,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                     }
                 } else {
                     // Item should NOT be marked
-                    item._isMarkedForImport = false;
+                    item.state.isMarked = false;
                     if (item.originalContextValue) {
                         // Must be set during item creation
                         item.contextValue = item.originalContextValue;
@@ -358,13 +364,13 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 }
                 item.updateIcon(); // Update icon based on new state
 
-                if (oldIsMarked !== item._isMarkedForImport || oldContextValue !== item.contextValue) {
+                if (oldIsMarked !== item.state.isMarked || oldContextValue !== item.contextValue) {
                     uiChanged = true;
                 }
             }
 
             if (item.children && item.children.length > 0) {
-                if (this.updateTreeItemsMarkingRecursive(item.children)) {
+                if (this.updateTreeItemsMarkingRecursive(item.children as TestThemeTreeItem[])) {
                     uiChanged = true;
                 }
             }
@@ -382,35 +388,35 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
     /**
      * Returns the parent of a given tree item.
-     * @param {BaseTestBenchTreeItem} element The tree item.
-     * @returns {BaseTestBenchTreeItem | null} The parent TestbenchTreeItem or null.
+     * @param {TestThemeTreeItem} element The tree item.
+     * @returns {TestThemeTreeItem | null} The parent TestbenchTreeItem or null.
      */
-    getParent(element: BaseTestBenchTreeItem): BaseTestBenchTreeItem | null {
-        return element.parent;
+    getParent(element: TestThemeTreeItem): TestThemeTreeItem | null {
+        return element.parent as TestThemeTreeItem | null;
     }
 
     /**
      * Returns the children of a given tree item. If no element is provided,
      * returns the root elements.
-     * @param {BaseTestBenchTreeItem} element Optional parent tree item.
-     * @returns {Promise<BaseTestBenchTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
+     * @param {TestThemeTreeItem} element Optional parent tree item.
+     * @returns {Promise<TestThemeTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
      */
-    async getChildren(element?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
+    async getChildren(element?: TestThemeTreeItem): Promise<TestThemeTreeItem[]> {
         if (!element) {
             if (this.isCustomRootActive && this.customRootItemInstance) {
                 return [this.customRootItemInstance];
             }
             return this.rootElements;
         }
-        return element.children || [];
+        return (element.children as TestThemeTreeItem[]) || [];
     }
 
     /**
      * Returns the TreeItem representation for a given element.
-     * @param {BaseTestBenchTreeItem[]} element The TestbenchTreeItem.
+     * @param {TestThemeTreeItem[]} element The TestbenchTreeItem.
      * @returns {vscode.TreeItem} The corresponding vscode.TreeItem.
      */
-    getTreeItem(element: BaseTestBenchTreeItem): vscode.TreeItem {
+    getTreeItem(element: TestThemeTreeItem): vscode.TreeItem {
         return element;
     }
 
@@ -418,16 +424,16 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * Recursively finds an item in a tree of `BaseTestBenchTreeItem` objects by its key.
      *
      * @param {string} key - The key to search for.
-     * @param {BaseTestBenchTreeItem[]} items - The array of `BaseTestBenchTreeItem` objects to search within.
-     * @returns {BaseTestBenchTreeItem | null} The `BaseTestBenchTreeItem` if found, otherwise `null`.
+     * @param {TestThemeTreeItem[]} items - The array of `BaseTestBenchTreeItem` objects to search within.
+     * @returns {TestThemeTreeItem | null} The `BaseTestBenchTreeItem` if found, otherwise `null`.
      */
-    private findItemByKey(key: string, items: BaseTestBenchTreeItem[]): BaseTestBenchTreeItem | null {
+    private findItemByKey(key: string, items: TestThemeTreeItem[]): TestThemeTreeItem | null {
         for (const item of items) {
-            if (item.item?.key === key || item.item?.base?.key === key) {
+            if (item.itemData?.key === key || item.itemData?.base?.key === key) {
                 return item;
             }
             if (item.children) {
-                const found = this.findItemByKey(key, item.children);
+                const found = this.findItemByKey(key, item.children as TestThemeTreeItem[]);
                 if (found) {
                     return found;
                 }
@@ -440,21 +446,21 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * Collects all descendant UIDs of a given tree item.
      * This method traverses the tree recursively,
      * collecting unique identifiers (UIDs) of all descendants of a given tree item.
-     * @param {BaseTestBenchTreeItem} treeItem - The tree item whose descendants are to be collected.
+     * @param {TestThemeTreeItem} treeItem - The tree item whose descendants are to be collected.
      * @return {string[]} An array of unique identifiers (UIDs) of all descendants.
      */
-    private collectDescendantUIDs(treeItem: BaseTestBenchTreeItem): string[] {
+    private collectDescendantUIDs(treeItem: TestThemeTreeItem): string[] {
         const descendantsUIDs: string[] = [];
         const visitedUIDs = new Set<string>();
 
-        function recurse(currentItem: BaseTestBenchTreeItem) {
+        function recurse(currentItem: TestThemeTreeItem) {
             if (currentItem.children) {
                 for (const child of currentItem.children) {
-                    const childUID = child.item?.base?.uniqueID || child.item?.uniqueID;
+                    const childUID = child.itemData?.base?.uniqueID || child.itemData?.uniqueID;
                     if (childUID && !visitedUIDs.has(childUID)) {
                         visitedUIDs.add(childUID);
                         descendantsUIDs.push(childUID);
-                        recurse(child);
+                        recurse(child as TestThemeTreeItem);
                     }
                 }
             }
@@ -468,19 +474,19 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * Collects descendant keys with UIDs for tracking
      * This method traverses the tree recursively,
      * collecting keys and UIDs of all descendants of a given tree item.
-     * @param {BaseTestBenchTreeItem} treeItem - The tree item whose descendants are to be collected.
+     * @param {TestThemeTreeItem} treeItem - The tree item whose descendants are to be collected.
      * @return {Array<[string, string]>} An array of tuples, each containing a key and its corresponding UID.
      */
-    private collectDescendantKeysWithUIDs(treeItem: BaseTestBenchTreeItem): Array<[string, string]> {
+    private collectDescendantKeysWithUIDs(treeItem: TestThemeTreeItem): Array<[string, string]> {
         const descendantsKeysWithUIDs: Array<[string, string]> = [];
 
         if (treeItem.children) {
             for (const child of treeItem.children) {
-                const childKey = child.item?.base?.key || child.item?.key;
-                const childUID = child.item?.base?.uniqueID || child.item?.uniqueID;
+                const childKey = child.itemData?.base?.key || child.itemData?.key;
+                const childUID = child.itemData?.base?.uniqueID || child.itemData?.uniqueID;
                 if (childKey && childUID) {
                     descendantsKeysWithUIDs.push([childKey, childUID]);
-                    descendantsKeysWithUIDs.push(...this.collectDescendantKeysWithUIDs(child));
+                    descendantsKeysWithUIDs.push(...this.collectDescendantKeysWithUIDs(child as TestThemeTreeItem));
                 }
             }
         }
@@ -491,16 +497,16 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * Marks a specified `BaseTestBenchTreeItem` as "generated".
      * This involves updating its `contextValue` and icon, persisting the marked state,
      * and clearing any previously marked item.
-     * @param {BaseTestBenchTreeItem} treeItemToMark The tree item to be marked.
+     * @param {TestThemeTreeItem} treeItemToMark The tree item to be marked.
      */
-    public async markItemAsGenerated(treeItemToMark: BaseTestBenchTreeItem): Promise<void> {
-        if (!treeItemToMark || (!treeItemToMark.item?.key && !treeItemToMark.item?.base?.key)) {
+    public async markItemAsGenerated(treeItemToMark: TestThemeTreeItem): Promise<void> {
+        if (!treeItemToMark || (!treeItemToMark.itemData?.key && !treeItemToMark.itemData?.base?.key)) {
             logger.warn("[TestThemeTreeDataProvider] Attempted to mark an invalid item for generation.");
             return;
         }
 
-        const itemKey = (treeItemToMark.item.key || treeItemToMark.item.base.key)!;
-        const itemUID = (treeItemToMark.item?.base?.uniqueID || treeItemToMark.item?.uniqueID)!;
+        const itemKey = (treeItemToMark.itemData.key || treeItemToMark.itemData.base.key)!;
+        const itemUID = (treeItemToMark.itemData?.base?.uniqueID || treeItemToMark.itemData?.uniqueID)!;
         const originalContext = (treeItemToMark.originalContextValue || treeItemToMark.contextValue)!;
 
         if (!originalContext || !itemUID) {
@@ -552,13 +558,13 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      *
      * @param parentItem The parent tree item whose descendants are to be marked.
      */
-    private markDescendantsRecursively(parentItem: BaseTestBenchTreeItem): void {
+    private markDescendantsRecursively(parentItem: TestThemeTreeItem): void {
         if (!parentItem.children) {
             return;
         }
 
         for (const child of parentItem.children) {
-            const childKey = child.item?.base?.key || child.item?.key;
+            const childKey = child.itemData?.base?.key || child.itemData?.key;
             if (!childKey) {
                 continue;
             }
@@ -573,7 +579,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             // For simplicity here, we assume if the parent root was marked, all its collectible descendants were intended to be.
             // The service call `markItem` already stored the list of all descendants.
             // `getItemImportState` should correctly report these.
-            const childUID = child.item?.base?.uniqueID || child.item?.uniqueID;
+            const childUID = child.itemData?.base?.uniqueID || child.itemData?.uniqueID;
             const importState = this.markedItemStateService.getItemImportState(childKey, childUID);
 
             if (
@@ -581,11 +587,11 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 (originalContext === TreeItemContextValues.TEST_THEME_NODE ||
                     originalContext === TreeItemContextValues.TEST_CASE_SET_NODE)
             ) {
-                child._isMarkedForImport = true;
-                this.updateItemContextForImport(child, originalContext);
+                child.state.isMarked = true;
+                this.updateItemContextForImport(child as TestThemeTreeItem, originalContext);
                 child.updateIcon();
             }
-            this.markDescendantsRecursively(child);
+            this.markDescendantsRecursively(child as TestThemeTreeItem);
         }
     }
 
@@ -596,7 +602,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @param item The tree item whose context value is to be updated.
      * @param originalContext The original context value of the tree item.
      */
-    private updateItemContextForImport(item: BaseTestBenchTreeItem, originalContext: string): void {
+    private updateItemContextForImport(item: TestThemeTreeItem, originalContext: string): void {
         if (originalContext === TreeItemContextValues.TEST_THEME_NODE) {
             item.contextValue = TreeItemContextValues.MARKED_TEST_THEME_NODE;
         } else if (originalContext === TreeItemContextValues.TEST_CASE_SET_NODE) {
@@ -626,9 +632,9 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @returns The uniqueID of the item if it's a directly generated item or an item
      *          eligible for import, otherwise undefined.
      */
-    public getReportRootUIDForItem(item: BaseTestBenchTreeItem): string | undefined {
-        const itemKey = item.item?.base?.key || item.item?.key;
-        const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+    public getReportRootUIDForItem(item: TestThemeTreeItem): string | undefined {
+        const itemKey = item.itemData?.base?.key || item.itemData?.key;
+        const itemUID = item.itemData?.base?.uniqueID || item.itemData?.uniqueID;
         return this.markedItemStateService.getReportRootUID(itemKey!, itemUID);
     }
 
@@ -636,11 +642,13 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * Clears the marked status of a specified tree item.
      * It removes the item's marked state from storage and refreshes the view.
      *
-     * @param {BaseTestBenchTreeItem} itemToClear - The tree item whose marked status needs to be cleared.
+     * @param {TestThemeTreeItem} itemToClear - The tree item whose marked status needs to be cleared.
      * @returns A promise that resolves when the operation is complete.
      */
-    public async clearMarkedItemStatus(itemToClear?: BaseTestBenchTreeItem): Promise<void> {
-        const itemKeyToClearInService = itemToClear ? itemToClear.item.key || itemToClear.item.base.key : undefined;
+    public async clearMarkedItemStatus(itemToClear?: TestThemeTreeItem): Promise<void> {
+        const itemKeyToClearInService = itemToClear
+            ? itemToClear.itemData.key || itemToClear.itemData.base.key
+            : undefined;
 
         if (itemToClear && !itemKeyToClearInService) {
             logger.warn("[TestThemeTreeDataProvider] Attempted to clear marked status for an item with no key.");
@@ -665,12 +673,12 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     /**
      * Sets the root elements of the test theme tree and refreshes the view.
      * This method is typically called when initially populating from cycle data.
-     * @param {BaseTestBenchTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
+     * @param {TestThemeTreeItem[]} roots An array of TestbenchTreeItems to set as roots.
      * @param {string} projectKey The key of the project this cycle belongs to.
      * @param {string} cycleKey The key of the cycle these roots belong to.
      * @param {string} cycleLabel The label/name of the cycle.
      */
-    private setRoots(roots: BaseTestBenchTreeItem[], projectKey: string, cycleKey: string, cycleLabel: string): void {
+    private setRoots(roots: TestThemeTreeItem[], projectKey: string, cycleKey: string, cycleLabel: string): void {
         logger.trace(
             `TestThemeTreeDataProvider: Setting roots for projectKey: ${projectKey}, cycleKey: ${cycleKey}, cycleLabel: ${cycleLabel}`
         );
@@ -705,9 +713,9 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * Sets the selected tree item as the sole root of the test theme tree and refreshes the view.
      * This implements the "Make Root" button functionality.
      * Make Root" only changes what's immediately displayed.
-     * @param {BaseTestBenchTreeItem} element The TestbenchTreeItem to set as root.
+     * @param {TestThemeTreeItem} element The TestbenchTreeItem to set as root.
      */
-    makeRoot(element: BaseTestBenchTreeItem): void {
+    makeRoot(element: TestThemeTreeItem): void {
         logger.debug("Setting the selected element as the root of the test theme tree view:", element);
 
         if (
@@ -742,7 +750,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     public async resetCustomRoot(): Promise<void> {
         logger.debug("Resetting custom root for Test Theme Tree.");
         if (this.isCustomRootActive) {
-            const itemThatWasRoot: BaseTestBenchTreeItem | null = this.customRootItemInstance;
+            const itemThatWasRoot: TestThemeTreeItem | null = this.customRootItemInstance;
             this.resetCustomRootInternally();
             await this.refresh(true);
             if (itemThatWasRoot) {
@@ -772,10 +780,10 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
     /**
      * Handles expansion or collapse of a tree item and updates its icon.
-     * @param {BaseTestBenchTreeItem} element The TestbenchTreeItem.
+     * @param {TestThemeTreeItem} element The TestbenchTreeItem.
      * @param {boolean} expanded True if the item is expanded; false if collapsed.
      */
-    handleExpansion(element: BaseTestBenchTreeItem, expanded: boolean): void {
+    handleExpansion(element: TestThemeTreeItem, expanded: boolean): void {
         logger.trace(
             `Setting expansion state of "${element.label}" to ${
                 expanded ? "expanded" : "collapsed"
@@ -785,10 +793,10 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
 
-        if (expanded && element.item?.key) {
-            this.expandedTreeItems.add(element.item.key);
-        } else if (element.item?.key) {
-            this.expandedTreeItems.delete(element.item.key);
+        if (expanded && element.itemData?.key) {
+            this.expandedTreeItems.add(element.itemData.key);
+        } else if (element.itemData?.key) {
+            this.expandedTreeItems.delete(element.itemData.key);
         }
 
         element.updateIcon();
@@ -796,16 +804,16 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
     /**
      * Recursively stores the keys of expanded nodes.
-     * @param {BaseTestBenchTreeItem[] | null} elements An array of TestbenchTreeItems or null.
+     * @param {TestThemeTreeItem[] | null} elements An array of TestbenchTreeItems or null.
      */
-    private storeExpandedTreeItems(elements: BaseTestBenchTreeItem[] | null): void {
+    private storeExpandedTreeItems(elements: TestThemeTreeItem[] | null): void {
         if (elements) {
             elements.forEach((element) => {
                 if (element.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
-                    this.expandedTreeItems.add(element.item.key);
+                    this.expandedTreeItems.add(element.itemData.key);
                 }
                 if (element.children) {
-                    this.storeExpandedTreeItems(element.children);
+                    this.storeExpandedTreeItems(element.children as TestThemeTreeItem[]);
                 }
             });
         }
@@ -871,7 +879,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 this.rootElements = [];
             } else {
                 const rootCycleNodeKey: string = eventData.rawCycleStructure.root.base.key;
-                this.rootElements = this.buildThemeTreeRecursively(
+                this.rootElements = this.buildTestThemeTreeRecursively(
                     rootCycleNodeKey,
                     null,
                     elementsByKey,
@@ -907,17 +915,17 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * Recursively builds a theme tree structure.
      *
      * @param {string} parentItemKey - The key of the parent item for which to find children.
-     * @param {BaseTestBenchTreeItem | null} parentTreeItem - The parent tree item in the current recursion level, or null for the root.
+     * @param {TestThemeTreeItem | null} parentTreeItem - The parent tree item in the current recursion level, or null for the root.
      * @param {Map<string, CycleNodeData>} elementsByKey - A map containing all available cycle node data, keyed by their unique keys.
      * @param {string} parentNameForLogging - The name of the parent item, used for logging purposes.
-     * @returns {BaseTestBenchTreeItem[]} An array of `BaseTestBenchTreeItem` representing the children of the specified parent.
+     * @returns {TestThemeTreeItem[]} An array of `BaseTestBenchTreeItem` representing the children of the specified parent.
      */
-    private buildThemeTreeRecursively(
+    private buildTestThemeTreeRecursively(
         parentItemKey: string,
-        parentTreeItem: BaseTestBenchTreeItem | null,
+        parentTreeItem: TestThemeTreeItem | null,
         elementsByKey: Map<string, CycleNodeData>,
         parentNameForLogging: string
-    ): BaseTestBenchTreeItem[] {
+    ): TestThemeTreeItem[] {
         logger.trace(
             `TestThemeTreeDataProvider: Building children for parentKey: ${parentItemKey} ('${parentNameForLogging}')`
         );
@@ -925,14 +933,14 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             (node) => node?.base?.parentKey === parentItemKey && this.isCycleNodeVisibleInTestThemeTree(node)
         );
 
-        const childTreeItems: (BaseTestBenchTreeItem | null)[] = potentialChildrenData.map((nodeData) => {
+        const childTreeItems: (TestThemeTreeItem | null)[] = potentialChildrenData.map((nodeData) => {
             const hasVisibleChildren: boolean = Array.from(elementsByKey.values()).some(
                 (childNodeCandidate) =>
                     childNodeCandidate?.base?.parentKey === nodeData.base.key &&
                     this.isCycleNodeVisibleInTestThemeTree(childNodeCandidate)
             );
 
-            const treeItem: BaseTestBenchTreeItem | null = this.createThemeTreeItem(
+            const treeItem: TestThemeTreeItem | null = this.createTestThemeTreeItem(
                 nodeData,
                 nodeData.elementType,
                 parentTreeItem,
@@ -944,7 +952,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             }
 
             if (hasVisibleChildren) {
-                treeItem.children = this.buildThemeTreeRecursively(
+                treeItem.children = this.buildTestThemeTreeRecursively(
                     nodeData.base.key,
                     treeItem,
                     elementsByKey,
@@ -956,9 +964,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             return treeItem;
         });
 
-        return childTreeItems.filter(
-            (item: BaseTestBenchTreeItem | null): item is BaseTestBenchTreeItem => item !== null
-        );
+        return childTreeItems.filter((item: TestThemeTreeItem | null): item is TestThemeTreeItem => item !== null);
     }
 
     /**
@@ -966,16 +972,16 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      *
      * @param {CycleNodeData} nodeData - The raw data for the theme item.
      * @param {string} originalContextValue - The context value determining the item's type and behavior.
-     * @param {BaseTestBenchTreeItem | null} parent - The parent tree item, or null if it's a root item.
+     * @param {TestThemeTreeItem | null} parent - The parent tree item, or null if it's a root item.
      * @param {boolean} hasVisibleChildren - Indicates if the item has children that are currently visible in the tree.
-     * @returns A new {@link BaseTestBenchTreeItem} instance, or null if `nodeData` is invalid.
+     * @returns A new instance, or null if `nodeData` is invalid.
      */
-    private createThemeTreeItem(
+    private createTestThemeTreeItem(
         nodeData: CycleNodeData,
         originalContextValue: string,
-        parent: BaseTestBenchTreeItem | null,
+        parent: TestThemeTreeItem | null,
         hasVisibleChildren: boolean
-    ): BaseTestBenchTreeItem | null {
+    ): TestThemeTreeItem | null {
         if (!nodeData?.base?.key || !nodeData?.base?.name) {
             logger.warn("TestThemeTreeDataProvider: Attempted to create theme tree item with invalid data structure");
             return null;
@@ -996,7 +1002,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 defaultCollapsibleState = vscode.TreeItemCollapsibleState.None;
         }
 
-        const treeItem: BaseTestBenchTreeItem = new BaseTestBenchTreeItem(
+        const treeItem: TestThemeTreeItem = new TestThemeTreeItem(
             label,
             originalContextValue,
             defaultCollapsibleState,
@@ -1006,7 +1012,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         );
 
         // Restore expansion state
-        const itemKeyForExpansion = treeItem.item?.base?.key;
+        const itemKeyForExpansion = treeItem.itemData?.base?.key;
         if (
             itemKeyForExpansion &&
             this.expandedTreeItems.has(itemKeyForExpansion) &&

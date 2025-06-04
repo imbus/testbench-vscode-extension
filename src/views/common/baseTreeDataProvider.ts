@@ -1,112 +1,90 @@
 /**
  * @file src/views/common/baseTreeDataProvider.ts
- * @description Base class for VS Code TreeDataProviders in the TestBench extension,
- * providing common functionalities like custom root management and expansion state tracking.
+ * @description Base class for VS Code TreeDataProviders with improved service integration
  */
 
 import * as vscode from "vscode";
-import { BaseTestBenchTreeItem } from "./baseTreeItem";
-import { logger } from "../../extension";
+import { TestBenchLogger } from "../../testBenchLogger";
+import { BaseTreeItem as BaseTreeItem } from "./baseTreeItem";
+import { CustomRootService } from "../../services/customRootService";
 
-export abstract class BaseTreeDataProvider<T extends BaseTestBenchTreeItem> implements vscode.TreeDataProvider<T> {
+export interface TreeDataProviderOptions {
+    contextKey: string;
+    customRootContextValue: string;
+    enableCustomRoot?: boolean;
+    enableExpansionTracking?: boolean;
+}
+
+export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vscode.TreeDataProvider<T> {
     protected _onDidChangeTreeData: vscode.EventEmitter<T | T[] | undefined | void> = new vscode.EventEmitter<
         T | T[] | undefined | void
     >();
     public readonly onDidChangeTreeData: vscode.Event<T | T[] | undefined | void> = this._onDidChangeTreeData.event;
 
-    public customRootItemInstance: T | null = null;
-    public originalCustomRootContextValue: string | null = null;
-    public isCustomRootActive: boolean = false;
-    public expandedTreeItems: Set<string> = new Set<string>();
+    protected customRootService: CustomRootService<T>;
+    protected rootElements: T[] = [];
 
     constructor(
         protected readonly extensionContext: vscode.ExtensionContext,
-        protected readonly updateMessageCallback: (message: string | undefined) => void
-    ) {}
+        protected readonly logger: TestBenchLogger,
+        protected readonly updateMessageCallback: (message: string | undefined) => void,
+        private readonly options: TreeDataProviderOptions
+    ) {
+        this.customRootService = new CustomRootService<T>(
+            logger,
+            options.contextKey,
+            options.customRootContextValue,
+            (state) => this.onCustomRootStateChange(state)
+        );
+    }
 
     /**
-     * Gets the VS Code context key string that indicates if this tree view has a custom root.
-     * (e.g., "testbenchExtension.projectTreeHasCustomRoot")
+     * Abstract methods that must be implemented by subclasses
      */
-    protected abstract getContextKeyForCustomRootSet(): string;
+    protected abstract fetchRootElements(): Promise<T[]>;
+    protected abstract fetchChildrenForElement(element: T): Promise<T[]>;
+    protected abstract createTreeItemFromData(data: any, parent: T | null): T | null;
 
     /**
-     * Gets the contextValue string to be set on the custom root item itself.
-     * (e.g., "customRoot.project")
-     */
-    protected abstract getActualContextValueForCustomRootItem(): string;
-
-    /**
-     * Fetches/returns the children for the tree view.
-     * If `element` is provided, it fetches children for that element.
-     * If `element` is undefined, it fetches the root elements of the tree.
-     * This method will be called by the base `getChildren` when not in a custom root scenario,
-     * or when fetching children of a normal item.
-     */
-    protected abstract getChildrenForTreeView(element?: T): Promise<T[]>;
-
-    /**
-     * Fetches/returns the children for the current `customRootItemInstance`.
-     * This method is called by the base `getChildren` when `customRootItemInstance` is the `element`.
-     */
-    protected abstract getChildrenOfCustomRoot(customRootElement: T): Promise<T[]>;
-
-    /**
-     * Returns the UI representation (TreeItem) of the element.
-     * @param element The element for which to return the TreeItem.
+     * Get tree item representation
      */
     getTreeItem(element: T): vscode.TreeItem {
         return element;
     }
 
     /**
-     * Returns the parent of the given element.
-     * Handles cases where a custom root is active.
-     * @param element The element for which to get the parent.
+     * Get parent of an element
      */
     getParent(element: T): vscode.ProviderResult<T> {
-        if (this.isCustomRootActive && this.customRootItemInstance) {
-            if (element === this.customRootItemInstance) {
+        if (this.customRootService.isActive()) {
+            const currentRoot = this.customRootService.getCurrentRoot();
+            if (element === currentRoot) {
                 return null;
             }
-            if (element.parent === this.customRootItemInstance) {
-                return this.customRootItemInstance;
+            if (element.parent === currentRoot) {
+                return currentRoot;
             }
         }
         return element.parent as T;
     }
 
     /**
-     * Gets the children of a given tree item or the root elements if no item is provided.
-     * Manages displaying either the custom root or the normal tree structure.
-     * @param element Optional parent tree item.
+     * Get children of an element or root elements
      */
     async getChildren(element?: T): Promise<T[]> {
         try {
             if (!element) {
-                if (this.isCustomRootActive && this.customRootItemInstance) {
-                    if (this.customRootItemInstance.collapsibleState === vscode.TreeItemCollapsibleState.None) {
-                        const children = await this.getChildrenOfCustomRoot(this.customRootItemInstance);
-                        if (children.length > 0) {
-                            this.customRootItemInstance.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-                        }
-                    }
-                    return [this.customRootItemInstance];
-                }
-                return await this.getChildrenForTreeView();
+                return await this.getRootChildren();
             }
 
-            if (
-                this.isCustomRootActive &&
-                this.customRootItemInstance &&
-                (element.item?.key === this.customRootItemInstance.item?.key ||
-                    element.item?.base?.key === this.customRootItemInstance.item?.base?.key)
-            ) {
-                return await this.getChildrenOfCustomRoot(element);
+            // Check if this is a custom root request
+            if (this.customRootService.isActive() && this.customRootService.isCurrentRoot(element)) {
+                return await this.getChildrenForCustomRoot(element);
             }
-            return await this.getChildrenForTreeView(element);
+
+            return await this.fetchChildrenForElement(element);
         } catch (error: any) {
-            logger.error(
+            this.logger.error(
                 `[BaseTreeDataProvider] Error in getChildren for element ${element?.label || "root"}: ${error.message}`,
                 error
             );
@@ -116,132 +94,192 @@ export abstract class BaseTreeDataProvider<T extends BaseTestBenchTreeItem> impl
     }
 
     /**
-     * Sets the selected tree item as the root for this tree view.
-     * @param treeItem The tree item to set as the custom root.
+     * Refresh the tree view
      */
-    public makeRoot(treeItem: T): void {
-        const itemName = typeof treeItem.label === "string" ? treeItem.label : treeItem.item?.name || "UnknownItem";
-        logger.debug(`[BaseTreeDataProvider] Setting item "${itemName}" as custom root.`);
+    public refresh(isHardRefresh: boolean = false): void {
+        this.logger.debug(`[BaseTreeDataProvider] Refreshing tree. Hard refresh: ${isHardRefresh}`);
 
-        if (
-            this.customRootItemInstance &&
-            this.customRootItemInstance !== treeItem &&
-            this.originalCustomRootContextValue
-        ) {
-            this.customRootItemInstance.contextValue = this.originalCustomRootContextValue;
-            this.customRootItemInstance.updateIcon();
+        if (isHardRefresh) {
+            this.customRootService.handleHardRefresh();
         }
 
-        this.customRootItemInstance = treeItem;
-        this.originalCustomRootContextValue = treeItem.contextValue ?? null;
-        treeItem.contextValue = this.getActualContextValueForCustomRootItem();
-        treeItem.parent = null;
-        this.isCustomRootActive = true;
-        if (treeItem.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
-            treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+        if (!this.customRootService.isActive()) {
+            this.updateMessageCallback("Loading...");
         }
-        treeItem.updateIcon();
 
-        vscode.commands.executeCommand("setContext", this.getContextKeyForCustomRootSet(), true);
+        this._onDidChangeTreeData.fire(undefined);
+    }
+
+    /**
+     * Clear tree data
+     */
+    public clearTree(): void {
+        this.logger.debug("[BaseTreeDataProvider] Clearing tree");
+        this.customRootService.resetCustomRoot();
+        this.rootElements = [];
+        this.updateMessageCallback("Tree cleared");
+        this._onDidChangeTreeData.fire(undefined);
+    }
+
+    /**
+     * Set an item as custom root
+     */
+    public makeRoot(item: T): void {
+        if (!this.options.enableCustomRoot) {
+            this.logger.warn("[BaseTreeDataProvider] Custom root is not enabled for this provider");
+            return;
+        }
+
+        if (!this.customRootService.canSetAsRoot(item)) {
+            this.logger.error(`[BaseTreeDataProvider] Item cannot be set as root: ${item.label}`);
+            return;
+        }
+
+        this.customRootService.setCustomRoot(item);
         this.updateMessageCallback(undefined);
         this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
-     * Resets the custom root, restoring the tree to its default full view.
+     * Reset custom root
      */
     public resetCustomRoot(): void {
-        const itemName = this.customRootItemInstance
-            ? typeof this.customRootItemInstance.label === "string"
-                ? this.customRootItemInstance.label
-                : this.customRootItemInstance.item?.name
-            : "N/A";
-        logger.debug(`[BaseTreeDataProvider] Resetting custom root. Previously: "${itemName}"`);
-        if (this.isCustomRootActive) {
-            this.resetCustomRootInternally();
-            this._onDidChangeTreeData.fire(undefined);
-            logger.info("[BaseTreeDataProvider] Custom root has been reset.");
-        } else {
-            logger.trace("[BaseTreeDataProvider] No custom root was active to reset.");
-        }
+        this.customRootService.resetCustomRoot();
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
-     * Internal logic to reset custom root state variables.
+     * Handle expansion of an item
      */
-    protected resetCustomRootInternally(): void {
-        if (this.customRootItemInstance && this.originalCustomRootContextValue) {
-            this.customRootItemInstance.contextValue = this.originalCustomRootContextValue;
-            this.customRootItemInstance.updateIcon();
-        }
-        this.customRootItemInstance = null;
-        this.originalCustomRootContextValue = null;
-        this.isCustomRootActive = false;
-        this.expandedTreeItems.clear();
-        vscode.commands.executeCommand("setContext", this.getContextKeyForCustomRootSet(), false);
-        this.updateMessageCallback(undefined);
-    }
+    public handleExpansion(element: T, expanded: boolean): void {
+        element.handleExpansion(expanded);
 
-    /**
-     * Remembers an item that has been expanded in the tree view.
-     * @param element The expanded tree item.
-     */
-    public rememberExpandedItem(element: T): void {
-        const itemId = element.item?.key || element.item?.base?.key;
-        if (itemId) {
-            this.expandedTreeItems.add(itemId);
-            logger.trace(`[BaseTreeDataProvider] Remembered expanded item: "${element.label}" (ID: ${itemId})`);
-        }
-    }
-
-    /**
-     * Forgets an item that has been collapsed in the tree view.
-     * @param element The collapsed tree item.
-     */
-    public forgetExpandedItem(element: T): void {
-        const itemId = element.item?.key || element.item?.base?.key;
-        if (itemId) {
-            this.expandedTreeItems.delete(itemId);
-            logger.trace(`[BaseTreeDataProvider] Forgot expanded item: "${element.label}" (ID: ${itemId})`);
-        }
-    }
-
-    /**
-     * Applies the stored expansion state to a given tree item.
-     * Typically called by derived classes when creating tree items.
-     * @param item The tree item to apply expansion state to.
-     */
-    protected applyStoredExpansionState(item: T): void {
-        const itemId = item.item?.key || item.item?.base?.key;
-        if (itemId && this.expandedTreeItems.has(itemId)) {
-            if (item.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
-                item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+        if (this.options.enableExpansionTracking) {
+            const itemId = element.getUniqueId();
+            if (expanded) {
+                this.customRootService.rememberExpandedItem(itemId);
+            } else {
+                this.customRootService.forgetExpandedItem(itemId);
             }
         }
     }
 
     /**
-     * Refreshes the tree view, optionally performing a hard refresh.
-     * Derived classes should override to implement their specific refresh logic,
-     * potentially calling `super.refresh()` or `this._onDidChangeTreeData.fire()`.
-     * @param isHardRefresh Optional flag to force a hard refresh.
+     * Apply stored expansion state to an item
      */
-    public refresh(isHardRefresh: boolean = false): void {
-        logger.debug(`[BaseTreeDataProvider] Base refresh called. Hard refresh: ${isHardRefresh}`);
-        if (isHardRefresh && this.isCustomRootActive) {
-            this.resetCustomRootInternally();
+    protected applyStoredExpansionState(item: T): void {
+        if (this.options.enableExpansionTracking) {
+            this.customRootService.applyExpansionState(item);
         }
+    }
+
+    /**
+     * Store expansion state from current tree
+     */
+    protected storeExpansionState(): void {
+        if (this.options.enableExpansionTracking) {
+            this.customRootService.storeExpansionState(this.rootElements);
+        }
+    }
+
+    /**
+     * Get root children based on custom root state
+     */
+    private async getRootChildren(): Promise<T[]> {
+        if (this.customRootService.isActive()) {
+            return this.customRootService.getChildrenForCustomRoot();
+        }
+
+        this.rootElements = await this.fetchRootElements();
+        return this.rootElements;
+    }
+
+    /**
+     * Get children for custom root element
+     */
+    protected async getChildrenForCustomRoot(customRootElement: T): Promise<T[]> {
+        return await this.fetchChildrenForElement(customRootElement);
+    }
+
+    /**
+     * Handle custom root state changes
+     */
+    protected onCustomRootStateChange(state: any): void {
+        // Override in subclasses if needed
+        this.logger.trace(`[BaseTreeDataProvider] Custom root state changed:`, state);
+    }
+
+    /**
+     * Update tree elements and refresh
+     */
+    protected updateElements(elements: T[]): void {
+        this.rootElements = elements;
+
+        if (this.options.enableExpansionTracking) {
+            // Apply expansion state to new elements
+            const applyExpansionRecursive = (items: T[]) => {
+                for (const item of items) {
+                    this.applyStoredExpansionState(item);
+                    if (item.children) {
+                        applyExpansionRecursive(item.children as T[]);
+                    }
+                }
+            };
+            applyExpansionRecursive(elements);
+        }
+
+        this.updateMessageCallback(elements.length === 0 ? "No items found" : undefined);
         this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
-     * Clears all data from the tree and resets its state.
-     * Derived classes should implement specific logic to clear their data stores.
+     * Find item by unique ID
      */
-    public clearTree(): void {
-        logger.debug("[BaseTreeDataProvider] Base clearTree called.");
-        this.resetCustomRootInternally();
-        this.expandedTreeItems.clear();
-        this._onDidChangeTreeData.fire(undefined);
+    protected findItemById(id: string, items?: T[]): T | null {
+        const searchItems = items || this.rootElements;
+
+        for (const item of searchItems) {
+            if (item.getUniqueId() === id) {
+                return item;
+            }
+
+            if (item.children) {
+                const found = this.findItemById(id, item.children as T[]);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get current root elements
+     */
+    public getCurrentElements(): T[] {
+        return [...this.rootElements];
+    }
+
+    /**
+     * Check if custom root is active
+     */
+    public isCustomRootActive(): boolean {
+        return this.customRootService.isActive();
+    }
+
+    /**
+     * Get current custom root item
+     */
+    public getCurrentCustomRoot(): T | null {
+        return this.customRootService.getCurrentRoot();
+    }
+
+    /**
+     * Dispose of the provider
+     */
+    public dispose(): void {
+        this.customRootService.dispose();
+        this._onDidChangeTreeData.dispose();
     }
 }

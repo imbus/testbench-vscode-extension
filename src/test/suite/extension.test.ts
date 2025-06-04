@@ -4,7 +4,7 @@ import * as sinon from "sinon";
 import { activate, initializeTreeViews } from "../../extension";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { ProjectManagementTreeDataProvider } from "../../views/projectManagementTreeView";
-import { TestElementsTreeDataProvider } from "../../views/testElementsView/testElementsTreeView";
+import { TestElementsTreeDataProvider } from "../../views/testElements/testElementsTreeView";
 import { baseKeyOfExtension } from "../../constants";
 import { getExtensionConfiguration } from "../../configuration";
 

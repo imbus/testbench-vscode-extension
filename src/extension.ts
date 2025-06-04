@@ -14,7 +14,7 @@ import * as testBenchLogger from "./testBenchLogger";
 import * as testBenchConnection from "./testBenchConnection";
 import * as reportHandler from "./reportHandler";
 import * as projectManagementTreeView from "./views/projectManagementTreeView";
-import * as testElementsTreeView from "./views/testElementsView/testElementsTreeView";
+import * as testElementsTreeView from "./views/testElements/testElementsTreeView";
 import * as loginWebView from "./loginWebView";
 import * as utils from "./utils";
 import path from "path";
@@ -28,7 +28,7 @@ import {
 import { CycleDataForThemeTreeEvent } from "./views/projectManagementTreeView";
 import { client, restartLanguageClient, stopLanguageClient } from "./server";
 import { hideTestThemeTreeView, TestThemeTreeDataProvider } from "./views/testThemeTreeView";
-import { clearTestElementsTreeView, displayTestElementsTreeView } from "./views/testElementsView/testElementsTreeView";
+import { clearTestElementsTreeView, displayTestElementsTreeView } from "./views/testElements/testElementsTreeView";
 import {
     TestBenchAuthenticationProvider,
     TESTBENCH_AUTH_PROVIDER_ID,
@@ -38,12 +38,14 @@ import * as profileManager from "./profileManager";
 import { PlayServerConnection } from "./testBenchConnection";
 import { TovStructureOptions } from "./testBenchTypes";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
-import { BaseTestBenchTreeItem } from "./views/common/baseTreeItem";
+import { BaseTreeItem } from "./views/common/baseTreeItem";
 import { ProjectDataService } from "./services/projectDataService";
 import { TestElementDataService } from "./services/testElementDataService";
 import { MarkedItemStateService } from "./services/markedItemStateService";
 import { ResourceFileService } from "./services/resourceFileService";
-import { TestElementTreeBuilder } from "./views/testElementsView/testElementTreeBuilder";
+import { TestElementTreeBuilder } from "./views/testElements/testElementTreeBuilder";
+import { ProjectManagementTreeItem } from "./views/projectManagement/projectManagementTreeItem";
+import { TestThemeTreeItem } from "./views/testTheme/testThemeTreeItem";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -71,8 +73,8 @@ export function getLoginWebViewProvider(): loginWebView.LoginWebViewProvider | n
 export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
 export let testThemeTreeDataProvider: TestThemeTreeDataProvider | null = null;
 export let testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDataProvider | undefined;
-export let projectTreeView: vscode.TreeView<BaseTestBenchTreeItem> | undefined;
-export let testThemeTreeView: vscode.TreeView<BaseTestBenchTreeItem> | undefined;
+export let projectTreeView: vscode.TreeView<ProjectManagementTreeItem> | undefined;
+export let testThemeTreeView: vscode.TreeView<TestThemeTreeItem> | undefined;
 export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementTreeItem> | undefined;
 
 // Global variable to store the authentication provider instance
@@ -205,7 +207,7 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
         context,
         projectDataService
     );
-    const newProjectTreeView: vscode.TreeView<BaseTestBenchTreeItem> = vscode.window.createTreeView(
+    const newProjectTreeView: vscode.TreeView<ProjectManagementTreeItem> = vscode.window.createTreeView(
         "projectManagementTree",
         {
             treeDataProvider: projectManagementTreeDataProvider,
@@ -385,7 +387,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(
         context,
         allExtensionCommands.handleProjectCycleClick,
-        async (cycleItem: BaseTestBenchTreeItem) => {
+        async (cycleItem: ProjectManagementTreeItem) => {
             logger.debug(`Command Called: ${allExtensionCommands.handleProjectCycleClick}`);
             if (projectManagementTreeDataProvider) {
                 // Avoid displaying old data in the tree views by clearing if fetching fails.
@@ -404,30 +406,26 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     // --- Command: Generate Test Cases For Cycle ---
     // Generates test cases for the selected cycle in the project management tree view.
-    registerSafeCommand(
-        context,
-        allExtensionCommands.generateTestCasesForCycle,
-        async (item: BaseTestBenchTreeItem) => {
-            logger.debug(`Command Called: ${allExtensionCommands.generateTestCasesForCycle}`);
-            if (!connection) {
-                vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.error(`${allExtensionCommands.generateTestCasesForCycle} command called without connection.`);
-                return;
-            }
-
-            if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
-                await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
-            }
-
-            await reportHandler.startTestGenerationForCycle(context, item);
+    registerSafeCommand(context, allExtensionCommands.generateTestCasesForCycle, async (item: TestThemeTreeItem) => {
+        logger.debug(`Command Called: ${allExtensionCommands.generateTestCasesForCycle}`);
+        if (!connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            logger.error(`${allExtensionCommands.generateTestCasesForCycle} command called without connection.`);
+            return;
         }
-    );
+
+        if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
+            await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
+        }
+
+        await reportHandler.startTestGenerationForCycle(context, item);
+    });
 
     // --- Command: Generate Test Cases For Test Theme or Test Case Set ---
     registerSafeCommand(
         context,
         allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet,
-        async (treeItem: BaseTestBenchTreeItem) => {
+        async (treeItem: TestThemeTreeItem) => {
             logger.debug(`Command Called: ${allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet}`);
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
@@ -462,7 +460,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     `Error: Cycle key not found for the selected item '${treeItem.label}'. Cannot generate tests.`
                 );
                 logger.error(
-                    `Cycle key not found for tree element: ${treeItem.label} (UID: ${treeItem.item?.uniqueID || treeItem.item?.key})`
+                    `Cycle key not found for tree element: ${treeItem.label} (UID: ${treeItem.itemData?.uniqueID || treeItem.itemData?.key})`
                 );
                 return;
             }
@@ -519,7 +517,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(
         context,
         allExtensionCommands.readAndImportTestResultsToTestbench,
-        async (item?: BaseTestBenchTreeItem) => {
+        async (item?: TestThemeTreeItem) => {
             logger.debug(`Command Called: ${allExtensionCommands.readAndImportTestResultsToTestbench}`);
             if (!connection) {
                 const noConnectionErrorMessage: string = "No connection available. Cannot import report.";
@@ -585,7 +583,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     // --- Command: Make Root ---
     // Right clicking on a tree element and selecting "Make Root" context menu option will make the selected element the root of the tree.
     // Refreshing the tree will revert the tree to its original state.
-    registerSafeCommand(context, allExtensionCommands.makeRoot, (treeItem: BaseTestBenchTreeItem) => {
+    registerSafeCommand(context, allExtensionCommands.makeRoot, (treeItem: BaseTreeItem) => {
         logger.debug(`Command Called: ${allExtensionCommands.makeRoot} for tree item:`, treeItem);
         if (!treeItem) {
             logger.warn("MakeRoot command called with null treeItem.");
@@ -692,14 +690,14 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     registerSafeCommand(
         context,
         allExtensionCommands.displayInteractionsForSelectedTOV,
-        async (treeItem: BaseTestBenchTreeItem) => {
+        async (treeItem: BaseTreeItem) => {
             logger.debug(
                 `Command Called: ${allExtensionCommands.displayInteractionsForSelectedTOV} for tree item:`,
                 treeItem
             );
 
             if (projectManagementTreeDataProvider && treeItem.contextValue === TreeItemContextValues.VERSION) {
-                const tovKeyOfSelectedTreeElement = treeItem.item?.key?.toString();
+                const tovKeyOfSelectedTreeElement = treeItem.itemData?.key?.toString();
                 if (tovKeyOfSelectedTreeElement && testElementsTreeDataProvider) {
                     const areTestElementsFetched: boolean = await testElementsTreeDataProvider.fetchTestElements(
                         tovKeyOfSelectedTreeElement,

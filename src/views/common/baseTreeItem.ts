@@ -1,171 +1,206 @@
 /**
  * @file src/views/common/baseTreeItem.ts
- * @description Base class for TestBench tree items, providing common properties and methods.
+ * @description Base class for all tree items with centralized icon and state management
  */
 
 import * as vscode from "vscode";
-import { logger, ENABLE_ICON_MARKING_ON_GENERATE } from "../../extension";
-import { allExtensionCommands, TreeItemContextValues } from "../../constants";
+import { logger } from "../../extension";
 
-export class BaseTestBenchTreeItem extends vscode.TreeItem {
-    public parent: BaseTestBenchTreeItem | null;
-    public children?: BaseTestBenchTreeItem[];
-    public statusOfTreeItem: string;
-    public originalContextValue?: string;
-    public _isMarkedForImport: boolean = false;
-    private readonly extensionContext: vscode.ExtensionContext;
+export interface TreeItemIconConfig {
+    light: string;
+    dark: string;
+    markedLight?: string;
+    markedDark?: string;
+}
+
+export interface TreeItemState {
+    isMarked?: boolean;
+    isExpanded?: boolean;
+    isCustomRoot?: boolean;
+    status?: string;
+}
+
+/**
+ * Base class for all tree items providing common functionality
+ */
+export abstract class BaseTreeItem extends vscode.TreeItem {
+    public parent: BaseTreeItem | null;
+    public children?: BaseTreeItem[];
+    public readonly originalContextValue: string;
+    public readonly extensionContext: vscode.ExtensionContext;
+
+    // State management
+    public state: TreeItemState = {};
+
+    // Data reference
+    public itemData: any;
 
     constructor(
         label: string,
         contextValue: string,
         collapsibleState: vscode.TreeItemCollapsibleState,
-        public item: any,
+        itemData: any,
         extensionContext: vscode.ExtensionContext,
-        parent: BaseTestBenchTreeItem | null = null
+        parent: BaseTreeItem | null = null
     ) {
         super(label, collapsibleState);
-        this.extensionContext = extensionContext;
-        this.contextValue = contextValue;
+
         this.originalContextValue = contextValue;
+        this.contextValue = contextValue;
+        this.extensionContext = extensionContext;
         this.parent = parent;
-        this.statusOfTreeItem = item.exec?.status || item.status || "None";
+        this.itemData = itemData;
 
-        const itemDataForTooltip = item?.base || item;
-
-        if (
-            contextValue === TreeItemContextValues.PROJECT ||
-            contextValue === TreeItemContextValues.VERSION ||
-            contextValue === TreeItemContextValues.CYCLE ||
-            (this.originalContextValue &&
-                (
-                    [
-                        TreeItemContextValues.PROJECT,
-                        TreeItemContextValues.VERSION,
-                        TreeItemContextValues.CYCLE
-                    ] as string[]
-                ).includes(this.originalContextValue))
-        ) {
-            this.tooltip = `Type: ${this.originalContextValue || contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nKey: ${itemDataForTooltip.key}`;
-            if (
-                (this.originalContextValue === TreeItemContextValues.PROJECT ||
-                    contextValue === TreeItemContextValues.PROJECT) &&
-                item
-            ) {
-                this.tooltip += `\nTOVs: ${item.tovsCount || 0}\nCycles: ${item.cyclesCount || 0}`;
-            }
-        } else if (
-            contextValue === TreeItemContextValues.TEST_THEME_NODE ||
-            contextValue === TreeItemContextValues.TEST_CASE_SET_NODE ||
-            contextValue === TreeItemContextValues.TEST_CASE_NODE ||
-            (this.originalContextValue &&
-                (
-                    [TreeItemContextValues.TEST_THEME_NODE, TreeItemContextValues.TEST_CASE_SET_NODE] as string[]
-                ).includes(this.originalContextValue))
-        ) {
-            if (itemDataForTooltip?.numbering) {
-                this.tooltip = `Numbering: ${itemDataForTooltip.numbering}\nType: ${itemDataForTooltip.elementType || this.originalContextValue || contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nID: ${itemDataForTooltip.uniqueID}`;
-            } else {
-                this.tooltip = `Type: ${itemDataForTooltip.elementType || this.originalContextValue || contextValue}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}\nID: ${itemDataForTooltip.uniqueID}`;
-            }
-            this.description = itemDataForTooltip?.uniqueID || "";
-        } else if (
-            contextValue === TreeItemContextValues.CUSTOM_ROOT_PROJECT ||
-            contextValue === TreeItemContextValues.CUSTOM_ROOT_TEST_THEME
-        ) {
-            this.tooltip = `Custom Root View\nType: ${this.originalContextValue || "N/A"}\nName: ${itemDataForTooltip.name}\nStatus: ${this.statusOfTreeItem}`;
-        }
-
-        if (contextValue === TreeItemContextValues.CYCLE) {
-            this.command = {
-                command: allExtensionCommands.handleProjectCycleClick,
-                title: "Show Test Themes",
-                arguments: [this]
-            };
-        }
+        this.initializeState();
+        this.setupTooltip();
         this.updateIcon();
     }
 
-    private getIconUris(): { light: vscode.Uri; dark: vscode.Uri } {
-        const baseIconUri = this.extensionContext.extensionUri;
-
-        let contextValueForIconLookup: string | undefined = this.contextValue;
-        let isTreeItemMarkedForImport: boolean = false;
-
-        if (
-            this.contextValue === TreeItemContextValues.MARKED_TEST_THEME_NODE ||
-            this.contextValue === TreeItemContextValues.MARKED_TEST_CASE_SET_NODE
-        ) {
-            contextValueForIconLookup = this.originalContextValue;
-            isTreeItemMarkedForImport = true;
-        } else if (
-            (this.contextValue === TreeItemContextValues.CUSTOM_ROOT_PROJECT ||
-                this.contextValue === TreeItemContextValues.CUSTOM_ROOT_TEST_THEME) &&
-            this._isMarkedForImport
-        ) {
-            contextValueForIconLookup = this.originalContextValue;
-            isTreeItemMarkedForImport = true;
-        } else {
-            contextValueForIconLookup = this.originalContextValue || this.contextValue;
-        }
-
-        const status: string = this.statusOfTreeItem?.toLowerCase() || "default";
-
-        const iconMap: Record<
-            string,
-            Record<string, { light: string; dark: string; markedLight?: string; markedDark?: string }>
-        > = {
-            [TreeItemContextValues.PROJECT]: {
-                active: { light: "project-light.svg", dark: "project-dark.svg" },
-                default: { light: "project-light.svg", dark: "project-dark.svg" }
-            },
-            [TreeItemContextValues.VERSION]: {
-                default: { light: "TOV-specification-light.svg", dark: "TOV-specification-dark.svg" }
-            },
-            [TreeItemContextValues.CYCLE]: {
-                default: { light: "Cycle-execution-light.svg", dark: "Cycle-execution-dark.svg" }
-            },
-            [TreeItemContextValues.TEST_THEME_NODE]: {
-                default: {
-                    light: "TestThemeOriginal-light.svg",
-                    dark: "TestThemeOriginal-dark.svg",
-                    markedLight: "TestThemeOriginal-marked-light.svg",
-                    markedDark: "TestThemeOriginal-marked-dark.svg"
-                }
-            },
-            [TreeItemContextValues.TEST_CASE_SET_NODE]: {
-                default: {
-                    light: "TestCaseSetOriginal-light.svg",
-                    dark: "TestCaseSetOriginal-dark.svg",
-                    markedLight: "TestCaseSetOriginal-marked-light.svg",
-                    markedDark: "TestCaseSetOriginal-marked-dark.svg"
-                }
-            },
-            [TreeItemContextValues.TEST_CASE_NODE]: {
-                default: { light: "TestCase-light.svg", dark: "TestCase-dark.svg" }
-            },
-            default: {
-                default: { light: "testbench-logo.svg", dark: "testbench-logo.svg" }
-            }
-        };
-
-        const typeIcons = iconMap[contextValueForIconLookup as keyof typeof iconMap] || iconMap["default"];
-        let iconFileNames = typeIcons[status] || typeIcons["default"] || iconMap.default.default;
-
-        if (ENABLE_ICON_MARKING_ON_GENERATE && (this._isMarkedForImport || isTreeItemMarkedForImport)) {
-            if (iconFileNames.markedLight && iconFileNames.markedDark) {
-                iconFileNames = { light: iconFileNames.markedLight, dark: iconFileNames.markedDark };
-            } else {
-                logger.warn(`[getIconUris] Marked icons not defined for type: ${contextValueForIconLookup}`);
-            }
-        }
-
-        return {
-            light: vscode.Uri.joinPath(baseIconUri, "resources", "icons", iconFileNames.light),
-            dark: vscode.Uri.joinPath(baseIconUri, "resources", "icons", iconFileNames.dark)
+    /**
+     * Initialize the tree item state from item data
+     */
+    protected initializeState(): void {
+        this.state = {
+            isMarked: false,
+            isExpanded: this.collapsibleState === vscode.TreeItemCollapsibleState.Expanded,
+            isCustomRoot: false,
+            status: this.extractStatus()
         };
     }
 
+    /**
+     * Extract status from item data - can be overridden by subclasses
+     */
+    protected extractStatus(): string {
+        return this.itemData?.exec?.status || this.itemData?.status || this.itemData?.base?.status || "None";
+    }
+
+    /**
+     * Setup tooltip - can be customized by subclasses
+     */
+    protected setupTooltip(): void {
+        this.tooltip = this.buildTooltipContent();
+    }
+
+    /**
+     * Build tooltip content - can be overridden by subclasses
+     */
+    protected abstract buildTooltipContent(): string | vscode.MarkdownString;
+
+    /**
+     * Get icon category for this tree item type - override in subclasses
+     */
+    protected abstract getIconCategory(): string;
+
+    /**
+     * Update the icon based on current state using icon management service
+     */
     public updateIcon(): void {
-        this.iconPath = this.getIconUris();
+        try {
+            // This will be injected by the tree data provider
+            const iconService = (this.extensionContext as any).iconManagementService;
+            if (!iconService) {
+                logger.warn(`[BaseTreeItem] No icon management service available for ${this.label}`);
+                this.setFallbackIcon();
+                return;
+            }
+
+            const iconContext = {
+                contextValue: this.contextValue!,
+                status: this.state.status,
+                isMarked: this.state.isMarked,
+                isCustomRoot: this.state.isCustomRoot,
+                originalContextValue: this.originalContextValue
+            };
+
+            this.iconPath = iconService.getIconUris(iconContext, this.getIconCategory());
+        } catch (error) {
+            logger.error(`Error updating icon for ${this.label}:`, error);
+            this.setFallbackIcon();
+        }
+    }
+
+    /**
+     * Set fallback icon when icon update fails
+     */
+    protected setFallbackIcon(): void {
+        this.iconPath = {
+            light: vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", "testbench-logo.svg"),
+            dark: vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", "testbench-logo.svg")
+        };
+    }
+
+    /**
+     * Update tree item state
+     */
+    public updateState(newState: Partial<TreeItemState>): void {
+        this.state = { ...this.state, ...newState };
+        this.updateIcon();
+
+        // Update VS Code tree item properties based on state
+        if (newState.isExpanded !== undefined) {
+            this.collapsibleState = newState.isExpanded
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed;
+        }
+    }
+
+    /**
+     * Get current state
+     */
+    public getState(): Readonly<TreeItemState> {
+        return { ...this.state };
+    }
+
+    /**
+     * Mark/unmark the item
+     */
+    public setMarked(marked: boolean): void {
+        this.updateState({ isMarked: marked });
+    }
+
+    /**
+     * Check if item is marked
+     */
+    public isMarked(): boolean {
+        return this.state.isMarked || false;
+    }
+
+    /**
+     * Set as custom root
+     */
+    public setAsCustomRoot(isRoot: boolean): void {
+        this.updateState({ isCustomRoot: isRoot });
+        if (isRoot) {
+            this.parent = null;
+        }
+    }
+
+    /**
+     * Get unique identifier for this item
+     */
+    public getUniqueId(): string {
+        return (
+            this.itemData?.key ||
+            this.itemData?.base?.key ||
+            this.itemData?.uniqueID ||
+            this.itemData?.base?.uniqueID ||
+            `fallback_${Date.now()}`
+        );
+    }
+
+    /**
+     * Get UID if available
+     */
+    public getUID(): string | undefined {
+        return this.itemData?.base?.uniqueID || this.itemData?.uniqueID;
+    }
+
+    /**
+     * Handle expansion state change
+     */
+    public handleExpansion(expanded: boolean): void {
+        this.updateState({ isExpanded: expanded });
+        logger.trace(`Item ${this.label} expansion state changed to: ${expanded}`);
     }
 }
