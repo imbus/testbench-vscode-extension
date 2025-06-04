@@ -29,7 +29,7 @@ import {
     TESTBENCH_AUTH_PROVIDER_ID,
     TESTBENCH_AUTH_PROVIDER_LABEL
 } from "./testBenchAuthenticationProvider";
-import * as profileManager from "./profileManager";
+import * as connectionManager from "./connectionManager";
 import { PlayServerConnection } from "./testBenchConnection";
 import { TovStructureOptions } from "./testBenchTypes";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
@@ -399,12 +399,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.debug(`[Cmd] Called: ${allExtensionCommands.automaticLoginAfterExtensionActivation}`);
 
         if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-            logger.info("[Cmd] Auto-login is enabled. Attempting silent login with last active profile...");
+            logger.info("[Cmd] Auto-login is enabled. Attempting silent login with last active connection...");
 
-            const activeProfile: profileManager.TestBenchProfile | undefined =
-                await profileManager.getActiveProfile(context);
-            if (!activeProfile) {
-                logger.info("[Cmd] Auto-login: No last active profile found. Cannot auto-login.");
+            const activeConnection: connectionManager.TestBenchConnection | undefined =
+                await connectionManager.getActiveConnection(context);
+            if (!activeConnection) {
+                logger.info("[Cmd] Auto-login: No last active connection found. Cannot auto-login.");
                 return;
             }
 
@@ -414,7 +414,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             }
 
             try {
-                await profileManager.setActiveProfileId(context, activeProfile.id);
+                await connectionManager.setActiveConnectionId(context, activeConnection.id);
                 authProviderInstance.prepareForSilentAutoLogin();
 
                 logger.trace("[Cmd] Auto-login: Calling vscode.authentication.getSession silently.");
@@ -426,7 +426,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
                 if (session) {
                     logger.info(
-                        `[Cmd] Auto-login successful for profile: ${activeProfile.label} (session restored/created silently).`
+                        `[Cmd] Auto-login successful for connection: ${activeConnection.label} (session restored/created silently).`
                     );
                 } else {
                     logger.info(
@@ -435,7 +435,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 }
             } catch (error: any) {
                 logger.warn(
-                    `[Cmd] Auto-login attempt for profile "${activeProfile?.label || "unknown"}" failed silently (this is expected if credentials/profile are incomplete or server issues prevent silent login): ${error.message}`
+                    `[Cmd] Auto-login attempt for connection "${activeConnection?.label || "unknown"}" failed silently (this is expected if credentials/connection are incomplete or server issues prevent silent login): ${error.message}`
                 );
             }
         } else {
@@ -1420,18 +1420,18 @@ async function handleTestBenchSessionChange(
     const wasPreviouslyConnected = !!connection;
 
     if (sessionToProcess && sessionToProcess.accessToken) {
-        const activeProfile = await profileManager.getActiveProfile(context);
-        if (activeProfile) {
-            // Check if a connection for this session and profile already exists
+        const activeConnection = await connectionManager.getActiveConnection(context);
+        if (activeConnection) {
+            // Check if a connection for this session and connection already exists
             if (
                 connection &&
                 connection.getSessionToken() === sessionToProcess.accessToken &&
-                connection.getUsername() === activeProfile.username &&
-                connection.getServerName() === activeProfile.serverName &&
-                connection.getServerPort() === activeProfile.portNumber.toString()
+                connection.getUsername() === activeConnection.username &&
+                connection.getServerName() === activeConnection.serverName &&
+                connection.getServerPort() === activeConnection.portNumber.toString()
             ) {
                 logger.info(
-                    `[Extension] Connection for profile '${activeProfile.label}' and current session token is already active. Skipping re-initialization.`
+                    `[Extension] Connection for connection '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
                 );
                 if (!wasPreviouslyConnected) {
                     logger.info("[Extension] Re-asserting UI state for existing matching connection.");
@@ -1447,7 +1447,7 @@ async function handleTestBenchSessionChange(
             }
 
             logger.info(
-                `[Extension] TestBench session active for profile: ${activeProfile.label}. Initializing PlayServerConnection.`
+                `[Extension] TestBench session active for connection: ${activeConnection.label}. Initializing PlayServerConnection.`
             );
 
             if (connection) {
@@ -1458,9 +1458,9 @@ async function handleTestBenchSessionChange(
             }
 
             const newConnection = new PlayServerConnection(
-                activeProfile.serverName,
-                activeProfile.portNumber,
-                activeProfile.username,
+                activeConnection.serverName,
+                activeConnection.portNumber,
+                activeConnection.username,
                 sessionToProcess.accessToken
             );
             setConnection(newConnection);
@@ -1481,7 +1481,7 @@ async function handleTestBenchSessionChange(
                 testThemeProvider?.clearTree();
                 testThemeProvider?.clearTree();
             } else {
-                // Session changed while already connected (e.g., profile switch if supported, or token refresh)
+                // Session changed while already connected (e.g., connection switch if supported, or token refresh)
                 logger.info(
                     "[Extension] Session changed while already connected. Resetting view to 'Projects' and refreshing data."
                 );
@@ -1491,7 +1491,7 @@ async function handleTestBenchSessionChange(
                 testThemeProvider?.clearTree();
             }
         } else {
-            logger.warn("[Extension] Session exists, but no active profile. Clearing connection.");
+            logger.warn("[Extension] Session exists, but no active connection. Clearing connection.");
             if (connection) {
                 await connection.logoutUserOnServer();
             }

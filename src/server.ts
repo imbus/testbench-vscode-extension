@@ -482,13 +482,36 @@ function setupClientNotifications(
     tovName: string,
     operationId: number
 ): void {
-    client.onNotification("custom/notification", (params) => {
-        logger.info(`[startAndMonitorClient - Op ${operationId}] Received custom notification: ${params.message}`);
-        vscode.window.showInformationMessage(`TestBench LS: ${params.message}`);
+    client.onNotification("testbench-language-server/show-error", (params) => {
+        vscode.window.showErrorMessage(`${params.message}`);
+    });
+
+    client.onNotification("testbench-language-server/show-info", (params) => {
+        vscode.window.showInformationMessage(`${params.message}`);
+    });
+
+    client.onNotification("testbench-language-server/log-info", (params) => {
+        logger.info(`[Language server] - ${params.message}`);
+    });
+
+    client.onNotification("testbench-language-server/log-debug", (params) => {
+        logger.debug(`[Language server] - ${params.message}`);
+    });
+
+    client.onNotification("testbench-language-server/log-trace", (params) => {
+        logger.trace(`[Language server] - ${params.message}`);
+    });
+
+    client.onNotification("testbench-language-server/log-error", (params) => {
+        logger.error(`[Language server] - ${params.message}`);
+    });
+
+    client.onNotification("testbench-language-server/log-warn", (params) => {
+        logger.warn(`[Language server] - ${params.message}`);
     });
 
     logger.info(
-        `[startAndMonitorClient - Op ${operationId}] Notification handlers set up for LS ${projectName}/${tovName}.`
+        `[startAndMonitorClient - Op ${operationId}] Language server notification handler set up for ${projectName}/${tovName}.`
     );
 }
 

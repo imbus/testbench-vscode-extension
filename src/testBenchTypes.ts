@@ -9,9 +9,9 @@
  * type definitions for better code reusability, consistency, and maintainability.
  */
 
-export interface TestBenchProfile {
-    id: string; // Unique identifier for the profile
-    label: string; // User-friendly name for the profile (e.g., "Dev Server")
+export interface TestBenchConnection {
+    id: string; // Unique identifier for the connection
+    label: string; // User-friendly name for the connection (e.g., "Dev Server")
     serverName: string;
     portNumber: number;
     username: string;

@@ -14,7 +14,7 @@ import { ConfigKeys } from "../../constants";
 import { getExtensionConfiguration } from "../../configuration";
 import { IconManagementService } from "../../services/iconManagementService";
 
-export const fileContentOfRobotResourceSubdivisionFile = `*** Settings ***\nDocumentation    tb:uid:`;
+export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
 
 function appendResourceExtensionAndTrimPathLocal(baseTargetPath: string, logger: TestBenchLogger): string {
     logger.trace(`Adding .resource extension and trimming path: ${baseTargetPath}`);
@@ -271,7 +271,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                         vscode.window.showErrorMessage(`Cannot create file for ${item.label}: Missing Unique ID.`);
                         return;
                     }
-                    const initialContent = `${fileContentOfRobotResourceSubdivisionFile}${uid}\n`;
+                    const initialContent: string = `${fileContentOfRobotResourceSubdivisionFile}${uid}\n\n`;
                     await this.resourceFileService.ensureFileExists(resourcePath, initialContent);
                     await this.resourceFileService.openFileInEditor(resourcePath);
                 } else {
