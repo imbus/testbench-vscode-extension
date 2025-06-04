@@ -91,11 +91,35 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         }
     }
 
+    /**
+     * Handles tree item expansion/collapse events to maintain state.
+     * @param element The tree item that was expanded/collapsed
+     * @param expanded Whether the item is now expanded or collapsed
+     */
+    public handleItemExpansion(element: TestElementTreeItem, expanded: boolean): void {
+        this.logger.trace(`[TETDP] Item ${element.label} expansion changed to: ${expanded}`);
+        this.handleExpansion(element, expanded);
+    }
+
+    /**
+     * Fetches test elements for a given TOV key and rebuilds the tree while preserving expansion state.
+     * @param tovKey The Test Object Version key to fetch elements for
+     * @param newTreeViewTitle Optional title for the tree view
+     * @returns Promise<boolean> indicating success/failure
+     */
     public async fetchTestElements(tovKey: string, newTreeViewTitle?: string): Promise<boolean> {
         this.logger.debug(`[TETDP] Fetching test elements for TOV: ${tovKey}`);
         this.isDataFetchAttempted = true;
         const tovLabel = newTreeViewTitle || tovKey;
         this.updateMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
+
+        // Store expansion state before clearing tree
+        const isRefreshingSameTov = this.currentTovKey === tovKey;
+        if (isRefreshingSameTov && this.rootElements.length > 0) {
+            this.storeExpansionState();
+        }
+
+        // Clear the tree
         this.updateElements([]);
 
         try {
@@ -131,6 +155,12 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         }
     }
 
+    /**
+     * Converts hierarchical test element data to tree items with proper expansion state handling.
+     * @param dataArray Array of test element data to convert
+     * @param parent Parent tree item (null for root items)
+     * @returns Array of tree items with children and proper expansion states
+     */
     private convertHierarchicalDataToTreeItems(
         dataArray: TestElementData[],
         parent: TestElementTreeItem | null
@@ -139,11 +169,11 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             const treeItem = this.createTreeItemFromData(data, parent);
             if (data.children && data.children.length > 0) {
                 treeItem.children = this.convertHierarchicalDataToTreeItems(data.children, treeItem);
-                const uniqueId = treeItem.getUniqueId();
-                treeItem.collapsibleState =
-                    uniqueId && this.customRootService.shouldBeExpanded(uniqueId)
-                        ? vscode.TreeItemCollapsibleState.Expanded
-                        : vscode.TreeItemCollapsibleState.Collapsed;
+
+                // Set default collapsible state based on children
+                treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+
+                this.applyStoredExpansionState(treeItem);
             } else {
                 treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
             }
@@ -189,6 +219,12 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         return (element.children as TestElementTreeItem[]) || [];
     }
 
+    /**
+     * Creates a tree item from test element data with proper state initialization.
+     * @param data Test element data to create tree item from
+     * @param parent Parent tree item (null for root items)
+     * @returns Created tree item with proper expansion state applied
+     */
     protected createTreeItemFromData(data: TestElementData, parent: TestElementTreeItem | null): TestElementTreeItem {
         const item = new TestElementTreeItem(
             data,
@@ -198,6 +234,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             parent
         );
         this.logger.trace(`[TETDP] Created tree item.`);
+
         this.applyStoredExpansionState(item);
         return item;
     }

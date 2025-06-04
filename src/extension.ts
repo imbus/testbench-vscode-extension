@@ -225,6 +225,26 @@ function initializeTestElementsTreeView(context: vscode.ExtensionContext, servic
         treeDataProvider: testElementsProvider
     });
     context.subscriptions.push(testElementTreeView);
+
+    // Handle expansion events to store expanded state
+    if (testElementTreeView && testElementsProvider) {
+        context.subscriptions.push(
+            testElementTreeView.onDidExpandElement((event) => {
+                if (testElementsProvider && typeof testElementsProvider.handleItemExpansion === "function") {
+                    testElementsProvider.handleItemExpansion(event.element, true);
+                }
+            })
+        );
+
+        context.subscriptions.push(
+            testElementTreeView.onDidCollapseElement((event) => {
+                if (testElementsProvider && typeof testElementsProvider.handleItemExpansion === "function") {
+                    testElementsProvider.handleItemExpansion(event.element, false);
+                }
+            })
+        );
+    }
+
     testElementsProvider.clearTree(); // Clear the tree initially
 
     if (testElementsProvider.isTreeDataEmpty()) {
