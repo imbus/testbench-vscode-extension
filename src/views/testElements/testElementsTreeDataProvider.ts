@@ -69,6 +69,15 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         return this.rootElements.length === 0;
     }
 
+    /**
+     * Updates the tree view status message based on the current state of test elements data.
+     *
+     * Displays appropriate messages when:
+     * - No TOV is selected (prompts user to select from Projects view)
+     * - No test elements match current filter criteria
+     * - No test elements found for selected TOV
+     * - Clears message when data is available
+     */
     public updateTreeViewStatusMessage(): void {
         if (this.isTreeDataEmpty()) {
             if (!this.isDataFetchAttempted) {
@@ -113,13 +122,11 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         const tovLabel = newTreeViewTitle || tovKey;
         this.updateMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
 
-        // Store expansion state before clearing tree
         const isRefreshingSameTov = this.currentTovKey === tovKey;
         if (isRefreshingSameTov && this.rootElements.length > 0) {
             this.storeExpansionState();
         }
 
-        // Clear the tree
         this.updateElements([]);
 
         try {
@@ -132,18 +139,14 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                     null
                 );
 
-                await this.updateAllItemIcons(treeItems);
+                // Skip icon updates during initial load, only update basic icons
+                this.updateBasicIcons(treeItems);
                 this.updateElements(treeItems);
-                if (treeItems.length === 0) {
-                    this.updateMessageCallback(`No test elements match criteria for TOV: ${tovLabel}.`);
-                } else {
-                    this.updateMessageCallback(undefined);
-                }
 
-                // TODO: Update tree view title
-                // if (newTreeViewTitle && testElementTreeView) {
-                //    testElementTreeView.title = `Test Elements (${newTreeViewTitle})`;
-                // }
+                // Update subdivision icons in background
+                this.updateSubdivisionIconsInBackground(treeItems);
+
+                this.updateMessageCallback(undefined);
                 return true;
             } else {
                 this.handleFetchFailure(tovLabel);
@@ -152,6 +155,68 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         } catch (error) {
             this.handleFetchFailure(tovLabel, error);
             return false;
+        }
+    }
+
+    /**
+     * Updates the basic icons for test element tree items recursively.
+     * Non-subdivision items get their standard icons updated, while subdivisions
+     * get a default "MissingSubdivision" icon without file validation.
+     * @param items - Array of test element tree items to update
+     */
+    private updateBasicIcons(items: TestElementTreeItem[]): void {
+        const updateRecursive = (items: TestElementTreeItem[]) => {
+            for (const item of items) {
+                if (item.testElementData.elementType !== "Subdivision") {
+                    item.updateIcon();
+                } else {
+                    // Set default subdivision icon without file check
+                    item.updateSubdivisionIcon("MissingSubdivision");
+                }
+                if (item.children) {
+                    updateRecursive(item.children as TestElementTreeItem[]);
+                }
+            }
+        };
+        updateRecursive(items);
+    }
+
+    /**
+     * Updates subdivision element icons in the background using batched processing.
+     *
+     * Recursively collects all subdivision items from the tree, then processes them
+     * in batches of 10 to avoid overwhelming the file system. Includes throttling
+     * with small delays between batches to maintain UI responsiveness.
+     *
+     * @param items - Array of test element tree items to process
+     * @returns Promise that resolves when all subdivision icons are updated
+     */
+    private async updateSubdivisionIconsInBackground(items: TestElementTreeItem[]): Promise<void> {
+        // Process subdivision icons in background with throttling
+        const subdivisionItems: TestElementTreeItem[] = [];
+        const collectSubdivisions = (items: TestElementTreeItem[]) => {
+            for (const item of items) {
+                if (item.testElementData.elementType === "Subdivision") {
+                    subdivisionItems.push(item);
+                }
+                if (item.children) {
+                    collectSubdivisions(item.children as TestElementTreeItem[]);
+                }
+            }
+        };
+        collectSubdivisions(items);
+
+        // Process in batches of 10 to avoid overwhelming the file system
+        const batchSize = 10;
+        for (let i = 0; i < subdivisionItems.length; i += batchSize) {
+            const batch = subdivisionItems.slice(i, i + batchSize);
+            await Promise.all(batch.map((item) => this.updateSingleItemIcon(item)));
+
+            // Fire update event for this batch
+            this._onDidChangeTreeData.fire(undefined);
+
+            // Small delay between batches to keep UI responsive
+            await new Promise((resolve) => setTimeout(resolve, 10));
         }
     }
 
@@ -181,15 +246,14 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         });
     }
 
-    private async updateAllItemIcons(items: TestElementTreeItem[]): Promise<void> {
-        for (const item of items) {
-            await this.updateSingleItemIcon(item);
-            if (item.children) {
-                await this.updateAllItemIcons(item.children as TestElementTreeItem[]);
-            }
-        }
-    }
-
+    /**
+     * Updates the icon for a single test element tree item based on its type and file existence.
+     *
+     * For subdivision elements, checks if the corresponding file exists and updates the icon accordingly.
+     * For other element types, performs a standard icon update.
+     *
+     * @param item - The test element tree item to update
+     */
     private async updateSingleItemIcon(item: TestElementTreeItem): Promise<void> {
         const elementData = item.testElementData;
         if (elementData.elementType === "Subdivision") {
@@ -211,10 +275,19 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         }
     }
 
+    /**
+     * Fetches the root test elements for the tree view.
+     * @returns A promise that resolves to an array of root test element tree items.
+     */
     protected async fetchRootElements(): Promise<TestElementTreeItem[]> {
         return this.rootElements;
     }
 
+    /**
+     * Retrieves the child elements for a given test element tree item.
+     * @param element - The parent test element tree item to fetch children for
+     * @returns A promise that resolves to an array of child test element tree items, or empty array if no children exist
+     */
     protected async fetchChildrenForElement(element: TestElementTreeItem): Promise<TestElementTreeItem[]> {
         return (element.children as TestElementTreeItem[]) || [];
     }
@@ -239,6 +312,14 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         return item;
     }
 
+    /**
+     * Handles failures when fetching test elements for a TOV.
+     * Resets the current TOV key, logs the error, shows user notification,
+     * updates the message callback, and clears the elements list.
+     *
+     * @param tovLabel - The label of the TOV that failed to fetch
+     * @param error - Optional error object or message from the failed operation
+     */
     private handleFetchFailure(tovLabel: string, error?: any) {
         this.currentTovKey = "";
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
@@ -248,6 +329,15 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         this.updateElements([]);
     }
 
+    /**
+     * Handles the "Go to Resource" command for a test element tree item.
+     *
+     * For Subdivisions: Creates/opens the corresponding resource file or reveals the folder in explorer of VS Code.
+     * For Interactions: Navigates to the parent robot resource or subdivision file.
+     *
+     * @param item - The test element tree item to process
+     * @returns Promise that resolves when the operation completes
+     */
     public async handleGoToResourceCommand(item: TestElementTreeItem): Promise<void> {
         if (!item || !item.testElementData) {
             return;
@@ -301,6 +391,15 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         }
     }
 
+    /**
+     * Creates a new interaction element under a subdivision in the test element tree.
+     *
+     * @param subdivisionItem - The subdivision tree item that will contain the new interaction
+     * @param interactionName - The name for the new interaction element
+     * @returns Promise that resolves to the created TestElementData or null if creation fails
+     *
+     * @throws Shows error message if the parent item is not a subdivision
+     */
     public async createInteractionUnderSubdivision(
         subdivisionItem: TestElementTreeItem,
         interactionName: string
@@ -348,6 +447,10 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         return newInteractionData;
     }
 
+    /**
+     * Clears the tree data and resets the provider state.
+     * Resets the current TOV key, data fetch flag, and updates the tree view status message.
+     */
     public override clearTree(): void {
         this.currentTovKey = "";
         this.isDataFetchAttempted = false;
@@ -356,6 +459,11 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         this.logger.trace("[TestElementsTreeDataProvider] Tree cleared.");
     }
 
+    /**
+     * Refreshes the test elements tree data provider.
+     * @param isHardRefresh - Whether to perform a hard refresh (Not used in this implementation). Defaults to false.
+     * @returns A promise that resolves when the refresh is complete.
+     */
     public override async refresh(isHardRefresh: boolean = false): Promise<void> {
         this.logger.debug(`[TETDP] Refresh called. Hard: ${isHardRefresh}, Current TOV: ${this.currentTovKey}`);
         if (!this.currentTovKey) {
