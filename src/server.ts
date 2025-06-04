@@ -482,13 +482,13 @@ function setupClientNotifications(
     tovName: string,
     operationId: number
 ): void {
-    client.onNotification("custom/notification", (params) => {
+    client.onNotification("testbench-language-server/error", (params) => {
         logger.info(`[startAndMonitorClient - Op ${operationId}] Received custom notification: ${params.message}`);
-        vscode.window.showInformationMessage(`${params.message}`);
+        vscode.window.showErrorMessage(`${params.message}`);
     });
 
     logger.info(
-        `[startAndMonitorClient - Op ${operationId}] Notification handlers set up for LS ${projectName}/${tovName}.`
+        `[startAndMonitorClient - Op ${operationId}] Error notification handler set up for LS ${projectName}/${tovName}.`
     );
 }
 
