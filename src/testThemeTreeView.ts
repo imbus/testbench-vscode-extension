@@ -13,12 +13,14 @@ interface MarkedItemInfo {
     key: string;
     originalContextValue: string;
     isDirectlyGenerated: boolean;
+    uniqueID: string;
 }
 
 interface GeneratedItemHierarchy {
     rootKey: string;
     rootUID: string;
-    markedSubItems: Set<string>;
+    markedSubItemUIDs: Set<string>;
+    markedSubItemsWithUID: Map<string, string>;
 }
 
 /**
@@ -54,12 +56,22 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
     private updateTreeViewStatusMessageCallback: (message: string | undefined) => void;
 
+    private isTestThemeTreeInitialized: boolean = false;
+    private initializationPromise: Promise<void> | null = null;
+
     constructor(updateMessageCallback: (message: string | undefined) => void, context: vscode.ExtensionContext) {
         this.extensionContext = context;
         this.updateTreeViewStatusMessageCallback = updateMessageCallback;
         vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
 
-        this.loadMarkedItemsFromStorage();
+        this.initializationPromise = this.initialize();
+    }
+
+    private async initialize(): Promise<void> {
+        await this.loadMarkedItemsFromStorage();
+        this.isTestThemeTreeInitialized = true;
+        this._onDidChangeTreeData.fire();
+        logger.trace("[TestThemeTreeDataProvider] Initialization complete, marked items loaded.");
     }
 
     /**
@@ -71,14 +83,27 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 StorageKeys.MARKED_TEST_GENERATION_ITEM
             );
             if (storedMarkedItem) {
-                this.currentMarkedItemInfo = {
-                    key: storedMarkedItem.key,
-                    originalContextValue: storedMarkedItem.originalContextValue,
-                    isDirectlyGenerated: storedMarkedItem.isDirectlyGenerated ?? true // True for existing items
-                };
-                logger.trace(
-                    `[TestThemeTreeDataProvider] Loaded marked item from workspace state: ${storedMarkedItem.key}`
-                );
+                if (
+                    storedMarkedItem.key &&
+                    storedMarkedItem.originalContextValue &&
+                    storedMarkedItem.uniqueID !== undefined
+                ) {
+                    this.currentMarkedItemInfo = {
+                        key: storedMarkedItem.key,
+                        originalContextValue: storedMarkedItem.originalContextValue,
+
+                        isDirectlyGenerated: storedMarkedItem.isDirectlyGenerated ?? true,
+                        uniqueID: storedMarkedItem.uniqueID
+                    };
+                    logger.trace(
+                        `[TestThemeTreeDataProvider] Loaded marked item from workspace state: ${storedMarkedItem.key} (UID: ${storedMarkedItem.uniqueID})`
+                    );
+                } else {
+                    logger.warn(
+                        "[TestThemeTreeDataProvider] Stored marked item is missing required properties, ignoring."
+                    );
+                    this.currentMarkedItemInfo = null;
+                }
             }
 
             const storedHierarchies = this.extensionContext.workspaceState.get<Array<[string, any]>>(
@@ -87,14 +112,21 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             if (storedHierarchies && Array.isArray(storedHierarchies)) {
                 this.generatedItemHierarchies = new Map();
                 for (const [key, hierarchyData] of storedHierarchies) {
-                    const hierarchy: GeneratedItemHierarchy = {
-                        rootKey: hierarchyData.rootKey,
-                        rootUID: hierarchyData.rootUID,
-                        markedSubItems: new Set(
-                            Array.isArray(hierarchyData.markedSubItems) ? hierarchyData.markedSubItems : []
-                        )
-                    };
-                    this.generatedItemHierarchies.set(key, hierarchy);
+                    if (hierarchyData.rootKey && hierarchyData.rootUID && hierarchyData.markedSubItemUIDs) {
+                        const hierarchy: GeneratedItemHierarchy = {
+                            rootKey: hierarchyData.rootKey,
+                            rootUID: hierarchyData.rootUID,
+                            markedSubItemUIDs: new Set(
+                                Array.isArray(hierarchyData.markedSubItemUIDs) ? hierarchyData.markedSubItemUIDs : []
+                            ),
+                            markedSubItemsWithUID: new Map(
+                                Array.isArray(hierarchyData.markedSubItemsWithUID)
+                                    ? hierarchyData.markedSubItemsWithUID
+                                    : []
+                            )
+                        };
+                        this.generatedItemHierarchies.set(key, hierarchy);
+                    }
                 }
                 logger.trace(
                     `[TestThemeTreeDataProvider] Loaded ${this.generatedItemHierarchies.size} generated item hierarchies from storage`
@@ -117,14 +149,15 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 this.currentMarkedItemInfo
             );
 
-            // Convert Sets to Arrays
+            // Convert Sets and Maps to Arrays for storage
             const hierarchiesForStorage = Array.from(this.generatedItemHierarchies.entries()).map(
                 ([key, hierarchy]) => [
                     key,
                     {
                         rootKey: hierarchy.rootKey,
                         rootUID: hierarchy.rootUID,
-                        markedSubItems: Array.from(hierarchy.markedSubItems)
+                        markedSubItemUIDs: Array.from(hierarchy.markedSubItemUIDs),
+                        markedSubItemsWithUID: Array.from(hierarchy.markedSubItemsWithUID.entries())
                     }
                 ]
             );
@@ -133,6 +166,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`,
                 hierarchiesForStorage
             );
+
+            logger.trace("[TestThemeTreeDataProvider] Saved marked items to storage successfully");
         } catch (error) {
             logger.error("[TestThemeTreeDataProvider] Error saving marked items to storage:", error);
         }
@@ -143,49 +178,34 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     }
 
     /**
-     * Determines if an item should show import functionality based on the generated hierarchies
+     * Determines if a tree item should show import button based on the generated hierarchies.
+     * This checks if the item is currently marked or if it belongs to a hierarchy of marked items.
+     * @param {string} itemKey - The key of the item to check.
+     * @param {string | undefined} itemUID - The unique identifier of the item, if available.
+     * @return {Object} An object containing:
+     * - `shouldShow`: A boolean indicating if the import functionality should be shown for this item.
+     * - `rootUID`: The UID of the root item if it is marked, otherwise undefined.
      */
-    private shouldShowImportFunctionality(itemKey: string): { shouldShow: boolean; rootUID?: string } {
-        // Check if this item is directly marked
-        if (this.currentMarkedItemInfo && this.currentMarkedItemInfo.key === itemKey) {
-            return { shouldShow: true, rootUID: this.getItemUIDByKey(itemKey) };
+    private shouldTreeItemDisplayImportButton(
+        itemKey: string,
+        itemUID: string | undefined
+    ): { shouldShow: boolean; rootUID?: string } {
+        if (
+            this.currentMarkedItemInfo &&
+            this.currentMarkedItemInfo.key === itemKey &&
+            this.currentMarkedItemInfo.uniqueID === itemUID
+        ) {
+            return { shouldShow: true, rootUID: itemUID };
         }
 
-        // Check if this item is part of any generated hierarchy
-        for (const hierarchy of this.generatedItemHierarchies.values()) {
-            if (hierarchy.markedSubItems.has(itemKey)) {
-                return { shouldShow: true, rootUID: this.getItemUIDByKey(itemKey) };
-            }
-        }
-
-        return { shouldShow: false };
-    }
-
-    /**
-     * Gets the UID for an item by its key
-     */
-    private getItemUIDByKey(treeItemKey: string): string | undefined {
-        const treeItem = this.findItemByKey(treeItemKey, this.rootElements);
-        return treeItem?.item?.base?.uniqueID || treeItem?.item?.uniqueID;
-    }
-
-    /**
-     * Recursively collects all descendant keys of a given item
-     */
-    private collectDescendantKeys(treeItem: BaseTestBenchTreeItem): string[] {
-        const descendantsKeys: string[] = [];
-
-        if (treeItem.children) {
-            for (const child of treeItem.children) {
-                const childKey = child.item?.base?.key || child.item?.key;
-                if (childKey) {
-                    descendantsKeys.push(childKey);
-                    descendantsKeys.push(...this.collectDescendantKeys(child));
+        if (itemUID) {
+            for (const hierarchy of this.generatedItemHierarchies.values()) {
+                if (hierarchy.markedSubItemUIDs && hierarchy.markedSubItemUIDs.has(itemUID)) {
+                    return { shouldShow: true, rootUID: itemUID };
                 }
             }
         }
-
-        return descendantsKeys;
+        return { shouldShow: false };
     }
 
     /**
@@ -253,10 +273,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                     !isHardRefresh &&
                     currentCustomRootKeyBeforeRefresh
                 ) {
-                    logger.debug(
-                        `Soft refreshing custom root: ${this.customRootItemInstance.label} (Key: ${currentCustomRootKeyBeforeRefresh})`
-                    );
-
                     const elementsByKey: Map<string, CycleNodeData> = new Map<string, CycleNodeData>();
                     rawCycleStructure.nodes.forEach((node: CycleNodeData) => {
                         if (node?.base?.key) {
@@ -345,20 +361,8 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                 this.setTreeViewStatusMessage(undefined);
             }
 
-            if (this.currentMarkedItemInfo) {
-                const item = this.findItemByKey(this.currentMarkedItemInfo.key, this.rootElements);
-                if (item) {
-                    if (this.currentMarkedItemInfo.originalContextValue === TreeItemContextValues.TEST_THEME_NODE) {
-                        item.contextValue = TreeItemContextValues.MARKED_TEST_THEME_NODE;
-                    } else if (
-                        this.currentMarkedItemInfo.originalContextValue === TreeItemContextValues.TEST_CASE_SET_NODE
-                    ) {
-                        item.contextValue = TreeItemContextValues.MARKED_TEST_CASE_SET_NODE;
-                    }
-                    item._isMarkedForImport = true;
-                    item.updateIcon();
-                    this._onDidChangeTreeData.fire(item);
-                }
+            if (operationSuccessful && this.rootElements.length > 0) {
+                this.restoreMarkingState();
             }
 
             const alreadyFired: boolean = this.isCustomRootActive && !isHardRefresh && operationSuccessful;
@@ -402,6 +406,130 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     }
 
     /**
+     * Finds item by both key and UID for.
+     * This method traverses the tree recursively, searching for an item with a specific key and UID.
+     * @param {string} treeItemKey - The key to search for.
+     * @param {string} treeItemUID - The unique identifier to search for.
+     * @return {BaseTestBenchTreeItem | null} The `BaseTestBenchTreeItem` if found, otherwise `null`.
+     */
+    private findTreeItemByKeyAndUID(
+        treeItemKey: string,
+        treeItemUID: string,
+        items: BaseTestBenchTreeItem[]
+    ): BaseTestBenchTreeItem | null {
+        for (const item of items) {
+            const itemKey = item.item?.key || item.item?.base?.key;
+            const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+
+            if (itemKey === treeItemKey && itemUID === treeItemUID) {
+                return item;
+            }
+
+            if (item.children) {
+                const foundTreeItem = this.findTreeItemByKeyAndUID(treeItemKey, treeItemUID, item.children);
+                if (foundTreeItem) {
+                    return foundTreeItem;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Restores marking state only to originally marked items
+     */
+    private restoreMarkingState(): void {
+        logger.debug("[restoreMarkingState] Starting marking state restoration");
+
+        if (!this.currentMarkedItemInfo && this.generatedItemHierarchies.size === 0) {
+            logger.trace("[restoreMarkingState] No marked items to restore");
+            return;
+        }
+
+        let restoredCount = 0;
+
+        // Restore the directly marked item
+        if (this.currentMarkedItemInfo) {
+            const directlyMarkedItem = this.findTreeItemByKeyAndUID(
+                this.currentMarkedItemInfo.key,
+                this.currentMarkedItemInfo.uniqueID,
+                this.rootElements
+            );
+
+            if (directlyMarkedItem) {
+                if (this.currentMarkedItemInfo.originalContextValue === TreeItemContextValues.TEST_THEME_NODE) {
+                    directlyMarkedItem.contextValue = TreeItemContextValues.MARKED_TEST_THEME_NODE;
+                } else if (
+                    this.currentMarkedItemInfo.originalContextValue === TreeItemContextValues.TEST_CASE_SET_NODE
+                ) {
+                    directlyMarkedItem.contextValue = TreeItemContextValues.MARKED_TEST_CASE_SET_NODE;
+                }
+                directlyMarkedItem._isMarkedForImport = true;
+                directlyMarkedItem.updateIcon();
+                restoredCount++;
+                logger.trace(`[restoreMarkingState] Restored directly marked item: ${directlyMarkedItem.label}`);
+            } else {
+                logger.warn(
+                    `[restoreMarkingState] Could not find directly marked item with key: ${this.currentMarkedItemInfo.key}, UID: ${this.currentMarkedItemInfo.uniqueID}`
+                );
+            }
+        }
+
+        // Restore marked descendant items
+        if (this.currentMarkedItemInfo) {
+            const activeRootKey: string = this.currentMarkedItemInfo.key;
+            const hierarchy: GeneratedItemHierarchy | undefined = this.generatedItemHierarchies.get(activeRootKey);
+
+            if (hierarchy) {
+                logger.trace(
+                    `[restoreMarkingState] Processing descendants for active hierarchy rooted by key: ${activeRootKey} (UID: ${this.currentMarkedItemInfo.uniqueID})`
+                );
+                for (const [descendantKey, descendantUID] of hierarchy.markedSubItemsWithUID.entries()) {
+                    const descendantTreeItem: BaseTestBenchTreeItem | null = this.findTreeItemByKeyAndUID(
+                        descendantKey,
+                        descendantUID,
+                        this.rootElements
+                    );
+                    if (descendantTreeItem) {
+                        const originalContext: string | undefined =
+                            descendantTreeItem.originalContextValue || descendantTreeItem.contextValue;
+                        if (
+                            originalContext === TreeItemContextValues.TEST_THEME_NODE ||
+                            originalContext === TreeItemContextValues.TEST_CASE_SET_NODE
+                        ) {
+                            descendantTreeItem._isMarkedForImport = true;
+                            this.updateItemContextForImport(descendantTreeItem, originalContext);
+                            descendantTreeItem.updateIcon();
+                            restoredCount++;
+                            logger.trace(
+                                `[restoreMarkingState] Restored descendant item: ${descendantTreeItem.label} (Key: ${descendantKey}, UID: ${descendantUID}) from hierarchy of rootKey: ${activeRootKey}`
+                            );
+                        }
+                    } else {
+                        logger.debug(
+                            `[restoreMarkingState] Descendant item not found for hierarchy ${activeRootKey}: Key=${descendantKey}, UID=${descendantUID}`
+                        );
+                    }
+                }
+            } else if (this.generatedItemHierarchies.size > 0) {
+                logger.warn(
+                    `[restoreMarkingState] currentMarkedItemInfo key '${activeRootKey}' not found in generatedItemHierarchies, but hierarchies map is not empty. Size: ${this.generatedItemHierarchies.size}.`
+                );
+            }
+        } else if (this.generatedItemHierarchies.size > 0) {
+            logger.warn(
+                `[restoreMarkingState] No currentMarkedItemInfo, but generatedItemHierarchies is not empty (size: ${this.generatedItemHierarchies.size}). Skipping descendant restoration.`
+            );
+        }
+
+        logger.info(`[restoreMarkingState] Restored marking for ${restoredCount} items`);
+
+        if (restoredCount > 0) {
+            this._onDidChangeTreeData.fire(undefined);
+        }
+    }
+
+    /**
      * Returns the parent of a given tree item.
      * @param {BaseTestBenchTreeItem} element The tree item.
      * @returns {BaseTestBenchTreeItem | null} The parent TestbenchTreeItem or null.
@@ -417,6 +545,9 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      * @returns {Promise<BaseTestBenchTreeItem[]>} A promise resolving to an array of TestbenchTreeItems.
      */
     async getChildren(element?: BaseTestBenchTreeItem): Promise<BaseTestBenchTreeItem[]> {
+        if (!this.isTestThemeTreeInitialized && this.initializationPromise) {
+            await this.initializationPromise;
+        }
         if (!element) {
             if (this.isCustomRootActive && this.customRootItemInstance) {
                 return [this.customRootItemInstance];
@@ -479,79 +610,140 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      */
     private async clearOldMarkedItemAndRefresh(oldMarkedTreeItemKey?: string): Promise<void> {
         const keyToClear: string | undefined = oldMarkedTreeItemKey || this.currentMarkedItemInfo?.key;
+        const uidToClear: string | undefined = oldMarkedTreeItemKey ? undefined : this.currentMarkedItemInfo?.uniqueID;
+
         if (keyToClear) {
-            const treeItem: BaseTestBenchTreeItem | null = this.findItemByKey(keyToClear, this.rootElements);
+            const treeItem: BaseTestBenchTreeItem | null = uidToClear
+                ? this.findTreeItemByKeyAndUID(keyToClear, uidToClear, this.rootElements)
+                : this.findItemByKey(keyToClear, this.rootElements);
+
             if (treeItem && treeItem.originalContextValue) {
                 this.clearItemMarking(treeItem);
             }
 
-            // Clear all items from hierarchies
             for (const hierarchy of this.generatedItemHierarchies.values()) {
-                for (const subItemKey of hierarchy.markedSubItems) {
-                    const subItem = this.findItemByKey(subItemKey, this.rootElements);
-                    if (subItem) {
-                        this.clearItemMarking(subItem);
+                if (hierarchy.markedSubItemsWithUID) {
+                    for (const [subItemKey, subItemUID] of hierarchy.markedSubItemsWithUID.entries()) {
+                        const subItem = this.findTreeItemByKeyAndUID(subItemKey, subItemUID, this.rootElements);
+                        if (subItem) {
+                            this.clearItemMarking(subItem);
+                        }
                     }
                 }
             }
-
             this._onDidChangeTreeData.fire(undefined);
         }
+    }
+
+    /**
+     * Collects all descendant UIDs of a given tree item.
+     * This method traverses the tree recursively,
+     * collecting unique identifiers (UIDs) of all descendants of a given tree item.
+     * @param {BaseTestBenchTreeItem} treeItem - The tree item whose descendants are to be collected.
+     * @return {string[]} An array of unique identifiers (UIDs) of all descendants.
+     */
+    private collectDescendantUIDs(treeItem: BaseTestBenchTreeItem): string[] {
+        const descendantsUIDs: string[] = [];
+        const visitedUIDs = new Set<string>();
+
+        function recurse(currentItem: BaseTestBenchTreeItem) {
+            if (currentItem.children) {
+                for (const child of currentItem.children) {
+                    const childUID = child.item?.base?.uniqueID || child.item?.uniqueID;
+                    if (childUID && !visitedUIDs.has(childUID)) {
+                        visitedUIDs.add(childUID);
+                        descendantsUIDs.push(childUID);
+                        recurse(child);
+                    }
+                }
+            }
+        }
+
+        recurse(treeItem);
+        return descendantsUIDs;
+    }
+
+    /**
+     * Collects descendant keys with UIDs for tracking
+     * This method traverses the tree recursively,
+     * collecting keys and UIDs of all descendants of a given tree item.
+     * @param {BaseTestBenchTreeItem} treeItem - The tree item whose descendants are to be collected.
+     * @return {Array<[string, string]>} An array of tuples, each containing a key and its corresponding UID.
+     */
+    private collectDescendantKeysWithUIDs(treeItem: BaseTestBenchTreeItem): Array<[string, string]> {
+        const descendantsKeysWithUIDs: Array<[string, string]> = [];
+
+        if (treeItem.children) {
+            for (const child of treeItem.children) {
+                const childKey = child.item?.base?.key || child.item?.key;
+                const childUID = child.item?.base?.uniqueID || child.item?.uniqueID;
+                if (childKey && childUID) {
+                    descendantsKeysWithUIDs.push([childKey, childUID]);
+                    descendantsKeysWithUIDs.push(...this.collectDescendantKeysWithUIDs(child));
+                }
+            }
+        }
+        return descendantsKeysWithUIDs;
     }
 
     /**
      * Marks a specified `BaseTestBenchTreeItem` as "generated".
      * This involves updating its `contextValue` and icon, persisting the marked state,
      * and clearing any previously marked item.
-     * @param {BaseTestBenchTreeItem} itemToMark The tree item to be marked.
+     * @param {BaseTestBenchTreeItem} treeItemToMark The tree item to be marked.
      */
-    public async markItemAsGenerated(itemToMark: BaseTestBenchTreeItem): Promise<void> {
-        if (!itemToMark || (!itemToMark.item?.key && !itemToMark.item?.base?.key)) {
+    public async markItemAsGenerated(treeItemToMark: BaseTestBenchTreeItem): Promise<void> {
+        if (!treeItemToMark || (!treeItemToMark.item?.key && !treeItemToMark.item?.base?.key)) {
             logger.warn("[TestThemeTreeDataProvider] Attempted to mark an invalid item.");
             return;
         }
 
-        const itemKey = itemToMark.item.key || itemToMark.item.base.key;
-        const itemUID = itemToMark.item?.base?.uniqueID || itemToMark.item?.uniqueID;
-        const originalContext = itemToMark.originalContextValue || itemToMark.contextValue;
+        const itemKey = (treeItemToMark.item.key || treeItemToMark.item.base.key)!;
+        const itemUID = (treeItemToMark.item?.base?.uniqueID || treeItemToMark.item?.uniqueID)!;
+        const originalContext = (treeItemToMark.originalContextValue || treeItemToMark.contextValue)!;
 
         if (!originalContext || !itemUID) {
-            logger.error(`[TestThemeTreeDataProvider] Cannot mark item ${itemKey}, required properties missing.`);
+            logger.error(
+                `[TestThemeTreeDataProvider] Cannot mark item ${itemKey}, required properties missing (UID or originalContext).`
+            );
             return;
         }
 
         await this.clearOldMarkedItemAndRefresh();
 
-        itemToMark._isMarkedForImport = true;
-        this.updateItemContextForImport(itemToMark, originalContext);
-        itemToMark.updateIcon();
+        this.generatedItemHierarchies.clear();
 
-        const descendantKeys = this.collectDescendantKeys(itemToMark);
+        treeItemToMark._isMarkedForImport = true;
+        this.updateItemContextForImport(treeItemToMark, originalContext);
+        treeItemToMark.updateIcon();
+        const descendantUIDs = this.collectDescendantUIDs(treeItemToMark);
+        const descendantKeysWithUIDs = this.collectDescendantKeysWithUIDs(treeItemToMark);
+
         const hierarchy: GeneratedItemHierarchy = {
             rootKey: itemKey,
             rootUID: itemUID,
-            markedSubItems: new Set(descendantKeys)
+            markedSubItemUIDs: new Set(descendantUIDs),
+            markedSubItemsWithUID: new Map(descendantKeysWithUIDs)
         };
-
         this.generatedItemHierarchies.set(itemKey, hierarchy);
-        this.markDescendantsRecursively(itemToMark);
+        this.markDescendantsRecursively(treeItemToMark);
+
         this.currentMarkedItemInfo = {
             key: itemKey,
             originalContextValue: originalContext,
-            isDirectlyGenerated: true
+            isDirectlyGenerated: true,
+            uniqueID: itemUID
         };
-
         await this.saveMarkedItemsToStorage();
 
         logger.info(
-            `[TestThemeTreeDataProvider] Marked item ${itemKey} and ${descendantKeys.length} descendants for import functionality.`
+            `[TestThemeTreeDataProvider] Marked item ${itemKey} (UID: ${itemUID}) and ${descendantUIDs.length} descendants for import functionality. All other persisted hierarchies cleared.`
         );
-
         this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
-     * Recursively marks descendants with import functionality.
+     * Recursively marks descendants of the given tree item.
      * Only marks TestThemeNode and TestCaseSetNode descendants.
      *
      * @param parentItem The parent tree item whose descendants are to be marked.
@@ -601,29 +793,30 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
     }
 
     /**
-     * Applies import marking to a tree item if it meets certain criteria.
-     * If the item is eligible for import and is a test theme or test case set node,
-     * it's marked for import, its context is updated, and its icon is refreshed.
-     * @param treeItem The tree item to potentially mark for import.
+     * Validates if an item was actually marked.
+     * This checks if the current marked item info matches the item key and UID,
+     * or if the item UID is part of any generated hierarchies.
+     * @param {string} itemKey - The key of the item to check.
+     * @param {string | undefined} itemUID - The unique identifier of the item, if available.
+     * @return {boolean} True if the item is marked, false otherwise.
      */
-    private applyImportMarkingToItem(treeItem: BaseTestBenchTreeItem): void {
-        const treeItemKey = treeItem.item?.base?.key || treeItem.item?.key;
-        if (!treeItemKey) {
-            return;
+    private isItemActuallyMarked(itemKey: string, itemUID: string | undefined): boolean {
+        if (
+            this.currentMarkedItemInfo &&
+            this.currentMarkedItemInfo.key === itemKey &&
+            this.currentMarkedItemInfo.uniqueID === itemUID
+        ) {
+            return true;
         }
 
-        const importInfoOfTreeItem = this.shouldShowImportFunctionality(treeItemKey);
-        if (importInfoOfTreeItem.shouldShow) {
-            const originalContext = treeItem.originalContextValue || treeItem.contextValue;
-            if (
-                originalContext === TreeItemContextValues.TEST_THEME_NODE ||
-                originalContext === TreeItemContextValues.TEST_CASE_SET_NODE
-            ) {
-                treeItem._isMarkedForImport = true;
-                this.updateItemContextForImport(treeItem, originalContext);
-                treeItem.updateIcon();
+        if (itemUID) {
+            for (const hierarchy of this.generatedItemHierarchies.values()) {
+                if (hierarchy.markedSubItemUIDs && hierarchy.markedSubItemUIDs.has(itemUID)) {
+                    return true;
+                }
             }
         }
+        return false;
     }
 
     /**
@@ -638,25 +831,36 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
      */
     public getReportRootUIDForItem(item: BaseTestBenchTreeItem): string | undefined {
         const itemKey = item.item?.base?.key || item.item?.key;
-        if (!itemKey) {
+        const itemUID = item.item?.base?.uniqueID || item.item?.uniqueID;
+
+        if (!itemKey || !itemUID) {
+            logger.trace(`[getReportRootUIDForItem] Item key or UID is missing for item: ${item.label}`);
             return undefined;
         }
 
-        // If this item was directly generated, use its own UID
+        const importInfo = this.shouldTreeItemDisplayImportButton(itemKey, itemUID);
+        if (importInfo.shouldShow) {
+            logger.trace(
+                `[getReportRootUIDForItem] Using item's own UID for targeted import: ${itemUID} (item: ${item.label})`
+            );
+            return itemUID;
+        }
+
         if (
             this.currentMarkedItemInfo &&
             this.currentMarkedItemInfo.key === itemKey &&
+            this.currentMarkedItemInfo.uniqueID === itemUID &&
             this.currentMarkedItemInfo.isDirectlyGenerated
         ) {
-            return item.item?.base?.uniqueID || item.item?.uniqueID;
+            logger.trace(
+                `[getReportRootUIDForItem] Using directly generated item's UID: ${itemUID} (item: ${item.label})`
+            );
+            return itemUID;
         }
 
-        // For sub items, use its own UID for targeted import
-        const importInfo = this.shouldShowImportFunctionality(itemKey);
-        if (importInfo.shouldShow) {
-            return item.item?.base?.uniqueID || item.item?.uniqueID;
-        }
-
+        logger.trace(
+            `[getReportRootUIDForItem] No import functionality or direct generation found for item: ${item.label}`
+        );
         return undefined;
     }
 
@@ -676,13 +880,11 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
         const itemKey = itemToClear.item.key || itemToClear.item.base.key;
         let hierarchyToRemove: string | null = null;
 
-        // Check if this is a root item
         if (this.generatedItemHierarchies.has(itemKey)) {
             hierarchyToRemove = itemKey;
         } else {
-            // Check if this is a sub item of any hierarchy
             for (const [rootKey, hierarchy] of this.generatedItemHierarchies) {
-                if (hierarchy.markedSubItems.has(itemKey)) {
+                if (hierarchy.markedSubItemUIDs.has(itemKey)) {
                     hierarchyToRemove = rootKey;
                     break;
                 }
@@ -699,6 +901,7 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
 
         logger.info(`[clearMarkedItemStatus] Cleared marked status for item ${itemKey} and its hierarchy.`);
     }
+
     /**
      * Sets the root elements of the test theme tree and refreshes the view.
      * This method is typically called when initially populating from cycle data.
@@ -914,6 +1117,9 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
                     elementsByKey,
                     eventData.rawCycleStructure.root.base.name
                 );
+
+                // Restore marking state after tree is built
+                this.restoreMarkingState();
             }
         }
 
@@ -1037,8 +1243,6 @@ export class TestThemeTreeDataProvider implements vscode.TreeDataProvider<BaseTe
             nodeData,
             parent
         );
-
-        this.applyImportMarkingToItem(treeItem);
 
         // Restore expansion state
         const itemKeyForExpansion = treeItem.item?.base?.key;
