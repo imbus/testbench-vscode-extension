@@ -351,7 +351,8 @@ export class PlayServerConnection {
 
             logger.trace("Response status of get test elements request:", testElementsResponse.status);
             if (testElementsResponse.data) {
-                logger.trace("Fetched test elements data:", testElementsResponse.data);
+                // Note: The output of testElementsResponse is large
+                // logger.trace("Fetched test elements data:", testElementsResponse.data);
                 return testElementsResponse.data;
             } else {
                 logger.error("Test elements data is null or undefined.");

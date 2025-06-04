@@ -130,7 +130,7 @@ export class TestElementTreeBuilder {
                 uniqueID: elementOwnUniqueID,
                 libraryKey,
                 jsonString: JSON.stringify(jsonTestElement, null, 2),
-                details: jsonTestElement,
+                details: jsonTestElement || {},
                 elementType: elementType,
                 directRegexMatch:
                     this.resourceRegexPatterns.length > 0

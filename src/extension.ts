@@ -147,7 +147,7 @@ function registerSafeCommand(
  * Hides the Projects tree view.
  */
 export async function hideProjectManagementTreeView(): Promise<void> {
-    if (testElementTreeView) {
+    if (projectTreeView) {
         await vscode.commands.executeCommand("projectManagementTree.removeView");
     } else {
         logger.warn("projectManagementTree instance not found, 'removeView' command not executed.");
@@ -157,7 +157,7 @@ export async function hideProjectManagementTreeView(): Promise<void> {
  * Displays the Projects tree view.
  */
 export async function displayProjectManagementTreeView(): Promise<void> {
-    if (testElementTreeView) {
+    if (projectTreeView) {
         await vscode.commands.executeCommand("projectManagementTree.focus");
     } else {
         logger.warn("projectManagementTree instance not found, 'focus' command not executed.");
@@ -167,7 +167,7 @@ export async function displayProjectManagementTreeView(): Promise<void> {
  * Hides the Test Theme tree view.
  */
 export async function hideTestThemeTreeView(): Promise<void> {
-    if (testElementTreeView) {
+    if (testThemeTreeView) {
         await vscode.commands.executeCommand("testThemeTree.removeView");
     } else {
         logger.warn("testThemeTree instance not found, 'removeView' command not executed.");
@@ -177,7 +177,7 @@ export async function hideTestThemeTreeView(): Promise<void> {
  * Displays the Test Theme tree view.
  */
 export async function displayTestThemeTreeView(): Promise<void> {
-    if (testElementTreeView) {
+    if (testThemeTreeView) {
         await vscode.commands.executeCommand("testThemeTree.focus");
     } else {
         logger.warn("testThemeTree instance not found, 'focus' command not executed.");

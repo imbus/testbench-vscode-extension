@@ -40,15 +40,15 @@ export class TestElementDataService {
 
         try {
             this.logger.debug(`[TestElementDataService] Fetching test elements for TOV key: ${tovKey}`);
-            const testElementsData = await currentConnection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
+            const rawTestElementsJsonData = await currentConnection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
 
-            if (testElementsData === null) {
+            if (rawTestElementsJsonData === null) {
                 this.logger.warn(
                     `[TestElementDataService] getTestElementsWithTovKeyUsingOldPlayServer returned null for TOV key ${tovKey}.`
                 );
                 return null;
             }
-            return Array.isArray(testElementsData) ? testElementsData : null;
+            return Array.isArray(rawTestElementsJsonData) ? rawTestElementsJsonData : null;
         } catch (error) {
             this.logger.error(`[TestElementDataService] Error fetching test elements for TOV key ${tovKey}:`, error);
             return null;

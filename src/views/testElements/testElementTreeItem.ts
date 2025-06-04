@@ -77,12 +77,15 @@ export class TestElementTreeItem extends BaseTreeItem {
             lines.push(`LibraryKey: ${this.testElementData.libraryKey}`);
         }
 
-        if (this.testElementData.details?.hasVersion !== undefined) {
-            lines.push(`Has Version: ${this.testElementData.details.hasVersion}`);
-        }
-
-        if (this.testElementData.details?.status !== undefined) {
-            lines.push(`Status: ${this.testElementData.details.status}`);
+        if (this.testElementData.details) {
+            if (this.testElementData.details.hasVersion !== undefined) {
+                lines.push(`Has Version: ${this.testElementData.details.hasVersion}`);
+            }
+            if (this.testElementData.details.status !== undefined) {
+                lines.push(`Status: ${this.testElementData.details.status}`);
+            }
+        } else {
+            lines.push("Details: Not available");
         }
 
         return new vscode.MarkdownString(lines.join("\n"));
