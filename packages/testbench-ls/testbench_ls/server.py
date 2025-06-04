@@ -32,7 +32,7 @@ from testbench2robotframework.testbench2robotframework import testbench2robotfra
 from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
-from .messages import ERROR_CONTEXT_NOT_SET, ERROR_CONTEXT_MISMATCH, ERROR_EMPTY_OUTPUT_DIRECTORY, ERROR_SUBDIVISON_MAPPING_FORMAT, ERROR_PUSH_KEYWORD, ERROR_KEYWORD_IS_LOCKED
+from .messages import COMMAND_GENERATE_TEST_SUITES, ERROR_CONTEXT_NOT_SET, ERROR_CONTEXT_MISMATCH, ERROR_EMPTY_OUTPUT_DIRECTORY, ERROR_SUBDIVISON_MAPPING_FORMAT, ERROR_PUSH_KEYWORD, ERROR_KEYWORD_IS_LOCKED, TESTBENCH_LS_CLASS_NAME
 from .testbench_api.testbench_patch import patch_interaction_details
 from .testbench_resource.resource_creation import (
     create_keyword,
@@ -58,7 +58,7 @@ from .testbench_resource.testbench_resource_model import TestBenchResourceModel
 
 class TestBenchLanguageServer(LanguageServer):
     def __init__(self):
-        super().__init__("testbench-language-server", __version__)
+        super().__init__(TESTBENCH_LS_CLASS_NAME,  __version__)
         self.server_name = None
         self.server_port = None
         self.project = None
@@ -99,10 +99,9 @@ class TestBenchLanguageServer(LanguageServer):
 
 testbench_ls = TestBenchLanguageServer()
 
-def send_notification(ls: LanguageServer, message: str):
-    """Send a notification to the client."""
+def send_error(ls: LanguageServer, message: str):
     ls.send_notification(
-        "custom/notification",
+        f"{TESTBENCH_LS_CLASS_NAME}/error",
         {"message": message},
     )
 
@@ -114,13 +113,12 @@ def parse_subdivision_mapping(ls: LanguageServer, values: list[str]) -> dict[str
             subdivision, import_value = value.split(":", 1)
             subdivision_mapping[subdivision] = import_value
         except ValueError:
-            send_notification(ls, ERROR_SUBDIVISON_MAPPING_FORMAT)
+            send_error(ls, ERROR_SUBDIVISON_MAPPING_FORMAT)
     return subdivision_mapping
 
 
-@testbench_ls.command("testbench_ls.generateTestSuites")
+@testbench_ls.command(COMMAND_GENERATE_TEST_SUITES)
 def generate_test_suites(ls: LanguageServer, kwargs):
-    """Generate Robot Framework test suites via testbench2robotframework."""
     kwargs, *_ = kwargs
     toml_settings = get_tb2robot_file_configuration(None)
     settings = {
@@ -149,7 +147,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         testbench2robotframework(report_path, toml_settings)
     else:
         if kwargs.get("output_directory") == "":
-            send_notification(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
+            send_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
             return
         testbench2robotframework(report_path, settings)
 
@@ -276,13 +274,13 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     project, tov = existing_resource.tb_tov_context
     logging.info(f"Project: {project}, TOV: {tov}")
     if not project or not tov:
-        send_notification(
+        send_error(
             ls,
             ERROR_CONTEXT_NOT_SET
         )
         return
     if project != ls.project or tov != ls.tov:
-        send_notification(ls, ERROR_CONTEXT_MISMATCH)
+        send_error(ls, ERROR_CONTEXT_MISMATCH)
         return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
@@ -482,9 +480,9 @@ def push_testbench_keyword(ls: LanguageServer, args):
         )
     except requests.exceptions.HTTPError as http_error:
         if http_error.response.status_code == 409:
-            send_notification(ls,f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
+            send_error(ls,f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
-            send_notification(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+            send_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
 
 
 # @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
