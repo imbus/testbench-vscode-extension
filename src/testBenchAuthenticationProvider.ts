@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import * as profileManager from "./connectionManager";
+import * as connectionManager from "./connectionManager";
 import { loginToServerAndGetSessionDetails, TestBenchLoginResult } from "./testBenchConnection";
 import { TestBenchConnection } from "./testBenchTypes";
 import { logger } from "./extension";
@@ -9,7 +9,7 @@ export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in
 
 interface TestBenchSessionData {
     sessionId: string; // VS Code session ID
-    profileId: string;
+    connectionId: string;
     testBenchSessionToken: string;
     accountLabel: string;
     userKey: string; // TestBench user key
@@ -68,14 +68,14 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * Creates a new TestBench authentication session.
      *
      * This method handles both interactive and silent (automatic) login attempts.
-     * It can utilize an active profile, prompt the user to select or create a new profile,
+     * It can utilize an active connection, prompt the user to select or create a new connection,
      * and manages password retrieval and storage.
      *
      * @param {string[]} scopes - An array of scopes requested for the session.
      * @param {vscode.AuthenticationProviderSessionOptions} options - Optional parameters for session creation, which can indicate if the call is for silent authentication.
      * @returns {Promise<vscode.AuthenticationSession>} A promise that resolves to a `vscode.AuthenticationSession` object upon successful login.
      * @throws Error if the login process is cancelled, fails due to incorrect credentials,
-     * missing profile information, or other issues during session creation.
+     * missing connection information, or other issues during session creation.
      */
     async createSession(
         scopes: readonly string[],
@@ -92,55 +92,57 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         }
 
         try {
-            let targetProfile: TestBenchConnection | undefined;
+            let targetConnection: TestBenchConnection | undefined;
             let passwordToUse: string | undefined;
 
-            const activeProfileIdFromManager: string | undefined = await profileManager.getActiveConnectionId(
+            const activeConnectionIdFromManager: string | undefined = await connectionManager.getActiveConnectionId(
                 this.context
             );
 
-            if (activeProfileIdFromManager) {
-                const allProfiles: profileManager.TestBenchConnection[] = await profileManager.getConnections(
+            if (activeConnectionIdFromManager) {
+                const allConnections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
                     this.context
                 );
-                targetProfile = allProfiles.find((p) => p.id === activeProfileIdFromManager);
-                if (targetProfile) {
+                targetConnection = allConnections.find((p) => p.id === activeConnectionIdFromManager);
+                if (targetConnection) {
                     logger.info(
-                        `[AuthProvider] Using active profile for ${isSilent ? "silent " : ""}login: ${targetProfile.label}`
+                        `[AuthProvider] Using active connection for ${isSilent ? "silent " : ""}login: ${targetConnection.label}`
                     );
                 } else {
                     logger.warn(
-                        `[AuthProvider] Active profile ID ${activeProfileIdFromManager} was set, but profile not found.`
+                        `[AuthProvider] Active connection ID ${activeConnectionIdFromManager} was set, but connection not found.`
                     );
-                    await profileManager.clearActiveConnection(this.context);
+                    await connectionManager.clearActiveConnection(this.context);
                     if (isSilent) {
-                        throw new Error("Active profile for auto-login not found.");
+                        throw new Error("Active connection for auto-login not found.");
                     }
                 }
             }
 
-            if (!targetProfile) {
+            if (!targetConnection) {
                 if (isSilent) {
-                    throw new Error("No active profile available for silent auto-login.");
+                    throw new Error("No active connection available for silent auto-login.");
                 }
-                logger.trace("[AuthProvider] No valid pre-selected profile, proceeding with QuickPick.");
-                const profiles = await profileManager.getConnections(this.context);
-                const quickPickItems: (vscode.QuickPickItem & { profile?: TestBenchConnection; isAddNew?: boolean })[] =
-                    [
-                        ...profiles.map((p) => ({
-                            label: p.label,
-                            description: `${p.username}@${p.serverName}:${p.portNumber}`,
-                            profile: p
-                        })),
-                        {
-                            label: "$(add) Add New TestBench Connection...",
-                            isAddNew: true,
-                            description: "Configure a new connection profile"
-                        }
-                    ];
+                logger.trace("[AuthProvider] No valid pre-selected connection, proceeding with QuickPick.");
+                const connections = await connectionManager.getConnections(this.context);
+                const quickPickItems: (vscode.QuickPickItem & {
+                    connection?: TestBenchConnection;
+                    isAddNew?: boolean;
+                })[] = [
+                    ...connections.map((p) => ({
+                        label: p.label,
+                        description: `${p.username}@${p.serverName}:${p.portNumber}`,
+                        connection: p
+                    })),
+                    {
+                        label: "$(add) Add New TestBench Connection...",
+                        isAddNew: true,
+                        description: "Configure a new connection connection"
+                    }
+                ];
 
                 const selection = await vscode.window.showQuickPick(quickPickItems, {
-                    placeHolder: "Select a TestBench Profile or Add New",
+                    placeHolder: "Select a TestBench Connection or Add New",
                     ignoreFocusOut: true
                 });
 
@@ -148,67 +150,71 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     throw new Error("TestBench login cancelled by user (QuickPick).");
                 }
 
-                if (selection.isAddNew || !selection.profile) {
-                    const newProfileDetails = await this.promptForNewProfileDetails();
-                    if (!newProfileDetails) {
-                        throw new Error("Profile creation cancelled.");
+                if (selection.isAddNew || !selection.connection) {
+                    const newConnectionDetails = await this.promptForNewConnectionDetails();
+                    if (!newConnectionDetails) {
+                        throw new Error("Connection creation cancelled.");
                     }
 
                     // Check for duplicate label if provided
-                    if (newProfileDetails.label && newProfileDetails.label.trim()) {
-                        const existingProfileByLabel: profileManager.TestBenchConnection | undefined =
-                            await profileManager.findConnectionByLabel(this.context, newProfileDetails.label.trim());
+                    if (newConnectionDetails.label && newConnectionDetails.label.trim()) {
+                        const existingConnectionByLabel: connectionManager.TestBenchConnection | undefined =
+                            await connectionManager.findConnectionByLabel(
+                                this.context,
+                                newConnectionDetails.label.trim()
+                            );
 
-                        if (existingProfileByLabel) {
+                        if (existingConnectionByLabel) {
                             throw new Error(
-                                `A profile with the label "${newProfileDetails.label}" already exists. Profile labels must be unique.`
+                                `A connection with the label "${newConnectionDetails.label}" already exists. Connection labels must be unique.`
                             );
                         }
                     }
 
-                    // Temp profile object, might not have ID yet if not saved
-                    targetProfile = {
+                    // Temp connection object, might not have ID yet if not saved
+                    targetConnection = {
                         id: "",
                         label:
-                            newProfileDetails.label || `${newProfileDetails.username}@${newProfileDetails.serverName}`,
-                        serverName: newProfileDetails.serverName,
-                        portNumber: newProfileDetails.portNumber,
-                        username: newProfileDetails.username
+                            newConnectionDetails.label ||
+                            `${newConnectionDetails.username}@${newConnectionDetails.serverName}`,
+                        serverName: newConnectionDetails.serverName,
+                        portNumber: newConnectionDetails.portNumber,
+                        username: newConnectionDetails.username
                     };
-                    passwordToUse = newProfileDetails.password;
+                    passwordToUse = newConnectionDetails.password;
 
                     const saveNewConnectionChoice: string | undefined = await vscode.window.showQuickPick(
                         ["Yes", "No"],
                         {
-                            placeHolder: `Save new connection "${targetProfile.label}"?`,
+                            placeHolder: `Save new connection "${targetConnection.label}"?`,
                             ignoreFocusOut: true
                         }
                     );
                     if (saveNewConnectionChoice === "Yes") {
-                        const savedId: string = await profileManager.saveConnection(
+                        const savedId: string = await connectionManager.saveConnection(
                             this.context,
-                            targetProfile,
+                            targetConnection,
                             passwordToUse
                         );
-                        targetProfile.id = savedId;
-                        await profileManager.setActiveConnectionId(this.context, targetProfile.id);
+                        targetConnection.id = savedId;
+                        await connectionManager.setActiveConnectionId(this.context, targetConnection.id);
                     } else if (!passwordToUse) {
-                        throw new Error("Password required for unsaved profile.");
+                        throw new Error("Password required for unsaved connection.");
                     }
                 } else {
-                    targetProfile = selection.profile;
+                    targetConnection = selection.connection;
                 }
             }
 
-            if (passwordToUse === undefined && targetProfile) {
-                passwordToUse = await profileManager.getPasswordForConnection(this.context, targetProfile.id);
+            if (passwordToUse === undefined && targetConnection) {
+                passwordToUse = await connectionManager.getPasswordForConnection(this.context, targetConnection.id);
 
                 if (passwordToUse === undefined) {
                     logger.info(
-                        `[AuthProvider] Profile "${targetProfile.label}" has no stored password. Prompting for password ${isSilent ? "(during auto-login attempt)" : ""}.`
+                        `[AuthProvider] Connection "${targetConnection.label}" has no stored password. Prompting for password ${isSilent ? "(during auto-login attempt)" : ""}.`
                     );
                     const manuallyEnteredPassword: string | undefined = await vscode.window.showInputBox({
-                        prompt: `Enter password for ${targetProfile.label}${isSilent ? " (auto-login attempt)" : ""}`,
+                        prompt: `Enter password for ${targetConnection.label}${isSilent ? " (auto-login attempt)" : ""}`,
                         password: true,
                         ignoreFocusOut: true
                     });
@@ -225,15 +231,15 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     passwordToUse = manuallyEnteredPassword;
                 } else if (passwordToUse === "") {
                     logger.warn(
-                        `[AuthProvider] Retrieved an empty string password for profile "${targetProfile.label}".`
+                        `[AuthProvider] Retrieved an empty string password for connection "${targetConnection.label}".`
                     );
                     if (isSilent) {
                         throw new Error(
-                            `Empty password stored for profile "${targetProfile.label}". Auto-login failed. Please update profile interactively.`
+                            `Empty password stored for connection "${targetConnection.label}". Auto-login failed. Please update connection interactively.`
                         );
                     }
                     const manuallyEnteredPassword: string | undefined = await vscode.window.showInputBox({
-                        prompt: `Enter password for ${targetProfile.label} (stored password was empty)`,
+                        prompt: `Enter password for ${targetConnection.label} (stored password was empty)`,
                         password: true,
                         ignoreFocusOut: true
                     });
@@ -246,54 +252,56 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     passwordToUse = manuallyEnteredPassword;
                 }
             }
-            if (!targetProfile || passwordToUse === undefined) {
-                throw new Error("Profile details or password not available for login.");
+            if (!targetConnection || passwordToUse === undefined) {
+                throw new Error("Connection details or password not available for login.");
             }
             if (passwordToUse === "") {
                 throw new Error("Cannot attempt login with an empty password.");
             }
 
-            logger.info(`[AuthProvider] Attempting login to ${targetProfile.serverName} as ${targetProfile.username}`);
+            logger.info(
+                `[AuthProvider] Attempting login to ${targetConnection.serverName} as ${targetConnection.username}`
+            );
             const loginResult: TestBenchLoginResult | null = await loginToServerAndGetSessionDetails(
-                targetProfile.serverName,
-                targetProfile.portNumber,
-                targetProfile.username,
+                targetConnection.serverName,
+                targetConnection.portNumber,
+                targetConnection.username,
                 passwordToUse
             );
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
-                await profileManager.clearActiveConnection(this.context);
+                await connectionManager.clearActiveConnection(this.context);
                 throw new Error("TestBench login failed. Check credentials or server details.");
             }
-            const initialPasswordFromStorage: string | undefined = await profileManager.getPasswordForConnection(
+            const initialPasswordFromStorage: string | undefined = await connectionManager.getPasswordForConnection(
                 this.context,
-                targetProfile.id
+                targetConnection.id
             );
             const wasPasswordManuallyEnteredOrCorrected =
                 (initialPasswordFromStorage === undefined || initialPasswordFromStorage === "") &&
                 passwordToUse &&
                 passwordToUse.length > 0;
 
-            if (wasPasswordManuallyEnteredOrCorrected && targetProfile.id) {
+            if (wasPasswordManuallyEnteredOrCorrected && targetConnection.id) {
                 const storePasswordAfterLoginChoice = await vscode.window.showQuickPick(["Yes", "No"], {
-                    placeHolder: `Save password for profile "${targetProfile.label}"?`,
+                    placeHolder: `Save password for connection "${targetConnection.label}"?`,
                     ignoreFocusOut: true
                 });
                 if (storePasswordAfterLoginChoice === "Yes") {
-                    await profileManager.saveConnection(this.context, targetProfile, passwordToUse);
+                    await connectionManager.saveConnection(this.context, targetConnection, passwordToUse);
                 }
             }
 
             const vsCodeSessionId: string = Date.now().toString() + Math.random().toString();
             const sessionData: TestBenchSessionData = {
                 sessionId: vsCodeSessionId,
-                profileId: targetProfile.id,
+                connectionId: targetConnection.id,
                 testBenchSessionToken: loginResult.sessionToken,
-                accountLabel: `${targetProfile.username}@${targetProfile.serverName}`,
+                accountLabel: `${targetConnection.username}@${targetConnection.serverName}`,
                 userKey: loginResult.userKey
             };
             this.activeSessions.set(vsCodeSessionId, sessionData);
-            await profileManager.setActiveConnectionId(this.context, targetProfile.id);
+            await connectionManager.setActiveConnectionId(this.context, targetConnection.id);
 
             this._onDidChangeSessions.fire({
                 added: [
@@ -317,7 +325,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         } catch (error: any) {
             logger.error(`[AuthProvider] createSession error${isSilent ? " (auto-login)" : ""}:`, error);
             if (!isSilent) {
-                await profileManager.clearActiveConnection(this.context);
+                await connectionManager.clearActiveConnection(this.context);
             }
             throw error;
         }
@@ -352,16 +360,16 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
     }
 
     /**
-     * Prompts the user to enter details for a new TestBench profile.
+     * Prompts the user to enter details for a new TestBench connection.
      * This includes server name, port number, username, password, and an optional label.
      * If the user cancels any of the required inputs (server name, port, username),
      * the function returns `undefined`. Otherwise, it returns an object containing
      * the entered details. The password can be an empty string. If no label is provided,
      * a default label in the format `username@serverName` is used.
-     * @returns A promise that resolves to an object with the profile details,
+     * @returns A promise that resolves to an object with the connection details,
      * or `undefined` if the user cancels the input process for required fields.
      */
-    private async promptForNewProfileDetails(): Promise<
+    private async promptForNewConnectionDetails(): Promise<
         (Omit<TestBenchConnection, "id" | "label"> & { label?: string; password?: string }) | undefined
     > {
         const serverName: string | undefined = await vscode.window.showInputBox({

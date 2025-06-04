@@ -70,13 +70,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     await this.sendConnectionToWebview();
                     break;
                 case WebviewMessageCommands.LOGIN_WITH_CONNECTION:
-                    await this.handleLoginWithConnection(message.payload.profileId);
+                    await this.handleLoginWithConnection(message.payload.connectionId);
                     break;
                 case WebviewMessageCommands.SAVE_NEW_CONNECTION:
                     await this.handleSaveNewConnection(message.payload);
                     break;
                 case WebviewMessageCommands.REQUEST_DELETE_CONFIRMATION:
-                    await this.handleRequestDeleteConfirmation(message.payload.profileId);
+                    await this.handleRequestDeleteConfirmation(message.payload.connectionId);
                     break;
                 case WebviewMessageCommands.LOGIN:
                     logger.info(
@@ -108,7 +108,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     }
                     break;
                 case WebviewMessageCommands.EDIT_CONNECTION:
-                    await this.handleEditConnection(message.payload.profileId);
+                    await this.handleEditConnection(message.payload.connectionId);
                     break;
                 case WebviewMessageCommands.UPDATE_CONNECTION:
                     await this.handleUpdateConnection(message.payload);
@@ -231,8 +231,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             );
 
             this.postMessageToWebview(WebviewMessageCommands.DISPLAY_CONNECTIONS_IN_WEBVIEW, {
-                profiles: sortedConnections,
-                editingProfileId: this.editingConnectionId
+                connections: sortedConnections,
+                editingConnectionId: this.editingConnectionId
             });
         } catch (error: any) {
             logger.error("[LoginWebView] Error fetching connections for webview:", error);
@@ -568,7 +568,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             logger.error("[LoginWebView] Error updating connection:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
-                text: `Error updating conection: ${error.message}`
+                text: `Error updating connection: ${error.message}`
             });
         }
     }
@@ -644,20 +644,20 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         font-src ${cspSource};
     `;
 
-        const connectionsHeaderIconDarkUri = this.createIconUri(webview, "profiles-dark.svg");
-        const connectionsHeaderIconLightUri = this.createIconUri(webview, "profiles-light.svg");
+        const connectionsHeaderIconDarkUri = this.createIconUri(webview, "connections-dark.svg");
+        const connectionsHeaderIconLightUri = this.createIconUri(webview, "connections-light.svg");
         const addConnectionHeaderIconDarkUri = this.createIconUri(webview, "add-dark.svg");
         const addConnectionHeaderIconLightUri = this.createIconUri(webview, "add-light.svg");
-        const editConnectionHeaderIconDarkUri = this.createIconUri(webview, "edit-profile-dark.svg");
-        const editConnectionHeaderIconLightUri = this.createIconUri(webview, "edit-profile-light.svg");
+        const editConnectionHeaderIconDarkUri = this.createIconUri(webview, "edit-connection-dark.svg");
+        const editConnectionHeaderIconLightUri = this.createIconUri(webview, "edit-connection-light.svg");
         const saveConnectionButtonIconDarkUri = this.createIconUri(webview, "save-dark.svg");
         const saveConnectionButtonIconLightUri = this.createIconUri(webview, "save-light.svg");
         const loginIconLightUri = this.createIconUri(webview, "login-webview-light.svg");
         const loginIconDarkUri = this.createIconUri(webview, "login-webview-dark.svg");
-        const editIconLightUri = this.createIconUri(webview, "edit-profile-light.svg");
-        const editIconDarkUri = this.createIconUri(webview, "edit-profile-dark.svg");
-        const deleteIconLightUri = this.createIconUri(webview, "remove-profile-light.svg");
-        const deleteIconDarkUri = this.createIconUri(webview, "remove-profile-dark.svg");
+        const editIconLightUri = this.createIconUri(webview, "edit-connection-light.svg");
+        const editIconDarkUri = this.createIconUri(webview, "edit-connection-dark.svg");
+        const deleteIconLightUri = this.createIconUri(webview, "remove-connection-light.svg");
+        const deleteIconDarkUri = this.createIconUri(webview, "remove-connection-dark.svg");
 
         return `
     <!DOCTYPE html>
@@ -666,7 +666,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         <meta charset="UTF-8"/>
         <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>TestBench Profile Management</title>
+        <title>TestBench Connection Management</title>
         <style>
             /* Css custom properties */
             :root {
@@ -728,9 +728,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             /* Theme-specific icon URLs */
             [data-vscode-theme-kind="vscode-light"],
             :root {
-                --icon-profiles-header: url(${connectionsHeaderIconLightUri});
-                --icon-add-profile-header: url(${addConnectionHeaderIconLightUri});
-                --icon-edit-profile-header: url(${editConnectionHeaderIconLightUri});
+                --icon-connections-header: url(${connectionsHeaderIconLightUri});
+                --icon-add-connection-header: url(${addConnectionHeaderIconLightUri});
+                --icon-edit-connection-header: url(${editConnectionHeaderIconLightUri});
                 --icon-save: url(${saveConnectionButtonIconLightUri});
                 --icon-login: url(${loginIconLightUri});
                 --icon-edit: url(${editIconLightUri});
@@ -740,9 +740,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             [data-vscode-theme-kind="vscode-dark"],
             [data-vscode-theme-kind="vscode-high-contrast"] {
                 --bg-body: #2d2d30;
-                --icon-profiles-header: url(${connectionsHeaderIconDarkUri});
-                --icon-add-profile-header: url(${addConnectionHeaderIconDarkUri});
-                --icon-edit-profile-header: url(${editConnectionHeaderIconDarkUri});
+                --icon-connections-header: url(${connectionsHeaderIconDarkUri});
+                --icon-add-connection-header: url(${addConnectionHeaderIconDarkUri});
+                --icon-edit-connection-header: url(${editConnectionHeaderIconDarkUri});
                 --icon-save: url(${saveConnectionButtonIconDarkUri});
                 --icon-login: url(${loginIconDarkUri});
                 --icon-edit: url(${editIconDarkUri});
@@ -784,8 +784,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 padding-right: 5px;
             }
 
-            .profile-section,
-            .add-profile-section {
+            .connection-section,
+            .add-connection-section {
                 padding: var(--spacing-2xl);
                 border: 1px solid var(--vscode-settings-dropdownBorder, var(--vscode-contrastBorder));
                 border-radius: var(--border-radius-lg);
@@ -807,7 +807,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
 
             .form-group label,
-            .profile-label {
+            .connection-label {
                 color: var(--text-primary) !important;
             }
 
@@ -820,16 +820,16 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 flex-shrink: 0;
             }
 
-            .icon-profiles-header { background-image: var(--icon-profiles-header); }
-            .icon-add-profile-header { background-image: var(--icon-add-profile-header); }
-            .icon-edit-profile-header { background-image: var(--icon-edit-profile-header); }
+            .icon-connections-header { background-image: var(--icon-connections-header); }
+            .icon-add-connection-header { background-image: var(--icon-add-connection-header); }
+            .icon-edit-connection-header { background-image: var(--icon-edit-connection-header); }
             .icon-save { background-image: var(--icon-save); }
             .icon-login { background-image: var(--icon-login); }
             .icon-edit { background-image: var(--icon-edit); }
             .icon-delete { background-image: var(--icon-delete); }
 
-            /* Remove margin for profile action icons */
-            .profile-actions .icon {
+            /* Remove margin for connection action icons */
+            .connection-actions .icon {
                 margin-right: 0;
             }
 
@@ -863,13 +863,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
 
             /* Button variants */
-            #saveProfileBtn {
+            #saveConnectionBtn {
                 background-color: var(--color-primary-bg);
                 color: var(--color-primary-fg);
                 border-color: var(--color-primary-bg);
             }
 
-            #saveProfileBtn:hover {
+            #saveConnectionBtn:hover {
                 background-color: var(--color-primary-hover);
             }
 
@@ -895,8 +895,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 opacity: 0.8;
             }
 
-            /* Profile list component */
-            #profilesList {
+            /* Connection list component */
+            #connectionsList {
                 list-style: none;
                 padding: 0;
                 max-height: min(60vh, 400px);
@@ -905,7 +905,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 transition: max-height 0.2s ease-in-out;
             }
 
-            #profilesList li {
+            #connectionsList li {
                 box-sizing: border-box;
                 padding: var(--spacing-lg) var(--spacing-xl);
                 margin-bottom: -1px;
@@ -921,15 +921,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 min-width: 0;
             }
 
-            #profilesList li:last-child {
+            #connectionsList li:last-child {
                 border-bottom: none;
             }
 
-            #profilesList li:hover {
+            #connectionsList li:hover {
                 background-color: var(--bg-list-focus);
             }
 
-            .profile-details {
+            .connection-details {
                 flex-grow: 1;
                 flex-shrink: 1;
                 margin-right: var(--spacing-lg);
@@ -937,7 +937,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 overflow: hidden;
             }
 
-            .profile-label {
+            .connection-label {
                 font-weight: bold;
                 color: var(--vscode-foreground);
                 font-size: 1.05em;
@@ -947,7 +947,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 max-width: 100%;
             }
 
-            .profile-info {
+            .connection-info {
                 font-size: 0.9em;
                 color: var(--text-secondary);
                 margin-top: 3px;
@@ -957,13 +957,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 max-width: 100%;
             }
 
-            .profile-being-edited {
+            .connection-being-edited {
                 background-color: var(--bg-list-focus);
                 border-left: 3px solid var(--vscode-gitDecoration-modifiedResourceForeground, #E1C16E);
                 padding-left: 9px;
             }
 
-            .profile-being-edited:focus-within {
+            .connection-being-edited:focus-within {
                 outline: 2px solid var(--vscode-gitDecoration-modifiedResourceForeground);
                 outline-offset: 2px;
             }
@@ -976,8 +976,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 opacity: 0.8;
             }
 
-            /* Profile actions */
-            .profile-actions {
+            /* Connection actions */
+            .connection-actions {
                 display: flex;
                 gap: var(--spacing-sm);
                 align-items: center;
@@ -985,7 +985,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 min-width: fit-content;
             }
 
-            .profile-actions button {
+            .connection-actions button {
                 padding: var(--btn-padding-sm);
                 font-size: 0.9em;
                 min-width: var(--btn-min-size);
@@ -994,14 +994,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 position: relative;
             }
 
-            .profile-actions button:disabled {
+            .connection-actions button:disabled {
                 opacity: 0.3;
                 cursor: not-allowed;
                 background-color: var(--color-secondary-bg);
                 color: var(--text-secondary);
             }
 
-            .profile-actions button:disabled:hover {
+            .connection-actions button:disabled:hover {
                 background-color: var(--color-secondary-bg);
                 opacity: 0.3;
             }
@@ -1067,11 +1067,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
 
             /* Edit mode */
-            .edit-mode .add-profile-section {
+            .edit-mode .add-connection-section {
                 border-color: var(--vscode-gitDecoration-modifiedResourceForeground);
             }
 
-            .edit-mode .add-profile-section h3 {
+            .edit-mode .add-connection-section h3 {
                 color: var(--vscode-gitDecoration-modifiedResourceForeground);
             }
 
@@ -1129,7 +1129,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 border: 1px solid var(--vscode-inputValidation-warningBorder, #warning_color_border_fallback);
             }
 
-            #noProfilesMessage {
+            #noConnectionsMessage {
                 padding: var(--spacing-2xl);
                 text-align: center;
                 color: var(--text-secondary);
@@ -1152,29 +1152,29 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     gap: var(--spacing-2xl);
                 }
 
-                .profile-section,
-                .add-profile-section {
+                .connection-section,
+                .add-connection-section {
                     padding: var(--spacing-xl);
                 }
             }
 
             @media (max-width: 300px) {
-                #profilesList li {
+                #connectionsList li {
                     padding: var(--spacing-md) var(--spacing-lg);
                 }
 
-                .profile-actions {
+                .connection-actions {
                     gap: var(--spacing-xs);
                 }
 
-                .profile-actions button {
+                .connection-actions button {
                     min-width: var(--btn-min-size-sm);
                     min-height: var(--btn-min-size-sm);
                     max-width: var(--btn-min-size-sm);
                     padding: var(--btn-padding-xs);
                 }
 
-                .profile-actions button .icon {
+                .connection-actions button .icon {
                     width: var(--icon-size-sm);
                     height: var(--icon-size-sm);
                     background-size: var(--icon-size-sm);
@@ -1198,29 +1198,29 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     <body>
         <!-- HTML content unchanged -->
         <div class="scrollable-content">
-        <section class="profile-section" aria-labelledby="profilesHeading">
-            <h2 id="profilesHeading">
-                <span class="icon icon-profiles-header"></span>
+        <section class="connection-section" aria-labelledby="connectionsHeading">
+            <h2 id="connectionsHeading">
+                <span class="icon icon-connections-header"></span>
                 TestBench Connections
             </h2>
-            <div id="profilesLoadingMessage" style="padding: 10px; text-align: center;">
+            <div id="connectionsLoadingMessage" style="padding: 10px; text-align: center;">
                 <vscode-progress-ring></vscode-progress-ring>
                 <p style="color: var(--vscode-descriptionForeground); margin-top: 5px;">Loading connections...</p>
             </div>
-            <ul id="profilesList" aria-live="polite">
+            <ul id="connectionsList" aria-live="polite">
             </ul>
-            <p id="noProfilesMessage" style="display: none;">No connections configured yet.<br>Use the form below to add one.</p>
+            <p id="noConnectionsMessage" style="display: none;">No connections configured yet.<br>Use the form below to add one.</p>
         </section>
 
-        <section class="add-profile-section" aria-labelledby="addProfileHeading">
-            <h3 id="addProfileHeading">
-                <span class="icon icon-add-profile-header"></span>
+        <section class="add-connection-section" aria-labelledby="addConnectionHeading">
+            <h3 id="addConnectionHeading">
+                <span class="icon icon-add-connection-header"></span>
                 <span id="sectionTitle">Add New Connection</span>
             </h3>
-            <form id="addProfileForm">
+            <form id="addConnectionForm">
                 <div class="form-group">
-                    <label for="profileLabel">Connection Label (e.g., "My TestBench Connection")</label>
-                    <input type="text" id="profileLabel" name="profileLabel" placeholder="Optional, e.g., Main TestBench">
+                    <label for="connectionLabel">Connection Label (e.g., "My TestBench Connection")</label>
+                    <input type="text" id="connectionLabel" name="connectionLabel" placeholder="Optional, e.g., Main TestBench">
                 </div>
                 <div class="form-group">
                     <label for="serverName">Server Hostname or IP Address</label>
@@ -1246,7 +1246,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     <label for="storePasswordCheckbox" style="margin-bottom: 0; font-weight: normal;">Store password for this connection</label>
                 </div>
                 
-                <button type="button" id="saveProfileBtn">
+                <button type="button" id="saveConnectionBtn">
                     <span class="icon icon-save"></span>                
                     <span id="saveButtonText">Save New Connection</span>
                 </button>
@@ -1266,30 +1266,30 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         // JavaScript remains exactly the same
         (function() {
             const vscode = acquireVsCodeApi();
-            const profilesListEl = document.getElementById('profilesList');
-            const noProfilesMessageEl = document.getElementById('noProfilesMessage');
-            const profilesLoadingMessageEl = document.getElementById('profilesLoadingMessage');
+            const connectionsListEl = document.getElementById('connectionsList');
+            const noConnectionsMessageEl = document.getElementById('noConnectionsMessage');
+            const connectionsLoadingMessageEl = document.getElementById('connectionsLoadingMessage');
             const messagesEl = document.getElementById('messages');
             const cancelEditBtn = document.getElementById('cancelEditBtn');
             const editActionsDiv = document.getElementById('editActions');
             const sectionTitle = document.getElementById('sectionTitle');
-            const sectionIcon = document.querySelector('.add-profile-section h3 .icon');
+            const sectionIcon = document.querySelector('.add-connection-section h3 .icon');
             const saveButtonText = document.getElementById('saveButtonText');
 
-            let currentEditingProfileId = null;
+            let currentEditingConnectionId = null;
             let isEditMode = false;
 
             // Form elements
-            const profileLabelInput = document.getElementById('profileLabel');
+            const connectionLabelInput = document.getElementById('connectionLabel');
             const serverNameInput = document.getElementById('serverName');
             const portNumberInput = document.getElementById('portNumber');
             const usernameInput = document.getElementById('username');
             const passwordInput = document.getElementById('password');
             const storePasswordCheckbox = document.getElementById('storePasswordCheckbox');
-            const saveProfileBtn = document.getElementById('saveProfileBtn');
-            const addProfileForm = document.getElementById('addProfileForm');
+            const saveConnectionBtn = document.getElementById('saveConnectionBtn');
+            const addConnectionForm = document.getElementById('addConnectionForm');
 
-            if (!profilesListEl || !saveProfileBtn || !noProfilesMessageEl || !messagesEl || !addProfileForm || !profilesLoadingMessageEl) {
+            if (!connectionsListEl || !saveConnectionBtn || !noConnectionsMessageEl || !messagesEl || !addConnectionForm || !connectionsLoadingMessageEl) {
                 console.error('[WebviewScript] Critical UI elements not found. Aborting script setup.');
                 return;
             }
@@ -1310,77 +1310,77 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 }
             }    
 
-            function renderProfiles(data) {
-                let profiles, editingProfileId;
+            function renderConnections(data) {
+                let connections, editingConnectionId;
                 if (Array.isArray(data)) {
-                    profiles = data;
-                    editingProfileId = null;
+                    connections = data;
+                    editingConnectionId = null;
                 } else {
-                    profiles = data.profiles || [];
-                    editingProfileId = data.editingProfileId || null;
+                    connections = data.connections || [];
+                    editingConnectionId = data.editingConnectionId || null;
                 }
 
-                if (profilesLoadingMessageEl) {
-                    profilesLoadingMessageEl.style.display = 'none';
+                if (connectionsLoadingMessageEl) {
+                    connectionsLoadingMessageEl.style.display = 'none';
                 }
-                profilesListEl.innerHTML = '';
+                connectionsListEl.innerHTML = '';
 
-                if (!profiles || profiles.length === 0) {
-                    if (noProfilesMessageEl) {
-                        noProfilesMessageEl.style.display = 'block';
+                if (!connections || connections.length === 0) {
+                    if (noConnectionsMessageEl) {
+                        noConnectionsMessageEl.style.display = 'block';
                     }
-                    if (profilesListEl) {
-                        profilesListEl.style.display = 'none';
+                    if (connectionsListEl) {
+                        connectionsListEl.style.display = 'none';
                     }
                 } else {
-                    if (noProfilesMessageEl) {
-                        noProfilesMessageEl.style.display = 'none';
+                    if (noConnectionsMessageEl) {
+                        noConnectionsMessageEl.style.display = 'none';
                     }
-                    if (profilesListEl) {
-                        profilesListEl.style.display = 'block';
+                    if (connectionsListEl) {
+                        connectionsListEl.style.display = 'block';
                     }
 
                     // Sort connections alphabetically by label
-                    const sortedProfiles = [...profiles].sort((a, b) => 
+                    const sortedConnections = [...connections].sort((a, b) => 
                         a.label.toLowerCase().localeCompare(b.label.toLowerCase())
                     );
                     
-                    sortedProfiles.forEach(profile => {
+                    sortedConnections.forEach(connection => {
                         const li = document.createElement('li');
-                        const isBeingEdited = editingProfileId === profile.id;
+                        const isBeingEdited = editingConnectionId === connection.id;
                         
                         // Add visual indication for connection being edited
                         if (isBeingEdited) {
-                            li.classList.add('profile-being-edited');
+                            li.classList.add('connection-being-edited');
                         }
                         
                         li.setAttribute('tabindex', '0');
-                        li.setAttribute('aria-label', \`Connection: \${profile.label}, user \${profile.username} at \${profile.serverName}\`);
+                        li.setAttribute('aria-label', \`Connection: \${connection.label}, user \${connection.username} at \${connection.serverName}\`);
 
                         li.innerHTML = \`
-                        <div class="profile-details">
-                            <div class="profile-label">
-                                \${profile.label}
+                        <div class="connection-details">
+                            <div class="connection-label">
+                                \${connection.label}
                                 \${isBeingEdited ? '<span class="editing-indicator">(editing)</span>' : ''}
                             </div>
-                            <div class="profile-info">\${profile.username}@\${profile.serverName}:\${profile.portNumber}</div>
+                            <div class="connection-info">\${connection.username}@\${connection.serverName}:\${connection.portNumber}</div>
                         </div>
-                        <div class="profile-actions">
-                            <button class="login-btn" data-profile-id="\${profile.id}" 
-                                    aria-label="Login with connection \${profile.label}" 
+                        <div class="connection-actions">
+                            <button class="login-btn" data-connection-id="\${connection.id}" 
+                                    aria-label="Login with connection \${connection.label}" 
                                     title="Login with this connection"
                                     \${isBeingEdited ? 'disabled' : ''}>
                                 <span class="icon icon-login"></span>
                             </button>
-                            <button class="edit-btn" data-profile-id="\${profile.id}" 
-                                    aria-label="Edit connection \${profile.label}" 
+                            <button class="edit-btn" data-connection-id="\${connection.id}" 
+                                    aria-label="Edit connection \${connection.label}" 
                                     title="Edit this connection"
                                     \${isBeingEdited ? 'disabled' : ''}
                                     style="\${isBeingEdited ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
                                 <span class="icon icon-edit"></span>
                             </button>
-                            <button class="delete-btn" data-profile-id="\${profile.id}" 
-                                    aria-label="Delete connection \${profile.label}" 
+                            <button class="delete-btn" data-connection-id="\${connection.id}" 
+                                    aria-label="Delete connection \${connection.label}" 
                                     title="\${isBeingEdited ? 'Cannot delete while editing' : 'Delete this connection'}"
                                     \${isBeingEdited ? 'disabled' : ''}
                                     style="\${isBeingEdited ? 'opacity: 0.3; cursor: not-allowed;' : ''}">
@@ -1388,21 +1388,21 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                             </button>
                         </div>
                         \`;
-                        profilesListEl.appendChild(li);
+                        connectionsListEl.appendChild(li);
                     });
                 }
             }
 
-            function enterEditMode(profile, hasStoredPassword) {
-                console.log('[WebviewScript] Entering edit mode for connection:', profile);
+            function enterEditMode(connection, hasStoredPassword) {
+                console.log('[WebviewScript] Entering edit mode for connection:', connection);
                 isEditMode = true;
-                currentEditingProfileId = profile.id;
+                currentEditingConnectionId = connection.id;
                 
                 // Update UI state
                 document.body.classList.add('edit-mode');
                 sectionTitle.textContent = 'Edit connection';
                 if (sectionIcon) {
-                    sectionIcon.className = 'icon icon-edit-profile-header';
+                    sectionIcon.className = 'icon icon-edit-connection-header';
                 }
                 saveButtonText.textContent = 'Save Changes';
                 
@@ -1410,31 +1410,31 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 editActionsDiv.style.display = 'block';
                 
                 // Populate form with connection data
-                profileLabelInput.value = profile.label || '';
-                serverNameInput.value = profile.serverName || '';
-                portNumberInput.value = profile.portNumber || '';
-                usernameInput.value = profile.username || '';
+                connectionLabelInput.value = connection.label || '';
+                serverNameInput.value = connection.serverName || '';
+                portNumberInput.value = connection.portNumber || '';
+                usernameInput.value = connection.username || '';
                 passwordInput.value = ''; // Don't pre-fill password for security
                 
                 // Update checkbox state
                 storePasswordCheckbox.checked = hasStoredPassword;
                 
                 // Focus on the label field
-                profileLabelInput.focus();
+                connectionLabelInput.focus();
                 
-                displayMessage('info', \`Editing connection: \${profile.label}\`);
+                displayMessage('info', \`Editing connection: \${connection.label}\`);
             }
 
             function exitEditMode() {
                 console.log('[WebviewScript] Exiting edit mode');
                 isEditMode = false;
-                currentEditingProfileId = null;
+                currentEditingConnectionId = null;
                 
                 // Reset UI state
                 document.body.classList.remove('edit-mode');
                 sectionTitle.textContent = 'Add New Connection';
                 if (sectionIcon) {
-                    sectionIcon.className = 'icon icon-add-profile-header';
+                    sectionIcon.className = 'icon icon-add-connection-header';
                 }
                 saveButtonText.textContent = 'Save New Connection';
                 
@@ -1442,12 +1442,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 editActionsDiv.style.display = 'none';
                 
                 // Clear and reset form
-                addProfileForm.reset();
+                addConnectionForm.reset();
                 portNumberInput.value = '9445'; // Reset default port
                 storePasswordCheckbox.checked = true; // Reset default
             }
 
-            function handleSaveProfile() {
+            function handleSaveConnection() {
                 if (!serverNameInput.value.trim() || !portNumberInput.value.trim() || !usernameInput.value.trim()) {
                     displayMessage('error', 'Server, Port, and Username are required fields.');
                     if (!serverNameInput.value.trim()) {serverNameInput.focus();}
@@ -1462,28 +1462,28 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 }
 
                 const payload = {
-                    label: profileLabelInput.value.trim() || \`\${usernameInput.value.trim()}@\${serverNameInput.value.trim()}\`,
+                    label: connectionLabelInput.value.trim() || \`\${usernameInput.value.trim()}@\${serverNameInput.value.trim()}\`,
                     serverName: serverNameInput.value.trim(),
                     portNumber: parseInt(portNumberInput.value, 10),
                     username: usernameInput.value.trim(),
                     password: storePasswordCheckbox.checked ? passwordInput.value : undefined
                 };
-                if (isEditMode && currentEditingProfileId) {
+                if (isEditMode && currentEditingConnectionId) {
                     // Update existing connection
-                    payload.id = currentEditingProfileId;
-                    saveProfileBtn.disabled = true;
+                    payload.id = currentEditingConnectionId;
+                    saveConnectionBtn.disabled = true;
                     saveButtonText.textContent = 'Updating...';
                     vscode.postMessage({ command: '${WebviewMessageCommands.UPDATE_CONNECTION}', payload });
                 } else {
                     // Save new connection
-                    saveProfileBtn.disabled = true;
+                    saveConnectionBtn.disabled = true;
                     saveButtonText.textContent = 'Saving...';
                     vscode.postMessage({ command: '${WebviewMessageCommands.SAVE_NEW_CONNECTION}', payload });
                 }
 
                 setTimeout(() => {
                     passwordInput.value = '';
-                    saveProfileBtn.disabled = false;
+                    saveConnectionBtn.disabled = false;
                     if (isEditMode) {
                         saveButtonText.textContent = 'Save Changes';
                     } else {
@@ -1493,18 +1493,18 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
 
             // Event listeners
-            saveProfileBtn.addEventListener('click', handleSaveProfile);
+            saveConnectionBtn.addEventListener('click', handleSaveConnection);
 
-            profilesListEl.addEventListener('click', function(event) {
+            connectionsListEl.addEventListener('click', function(event) {
                 const targetButton = event.target.closest('button');
                 if (targetButton && !targetButton.disabled) {
-                    const profileId = targetButton.dataset.profileId;
+                    const connectionId = targetButton.dataset.connectionId;
                     if (targetButton.classList.contains('login-btn')) {
-                        vscode.postMessage({ command: 'loginWithProfile', payload: { profileId } });
+                        vscode.postMessage({ command: 'loginWithConnection', payload: { connectionId: connectionId } });
                     } else if (targetButton.classList.contains('edit-btn')) {
-                        vscode.postMessage({ command: 'editProfile', payload: { profileId } });
+                        vscode.postMessage({ command: 'editConnection', payload: { connectionId: connectionId } });
                     } else if (targetButton.classList.contains('delete-btn')) {
-                        vscode.postMessage({ command: 'requestDeleteConfirmation', payload: { profileId } });
+                        vscode.postMessage({ command: 'requestDeleteConfirmation', payload: { connectionId: connectionId } });
                     }
                 } else if (targetButton && targetButton.disabled) {
                     if (targetButton.classList.contains('delete-btn')) {
@@ -1527,13 +1527,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 console.log('[WebviewScript] Message received from host:', message);
                 switch (message.command) {
                     case '${WebviewMessageCommands.DISPLAY_CONNECTIONS_IN_WEBVIEW}':
-                        renderProfiles(message.payload);
+                        renderConnections(message.payload);
                         break;
                     case '${WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE}':
                         displayMessage(message.payload.type, message.payload.text);
                         // Reset button states
-                        if (saveProfileBtn) {
-                            saveProfileBtn.disabled = false;
+                        if (saveConnectionBtn) {
+                            saveConnectionBtn.disabled = false;
                             if (isEditMode) {
                                 saveButtonText.textContent = 'Save Changes';
                             } else {
@@ -1542,7 +1542,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         }
                         break;
                     case 'enterEditMode':
-                        enterEditMode(message.payload.profile, message.payload.hasStoredPassword);
+                        enterEditMode(message.payload.connection, message.payload.hasStoredPassword);
                         break;
                     case 'exitEditMode':
                         exitEditMode();
@@ -1551,7 +1551,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             });
 
             // Tell the extension the UI is ready
-            console.log('[WebviewScript] Requesting initial connections via PROFILE_UI_LOADED.');
+            console.log('[WebviewScript] Requesting initial connections via CONNECTION_UI_LOADED.');
             vscode.postMessage({ command: '${WebviewMessageCommands.CONNECTION_UI_LOADED}' });
             messagesEl.classList.add('hidden');
         }());
@@ -1559,6 +1559,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     </body>
     </html>`;
     }
+
     /**
      * Generates the HTML content for a webview page indicating that the user is already logged in.
      * This page displays a success message, the TestBench logo, and a sign-out button.
