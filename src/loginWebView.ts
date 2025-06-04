@@ -7,12 +7,12 @@
 import * as vscode from "vscode";
 import { logger, connection } from "./extension";
 import { WebviewMessageCommands, allExtensionCommands } from "./constants";
-import * as profileManager from "./profileManager";
-import { TestBenchProfile } from "./testBenchTypes";
+import * as connectionManager from "./connectionManager";
+import { TestBenchConnection } from "./testBenchTypes";
 import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
 import { PlayServerConnection } from "./testBenchConnection";
 
-interface EditingProfileData extends TestBenchProfile {
+interface EditingConnectionData extends TestBenchConnection {
     password?: string;
 }
 
@@ -23,7 +23,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewId: string = "testbenchExtension.webView";
     private currentWebview?: vscode.WebviewView;
     private _messageListenerDisposable: vscode.Disposable | undefined;
-    private editingProfileId: string | null = null;
+    private editingConnectionId: string | null = null;
 
     /**
      * Constructs a new LoginWebViewProvider.
@@ -66,14 +66,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         this._messageListenerDisposable = webviewView.webview.onDidReceiveMessage(async (message) => {
             logger.trace(`[LoginWebView] Received message from webview: ${message.command}`);
             switch (message.command) {
-                case WebviewMessageCommands.PROFILE_UI_LOADED:
-                    await this.sendProfilesToWebview();
+                case WebviewMessageCommands.CONNECTION_UI_LOADED:
+                    await this.sendConnectionToWebview();
                     break;
-                case WebviewMessageCommands.LOGIN_WITH_PROFILE:
-                    await this.handleLoginWithProfile(message.payload.profileId);
+                case WebviewMessageCommands.LOGIN_WITH_CONNECTION:
+                    await this.handleLoginWithConnection(message.payload.profileId);
                     break;
-                case WebviewMessageCommands.SAVE_NEW_PROFILE:
-                    await this.handleSaveNewProfile(message.payload);
+                case WebviewMessageCommands.SAVE_NEW_CONNECTION:
+                    await this.handleSaveNewConnection(message.payload);
                     break;
                 case WebviewMessageCommands.REQUEST_DELETE_CONFIRMATION:
                     await this.handleRequestDeleteConfirmation(message.payload.profileId);
@@ -107,14 +107,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         });
                     }
                     break;
-                case WebviewMessageCommands.EDIT_PROFILE:
-                    await this.handleEditProfile(message.payload.profileId);
+                case WebviewMessageCommands.EDIT_CONNECTION:
+                    await this.handleEditConnection(message.payload.profileId);
                     break;
-                case WebviewMessageCommands.UPDATE_PROFILE:
-                    await this.handleUpdateProfile(message.payload);
+                case WebviewMessageCommands.UPDATE_CONNECTION:
+                    await this.handleUpdateConnection(message.payload);
                     break;
-                case WebviewMessageCommands.CANCEL_EDIT_PROFILE:
-                    await this.handleCancelEditProfile();
+                case WebviewMessageCommands.CANCEL_EDIT_CONNECTION:
+                    await this.handleCancelEditConnection();
                     break;
                 default:
                     logger.warn(`[LoginWebView] Unknown command from webview: ${message.command}`);
@@ -137,7 +137,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 if (this._messageListenerDisposable) {
                     this._messageListenerDisposable.dispose();
                 }
-                logger.trace("[LoginWebView] Profile Management webview disposed.");
+                logger.trace("[LoginWebView] Connection Management webview disposed.");
             },
             null,
             this.extensionContext?.subscriptions
@@ -145,56 +145,58 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Handles the request to confirm the deletion of a user profile.
+     * Handles the request to confirm the deletion of a user connection.
      * It prompts the user with a confirmation dialog before proceeding with the deletion.
      *
-     * @param {string} profileId - The ID of the profile to be considered for deletion.
+     * @param {string} connectionId - The ID of the connection to be considered for deletion.
      * @returns A promise that resolves when the confirmation process is complete.
      */
-    private async handleRequestDeleteConfirmation(profileId: string): Promise<void> {
-        logger.info(`[LoginWebView] Received request for delete confirmation for profile ID: ${profileId}`);
-        // Prevent deletion of profile currently being edited
-        if (this.editingProfileId === profileId) {
+    private async handleRequestDeleteConfirmation(connectionId: string): Promise<void> {
+        logger.info(`[LoginWebView] Received request for delete confirmation for connection ID: ${connectionId}`);
+        // Prevent deletion of connection currently being edited
+        if (this.editingConnectionId === connectionId) {
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "warning",
-                text: "Cannot delete profile while editing it. Please save or cancel your changes first."
+                text: "Cannot delete connection while editing it. Please save or cancel your changes first."
             });
-            logger.warn(`[LoginWebView] Attempted to delete profile ${profileId} while it's being edited.`);
+            logger.warn(`[LoginWebView] Attempted to delete connection ${connectionId} while it's being edited.`);
             return;
         }
 
-        if (!profileId) {
-            logger.warn("[LoginWebView] No profileId provided for delete confirmation.");
+        if (!connectionId) {
+            logger.warn("[LoginWebView] No connectionId provided for delete confirmation.");
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
-                text: "Cannot delete: Profile ID missing."
+                text: "Cannot delete: Connection ID missing."
             });
             return;
         }
 
-        const profileToDelete: profileManager.TestBenchProfile | undefined = (
-            await profileManager.getProfiles(this.extensionContext)
-        ).find((p) => p.id === profileId);
-        if (!profileToDelete) {
+        const connectionToDelete: connectionManager.TestBenchConnection | undefined = (
+            await connectionManager.getConnections(this.extensionContext)
+        ).find((p) => p.id === connectionId);
+        if (!connectionToDelete) {
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
-                text: `Profile not found for deletion.`
+                text: `Connection not found for deletion.`
             });
             return;
         }
 
         const confirmation = await vscode.window.showWarningMessage(
-            `Are you sure you want to delete the profile "${profileToDelete.label}"?`,
+            `Are you sure you want to delete the connection "${connectionToDelete.label}"?`,
             { modal: true },
             "Delete",
             "No"
         );
 
         if (confirmation === "Delete") {
-            logger.info(`[LoginWebView] User confirmed deletion for profile ID: ${profileId}. Proceeding with delete.`);
-            await this.handleDeleteProfile(profileId);
+            logger.info(
+                `[LoginWebView] User confirmed deletion for connection ID: ${connectionId}. Proceeding with delete.`
+            );
+            await this.handleDeleteConnection(connectionId);
         } else {
-            logger.info(`[LoginWebView] User cancelled deletion for profile ID: ${profileId}.`);
+            logger.info(`[LoginWebView] User cancelled deletion for connection ID: ${connectionId}.`);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "info",
                 text: "Delete operation cancelled."
@@ -214,61 +216,67 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Asynchronously fetches user profiles and sends them to the webview sorted alphabetically by label.
-     * Send the editing state to the webview if a profile is being edited.
-     * If successful, it posts the profiles for display.
+     * Asynchronously fetches user connections them to the webview sorted alphabetically by label.
+     * Send the editing state to the webview if a connection edited.
+     * If successful, it posts the connections for display.
      * If an error occurs, it logs the error and posts an error message to the webview.
      */
-    private async sendProfilesToWebview(): Promise<void> {
+    private async sendConnectionToWebview(): Promise<void> {
         try {
-            const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
-            const sortedProfiles = profiles.sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase()));
+            const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
+                this.extensionContext
+            );
+            const sortedConnections = connections.sort((a, b) =>
+                a.label.toLowerCase().localeCompare(b.label.toLowerCase())
+            );
 
-            this.postMessageToWebview(WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW, {
-                profiles: sortedProfiles,
-                editingProfileId: this.editingProfileId
+            this.postMessageToWebview(WebviewMessageCommands.DISPLAY_CONNECTIONS_IN_WEBVIEW, {
+                profiles: sortedConnections,
+                editingProfileId: this.editingConnectionId
             });
         } catch (error: any) {
-            logger.error("[LoginWebView] Error fetching profiles for webview:", error);
+            logger.error("[LoginWebView] Error fetching connections for webview:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
-                text: "Error loading profiles."
+                text: "Error loading connections."
             });
         }
     }
 
     /**
-     * Handles the login process using a specified profile ID.
-     * It retrieves the profile, sets it as active, and then initiates
+     * Handles the login process using a specified connection ID.
+     * It retrieves the connection, sets it as active, and then initiates
      * the VS Code authentication flow.
      *
-     * @param {string} profileId The ID of the profile to use for login.
+     * @param {string} connectionId The ID of the connection to use for login.
      * @returns A promise that resolves when the login attempt is complete.
      */
-    private async handleLoginWithProfile(profileId: string): Promise<void> {
-        logger.info(`[LoginWebView] Attempting login with profile ID: ${profileId}`);
+    private async handleLoginWithConnection(connectionId: string): Promise<void> {
+        logger.info(`[LoginWebView] Attempting login with connection ID: ${connectionId}`);
         try {
-            const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
-            const selectedProfile: profileManager.TestBenchProfile | undefined = profiles.find(
-                (p) => p.id === profileId
+            const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
+                this.extensionContext
+            );
+            const selectedConnection: connectionManager.TestBenchConnection | undefined = connections.find(
+                (p) => p.id === connectionId
             );
 
-            if (!selectedProfile) {
+            if (!selectedConnection) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
-                    text: `Profile with ID ${profileId} not found.`
+                    text: `Connection with ID ${connectionId} not found.`
                 });
                 return;
             }
 
-            await profileManager.setActiveProfileId(this.extensionContext, selectedProfile.id);
+            await connectionManager.setActiveConnectionId(this.extensionContext, selectedConnection.id);
 
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
                 createIfNone: true
             });
 
             if (session) {
-                logger.info(`[LoginWebView] Login successful via provider for profile: ${selectedProfile.label}`);
+                logger.info(`[LoginWebView] Login successful via provider for connection: ${selectedConnection.label}`);
                 // The onDidChangeSessions listener in extension.ts handles UI updates
             } else {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -277,8 +285,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 });
             }
         } catch (error: any) {
-            logger.error(`[LoginWebView] Login failed for profile ${profileId}:`, error);
-            await profileManager.clearActiveProfile(this.extensionContext);
+            logger.error(`[LoginWebView] Login failed for connection ${connectionId}:`, error);
+            await connectionManager.clearActiveConnection(this.extensionContext);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Login Error: ${error.message}`
@@ -287,22 +295,22 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Handles the saving of a new user profile.
-     * It validates the necessary profile data, attempts to save it,
+     * Handles the saving of a new user connection.
+     * It validates the necessary connection data, attempts to save it,
      * and then sends a status message (success or error) back to the webview.
-     * If successful, it also refreshes the list of profiles in the webview.
+     * If successful, it also refreshes the list of connections in the webview.
      *
-     * @param profileData - An object containing the details of the new profile to be saved.
+     * @param connectionData - An object containing the details of the new connection to be saved.
      *                      This includes server name, port number, username, and an optional password and label.
      *                      The 'id' property is omitted as it will be generated upon saving.
      * @returns A promise that resolves when the save operation (including webview updates) is complete.
      */
-    private async handleSaveNewProfile(
-        profileData: Omit<TestBenchProfile, "id"> & { password?: string }
+    private async handleSaveNewConnection(
+        connectionData: Omit<TestBenchConnection, "id"> & { password?: string }
     ): Promise<void> {
-        logger.info(`[LoginWebView] Attempting to save new connection: ${profileData.label || "No Label"}`);
+        logger.info(`[LoginWebView] Attempting to save new connection: ${connectionData.label || "No Label"}`);
         try {
-            if (!profileData.serverName || !profileData.portNumber || !profileData.username) {
+            if (!connectionData.serverName || !connectionData.portNumber || !connectionData.username) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
                     text: "Server, Port, and Username are required."
@@ -311,239 +319,256 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
 
             // Check for duplicate label
-            if (profileData.label && profileData.label.trim()) {
-                const existingProfileByLabel: profileManager.TestBenchProfile | undefined =
-                    await profileManager.findProfileByLabel(this.extensionContext, profileData.label.trim());
+            if (connectionData.label && connectionData.label.trim()) {
+                const existingConnectionByLabel: connectionManager.TestBenchConnection | undefined =
+                    await connectionManager.findConnectionByLabel(this.extensionContext, connectionData.label.trim());
 
-                if (existingProfileByLabel) {
+                if (existingConnectionByLabel) {
                     this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                         type: "warning",
-                        text: `A profile with the label "${profileData.label}" already exists. Profile labels must be unique.`
+                        text: `A connection with the label "${connectionData.label}" already exists. Connection labels must be unique.`
                     });
                     logger.warn(
-                        `[LoginWebView] Attempt to save profile with duplicate label prevented: ${profileData.label}`
+                        `[LoginWebView] Attempt to save connection with duplicate label prevented: ${connectionData.label}`
                     );
                     return;
                 }
             }
 
-            // Don't include password check when comparing existing profiles
-            const existingProfile: profileManager.TestBenchProfile | undefined =
-                await profileManager.findProfileByCredentials(
+            // Don't include password check when comparing existing connections
+            const existingConnection: connectionManager.TestBenchConnection | undefined =
+                await connectionManager.findConnectionByCredentials(
                     this.extensionContext,
-                    profileData.serverName,
-                    profileData.portNumber,
-                    profileData.username
+                    connectionData.serverName,
+                    connectionData.portNumber,
+                    connectionData.username
                 );
 
-            if (existingProfile) {
+            if (existingConnection) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "warning",
-                    text: `A profile with the same server, port, and username already exists: "${existingProfile.label}". Not saving duplicate.`
+                    text: `A connection with the same server, port, and username already exists: "${existingConnection.label}". Not saving duplicate.`
                 });
                 logger.warn(
-                    `[LoginWebView] Attempt to save duplicate profile (server/user match) prevented for: ${existingProfile.label}`
+                    `[LoginWebView] Attempt to save duplicate connection (server/user match) prevented for: ${existingConnection.label}`
                 );
                 return;
             }
 
-            const newProfileId = await profileManager.saveProfile(
+            const newConnectionId = await connectionManager.saveConnection(
                 this.extensionContext,
-                profileData,
-                profileData.password
+                connectionData,
+                connectionData.password
             );
-            logger.info(`[LoginWebView] New profile saved with ID: ${newProfileId}`);
+            logger.info(`[LoginWebView] New connection saved with ID: ${newConnectionId}`);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "success",
-                text: `Profile "${profileData.label || newProfileId}" saved.`
+                text: `Connection "${connectionData.label || newConnectionId}" saved.`
             });
-            await this.sendProfilesToWebview();
+            await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error("[LoginWebView] Error saving new profile:", error);
+            logger.error("[LoginWebView] Error saving new connection:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
-                text: `Error saving profile: ${error.message}`
+                text: `Error saving connection: ${error.message}`
             });
         }
     }
 
     /**
-     * Handles the deletion of a user profile.
-     * It attempts to find and delete a profile based on the provided ID.
-     * Sends success or error messages to the webview and refreshes the profile list upon successful deletion.
+     * Handles the deletion of a user connection.
+     * It attempts to find and delete a connection based on the provided ID.
+     * Sends success or error messages to the webview and refreshes the connection list upon successful deletion.
      *
-     * @param {string} profileId The ID of the profile to delete.
+     * @param {string} connectionId The ID of the connection to delete.
      * @returns A promise that resolves when the deletion process is complete.
      */
-    private async handleDeleteProfile(profileId: string): Promise<void> {
-        logger.info(`[LoginWebView] Attempting to delete profile ID: ${profileId}`);
+    private async handleDeleteConnection(connectionId: string): Promise<void> {
+        logger.info(`[LoginWebView] Attempting to delete connection ID: ${connectionId}`);
         try {
-            const profileToDelete: profileManager.TestBenchProfile | undefined = (
-                await profileManager.getProfiles(this.extensionContext)
-            ).find((p) => p.id === profileId);
-            if (!profileToDelete) {
+            const connectionToDelete: connectionManager.TestBenchConnection | undefined = (
+                await connectionManager.getConnections(this.extensionContext)
+            ).find((p) => p.id === connectionId);
+            if (!connectionToDelete) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
-                    text: `Profile not found for deletion.`
+                    text: `Connection not found for deletion.`
                 });
                 return;
             }
 
-            await profileManager.deleteProfile(this.extensionContext, profileId);
-            logger.info(`[LoginWebView] Profile deleted: ${profileId}`);
+            await connectionManager.deleteConnection(this.extensionContext, connectionId);
+            logger.info(`[LoginWebView] Connection deleted: ${connectionId}`);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "success",
-                text: `Profile "${profileToDelete.label}" deleted.`
+                text: `Connection "${connectionToDelete.label}" deleted.`
             });
-            await this.sendProfilesToWebview();
+            await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error(`[LoginWebView] Error deleting profile ${profileId}:`, error);
+            logger.error(`[LoginWebView] Error deleting connection ${connectionId}:`, error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
-                text: `Error deleting profile: ${error.message}`
+                text: `Error deleting connection: ${error.message}`
             });
         }
     }
 
     /**
-     * Handles entering edit mode for a specific profile.
-     * Loads the profile data into the form and switches the UI to edit mode.
+     * Handles entering edit mode for a specific connection.
+     * Loads the connection data into the form and switches the UI to edit mode.
      *
-     * @param {string} profileId - The ID of the profile to edit.
+     * @param {string} connectionId - The ID of the connection to edit.
      * @returns A promise that resolves when the edit mode is set up.
      */
-    private async handleEditProfile(profileId: string): Promise<void> {
-        logger.info(`[LoginWebView] Entering edit mode for profile ID: ${profileId}`);
+    private async handleEditConnection(connectionId: string): Promise<void> {
+        logger.info(`[LoginWebView] Entering edit mode for connection ID: ${connectionId}`);
         try {
-            const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
-            const profileToEdit: profileManager.TestBenchProfile | undefined = profiles.find((p) => p.id === profileId);
+            const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
+                this.extensionContext
+            );
+            const connectionToEdit: connectionManager.TestBenchConnection | undefined = connections.find(
+                (p) => p.id === connectionId
+            );
 
-            if (!profileToEdit) {
+            if (!connectionToEdit) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
-                    text: `Profile not found for editing.`
+                    text: `Connection not found for editing.`
                 });
                 return;
             }
 
-            const storedPassword = await profileManager.getPasswordForProfile(this.extensionContext, profileId);
-            this.editingProfileId = profileId;
+            const storedPassword = await connectionManager.getPasswordForConnection(
+                this.extensionContext,
+                connectionId
+            );
+            this.editingConnectionId = connectionId;
 
-            // Send edit mode data and refresh profiles to update UI state
+            // Send edit mode data and refresh connections to update UI state
             this.postMessageToWebview("enterEditMode", {
-                profile: profileToEdit,
+                connection: connectionToEdit,
                 hasStoredPassword: !!storedPassword
             });
 
-            // Refresh profiles to disable delete button for the editing connection
-            await this.sendProfilesToWebview();
+            // Refresh connections to disable delete button for the editing connection
+            await this.sendConnectionToWebview();
 
-            logger.info(`[LoginWebView] Edit mode activated for profile: ${profileToEdit.label}`);
+            logger.info(`[LoginWebView] Edit mode activated for connection: ${connectionToEdit.label}`);
         } catch (error: any) {
-            logger.error(`[LoginWebView] Error entering edit mode for profile ${profileId}:`, error);
+            logger.error(`[LoginWebView] Error entering edit mode for connection ${connectionId}:`, error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
-                text: `Error loading profile for editing: ${error.message}`
+                text: `Error loading connection for editing: ${error.message}`
             });
         }
     }
 
     /**
-     * Handles updating an existing profile with new data.
-     * Validates the data and saves the updated profile.
+     * Handles updating an existing connection with new data.
+     * Validates the data and saves the updated connection.
      *
-     * @param payload - An object containing the updated profile data including the profile ID.
+     * @param payload - An object containing the updated connection data including the connection ID.
      * @returns A promise that resolves when the update operation is complete.
      */
-    private async handleUpdateProfile(payload: EditingProfileData): Promise<void> {
-        logger.info(`[LoginWebView] Attempting to update profile: ${payload.label || payload.id}`);
+    private async handleUpdateConnection(payload: EditingConnectionData): Promise<void> {
+        logger.info(`[LoginWebView] Attempting to update connection: ${payload.label || payload.id}`);
 
         try {
             if (!payload.id || !payload.serverName || !payload.portNumber || !payload.username) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
-                    text: "Profile ID, Server, Port, and Username are required."
+                    text: "Connection ID, Server, Port, and Username are required."
                 });
                 return;
             }
 
-            // Check for duplicate label (excluding the current profile being edited)
+            // Check for duplicate label (excluding the current connection being edited)
             if (payload.label && payload.label.trim()) {
-                const existingProfileByLabel: profileManager.TestBenchProfile | undefined =
-                    await profileManager.findProfileByLabel(this.extensionContext, payload.label.trim(), payload.id);
+                const existingConnectionByLabel: connectionManager.TestBenchConnection | undefined =
+                    await connectionManager.findConnectionByLabel(
+                        this.extensionContext,
+                        payload.label.trim(),
+                        payload.id
+                    );
 
-                if (existingProfileByLabel) {
+                if (existingConnectionByLabel) {
                     this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                         type: "warning",
-                        text: `Another profile with the label "${payload.label}" already exists. Profile labels must be unique.`
+                        text: `Another connection with the label "${payload.label}" already exists. Connection labels must be unique.`
                     });
                     logger.warn(
-                        `[LoginWebView] Attempt to update to duplicate label prevented. Existing profile: ${existingProfileByLabel.label}`
+                        `[LoginWebView] Attempt to update to duplicate label prevented. Existing connection: ${existingConnectionByLabel.label}`
                     );
                     return;
                 }
             }
 
-            // Check if another profile already exists with the same server/port/username combination
-            // (excluding the current profile being edited)
-            const existingProfile: profileManager.TestBenchProfile | undefined =
-                await profileManager.findProfileByCredentials(
+            // Check if another connection already exists with the same server/port/username combination
+            // (excluding the current connection being edited)
+            const existingConnection: connectionManager.TestBenchConnection | undefined =
+                await connectionManager.findConnectionByCredentials(
                     this.extensionContext,
                     payload.serverName,
                     payload.portNumber,
                     payload.username
                 );
 
-            if (existingProfile && existingProfile.id !== payload.id) {
+            if (existingConnection && existingConnection.id !== payload.id) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "warning",
-                    text: `Another profile with the same server, port, and username already exists: "${existingProfile.label}". Cannot save duplicate.`
+                    text: `Another connection with the same server, port, and username already exists: "${existingConnection.label}". Cannot save duplicate.`
                 });
                 logger.warn(
-                    `[LoginWebView] Attempt to update to duplicate profile credentials prevented. Existing profile: ${existingProfile.label}`
+                    `[LoginWebView] Attempt to update to duplicate connection credentials prevented. Existing connection: ${existingConnection.label}`
                 );
                 return;
             }
 
             // Show confirmation dialog after validations
-            const profiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.extensionContext);
-            const originalUneditedProfile: profileManager.TestBenchProfile | undefined = profiles.find(
+            const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
+                this.extensionContext
+            );
+            const originalUneditedConnection: connectionManager.TestBenchConnection | undefined = connections.find(
                 (p) => p.id === payload.id
             );
-            const originalUneditedLabel = originalUneditedProfile?.label || payload.id;
+            const originalUneditedLabel = originalUneditedConnection?.label || payload.id;
 
             const confirmation = await vscode.window.showWarningMessage(
-                `Are you sure you want to overwrite the profile "${originalUneditedLabel}"?`,
+                `Are you sure you want to overwrite the connection "${originalUneditedLabel}"?`,
                 { modal: true },
                 "Save Changes",
                 "No"
             );
 
             if (confirmation !== "Save Changes") {
-                logger.info(`[LoginWebView] User cancelled update for profile: ${payload.label}`);
+                logger.info(`[LoginWebView] User cancelled update for connection: ${payload.label}`);
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "info",
-                    text: "Profile update cancelled."
+                    text: "Connection update cancelled."
                 });
                 return;
             }
 
-            const updatedProfileId = await profileManager.saveProfile(this.extensionContext, payload, payload.password);
-            logger.info(`[LoginWebView] Profile updated successfully with ID: ${updatedProfileId}`);
+            const updatedConnectionId = await connectionManager.saveConnection(
+                this.extensionContext,
+                payload,
+                payload.password
+            );
+            logger.info(`[LoginWebView] Connection updated successfully with ID: ${updatedConnectionId}`);
 
-            this.editingProfileId = null;
+            this.editingConnectionId = null;
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "success",
-                text: `Profile "${payload.label}" updated successfully.`
+                text: `Connection "${payload.label}" updated successfully.`
             });
 
             this.postMessageToWebview("exitEditMode", {});
-            await this.sendProfilesToWebview();
+            await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error("[LoginWebView] Error updating profile:", error);
+            logger.error("[LoginWebView] Error updating connection:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
-                text: `Error updating profile: ${error.message}`
+                text: `Error updating conection: ${error.message}`
             });
         }
     }
@@ -553,9 +578,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      *
      * @returns A promise that resolves when the cancel operation is complete.
      */
-    private async handleCancelEditProfile(): Promise<void> {
-        logger.info(`[LoginWebView] Cancelling edit mode for profile ID: ${this.editingProfileId}`);
-        this.editingProfileId = null;
+    private async handleCancelEditConnection(): Promise<void> {
+        logger.info(`[LoginWebView] Cancelling edit mode for connection ID: ${this.editingConnectionId}`);
+        this.editingConnectionId = null;
 
         this.postMessageToWebview("exitEditMode", {});
         this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -563,8 +588,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             text: "Edit cancelled."
         });
 
-        // Refresh profiles to re-enable delete button
-        await this.sendProfilesToWebview();
+        // Refresh connections to re-enable delete button
+        await this.sendConnectionToWebview();
 
         logger.info("[LoginWebView] Edit mode cancelled and form reset.");
     }
@@ -578,7 +603,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             if (isSignedIn) {
                 this.currentWebview.webview.html = this.getAlreadyLoggedInHtmlPage(this.currentWebview.webview);
             } else {
-                this.currentWebview.webview.html = this.getProfileManagementHtmlPage(this.currentWebview.webview);
+                this.currentWebview.webview.html = this.getConnectionManagementHtmlPage(this.currentWebview.webview);
             }
         }
     }
@@ -601,14 +626,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Generates the HTML content for the profile management webview.
-     * This includes the UI for displaying, adding, and managing connection profiles.
+     * Generates the HTML content for the connection management webview.
+     * This includes the UI for displaying, adding, and managing connection connections.
      *
      * @param {vscode.Webview} webview The VS Code webview instance to which this HTML will be rendered.
      *                Used to generate Content Security Policy nonces and URIs.
-     * @returns {string} A string containing the complete HTML for the profile management page.
+     * @returns {string} A string containing the complete HTML for the connection management page.
      */
-    private getProfileManagementHtmlPage(webview: vscode.Webview): string {
+    private getConnectionManagementHtmlPage(webview: vscode.Webview): string {
         const nonce: string = getNonce();
         const cspSource: string = webview.cspSource;
         const contentSecurityPolicy: string = `
@@ -619,14 +644,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         font-src ${cspSource};
     `;
 
-        const profilesHeaderIconDarkUri = this.createIconUri(webview, "profiles-dark.svg");
-        const profilesHeaderIconLightUri = this.createIconUri(webview, "profiles-light.svg");
-        const addProfileHeaderIconDarkUri = this.createIconUri(webview, "add-dark.svg");
-        const addProfileHeaderIconLightUri = this.createIconUri(webview, "add-light.svg");
-        const editProfileHeaderIconDarkUri = this.createIconUri(webview, "edit-profile-dark.svg");
-        const editProfileHeaderIconLightUri = this.createIconUri(webview, "edit-profile-light.svg");
-        const saveProfileButtonIconDarkUri = this.createIconUri(webview, "save-dark.svg");
-        const saveProfileButtonIconLightUri = this.createIconUri(webview, "save-light.svg");
+        const connectionsHeaderIconDarkUri = this.createIconUri(webview, "profiles-dark.svg");
+        const connectionsHeaderIconLightUri = this.createIconUri(webview, "profiles-light.svg");
+        const addConnectionHeaderIconDarkUri = this.createIconUri(webview, "add-dark.svg");
+        const addConnectionHeaderIconLightUri = this.createIconUri(webview, "add-light.svg");
+        const editConnectionHeaderIconDarkUri = this.createIconUri(webview, "edit-profile-dark.svg");
+        const editConnectionHeaderIconLightUri = this.createIconUri(webview, "edit-profile-light.svg");
+        const saveConnectionButtonIconDarkUri = this.createIconUri(webview, "save-dark.svg");
+        const saveConnectionButtonIconLightUri = this.createIconUri(webview, "save-light.svg");
         const loginIconLightUri = this.createIconUri(webview, "login-webview-light.svg");
         const loginIconDarkUri = this.createIconUri(webview, "login-webview-dark.svg");
         const editIconLightUri = this.createIconUri(webview, "edit-profile-light.svg");
@@ -703,10 +728,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             /* Theme-specific icon URLs */
             [data-vscode-theme-kind="vscode-light"],
             :root {
-                --icon-profiles-header: url(${profilesHeaderIconLightUri});
-                --icon-add-profile-header: url(${addProfileHeaderIconLightUri});
-                --icon-edit-profile-header: url(${editProfileHeaderIconLightUri});
-                --icon-save: url(${saveProfileButtonIconLightUri});
+                --icon-profiles-header: url(${connectionsHeaderIconLightUri});
+                --icon-add-profile-header: url(${addConnectionHeaderIconLightUri});
+                --icon-edit-profile-header: url(${editConnectionHeaderIconLightUri});
+                --icon-save: url(${saveConnectionButtonIconLightUri});
                 --icon-login: url(${loginIconLightUri});
                 --icon-edit: url(${editIconLightUri});
                 --icon-delete: url(${deleteIconLightUri});
@@ -715,10 +740,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             [data-vscode-theme-kind="vscode-dark"],
             [data-vscode-theme-kind="vscode-high-contrast"] {
                 --bg-body: #2d2d30;
-                --icon-profiles-header: url(${profilesHeaderIconDarkUri});
-                --icon-add-profile-header: url(${addProfileHeaderIconDarkUri});
-                --icon-edit-profile-header: url(${editProfileHeaderIconDarkUri});
-                --icon-save: url(${saveProfileButtonIconDarkUri});
+                --icon-profiles-header: url(${connectionsHeaderIconDarkUri});
+                --icon-add-profile-header: url(${addConnectionHeaderIconDarkUri});
+                --icon-edit-profile-header: url(${editConnectionHeaderIconDarkUri});
+                --icon-save: url(${saveConnectionButtonIconDarkUri});
                 --icon-login: url(${loginIconDarkUri});
                 --icon-edit: url(${editIconDarkUri});
                 --icon-delete: url(${deleteIconDarkUri});
@@ -1315,7 +1340,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         profilesListEl.style.display = 'block';
                     }
 
-                    // Sort profiles alphabetically by label
+                    // Sort connections alphabetically by label
                     const sortedProfiles = [...profiles].sort((a, b) => 
                         a.label.toLowerCase().localeCompare(b.label.toLowerCase())
                     );
@@ -1324,13 +1349,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         const li = document.createElement('li');
                         const isBeingEdited = editingProfileId === profile.id;
                         
-                        // Add visual indication for profile being edited
+                        // Add visual indication for connection being edited
                         if (isBeingEdited) {
                             li.classList.add('profile-being-edited');
                         }
                         
                         li.setAttribute('tabindex', '0');
-                        li.setAttribute('aria-label', \`Profile: \${profile.label}, user \${profile.username} at \${profile.serverName}\`);
+                        li.setAttribute('aria-label', \`Connection: \${profile.label}, user \${profile.username} at \${profile.serverName}\`);
 
                         li.innerHTML = \`
                         <div class="profile-details">
@@ -1342,7 +1367,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         </div>
                         <div class="profile-actions">
                             <button class="login-btn" data-profile-id="\${profile.id}" 
-                                    aria-label="Login with profile \${profile.label}" 
+                                    aria-label="Login with connection \${profile.label}" 
                                     title="Login with this connection"
                                     \${isBeingEdited ? 'disabled' : ''}>
                                 <span class="icon icon-login"></span>
@@ -1355,7 +1380,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                                 <span class="icon icon-edit"></span>
                             </button>
                             <button class="delete-btn" data-profile-id="\${profile.id}" 
-                                    aria-label="Delete profile \${profile.label}" 
+                                    aria-label="Delete connection \${profile.label}" 
                                     title="\${isBeingEdited ? 'Cannot delete while editing' : 'Delete this connection'}"
                                     \${isBeingEdited ? 'disabled' : ''}
                                     style="\${isBeingEdited ? 'opacity: 0.3; cursor: not-allowed;' : ''}">
@@ -1369,7 +1394,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
 
             function enterEditMode(profile, hasStoredPassword) {
-                console.log('[WebviewScript] Entering edit mode for profile:', profile);
+                console.log('[WebviewScript] Entering edit mode for connection:', profile);
                 isEditMode = true;
                 currentEditingProfileId = profile.id;
                 
@@ -1384,7 +1409,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 // Show cancel button
                 editActionsDiv.style.display = 'block';
                 
-                // Populate form with profile data
+                // Populate form with connection data
                 profileLabelInput.value = profile.label || '';
                 serverNameInput.value = profile.serverName || '';
                 portNumberInput.value = profile.portNumber || '';
@@ -1448,12 +1473,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     payload.id = currentEditingProfileId;
                     saveProfileBtn.disabled = true;
                     saveButtonText.textContent = 'Updating...';
-                    vscode.postMessage({ command: '${WebviewMessageCommands.UPDATE_PROFILE}', payload });
+                    vscode.postMessage({ command: '${WebviewMessageCommands.UPDATE_CONNECTION}', payload });
                 } else {
                     // Save new connection
                     saveProfileBtn.disabled = true;
                     saveButtonText.textContent = 'Saving...';
-                    vscode.postMessage({ command: '${WebviewMessageCommands.SAVE_NEW_PROFILE}', payload });
+                    vscode.postMessage({ command: '${WebviewMessageCommands.SAVE_NEW_CONNECTION}', payload });
                 }
 
                 setTimeout(() => {
@@ -1483,7 +1508,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     }
                 } else if (targetButton && targetButton.disabled) {
                     if (targetButton.classList.contains('delete-btn')) {
-                        displayMessage('info', 'Cannot delete profile while editing it. Please save or cancel your changes first.');
+                        displayMessage('info', 'Cannot delete connection while editing it. Please save or cancel your changes first.');
                     } else if (targetButton.classList.contains('login-btn') || targetButton.classList.contains('edit-btn')) {
                         displayMessage('info', 'Please save or cancel your current changes before performing other actions.');
                     }
@@ -1492,7 +1517,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
             if (cancelEditBtn) {
                 cancelEditBtn.addEventListener('click', function() {
-                    vscode.postMessage({ command: '${WebviewMessageCommands.CANCEL_EDIT_PROFILE}' });
+                    vscode.postMessage({ command: '${WebviewMessageCommands.CANCEL_EDIT_CONNECTION}' });
                 });
             }
             
@@ -1501,7 +1526,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 const message = event.data;
                 console.log('[WebviewScript] Message received from host:', message);
                 switch (message.command) {
-                    case '${WebviewMessageCommands.DISPLAY_PROFILES_IN_WEBVIEW}':
+                    case '${WebviewMessageCommands.DISPLAY_CONNECTIONS_IN_WEBVIEW}':
                         renderProfiles(message.payload);
                         break;
                     case '${WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE}':
@@ -1526,8 +1551,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             });
 
             // Tell the extension the UI is ready
-            console.log('[WebviewScript] Requesting initial profiles via PROFILE_UI_LOADED.');
-            vscode.postMessage({ command: '${WebviewMessageCommands.PROFILE_UI_LOADED}' });
+            console.log('[WebviewScript] Requesting initial connections via PROFILE_UI_LOADED.');
+            vscode.postMessage({ command: '${WebviewMessageCommands.CONNECTION_UI_LOADED}' });
             messagesEl.classList.add('hidden');
         }());
         </script>

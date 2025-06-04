@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import * as profileManager from "./profileManager";
+import * as profileManager from "./connectionManager";
 import { loginToServerAndGetSessionDetails, TestBenchLoginResult } from "./testBenchConnection";
-import { TestBenchProfile } from "./testBenchTypes";
+import { TestBenchConnection } from "./testBenchTypes";
 import { logger } from "./extension";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
@@ -92,15 +92,17 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         }
 
         try {
-            let targetProfile: TestBenchProfile | undefined;
+            let targetProfile: TestBenchConnection | undefined;
             let passwordToUse: string | undefined;
 
-            const activeProfileIdFromManager: string | undefined = await profileManager.getActiveProfileId(
+            const activeProfileIdFromManager: string | undefined = await profileManager.getActiveConnectionId(
                 this.context
             );
 
             if (activeProfileIdFromManager) {
-                const allProfiles: profileManager.TestBenchProfile[] = await profileManager.getProfiles(this.context);
+                const allProfiles: profileManager.TestBenchConnection[] = await profileManager.getConnections(
+                    this.context
+                );
                 targetProfile = allProfiles.find((p) => p.id === activeProfileIdFromManager);
                 if (targetProfile) {
                     logger.info(
@@ -110,7 +112,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     logger.warn(
                         `[AuthProvider] Active profile ID ${activeProfileIdFromManager} was set, but profile not found.`
                     );
-                    await profileManager.clearActiveProfile(this.context);
+                    await profileManager.clearActiveConnection(this.context);
                     if (isSilent) {
                         throw new Error("Active profile for auto-login not found.");
                     }
@@ -122,19 +124,20 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     throw new Error("No active profile available for silent auto-login.");
                 }
                 logger.trace("[AuthProvider] No valid pre-selected profile, proceeding with QuickPick.");
-                const profiles = await profileManager.getProfiles(this.context);
-                const quickPickItems: (vscode.QuickPickItem & { profile?: TestBenchProfile; isAddNew?: boolean })[] = [
-                    ...profiles.map((p) => ({
-                        label: p.label,
-                        description: `${p.username}@${p.serverName}:${p.portNumber}`,
-                        profile: p
-                    })),
-                    {
-                        label: "$(add) Add New TestBench Connection...",
-                        isAddNew: true,
-                        description: "Configure a new connection profile"
-                    }
-                ];
+                const profiles = await profileManager.getConnections(this.context);
+                const quickPickItems: (vscode.QuickPickItem & { profile?: TestBenchConnection; isAddNew?: boolean })[] =
+                    [
+                        ...profiles.map((p) => ({
+                            label: p.label,
+                            description: `${p.username}@${p.serverName}:${p.portNumber}`,
+                            profile: p
+                        })),
+                        {
+                            label: "$(add) Add New TestBench Connection...",
+                            isAddNew: true,
+                            description: "Configure a new connection profile"
+                        }
+                    ];
 
                 const selection = await vscode.window.showQuickPick(quickPickItems, {
                     placeHolder: "Select a TestBench Profile or Add New",
@@ -153,8 +156,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
                     // Check for duplicate label if provided
                     if (newProfileDetails.label && newProfileDetails.label.trim()) {
-                        const existingProfileByLabel: profileManager.TestBenchProfile | undefined =
-                            await profileManager.findProfileByLabel(this.context, newProfileDetails.label.trim());
+                        const existingProfileByLabel: profileManager.TestBenchConnection | undefined =
+                            await profileManager.findConnectionByLabel(this.context, newProfileDetails.label.trim());
 
                         if (existingProfileByLabel) {
                             throw new Error(
@@ -182,13 +185,13 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                         }
                     );
                     if (saveNewConnectionChoice === "Yes") {
-                        const savedId: string = await profileManager.saveProfile(
+                        const savedId: string = await profileManager.saveConnection(
                             this.context,
                             targetProfile,
                             passwordToUse
                         );
                         targetProfile.id = savedId;
-                        await profileManager.setActiveProfileId(this.context, targetProfile.id);
+                        await profileManager.setActiveConnectionId(this.context, targetProfile.id);
                     } else if (!passwordToUse) {
                         throw new Error("Password required for unsaved profile.");
                     }
@@ -198,7 +201,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             }
 
             if (passwordToUse === undefined && targetProfile) {
-                passwordToUse = await profileManager.getPasswordForProfile(this.context, targetProfile.id);
+                passwordToUse = await profileManager.getPasswordForConnection(this.context, targetProfile.id);
 
                 if (passwordToUse === undefined) {
                     logger.info(
@@ -259,10 +262,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             );
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
-                await profileManager.clearActiveProfile(this.context);
+                await profileManager.clearActiveConnection(this.context);
                 throw new Error("TestBench login failed. Check credentials or server details.");
             }
-            const initialPasswordFromStorage: string | undefined = await profileManager.getPasswordForProfile(
+            const initialPasswordFromStorage: string | undefined = await profileManager.getPasswordForConnection(
                 this.context,
                 targetProfile.id
             );
@@ -277,7 +280,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     ignoreFocusOut: true
                 });
                 if (storePasswordAfterLoginChoice === "Yes") {
-                    await profileManager.saveProfile(this.context, targetProfile, passwordToUse);
+                    await profileManager.saveConnection(this.context, targetProfile, passwordToUse);
                 }
             }
 
@@ -290,7 +293,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 userKey: loginResult.userKey
             };
             this.activeSessions.set(vsCodeSessionId, sessionData);
-            await profileManager.setActiveProfileId(this.context, targetProfile.id);
+            await profileManager.setActiveConnectionId(this.context, targetProfile.id);
 
             this._onDidChangeSessions.fire({
                 added: [
@@ -314,7 +317,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         } catch (error: any) {
             logger.error(`[AuthProvider] createSession error${isSilent ? " (auto-login)" : ""}:`, error);
             if (!isSilent) {
-                await profileManager.clearActiveProfile(this.context);
+                await profileManager.clearActiveConnection(this.context);
             }
             throw error;
         }
@@ -359,7 +362,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * or `undefined` if the user cancels the input process for required fields.
      */
     private async promptForNewProfileDetails(): Promise<
-        (Omit<TestBenchProfile, "id" | "label"> & { label?: string; password?: string }) | undefined
+        (Omit<TestBenchConnection, "id" | "label"> & { label?: string; password?: string }) | undefined
     > {
         const serverName: string | undefined = await vscode.window.showInputBox({
             prompt: "Enter TestBench Server Name (e.g., testbench.example.com)",

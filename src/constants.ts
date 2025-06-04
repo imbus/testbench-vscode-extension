@@ -33,18 +33,18 @@ export const WebviewMessageCommands = {
     UPDATE_CONTENT: "updateContent",
     TRIGGER_COMMAND: "triggerCommand",
 
-    // Profile Management UI
-    PROFILE_UI_LOADED: "profileUiLoaded",
-    LOGIN_WITH_PROFILE: "loginWithProfile",
-    SAVE_NEW_PROFILE: "saveNewProfile",
+    // Connection Management UI
+    CONNECTION_UI_LOADED: "profileUiLoaded",
+    LOGIN_WITH_CONNECTION: "loginWithProfile",
+    SAVE_NEW_CONNECTION: "saveNewProfile",
     REQUEST_DELETE_CONFIRMATION: "requestDeleteConfirmation",
-    // Edit profile functionality
-    EDIT_PROFILE: "editProfile",
-    UPDATE_PROFILE: "updateProfile",
-    CANCEL_EDIT_PROFILE: "cancelEditProfile",
+    // Edit connection functionality
+    EDIT_CONNECTION: "editProfile",
+    UPDATE_CONNECTION: "updateProfile",
+    CANCEL_EDIT_CONNECTION: "cancelEditProfile",
 
     // Host to Webview communication
-    DISPLAY_PROFILES_IN_WEBVIEW: "displayProfilesInWebview",
+    DISPLAY_CONNECTIONS_IN_WEBVIEW: "displayProfilesInWebview",
     SHOW_WEBVIEW_MESSAGE: "showWebviewMessage"
 } as const;
 
@@ -86,9 +86,9 @@ export const StorageKeys = {
      */
     LAST_GENERATED_PARAMS: "testbenchExtension.lastGeneratedReportParams",
     // AuthenticationProvider constants
-    PROFILES_STORAGE_KEY: "testbenchExtension.profiles",
-    ACTIVE_PROFILE_ID_KEY: "testbenchExtension.activeProfileId",
-    PROFILE_PASSWORD_SECRET_PREFIX: "testbenchExtension.profile.password.",
+    CONNECTIONS_STORAGE_KEY: "testbenchExtension.profiles",
+    ACTIVE_CONNECTION_ID_KEY: "testbenchExtension.activeProfileId",
+    CONNECTION_PASSWORD_SECRET_PREFIX: "testbenchExtension.profile.password.",
     MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem",
     SUB_ELEMENT_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubElements"
 } as const;
