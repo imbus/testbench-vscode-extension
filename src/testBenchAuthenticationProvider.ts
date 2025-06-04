@@ -171,9 +171,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                         }
                     }
 
-                    // Temp connection object, might not have ID yet if not saved
+                    // Create temp connection object with a temporary ID for unsaved connections
+                    const tempConnectionId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
                     targetConnection = {
-                        id: "",
+                        id: tempConnectionId,
                         label:
                             newConnectionDetails.label ||
                             `${newConnectionDetails.username}@${newConnectionDetails.serverName}`,
@@ -190,14 +191,20 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                             ignoreFocusOut: true
                         }
                     );
+
                     if (saveNewConnectionChoice === "Yes") {
-                        const savedId: string = await connectionManager.saveConnection(
-                            this.context,
-                            targetConnection,
-                            passwordToUse
-                        );
-                        targetConnection.id = savedId;
-                        await connectionManager.setActiveConnectionId(this.context, targetConnection.id);
+                        try {
+                            const savedId: string = await connectionManager.saveConnection(
+                                this.context,
+                                targetConnection,
+                                passwordToUse
+                            );
+                            targetConnection.id = savedId;
+                            await connectionManager.setActiveConnectionId(this.context, targetConnection.id);
+                        } catch (saveError: any) {
+                            logger.error(`[AuthProvider] Failed to save new connection: ${saveError.message}`);
+                            throw new Error(`Failed to save connection: ${saveError.message}`);
+                        }
                     } else if (!passwordToUse) {
                         throw new Error("Password required for unsaved connection.");
                     }
@@ -259,6 +266,13 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 throw new Error("Cannot attempt login with an empty password.");
             }
 
+            try {
+                this.validateConnectionForLogin(targetConnection, passwordToUse);
+            } catch (validationError: any) {
+                logger.error(`[AuthProvider] Connection validation failed: ${validationError.message}`);
+                throw validationError;
+            }
+
             logger.info(
                 `[AuthProvider] Attempting login to ${targetConnection.serverName} as ${targetConnection.username}`
             );
@@ -271,7 +285,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
                 await connectionManager.clearActiveConnection(this.context);
-                throw new Error("TestBench login failed. Check credentials or server details.");
+                throw new Error("Login to TestBench server failed. Check credentials or server details.");
             }
             const initialPasswordFromStorage: string | undefined = await connectionManager.getPasswordForConnection(
                 this.context,
@@ -415,5 +429,33 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             password: passwordInput, // Treat undefined password as empty
             label: label || `${username}@${serverName}`
         };
+    }
+
+    /**
+     * Validates connection details before attempting login.
+     * @param connection The connection to validate
+     * @param password The password to validate
+     * @throws Error if validation fails
+     */
+    private validateConnectionForLogin(connection: TestBenchConnection, password: string | undefined): void {
+        if (!connection) {
+            throw new Error("Connection details are required for login.");
+        }
+
+        if (!connection.serverName || connection.serverName.trim() === "") {
+            throw new Error("Server name is required for login.");
+        }
+
+        if (!connection.portNumber || connection.portNumber <= 0 || connection.portNumber > 65535) {
+            throw new Error("Valid port number (1-65535) is required for login.");
+        }
+
+        if (!connection.username || connection.username.trim() === "") {
+            throw new Error("Username is required for login.");
+        }
+
+        if (!password || password === "") {
+            throw new Error("Password is required for login.");
+        }
     }
 }
