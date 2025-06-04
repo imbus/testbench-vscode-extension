@@ -7,8 +7,6 @@ import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { BaseTreeItem as BaseTreeItem } from "./baseTreeItem";
 import { CustomRootService } from "../../services/customRootService";
-import { TestThemeTreeDataProvider } from "../testTheme/testThemeTreeDataProvider";
-import { TestElementsTreeDataProvider } from "../testElements/testElementsTreeDataProvider";
 
 export interface TreeDataProviderOptions {
     contextKey: string;
@@ -121,15 +119,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
             this.customRootService.resetCustomRoot();
         }
         this.rootElements = [];
-        if (this instanceof TestThemeTreeDataProvider) {
-            this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
-        } else if (this instanceof TestElementsTreeDataProvider) {
-            this.updateMessageCallback(
-                "Select a Test Object Version (TOV) from the 'Projects' view to load test elements."
-            );
-        } else {
-            this.updateMessageCallback(undefined);
-        }
+        this.updateMessageCallback(undefined);
         this._onDidChangeTreeData.fire(undefined);
     }
 
