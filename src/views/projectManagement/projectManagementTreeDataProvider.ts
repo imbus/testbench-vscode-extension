@@ -139,7 +139,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                     : vscode.TreeItemCollapsibleState.None;
             }
             case TreeItemContextValues.CYCLE:
-                return vscode.TreeItemCollapsibleState.None; // Cycles are leaves in this tree
+                return vscode.TreeItemCollapsibleState.None; // Cycles are leaves in projects tree
             default:
                 return vscode.TreeItemCollapsibleState.None;
         }

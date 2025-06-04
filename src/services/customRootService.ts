@@ -43,7 +43,6 @@ export class CustomRootService<T extends BaseTreeItem> {
             this.resetPreviousRoot();
         }
 
-        // Set new custom root
         this.state = {
             isActive: true,
             rootItem: item,

@@ -149,7 +149,6 @@ export class IconManagementService {
      * Find icon definition for a given context
      */
     private findIconDefinition(context: IconContext, category: string): IconDefinition {
-        // Determine the actual context value to use for icon lookup
         let contextValueForIcon = context.contextValue;
 
         // Handle marked contexts
@@ -162,7 +161,6 @@ export class IconManagementService {
             contextValueForIcon = context.originalContextValue;
         }
 
-        // Try to find in the specified category
         const categoryMap = this.iconRegistry.get(category);
         if (categoryMap) {
             const iconDef = this.findInCategory(categoryMap, contextValueForIcon, context.status);
@@ -171,7 +169,6 @@ export class IconManagementService {
             }
         }
 
-        // Try other categories as fallback
         for (const [catName, catMap] of this.iconRegistry) {
             if (catName !== category) {
                 const iconDef = this.findInCategory(catMap, contextValueForIcon, context.status);
@@ -199,7 +196,6 @@ export class IconManagementService {
         contextValue: string,
         status?: string
     ): IconDefinition | null {
-        // Try with specific status
         if (status) {
             const withStatus = categoryMap.get(this.createIconKey(contextValue, status.toLowerCase()));
             if (withStatus) {
@@ -207,7 +203,6 @@ export class IconManagementService {
             }
         }
 
-        // Try default status
         const withDefault = categoryMap.get(this.createIconKey(contextValue, "default"));
         if (withDefault) {
             return withDefault;

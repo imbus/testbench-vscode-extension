@@ -31,7 +31,7 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
     public state: TreeItemState = {};
     public itemData: any;
 
-    // Dependencies are injected
+    // Dependencies
     protected readonly logger: TestBenchLogger;
     protected readonly iconService: IconManagementService;
     protected readonly extensionContext: vscode.ExtensionContext;
@@ -127,7 +127,6 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
         if (this.iconService) {
             this.iconPath = this.iconService.getIconUris({ contextValue: "default", status: "default" }, "default");
         } else {
-            // Fallback
             const fallbackIconName = "other.svg";
             this.iconPath = {
                 light: vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources", "icons", fallbackIconName),

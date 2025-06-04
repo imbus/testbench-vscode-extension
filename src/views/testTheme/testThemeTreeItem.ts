@@ -41,7 +41,6 @@ export class TestThemeTreeItem extends BaseTreeItem {
             tooltipContextLines.push(`Numbering: ${itemDataForTooltip.numbering}`);
         }
 
-        // Add type information
         tooltipContextLines.push(`Type: ${itemDataForTooltip.elementType || this.originalContextValue}`);
 
         if (itemDataForTooltip.name) {

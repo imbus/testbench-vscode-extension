@@ -9,6 +9,13 @@ import { TreeItemContextValues } from "../../constants";
 import { IconContext, IconManagementService } from "../../services/iconManagementService";
 import { TestBenchLogger } from "../../testBenchLogger";
 
+// Extend TreeItemState interface for test elements
+declare module "../common/baseTreeItem" {
+    interface TreeItemState {
+        subdivisionIconType?: "LocalSubdivision" | "MissingSubdivision";
+    }
+}
+
 export type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
 export interface TestElementData {
@@ -80,7 +87,7 @@ export class TestElementTreeItem extends BaseTreeItem {
     public updateIcon(): void {
         // testElementData might not be initialized yet during constructor
         if (!this.testElementData) {
-            this.logger.trace(
+            this.logger.warn(
                 `[TestElementTreeItem] Skipping icon update - testElementData not initialized yet for: ${this.label}`
             );
             super.updateIcon(); // Fall back to base implementation
@@ -92,15 +99,20 @@ export class TestElementTreeItem extends BaseTreeItem {
         );
 
         try {
+            const contextValue = this.getIconContextValue();
+            const status = String(this.state.status || "default");
+
             const iconContext: IconContext = {
-                contextValue: this.getIconContextValue(),
-                status: this.state.status,
+                contextValue: contextValue,
+                status: status,
                 isMarked: this.state.isMarked,
                 isCustomRoot: this.state.isCustomRoot,
                 originalContextValue: this.originalContextValue
             };
 
             this.iconPath = this.iconService.getIconUris(iconContext, "testElement");
+
+            this.logger.trace(`[TestElementTreeItem] Icon path set successfully for ${this.label}:`, this.iconPath);
         } catch (error) {
             this.logger.error(`Error updating icon for test element ${this.label}:`, error);
             this.setFallbackIcon();
@@ -111,17 +123,14 @@ export class TestElementTreeItem extends BaseTreeItem {
      * Get the correct context value for icon lookup
      */
     private getIconContextValue(): string {
-        // Safety check
         if (!this.testElementData) {
             return "Other";
         }
 
-        // For subdivisions, use the specific subdivision type based on state
         if (this.testElementData.elementType === "Subdivision") {
             return this.state.subdivisionIconType || "MissingSubdivision";
         }
 
-        // For other types, use the TestElementType directly (which matches the icon registry keys)
         return this.testElementData.elementType;
     }
 
@@ -266,12 +275,5 @@ export class TestElementTreeItem extends BaseTreeItem {
         }
 
         return null;
-    }
-}
-
-// Extend TreeItemState interface for test elements
-declare module "../common/baseTreeItem" {
-    interface TreeItemState {
-        subdivisionIconType?: "LocalSubdivision" | "MissingSubdivision";
     }
 }

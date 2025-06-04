@@ -481,7 +481,7 @@ export class TreeServiceManager {
             });
             this._disposables.length = 0;
 
-            // Note: Add dispose calls here when services implement IDisposable
+            // Dspose calls are added here when services implement IDisposable
             // this.markedItemStateService.dispose?.();
             // this.iconManagementService.dispose?.();
 

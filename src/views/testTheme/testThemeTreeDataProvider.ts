@@ -27,7 +27,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         private readonly projectDataService: ProjectDataService,
         private readonly markedItemStateService: MarkedItemStateService,
         iconManagementService: IconManagementService
-        // IconManagementService is injected into BaseTreeItem via extensionContext
     ) {
         const providerOptions: TreeDataProviderOptions = {
             contextKey: ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT,
@@ -130,7 +129,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             parent
         );
 
-        // Update marking state from service
         const itemKey = treeItem.getUniqueId();
         const itemUID = treeItem.getUID();
         if (itemKey && itemUID) {
@@ -143,9 +141,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     // Helper to get the current set of all nodes being processed
-    // This depends on how you store the full cycleStructure when populateFromCycleData is called
-    // For now, let's assume fetchRootElements populates something accessible or we re-fetch if needed.
-    // This is a simplification; ideally, you'd have the full structure available.
     private getRawNodesFromCurrentRoot(): CycleNodeData[] {
         const activeRoot = this.isCustomRootActive()
             ? this.getCurrentCustomRoot()?.itemData
@@ -161,7 +156,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     private nodeWillHaveVisibleChildren(nodeData: CycleNodeData, allNodes: CycleNodeData[]): boolean {
-        // Check if any child of nodeData (based on parentKey) is visible
         return allNodes.some(
             (childNode) =>
                 childNode.base.parentKey === nodeData.base.key && this.isNodeVisibleInTestThemeTree(childNode)
