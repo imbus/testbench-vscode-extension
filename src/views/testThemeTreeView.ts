@@ -3,6 +3,8 @@
  * @description Provides a VS Code TreeDataProvider implementation for the Test Theme Tree view.
  */
 
+// TODO: Delete this file after the refactor
+
 import * as vscode from "vscode";
 import { CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
 import { logger, testThemeTreeView } from "../extension";

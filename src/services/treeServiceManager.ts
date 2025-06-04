@@ -460,8 +460,7 @@ export class TreeServiceManager {
                     this.dependencies.extensionContext,
                     this.dependencies.logger,
                     updateMessageCallback,
-                    this.projectDataService,
-                    this.iconManagementService
+                    this.projectDataService
                 );
             },
 
@@ -471,8 +470,7 @@ export class TreeServiceManager {
                     this.dependencies.logger,
                     updateMessageCallback,
                     this.projectDataService,
-                    this.markedItemStateService,
-                    this.iconManagementService
+                    this.markedItemStateService
                 );
             },
 
@@ -485,7 +483,6 @@ export class TreeServiceManager {
                     updateMessageCallback,
                     this.testElementDataService,
                     this.resourceFileService,
-                    this.iconManagementService,
                     treeBuilder
                 );
             }

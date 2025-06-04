@@ -73,7 +73,7 @@ export function getLoginWebViewProvider(): loginWebView.LoginWebViewProvider | n
 export let projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider | null = null;
 export let testThemeTreeDataProvider: TestThemeTreeDataProvider | null = null;
 export let testElementsTreeDataProvider: testElementsTreeView.TestElementsTreeDataProvider | undefined;
-export let projectTreeView: vscode.TreeView<ProjectManagementTreeItem> | undefined;
+export let projectTreeView: vscode.TreeView<BaseTreeItem> | undefined;
 export let testThemeTreeView: vscode.TreeView<TestThemeTreeItem> | undefined;
 export let testElementTreeView: vscode.TreeView<testElementsTreeView.TestElementTreeItem> | undefined;
 
@@ -207,13 +207,10 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
         context,
         projectDataService
     );
-    const newProjectTreeView: vscode.TreeView<ProjectManagementTreeItem> = vscode.window.createTreeView(
-        "projectManagementTree",
-        {
-            treeDataProvider: projectManagementTreeDataProvider,
-            canSelectMany: false
-        }
-    );
+    const newProjectTreeView: vscode.TreeView<BaseTreeItem> = vscode.window.createTreeView("projectManagementTree", {
+        treeDataProvider: projectManagementTreeDataProvider,
+        canSelectMany: false
+    });
     projectTreeView = newProjectTreeView;
     context.subscriptions.push(projectTreeView);
 

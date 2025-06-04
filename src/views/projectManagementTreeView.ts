@@ -4,6 +4,8 @@
  * Project management tree displays the selected project and its test object versions and cycles.
  */
 
+// TODO: Delete this file after the refactor
+
 import * as vscode from "vscode";
 import {
     getLatestLsContextRequestId,

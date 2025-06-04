@@ -5,11 +5,10 @@
 
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { BaseTreeDataProvider } from "../common/baseTreeDataProvider";
+import { BaseTreeDataProvider, TreeDataProviderOptions } from "../common/baseTreeDataProvider";
 import { ProjectManagementTreeItem } from "./projectManagementTreeItem";
 import { ProjectDataService } from "../../services/projectDataService";
-import { IconManagementService } from "../../services/iconManagementService";
-import { TreeItemContextValues, ContextKeys } from "../../constants";
+import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
 
 export interface CycleDataForThemeTreeEvent {
@@ -20,8 +19,7 @@ export interface CycleDataForThemeTreeEvent {
 }
 
 export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<ProjectManagementTreeItem> {
-    private _onDidPrepareCycleDataForThemeTree: vscode.EventEmitter<CycleDataForThemeTreeEvent> =
-        new vscode.EventEmitter<CycleDataForThemeTreeEvent>();
+    private _onDidPrepareCycleDataForThemeTree = new vscode.EventEmitter<CycleDataForThemeTreeEvent>();
     public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
         this._onDidPrepareCycleDataForThemeTree.event;
 
@@ -29,33 +27,26 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         extensionContext: vscode.ExtensionContext,
         logger: TestBenchLogger,
         updateMessageCallback: (message: string | undefined) => void,
-        private readonly projectDataService: ProjectDataService,
-        private readonly iconManagementService: IconManagementService
+        private readonly projectDataService: ProjectDataService
     ) {
-        super(extensionContext, logger, updateMessageCallback, {
+        const providerOptions: TreeDataProviderOptions = {
             contextKey: ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT,
             customRootContextValue: TreeItemContextValues.CUSTOM_ROOT_PROJECT,
             enableCustomRoot: true,
             enableExpansionTracking: true
-        });
-
-        // Inject icon service into extension context for tree items
-        (this.extensionContext as any).iconManagementService = this.iconManagementService;
+        };
+        super(extensionContext, logger, updateMessageCallback, providerOptions);
+        this.logger.trace("[ProjectManagementTreeDataProvider] Initialized");
     }
 
-    /**
-     * Fetch root elements (projects)
-     */
     protected async fetchRootElements(): Promise<ProjectManagementTreeItem[]> {
         this.logger.debug("[ProjectManagementTreeDataProvider] Fetching root projects");
-
         const projectList: Project[] | null = await this.projectDataService.getProjectsList();
 
-        if (!projectList) {
+        if (projectList === null) {
             this.updateMessageCallback("Error fetching projects. Please check connection or try refreshing.");
             return [];
         }
-
         if (projectList.length === 0) {
             this.updateMessageCallback(
                 "No projects found on the server. Create a project in TestBench or check permissions."
@@ -65,42 +56,37 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
         const projectItems = projectList
             .map((project) => this.createTreeItemFromData(project, null))
-            .filter((item) => item !== null) as ProjectManagementTreeItem[];
+            .filter((item): item is ProjectManagementTreeItem => item !== null);
 
-        this.updateMessageCallback(undefined);
+        this.updateMessageCallback(undefined); // Clear loading message
         return projectItems;
     }
 
-    /**
-     * Fetch children for a specific element
-     */
     protected async fetchChildrenForElement(element: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
         this.logger.debug(`[ProjectManagementTreeDataProvider] Fetching children for: ${element.label}`);
+        const itemContext = element.originalContextValue;
 
-        switch (element.originalContextValue) {
+        switch (itemContext) {
             case TreeItemContextValues.PROJECT:
-                return await this.getChildrenForProject(element);
+                return this.getChildrenForProject(element);
             case TreeItemContextValues.VERSION:
                 return this.getChildrenForVersion(element);
             case TreeItemContextValues.CYCLE:
                 return []; // Cycles don't show direct children in this tree
             default:
                 this.logger.warn(
-                    `[ProjectManagementTreeDataProvider] Unknown element type: ${element.originalContextValue}`
+                    `[ProjectManagementTreeDataProvider] Unknown element type for fetching children: ${itemContext}`
                 );
                 return [];
         }
     }
 
-    /**
-     * Create tree item from raw data
-     */
     protected createTreeItemFromData(
-        data: any,
+        data: any, // Project or TreeNode
         parent: ProjectManagementTreeItem | null
     ): ProjectManagementTreeItem | null {
         if (!data || typeof data.key === "undefined" || typeof data.name === "undefined") {
-            this.logger.warn(`[ProjectManagementTreeDataProvider] Invalid data for tree item creation:`, data);
+            this.logger.warn(`[ProjectManagementTreeDataProvider] Invalid data for tree item:`, data);
             return null;
         }
 
@@ -116,75 +102,24 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             this.extensionContext,
             parent
         );
-
-        // Apply stored expansion state
         this.applyStoredExpansionState(treeItem);
-
         return treeItem;
     }
 
-    /**
-     * Get children for a project element
-     */
-    private async getChildrenForProject(
-        projectElement: ProjectManagementTreeItem
-    ): Promise<ProjectManagementTreeItem[]> {
-        const projectKey = projectElement.getUniqueId();
-        if (!projectKey) {
-            this.logger.error(`[ProjectManagementTreeDataProvider] Project key missing for: ${projectElement.label}`);
-            return [];
-        }
-
-        const projectTree: TreeNode | null = await this.projectDataService.getProjectTree(projectKey);
-
-        if (!projectTree?.children?.length) {
-            this.logger.debug(
-                `[ProjectManagementTreeDataProvider] No children found for project: ${projectElement.label}`
-            );
-            return [];
-        }
-
-        return projectTree.children
-            .map((tovNode) => this.createTreeItemFromData(tovNode, projectElement))
-            .filter((item: ProjectManagementTreeItem | null): item is ProjectManagementTreeItem => item !== null);
-    }
-
-    /**
-     * Get children for a version (TOV) element
-     */
-    private getChildrenForVersion(versionElement: ProjectManagementTreeItem): ProjectManagementTreeItem[] {
-        this.logger.debug(`[ProjectManagementTreeDataProvider] Getting children for TOV: ${versionElement.label}`);
-
-        const cycleNodes = versionElement.itemData.children ?? [];
-        return cycleNodes
-            .map((cycleNode: TreeNode) => this.createTreeItemFromData(cycleNode, versionElement))
-            .filter((item: ProjectManagementTreeItem | null): item is ProjectManagementTreeItem => item !== null);
-    }
-
-    /**
-     * Determine context value from data
-     */
     private determineContextValue(data: any): string {
-        // If data has a nodeType, use it directly
         if (data.nodeType) {
             return data.nodeType;
-        }
-
-        // Fallback logic based on data structure
-        if (data.tovsCount !== undefined || data.cyclesCount !== undefined) {
+        } // "Version" or "Cycle" for TreeNodes
+        if (typeof data.tovsCount !== "undefined" || typeof data.cyclesCount !== "undefined") {
             return TreeItemContextValues.PROJECT;
         }
 
-        if (data.children && Array.isArray(data.children)) {
+        if (Object.prototype.hasOwnProperty.call(data, "children")) {
             return TreeItemContextValues.VERSION;
         }
-
         return TreeItemContextValues.CYCLE;
     }
 
-    /**
-     * Determine collapsible state from data and context
-     */
     private determineCollapsibleState(data: any, contextValue: string): vscode.TreeItemCollapsibleState {
         switch (contextValue) {
             case TreeItemContextValues.PROJECT: {
@@ -193,34 +128,51 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                     ? vscode.TreeItemCollapsibleState.Collapsed
                     : vscode.TreeItemCollapsibleState.None;
             }
-
             case TreeItemContextValues.VERSION: {
                 const version = data as TreeNode;
                 return version.children && version.children.length > 0
                     ? vscode.TreeItemCollapsibleState.Collapsed
                     : vscode.TreeItemCollapsibleState.None;
             }
-
             case TreeItemContextValues.CYCLE:
-                return vscode.TreeItemCollapsibleState.None;
-
+                return vscode.TreeItemCollapsibleState.None; // Cycles are leaves in this tree
             default:
                 return vscode.TreeItemCollapsibleState.None;
         }
     }
 
-    /**
-     * Handle cycle click for theme tree preparation
-     */
+    private async getChildrenForProject(
+        projectElement: ProjectManagementTreeItem
+    ): Promise<ProjectManagementTreeItem[]> {
+        const projectKey = projectElement.getUniqueId();
+        if (!projectKey) {
+            this.logger.error(`[PMTDP] Project key missing for: ${projectElement.label}`);
+            return [];
+        }
+        const projectTree: TreeNode | null = await this.projectDataService.getProjectTree(projectKey);
+        if (!projectTree?.children?.length) {
+            return [];
+        }
+        return projectTree.children
+            .map((tovNode) => this.createTreeItemFromData(tovNode, projectElement))
+            .filter((item): item is ProjectManagementTreeItem => item !== null);
+    }
+
+    private getChildrenForVersion(versionElement: ProjectManagementTreeItem): ProjectManagementTreeItem[] {
+        const cycleNodes: TreeNode[] = versionElement.itemData.children ?? [];
+        return cycleNodes
+            .map((cycleNode) => this.createTreeItemFromData(cycleNode, versionElement))
+            .filter((item): item is ProjectManagementTreeItem => item !== null);
+    }
+
     public async handleCycleClick(cycleItem: ProjectManagementTreeItem): Promise<void> {
         const cycleLabel = typeof cycleItem.label === "string" ? cycleItem.label : "N/A";
-        this.logger.trace(`[ProjectManagementTreeDataProvider] Handling cycle click: ${cycleLabel}`);
+        this.logger.trace(`[PMTDP] Handling cycle click: ${cycleLabel}`);
 
         if (cycleItem.originalContextValue !== TreeItemContextValues.CYCLE) {
-            this.logger.error("Clicked item is not a cycle. Cannot proceed.");
+            this.logger.error("Clicked item is not a cycle.");
             return;
         }
-
         const cycleKey = cycleItem.getUniqueId();
         const projectKey = cycleItem.getProjectKey();
 
@@ -239,118 +191,84 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                 },
                 async (progress) => {
                     progress.report({ increment: 0, message: "Fetching cycle structure..." });
-
-                    const rawCycleData = await this.getCycleStructure(projectKey, cycleKey);
-
+                    const rawCycleData = await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
                     progress.report({ increment: 50, message: "Preparing theme tree..." });
-
                     this._onDidPrepareCycleDataForThemeTree.fire({
                         projectKey,
                         cycleKey,
                         cycleLabel,
                         rawCycleStructure: rawCycleData
                     });
-
                     progress.report({ increment: 100, message: "Data loaded." });
                 }
             );
         } catch (error) {
-            this.logger.error(`[ProjectManagementTreeDataProvider] Error handling cycle click:`, error);
+            this.logger.error(`[PMTDP] Error handling cycle click:`, error);
             vscode.window.showErrorMessage(
-                `Failed to load cycle data: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Failed to load data for cycle '${cycleLabel}': ${error instanceof Error ? error.message : "Unknown error"}`
             );
         }
     }
 
-    /**
-     * Get cycle structure data
-     */
-    private async getCycleStructure(projectKey: string, cycleKey: string): Promise<CycleStructure | null> {
-        try {
-            return await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
-        } catch (error) {
-            this.logger.error(`[ProjectManagementTreeDataProvider] Failed to fetch cycle structure:`, error);
-            return null;
-        }
-    }
-
-    /**
-     * Get project and TOV names for an item
-     */
-    public getProjectAndTovNamesForItem(
-        item: ProjectManagementTreeItem
-    ): { projectName: string | undefined; tovName: string | undefined } | null {
+    public getProjectAndTovNamesForItem(item: ProjectManagementTreeItem): { projectName?: string; tovName?: string } {
         let projectName: string | undefined;
         let tovName: string | undefined;
-
         let current: ProjectManagementTreeItem | null = item;
 
-        // Traverse up the tree to find project and TOV names
         while (current) {
-            const effectiveContext = this.customRootService.isCurrentRoot(current)
+            const context = this.customRootService.isCurrentRoot(current)
                 ? this.customRootService.getOriginalContextValue()
                 : current.originalContextValue;
+            const name = current.itemData?.name;
 
-            const itemName = current.itemData?.name;
-
-            if (effectiveContext === TreeItemContextValues.PROJECT && !projectName) {
-                projectName = itemName;
-            } else if (effectiveContext === TreeItemContextValues.VERSION && !tovName) {
-                tovName = itemName;
+            if (context === TreeItemContextValues.PROJECT) {
+                projectName = name;
             }
-
+            if (context === TreeItemContextValues.VERSION) {
+                tovName = name;
+            }
             if (projectName && tovName) {
                 break;
             }
-
             current = current.parent as ProjectManagementTreeItem | null;
         }
-
-        // Handle case where the selected item itself is the project or TOV
-        const selectedEffectiveContext = this.customRootService.isCurrentRoot(item)
+        // If the item itself is Project/Version and names not set by parent traversal
+        const selectedContext = this.customRootService.isCurrentRoot(item)
             ? this.customRootService.getOriginalContextValue()
             : item.originalContextValue;
 
-        if (selectedEffectiveContext === TreeItemContextValues.PROJECT && !projectName) {
+        if (selectedContext === TreeItemContextValues.PROJECT && !projectName) {
             projectName = item.itemData?.name;
-        } else if (selectedEffectiveContext === TreeItemContextValues.VERSION && !tovName) {
+        }
+        if (selectedContext === TreeItemContextValues.VERSION && !tovName) {
             tovName = item.itemData?.name;
         }
 
-        this.logger.trace(
-            `[ProjectManagementTreeDataProvider] Resolved names - Project: '${projectName}', TOV: '${tovName}'`
-        );
-
+        this.logger.trace(`[PMTDP] Resolved for ${item.label}: Project='${projectName}', TOV='${tovName}'`);
         return { projectName, tovName };
     }
 
-    /**
-     * Override refresh to handle custom messaging
-     */
-    public refresh(isHardRefresh: boolean = false): void {
-        this.logger.debug(`[ProjectManagementTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
+    public override clearTree(): void {
+        super.clearTree();
+        this.updateMessageCallback("Not connected to TestBench or no projects available.");
+        this.logger.trace("[ProjectManagementTreeDataProvider] Tree cleared.");
+    }
 
+    public override refresh(isHardRefresh: boolean = false): void {
+        this.logger.debug(`[ProjectManagementTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
         if (isHardRefresh && this.isCustomRootActive()) {
-            this.customRootService.handleHardRefresh();
+            this.customRootService.resetCustomRoot();
+        }
+        // Store expansion state before fetching new data if not a hard reset of custom root
+        if (!(isHardRefresh && this.isCustomRootActive())) {
+            this.storeExpansionState();
         }
 
-        // Store expansion state before refresh
-        this.storeExpansionState();
-
         if (this.isCustomRootActive()) {
-            this.updateMessageCallback(undefined);
+            this.updateMessageCallback(undefined); // Custom root view has its own context
         } else {
             this.updateMessageCallback("Loading projects...");
         }
-
         this._onDidChangeTreeData.fire(undefined);
-    }
-
-    /**
-     * Override clear tree for specific messaging
-     */
-    public clearTree(): void {
-        super.clearTree();
-        this.updateMessageCallback("Not connected to TestBench. Please log in.");
     }
 }

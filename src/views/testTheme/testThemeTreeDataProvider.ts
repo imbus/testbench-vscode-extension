@@ -5,14 +5,13 @@
 
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { BaseTreeDataProvider } from "../common/baseTreeDataProvider";
+import { BaseTreeDataProvider, TreeDataProviderOptions } from "../common/baseTreeDataProvider";
 import { TestThemeTreeItem } from "./testThemeTreeItem";
 import { ProjectDataService } from "../../services/projectDataService";
 import { MarkedItemStateService } from "../../services/markedItemStateService";
-import { IconManagementService } from "../../services/iconManagementService";
-import { TreeItemContextValues, ContextKeys } from "../../constants";
-import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
+import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { CycleNodeData, CycleStructure } from "../../testBenchTypes";
+import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
 
 export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTreeItem> {
     private currentCycleKey: string | null = null;
@@ -24,428 +23,282 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         logger: TestBenchLogger,
         updateMessageCallback: (message: string | undefined) => void,
         private readonly projectDataService: ProjectDataService,
-        private readonly markedItemStateService: MarkedItemStateService,
-        private readonly iconManagementService: IconManagementService
+        private readonly markedItemStateService: MarkedItemStateService
+        // IconManagementService is injected into BaseTreeItem via extensionContext
     ) {
-        super(extensionContext, logger, updateMessageCallback, {
+        const providerOptions: TreeDataProviderOptions = {
             contextKey: ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT,
             customRootContextValue: TreeItemContextValues.CUSTOM_ROOT_TEST_THEME,
             enableCustomRoot: true,
             enableExpansionTracking: true
-        });
-
-        // Inject services into extension context for tree items
-        (this.extensionContext as any).iconManagementService = this.iconManagementService;
-        (this.extensionContext as any).markedItemStateService = this.markedItemStateService;
+        };
+        super(extensionContext, logger, updateMessageCallback, providerOptions);
+        this.logger.trace("[TestThemeTreeDataProvider] Initialized");
     }
 
-    /**
-     * Get current cycle key
-     */
     public getCurrentCycleKey(): string | null {
         return this.currentCycleKey;
     }
-
-    /**
-     * Get current project key
-     */
     public getCurrentProjectKey(): string | null {
         return this.currentProjectKey;
     }
 
-    /**
-     * Populate tree from cycle data
-     */
     public populateFromCycleData(eventData: CycleDataForThemeTreeEvent): void {
         this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.cycleKey}`);
-
         this.currentCycleKey = eventData.cycleKey;
         this.currentProjectKey = eventData.projectKey;
         this.currentCycleLabel = eventData.cycleLabel;
 
-        // Reset custom root if active
         if (this.isCustomRootActive()) {
             this.customRootService.resetCustomRoot();
         }
+        this.storeExpansionState(); // Store expansion state before building new tree
 
         if (!eventData.rawCycleStructure?.nodes?.length || !eventData.rawCycleStructure.root?.base?.key) {
-            this.logger.warn(`[TestThemeTreeDataProvider] Invalid cycle structure for: ${eventData.cycleLabel}`);
+            this.logger.warn(`[TTTDP] Invalid cycle structure for: ${eventData.cycleLabel}`);
             this.updateElements([]);
+            this.updateMessageCallback(`No test themes found for cycle ${this.currentCycleLabel}.`);
             return;
         }
 
         const elements = this.buildTreeFromCycleStructure(eventData.rawCycleStructure);
         this.updateElements(elements);
-
-        // Restore marking state after tree is built
-        this.restoreMarkingState();
+        if (elements.length === 0) {
+            this.updateMessageCallback(`No test themes found for cycle ${this.currentCycleLabel}.`);
+        }
     }
 
-    /**
-     * Fetch root elements - not used directly since we populate from cycle data
-     */
     protected async fetchRootElements(): Promise<TestThemeTreeItem[]> {
         if (!this.currentCycleKey || !this.currentProjectKey) {
             this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
             return [];
         }
-
-        // Fetch fresh cycle structure
-        try {
-            const cycleStructure = await this.projectDataService.fetchCycleStructure(
-                this.currentProjectKey,
-                this.currentCycleKey
+        this.logger.debug(`[TTTDP] fetchRootElements for cycle ${this.currentCycleKey}`);
+        const cycleStructure = await this.projectDataService.fetchCycleStructure(
+            this.currentProjectKey,
+            this.currentCycleKey
+        );
+        if (cycleStructure) {
+            const newRootElements = this.buildTreeFromCycleStructure(cycleStructure);
+            // Since updateElements is not called directly here, manually apply expansion
+            const applyExpansionRecursive = (items: TestThemeTreeItem[]) => {
+                for (const item of items) {
+                    this.applyStoredExpansionState(item);
+                    if (item.children) {
+                        applyExpansionRecursive(item.children as TestThemeTreeItem[]);
+                    }
+                }
+            };
+            applyExpansionRecursive(newRootElements);
+            this.rootElements = newRootElements;
+            this.updateMessageCallback(
+                newRootElements.length === 0 ? `No themes in ${this.currentCycleLabel}` : undefined
             );
-
-            if (cycleStructure) {
-                return this.buildTreeFromCycleStructure(cycleStructure);
-            }
-        } catch (error) {
-            this.logger.error(`[TestThemeTreeDataProvider] Error fetching cycle structure:`, error);
+            return newRootElements;
         }
-
+        this.updateMessageCallback(`Error loading themes for ${this.currentCycleLabel}.`);
         return [];
     }
 
-    /**
-     * Fetch children for an element
-     */
     protected async fetchChildrenForElement(element: TestThemeTreeItem): Promise<TestThemeTreeItem[]> {
         return (element.children as TestThemeTreeItem[]) || [];
     }
 
-    /**
-     * Create tree item from cycle node data
-     */
     protected createTreeItemFromData(data: CycleNodeData, parent: TestThemeTreeItem | null): TestThemeTreeItem | null {
         if (!data?.base?.key || !data?.base?.name) {
-            this.logger.warn("[TestThemeTreeDataProvider] Invalid cycle node data");
+            this.logger.warn("[TTTDP] Invalid cycle node data for tree item creation:", data);
             return null;
         }
-
         const label = data.base.numbering ? `${data.base.numbering} ${data.base.name}` : data.base.name;
-        const hasChildren = this.willHaveVisibleChildren(data);
+        const hasChildren = this.nodeWillHaveVisibleChildren(data, this.getRawNodesFromCurrentRoot());
+
         const collapsibleState = hasChildren
             ? vscode.TreeItemCollapsibleState.Collapsed
             : vscode.TreeItemCollapsibleState.None;
 
         const treeItem = new TestThemeTreeItem(
             label,
-            data.elementType,
+            data.elementType, // Original context for icon/logic
             collapsibleState,
             data,
             this.extensionContext,
             parent
         );
 
-        // Apply stored expansion state
-        this.applyStoredExpansionState(treeItem);
+        // Update marking state from service
+        const itemKey = treeItem.getUniqueId();
+        const itemUID = treeItem.getUID();
+        if (itemKey && itemUID) {
+            const importState = this.markedItemStateService.getItemImportState(itemKey, itemUID);
+            treeItem.updateContextForMarking(importState.shouldShow);
+        }
 
+        this.applyStoredExpansionState(treeItem);
         return treeItem;
     }
 
-    /**
-     * Build tree structure from cycle structure
-     */
+    private getRawNodesFromCurrentRoot(): CycleNodeData[] {
+        // Helper to get the current set of all nodes being processed
+        // This depends on how you store the full cycleStructure when populateFromCycleData is called
+        // For now, let's assume fetchRootElements populates something accessible or we re-fetch if needed.
+        // This is a simplification; ideally, you'd have the full structure available.
+        const activeRoot = this.isCustomRootActive()
+            ? this.getCurrentCustomRoot()?.itemData
+            : (this.rootElements[0]?.itemData as CycleNodeData); // This is flawed if multiple roots
+        if (activeRoot && activeRoot.nodes) {
+            return activeRoot.nodes;
+        } // If root is the cycle_structure.json itself
+        if (this.rootElements.length > 0 && this.rootElements[0]?.itemData?.parentCycleStructure?.nodes) {
+            return this.rootElements[0].itemData.parentCycleStructure.nodes;
+        }
+        this.logger.warn("[TTTDP] Cannot get raw nodes for child check, full structure not readily available.");
+        return [];
+    }
+
+    private nodeWillHaveVisibleChildren(nodeData: CycleNodeData, allNodes: CycleNodeData[]): boolean {
+        // Check if any child of nodeData (based on parentKey) is visible
+        return allNodes.some(
+            (childNode) =>
+                childNode.base.parentKey === nodeData.base.key && this.isNodeVisibleInTestThemeTree(childNode)
+        );
+    }
+
     private buildTreeFromCycleStructure(cycleStructure: CycleStructure): TestThemeTreeItem[] {
         const elementsByKey = new Map<string, CycleNodeData>();
-
-        // Index all nodes by key
         cycleStructure.nodes.forEach((node) => {
             if (node?.base?.key) {
                 elementsByKey.set(node.base.key, node);
             }
         });
 
-        if (elementsByKey.size === 0) {
-            this.logger.error("[TestThemeTreeDataProvider] No valid nodes found in cycle structure");
+        if (elementsByKey.size === 0 && cycleStructure.nodes.length > 0) {
+            this.logger.error("[TTTDP] No nodes with base.key found in cycle structure.");
             return [];
         }
-
         const rootCycleKey = cycleStructure.root.base.key;
         return this.buildTreeRecursively(rootCycleKey, null, elementsByKey);
     }
 
-    /**
-     * Build tree recursively from cycle data
-     */
     private buildTreeRecursively(
         parentKey: string,
         parentItem: TestThemeTreeItem | null,
         elementsByKey: Map<string, CycleNodeData>
     ): TestThemeTreeItem[] {
         const children: TestThemeTreeItem[] = [];
-
         for (const nodeData of elementsByKey.values()) {
             if (nodeData.base.parentKey === parentKey && this.isNodeVisibleInTestThemeTree(nodeData)) {
                 const treeItem = this.createTreeItemFromData(nodeData, parentItem);
                 if (treeItem) {
-                    // Build children recursively
                     const grandChildren = this.buildTreeRecursively(nodeData.base.key, treeItem, elementsByKey);
                     treeItem.children = grandChildren;
-
                     // Update collapsible state based on actual children
                     if (grandChildren.length > 0) {
-                        treeItem.collapsibleState = this.customRootService.shouldBeExpanded(treeItem.getUniqueId())
-                            ? vscode.TreeItemCollapsibleState.Expanded
-                            : vscode.TreeItemCollapsibleState.Collapsed;
+                        treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
                     } else {
                         treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
                     }
-
+                    this.applyStoredExpansionState(treeItem); // Apply after children are set
                     children.push(treeItem);
                 }
             }
         }
-
         return children;
     }
 
-    /**
-     * Check if a cycle node should be visible in test theme tree
-     */
     private isNodeVisibleInTestThemeTree(nodeData: CycleNodeData): boolean {
-        // Exclude test cases
         if (nodeData.elementType === TreeItemContextValues.TEST_CASE_NODE) {
             return false;
         }
-
-        // Filter out non-executable elements and system-locked elements
         if (nodeData.exec?.status === "NotPlanned" || nodeData.exec?.locker === "-2") {
             return false;
         }
-
         return true;
     }
 
-    /**
-     * Check if a node will have visible children
-     */
-    private willHaveVisibleChildren(nodeData: CycleNodeData): boolean {
-        // This would require checking the full cycle structure
-        // For now, assume theme nodes and case set nodes can have children
-        return (
-            nodeData.elementType === TreeItemContextValues.TEST_THEME_NODE ||
-            nodeData.elementType === TreeItemContextValues.TEST_CASE_SET_NODE
-        );
-    }
-
-    /**
-     * Mark an item as generated
-     */
-    public async markItemAsGenerated(item: TestThemeTreeItem): Promise<void> {
-        if (!item.canGenerateTests()) {
-            this.logger.warn(`[TestThemeTreeDataProvider] Item cannot be marked for generation: ${item.label}`);
-            return;
-        }
-
-        const itemKey = item.getUniqueId();
-        const itemUID = item.getUID();
-
-        if (!itemKey || !itemUID) {
-            this.logger.error(`[TestThemeTreeDataProvider] Missing key or UID for item: ${item.label}`);
-            return;
-        }
-
-        try {
-            // Clear previous markings
-            await this.markedItemStateService.clearMarking();
-
-            // Get descendant information
-            const descendantUIDs = item.getDescendantUIDs();
-            const descendantKeysWithUIDs = item.getDescendantKeysWithUIDs();
-
-            // Mark the item and its descendants
-            await this.markedItemStateService.markItem(
-                itemKey,
-                itemUID,
-                item.originalContextValue,
-                true, // isDirectlyGenerated
-                descendantUIDs,
-                descendantKeysWithUIDs
-            );
-
-            // Update UI state for all visible items
-            this.updateTreeItemsMarkingRecursive(this.rootElements);
-
-            this.logger.info(`[TestThemeTreeDataProvider] Marked item as generated: ${item.label}`);
-            this._onDidChangeTreeData.fire(undefined);
-        } catch (error) {
-            this.logger.error(`[TestThemeTreeDataProvider] Error marking item as generated:`, error);
-        }
-    }
-
-    /**
-     * Clear marked status for an item
-     */
-    public async clearMarkedItemStatus(item?: TestThemeTreeItem): Promise<void> {
-        const itemKey = item ? item.getUniqueId() : undefined;
-
-        try {
-            await this.markedItemStateService.clearMarking(itemKey);
-            this.updateTreeItemsMarkingRecursive(this.rootElements);
-
-            this.logger.info(`[TestThemeTreeDataProvider] Cleared marked status for: ${item?.label || "all items"}`);
-            this._onDidChangeTreeData.fire(undefined);
-        } catch (error) {
-            this.logger.error(`[TestThemeTreeDataProvider] Error clearing marked status:`, error);
-        }
-    }
-
-    /**
-     * Get report root UID for an item
-     */
     public getReportRootUIDForItem(item: TestThemeTreeItem): string | undefined {
         const itemKey = item.getUniqueId();
         const itemUID = item.getUID();
-
-        if (!itemKey || !itemUID) {
-            return undefined;
-        }
-
-        return this.markedItemStateService.getReportRootUID(itemKey, itemUID);
+        return itemKey && itemUID ? this.markedItemStateService.getReportRootUID(itemKey, itemUID) : undefined;
     }
 
-    /**
-     * Restore marking state for visible items
-     */
-    private restoreMarkingState(): void {
-        this.updateTreeItemsMarkingRecursive(this.rootElements);
-    }
-
-    /**
-     * Update marking state recursively for tree items
-     */
-    private updateTreeItemsMarkingRecursive(items: TestThemeTreeItem[]): void {
-        for (const item of items) {
-            const itemKey = item.getUniqueId();
-            const itemUID = item.getUID();
-
-            if (itemKey && itemUID) {
-                const importState = this.markedItemStateService.getItemImportState(itemKey, itemUID);
-                item.updateContextForMarking(importState.shouldShow);
-            }
-
-            if (item.children) {
-                this.updateTreeItemsMarkingRecursive(item.children as TestThemeTreeItem[]);
-            }
-        }
-    }
-
-    /**
-     * Clear tree and reset state
-     */
-    public clearTree(): void {
+    public override clearTree(): void {
         this.currentCycleKey = null;
         this.currentProjectKey = null;
         this.currentCycleLabel = null;
-
         super.clearTree();
         this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
+        this.logger.trace("[TestThemeTreeDataProvider] Tree cleared.");
     }
 
-    /**
-     * Override refresh to handle cycle data refresh
-     */
-    public async refresh(isHardRefresh: boolean = false): Promise<void> {
+    public override async refresh(isHardRefresh: boolean = false): Promise<void> {
         this.logger.debug(`[TestThemeTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
-
         if (isHardRefresh && this.isCustomRootActive()) {
-            this.customRootService.handleHardRefresh();
+            this.customRootService.resetCustomRoot();
         }
+        this.storeExpansionState();
 
         if (!this.currentCycleKey || !this.currentProjectKey) {
             this.clearTree();
             return;
         }
 
+        const loadingMessage =
+            this.isCustomRootActive() && this.getCurrentCustomRoot()
+                ? `Refreshing: ${this.getCurrentCustomRoot()?.label}...`
+                : `Loading test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`;
+        this.updateMessageCallback(loadingMessage);
+
         try {
-            // Store expansion state
-            this.storeExpansionState();
-
-            // Show loading message
-            const loadingMessage =
-                this.isCustomRootActive() && this.getCurrentCustomRoot()
-                    ? `Refreshing: ${this.getCurrentCustomRoot()?.label}...`
-                    : `Loading test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`;
-
-            this.updateMessageCallback(loadingMessage);
-
-            // Fetch fresh data
             const cycleStructure = await this.projectDataService.fetchCycleStructure(
                 this.currentProjectKey,
                 this.currentCycleKey
             );
-
             if (cycleStructure) {
                 if (this.isCustomRootActive() && !isHardRefresh) {
-                    // Handle custom root refresh
-                    await this.refreshCustomRoot(cycleStructure);
+                    await this.refreshCustomRootNode(cycleStructure);
                 } else {
-                    // Normal refresh
                     const elements = this.buildTreeFromCycleStructure(cycleStructure);
                     this.updateElements(elements);
-                    this.restoreMarkingState();
                 }
             } else {
                 this.updateElements([]);
             }
         } catch (error) {
-            this.logger.error(`[TestThemeTreeDataProvider] Error during refresh:`, error);
+            this.logger.error(`[TTTDP] Error during refresh:`, error);
             this.updateMessageCallback(`Error loading themes for ${this.currentCycleLabel || this.currentCycleKey}.`);
+            this.updateElements([]);
         }
     }
 
-    /**
-     * Refresh custom root with updated data
-     */
-    private async refreshCustomRoot(cycleStructure: CycleStructure): Promise<void> {
+    private async refreshCustomRootNode(cycleStructure: CycleStructure): Promise<void> {
         const currentRoot = this.getCurrentCustomRoot();
         if (!currentRoot) {
             return;
         }
 
-        // Find updated data for current root
         const currentRootKey = currentRoot.getUniqueId();
-        const updatedNodeData = cycleStructure.nodes.find((node) => node.base.key === currentRootKey);
+        const elementsByKey = new Map<string, CycleNodeData>();
+        cycleStructure.nodes.forEach((node) => node?.base?.key && elementsByKey.set(node.base.key, node));
+
+        const updatedNodeData = elementsByKey.get(currentRootKey);
 
         if (updatedNodeData) {
-            // Update root item data
             currentRoot.itemData = updatedNodeData;
-
-            // Update label if changed
-            const newLabel = updatedNodeData.base.numbering
+            currentRoot.label = updatedNodeData.base.numbering
                 ? `${updatedNodeData.base.numbering} ${updatedNodeData.base.name}`
                 : updatedNodeData.base.name;
-            currentRoot.label = newLabel;
-
-            // Rebuild children
-            const elementsByKey = new Map<string, CycleNodeData>();
-            cycleStructure.nodes.forEach((node) => {
-                if (node?.base?.key) {
-                    elementsByKey.set(node.base.key, node);
-                }
-            });
-
             currentRoot.children = this.buildTreeRecursively(currentRootKey, currentRoot, elementsByKey);
-
-            // Update collapsible state
             currentRoot.collapsibleState =
                 currentRoot.children.length > 0
                     ? vscode.TreeItemCollapsibleState.Expanded
                     : vscode.TreeItemCollapsibleState.None;
 
-            this.rootElements = [currentRoot];
-            this.restoreMarkingState();
-            this._onDidChangeTreeData.fire(currentRoot);
+            this.applyStoredExpansionState(currentRoot);
+            this.updateElements([currentRoot]);
         } else {
-            this.logger.warn(
-                `[TestThemeTreeDataProvider] Custom root not found in refreshed data. Resetting to full view.`
-            );
+            this.logger.warn(`[TTTDP] Custom root ${currentRootKey} not found in refreshed data. Resetting.`);
             this.customRootService.resetCustomRoot();
-            const elements = this.buildTreeFromCycleStructure(cycleStructure);
-            this.updateElements(elements);
-            this.restoreMarkingState();
+            this.refresh(true);
         }
     }
 }
