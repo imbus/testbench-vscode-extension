@@ -281,22 +281,28 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     return code_lenses
 
 
+def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceModel) -> bool:
+    project, tov = existing_resource.tb_tov_context
+    logging.info(f"Project: {project}, TOV: {tov}")
+    if not project or not tov:
+        send_error(ls, ERROR_CONTEXT_NOT_SET)
+        return False
+    if project != ls.project or tov != ls.tov:
+        send_error(ls, ERROR_CONTEXT_MISMATCH)
+        return False
+    return True
+
+
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
 def pull_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
+    existing_resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, existing_resource):
+        return
     new_resource = create_resource(
         uid=subdivision_uid,
     )
-    existing_resource = TestBenchResourceModel.from_file(document.source)
-    project, tov = existing_resource.tb_tov_context
-    # logging.info(f"Project: {project}, TOV: {tov}")
-    if not project or not tov:
-        send_error(ls, ERROR_CONTEXT_NOT_SET)
-        return
-    if project != ls.project or tov != ls.tov:
-        send_error(ls, ERROR_CONTEXT_MISMATCH)
-        return
     change_identifier = ChangeAnnotationIdentifier()
     edits = []
     create_kw_section = not bool(get_keyword_section(existing_resource.file))
@@ -447,9 +453,10 @@ def pull_testbench_keyword(ls: LanguageServer, args):
     document_uri, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, resource):
+        return
     edits = []
     change_identifier = ChangeAnnotationIdentifier()
-
     existing_keyword = resource.get_keyword(keyword_uid)
     new_keyword = create_keyword(
         keyword_uid,
@@ -479,6 +486,8 @@ def push_testbench_keyword(ls: LanguageServer, args):
     document_uri, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, resource):
+        return
     robot_keyword = resource.get_keyword(keyword_uid)
     rd = ResourceDocumentation(document.path)
     new_docu = rd.get_keyword_documentation(keyword_uid)
