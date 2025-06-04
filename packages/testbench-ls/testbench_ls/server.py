@@ -32,7 +32,31 @@ from testbench2robotframework.testbench2robotframework import testbench2robotfra
 from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
-from .messages import COMMAND_GENERATE_TEST_SUITES, ERROR_CONTEXT_NOT_SET, ERROR_CONTEXT_MISMATCH, ERROR_EMPTY_OUTPUT_DIRECTORY, ERROR_SUBDIVISON_MAPPING_FORMAT, ERROR_PUSH_KEYWORD, ERROR_KEYWORD_IS_LOCKED, TESTBENCH_LS_CLASS_NAME
+from .messages import (
+    COMMAND_FETCH_RESULTS,
+    COMMAND_GENERATE_TEST_SUITES,
+    COMMAND_PULL_KEYWORD,
+    COMMAND_PULL_SUBDIVISION,
+    COMMAND_PUSH_KEYWORD,
+    COMMAND_UPDATE_LOGIN_NAME,
+    COMMAND_UPDATE_PROJECT,
+    COMMAND_UPDATE_SERVER_NAME,
+    COMMAND_UPDATE_SERVER_PORT,
+    COMMAND_UPDATE_SESSION_TOKEN,
+    COMMAND_UPDATE_TOV,
+    ERROR_CONTEXT_MISMATCH,
+    ERROR_CONTEXT_NOT_SET,
+    ERROR_EMPTY_OUTPUT_DIRECTORY,
+    ERROR_KEYWORD_IS_LOCKED,
+    ERROR_PUSH_KEYWORD,
+    ERROR_SUBDIVISON_MAPPING_FORMAT,
+    KEYWORD_INTERFACE_CHANGE_LABEL,
+    PULL_KEYWORD_TITLE,
+    PULL_SUBDIVISON_TITLE,
+    PUSH_KEYWORD_TITLE,
+    TESTBENCH_LS_CLASS_NAME,
+    WORKSPACE_APPLY_EDIT_LABEL,
+)
 from .testbench_api.testbench_patch import patch_interaction_details
 from .testbench_resource.resource_creation import (
     create_keyword,
@@ -58,7 +82,7 @@ from .testbench_resource.testbench_resource_model import TestBenchResourceModel
 
 class TestBenchLanguageServer(LanguageServer):
     def __init__(self):
-        super().__init__(TESTBENCH_LS_CLASS_NAME,  __version__)
+        super().__init__(TESTBENCH_LS_CLASS_NAME, __version__)
         self.server_name = None
         self.server_port = None
         self.project = None
@@ -98,6 +122,7 @@ class TestBenchLanguageServer(LanguageServer):
 
 
 testbench_ls = TestBenchLanguageServer()
+
 
 def send_error(ls: LanguageServer, message: str):
     ls.send_notification(
@@ -152,9 +177,8 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         testbench2robotframework(report_path, settings)
 
 
-@testbench_ls.command("testbench_ls.fetchResults")
+@testbench_ls.command(COMMAND_FETCH_RESULTS)
 def generate_test_suites(ls: LanguageServer, kwargs):
-    """Generate Robot Framework test suites via testbench2robotframework."""
     kwargs, *_ = kwargs
     fetch_results.callback(
         config=None,
@@ -170,44 +194,38 @@ def initialize(params: InitializeParams) -> InitializeResult:
     return InitializeResult(capabilities=server_capabilities)
 
 
-@testbench_ls.command("testbench_ls.updateServerName")
+@testbench_ls.command(COMMAND_UPDATE_SERVER_NAME)
 def update_server_name(ls: LanguageServer, args):
-    """Update the server name."""
     new_name, *_ = args
     ls.set_server_name(new_name)
 
 
-@testbench_ls.command("testbench_ls.updateServerPort")
+@testbench_ls.command(COMMAND_UPDATE_SERVER_PORT)
 def update_server_port(ls: LanguageServer, args):
-    """Update the server port."""
     new_port, *_ = args
     ls.set_server_port(new_port)
 
 
-@testbench_ls.command("testbench_ls.updateLoginName")
+@testbench_ls.command(COMMAND_UPDATE_LOGIN_NAME)
 def update_login_name(ls: LanguageServer, args):
-    """Update the login name."""
     new_name, *_ = args
     ls.set_login_name(new_name)
 
 
-@testbench_ls.command("testbench_ls.updateSessionToken")
+@testbench_ls.command(COMMAND_UPDATE_SESSION_TOKEN)
 def update_session_token(ls: LanguageServer, args):
-    """Update the session_token."""
     new_session_token, *_ = args
     ls.set_session_token(new_session_token)
 
 
-@testbench_ls.command("testbench_ls.updateProject")
+@testbench_ls.command(COMMAND_UPDATE_PROJECT)
 def update_project(ls: LanguageServer, args):
-    """Update the project."""
     new_project, *_ = args
     ls.set_project(new_project)
 
 
-@testbench_ls.command("testbench_ls.updateTov")
+@testbench_ls.command(COMMAND_UPDATE_TOV)
 def update_tov(ls: LanguageServer, args):
-    """Update the TOV."""
     new_tov, *_ = args
     ls.set_tov(new_tov)
 
@@ -218,14 +236,14 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     document_uri = params.text_document.uri
     document = testbench_ls.workspace.get_text_document(document_uri)
     testbench_resource = TestBenchResourceModel.from_file(document.source)
-    logging.info(f"subdivion_uid: {testbench_resource.tb_subdivision_uid}")
+    # logging.info(f"subdivion_uid: {testbench_resource.tb_subdivision_uid}")
     if not testbench_resource.tb_subdivision_uid:
         return code_lenses
     pull_resource_lens = CodeLens(
         range=Range(start=Position(line=0, character=0), end=Position(line=0, character=0)),
         command=Command(
-            title="Pull TestBench Subdivision",
-            command="testbench_ls.pullSubdivision",
+            title=PULL_SUBDIVISON_TITLE,
+            command=COMMAND_PULL_SUBDIVISION,
             arguments=[document_uri, testbench_resource.tb_subdivision_uid],
         ),
     )
@@ -241,8 +259,8 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
                         end=Position(line=keyword_line, character=0),
                     ),
                     command=Command(
-                        title="Pull TestBench Keyword",
-                        command="testbench_ls.pullKeyword",
+                        title=PULL_KEYWORD_TITLE,
+                        command=COMMAND_PULL_KEYWORD,
                         arguments=[document_uri, keyword_uid],
                     ),
                 )
@@ -254,8 +272,8 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
                         end=Position(line=keyword_line, character=0),
                     ),
                     command=Command(
-                        title="Push TestBench Keyword",
-                        command="testbench_ls.pushKeyword",
+                        title=PUSH_KEYWORD_TITLE,
+                        command=COMMAND_PUSH_KEYWORD,
                         arguments=[document_uri, keyword_uid],
                     ),
                 )
@@ -263,7 +281,7 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     return code_lenses
 
 
-@testbench_ls.command("testbench_ls.pullSubdivision")
+@testbench_ls.command(COMMAND_PULL_SUBDIVISION)
 def pull_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
@@ -272,12 +290,9 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     )
     existing_resource = TestBenchResourceModel.from_file(document.source)
     project, tov = existing_resource.tb_tov_context
-    logging.info(f"Project: {project}, TOV: {tov}")
+    # logging.info(f"Project: {project}, TOV: {tov}")
     if not project or not tov:
-        send_error(
-            ls,
-            ERROR_CONTEXT_NOT_SET
-        )
+        send_error(ls, ERROR_CONTEXT_NOT_SET)
         return
     if project != ls.project or tov != ls.tov:
         send_error(ls, ERROR_CONTEXT_MISMATCH)
@@ -310,12 +325,12 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
             ],
             change_annotations={
                 change_identifier: ChangeAnnotation(
-                    "Keyword interface changes", needs_confirmation=False
+                    KEYWORD_INTERFACE_CHANGE_LABEL, needs_confirmation=False
                 )
             },
         )
         ls.lsp.send_request(
-            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, "Refactoring Preview")
+            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
         )
 
 
@@ -427,7 +442,7 @@ def create_keyword_edits(
     return edits
 
 
-@testbench_ls.command("testbench_ls.pullKeyword")
+@testbench_ls.command(COMMAND_PULL_KEYWORD)
 def pull_testbench_keyword(ls: LanguageServer, args):
     document_uri, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
@@ -450,16 +465,16 @@ def pull_testbench_keyword(ls: LanguageServer, args):
             ],
             change_annotations={
                 change_identifier: ChangeAnnotation(
-                    "Keyword interface changes", needs_confirmation=True
+                    KEYWORD_INTERFACE_CHANGE_LABEL, needs_confirmation=True
                 )
             },
         )
         ls.lsp.send_request(
-            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, "Refactoring Preview")
+            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
         )
 
 
-@testbench_ls.command("testbench_ls.pushKeyword")
+@testbench_ls.command(COMMAND_PUSH_KEYWORD)
 def push_testbench_keyword(ls: LanguageServer, args):
     document_uri, keyword_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
@@ -480,7 +495,7 @@ def push_testbench_keyword(ls: LanguageServer, args):
         )
     except requests.exceptions.HTTPError as http_error:
         if http_error.response.status_code == 409:
-            send_error(ls,f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
+            send_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
             send_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
 
