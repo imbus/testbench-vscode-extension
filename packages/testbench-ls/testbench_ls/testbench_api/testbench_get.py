@@ -1,5 +1,6 @@
 from .legacy_model import TestElement
 from .model import InteractionSummary
+from .model_utils import from_dict
 from .testbench_resource_connection import TestBenchResourceConnection
 
 
@@ -10,7 +11,7 @@ def get_test_elements(tb_connection: TestBenchResourceConnection) -> list[TestEl
             params={"tovKey": tb_connection.tov_key},
         ).json()
     )
-    return [TestElement(**item) for item in response]
+    return [from_dict(TestElement, item) for item in response]
 
 
 def get_test_element(tb_connection: TestBenchResourceConnection, uid: str) -> dict:
@@ -26,11 +27,10 @@ def get_test_element(tb_connection: TestBenchResourceConnection, uid: str) -> di
 def get_interaction(
     tb_connection: TestBenchResourceConnection, project_key: str, interaction_key: str
 ) -> InteractionSummary:
-    return InteractionSummary(
-        **dict(
-            tb_connection.connection.session.get(
-                f"{tb_connection.connection.server_url}projects/{project_key}/interactions/{interaction_key}/v1",
-                params={"projectKey": project_key, "interactionKey": interaction_key},
-            ).json()
-        )
+    return from_dict(
+        InteractionSummary,
+        tb_connection.connection.session.get(
+            f"{tb_connection.connection.server_url}projects/{project_key}/interactions/{interaction_key}/v1",
+            params={"projectKey": project_key, "interactionKey": interaction_key},
+        ).json(),
     )

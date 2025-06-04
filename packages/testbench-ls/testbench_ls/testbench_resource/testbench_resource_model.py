@@ -30,6 +30,7 @@ class TestBenchResourceModel:
         else:
             self.file: File = File(
                 [
+                    CommentSection(header=SectionHeader.from_params(Token.COMMENT_HEADER)),
                     SettingSection(header=SectionHeader.from_params(Token.SETTING_HEADER)),
                     KeywordSection(header=SectionHeader.from_params(Token.KEYWORD_HEADER)),
                 ],
@@ -93,6 +94,8 @@ class TestBenchResourceModel:
 
     @property
     def comments(self) -> list[str]:
+        if not self.comment_section:
+            return ""
         return [
             token.value
             for comment in self.comment_section.body
@@ -102,10 +105,19 @@ class TestBenchResourceModel:
 
     @property
     def tb_subdivision_uid(self) -> str:
-        uid_match = re.match(r".*tb:uid:(?P<tb_uid>.*$)", self.documentation, re.DOTALL)
+        uid_match = re.search(r".*tb:uid:(?P<tb_uid>.*$)", "".join(self.comments), re.MULTILINE)
         if uid_match:
-            return uid_match.group("tb_uid")
+            return uid_match.group("tb_uid").strip()
         return ""
+
+    @property
+    def tb_tov_context(self) -> tuple[str, str]:
+        context_match = re.search(
+            r".*tb:context:(?P<tb_context>.*$)", "".join(self.comments), re.MULTILINE
+        )
+        if context_match:
+            return tuple(map(str.strip, context_match.group("tb_context").split("/", 1)))
+        return ("", "")
 
     @property
     def keyword_names(self) -> list[str]:

@@ -25,3 +25,6 @@ def update_dependencies(c):
     c.run("pip-compile")
     c.run("python -m nox --session bundle_dependencies")
     
+@task
+def update_language_server(c):
+    shutil.copytree("packages/testbench-ls/testbench_ls", "bundled/libs/testbench_ls", dirs_exist_ok=True)

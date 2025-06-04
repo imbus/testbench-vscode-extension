@@ -41,7 +41,7 @@ def create_resource(
         resource_path = get_interactions_resource_path(test_elements, test_element)
         if not resource:
             resource = TestBenchResourceModel(resource_path)
-            resource.add_documentation(f"tb:uid:{uid}")
+            resource.add_comment(f"tb:uid:{uid}")
         interaction_key = get_interaction_key(test_element)
         interaction_details = get_interaction(
             tb_connection, tb_connection.project_key, interaction_key
