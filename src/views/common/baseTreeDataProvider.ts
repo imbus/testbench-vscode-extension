@@ -27,7 +27,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
     constructor(
         protected readonly extensionContext: vscode.ExtensionContext,
         protected readonly logger: TestBenchLogger,
-        protected readonly updateMessageCallback: (message: string | undefined) => void,
+        protected updateMessageCallback: (message: string | undefined) => void,
         private readonly options: TreeDataProviderOptions
     ) {
         this.customRootService = new CustomRootService<T>(
