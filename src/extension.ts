@@ -144,6 +144,46 @@ function registerSafeCommand(
 
 // TODO: Use context key later to manage visibility of the tree views
 /**
+ * Hides the Projects tree view.
+ */
+export async function hideProjectManagementTreeView(): Promise<void> {
+    if (testElementTreeView) {
+        await vscode.commands.executeCommand("projectManagementTree.removeView");
+    } else {
+        logger.warn("projectManagementTree instance not found, 'removeView' command not executed.");
+    }
+}
+/**
+ * Displays the Projects tree view.
+ */
+export async function displayProjectManagementTreeView(): Promise<void> {
+    if (testElementTreeView) {
+        await vscode.commands.executeCommand("projectManagementTree.focus");
+    } else {
+        logger.warn("projectManagementTree instance not found, 'focus' command not executed.");
+    }
+}
+/**
+ * Hides the Test Theme tree view.
+ */
+export async function hideTestThemeTreeView(): Promise<void> {
+    if (testElementTreeView) {
+        await vscode.commands.executeCommand("testThemeTree.removeView");
+    } else {
+        logger.warn("testThemeTree instance not found, 'removeView' command not executed.");
+    }
+}
+/**
+ * Displays the Test Theme tree view.
+ */
+export async function displayTestThemeTreeView(): Promise<void> {
+    if (testElementTreeView) {
+        await vscode.commands.executeCommand("testThemeTree.focus");
+    } else {
+        logger.warn("testThemeTree instance not found, 'focus' command not executed.");
+    }
+}
+/**
  * Hides the Test Elements tree view.
  */
 export async function hideTestElementsTreeView(): Promise<void> {
@@ -161,46 +201,6 @@ export async function displayTestElementsTreeView(): Promise<void> {
         await vscode.commands.executeCommand("testElementsView.focus");
     } else {
         logger.warn("Test Elements view instance not found, 'focus' command not executed.");
-    }
-}
-/**
- * Hides the Test Theme tree view.
- */
-export async function hideTestThemeTreeView(): Promise<void> {
-    if (testElementTreeView) {
-        await vscode.commands.executeCommand("testThemeTreeView.removeView");
-    } else {
-        logger.warn("testThemeTreeView instance not found, 'removeView' command not executed.");
-    }
-}
-/**
- * Displays the Test Theme tree view.
- */
-export async function displayTestThemeTreeView(): Promise<void> {
-    if (testElementTreeView) {
-        await vscode.commands.executeCommand("testThemeTreeView.focus");
-    } else {
-        logger.warn("testThemeTreeView instance not found, 'focus' command not executed.");
-    }
-}
-/**
- * Hides the Projects tree view.
- */
-export async function hideProjectsTreeView(): Promise<void> {
-    if (testElementTreeView) {
-        await vscode.commands.executeCommand("projectsTreeView.removeView");
-    } else {
-        logger.warn("projectsTreeView instance not found, 'removeView' command not executed.");
-    }
-}
-/**
- * Displays the Projects tree view.
- */
-export async function displayProjectsTreeView(): Promise<void> {
-    if (testElementTreeView) {
-        await vscode.commands.executeCommand("projectsTreeView.focus");
-    } else {
-        logger.warn("projectsTreeView instance not found, 'focus' command not executed.");
     }
 }
 
@@ -267,6 +267,48 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
     context.subscriptions.push(projectTreeView);
     logger.info("[Extension] Project Management Tree View initialized.");
 
+    // Setup event listener for language server context updates based on project selection
+    if (projectTreeView && projectManagementProvider) {
+        context.subscriptions.push(
+            projectTreeView.onDidChangeSelection(async (event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>) => {
+                if (event.selection.length > 0 && projectManagementProvider) {
+                    const selectedItem = event.selection[0];
+                    if (selectedItem instanceof ProjectManagementTreeItem) {
+                        logger.trace(
+                            `[Extension] Project Tree selection changed to: ${selectedItem.label}, context: ${selectedItem.contextValue}`
+                        );
+
+                        const { projectName, tovName } =
+                            projectManagementProvider.getProjectAndTovNamesForItem(selectedItem);
+                        logger.info(
+                            `[Extension] Resolved LS Context: Project Name='${projectName}', TOV Name='${tovName}'`
+                        );
+
+                        if (projectName && tovName) {
+                            await restartLanguageClient(projectName, tovName);
+                        } else if (projectName && !tovName) {
+                            logger.info(`[Extension] Project '${projectName}' selected without a TOV.`);
+                            // await stopLanguageClient();
+                        } else {
+                            // No clear project/TOV context (e.g., clearing selection or root selection)
+                            logger.info("[Extension] No clear Project/TOV context from selection.");
+                            // await stopLanguageClient();
+                        }
+                    } else {
+                        logger.trace(
+                            `[Extension] Selection is not a ProjectManagementTreeItem, ignoring for LS context.`
+                        );
+                    }
+                } else {
+                    // No selection
+                    logger.info("[Extension] Project Tree selection cleared.");
+                    // await stopLanguageClient();
+                }
+            })
+        );
+        logger.info("[Extension] Project Management TreeView selection listener registered.");
+    }
+
     // Initialize Test Theme Tree View
     const updateTestThemeTreeMessage = (message?: string) => {
         if (testThemeTreeView) {
@@ -305,14 +347,6 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
     projectManagementProvider?.refresh(true);
     testThemeProvider?.clearTree();
 
-    // Setup Project TreeView specific event listeners
-    // Expansion/selection for LS updates should be handled by the provider itself or a dedicated service.
-    // if (projectTreeView && projectManagementProvider) {
-    // projectManagementTreeView.setupProjectTreeViewEventListeners(
-    // projectTreeView,
-    // projectManagementProvider
-    // );
-    // }
     logger.info("[Extension] All tree views initialized.");
 }
 
@@ -453,18 +487,61 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         context,
         allExtensionCommands.handleProjectCycleClick,
         async (cycleItem: ProjectManagementTreeItem) => {
-            logger.debug(`Command Called: ${allExtensionCommands.handleProjectCycleClick}`);
-            if (projectManagementProvider) {
-                // Avoid displaying old data in the tree views by clearing if fetching fails.
-                testThemeProvider?.clearTree();
-                testElementsProvider?.clearTree();
+            // cycleItem is of type ProjectManagementTreeItem
+            logger.debug(`Command Called: ${allExtensionCommands.handleProjectCycleClick} for item ${cycleItem.label}`);
+            if (
+                projectManagementProvider &&
+                testThemeProvider &&
+                testElementsProvider &&
+                projectTreeView &&
+                testThemeTreeView &&
+                testElementTreeView
+            ) {
+                // Hide Projects view, show Test Theme and Test Elements views
+                await hideProjectManagementTreeView();
+                await displayTestThemeTreeView();
+                await displayTestElementsTreeView();
 
+                // Clear previous content from Test Theme and Test Elements views
+                testThemeProvider.clearTree();
+                testElementsProvider.clearTree();
+
+                const tovKey = cycleItem.getTovKey();
+                const tovLabel = cycleItem.parent?.label;
+
+                // Update Test Elements View title and set loading message
+                if (tovKey && typeof tovLabel === "string" && testElementTreeView) {
+                    testElementTreeView.title = `Test Elements (${tovLabel})`;
+                    testElementsProvider.showTreeStatusMessage(`Loading elements for TOV: ${tovLabel}...`);
+                } else if (tovKey && testElementTreeView) {
+                    testElementTreeView.title = `Test Elements (TOV Key: ${tovKey})`;
+                    testElementsProvider.showTreeStatusMessage(`Loading elements for TOV Key: ${tovKey}...`);
+                } else if (testElementTreeView) {
+                    testElementTreeView.title = "Test Elements"; // Default title
+                    testElementsProvider.showTreeStatusMessage("Select a TOV to see elements.");
+                }
+
+                // Data Loading for Test Themes
                 await projectManagementProvider.handleCycleClick(cycleItem);
+
+                // Data Loading for Test Elements
+                if (tovKey) {
+                    logger.debug(`[Cmd CycleClick] Fetching test elements for TOV Key: ${tovKey}`);
+                    await testElementsProvider.fetchTestElements(
+                        tovKey,
+                        typeof tovLabel === "string" ? tovLabel : undefined
+                    );
+                } else {
+                    logger.warn(
+                        `[Cmd CycleClick] No TOV Key found for cycle ${cycleItem.label}, cannot fetch test elements.`
+                    );
+                    testElementsProvider.clearTree();
+                }
             } else {
-                logger.error(
-                    "Cycle click cannot be processed: Project management tree data provider is not initialized."
-                );
-                vscode.window.showErrorMessage("Project management tree is not initialized.");
+                const errorMessage =
+                    "Cycle click cannot be processed: One or more tree data providers or views are not initialized.";
+                logger.error(errorMessage);
+                vscode.window.showErrorMessage(errorMessage);
             }
         }
     );
@@ -599,7 +676,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
-        await displayProjectsTreeView();
+        await displayProjectManagementTreeView();
         await hideTestThemeTreeView();
         await hideTestElementsTreeView();
     });
@@ -889,7 +966,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         typeof treeItem.label === "string" ? treeItem.label : undefined
                     );
                     if (areTestElementsFetched) {
-                        await hideProjectsTreeView();
+                        await hideProjectManagementTreeView();
                         await displayTestElementsTreeView();
 
                         // Clicking on the "Show Robotframework Resources" button will not trigger project management tree onDidChangeSelection event,
@@ -1402,7 +1479,7 @@ async function handleTestBenchSessionChange(
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-            await hideProjectsTreeView();
+            await hideProjectManagementTreeView();
             await hideTestThemeTreeView();
             await hideTestElementsTreeView();
             projectManagementProvider?.clearTree();
@@ -1418,7 +1495,7 @@ async function handleTestBenchSessionChange(
         await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
         getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-        await hideProjectsTreeView();
+        await hideProjectManagementTreeView();
         await hideTestThemeTreeView();
         await hideTestElementsTreeView();
         projectManagementProvider?.clearTree();
