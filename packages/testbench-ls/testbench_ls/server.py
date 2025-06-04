@@ -1,4 +1,3 @@
-import logging
 import pathlib
 import re
 
@@ -32,6 +31,7 @@ from testbench2robotframework.testbench2robotframework import testbench2robotfra
 from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
+from .ls_logging import LogLevel, log, show_error
 from .messages import (
     COMMAND_FETCH_RESULTS,
     COMMAND_GENERATE_TEST_SUITES,
@@ -124,13 +124,6 @@ class TestBenchLanguageServer(LanguageServer):
 testbench_ls = TestBenchLanguageServer()
 
 
-def send_error(ls: LanguageServer, message: str):
-    ls.send_notification(
-        f"{TESTBENCH_LS_CLASS_NAME}/error",
-        {"message": message},
-    )
-
-
 def parse_subdivision_mapping(ls: LanguageServer, values: list[str]) -> dict[str, str]:
     subdivision_mapping = {}
     for value in values:
@@ -138,7 +131,7 @@ def parse_subdivision_mapping(ls: LanguageServer, values: list[str]) -> dict[str
             subdivision, import_value = value.split(":", 1)
             subdivision_mapping[subdivision] = import_value
         except ValueError:
-            send_error(ls, ERROR_SUBDIVISON_MAPPING_FORMAT)
+            show_error(ls, ERROR_SUBDIVISON_MAPPING_FORMAT)
     return subdivision_mapping
 
 
@@ -172,7 +165,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         testbench2robotframework(report_path, toml_settings)
     else:
         if kwargs.get("output_directory") == "":
-            send_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
+            show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
             return
         testbench2robotframework(report_path, settings)
 
@@ -236,7 +229,6 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     document_uri = params.text_document.uri
     document = testbench_ls.workspace.get_text_document(document_uri)
     testbench_resource = TestBenchResourceModel.from_file(document.source)
-    # logging.info(f"subdivion_uid: {testbench_resource.tb_subdivision_uid}")
     if not testbench_resource.tb_subdivision_uid:
         return code_lenses
     pull_resource_lens = CodeLens(
@@ -283,12 +275,16 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
 
 def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceModel) -> bool:
     project, tov = existing_resource.tb_tov_context
-    logging.info(f"Project: {project}, TOV: {tov}")
+    log(
+        ls,
+        f"Checking testbench context. Selected context: {ls.project}/{ls.tov} - Resource context: {project}/{tov} ",
+        LogLevel.DEBUG,
+    )
     if not project or not tov:
-        send_error(ls, ERROR_CONTEXT_NOT_SET)
+        show_error(ls, ERROR_CONTEXT_NOT_SET)
         return False
     if project != ls.project or tov != ls.tov:
-        send_error(ls, ERROR_CONTEXT_MISMATCH)
+        show_error(ls, ERROR_CONTEXT_MISMATCH)
         return False
     return True
 
@@ -504,9 +500,9 @@ def push_testbench_keyword(ls: LanguageServer, args):
         )
     except requests.exceptions.HTTPError as http_error:
         if http_error.response.status_code == 409:
-            send_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
+            show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
-            send_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+            show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
 
 
 # @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
@@ -603,7 +599,6 @@ def start_language_server(
     project: str,
     tov: str,
 ):
-    logging.basicConfig(filename="pygls.log", filemode="w", level=logging.DEBUG)
     TestBenchResourceConnection(server_name, server_port, login_name, session_token, project, tov)
     testbench_ls.set_server_name(server_name)
     testbench_ls.set_server_port(server_port)
