@@ -6,7 +6,7 @@
 import * as vscode from "vscode";
 import { BaseTreeItem } from "../common/baseTreeItem";
 import { TreeItemContextValues } from "../../constants";
-import { IconManagementService } from "../../services/iconManagementService";
+import { IconContext, IconManagementService } from "../../services/iconManagementService";
 import { TestBenchLogger } from "../../testBenchLogger";
 
 export type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
@@ -41,10 +41,9 @@ export class TestElementTreeItem extends BaseTreeItem {
             testElementData?.children && testElementData.children.length > 0
                 ? vscode.TreeItemCollapsibleState.Collapsed
                 : vscode.TreeItemCollapsibleState.None;
-
         super(
             label,
-            testElementData.elementType,
+            TestElementTreeItem.getContextValueForElementType(testElementData.elementType),
             collapsibleState,
             testElementData,
             extensionContext,
@@ -52,6 +51,7 @@ export class TestElementTreeItem extends BaseTreeItem {
             iconService,
             parent
         );
+
         this.testElementData = testElementData;
         this.contextValue = this.getContextValueForElementType(testElementData.elementType);
 
@@ -59,30 +59,95 @@ export class TestElementTreeItem extends BaseTreeItem {
         this.description = testElementData.uniqueID || "";
     }
 
+    private static getContextValueForElementType(elementType: TestElementType): string {
+        switch (elementType) {
+            case "Subdivision":
+                return TreeItemContextValues.SUBDIVISION;
+            case "Interaction":
+                return TreeItemContextValues.INTERACTION;
+            case "DataType":
+                return TreeItemContextValues.DATA_TYPE;
+            case "Condition":
+                return TreeItemContextValues.CONDITION;
+            default:
+                return TreeItemContextValues.TEST_ELEMENT;
+        }
+    }
+
+    /**
+     * Override icon update to handle test element specific logic
+     */
+    public updateIcon(): void {
+        // testElementData might not be initialized yet during constructor
+        if (!this.testElementData) {
+            this.logger.trace(
+                `[TestElementTreeItem] Skipping icon update - testElementData not initialized yet for: ${this.label}`
+            );
+            super.updateIcon(); // Fall back to base implementation
+            return;
+        }
+
+        this.logger.trace(
+            `[TestElementTreeItem] Updating icon for element: ${this.label}, type: ${this.testElementData.elementType}`
+        );
+
+        try {
+            const iconContext: IconContext = {
+                contextValue: this.getIconContextValue(),
+                status: this.state.status,
+                isMarked: this.state.isMarked,
+                isCustomRoot: this.state.isCustomRoot,
+                originalContextValue: this.originalContextValue
+            };
+
+            this.iconPath = this.iconService.getIconUris(iconContext, "testElement");
+        } catch (error) {
+            this.logger.error(`Error updating icon for test element ${this.label}:`, error);
+            this.setFallbackIcon();
+        }
+    }
+
+    /**
+     * Get the correct context value for icon lookup
+     */
+    private getIconContextValue(): string {
+        // Safety check
+        if (!this.testElementData) {
+            return "Other";
+        }
+
+        // For subdivisions, use the specific subdivision type based on state
+        if (this.testElementData.elementType === "Subdivision") {
+            return this.state.subdivisionIconType || "MissingSubdivision";
+        }
+
+        // For other types, use the TestElementType directly (which matches the icon registry keys)
+        return this.testElementData.elementType;
+    }
+
     protected extractStatus(): string {
-        return this.testElementData.details?.status || "None";
+        const data = this.itemData as TestElementData;
+        return data.details?.status || "None";
     }
 
     protected buildTooltipContent(): vscode.MarkdownString {
-        const lines: string[] = [
-            `Type: ${this.testElementData.elementType || "N/A"}`,
-            `Name: ${this.testElementData.name || this.label}`
-        ];
+        const data = this.itemData as TestElementData;
+        const lines: string[] = [`Type: ${data.elementType || "N/A"}`, `Name: ${data.name || this.label}`];
 
-        if (this.testElementData.uniqueID) {
-            lines.push(`UniqueID: ${this.testElementData.uniqueID}`);
+        if (data.uniqueID) {
+            lines.push(`UniqueID: ${data.uniqueID}`);
         }
 
-        if (this.testElementData.libraryKey) {
-            lines.push(`LibraryKey: ${this.testElementData.libraryKey}`);
+        if (data.libraryKey) {
+            lines.push(`LibraryKey: ${data.libraryKey}`);
         }
 
-        if (this.testElementData.details) {
-            if (this.testElementData.details.hasVersion !== undefined) {
-                lines.push(`Has Version: ${this.testElementData.details.hasVersion}`);
+        if (data.details) {
+            if (data?.details?.hasVersion !== undefined) {
+                lines.push(`Has Version: ${data?.details?.hasVersion}`);
             }
-            if (this.testElementData.details.status !== undefined) {
-                lines.push(`Status: ${this.testElementData.details.status}`);
+            if (data?.details?.status !== undefined) {
+                lines.push(`Status: ${data?.details?.status}`);
             }
         } else {
             lines.push("Details: Not available");

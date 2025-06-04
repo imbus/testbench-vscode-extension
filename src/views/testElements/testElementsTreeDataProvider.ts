@@ -92,9 +92,9 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     public async fetchTestElements(tovKey: string, newTreeViewTitle?: string): Promise<boolean> {
+        this.logger.debug(`[TETDP] Fetching test elements for TOV: ${tovKey}`);
         this.isDataFetchAttempted = true;
         const tovLabel = newTreeViewTitle || tovKey;
-        this.logger.debug(`[TETDP] Fetching test elements for TOV: ${tovKey}`);
         this.updateMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
         this.updateElements([]);
 
@@ -102,16 +102,10 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             const rawtestElementsJsonData = await this.testElementDataService.getTestElements(tovKey);
             if (rawtestElementsJsonData) {
                 this.currentTovKey = tovKey;
-                this.logger.debug(`[TETDP] Successfully fetched test elements for TOV key: ${tovKey}`);
                 const hierarchicalData: TestElementData[] = this.testElementTreeBuilder.build(rawtestElementsJsonData);
-                this.logger.debug(`[TETDP] Hierarchical data built for TOV key: ${tovKey}`, hierarchicalData);
                 const treeItems: TestElementTreeItem[] = this.convertHierarchicalDataToTreeItems(
                     hierarchicalData,
                     null
-                );
-                this.logger.debug(
-                    `[TETDP] Converted hierarchical data to tree items for TOV key: ${tovKey}`,
-                    treeItems
                 );
 
                 await this.updateAllItemIcons(treeItems);
@@ -141,10 +135,8 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         dataArray: TestElementData[],
         parent: TestElementTreeItem | null
     ): TestElementTreeItem[] {
-        this.logger.trace(`[TETDP] Converting hierarchical data to tree items for parent: ${parent?.label || "root"}`);
         return dataArray.map((data) => {
             const treeItem = this.createTreeItemFromData(data, parent);
-            this.logger.trace(`[TETDP] Processing data item: ${data.name} (Type: ${data.elementType}, ID: ${data.id})`);
             if (data.children && data.children.length > 0) {
                 treeItem.children = this.convertHierarchicalDataToTreeItems(data.children, treeItem);
                 const uniqueId = treeItem.getUniqueId();
@@ -155,9 +147,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             } else {
                 treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
             }
-            this.logger.trace(
-                `[TETDP] Created tree item in convertHierarchicalDataToTreeItems: ${treeItem.label} (ID: ${treeItem.id})`
-            );
             return treeItem;
         });
     }
@@ -201,7 +190,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     protected createTreeItemFromData(data: TestElementData, parent: TestElementTreeItem | null): TestElementTreeItem {
-        this.logger.trace(`[TETDP] Creating tree item from data: ${data.name} (Type: ${data.elementType})`);
         const item = new TestElementTreeItem(
             data,
             this.extensionContext,
@@ -209,7 +197,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             this.iconManagementService,
             parent
         );
-        this.logger.trace(`[TETDP] Created tree item: ${item.label} (ID: ${item.id})`);
+        this.logger.trace(`[TETDP] Created tree item.`);
         this.applyStoredExpansionState(item);
         return item;
     }

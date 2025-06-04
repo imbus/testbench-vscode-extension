@@ -4,7 +4,6 @@
  */
 
 import * as vscode from "vscode";
-import { logger } from "../../extension";
 import { IconManagementService } from "../../services/iconManagementService";
 import { TestBenchLogger } from "../../testBenchLogger";
 
@@ -207,6 +206,5 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
      */
     public handleExpansion(expanded: boolean): void {
         this.updateState({ isExpanded: expanded });
-        logger.trace(`Item ${this.label} expansion state changed to: ${expanded}`);
     }
 }
