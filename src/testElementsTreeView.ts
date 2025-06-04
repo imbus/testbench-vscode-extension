@@ -14,7 +14,7 @@ import { getExtensionConfiguration, getExtensionSetting } from "./configuration"
 
 type TestElementType = "Subdivision" | "DataType" | "Interaction" | "Condition" | "Other";
 
-export const fileContentOfRobotResourceSubdivisionFile = `*** Settings ***\nDocumentation    tb:uid:`;
+export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
 
 /**
  * Interface representing a test element from the json response of the server.
@@ -918,7 +918,7 @@ export async function handleSubdivision(subdivisionTreeItem: TestElementTreeItem
             await createFolderStructure(path.dirname(resourcePath));
 
             if (!(await isFilePresentLocally(resourcePath))) {
-                const fileContent: string = `${fileContentOfRobotResourceSubdivisionFile}${subdivisionTreeItem.testElementData.uniqueID}\n`;
+                const fileContent: string = `${fileContentOfRobotResourceSubdivisionFile}${subdivisionTreeItem.testElementData.uniqueID}\n\n`;
                 await fs.promises.writeFile(resourcePath, fileContent);
             }
 
@@ -1008,7 +1008,7 @@ export async function handleInteraction(interactionTreeItem: TestElementTreeItem
     try {
         if (!(await isFilePresentLocally(processedRobotResourceAncestorPath))) {
             await createFolderStructure(path.dirname(processedRobotResourceAncestorPath));
-            const fileContent: string = `${fileContentOfRobotResourceSubdivisionFile}${robotResourceAncestor.testElementData.uniqueID}\n`;
+            const fileContent: string = `${fileContentOfRobotResourceSubdivisionFile}${robotResourceAncestor.testElementData.uniqueID}\n\n`;
             await fs.promises.writeFile(processedRobotResourceAncestorPath, fileContent);
             logger.trace(`[handleInteraction] Resource file created at ${processedRobotResourceAncestorPath}`);
         } else {
