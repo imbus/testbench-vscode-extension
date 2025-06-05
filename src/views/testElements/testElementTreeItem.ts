@@ -60,25 +60,10 @@ export class TestElementTreeItem extends BaseTreeItem {
         );
 
         this.testElementData = testElementData;
-        this.contextValue = this.getContextValueForElementType(testElementData.elementType);
+        this.contextValue = TestElementTreeItem.getContextValueForElementType(testElementData.elementType);
 
         // Display the uniqueID as a description next to the label
         this.description = testElementData.uniqueID || "";
-    }
-
-    private static getContextValueForElementType(elementType: TestElementType): string {
-        switch (elementType) {
-            case "Subdivision":
-                return TreeItemContextValues.SUBDIVISION;
-            case "Interaction":
-                return TreeItemContextValues.INTERACTION;
-            case "DataType":
-                return TreeItemContextValues.DATA_TYPE;
-            case "Condition":
-                return TreeItemContextValues.CONDITION;
-            default:
-                return TreeItemContextValues.TEST_ELEMENT;
-        }
     }
 
     /**
@@ -169,7 +154,7 @@ export class TestElementTreeItem extends BaseTreeItem {
         return "testElement";
     }
 
-    private getContextValueForElementType(elementType: TestElementType): string {
+    private static getContextValueForElementType(elementType: TestElementType): string {
         switch (elementType) {
             case "Subdivision":
                 return TreeItemContextValues.SUBDIVISION;
