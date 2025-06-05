@@ -1,6 +1,6 @@
 /**
  * @file src/views/testElements/testElementsTreeDataProvider.ts
- * @description Test elements tree data provider using new architecture
+ * @description Test elements tree data provider
  */
 
 import * as vscode from "vscode";
@@ -13,15 +13,12 @@ import { TestElementTreeBuilder } from "./testElementTreeBuilder";
 import { IconManagementService } from "../../services/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
 import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
+import { StateChangeNotification } from "../../services/unifiedTreeStateManager";
 
 export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
 
 /**
  * Appends `.resource` extension to a file path if not already present and normalizes the path by trimming whitespace.
- *
- * @param baseTargetPath - The base file path to process
- * @param logger - Logger instance for tracing the operation
- * @returns The normalized path with `.resource` extension and trimmed whitespace
  */
 function appendResourceExtensionAndTrimPathLocal(baseTargetPath: string, logger: TestBenchLogger): string {
     logger.trace(`Adding .resource extension and trimming path: ${baseTargetPath}`);
@@ -34,8 +31,6 @@ function appendResourceExtensionAndTrimPathLocal(baseTargetPath: string, logger:
 
 /**
  * Removes all occurrences of "[Robot-Resource]" from a given path string.
- * @param {string} pathStr The original path string.
- * @returns {string} The cleaned path string.
  */
 function removeRobotResourceFromPathString(pathStr: string, logger: TestBenchLogger): string {
     const cleanedPath: string = pathStr.replace(/\[Robot-Resource\]/g, "");
@@ -75,7 +70,20 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
         this.operationManager = new CancellableOperationManager(logger);
-        this.logger.trace("[TestElementsTreeDataProvider] Initialized with enhanced state management");
+        this.logger.trace("[TestElementsTreeDataProvider] Initialized with unified state management");
+    }
+
+    /**
+     * Handle unified state changes for better coordination
+     */
+    protected override onUnifiedStateChange(notification: StateChangeNotification): void {
+        super.onUnifiedStateChange(notification);
+
+        if (notification.changedFields.includes("operationalState")) {
+            this.logger.trace(
+                `[TestElementsTreeDataProvider] Operational state changed to: ${notification.newState.operationalState}`
+            );
+        }
     }
 
     public getCurrentTovKey(): string {
@@ -84,12 +92,10 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
     /**
      * Sets the current TOV key and optionally the display name for user-facing messages
-     * @param tovKey The TOV key identifier
-     * @param displayName Optional human-readable name for the TOV (defaults to tovKey)
      */
     public setCurrentTovKey(tovKey: string, displayName?: string): void {
         this.currentTovKey = tovKey;
-        this.setDataSource(tovKey, displayName || tovKey, displayName || tovKey);
+        this.getUnifiedStateManager().setDataSource(tovKey, displayName || tovKey, displayName || tovKey);
     }
 
     public isTreeDataEmpty(): boolean {
@@ -97,30 +103,25 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     /**
-     * Updates the tree view status message using the new state manager
+     * Updates the tree view status message using the unified state manager
      */
     public updateTreeViewStatusMessage(): void {
-        const currentState = this.getStateManager().getCurrentState();
+        const currentState = this.getUnifiedStateManager().getCurrentUnifiedState();
         this.logger.trace(
-            `[TETDP] Current state: ${currentState.operationalState}, Empty state: ${currentState.emptyState}`
+            `[TestElementsTreeDataProvider] Current state: ${currentState.operationalState}, Empty state: ${currentState.emptyState}`
         );
     }
 
     /**
      * Handles tree item expansion/collapse events to maintain state.
-     * @param element The tree item that was expanded/collapsed
-     * @param expanded Whether the item is now expanded or collapsed
      */
     public handleItemExpansion(element: TestElementTreeItem, expanded: boolean): void {
-        this.logger.trace(`[TETDP] Item ${element.label} expansion changed to: ${expanded}`);
+        this.logger.trace(`[TestElementsTreeDataProvider] Item ${element.label} expansion changed to: ${expanded}`);
         this.handleExpansion(element, expanded);
     }
 
     /**
      * Fetches test elements for a given TOV key and rebuilds the tree while preserving expansion state.
-     * @param tovKey The Test Object Version key to fetch elements for
-     * @param newTreeViewTitle Optional title for the tree view
-     * @returns Promise<boolean> indicating success/failure
      */
     public async fetchTestElements(tovKey: string, newTreeViewTitle?: string): Promise<boolean> {
         this.operationManager.cancelOperation(TestElementsTreeDataProvider.FETCH_OPERATION);
@@ -132,12 +133,18 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
         const tovLabel = newTreeViewTitle || tovKey;
         try {
-            this.logger.debug(`[TETDP] Fetching test elements for TOV: ${tovKey}`);
+            this.logger.debug(`[TestElementsTreeDataProvider] Fetching test elements for TOV: ${tovKey}`);
 
             const tovDisplayName = newTreeViewTitle || tovKey;
 
-            this.setDataSource(tovKey, tovLabel, tovDisplayName);
-            this.setLoadingState(`Loading test elements for TOV: ${tovLabel}...`);
+            // Single coordinated state update through unified manager
+            this.getUnifiedStateManager().updateState({
+                dataSourceKey: tovKey,
+                dataSourceLabel: tovLabel,
+                dataSourceDisplayName: tovDisplayName,
+                operationalState: TreeViewOperationalState.LOADING,
+                metadata: { loadingMessage: `Loading test elements for TOV: ${tovLabel}...` }
+            });
 
             const isRefreshingSameTov = this.currentTovKey === tovKey;
             if (isRefreshingSameTov && this.rootElements.length > 0) {
@@ -146,20 +153,22 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
             this.updateElements([]);
 
-            // Check for cancellation before expensive operation
             operation.throwIfCancelled("before data fetch");
 
             const rawtestElementsJsonData = await this.testElementDataService.getTestElements(tovKey);
 
-            // Check for cancellation after data fetch
             operation.throwIfCancelled("after data fetch");
 
             if (rawtestElementsJsonData) {
                 this.currentTovKey = tovKey;
-                this.recordFetchAttempt(true, rawtestElementsJsonData.length);
 
                 if (rawtestElementsJsonData.length === 0) {
-                    this.updateTreeState({
+                    // Coordinated state update for empty server data
+                    this.getUnifiedStateManager().updateState({
+                        dataFetchAttempted: true,
+                        serverDataReceived: true,
+                        itemsBeforeFiltering: 0,
+                        itemsAfterFiltering: 0,
                         operationalState: TreeViewOperationalState.EMPTY,
                         emptyState: TreeViewEmptyState.SERVER_NO_DATA
                     });
@@ -167,7 +176,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                     return true;
                 }
 
-                // Check for cancellation before processing
                 operation.throwIfCancelled("before tree building");
 
                 const hierarchicalData: TestElementData[] = this.testElementTreeBuilder.build(rawtestElementsJsonData);
@@ -176,24 +184,25 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                     null
                 );
 
-                // Check for cancellation before final update
                 operation.throwIfCancelled("before tree update");
 
-                this.recordFetchAttempt(true, rawtestElementsJsonData.length, treeItems.length);
+                // Coordinated state update for successful fetch
+                this.getUnifiedStateManager().updateState({
+                    dataFetchAttempted: true,
+                    serverDataReceived: true,
+                    itemsBeforeFiltering: rawtestElementsJsonData.length,
+                    itemsAfterFiltering: treeItems.length,
+                    operationalState:
+                        treeItems.length === 0 ? TreeViewOperationalState.EMPTY : TreeViewOperationalState.READY,
+                    emptyState: treeItems.length === 0 ? TreeViewEmptyState.FILTERED_OUT : undefined
+                });
 
-                // Update basic icons immediately (fast operation)
+                // Update basic icons immediately
                 this.updateBasicIcons(treeItems);
                 this.updateElements(treeItems);
 
                 // Start background icon updates with cancellation support
                 this.updateSubdivisionIconsInBackground(treeItems, operation);
-
-                if (treeItems.length === 0) {
-                    this.updateTreeState({
-                        operationalState: TreeViewOperationalState.EMPTY,
-                        emptyState: TreeViewEmptyState.FILTERED_OUT
-                    });
-                }
 
                 return true;
             } else {
@@ -202,22 +211,17 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             }
         } catch (error) {
             if (error instanceof vscode.CancellationError) {
-                this.logger.debug(`[TETDP] Fetch operation cancelled for TOV: ${tovKey}`);
+                this.logger.debug(`[TestElementsTreeDataProvider] Fetch operation cancelled for TOV: ${tovKey}`);
                 return false;
             }
 
             this.handleFetchFailure(tovLabel, error as Error);
             return false;
-        } finally {
-            // Operation cleanup is handled by the operation manager
         }
     }
 
     /**
      * Updates the basic icons for test element tree items recursively.
-     * Non-subdivision items get their standard icons updated, while subdivisions
-     * get a default "MissingSubdivision" icon without file validation.
-     * @param items - Array of test element tree items to update
      */
     private updateBasicIcons(items: TestElementTreeItem[]): void {
         const updateRecursive = (items: TestElementTreeItem[]) => {
@@ -238,13 +242,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
     /**
      * Updates subdivision element icons in the background using batched processing.
-     *
-     * Recursively collects all subdivision items from the tree, then processes them
-     * in batches of 10 to avoid overwhelming the file system. Includes throttling
-     * with small delays between batches to maintain UI responsiveness.
-     *
-     * @param items - Array of test element tree items to process
-     * @returns Promise that resolves when all subdivision icons are updated
      */
     private async updateSubdivisionIconsInBackground(
         items: TestElementTreeItem[],
@@ -254,7 +251,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         this.operationManager.cancelOperation(TestElementsTreeDataProvider.ICON_UPDATE_OPERATION);
 
         try {
-            // Collect all subdivision items
             const subdivisionItems: TestElementTreeItem[] = [];
             const collectSubdivisions = (items: TestElementTreeItem[]) => {
                 for (const item of items) {
@@ -278,7 +274,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             const totalBatches = Math.ceil(subdivisionItems.length / batchSize);
 
             this.logger.trace(
-                `[TETDP] Starting background icon update for ${subdivisionItems.length} subdivisions in ${totalBatches} batches`
+                `[TestElementsTreeDataProvider] Starting background icon update for ${subdivisionItems.length} subdivisions in ${totalBatches} batches`
             );
 
             for (let i = 0; i < subdivisionItems.length; i += batchSize) {
@@ -302,12 +298,14 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                 }
             }
 
-            this.logger.trace(`[TETDP] Completed background icon update for ${subdivisionItems.length} subdivisions`);
+            this.logger.trace(
+                `[TestElementsTreeDataProvider] Completed background icon update for ${subdivisionItems.length} subdivisions`
+            );
         } catch (error) {
             if (error instanceof vscode.CancellationError) {
-                this.logger.debug(`[TETDP] Background icon update cancelled`);
+                this.logger.debug(`[TestElementsTreeDataProvider] Background icon update cancelled`);
             } else {
-                this.logger.error(`[TETDP] Error during background icon update:`, error);
+                this.logger.error(`[TestElementsTreeDataProvider] Error during background icon update:`, error);
             }
         }
     }
@@ -323,26 +321,25 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             operation.throwIfCancelled(`icon update for ${item.label}`);
 
             if (item.isDisposed) {
-                this.logger.trace(`[TETDP] Skipping icon update for disposed item: ${item.label}`);
+                this.logger.trace(
+                    `[TestElementsTreeDataProvider] Skipping icon update for disposed item: ${item.label}`
+                );
                 return;
             }
 
             await this.updateSingleItemIcon(item);
         } catch (error) {
             if (error instanceof vscode.CancellationError) {
-                throw error; // Re-throw cancellation errors
+                throw error;
             }
 
-            this.logger.error(`[TETDP] Error updating icon for item ${item.label}:`, error);
+            this.logger.error(`[TestElementsTreeDataProvider] Error updating icon for item ${item.label}:`, error);
             // Continue with other items despite individual failures
         }
     }
 
     /**
      * Converts hierarchical test element data to tree items with proper expansion state handling.
-     * @param dataArray Array of test element data to convert
-     * @param parent Parent tree item (null for root items)
-     * @returns Array of tree items with children and proper expansion states
      */
     private convertHierarchicalDataToTreeItems(
         dataArray: TestElementData[],
@@ -353,8 +350,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                 const treeItem = this.createTreeItemFromData(data, parent);
                 if (data.children && data.children.length > 0) {
                     treeItem.children = this.convertHierarchicalDataToTreeItems(data.children, treeItem);
-
-                    // Set default collapsible state based on children
                     treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
 
                     this.applyStoredExpansionState(treeItem);
@@ -364,19 +359,17 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                 return treeItem;
             });
         } catch (error) {
-            this.logger.error(`[TETDP] Error converting hierarchical data to tree items:`, error);
-            this.setErrorState(error as Error, TreeViewEmptyState.PROCESSING_ERROR);
+            this.logger.error(
+                `[TestElementsTreeDataProvider] Error converting hierarchical data to tree items:`,
+                error
+            );
+            this.getUnifiedStateManager().setError(error as Error, TreeViewEmptyState.PROCESSING_ERROR);
             throw error;
         }
     }
 
     /**
      * Updates the icon for a single test element tree item based on its type and file existence.
-     *
-     * For subdivision elements, checks if the corresponding file exists and updates the icon accordingly.
-     * For other element types, performs a standard icon update.
-     *
-     * @param item - The test element tree item to update
      */
     private async updateSingleItemIcon(item: TestElementTreeItem): Promise<void> {
         const elementData = item.testElementData;
@@ -401,7 +394,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
     /**
      * Fetches the root test elements for the tree view.
-     * @returns A promise that resolves to an array of root test element tree items.
      */
     protected async fetchRootElements(): Promise<TestElementTreeItem[]> {
         return this.rootElements;
@@ -409,8 +401,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
     /**
      * Retrieves the child elements for a given test element tree item.
-     * @param element - The parent test element tree item to fetch children for
-     * @returns A promise that resolves to an array of child test element tree items, or empty array if no children exist
      */
     protected async fetchChildrenForElement(element: TestElementTreeItem): Promise<TestElementTreeItem[]> {
         return (element.children as TestElementTreeItem[]) || [];
@@ -418,9 +408,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
     /**
      * Creates a tree item from test element data with proper state initialization.
-     * @param data Test element data to create tree item from
-     * @param parent Parent tree item (null for root items)
-     * @returns Created tree item with proper expansion state applied
      */
     protected createTreeItemFromData(data: TestElementData, parent: TestElementTreeItem | null): TestElementTreeItem {
         const item = new TestElementTreeItem(
@@ -430,7 +417,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             this.iconManagementService,
             parent
         );
-        this.logger.trace(`[TETDP] Created tree item.`);
+        this.logger.trace(`[TestElementsTreeDataProvider] Created tree item.`);
 
         this.applyStoredExpansionState(item);
         return item;
@@ -438,27 +425,19 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
     /**
      * Handles failures when fetching test elements for a TOV.
-     * Resets the current TOV key, logs the error, shows user notification,
-     * updates the message callback, and clears the elements list.
-     *
-     * @param tovLabel - The label of the TOV that failed to fetch
-     * @param error - Optional error object or message from the failed operation
      */
     private handleFetchFailure(tovLabel: string, error?: Error): void {
         this.currentTovKey = "";
         const errorMsg = error ? error.message : "Unknown error";
-        this.logger.error(`[TETDP] Fetch failed for TOV "${tovLabel}": ${errorMsg}`, error);
+        this.logger.error(`[TestElementsTreeDataProvider] Fetch failed for TOV "${tovLabel}": ${errorMsg}`, error);
 
-        this.setErrorState(error || new Error(errorMsg), TreeViewEmptyState.FETCH_ERROR);
+        this.getUnifiedStateManager().setError(error || new Error(errorMsg), TreeViewEmptyState.FETCH_ERROR);
         vscode.window.showErrorMessage(`Failed to fetch test elements for TOV "${tovLabel}".`);
         this.updateElements([]);
     }
 
     /**
      * Updates the tree elements and applies expansion state tracking if enabled.
-     * Fires tree data change event and updates operational state based on element count.
-     *
-     * @param elements - Array of test element tree items to display
      */
     protected override updateElements(elements: TestElementTreeItem[]): void {
         this.rootElements = elements;
@@ -478,7 +457,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         this._onDidChangeTreeData.fire(undefined);
 
         if (elements.length !== 0) {
-            this.updateTreeState({
+            this.getUnifiedStateManager().updateState({
                 operationalState: TreeViewOperationalState.READY
             });
         }
@@ -486,12 +465,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
     /**
      * Handles the "Go to Resource" command for a test element tree item.
-     *
-     * For Subdivisions: Creates/opens the corresponding resource file or reveals the folder in explorer of VS Code.
-     * For Interactions: Navigates to the parent robot resource or subdivision file.
-     *
-     * @param item - The test element tree item to process
-     * @returns Promise that resolves when the operation completes
      */
     public async handleGoToResourceCommand(item: TestElementTreeItem): Promise<void> {
         if (!item || !item.testElementData) {
@@ -548,12 +521,6 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
     /**
      * Creates a new interaction element under a subdivision in the test element tree.
-     *
-     * @param subdivisionItem - The subdivision tree item that will contain the new interaction
-     * @param interactionName - The name for the new interaction element
-     * @returns Promise that resolves to the created TestElementData or null if creation fails
-     *
-     * @throws Shows error message if the parent item is not a subdivision
      */
     public async createInteractionUnderSubdivision(
         subdivisionItem: TestElementTreeItem,
@@ -603,8 +570,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     /**
-     * Clears the tree data and resets the provider state.
-     * Resets the current TOV key, data fetch flag, and updates the tree view status message.
+     * Clears the tree data and resets the provider state using unified state management.
      */
     public override clearTree(): void {
         this.logger.trace("[TestElementsTreeDataProvider] Clearing tree and cancelling operations");
@@ -617,7 +583,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             try {
                 item.dispose();
             } catch (error) {
-                this.logger.error(`[TETDP] Error disposing tree item during clear:`, error);
+                this.logger.error(`[TestElementsTreeDataProvider] Error disposing tree item during clear:`, error);
             }
         });
 
@@ -639,7 +605,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             try {
                 item.dispose();
             } catch (error) {
-                this.logger.error(`[TETDP] Error disposing tree item:`, error);
+                this.logger.error(`[TestElementsTreeDataProvider] Error disposing tree item:`, error);
             }
         });
 
@@ -647,20 +613,20 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     /**
-     * Refreshes the test elements tree data provider.
-     * @param isHardRefresh - Whether to perform a hard refresh (Not used in this implementation). Defaults to false.
-     * @returns A promise that resolves when the refresh is complete.
+     * Refreshes the test elements tree data provider using unified state management.
      */
     public override async refresh(isHardRefresh: boolean = false): Promise<void> {
-        this.logger.debug(`[TETDP] Refresh called. Hard: ${isHardRefresh}, Current TOV: ${this.currentTovKey}`);
+        this.logger.debug(
+            `[TestElementsTreeDataProvider] Refresh called. Hard: ${isHardRefresh}, Current TOV: ${this.currentTovKey}`
+        );
         if (!this.currentTovKey) {
             this.clearTree();
             return;
         }
         this.storeExpansionState();
 
-        const currentState = this.getStateManager().getCurrentState();
-        const storedDisplayName = currentState.currentDataSourceDisplayName;
+        const currentState = this.getUnifiedStateManager().getCurrentUnifiedState();
+        const storedDisplayName = currentState.dataSourceDisplayName;
 
         const displayNameForRefresh =
             storedDisplayName && storedDisplayName !== this.currentTovKey ? storedDisplayName : undefined;
@@ -676,7 +642,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             currentTovKey: this.currentTovKey,
             rootElementsCount: this.rootElements.length,
             isTreeEmpty: this.isTreeDataEmpty(),
-            stateManagerDiagnostics: this.getStateManager().getDiagnostics(),
+            unifiedStateDiagnostics: this.getUnifiedStateManager().getDiagnostics(),
             timestamp: new Date().toISOString()
         };
     }

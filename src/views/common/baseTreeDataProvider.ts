@@ -1,13 +1,12 @@
 /**
  * @file src/views/common/baseTreeDataProvider.ts
- * @description Base class for VS Code TreeDataProviders with improved service integration
+ * @description Base class for VS Code TreeDataProviders
  */
 
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { BaseTreeItem as BaseTreeItem } from "./baseTreeItem";
-import { CustomRootService } from "../../services/customRootService";
-import { TreeViewStateManager } from "../../services/treeViewStateManager";
+import { UnifiedTreeStateManager, StateChangeNotification } from "../../services/unifiedTreeStateManager";
 import {
     TreeViewStateConfig,
     TreeViewEmptyState,
@@ -31,9 +30,8 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     >();
     public readonly onDidChangeTreeData: vscode.Event<T | T[] | undefined | void> = this._onDidChangeTreeData.event;
 
-    protected customRootService: CustomRootService<T>;
     protected rootElements: T[] = [];
-    protected stateManager: TreeViewStateManager;
+    protected unifiedStateManager: UnifiedTreeStateManager<T>;
     private readonly _disposables: vscode.Disposable[] = [];
 
     constructor(
@@ -42,28 +40,28 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         protected updateMessageCallback: (message: string | undefined) => void,
         protected readonly options: TreeDataProviderOptions
     ) {
-        this.customRootService = new CustomRootService<T>(
+        const stateConfig = options.stateConfig || {
+            treeViewId: options.contextKey,
+            treeViewType: "project_management" as any
+        };
+
+        this.unifiedStateManager = new UnifiedTreeStateManager<T>(
             logger,
+            stateConfig,
+            updateMessageCallback,
             options.contextKey,
             options.customRootContextValue,
             (state) => this.onCustomRootStateChange(state)
         );
 
-        if (options.stateConfig) {
-            this.stateManager = new TreeViewStateManager(logger, options.stateConfig, updateMessageCallback);
-        } else {
-            this.stateManager = new TreeViewStateManager(
-                logger,
-                {
-                    treeViewId: options.contextKey,
-                    treeViewType: "project_management" as any
-                },
-                updateMessageCallback
-            );
-        }
+        // Register for state change notifications
+        this.unifiedStateManager.onStateChange((notification) => this.onUnifiedStateChange(notification));
+
         // Register disposables for cleanup
         this._disposables.push(this._onDidChangeTreeData);
-        this._disposables.push(this.customRootService);
+        this._disposables.push(this.unifiedStateManager);
+
+        this.logger.trace("[BaseTreeDataProvider] Initialized with unified state management");
     }
 
     /**
@@ -84,8 +82,9 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      * Get parent of an element
      */
     getParent(element: T): vscode.ProviderResult<T> {
-        if (this.customRootService.isActive()) {
-            const currentRoot = this.customRootService.getCurrentRoot();
+        const state = this.unifiedStateManager.getCurrentUnifiedState();
+        if (state.customRootActive) {
+            const currentRoot = state.customRootItem;
             if (element === currentRoot) {
                 return null;
             }
@@ -102,7 +101,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     async getChildren(element?: T): Promise<T[]> {
         try {
             if (!element) {
-                this.stateManager.setLoading();
+                this.unifiedStateManager.setLoading();
             }
 
             if (!element) {
@@ -110,7 +109,8 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             }
 
             // Check if this is a custom root request
-            if (this.customRootService.isActive() && this.customRootService.isCurrentRoot(element)) {
+            const state = this.unifiedStateManager.getCurrentUnifiedState();
+            if (state.customRootActive && this.isCurrentRoot(element)) {
                 return await this.getChildrenForCustomRoot(element);
             }
 
@@ -120,7 +120,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
                 `[BaseTreeDataProvider] Error in getChildren for element ${element?.label || "root"}: ${error.message}`,
                 error
             );
-            this.stateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
+            this.unifiedStateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
             return [];
         }
     }
@@ -132,10 +132,10 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         this.logger.debug(`[BaseTreeDataProvider] Refreshing tree. Hard refresh: ${isHardRefresh}`);
 
         if (isHardRefresh) {
-            this.customRootService.handleHardRefresh();
+            this.unifiedStateManager.resetCustomRoot();
         }
 
-        this.stateManager.updateState({
+        this.unifiedStateManager.updateState({
             operationalState: TreeViewOperationalState.REFRESHING
         });
 
@@ -159,12 +159,8 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             }
         });
 
-        if (this.options.enableCustomRoot) {
-            this.customRootService.resetCustomRoot();
-        }
-
         this.rootElements = [];
-        this.stateManager.clear();
+        this.unifiedStateManager.clear();
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -177,13 +173,12 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             return;
         }
 
-        if (!this.customRootService.canSetAsRoot(item)) {
+        if (!this.canSetAsRoot(item)) {
             this.logger.error(`[BaseTreeDataProvider] Item cannot be set as root: ${item.label}`);
             return;
         }
 
-        this.customRootService.setCustomRoot(item);
-        this.stateManager.updateState({ operationalState: TreeViewOperationalState.READY });
+        this.unifiedStateManager.setCustomRoot(item);
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -191,7 +186,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      * Reset custom root
      */
     public resetCustomRoot(): void {
-        this.customRootService.resetCustomRoot();
+        this.unifiedStateManager.resetCustomRoot();
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -203,11 +198,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
 
         if (this.options.enableExpansionTracking) {
             const itemId = element.getUniqueId();
-            if (expanded) {
-                this.customRootService.rememberExpandedItem(itemId);
-            } else {
-                this.customRootService.forgetExpandedItem(itemId);
-            }
+            this.unifiedStateManager.setItemExpansion(itemId, expanded);
         }
     }
 
@@ -216,7 +207,13 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      */
     protected applyStoredExpansionState(item: T): void {
         if (this.options.enableExpansionTracking) {
-            this.customRootService.applyExpansionState(item);
+            const state = this.unifiedStateManager.getCurrentUnifiedState();
+            const itemId = item.getUniqueId();
+            if (state.expandedItems.has(itemId)) {
+                if (item.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+                    item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                }
+            }
         }
     }
 
@@ -225,7 +222,21 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      */
     protected storeExpansionState(): void {
         if (this.options.enableExpansionTracking) {
-            this.customRootService.storeExpansionState(this.rootElements);
+            const expandedIds = new Set<string>();
+
+            const collectExpanded = (items: T[]) => {
+                for (const item of items) {
+                    if (item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                        expandedIds.add(item.getUniqueId());
+                    }
+                    if (item.children) {
+                        collectExpanded(item.children as T[]);
+                    }
+                }
+            };
+
+            collectExpanded(this.rootElements);
+            this.unifiedStateManager.updateState({ expandedItems: expandedIds });
         }
     }
 
@@ -246,7 +257,8 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
 
         this.rootElements = elements;
 
-        if (this.options.enableExpansionTracking) {
+        // Apply expansion state if tracking is enabled
+        if (this.options.enableExpansionTracking && elements.length > 0) {
             const applyExpansionRecursive = (items: T[]) => {
                 for (const item of items) {
                     this.applyStoredExpansionState(item);
@@ -258,10 +270,11 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             applyExpansionRecursive(elements);
         }
 
+        // Update state based on element count
         if (elements.length === 0) {
-            this.stateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
+            this.unifiedStateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
         } else {
-            this.stateManager.setReady(elements.length);
+            this.unifiedStateManager.setReady(elements.length);
         }
 
         this._onDidChangeTreeData.fire(undefined);
@@ -271,35 +284,67 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      * Sets the data source for state tracking
      */
     protected setDataSource(key: string, label?: string, displayName?: string): void {
-        this.stateManager.setDataSource(key, label, displayName);
+        this.unifiedStateManager.setDataSource(key, label, displayName);
     }
 
     /**
      * Records a fetch attempt with results
      */
     protected recordFetchAttempt(success: boolean, itemsBeforeFilter: number = 0, itemsAfterFilter: number = 0): void {
-        this.stateManager.recordFetchAttempt(success, itemsBeforeFilter, itemsAfterFilter);
+        this.unifiedStateManager.recordFetchAttempt(success, itemsBeforeFilter, itemsAfterFilter);
     }
 
     /**
      * Sets loading state with optional message
      */
     protected setLoadingState(message?: string): void {
-        this.stateManager.setLoading(message);
+        this.unifiedStateManager.setLoading(message);
     }
 
     /**
      * Sets error state
      */
     protected setErrorState(error: Error, emptyState: TreeViewEmptyState = TreeViewEmptyState.FETCH_ERROR): void {
-        this.stateManager.setError(error, emptyState);
+        this.unifiedStateManager.setError(error, emptyState);
     }
 
     /**
      * Updates the tree state with custom parameters
      */
     protected updateTreeState(params: StateUpdateParams): void {
-        this.stateManager.updateState(params);
+        this.unifiedStateManager.updateState(params);
+    }
+
+    /**
+     * Check if custom root is active
+     */
+    public isCustomRootActive(): boolean {
+        return this.unifiedStateManager.getCurrentUnifiedState().customRootActive;
+    }
+
+    /**
+     * Get current custom root item
+     */
+    public getCurrentCustomRoot(): T | null {
+        return this.unifiedStateManager.getCurrentUnifiedState().customRootItem as T | null;
+    }
+
+    /**
+     * Check if an item is the current custom root
+     */
+    public isCurrentRoot(item: T): boolean {
+        const state = this.unifiedStateManager.getCurrentUnifiedState();
+        if (!state.customRootActive || !state.customRootItem) {
+            return false;
+        }
+        return (state.customRootItem as T).getUniqueId() === item.getUniqueId();
+    }
+
+    /**
+     * Check if an item can be set as custom root
+     */
+    private canSetAsRoot(item: T): boolean {
+        return item !== null && item.getUniqueId() !== undefined;
     }
 
     /**
@@ -307,22 +352,23 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      */
     private async getRootChildren(): Promise<T[]> {
         try {
-            if (this.customRootService.isActive()) {
-                return this.customRootService.getChildrenForCustomRoot();
+            const state = this.unifiedStateManager.getCurrentUnifiedState();
+            if (state.customRootActive && state.customRootItem) {
+                return [state.customRootItem as T];
             }
 
             this.rootElements = await this.fetchRootElements();
 
             if (this.rootElements.length === 0) {
-                this.stateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
+                this.unifiedStateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
             } else {
-                this.stateManager.setReady(this.rootElements.length);
+                this.unifiedStateManager.setReady(this.rootElements.length);
             }
 
             return this.rootElements;
         } catch (error: any) {
             this.logger.error(`[BaseTreeDataProvider] Error fetching root elements:`, error);
-            this.stateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
+            this.unifiedStateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
             return [];
         }
     }
@@ -335,7 +381,18 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Handle custom root state changes
+     * Handle unified state changes
+     */
+    protected onUnifiedStateChange(notification: StateChangeNotification): void {
+        this.logger.trace(
+            `[BaseTreeDataProvider] Unified state changed. Fields: ${notification.changedFields.join(", ")}`
+        );
+
+        // Can be overridden by subclasses for custom behavior
+    }
+
+    /**
+     * Handle custom root state changes (for backwards compatibility)
      */
     protected onCustomRootStateChange(state: any): void {
         this.logger.trace(`[BaseTreeDataProvider] Custom root state changed:`, state);
@@ -371,20 +428,6 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Check if custom root is active
-     */
-    public isCustomRootActive(): boolean {
-        return this.customRootService.isActive();
-    }
-
-    /**
-     * Get current custom root item
-     */
-    public getCurrentCustomRoot(): T | null {
-        return this.customRootService.getCurrentRoot();
-    }
-
-    /**
      * Show tree status message (legacy method for backward compatibility)
      */
     public showTreeStatusMessage(message: string | undefined): void {
@@ -393,10 +436,17 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Get the state manager for advanced state operations
+     * Get the unified state manager for advanced state operations
      */
-    protected getStateManager(): TreeViewStateManager {
-        return this.stateManager;
+    protected getUnifiedStateManager(): UnifiedTreeStateManager<T> {
+        return this.unifiedStateManager;
+    }
+
+    /**
+     * Get the underlying state manager for backwards compatibility
+     */
+    protected getStateManager() {
+        return this.unifiedStateManager.getTreeViewStateManager();
     }
 
     /**
@@ -406,8 +456,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         return {
             providerType: this.constructor.name,
             rootElementsCount: this.rootElements.length,
-            customRootActive: this.isCustomRootActive(),
-            stateManagerDiagnostics: this.stateManager.getDiagnostics(),
+            unifiedStateDiagnostics: this.unifiedStateManager.getDiagnostics(),
             timestamp: new Date().toISOString()
         };
     }
@@ -419,10 +468,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         this.logger.debug(`[${this.constructor.name}] Disposing provider`);
 
         try {
-            // Clear tree first
             this.clearTree();
-
-            // Dispose all registered disposables
             this._disposables.forEach((disposable) => {
                 try {
                     disposable.dispose();

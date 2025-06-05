@@ -1196,7 +1196,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     </head>
     <!-- Rest of the HTML remains exactly the same -->
     <body>
-        <!-- HTML content unchanged -->
         <div class="scrollable-content">
         <section class="connection-section" aria-labelledby="connectionsHeading">
             <h2 id="connectionsHeading">

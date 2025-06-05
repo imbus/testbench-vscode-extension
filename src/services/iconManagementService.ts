@@ -151,7 +151,6 @@ export class IconManagementService {
     private findIconDefinition(context: IconContext, category: string): IconDefinition {
         let contextValueForIcon = context.contextValue;
 
-        // Handle marked contexts
         if (
             context.contextValue === TreeItemContextValues.MARKED_TEST_THEME_NODE ||
             context.contextValue === TreeItemContextValues.MARKED_TEST_CASE_SET_NODE

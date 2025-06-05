@@ -1,6 +1,6 @@
 /**
  * @file src/services/treeServiceManager.ts
- * @description Enhanced TreeServiceManager with centralized tree view management
+ * @description TreeServiceManager
  */
 
 import * as vscode from "vscode";
@@ -23,6 +23,7 @@ import { TestThemeTreeItem } from "../views/testTheme/testThemeTreeItem";
 import { TestElementTreeItem } from "../views/testElements/testElementTreeItem";
 import { PlayServerConnection } from "../testBenchConnection";
 import { restartLanguageClient } from "../server";
+import { StateChangeNotification } from "./unifiedTreeStateManager";
 
 export interface TreeServiceDependencies {
     extensionContext: vscode.ExtensionContext;
@@ -37,7 +38,7 @@ export interface TreeViewContainer {
 }
 
 /**
- * Centralized manager for all tree-related services and views
+ * Centralized manager for all tree-related services and views with unified state management
  */
 export class TreeServiceManager {
     public readonly logger: TestBenchLogger;
@@ -56,11 +57,14 @@ export class TreeServiceManager {
     private readonly treeViews = new Map<string, TreeViewContainer>();
     private _isInitialized = false;
 
+    // State change listeners for coordination
+    private readonly stateChangeListeners = new Map<string, (notification: StateChangeNotification) => void>();
+
     constructor(dependencies: TreeServiceDependencies) {
         this.extensionContext = dependencies.extensionContext;
         this.logger = dependencies.logger;
         this.getConnection = dependencies.getConnection;
-        this.logger.trace("[TreeServiceManager] Initialized with enhanced tree view management");
+        this.logger.trace("[TreeServiceManager] Initialized with unified state management integration");
     }
 
     /**
@@ -75,7 +79,7 @@ export class TreeServiceManager {
         try {
             this.logger.info("[TreeServiceManager] Initializing core services...");
 
-            // Initialize core services
+            // Ccore services
             this._iconManagementService = new IconManagementService(this.logger, this.extensionContext);
             this._resourceFileService = new ResourceFileService(this.logger);
             this._projectDataService = new ProjectDataService(this.getConnection, this.logger);
@@ -83,8 +87,12 @@ export class TreeServiceManager {
             this._markedItemStateService = new MarkedItemStateService(this.extensionContext, this.logger);
             this._testElementTreeBuilder = new TestElementTreeBuilder(this.logger);
 
+            await this._markedItemStateService.initialize();
+
             this._isInitialized = true;
-            this.logger.info("[TreeServiceManager] All services initialized successfully");
+            this.logger.info(
+                "[TreeServiceManager] All services initialized successfully with unified state management"
+            );
         } catch (error) {
             this.logger.error("[TreeServiceManager] Failed to initialize services:", error);
             throw new Error(`TreeServiceManager initialization failed: ${(error as Error).message}`);
@@ -100,19 +108,17 @@ export class TreeServiceManager {
         }
 
         try {
-            // Create Project Management Tree
             await this.createProjectManagementTree();
-
-            // Create Test Theme Tree
             await this.createTestThemeTree();
-
-            // Create Test Elements Tree
             await this.createTestElementsTree();
 
-            // Setup inter-tree communication
+            // Setup inter-tree communication and state coordination
             this.setupTreeViewInteractions();
+            this.setupUnifiedStateCoordination();
 
-            this.logger.info("[TreeServiceManager] All tree views initialized successfully");
+            this.logger.info(
+                "[TreeServiceManager] All tree views initialized successfully with unified state management"
+            );
         } catch (error) {
             this.logger.error("[TreeServiceManager] Failed to initialize tree views:", error);
             throw error;
@@ -153,7 +159,10 @@ export class TreeServiceManager {
         this.extensionContext.subscriptions.push(treeView);
         this.treeViews.set("projectManagement", { provider, treeView, updateMessage });
 
-        this.logger.info("[TreeServiceManager] Project Management tree view created");
+        // Setup state change listener for this provider
+        this.setupProviderStateListener("projectManagement", provider);
+
+        this.logger.info("[TreeServiceManager] Project Management tree view created with unified state management");
     }
 
     /**
@@ -183,7 +192,10 @@ export class TreeServiceManager {
         this.extensionContext.subscriptions.push(treeView);
         this.treeViews.set("testTheme", { provider, treeView, updateMessage });
 
-        this.logger.info("[TreeServiceManager] Test Theme tree view created");
+        // Setup state change listener for this provider
+        this.setupProviderStateListener("testTheme", provider);
+
+        this.logger.info("[TreeServiceManager] Test Theme tree view created with unified state management");
     }
 
     /**
@@ -231,10 +243,52 @@ export class TreeServiceManager {
         this.extensionContext.subscriptions.push(treeView);
         this.treeViews.set("testElements", { provider, treeView, updateMessage });
 
-        // Initialize with clear state
+        // Setup state change listener for this provider
+        this.setupProviderStateListener("testElements", provider);
+
         provider.clearTree();
 
-        this.logger.info("[TreeServiceManager] Test Elements tree view created");
+        this.logger.info("[TreeServiceManager] Test Elements tree view created with unified state management");
+    }
+
+    /**
+     * Setup state change listeners for individual providers to enable coordination
+     */
+    private setupProviderStateListener(providerKey: string, provider: any): void {
+        if (provider && provider.getUnifiedStateManager) {
+            const listener = (notification: StateChangeNotification) => {
+                this.handleProviderStateChange(providerKey, notification);
+            };
+
+            provider.getUnifiedStateManager().onStateChange(listener);
+            this.stateChangeListeners.set(providerKey, listener);
+
+            this.logger.trace(`[TreeServiceManager] State change listener setup for ${providerKey}`);
+        }
+    }
+
+    /**
+     * Handle state changes from individual providers for coordination
+     */
+    private handleProviderStateChange(providerKey: string, notification: StateChangeNotification): void {
+        this.logger.trace(
+            `[TreeServiceManager] State change in ${providerKey}: ${notification.changedFields.join(", ")}`
+        );
+
+        if (notification.changedFields.includes("operationalState")) {
+            this.logger.debug(
+                `[TreeServiceManager] ${providerKey} operational state: ${notification.newState.operationalState}`
+            );
+        }
+    }
+
+    /**
+     * Setup unified state coordination between all providers
+     */
+    private setupUnifiedStateCoordination(): void {
+        // Individual providers manage their own state through the unified manager
+        // This method can be extended to add cross-provider state coordination
+        this.logger.trace("[TreeServiceManager] Unified state coordination setup completed");
     }
 
     /**
@@ -282,7 +336,6 @@ export class TreeServiceManager {
         }
     }
 
-    // Getter methods with proper error handling
     public getProjectManagementProvider(): ProjectManagementTreeDataProvider {
         const container = this.treeViews.get("projectManagement");
         if (!container?.provider) {
@@ -331,13 +384,12 @@ export class TreeServiceManager {
         return container.treeView;
     }
 
-    // Utility methods for common operations
     public async clearAllTrees(): Promise<void> {
         try {
             this.getProjectManagementProvider().clearTree();
             this.getTestThemeProvider().clearTree();
             this.getTestElementsProvider().clearTree();
-            this.logger.info("[TreeServiceManager] All trees cleared");
+            this.logger.info("[TreeServiceManager] All trees cleared using unified state management");
         } catch (error) {
             this.logger.error("[TreeServiceManager] Error clearing trees:", error);
         }
@@ -348,7 +400,9 @@ export class TreeServiceManager {
             this.getProjectManagementProvider().refresh(isHardRefresh);
             this.getTestThemeProvider().refresh(isHardRefresh);
             this.getTestElementsProvider().refresh(isHardRefresh);
-            this.logger.info(`[TreeServiceManager] All trees refreshed (hard: ${isHardRefresh})`);
+            this.logger.info(
+                `[TreeServiceManager] All trees refreshed (hard: ${isHardRefresh}) using unified state management`
+            );
         } catch (error) {
             this.logger.error("[TreeServiceManager] Error refreshing trees:", error);
         }
@@ -375,14 +429,12 @@ export class TreeServiceManager {
             const testElementsProvider = this.getTestElementsProvider();
             const testElementsTreeView = this.getTestElementsTreeView();
 
-            // Clear previous content
             testThemeProvider.clearTree();
             testElementsProvider.clearTree();
 
             const tovKey = cycleItem.getTovKey();
             const tovLabel = cycleItem.parent?.label;
 
-            // Handle Test Elements
             if (tovKey && typeof tovLabel === "string") {
                 testElementsTreeView.title = `Test Elements (${tovLabel})`;
                 try {
@@ -403,14 +455,15 @@ export class TreeServiceManager {
             // Handle Test Themes through project provider
             await projectProvider.handleCycleClick(cycleItem);
 
-            this.logger.info(`[TreeServiceManager] Cycle selection handled for: ${cycleItem.label}`);
+            this.logger.info(
+                `[TreeServiceManager] Cycle selection handled for: ${cycleItem.label} with unified state management`
+            );
         } catch (error) {
             this.logger.error("[TreeServiceManager] Error handling cycle selection:", error);
             throw error;
         }
     }
 
-    // Service getters (existing implementation)
     public get projectDataService(): ProjectDataService {
         if (!this._projectDataService) {
             throw new Error("ProjectDataService is not initialized. Call initialize() first.");
@@ -462,13 +515,14 @@ export class TreeServiceManager {
     }
 
     /**
-     * Get diagnostic information about the current tree state and services
+     * Get diagnostic information about the current tree state and services with unified state details
      */
     public getDiagnostics(): Record<string, any> {
         const diagnostics: Record<string, any> = {
             managerType: this.constructor.name,
             isInitialized: this._isInitialized,
             treeViewsCount: this.treeViews.size,
+            stateListenersCount: this.stateChangeListeners.size,
             treeViews: {},
             services: {
                 projectDataService: !!this._projectDataService,
@@ -481,7 +535,7 @@ export class TreeServiceManager {
             timestamp: new Date().toISOString()
         };
 
-        // Add diagnostics for each tree view
+        // Add diagnostics for each tree view including unified state information
         for (const [key, container] of this.treeViews) {
             try {
                 const providerDiagnostics =
@@ -489,11 +543,25 @@ export class TreeServiceManager {
                         ? container.provider.getDiagnostics()
                         : { error: "No diagnostics available" };
 
+                let unifiedStateDiagnostics = {};
+                if (container.provider && container.provider.getUnifiedStateManager) {
+                    try {
+                        unifiedStateDiagnostics = container.provider.getUnifiedStateManager().getDiagnostics();
+                    } catch (error) {
+                        unifiedStateDiagnostics = { error: "Failed to get unified state diagnostics" };
+                        this.logger.error(
+                            `[TreeServiceManager] Error getting unified state diagnostics for ${key}:`,
+                            error
+                        );
+                    }
+                }
+
                 diagnostics.treeViews[key] = {
                     hasProvider: !!container.provider,
                     hasTreeView: !!container.treeView,
                     treeViewTitle: container.treeView?.title || "No title",
-                    providerDiagnostics
+                    providerDiagnostics,
+                    unifiedStateDiagnostics
                 };
             } catch (error) {
                 diagnostics.treeViews[key] = {
@@ -509,6 +577,18 @@ export class TreeServiceManager {
      * Dispose of all tree views and clean up resources
      */
     public dispose(): void {
+        for (const [key, listener] of this.stateChangeListeners) {
+            try {
+                const container = this.treeViews.get(key);
+                if (container?.provider && container.provider.getUnifiedStateManager) {
+                    container.provider.getUnifiedStateManager().removeStateChangeCallback(listener);
+                }
+            } catch (error) {
+                this.logger.error(`[TreeServiceManager] Error removing state listener for ${key}:`, error);
+            }
+        }
+        this.stateChangeListeners.clear();
+
         for (const [key, container] of this.treeViews) {
             try {
                 if (container.provider && typeof container.provider.dispose === "function") {
@@ -519,7 +599,7 @@ export class TreeServiceManager {
             }
         }
         this.treeViews.clear();
-        this.logger.info("[TreeServiceManager] Disposed successfully");
+        this.logger.info("[TreeServiceManager] Disposed successfully with unified state management cleanup");
     }
 }
 

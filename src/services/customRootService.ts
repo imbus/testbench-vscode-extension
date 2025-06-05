@@ -129,6 +129,22 @@ export class CustomRootService<T extends BaseTreeItem> {
     }
 
     /**
+     * Get all expanded items
+     */
+    public getExpandedItems(): string[] {
+        return Array.from(this.expandedItems);
+    }
+
+    /**
+     * Set expanded items
+     * @param expandedItems Array of item IDs that should be expanded
+     */
+    public setExpandedItems(expandedItems: string[]): void {
+        this.expandedItems = new Set(expandedItems);
+        this.logger.trace(`[CustomRootService] Set expanded items: ${expandedItems.length} items`);
+    }
+
+    /**
      * Check if an item is the current custom root
      */
     public isCurrentRoot(item: T): boolean {

@@ -85,7 +85,6 @@ export class CancellableOperation implements vscode.Disposable {
                 }
             }, ms);
 
-            // Cancel timeout if operation is cancelled
             this._cancellationToken.onCancellationRequested(() => {
                 clearTimeout(timeout);
                 this.logger.debug(`[CancellableOperation] Delay cancelled for operation: ${this.operationName}`);
@@ -120,7 +119,6 @@ export class CancellableOperationManager implements vscode.Disposable {
      * @returns The created operation
      */
     public createOperation(operationId: string, operationName: string): CancellableOperation {
-        // Cancel any existing operation with the same ID
         this.cancelOperation(operationId);
 
         const operation = new CancellableOperation(this.logger, operationName);
