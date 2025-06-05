@@ -982,31 +982,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         try {
             logger.debug(`Refreshing test elements for TOV: ${currentTovKey}`);
-            if (testElementTreeView) {
-                const currentTitle = testElementTreeView.title || "Test Elements";
-                testElementTreeView.title = `${currentTitle} (Refreshing...)`;
-            }
-
-            const success = await testElementsProvider.fetchTestElements(currentTovKey);
-            if (testElementTreeView) {
-                const baseTitle = testElementTreeView.title?.replace(" (Refreshing...)", "") || "Test Elements";
-                testElementTreeView.title = baseTitle;
-            }
-
-            if (!success) {
-                logger.warn(`Refresh failed for TOV: ${currentTovKey}`);
-                vscode.window.showWarningMessage(
-                    `Failed to refresh test elements. Please check the connection and try again.`
-                );
-            } else {
-                logger.info(`Test elements refreshed successfully for TOV: ${currentTovKey}`);
-            }
+            await testElementsProvider.refresh(false);
         } catch (error) {
             logger.error(`Error during test elements refresh:`, error);
-            if (testElementTreeView) {
-                testElementTreeView.title = "Test Elements";
-            }
-
             vscode.window.showErrorMessage(
                 `Error refreshing test elements: ${error instanceof Error ? error.message : "Unknown error"}`
             );

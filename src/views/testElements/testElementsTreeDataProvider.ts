@@ -528,7 +528,14 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             return;
         }
         this.storeExpansionState();
-        await this.fetchTestElements(this.currentTovKey);
+
+        const currentState = this.getStateManager().getCurrentState();
+        const storedDisplayName = currentState.currentDataSourceDisplayName;
+
+        const displayNameForRefresh =
+            storedDisplayName && storedDisplayName !== this.currentTovKey ? storedDisplayName : undefined;
+
+        await this.fetchTestElements(this.currentTovKey, displayNameForRefresh);
     }
 
     /**
