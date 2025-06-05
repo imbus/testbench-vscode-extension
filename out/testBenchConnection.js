@@ -350,7 +350,8 @@ class PlayServerConnection {
             */
             extension_1.logger.trace("Response status of get test elements request:", testElementsResponse.status);
             if (testElementsResponse.data) {
-                extension_1.logger.trace("Fetched test elements data:", testElementsResponse.data);
+                // Note: The output of testElementsResponse is large
+                // logger.trace("Fetched test elements data:", testElementsResponse.data);
                 return testElementsResponse.data;
             }
             else {
@@ -560,7 +561,8 @@ class PlayServerConnection {
             */
             extension_1.logger.trace(`Cycle structure response for cycle key ${cycleKey}:`, cycleStructureResponse.status);
             if (cycleStructureResponse.data) {
-                extension_1.logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, cycleStructureResponse.data);
+                // Note: The output of cycleStructureResponse is large
+                // logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, cycleStructureResponse.data);
                 return cycleStructureResponse.data;
             }
             else {

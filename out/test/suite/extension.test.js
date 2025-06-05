@@ -95,7 +95,7 @@ suite("Extension Test Suite", () => {
         assert.ok(config, "Configuration should be returned");
     });
     test("initializeTreeViews should initialize the tree views", () => {
-        (0, extension_1.initializeTreeViews)(context);
+        (0, extension_1.initializeTreeViews)();
         assert.ok(projectManagementTreeDataProviderStub, "Project management tree view should be initialized");
         assert.ok(testElementsTreeDataProviderStub, "Test elements tree view should be initialized");
     });

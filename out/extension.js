@@ -40,18 +40,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALLOW_PERSISTENT_IMPORT_BUTTON = exports.ENABLE_ICON_MARKING_ON_TEST_GENERATION = exports.testElementTreeView = exports.testThemeTreeView = exports.projectTreeView = exports.testElementsProvider = exports.testThemeProvider = exports.projectManagementProvider = exports.connection = exports.logger = void 0;
+exports.ALLOW_PERSISTENT_IMPORT_BUTTON = exports.ENABLE_ICON_MARKING_ON_TEST_GENERATION = exports.connection = exports.logger = void 0;
 exports.setLogger = setLogger;
 exports.setConnection = setConnection;
 exports.getConnection = getConnection;
 exports.getLoginWebViewProvider = getLoginWebViewProvider;
 exports.safeCommandHandler = safeCommandHandler;
-exports.hideTestElementsTreeView = hideTestElementsTreeView;
-exports.displayTestElementsTreeView = displayTestElementsTreeView;
-exports.hideTestThemeTreeView = hideTestThemeTreeView;
-exports.displayTestThemeTreeView = displayTestThemeTreeView;
-exports.hideProjectsTreeView = hideProjectsTreeView;
-exports.displayProjectsTreeView = displayProjectsTreeView;
 exports.initializeTreeViews = initializeTreeViews;
 exports.activate = activate;
 exports.deactivate = deactivate;
@@ -70,7 +64,7 @@ const path_1 = __importDefault(require("path"));
 const constants_1 = require("./constants");
 const server_1 = require("./server");
 const testBenchAuthenticationProvider_1 = require("./testBenchAuthenticationProvider");
-const profileManager = __importStar(require("./profileManager"));
+const connectionManager = __importStar(require("./connectionManager"));
 const testBenchConnection_1 = require("./testBenchConnection");
 const configuration_1 = require("./configuration");
 const treeServiceManager_1 = require("./services/treeServiceManager");
@@ -90,12 +84,8 @@ let loginWebViewProvider = null;
 function getLoginWebViewProvider() {
     return loginWebViewProvider;
 }
-/** Global variables to hold the tree data providers and views. */
-exports.projectManagementProvider = null;
-exports.testThemeProvider = null;
-// REFACTOR PROCESS
+// Centralized tree service manager
 let treeServiceManager;
-let serviceFactory;
 // Global variable to store the authentication provider instance
 let authProviderInstance = null;
 // Prevent multiple session change handling simultaneously
@@ -148,104 +138,33 @@ function registerSafeCommand(context, commandId, callback) {
     });
     context.subscriptions.push(disposable);
 }
-// TODO: Use context key later to manage visibility of the tree views
 /**
- * Hides the Test Elements tree view.
+ * Utility functions for tree view visibility management
  */
-async function hideTestElementsTreeView() {
-    if (exports.testElementTreeView) {
-        await vscode.commands.executeCommand("testElementsView.removeView");
-    }
-    else {
-        exports.logger.warn("Test Elements view instance not found, 'removeView' command not executed.");
-    }
+async function hideProjectManagementTreeView() {
+    await vscode.commands.executeCommand("projectManagementTree.removeView");
 }
-/**
- * Displays the Test Elements tree view.
- */
-async function displayTestElementsTreeView() {
-    if (exports.testElementTreeView) {
-        await vscode.commands.executeCommand("testElementsView.focus");
-    }
-    else {
-        exports.logger.warn("Test Elements view instance not found, 'focus' command not executed.");
-    }
+async function displayProjectManagementTreeView() {
+    await vscode.commands.executeCommand("projectManagementTree.focus");
 }
-/**
- * Hides the Test Theme tree view.
- */
 async function hideTestThemeTreeView() {
-    if (exports.testElementTreeView) {
-        await vscode.commands.executeCommand("testThemeTreeView.removeView");
-    }
-    else {
-        exports.logger.warn("testThemeTreeView instance not found, 'removeView' command not executed.");
-    }
+    await vscode.commands.executeCommand("testThemeTree.removeView");
 }
-/**
- * Displays the Test Theme tree view.
- */
 async function displayTestThemeTreeView() {
-    if (exports.testElementTreeView) {
-        await vscode.commands.executeCommand("testThemeTreeView.focus");
-    }
-    else {
-        exports.logger.warn("testThemeTreeView instance not found, 'focus' command not executed.");
-    }
+    await vscode.commands.executeCommand("testThemeTree.focus");
 }
-/**
- * Hides the Projects tree view.
- */
-async function hideProjectsTreeView() {
-    if (exports.testElementTreeView) {
-        await vscode.commands.executeCommand("projectsTreeView.removeView");
-    }
-    else {
-        exports.logger.warn("projectsTreeView instance not found, 'removeView' command not executed.");
-    }
+async function hideTestElementsTreeView() {
+    await vscode.commands.executeCommand("testElementsView.removeView");
 }
-/**
- * Displays the Projects tree view.
- */
-async function displayProjectsTreeView() {
-    if (exports.testElementTreeView) {
-        await vscode.commands.executeCommand("projectsTreeView.focus");
-    }
-    else {
-        exports.logger.warn("projectsTreeView instance not found, 'focus' command not executed.");
-    }
-}
-/**
- * Initializes the Test Elements Tree View using the service factory.
- *
- * @param {vscode.ExtensionContext} context The extension context.
- * @param {TreeServiceFactory} serviceFactory The factory for creating providers with injected services.
- */
-function initializeTestElementsTreeView(context, serviceFactory) {
-    const updateTestElementsTreeMessage = (message) => {
-        if (exports.testElementTreeView) {
-            exports.testElementTreeView.message = message;
-        }
-    };
-    // Create provider using the factory
-    exports.testElementsProvider = serviceFactory.createTestElementsProvider(updateTestElementsTreeMessage);
-    exports.testElementTreeView = vscode.window.createTreeView("testElementsView", {
-        // View ID from package.json
-        treeDataProvider: exports.testElementsProvider
-    });
-    context.subscriptions.push(exports.testElementTreeView);
-    exports.testElementsProvider.clearTree(); // Clear the tree initially
-    if (exports.testElementsProvider.isTreeDataEmpty()) {
-        exports.testElementsProvider.updateTreeViewStatusMessage();
-    }
-    exports.logger.info("[Extension] Test Elements Tree View initialized.");
+async function displayTestElementsTreeView() {
+    await vscode.commands.executeCommand("testElementsView.focus");
 }
 /**
  * Initializes all tree views using the TreeServiceManager.
  *
  * @param {vscode.ExtensionContext} context The extension context.
  */
-async function initializeTreeViews(context) {
+async function initializeTreeViews() {
     if (!treeServiceManager) {
         exports.logger.error("[Extension] TreeServiceManager is not initialized. Cannot initialize tree views.");
         vscode.window.showErrorMessage("Failed to initialize TestBench views: Core services missing.");
@@ -254,61 +173,29 @@ async function initializeTreeViews(context) {
     if (!treeServiceManager.getInitializationStatus()) {
         exports.logger.warn("[Extension] TreeServiceManager is not fully initialized. Proceeding, but some services might not be ready.");
     }
-    const serviceFactory = treeServiceManager.createServiceFactory();
-    // Initialize Project Management Tree View
-    const updateProjectTreeMessage = (message) => {
-        if (exports.projectTreeView) {
-            exports.projectTreeView.message = message;
+    try {
+        // Initialize all tree views through TreeServiceManager
+        await treeServiceManager.initializeTreeViews();
+        // Initial state setup
+        try {
+            const projectProvider = treeServiceManager.getProjectManagementProvider();
+            const testThemeProvider = treeServiceManager.getTestThemeProvider();
+            projectProvider.refresh(true);
+            testThemeProvider.clearTree();
         }
-    };
-    exports.projectManagementProvider = serviceFactory.createProjectManagementProvider(updateProjectTreeMessage);
-    exports.projectTreeView = vscode.window.createTreeView("projectManagementTree", {
-        // View ID from package.json
-        treeDataProvider: exports.projectManagementProvider,
-        canSelectMany: false
-    });
-    context.subscriptions.push(exports.projectTreeView);
-    exports.logger.info("[Extension] Project Management Tree View initialized.");
-    // Initialize Test Theme Tree View
-    const updateTestThemeTreeMessage = (message) => {
-        if (exports.testThemeTreeView) {
-            exports.testThemeTreeView.message = message;
+        catch (error) {
+            exports.logger.warn("[Extension] Error during initial tree state setup:", error);
         }
-    };
-    exports.testThemeProvider = serviceFactory.createTestThemeProvider(updateTestThemeTreeMessage);
-    exports.testThemeTreeView = vscode.window.createTreeView("testThemeTree", {
-        // View ID from package.json
-        treeDataProvider: exports.testThemeProvider
-    });
-    context.subscriptions.push(exports.testThemeTreeView);
-    exports.logger.info("[Extension] Test Theme Tree View initialized.");
-    // Setup event listener for ProjectManagement -> TestTheme data passing
-    if (exports.projectManagementProvider && exports.testThemeProvider) {
-        context.subscriptions.push(exports.projectManagementProvider.onDidPrepareCycleDataForThemeTree(async (eventData) => {
-            if (exports.testThemeProvider && exports.testThemeTreeView) {
-                exports.logger.debug(`[Extension] Cycle data prepared for ${eventData.cycleLabel}. Updating Test Theme Tree.`);
-                exports.testThemeTreeView.title = `Test Themes (${eventData.cycleLabel})`;
-                exports.logger.trace(`Test Themes view title updated to: ${exports.testThemeTreeView.title}`);
-                exports.testThemeProvider.populateFromCycleData(eventData);
-            }
-        }));
+        exports.logger.info("[Extension] All tree views initialized successfully through TreeServiceManager.");
     }
-    initializeTestElementsTreeView(context, serviceFactory);
-    // Initial refresh/clear states
-    exports.projectManagementProvider?.refresh(true);
-    exports.testThemeProvider?.clearTree();
-    // Setup Project TreeView specific event listeners 
-    // Expansion/selection for LS updates should be handled by the provider itself or a dedicated service.
-    // if (projectTreeView && projectManagementProvider) {
-    // projectManagementTreeView.setupProjectTreeViewEventListeners(
-    // projectTreeView,
-    // projectManagementProvider
-    // );
-    // }
-    exports.logger.info("[Extension] All tree views initialized.");
+    catch (error) {
+        exports.logger.error("[Extension] Failed to initialize tree views:", error);
+        vscode.window.showErrorMessage(`Failed to initialize TestBench tree views: ${error instanceof Error ? error.message : "Unknown error"}`);
+        throw error;
+    }
 }
 /**
- * Registers all extension commands.
+ * Registers all extension commands with centralized provider access.
  *
  * @param {vscode.ExtensionContext} context The extension context.
  */
@@ -332,10 +219,10 @@ async function registerExtensionCommands(context) {
     registerSafeCommand(context, constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation, async () => {
         exports.logger.debug(`[Cmd] Called: ${constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation}`);
         if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
-            exports.logger.info("[Cmd] Auto-login is enabled. Attempting silent login with last active profile...");
-            const activeProfile = await profileManager.getActiveProfile(context);
-            if (!activeProfile) {
-                exports.logger.info("[Cmd] Auto-login: No last active profile found. Cannot auto-login.");
+            exports.logger.info("[Cmd] Auto-login is enabled. Attempting silent login with last active connection...");
+            const activeConnection = await connectionManager.getActiveConnection(context);
+            if (!activeConnection) {
+                exports.logger.info("[Cmd] Auto-login: No last active connection found. Cannot auto-login.");
                 return;
             }
             if (!authProviderInstance) {
@@ -343,19 +230,19 @@ async function registerExtensionCommands(context) {
                 return;
             }
             try {
-                await profileManager.setActiveProfileId(context, activeProfile.id);
+                await connectionManager.setActiveConnectionId(context, activeConnection.id);
                 authProviderInstance.prepareForSilentAutoLogin();
                 exports.logger.trace("[Cmd] Auto-login: Calling vscode.authentication.getSession silently.");
                 const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], { createIfNone: true });
                 if (session) {
-                    exports.logger.info(`[Cmd] Auto-login successful for profile: ${activeProfile.label} (session restored/created silently).`);
+                    exports.logger.info(`[Cmd] Auto-login successful for connection: ${activeConnection.label} (session restored/created silently).`);
                 }
                 else {
                     exports.logger.info("[Cmd] Auto-login: No session restored/created silently. User may need to login manually.");
                 }
             }
             catch (error) {
-                exports.logger.warn(`[Cmd] Auto-login attempt for profile "${activeProfile?.label || "unknown"}" failed silently (this is expected if credentials/profile are incomplete or server issues prevent silent login): ${error.message}`);
+                exports.logger.warn(`[Cmd] Auto-login attempt for connection "${activeConnection?.label || "unknown"}" failed silently (this is expected if credentials/connection are incomplete or server issues prevent silent login): ${error.message}`);
             }
         }
         else {
@@ -363,16 +250,20 @@ async function registerExtensionCommands(context) {
         }
     });
     // --- Command: Login ---
-    // Performs the login process and stores the connection object.
     registerSafeCommand(context, constants_1.allExtensionCommands.login, async () => {
         exports.logger.debug(`[Cmd] Called: ${constants_1.allExtensionCommands.login}`);
         try {
-            // Triggers TestBenchAuthenticationProvider.createSession if no session exists
             const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], { createIfNone: true });
             if (session) {
                 exports.logger.info(`[Cmd] Login successful, session ID: ${session.id}`);
-                initializeTreeViews(context);
-                exports.projectManagementProvider?.refresh(true);
+                await initializeTreeViews();
+                try {
+                    const projectProvider = treeServiceManager.getProjectManagementProvider();
+                    projectProvider.refresh(true);
+                }
+                catch (error) {
+                    exports.logger.warn("[Cmd] Error refreshing project provider after login:", error);
+                }
             }
         }
         catch (error) {
@@ -381,7 +272,6 @@ async function registerExtensionCommands(context) {
         }
     });
     // --- Command: Logout ---
-    // Performs the logout process and clears the connection object.
     registerSafeCommand(context, constants_1.allExtensionCommands.logout, async () => {
         exports.logger.debug(`[Cmd] Called: ${constants_1.allExtensionCommands.logout}`);
         try {
@@ -411,22 +301,34 @@ async function registerExtensionCommands(context) {
         await server_1.client?.stop();
     });
     // --- Command: Handle Cycle Click ---
-    // Handles the click event on a cycle element in the project management tree view.
     registerSafeCommand(context, constants_1.allExtensionCommands.handleProjectCycleClick, async (cycleItem) => {
-        exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.handleProjectCycleClick}`);
-        if (exports.projectManagementProvider) {
-            // Avoid displaying old data in the tree views by clearing if fetching fails.
-            exports.testThemeProvider?.clearTree();
-            exports.testElementsProvider?.clearTree();
-            await exports.projectManagementProvider.handleCycleClick(cycleItem);
+        exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.handleProjectCycleClick} for item ${cycleItem.label}`);
+        try {
+            if (!treeServiceManager || !treeServiceManager.getInitializationStatus()) {
+                throw new Error("TreeServiceManager is not initialized");
+            }
+            // Hide Projects view, show Test Theme and Test Elements views
+            await hideProjectManagementTreeView();
+            await displayTestThemeTreeView();
+            await displayTestElementsTreeView();
+            await treeServiceManager.handleCycleSelection(cycleItem);
         }
-        else {
-            exports.logger.error("Cycle click cannot be processed: Project management tree data provider is not initialized.");
-            vscode.window.showErrorMessage("Project management tree is not initialized.");
+        catch (error) {
+            exports.logger.error("[Cmd CycleClick] Error during cycle click handling:", error);
+            // Reset Test Elements tree view on error
+            try {
+                const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
+                testElementsTreeView.title = "Test Elements";
+                const testElementsProvider = treeServiceManager.getTestElementsProvider();
+                testElementsProvider.updateTreeViewStatusMessage();
+            }
+            catch (resetError) {
+                exports.logger.error("[Cmd CycleClick] Error resetting tree view after failure:", resetError);
+            }
+            vscode.window.showErrorMessage(`Error handling cycle selection: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
     });
     // --- Command: Generate Test Cases For Cycle ---
-    // Generates test cases for the selected cycle in the project management tree view.
     registerSafeCommand(context, constants_1.allExtensionCommands.generateTestCasesForCycle, async (item) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.generateTestCasesForCycle}`);
         if (!exports.connection) {
@@ -441,42 +343,29 @@ async function registerExtensionCommands(context) {
     });
     // --- Command: Generate Test Cases For Test Theme or Test Case Set ---
     registerSafeCommand(context, constants_1.allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet, async (treeItem) => {
-        // treeItem is from the Test Theme Tree
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet} for item: ${treeItem.label}`);
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
             exports.logger.error(`${constants_1.allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet} command called without connection.`);
             return;
         }
-        if (!exports.testThemeProvider) {
-            exports.logger.error("TestThemeTreeDataProvider is not available. Cannot determine context for test generation.");
-            vscode.window.showErrorMessage("Test generation failed: Test context is not available.");
-            return;
-        }
-        if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR)) {
-            await vscode.commands.executeCommand(constants_1.allExtensionCommands.clearInternalTestbenchFolder);
-            // Note: clearInternalTestbenchFolder also needs to be updated to use ResourceFileService if not already.
-        }
-        // Get the current cycleKey and projectKey from the TestThemeTreeDataProvider
-        // This is the most reliable source as it reflects the currently displayed context in the Test Theme tree.
-        const cycleKey = exports.testThemeProvider.getCurrentCycleKey();
-        const projectKey = exports.testThemeProvider.getCurrentProjectKey(); // Assuming this method exists from refactor
-        if (!cycleKey || !projectKey) {
-            const errorMessage = `Error: Could not determine the active Project or Cycle context for test generation. Please ensure a cycle is selected and its themes are visible.`;
-            vscode.window.showErrorMessage(errorMessage);
-            exports.logger.error(`${errorMessage} (Project: ${projectKey}, Cycle: ${cycleKey}) for item '${treeItem.label}' (UID: ${treeItem.getUID()})`);
-            return;
-        }
-        exports.logger.trace(`Using Project Key: '${projectKey}' and Cycle Key: '${cycleKey}' from TestThemeTreeDataProvider for test generation for item '${treeItem.label}'.`);
-        // The reportHandler function signature was updated to return a boolean
-        const generationSuccessful = await reportHandler.generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(context, treeItem, // treeItem is already the correct TestThemeTreeItem type
-        typeof treeItem.label === "string" ? treeItem.label : treeItem.itemData?.name || "Unknown Item", projectKey, cycleKey, treeItem.getUID() || "" // elementUID - use the UID of the specific TestThemeTreeItem
-        );
-        if (generationSuccessful) {
-            // Marking logic is now handled by the command handler using MarkedItemStateService
-            if (exports.ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
-                // Assuming this constant is still relevant
-                const markedItemStateService = treeServiceManager.markedItemStateService; // Get service
+        try {
+            const testThemeProvider = treeServiceManager.getTestThemeProvider();
+            if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR)) {
+                await vscode.commands.executeCommand(constants_1.allExtensionCommands.clearInternalTestbenchFolder);
+            }
+            const cycleKey = testThemeProvider.getCurrentCycleKey();
+            const projectKey = testThemeProvider.getCurrentProjectKey();
+            if (!cycleKey || !projectKey) {
+                const errorMessage = `Error: Could not determine the active Project or Cycle context for test generation. Please ensure a cycle is selected and its themes are visible.`;
+                vscode.window.showErrorMessage(errorMessage);
+                exports.logger.error(`${errorMessage} (Project: ${projectKey}, Cycle: ${cycleKey}) for item '${treeItem.label}' (UID: ${treeItem.getUID()})`);
+                return;
+            }
+            exports.logger.trace(`Using Project Key: '${projectKey}' and Cycle Key: '${cycleKey}' from TestThemeTreeDataProvider for test generation for item '${treeItem.label}'.`);
+            const testGenerationSuccessful = await reportHandler.generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(context, treeItem, typeof treeItem.label === "string" ? treeItem.label : treeItem.itemData?.name || "Unknown Item", projectKey, cycleKey, treeItem.getUID() || "");
+            if (testGenerationSuccessful && exports.ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
+                const markedItemStateService = treeServiceManager.markedItemStateService;
                 const itemKeyToMark = treeItem.getUniqueId();
                 const itemUIDToMark = treeItem.getUID();
                 const originalContext = treeItem.originalContextValue;
@@ -487,19 +376,20 @@ async function registerExtensionCommands(context) {
                         originalContext === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE)) {
                     const descendantUIDs = treeItem.getDescendantUIDs();
                     const descendantKeysWithUIDs = treeItem.getDescendantKeysWithUIDs();
-                    await markedItemStateService.markItem(itemKeyToMark, itemUIDToMark, originalContext, true, // isDirectlyGenerated
-                    descendantUIDs, descendantKeysWithUIDs);
-                    exports.testThemeProvider.refresh(); // Refresh the tree to show updated markings
+                    await markedItemStateService.markItem(itemKeyToMark, itemUIDToMark, originalContext, true, descendantUIDs, descendantKeysWithUIDs);
+                    testThemeProvider.refresh();
                 }
                 else {
                     exports.logger.warn(`[Cmd Handler] Could not mark item ${treeItem.label} after generation, missing key/UID/originalContext or invalid type.`);
                 }
             }
         }
-        // Errors from generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary are expected to be handled within that function (e.g., show error message)
+        catch (error) {
+            exports.logger.error("[Cmd] Error in generateTestCasesForTestThemeOrTestCaseSet:", error);
+            vscode.window.showErrorMessage(`Error accessing Test Theme context: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
     });
     // --- Command: Display All Projects ---
-    // Opens the project management tree view, hides other views, and displays all projects with their contents.
     registerSafeCommand(context, constants_1.allExtensionCommands.displayAllProjects, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.displayAllProjects}`);
         if (!exports.connection) {
@@ -507,13 +397,11 @@ async function registerExtensionCommands(context) {
             exports.logger.error(`${constants_1.allExtensionCommands.displayAllProjects} command called without connection.`);
             return;
         }
-        await displayProjectsTreeView();
+        await displayProjectManagementTreeView();
         await hideTestThemeTreeView();
         await hideTestElementsTreeView();
     });
     // --- Command: Read Robotframework Test Results And Create Report With Results ---
-    // Activated for a test theme or test case set element.
-    // Reads the test results (output.xml) from the testbench working directory and creates a report zip file with the results.
     registerSafeCommand(context, constants_1.allExtensionCommands.readRFTestResultsAndCreateReportWithResults, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.readRFTestResultsAndCreateReportWithResults}`);
         if (!exports.connection) {
@@ -524,7 +412,6 @@ async function registerExtensionCommands(context) {
         await reportHandler.fetchTestResultsAndCreateReportWithResultsWithTb2Robot(context);
     });
     // --- Command: Import Test Results To Testbench ---
-    // Imports the selected test results zip to the testbench server
     registerSafeCommand(context, constants_1.allExtensionCommands.importTestResultsToTestbench, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.importTestResultsToTestbench}`);
         if (!exports.connection) {
@@ -535,9 +422,7 @@ async function registerExtensionCommands(context) {
         await testBenchConnection.selectReportWithResultsAndImportToTestbench(exports.connection);
     });
     // --- Command: Read And Import Test Results To Testbench ---
-    // A command that combines the reading of robotframework test results, creating a report file with results, and importing test results to testbench server.
     registerSafeCommand(context, constants_1.allExtensionCommands.readAndImportTestResultsToTestbench, async (item) => {
-        // item is of the new TestThemeTreeItem type
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.readAndImportTestResultsToTestbench}`);
         if (!exports.connection) {
             const noConnectionErrorMessage = "No connection available. Cannot import report.";
@@ -550,154 +435,144 @@ async function registerExtensionCommands(context) {
             vscode.window.showWarningMessage("Please invoke this command from a Test Theme or Test Case Set that has generated tests.");
             return null;
         }
-        if (!exports.testThemeProvider) {
-            exports.logger.error("TestThemeTreeDataProvider is not available to resolve context for import.");
-            vscode.window.showErrorMessage("Cannot perform import: Test Theme context is unavailable.");
-            return null;
-        }
-        // Get necessary services from TreeServiceManager
-        // Assuming treeServiceManager is initialized and accessible
-        const markedItemStateService = treeServiceManager.markedItemStateService;
-        // 1. Resolve Target Project Key and Cycle Key from the TestThemeTreeDataProvider
-        const targetProjectKey = exports.testThemeProvider.getCurrentProjectKey();
-        const targetCycleKey = exports.testThemeProvider.getCurrentCycleKey();
-        if (!targetProjectKey || !targetCycleKey) {
-            const errorMsg = `Could not determine active Project/Cycle key for import. Please ensure a cycle is selected.`;
-            exports.logger.error(errorMsg);
-            vscode.window.showErrorMessage(errorMsg);
-            return null;
-        }
-        // 2. Resolve the Report Root UID using the MarkedItemStateService
-        const itemKey = item.getUniqueId();
-        const itemUID = item.getUID();
-        const resolvedReportRootUID = markedItemStateService.getReportRootUID(itemKey, itemUID);
-        if (!resolvedReportRootUID) {
-            const errorMsg = `Cannot determine Report Root UID for item: ${item.label}. This item may not be eligible for import or was not properly marked after test generation.`;
-            exports.logger.error(errorMsg);
-            vscode.window.showErrorMessage(errorMsg);
-            return null;
-        }
-        // 3. Call the reportHandler function with all necessary resolved parameters
-        const importSuccessful = await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context, item, targetProjectKey, targetCycleKey, resolvedReportRootUID);
-        // 4. After successful import, decide on clearing marked state and refresh UI
-        if (importSuccessful) {
-            // Assuming fetchTestResultsAndCreateResultsAndImportToTestbench now returns a status
-            exports.logger.info(`Import process for item ${item.label} (UID: ${resolvedReportRootUID}) reported success.`);
-            if (!exports.ALLOW_PERSISTENT_IMPORT_BUTTON) {
-                exports.logger.debug(`Clearing marked state for item: ${item.label} as ALLOW_PERSISTENT_IMPORT_BUTTON is false.`);
-                await markedItemStateService.clearMarking(itemKey); // Clear marking for this specific item's hierarchy
+        try {
+            const testThemeProvider = treeServiceManager.getTestThemeProvider();
+            const markedItemStateService = treeServiceManager.markedItemStateService;
+            const targetProjectKey = testThemeProvider.getCurrentProjectKey();
+            const targetCycleKey = testThemeProvider.getCurrentCycleKey();
+            if (!targetProjectKey || !targetCycleKey) {
+                const errorMsg = `Could not determine active Project/Cycle key for import. Please ensure a cycle is selected.`;
+                exports.logger.error(errorMsg);
+                vscode.window.showErrorMessage(errorMsg);
+                return null;
+            }
+            const itemKey = item.getUniqueId();
+            const itemUID = item.getUID();
+            const resolvedReportRootUID = markedItemStateService.getReportRootUID(itemKey, itemUID);
+            if (!resolvedReportRootUID) {
+                const errorMsg = `Cannot determine Report Root UID for item: ${item.label}. This item may not be eligible for import or was not properly marked after test generation.`;
+                exports.logger.error(errorMsg);
+                vscode.window.showErrorMessage(errorMsg);
+                return null;
+            }
+            const importSuccessful = await reportHandler.fetchTestResultsAndCreateResultsAndImportToTestbench(context, item, targetProjectKey, targetCycleKey, resolvedReportRootUID);
+            if (importSuccessful) {
+                exports.logger.info(`Import process for item ${item.label} (UID: ${resolvedReportRootUID}) reported success.`);
+                if (!exports.ALLOW_PERSISTENT_IMPORT_BUTTON) {
+                    exports.logger.debug(`Clearing marked state for item: ${item.label} as ALLOW_PERSISTENT_IMPORT_BUTTON is false.`);
+                    await markedItemStateService.clearMarking(itemKey);
+                }
+                else {
+                    exports.logger.debug(`ALLOW_PERSISTENT_IMPORT_BUTTON is true. Import button will persist for item: ${item.label}`);
+                }
+                testThemeProvider.refresh();
             }
             else {
-                exports.logger.debug(`ALLOW_PERSISTENT_IMPORT_BUTTON is true. Import button will persist for item: ${item.label}`);
+                exports.logger.warn(`Import process for item ${item.label} (UID: ${resolvedReportRootUID}) did not complete successfully or was cancelled.`);
             }
-            // Refresh the Test Theme Tree to reflect any changes in marking
-            exports.testThemeProvider.refresh();
         }
-        else {
-            exports.logger.warn(`Import process for item ${item.label} (UID: ${resolvedReportRootUID}) did not complete successfully or was cancelled.`);
-            // Optionally, refresh even on failure if partial states might have changed
-            // testThemeProvider.refresh();
+        catch (error) {
+            exports.logger.error("[Cmd] Error in readAndImportTestResultsToTestbench:", error);
+            vscode.window.showErrorMessage(`Error accessing Test Theme context: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
     });
     // --- Command: Refresh Project Tree View ---
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshProjectTreeView, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.refreshProjectTreeView}`);
-        if (exports.projectManagementProvider && exports.projectTreeView) {
-            exports.projectManagementProvider.refresh(false);
+        try {
+            const projectProvider = treeServiceManager.getProjectManagementProvider();
+            projectProvider.refresh(false);
         }
-        else {
-            exports.logger.warn(`Project Management Tree Data Provider or Project Tree View not initialized. Cannot refresh.`);
+        catch (error) {
+            exports.logger.error("[Cmd] Error refreshing project tree:", error);
+            vscode.window.showErrorMessage("Failed to refresh project tree. Please check logs for details.");
         }
     });
     // --- Command: Refresh Test Theme Tree View ---
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshTestThemeTreeView, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.refreshTestThemeTreeView}`);
-        if (!exports.testThemeProvider) {
-            exports.logger.warn("Test Theme Tree Data Provider not initialized. Cannot refresh.");
-            vscode.window.showErrorMessage("Test Theme Tree is not available to refresh.");
-            return;
-        }
-        if (!exports.testThemeProvider.getCurrentCycleKey() || !exports.testThemeProvider.getCurrentProjectKey()) {
-            exports.logger.info("Test Theme Tree: No current cycle selected to refresh. Clearing tree.");
-            exports.testThemeProvider.clearTree();
-            if (exports.testThemeTreeView) {
-                exports.testThemeTreeView.title = "Test Themes";
-            }
-            return;
-        }
         try {
-            await exports.testThemeProvider.refresh(false);
-            exports.logger.info("Test Theme Tree view refresh initiated and completed via provider.");
+            const testThemeProvider = treeServiceManager.getTestThemeProvider();
+            const testThemeTreeView = treeServiceManager.getTestThemeTreeView();
+            if (!testThemeProvider.getCurrentCycleKey() || !testThemeProvider.getCurrentProjectKey()) {
+                exports.logger.info("Test Theme Tree: No current cycle selected to refresh. Clearing tree.");
+                testThemeProvider.clearTree();
+                testThemeTreeView.title = "Test Themes";
+                return;
+            }
+            await testThemeProvider.refresh(false);
+            exports.logger.info("Test Theme Tree view refresh completed successfully.");
         }
         catch (error) {
-            exports.logger.error("Error during Test Theme Tree view refresh command execution:", error);
+            exports.logger.error("[Cmd] Error refreshing test theme tree:", error);
             vscode.window.showErrorMessage("Failed to refresh Test Themes. Check logs for details.");
-            exports.testThemeProvider.showTreeStatusMessage("Error refreshing test themes.");
         }
     });
     // --- Command: Make Root ---
-    // Right clicking on a tree element and selecting "Make Root" context menu option will make the selected element the root of the tree.
-    // Refreshing the tree will revert the tree to its original state.
     registerSafeCommand(context, constants_1.allExtensionCommands.makeRoot, (treeItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.makeRoot} for tree item:`, treeItem);
         if (!treeItem) {
             exports.logger.warn("MakeRoot command called with null treeItem.");
             return;
         }
-        // Check if the item belongs to the Project Management Tree
-        if (treeItem.contextValue &&
-            [constants_1.TreeItemContextValues.PROJECT, constants_1.TreeItemContextValues.VERSION, constants_1.TreeItemContextValues.CYCLE].includes(treeItem.contextValue)) {
-            if (exports.projectManagementProvider) {
-                exports.projectManagementProvider.makeRoot(treeItem);
+        try {
+            // Check if the item belongs to the Project Management Tree
+            if (treeItem.contextValue &&
+                [
+                    constants_1.TreeItemContextValues.PROJECT,
+                    constants_1.TreeItemContextValues.VERSION,
+                    constants_1.TreeItemContextValues.CYCLE
+                ].includes(treeItem.contextValue)) {
+                const projectProvider = treeServiceManager.getProjectManagementProvider();
+                projectProvider.makeRoot(treeItem);
+            }
+            // Check if the item belongs to the Test Theme Tree
+            else if (treeItem.contextValue &&
+                [constants_1.TreeItemContextValues.TEST_THEME_NODE, constants_1.TreeItemContextValues.TEST_CASE_SET_NODE].includes(treeItem.contextValue)) {
+                const testThemeProvider = treeServiceManager.getTestThemeProvider();
+                if (typeof testThemeProvider.makeRoot === "function") {
+                    testThemeProvider.makeRoot(treeItem);
+                }
+                else {
+                    exports.logger.warn(`MakeRoot: testThemeTreeDataProvider does not have a makeRoot method or item type (${treeItem.contextValue}) is not supported for makeRoot in test theme tree.`);
+                    vscode.window.showInformationMessage(`Cannot make '${treeItem.label}' root in the Test Themes view with current implementation.`);
+                }
             }
             else {
-                const makeRootNoProviderErrorMessage = "MakeRoot command called without projectManagementTreeDataProvider.";
-                exports.logger.warn(makeRootNoProviderErrorMessage);
-                vscode.window.showErrorMessage(makeRootNoProviderErrorMessage);
+                exports.logger.warn(`MakeRoot: Item type "${treeItem.contextValue}" not supported for makeRoot or target provider not identified.`);
+                vscode.window.showInformationMessage(`Item '${treeItem.label}' cannot be made a root in the current view.`);
             }
         }
-        // Check if the item belongs to the Test Theme Tree
-        else if (exports.testThemeProvider &&
-            treeItem.contextValue &&
-            [constants_1.TreeItemContextValues.TEST_THEME_NODE, constants_1.TreeItemContextValues.TEST_CASE_SET_NODE].includes(treeItem.contextValue)) {
-            // Delegate to testThemeTreeDataProvider if it's a test theme item
-            if (typeof exports.testThemeProvider.makeRoot === "function") {
-                exports.testThemeProvider.makeRoot(treeItem);
-            }
-            else {
-                exports.logger.warn(`MakeRoot: testThemeTreeDataProvider does not have a makeRoot method or item type (${treeItem.contextValue}) is not supported for makeRoot in test theme tree.`);
-                vscode.window.showInformationMessage(`Cannot make '${treeItem.label}' root in the Test Themes view with current implementation.`);
-            }
-        }
-        else {
-            exports.logger.warn(`MakeRoot: Item type "${treeItem.contextValue}" not supported for makeRoot or target provider not identified.`);
-            vscode.window.showInformationMessage(`Item '${treeItem.label}' cannot be made a root in the current view.`);
+        catch (error) {
+            exports.logger.error("[Cmd] Error in makeRoot command:", error);
+            vscode.window.showErrorMessage(`Failed to make '${treeItem.label}' a root: ${error.message}`);
         }
     });
     // --- Command: Reset Project Tree View Root ---
     registerSafeCommand(context, constants_1.allExtensionCommands.resetProjectTreeViewRoot, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.resetProjectTreeViewRoot}`);
-        if (exports.projectManagementProvider) {
-            exports.projectManagementProvider.resetCustomRoot();
+        try {
+            const projectProvider = treeServiceManager.getProjectManagementProvider();
+            projectProvider.resetCustomRoot();
         }
-        else {
-            exports.logger.warn("ProjectManagementTreeDataProvider not available to reset custom root.");
-            vscode.window.showWarningMessage("Project tree is not ready to reset root.");
+        catch (error) {
+            exports.logger.error("[Cmd] Error resetting project tree root:", error);
+            vscode.window.showWarningMessage("Failed to reset project tree root.");
         }
     });
     // --- Command: Reset Test Theme Tree View Root ---
     registerSafeCommand(context, constants_1.allExtensionCommands.resetTestThemeTreeViewRoot, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.resetTestThemeTreeViewRoot}`);
-        if (exports.testThemeProvider) {
-            exports.testThemeProvider.resetCustomRoot();
+        try {
+            const testThemeProvider = treeServiceManager.getTestThemeProvider();
+            testThemeProvider.resetCustomRoot();
         }
-        else {
-            exports.logger.warn("TestThemeTreeDataProvider not available to reset custom root.");
-            vscode.window.showWarningMessage("Test theme tree is not ready to reset root.");
+        catch (error) {
+            exports.logger.error("[Cmd] Error resetting test theme tree root:", error);
+            vscode.window.showWarningMessage("Failed to reset test theme tree root.");
         }
     });
     // --- Command: Clear Workspace Folder ---
-    // Clears the workspace folder of its contents, excluding extension log files.
     registerSafeCommand(context, constants_1.allExtensionCommands.clearInternalTestbenchFolder, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.clearInternalTestbenchFolder}`);
         const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
@@ -710,64 +585,90 @@ async function registerExtensionCommands(context) {
         );
     });
     // --- Command: Refresh Test Elements Tree ---
-    // Refreshes the test elements tree view with the latest test elements for the selected TOV.
     registerSafeCommand(context, constants_1.allExtensionCommands.refreshTestElementsTree, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.refreshTestElementsTree}`);
-        if (!exports.testElementsProvider) {
-            exports.logger.warn("Test Elements Tree Data Provider not initialized. Cannot refresh Test Elements Tree.");
-            return;
+        try {
+            const testElementsProvider = treeServiceManager.getTestElementsProvider();
+            const currentTovKey = testElementsProvider.getCurrentTovKey();
+            if (!currentTovKey) {
+                exports.logger.info("No TOV key available for refresh. Clearing tree with appropriate message.");
+                testElementsProvider.clearTree();
+                return;
+            }
+            exports.logger.debug(`Refreshing test elements for TOV: ${currentTovKey}`);
+            await testElementsProvider.refresh(false);
         }
-        const currentTovKey = exports.testElementsProvider.getCurrentTovKey();
-        if (!currentTovKey) {
-            vscode.window.showErrorMessage("No TOV key stored. Please fetch test elements first.");
-            return;
+        catch (error) {
+            exports.logger.error(`[Cmd] Error during test elements refresh:`, error);
+            vscode.window.showErrorMessage(`Error refreshing test elements: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
-        await exports.testElementsProvider.fetchTestElements(currentTovKey);
     });
     // --- Command: Display Interactions For Selected TOV ---
     registerSafeCommand(context, constants_1.allExtensionCommands.displayInteractionsForSelectedTOV, async (treeItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.displayInteractionsForSelectedTOV} for tree item:`, treeItem);
-        if (exports.projectManagementProvider && treeItem.contextValue === constants_1.TreeItemContextValues.VERSION) {
-            const tovKeyOfSelectedTreeElement = treeItem.itemData?.key?.toString();
-            if (tovKeyOfSelectedTreeElement && exports.testElementsProvider) {
-                const areTestElementsFetched = await exports.testElementsProvider.fetchTestElements(tovKeyOfSelectedTreeElement, typeof treeItem.label === "string" ? treeItem.label : undefined);
-                if (areTestElementsFetched) {
-                    await hideProjectsTreeView();
-                    await displayTestElementsTreeView();
-                    // Clicking on the "Show Robotframework Resources" button will not trigger project management tree onDidChangeSelection event,
-                    // which restarts the language client.
-                    // Retrieve the project name and TOV name from the tree item for language client restart.
-                    const projectAndTovNameObj = exports.projectManagementProvider.getProjectAndTovNamesForItem(treeItem);
-                    if (projectAndTovNameObj) {
-                        const { projectName, tovName } = projectAndTovNameObj;
-                        if (projectName && tovName) {
-                            await (0, server_1.restartLanguageClient)(projectName, tovName);
+        try {
+            const projectProvider = treeServiceManager.getProjectManagementProvider();
+            const testElementsProvider = treeServiceManager.getTestElementsProvider();
+            const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
+            if (treeItem.contextValue === constants_1.TreeItemContextValues.VERSION) {
+                const tovKeyOfSelectedTreeElement = treeItem.itemData?.key?.toString();
+                const tovLabel = typeof treeItem.label === "string" ? treeItem.label : "Unknown TOV";
+                if (tovKeyOfSelectedTreeElement) {
+                    testElementsTreeView.title = `Test Elements (Loading...)`;
+                    const areTestElementsFetched = await testElementsProvider.fetchTestElements(tovKeyOfSelectedTreeElement, tovLabel);
+                    if (areTestElementsFetched) {
+                        await hideProjectManagementTreeView();
+                        await displayTestElementsTreeView();
+                        testElementsTreeView.title = `Test Elements (${tovLabel})`;
+                        // Restart language client for the selected project/TOV
+                        const projectAndTovNameObj = projectProvider.getProjectAndTovNamesForItem(treeItem);
+                        if (projectAndTovNameObj) {
+                            const { projectName, tovName } = projectAndTovNameObj;
+                            if (projectName && tovName) {
+                                await (0, server_1.restartLanguageClient)(projectName, tovName);
+                            }
                         }
+                    }
+                    else {
+                        testElementsTreeView.title = "Test Elements";
+                        exports.logger.warn(`Test Elements fetch failed for TOV: ${tovKeyOfSelectedTreeElement}`);
+                        vscode.window.showErrorMessage(`Failed to fetch test elements for TOV: ${tovLabel}`);
                     }
                 }
                 else {
-                    exports.logger.warn(`Test Elements Tree Data Provider not initialized or failed to fetch test elements for TOV: ${tovKeyOfSelectedTreeElement}`);
-                    vscode.window.showErrorMessage(`Failed to fetch test elements for TOV: ${tovKeyOfSelectedTreeElement}`);
+                    const errorMsg = "Invalid TOV selection for test elements display.";
+                    exports.logger.warn(errorMsg);
+                    vscode.window.showWarningMessage(errorMsg);
                 }
             }
         }
+        catch (error) {
+            exports.logger.error(`[Cmd] Error in display interactions command:`, error);
+            try {
+                const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
+                const testElementsProvider = treeServiceManager.getTestElementsProvider();
+                testElementsTreeView.title = "Test Elements";
+                testElementsProvider.updateTreeViewStatusMessage();
+            }
+            catch (resetError) {
+                exports.logger.error("[Cmd] Error resetting test elements view after failure:", resetError);
+            }
+            vscode.window.showErrorMessage(`Error loading test elements: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
     });
     // --- Command: Go To Resource File ---
-    // Opens or creates the robot resource file associated with the selected test element.
-    registerSafeCommand(
-    //
-    context, constants_1.allExtensionCommands.openOrCreateRobotResourceFile, async (treeItem) => {
+    registerSafeCommand(context, constants_1.allExtensionCommands.openOrCreateRobotResourceFile, async (treeItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.openOrCreateRobotResourceFile} for tree item:`, treeItem);
-        if (exports.testElementsProvider) {
-            await exports.testElementsProvider.handleGoToResourceCommand(treeItem);
+        try {
+            const testElementsProvider = treeServiceManager.getTestElementsProvider();
+            await testElementsProvider.handleGoToResourceCommand(treeItem);
         }
-        else {
-            exports.logger.error("TestElementsTreeDataProvider not initialized. Cannot handle Go To Resource File command.");
-            vscode.window.showErrorMessage("Test Elements view is not ready. Please try again.");
+        catch (error) {
+            exports.logger.error("[Cmd] Error handling Go To Resource File command:", error);
+            vscode.window.showErrorMessage("Failed to handle resource file operation. Please try again.");
         }
     });
     // --- Command: Create Interaction Under Subdivision ---
-    // Creates a new interaction tree element under the selected subdivision.
     registerSafeCommand(context, constants_1.allExtensionCommands.createInteractionUnderSubdivision, async (subdivisionTreeItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.createInteractionUnderSubdivision} for tree item:`, subdivisionTreeItem);
         if (!exports.connection) {
@@ -775,33 +676,34 @@ async function registerExtensionCommands(context) {
             exports.logger.error(`${constants_1.allExtensionCommands.createInteractionUnderSubdivision} command called without connection.`);
             return;
         }
-        if (!exports.testElementsProvider) {
-            return;
-        }
-        const interactionName = await vscode.window.showInputBox({
-            prompt: "Enter name for the new Interaction",
-            placeHolder: "New Interaction Name",
-            validateInput: (value) => {
-                if (!value || value.trim() === "") {
-                    return "Interaction name cannot be empty";
+        try {
+            const testElementsProvider = treeServiceManager.getTestElementsProvider();
+            const interactionName = await vscode.window.showInputBox({
+                prompt: "Enter name for the new Interaction",
+                placeHolder: "New Interaction Name",
+                validateInput: (value) => {
+                    if (!value || value.trim() === "") {
+                        return "Interaction name cannot be empty";
+                    }
+                    return null;
                 }
-                return null;
+            });
+            if (!interactionName) {
+                return; // User cancelled input box
             }
-        });
-        if (!interactionName) {
-            return; // User cancelled input box
+            const newInteraction = await testElementsProvider.createInteractionUnderSubdivision(subdivisionTreeItem, interactionName);
+            if (newInteraction) {
+                testElementsProvider._onDidChangeTreeData.fire(undefined);
+                vscode.window.showInformationMessage(`Successfully created interaction '${interactionName}'`);
+                exports.logger.debug(`Created new interaction '${interactionName}' under subdivision '${subdivisionTreeItem.testElementData.name}'`);
+            }
         }
-        const newInteraction = await exports.testElementsProvider.createInteractionUnderSubdivision(subdivisionTreeItem, interactionName);
-        if (newInteraction) {
-            // TODO: After the API is implemented, use the API to create the interaction on the server
-            // For now, refresh the tree view to show the new interaction
-            exports.testElementsProvider._onDidChangeTreeData.fire(undefined);
-            vscode.window.showInformationMessage(`Successfully created interaction '${interactionName}'`);
-            exports.logger.debug(`Created new interaction '${interactionName}' under subdivision '${subdivisionTreeItem.testElementData.name}'`);
+        catch (error) {
+            exports.logger.error("[Cmd] Error creating interaction under subdivision:", error);
+            vscode.window.showErrorMessage("Failed to create interaction. Please try again.");
         }
     });
     // --- Command: Open Issue Reporter ---
-    // Opens the official VS Code issue reporter, where the extension is preselected.
     registerSafeCommand(context, constants_1.allExtensionCommands.openIssueReporter, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.openIssueReporter}`);
         vscode.commands.executeCommand("workbench.action.openIssueReporter", {
@@ -809,8 +711,6 @@ async function registerExtensionCommands(context) {
         });
     });
     // --- Command: Modify Report With Results Zip ---
-    // TODO: This feature needs to be discussed with the team.
-    // Allows the user to select a report zip file and create a new report by removing JSON files that were not selected in the quick pick from the original report zip.
     registerSafeCommand(context, constants_1.allExtensionCommands.modifyReportWithResultsZip, async () => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.modifyReportWithResultsZip}`);
         const zipUris = await vscode.window.showOpenDialog({
@@ -1056,13 +956,10 @@ async function registerExtensionCommands(context) {
     });
 }
 /**
- * Handles changes in the TestBench authentication session.
+ * Handles changes in the TestBench authentication session with centralized tree management.
  *
- * Updates the application state based on the provided or retrieved authentication session.
  * @param {vscode.ExtensionContext} context - The VS Code extension context.
  * @param {vscode.AuthenticationSession} existingSession - An optional existing authentication session to process.
- *                          If not provided, the function will attempt to retrieve the current session.
- * @returns A promise that resolves when the session change has been handled.
  */
 async function handleTestBenchSessionChange(context, existingSession) {
     exports.logger.info(`[handleTestBenchSessionChange] Session changed. Processing... Has session: ${!!existingSession}`);
@@ -1081,68 +978,90 @@ async function handleTestBenchSessionChange(context, existingSession) {
     }
     const wasPreviouslyConnected = !!exports.connection;
     if (sessionToProcess && sessionToProcess.accessToken) {
-        const activeProfile = await profileManager.getActiveProfile(context);
-        if (activeProfile) {
-            // Check if a connection for this session and profile already exists
+        const activeConnection = await connectionManager.getActiveConnection(context);
+        if (activeConnection) {
+            // Check if a connection for this session and connection already exists
             if (exports.connection &&
                 exports.connection.getSessionToken() === sessionToProcess.accessToken &&
-                exports.connection.getUsername() === activeProfile.username &&
-                exports.connection.getServerName() === activeProfile.serverName &&
-                exports.connection.getServerPort() === activeProfile.portNumber.toString()) {
-                exports.logger.info(`[Extension] Connection for profile '${activeProfile.label}' and current session token is already active. Skipping re-initialization.`);
+                exports.connection.getUsername() === activeConnection.username &&
+                exports.connection.getServerName() === activeConnection.serverName &&
+                exports.connection.getServerPort() === activeConnection.portNumber.toString()) {
+                exports.logger.info(`[Extension] Connection for connection '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`);
                 if (!wasPreviouslyConnected) {
                     exports.logger.info("[Extension] Re-asserting UI state for existing matching connection.");
                     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, true);
                     getLoginWebViewProvider()?.updateWebviewHTMLContent();
                     await vscode.commands.executeCommand(constants_1.allExtensionCommands.displayAllProjects);
-                    exports.projectManagementProvider?.refresh(true);
-                    exports.testThemeProvider?.clearTree();
-                    exports.testThemeProvider?.clearTree();
+                    try {
+                        const projectProvider = treeServiceManager.getProjectManagementProvider();
+                        const testThemeProvider = treeServiceManager.getTestThemeProvider();
+                        projectProvider.refresh(true);
+                        testThemeProvider.clearTree();
+                    }
+                    catch (error) {
+                        exports.logger.warn("[Extension] Error refreshing trees during session restore:", error);
+                    }
                 }
                 return;
             }
-            exports.logger.info(`[Extension] TestBench session active for profile: ${activeProfile.label}. Initializing PlayServerConnection.`);
+            exports.logger.info(`[Extension] TestBench session active for connection: ${activeConnection.label}. Initializing PlayServerConnection.`);
             if (exports.connection) {
                 exports.logger.warn("[Extension] A different connection was active. Logging out from previous server session before establishing new one.");
                 await exports.connection.logoutUserOnServer();
             }
-            const newConnection = new testBenchConnection_1.PlayServerConnection(activeProfile.serverName, activeProfile.portNumber, activeProfile.username, sessionToProcess.accessToken);
+            const newConnection = new testBenchConnection_1.PlayServerConnection(activeConnection.serverName, activeConnection.portNumber, activeConnection.username, sessionToProcess.accessToken);
             setConnection(newConnection);
             await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, true);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
             if (!wasPreviouslyConnected ||
                 (exports.connection && exports.connection.getSessionToken() !== newConnection.getSessionToken())) {
-                // This is a new login session (e.g., startup auto-login, or manual login from disconnected state)
                 exports.logger.info("[Extension] New session established. Setting default view to 'Projects' and refreshing data.");
                 await vscode.commands.executeCommand(constants_1.allExtensionCommands.displayAllProjects);
-                exports.projectManagementProvider?.refresh(true);
-                exports.testThemeProvider?.clearTree();
-                exports.testThemeProvider?.clearTree();
+                try {
+                    const projectProvider = treeServiceManager.getProjectManagementProvider();
+                    const testThemeProvider = treeServiceManager.getTestThemeProvider();
+                    const testElementsProvider = treeServiceManager.getTestElementsProvider();
+                    projectProvider.refresh(true);
+                    testThemeProvider.clearTree();
+                    testElementsProvider.clearTree();
+                }
+                catch (error) {
+                    exports.logger.warn("[Extension] Error managing trees during session change:", error);
+                }
             }
             else {
-                // Session changed while already connected (e.g., profile switch if supported, or token refresh)
                 exports.logger.info("[Extension] Session changed while already connected. Resetting view to 'Projects' and refreshing data.");
                 await vscode.commands.executeCommand(constants_1.allExtensionCommands.displayAllProjects);
-                exports.projectManagementProvider?.refresh(true);
-                exports.testThemeProvider?.clearTree();
-                exports.testThemeProvider?.clearTree();
-                ;
+                try {
+                    const projectProvider = treeServiceManager.getProjectManagementProvider();
+                    const testThemeProvider = treeServiceManager.getTestThemeProvider();
+                    const testElementsProvider = treeServiceManager.getTestElementsProvider();
+                    projectProvider.refresh(true);
+                    testThemeProvider.clearTree();
+                    testElementsProvider.clearTree();
+                }
+                catch (error) {
+                    exports.logger.warn("[Extension] Error managing trees during session update:", error);
+                }
             }
         }
         else {
-            exports.logger.warn("[Extension] Session exists, but no active profile. Clearing connection.");
+            exports.logger.warn("[Extension] Session exists, but no active connection. Clearing connection.");
             if (exports.connection) {
                 await exports.connection.logoutUserOnServer();
             }
             setConnection(null);
             await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
-            await hideProjectsTreeView();
+            await hideProjectManagementTreeView();
             await hideTestThemeTreeView();
             await hideTestElementsTreeView();
-            exports.projectManagementProvider?.clearTree();
-            exports.testThemeProvider?.clearTree();
-            exports.testElementsProvider?.clearTree();
+            try {
+                treeServiceManager.clearAllTrees();
+            }
+            catch (error) {
+                exports.logger.warn("[Extension] Error clearing trees during logout:", error);
+            }
         }
     }
     else {
@@ -1153,12 +1072,15 @@ async function handleTestBenchSessionChange(context, existingSession) {
         setConnection(null);
         await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
         getLoginWebViewProvider()?.updateWebviewHTMLContent();
-        await hideProjectsTreeView();
+        await hideProjectManagementTreeView();
         await hideTestThemeTreeView();
         await hideTestElementsTreeView();
-        exports.projectManagementProvider?.clearTree();
-        exports.testThemeProvider?.clearTree();
-        exports.testThemeProvider?.clearTree();
+        try {
+            treeServiceManager.clearAllTrees();
+        }
+        catch (error) {
+            exports.logger.warn("[Extension] Error clearing trees during session cleanup:", error);
+        }
     }
 }
 /* =============================================================================
@@ -1175,8 +1097,7 @@ async function activate(context) {
     (0, configuration_1.initializeConfigurationWatcher)();
     // Register AuthenticationProvider
     authProviderInstance = new testBenchAuthenticationProvider_1.TestBenchAuthenticationProvider(context);
-    context.subscriptions.push(vscode.authentication.registerAuthenticationProvider(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_LABEL, authProviderInstance, { supportsMultipleAccounts: false } // No support for multiple simultaneous TestBench logins
-    ));
+    context.subscriptions.push(vscode.authentication.registerAuthenticationProvider(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_LABEL, authProviderInstance, { supportsMultipleAccounts: false }));
     exports.logger.info("TestBenchAuthenticationProvider registered.");
     // Session Change Listener
     context.subscriptions.push(vscode.authentication.onDidChangeSessions(async (e) => {
@@ -1201,42 +1122,34 @@ async function activate(context) {
             }
         }
     }));
-    // Define TreeServiceManager Dependencies
+    // Initialize TreeServiceManager
     const treeServiceDependencies = {
         extensionContext: context,
         logger: exports.logger,
         getConnection: getConnection
     };
-    // Instantiate TreeServiceManager
     treeServiceManager = new treeServiceManager_1.TreeServiceManager(treeServiceDependencies);
     try {
-        // Initialize TreeServiceManager (and its managed services)
         await treeServiceManager.initialize();
         exports.logger.info("[Extension] TreeServiceManager initialized successfully.");
-        // Get the factory for creating tree providers
-        serviceFactory = treeServiceManager.createServiceFactory();
-        exports.logger.info("[Extension] Service factory created.");
     }
     catch (error) {
         exports.logger.error("[Extension] TreeServiceManager initialization failed:", error);
         vscode.window.showErrorMessage("TestBench Extension critical services failed to initialize. Some features may be unavailable.");
     }
-    await initializeTreeViews(context);
-    // Set the initial connection context state. Before any login attempt, connection is null.
-    // VS Code will show/hide views based on this initial state matching the 'when' clauses in package.json
-    // CONNECTION_ACTIVE is also used to enable or disable the login and logout buttons in the status bar,
-    // which allows icon changes for login/logout buttons based on connectionActive variable.
+    await initializeTreeViews();
+    // Set the initial connection context state
     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, exports.connection !== null);
     exports.logger.trace(`Initial connectionActive context set to: ${exports.connection !== null}`);
     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
+    // Initialize login webview
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(loginWebView.LoginWebViewProvider.viewId, loginWebViewProvider, {
         webviewOptions: { retainContextWhenHidden: true }
     }));
     await registerExtensionCommands(context);
     // Attempt to restore session on activation
-    // Try to get an existing session without creating one.
     exports.logger.trace("[Extension] Attempting to silently restore existing TestBench session on activation...");
     try {
         const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
@@ -1249,8 +1162,6 @@ async function activate(context) {
         }
         else {
             exports.logger.info("[Extension] No existing TestBench session found during initial check.");
-            // If auto-login is enabled, it will be triggered next.
-            // If not, user needs to login manually.
             if (!(0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
@@ -1264,7 +1175,6 @@ async function activate(context) {
     // Trigger Automatic Login Command if configured
     if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
         exports.logger.info("[Extension] Auto-login configured. Triggering automatic login command.");
-        // Note: Dont use await here, which would block the login webview display during autologin.
         vscode.commands.executeCommand(constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation);
     }
     else {
@@ -1286,6 +1196,10 @@ async function deactivate() {
             exports.logger.info("[Extension] Attempting to stop language server on deactivation.");
             await (0, server_1.stopLanguageClient)(true);
             exports.logger.info("[Extension] Language server stopped on deactivation.");
+        }
+        if (treeServiceManager) {
+            exports.logger.info("[Extension] Disposing TreeServiceManager on deactivation.");
+            treeServiceManager.dispose();
         }
         exports.logger.info("Extension deactivated.");
     }
