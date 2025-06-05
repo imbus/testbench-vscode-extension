@@ -38,6 +38,7 @@ from .messages import (
     COMMAND_PULL_KEYWORD,
     COMMAND_PULL_SUBDIVISION,
     COMMAND_PUSH_KEYWORD,
+    COMMAND_PUSH_SUBDIVISION,
     COMMAND_UPDATE_LOGIN_NAME,
     COMMAND_UPDATE_PROJECT,
     COMMAND_UPDATE_SERVER_NAME,
@@ -54,6 +55,7 @@ from .messages import (
     PULL_KEYWORD_TITLE,
     PULL_SUBDIVISON_TITLE,
     PUSH_KEYWORD_TITLE,
+    PUSH_SUBDIVISON_TITLE,
     TESTBENCH_LS_CLASS_NAME,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
@@ -240,6 +242,15 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
         ),
     )
     code_lenses.append(pull_resource_lens)
+    push_resource_lens = CodeLens(
+        range=Range(start=Position(line=0, character=0), end=Position(line=0, character=0)),
+        command=Command(
+            title=PUSH_SUBDIVISON_TITLE,
+            command=COMMAND_PUSH_SUBDIVISION,
+            arguments=[document_uri, testbench_resource.tb_subdivision_uid],
+        ),
+    )
+    code_lenses.append(push_resource_lens)
     for keyword in testbench_resource.keywords:
         keyword_uid = testbench_resource.get_kw_uid(keyword)
         if keyword_uid:
@@ -287,6 +298,40 @@ def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceMod
         show_error(ls, ERROR_CONTEXT_MISMATCH)
         return False
     return True
+
+
+@testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
+def pull_testbench_subdivision(ls: LanguageServer, args):
+    document_uri, subdivision_uid, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    existing_resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, existing_resource):
+        return
+    rd = ResourceDocumentation(document.path)
+    for keyword in existing_resource.keyword_section.body:
+        keyword_uid = existing_resource.get_kw_uid(keyword)
+        existing_keywords = existing_resource.get_keywords(keyword_uid)
+        if len(existing_keywords) > 1:
+            show_error(
+                ls,
+                f"Multiple keywords with uid '{keyword_uid}' found. Please resolve the conflict manually.",
+            )
+            continue
+        new_docu = rd.get_keyword_documentation(keyword_uid)
+        html_description = f"<html><body>{new_docu.replace('<br>', '<br/>').replace('<hr>', '<br/>')}</body></html>"
+        try:
+            tb_connection = TestBenchResourceConnection.singleton()
+            response = patch_interaction_details(
+                tb_connection,
+                keyword_uid,
+                keyword.name,
+                html_description,
+            )
+        except requests.exceptions.HTTPError as http_error:
+            if http_error.response.status_code == 409:
+                show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
+            else:
+                show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
 
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
