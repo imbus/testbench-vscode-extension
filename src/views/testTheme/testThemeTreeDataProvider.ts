@@ -13,6 +13,7 @@ import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { CycleNodeData, CycleStructure } from "../../testBenchTypes";
 import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
 import { IconManagementService } from "../../services/iconManagementService";
+import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
 
 export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTreeItem> {
     private currentCycleKey: string | null = null;
@@ -32,11 +33,17 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             contextKey: ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT,
             customRootContextValue: TreeItemContextValues.CUSTOM_ROOT_TEST_THEME,
             enableCustomRoot: true,
-            enableExpansionTracking: true
+            enableExpansionTracking: true,
+            stateConfig: {
+                treeViewId: "testThemeTree",
+                treeViewType: TreeViewType.TEST_THEME,
+                noDataSourceMessage: "Select a cycle from the 'Projects' view to see test themes.",
+                loadingMessageTemplate: "Loading test themes for {dataSource}..."
+            }
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
         this.iconService = iconManagementService;
-        this.logger.trace("[TestThemeTreeDataProvider] Initialized");
+        this.logger.trace("[TestThemeTreeDataProvider] Initialized with enhanced state management");
     }
 
     public getCurrentCycleKey(): string | null {
@@ -48,6 +55,9 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
     public populateFromCycleData(eventData: CycleDataForThemeTreeEvent): void {
         this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.cycleKey}`);
+
+        this.setDataSource(eventData.cycleKey, eventData.cycleLabel, eventData.cycleLabel);
+
         this.currentCycleKey = eventData.cycleKey;
         this.currentProjectKey = eventData.projectKey;
         this.currentCycleLabel = eventData.cycleLabel;
@@ -60,46 +70,81 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         if (!eventData.rawCycleStructure?.nodes?.length || !eventData.rawCycleStructure.root?.base?.key) {
             this.logger.warn(`[TTTDP] Invalid cycle structure for: ${eventData.cycleLabel}`);
             this.updateElements([]);
-            this.updateMessageCallback(`No test themes found for cycle ${this.currentCycleLabel}.`);
+            this.setErrorState(new Error("Invalid cycle structure"), TreeViewEmptyState.PROCESSING_ERROR);
             return;
         }
 
-        const elements = this.buildTreeFromCycleStructure(eventData.rawCycleStructure);
-        this.updateElements(elements);
-        if (elements.length === 0) {
-            this.updateMessageCallback(`No test themes found for cycle ${this.currentCycleLabel}.`);
+        try {
+            const elements = this.buildTreeFromCycleStructure(eventData.rawCycleStructure);
+            this.recordFetchAttempt(true, eventData.rawCycleStructure.nodes.length, elements.length);
+            this.updateElements(elements);
+
+            if (elements.length === 0) {
+                this.updateTreeState({
+                    operationalState: TreeViewOperationalState.EMPTY,
+                    emptyState: TreeViewEmptyState.SERVER_NO_DATA
+                });
+            }
+        } catch (error) {
+            this.logger.error(`[TTTDP] Error building tree from cycle structure:`, error);
+            this.setErrorState(error as Error, TreeViewEmptyState.PROCESSING_ERROR);
         }
     }
 
     protected async fetchRootElements(): Promise<TestThemeTreeItem[]> {
         if (!this.currentCycleKey || !this.currentProjectKey) {
-            this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
+            this.updateTreeState({
+                operationalState: TreeViewOperationalState.EMPTY,
+                emptyState: TreeViewEmptyState.NO_DATA_SOURCE
+            });
             return [];
         }
+
         this.logger.debug(`[TTTDP] fetchRootElements for cycle ${this.currentCycleKey}`);
-        const cycleStructure = await this.projectDataService.fetchCycleStructure(
-            this.currentProjectKey,
-            this.currentCycleKey
-        );
-        if (cycleStructure) {
-            const newRootElements = this.buildTreeFromCycleStructure(cycleStructure);
-            const applyExpansionRecursive = (items: TestThemeTreeItem[]) => {
-                for (const item of items) {
-                    this.applyStoredExpansionState(item);
-                    if (item.children) {
-                        applyExpansionRecursive(item.children as TestThemeTreeItem[]);
-                    }
-                }
-            };
-            applyExpansionRecursive(newRootElements);
-            this.rootElements = newRootElements;
-            this.updateMessageCallback(
-                newRootElements.length === 0 ? `No themes in ${this.currentCycleLabel}` : undefined
+        this.setLoadingState(`Loading test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`);
+
+        try {
+            const cycleStructure = await this.projectDataService.fetchCycleStructure(
+                this.currentProjectKey,
+                this.currentCycleKey
             );
-            return newRootElements;
+
+            if (cycleStructure) {
+                const newRootElements = this.buildTreeFromCycleStructure(cycleStructure);
+                const applyExpansionRecursive = (items: TestThemeTreeItem[]) => {
+                    for (const item of items) {
+                        this.applyStoredExpansionState(item);
+                        if (item.children) {
+                            applyExpansionRecursive(item.children as TestThemeTreeItem[]);
+                        }
+                    }
+                };
+                applyExpansionRecursive(newRootElements);
+                this.rootElements = newRootElements;
+
+                this.recordFetchAttempt(true, cycleStructure.nodes?.length || 0, newRootElements.length);
+
+                if (newRootElements.length === 0) {
+                    this.updateTreeState({
+                        operationalState: TreeViewOperationalState.EMPTY,
+                        emptyState: TreeViewEmptyState.SERVER_NO_DATA
+                    });
+                } else {
+                    this.updateTreeState({
+                        operationalState: TreeViewOperationalState.READY
+                    });
+                }
+
+                return newRootElements;
+            } else {
+                this.setErrorState(new Error("Failed to fetch cycle structure"), TreeViewEmptyState.FETCH_ERROR);
+                return [];
+            }
+        } catch (error) {
+            this.logger.error(`[TTTDP] Error in fetchRootElements:`, error);
+            this.setErrorState(error as Error, TreeViewEmptyState.FETCH_ERROR);
+            return [];
         }
-        this.updateMessageCallback(`Error loading themes for ${this.currentCycleLabel}.`);
-        return [];
     }
 
     protected async fetchChildrenForElement(element: TestThemeTreeItem): Promise<TestThemeTreeItem[]> {
@@ -224,12 +269,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         this.currentProjectKey = null;
         this.currentCycleLabel = null;
         super.clearTree();
-        this.updateMessageCallback("Select a cycle from the 'Projects' view to see test themes.");
-        this.logger.trace("[TestThemeTreeDataProvider] Tree cleared.");
+        this.logger.trace("[TestThemeTreeDataProvider] Tree cleared with enhanced state management.");
     }
 
     public override async refresh(isHardRefresh: boolean = false): Promise<void> {
         this.logger.debug(`[TestThemeTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
+
         if (isHardRefresh && this.isCustomRootActive()) {
             this.customRootService.resetCustomRoot();
         }
@@ -240,31 +285,35 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             return;
         }
 
+        this.setDataSource(this.currentCycleKey, this.currentCycleLabel || this.currentCycleKey);
+
         const loadingMessage =
             this.isCustomRootActive() && this.getCurrentCustomRoot()
                 ? `Refreshing: ${this.getCurrentCustomRoot()?.label}...`
-                : `Loading test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`;
-        this.updateMessageCallback(loadingMessage);
+                : `Refreshing test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`;
+
+        this.setLoadingState(loadingMessage);
 
         try {
             const cycleStructure = await this.projectDataService.fetchCycleStructure(
                 this.currentProjectKey,
                 this.currentCycleKey
             );
+
             if (cycleStructure) {
                 if (this.isCustomRootActive() && !isHardRefresh) {
                     await this.refreshCustomRootNode(cycleStructure);
                 } else {
                     const elements = this.buildTreeFromCycleStructure(cycleStructure);
+                    this.recordFetchAttempt(true, cycleStructure.nodes?.length || 0, elements.length);
                     this.updateElements(elements);
                 }
             } else {
-                this.updateElements([]);
+                this.setErrorState(new Error("Failed to fetch cycle structure"), TreeViewEmptyState.FETCH_ERROR);
             }
         } catch (error) {
             this.logger.error(`[TTTDP] Error during refresh:`, error);
-            this.updateMessageCallback(`Error loading themes for ${this.currentCycleLabel || this.currentCycleKey}.`);
-            this.updateElements([]);
+            this.setErrorState(error as Error, TreeViewEmptyState.FETCH_ERROR);
         }
     }
 

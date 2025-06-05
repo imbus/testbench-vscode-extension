@@ -10,38 +10,10 @@ import { TestElementTreeItem, TestElementData } from "./testElementTreeItem";
 import { TestElementDataService } from "../../services/testElementDataService";
 import { ResourceFileService } from "../../services/resourceFileService";
 import { TestElementTreeBuilder } from "./testElementTreeBuilder";
-import { ConfigKeys } from "../../constants";
-import { getExtensionConfiguration } from "../../configuration";
 import { IconManagementService } from "../../services/iconManagementService";
+import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
 
 export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
-
-/**
- * Enum representing different states that can lead to an empty tree
- */
-enum EmptyTreeState {
-    NOT_INITIALIZED = "not_initialized",
-    NO_TOV_SELECTED = "no_tov_selected",
-    FETCH_ERROR = "fetch_error",
-    SERVER_NO_DATA = "server_no_data",
-    FILTERED_OUT = "filtered_out",
-    PROCESSING_ERROR = "processing_error"
-}
-
-/**
- * Interface for tracking the current state of the tree
- */
-interface TreeState {
-    emptyState: EmptyTreeState;
-    lastTovKey: string;
-    lastTovLabel: string;
-    lastTovDisplayName: string;
-    lastError?: Error;
-    dataFetchAttempted: boolean;
-    serverDataReceived: boolean;
-    elementsBeforeFiltering: number;
-    elementsAfterFiltering: number;
-}
 
 /**
  * Appends `.resource` extension to a file path if not already present and normalizes the path by trimming whitespace.
@@ -72,8 +44,6 @@ function removeRobotResourceFromPathString(pathStr: string, logger: TestBenchLog
 
 export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestElementTreeItem> {
     private currentTovKey: string = "";
-    private treeState: TreeState;
-    private readonly providerOptions: TreeDataProviderOptions;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -88,37 +58,17 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             contextKey: "testbenchExtension.testElementsTreeHasCustomRoot",
             customRootContextValue: "customRoot.testElement",
             enableCustomRoot: false,
-            enableExpansionTracking: true
+            enableExpansionTracking: true,
+            stateConfig: {
+                treeViewId: "testElementsView",
+                treeViewType: TreeViewType.TEST_ELEMENTS,
+                noDataSourceMessage:
+                    "Select a Test Object Version (TOV) from the 'Projects' view to load test elements.",
+                loadingMessageTemplate: "Loading test elements for {dataSource}..."
+            }
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
-        this.providerOptions = providerOptions;
-        this.treeState = this.createInitialTreeState();
-        this.logger.trace("[TestElementsTreeDataProvider] Initialized");
-    }
-
-    /**
-     * Creates the initial tree state
-     */
-    private createInitialTreeState(): TreeState {
-        return {
-            emptyState: EmptyTreeState.NOT_INITIALIZED,
-            lastTovKey: "",
-            lastTovLabel: "",
-            lastTovDisplayName: "",
-            dataFetchAttempted: false,
-            serverDataReceived: false,
-            elementsBeforeFiltering: 0,
-            elementsAfterFiltering: 0
-        };
-    }
-
-    /**
-     * Updates the tree state and ensures status message is properly set
-     */
-    private updateTreeState(updates: Partial<TreeState>): void {
-        this.treeState = { ...this.treeState, ...updates };
-        this.updateTreeViewStatusMessage();
-        this.logger.trace(`[TETDP] Tree state updated:`, this.treeState);
+        this.logger.trace("[TestElementsTreeDataProvider] Initialized with enhanced state management");
     }
 
     public getCurrentTovKey(): string {
@@ -132,10 +82,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
      */
     public setCurrentTovKey(tovKey: string, displayName?: string): void {
         this.currentTovKey = tovKey;
-        this.updateTreeState({
-            lastTovKey: tovKey,
-            lastTovDisplayName: displayName || tovKey
-        });
+        this.setDataSource(tovKey, displayName || tovKey, displayName || tovKey);
     }
 
     public isTreeDataEmpty(): boolean {
@@ -143,61 +90,13 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     /**
-     * Enhanced status message handling with specific messages for different empty states
+     * Updates the tree view status message using the new state manager
      */
     public updateTreeViewStatusMessage(): void {
-        const message = this.determineStatusMessage();
-        this.updateMessageCallback(message);
-
-        if (message) {
-            this.logger.trace(`[TETDP] Status message set: "${message}"`);
-        }
-    }
-
-    /**
-     * Determines the appropriate status message based on current tree state
-     */
-    private determineStatusMessage(): string | undefined {
-        if (!this.isTreeDataEmpty()) {
-            return undefined;
-        }
-
-        const displayName =
-            this.treeState.lastTovDisplayName || this.treeState.lastTovLabel || this.treeState.lastTovKey;
-
-        switch (this.treeState.emptyState) {
-            case EmptyTreeState.NOT_INITIALIZED:
-                return "Test Elements view is initializing...";
-
-            case EmptyTreeState.NO_TOV_SELECTED:
-                return "Select a Test Object Version (TOV) from the 'Projects' view to load test elements.";
-
-            case EmptyTreeState.FETCH_ERROR: {
-                const errorDetail = this.treeState.lastError ? ` (${this.treeState.lastError.message})` : "";
-                return `Error fetching test elements for TOV "${displayName}"${errorDetail}. Check logs for details.`;
-            }
-
-            case EmptyTreeState.SERVER_NO_DATA:
-                return `No test elements found on server for TOV "${displayName}".`;
-
-            case EmptyTreeState.FILTERED_OUT: {
-                const filterPatterns = getExtensionConfiguration().get<string[]>(
-                    ConfigKeys.TB2ROBOT_RESOURCE_MARKER,
-                    []
-                );
-                if (filterPatterns && filterPatterns.length > 0) {
-                    return `All test elements (${this.treeState.elementsBeforeFiltering}) were filtered out by current filter criteria. Consider reviewing your resource marker settings.`;
-                } else {
-                    return `Test elements were processed but none matched the display criteria for TOV "${displayName}".`;
-                }
-            }
-
-            case EmptyTreeState.PROCESSING_ERROR:
-                return `Error processing test elements for TOV "${displayName}". The data may be corrupted or in an unexpected format.`;
-
-            default:
-                return `No test elements available for TOV "${displayName}".`;
-        }
+        const currentState = this.getStateManager().getCurrentState();
+        this.logger.trace(
+            `[TETDP] Current state: ${currentState.operationalState}, Empty state: ${currentState.emptyState}`
+        );
     }
 
     /**
@@ -219,20 +118,11 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     public async fetchTestElements(tovKey: string, newTreeViewTitle?: string): Promise<boolean> {
         this.logger.debug(`[TETDP] Fetching test elements for TOV: ${tovKey}`);
 
-        const tovDisplayName = newTreeViewTitle || this.treeState.lastTovDisplayName || tovKey;
+        const tovDisplayName = newTreeViewTitle || tovKey;
         const tovLabel = newTreeViewTitle || tovKey;
-        this.updateTreeState({
-            dataFetchAttempted: true,
-            lastTovKey: tovKey,
-            lastTovLabel: tovLabel,
-            lastTovDisplayName: tovDisplayName,
-            serverDataReceived: false,
-            elementsBeforeFiltering: 0,
-            elementsAfterFiltering: 0,
-            lastError: undefined
-        });
 
-        this.updateMessageCallback(`Loading test elements for TOV: ${tovLabel}...`);
+        this.setDataSource(tovKey, tovLabel, tovDisplayName);
+        this.setLoadingState(`Loading test elements for TOV: ${tovLabel}...`);
 
         const isRefreshingSameTov = this.currentTovKey === tovKey;
         if (isRefreshingSameTov && this.rootElements.length > 0) {
@@ -243,14 +133,16 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
         try {
             const rawtestElementsJsonData = await this.testElementDataService.getTestElements(tovKey);
+
             if (rawtestElementsJsonData) {
                 this.currentTovKey = tovKey;
-                this.updateTreeState({
-                    serverDataReceived: true,
-                    elementsBeforeFiltering: rawtestElementsJsonData.length
-                });
+                this.recordFetchAttempt(true, rawtestElementsJsonData.length);
+
                 if (rawtestElementsJsonData.length === 0) {
-                    this.updateTreeState({ emptyState: EmptyTreeState.SERVER_NO_DATA });
+                    this.updateTreeState({
+                        operationalState: TreeViewOperationalState.EMPTY,
+                        emptyState: TreeViewEmptyState.SERVER_NO_DATA
+                    });
                     this.updateElements([]);
                     return true;
                 }
@@ -261,9 +153,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                     null
                 );
 
-                this.updateTreeState({
-                    elementsAfterFiltering: treeItems.length
-                });
+                this.recordFetchAttempt(true, rawtestElementsJsonData.length, treeItems.length);
 
                 // Skip icon updates during initial load, only update basic icons
                 this.updateBasicIcons(treeItems);
@@ -273,9 +163,10 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                 this.updateSubdivisionIconsInBackground(treeItems);
 
                 if (treeItems.length === 0) {
-                    this.updateTreeState({ emptyState: EmptyTreeState.FILTERED_OUT });
-                } else {
-                    this.updateMessageCallback(undefined);
+                    this.updateTreeState({
+                        operationalState: TreeViewOperationalState.EMPTY,
+                        emptyState: TreeViewEmptyState.FILTERED_OUT
+                    });
                 }
 
                 return true;
@@ -378,10 +269,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             });
         } catch (error) {
             this.logger.error(`[TETDP] Error converting hierarchical data to tree items:`, error);
-            this.updateTreeState({
-                emptyState: EmptyTreeState.PROCESSING_ERROR,
-                lastError: error as Error
-            });
+            this.setErrorState(error as Error, TreeViewEmptyState.PROCESSING_ERROR);
             throw error;
         }
     }
@@ -465,31 +353,38 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         const errorMsg = error ? error.message : "Unknown error";
         this.logger.error(`[TETDP] Fetch failed for TOV "${tovLabel}": ${errorMsg}`, error);
 
-        this.updateTreeState({
-            emptyState: EmptyTreeState.FETCH_ERROR,
-            lastError: error
-        });
-
+        this.setErrorState(error || new Error(errorMsg), TreeViewEmptyState.FETCH_ERROR);
         vscode.window.showErrorMessage(`Failed to fetch test elements for TOV "${tovLabel}".`);
-
         this.updateElements([]);
     }
 
+    /**
+     * Updates the tree elements and applies expansion state tracking if enabled.
+     * Fires tree data change event and updates operational state based on element count.
+     *
+     * @param elements - Array of test element tree items to display
+     */
     protected override updateElements(elements: TestElementTreeItem[]): void {
         this.rootElements = elements;
 
-        // Apply expansion state if enabled
-        if (this.providerOptions.enableExpansionTracking && elements.length > 0) {
-            // Apply expansion recursively
+        if (this.options.enableExpansionTracking && elements.length > 0) {
+            const applyExpansionRecursive = (items: TestElementTreeItem[]) => {
+                for (const item of items) {
+                    this.applyStoredExpansionState(item);
+                    if (item.children) {
+                        applyExpansionRecursive(item.children as TestElementTreeItem[]);
+                    }
+                }
+            };
+            applyExpansionRecursive(elements);
         }
 
         this._onDidChangeTreeData.fire(undefined);
 
-        // Use our detailed messages instead of generic "No items found"
-        if (elements.length === 0) {
-            this.updateTreeViewStatusMessage(); // Detailed context-aware messages
-        } else {
-            this.updateMessageCallback(undefined); // Clear message for success
+        if (elements.length !== 0) {
+            this.updateTreeState({
+                operationalState: TreeViewOperationalState.READY
+            });
         }
     }
 
@@ -617,15 +512,10 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
      */
     public override clearTree(): void {
         this.currentTovKey = "";
-        this.treeState = this.createInitialTreeState();
-        this.updateTreeState({ emptyState: EmptyTreeState.NO_TOV_SELECTED });
-
-        // Call parent clearTree but don't let it override our message
-        const savedCallback = this.updateMessageCallback;
-        this.updateMessageCallback = savedCallback;
-        this.updateTreeViewStatusMessage();
+        super.clearTree();
         this.logger.trace("[TestElementsTreeDataProvider] Tree cleared with enhanced state management.");
     }
+
     /**
      * Refreshes the test elements tree data provider.
      * @param isHardRefresh - Whether to perform a hard refresh (Not used in this implementation). Defaults to false.
@@ -647,9 +537,9 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     public getDiagnostics(): Record<string, any> {
         return {
             currentTovKey: this.currentTovKey,
-            treeState: this.treeState,
             rootElementsCount: this.rootElements.length,
             isTreeEmpty: this.isTreeDataEmpty(),
+            stateManagerDiagnostics: this.getStateManager().getDiagnostics(),
             timestamp: new Date().toISOString()
         };
     }

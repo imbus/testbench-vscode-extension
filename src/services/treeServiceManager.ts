@@ -13,6 +13,8 @@ import { ProjectDataService } from "./projectDataService";
 import { TestElementDataService } from "./testElementDataService";
 import { ResourceFileService } from "./resourceFileService";
 import { MarkedItemStateService } from "./markedItemStateService";
+import { TreeViewStateManager } from "./treeViewStateManager";
+import { TreeViewStateConfig } from "./treeViewStateTypes";
 import { PlayServerConnection } from "../testBenchConnection";
 import { ProjectManagementTreeDataProvider } from "../views/projectManagement/projectManagementTreeDataProvider";
 import { TestThemeTreeDataProvider } from "../views/testTheme/testThemeTreeDataProvider";
@@ -64,6 +66,10 @@ export interface ProviderDependencies {
         customContextValue: string,
         onStateChange?: (state: any) => void
     ) => CustomRootService<T>;
+    readonly createTreeViewStateManager: (
+        config: TreeViewStateConfig,
+        updateMessageCallback: (message: string | undefined) => void
+    ) => TreeViewStateManager;
 }
 
 /**
@@ -244,6 +250,22 @@ export class TreeServiceManager {
     }
 
     /**
+     * Creates a tree view state manager factory for providers
+     *
+     * @param config - Configuration for the tree view state manager
+     * @param updateMessageCallback - Callback to update tree view messages
+     * @returns A new TreeViewStateManager instance
+     */
+    public createTreeViewStateManager(
+        config: TreeViewStateConfig,
+        updateMessageCallback: (message: string | undefined) => void
+    ): TreeViewStateManager {
+        const stateManager = new TreeViewStateManager(this.dependencies.logger, config, updateMessageCallback);
+        this.dependencies.logger.trace(`[TreeServiceManager] Created TreeViewStateManager for: ${config.treeViewId}`);
+        return stateManager;
+    }
+
+    /**
      * Registers additional icon sets with the icon management service.
      *
      * @param category - The category name for the icon set
@@ -407,7 +429,8 @@ export class TreeServiceManager {
             testElementDataService: this.testElementDataService,
             resourceFileService: this.resourceFileService,
             markedItemStateService: this.markedItemStateService,
-            createCustomRootService: this.createCustomRootService.bind(this)
+            createCustomRootService: this.createCustomRootService.bind(this),
+            createTreeViewStateManager: this.createTreeViewStateManager.bind(this)
         });
     }
 
@@ -481,7 +504,7 @@ export class TreeServiceManager {
             });
             this._disposables.length = 0;
 
-            // Dspose calls are added here when services implement IDisposable
+            // Dispose calls are added here when services implement IDisposable
             // this.markedItemStateService.dispose?.();
             // this.iconManagementService.dispose?.();
 

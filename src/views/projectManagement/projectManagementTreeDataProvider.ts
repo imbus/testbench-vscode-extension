@@ -11,6 +11,7 @@ import { ProjectDataService } from "../../services/projectDataService";
 import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
 import { IconManagementService } from "../../services/iconManagementService";
+import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
 
 export interface CycleDataForThemeTreeEvent {
     projectKey: string;
@@ -35,33 +36,54 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             contextKey: ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT,
             customRootContextValue: TreeItemContextValues.CUSTOM_ROOT_PROJECT,
             enableCustomRoot: true,
-            enableExpansionTracking: true
+            enableExpansionTracking: true,
+            stateConfig: {
+                treeViewId: "projectManagementTree",
+                treeViewType: TreeViewType.PROJECT_MANAGEMENT,
+                noDataSourceMessage: "Not connected to TestBench or no projects available.",
+                loadingMessageTemplate: "Loading projects..."
+            }
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
-        this.logger.trace("[ProjectManagementTreeDataProvider] Initialized");
+        this.logger.trace("[ProjectManagementTreeDataProvider] Initialized with enhanced state management");
     }
 
     protected async fetchRootElements(): Promise<ProjectManagementTreeItem[]> {
         this.logger.debug("[ProjectManagementTreeDataProvider] Fetching root projects");
-        const projectList: Project[] | null = await this.projectDataService.getProjectsList();
+        this.setLoadingState("Loading projects...");
 
-        if (projectList === null) {
-            this.updateMessageCallback("Error fetching projects. Please check connection or try refreshing.");
+        try {
+            const projectList: Project[] | null = await this.projectDataService.getProjectsList();
+
+            if (projectList === null) {
+                this.setErrorState(new Error("Failed to fetch projects"), TreeViewEmptyState.FETCH_ERROR);
+                return [];
+            }
+
+            this.recordFetchAttempt(true, projectList.length, projectList.length);
+
+            if (projectList.length === 0) {
+                this.updateTreeState({
+                    operationalState: TreeViewOperationalState.EMPTY,
+                    emptyState: TreeViewEmptyState.SERVER_NO_DATA
+                });
+                return [];
+            }
+
+            const projectItems = projectList
+                .map((project) => this.createTreeItemFromData(project, null))
+                .filter((item): item is ProjectManagementTreeItem => item !== null);
+
+            this.updateTreeState({
+                operationalState: TreeViewOperationalState.READY
+            });
+
+            return projectItems;
+        } catch (error) {
+            this.logger.error("[ProjectManagementTreeDataProvider] Error fetching projects:", error);
+            this.setErrorState(error as Error, TreeViewEmptyState.FETCH_ERROR);
             return [];
         }
-        if (projectList.length === 0) {
-            this.updateMessageCallback(
-                "No projects found on the server. Create a project in TestBench or check permissions."
-            );
-            return [];
-        }
-
-        const projectItems = projectList
-            .map((project) => this.createTreeItemFromData(project, null))
-            .filter((item): item is ProjectManagementTreeItem => item !== null);
-
-        this.updateMessageCallback(undefined);
-        return projectItems;
     }
 
     protected async fetchChildrenForElement(element: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
@@ -153,13 +175,19 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             this.logger.error(`[PMTDP] Project key missing for: ${projectElement.label}`);
             return [];
         }
-        const projectTree: TreeNode | null = await this.projectDataService.getProjectTree(projectKey);
-        if (!projectTree?.children?.length) {
+
+        try {
+            const projectTree: TreeNode | null = await this.projectDataService.getProjectTree(projectKey);
+            if (!projectTree?.children?.length) {
+                return [];
+            }
+            return projectTree.children
+                .map((tovNode) => this.createTreeItemFromData(tovNode, projectElement))
+                .filter((item): item is ProjectManagementTreeItem => item !== null);
+        } catch (error) {
+            this.logger.error(`[PMTDP] Error fetching children for project ${projectKey}:`, error);
             return [];
         }
-        return projectTree.children
-            .map((tovNode) => this.createTreeItemFromData(tovNode, projectElement))
-            .filter((item): item is ProjectManagementTreeItem => item !== null);
     }
 
     private getChildrenForVersion(versionElement: ProjectManagementTreeItem): ProjectManagementTreeItem[] {
@@ -177,6 +205,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             this.logger.error("Clicked item is not a cycle.");
             return;
         }
+
         const cycleKey = cycleItem.getUniqueId();
         const projectKey = cycleItem.getProjectKey();
 
@@ -195,15 +224,23 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                 },
                 async (progress) => {
                     progress.report({ increment: 0, message: "Fetching cycle structure..." });
-                    const rawCycleData = await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
-                    progress.report({ increment: 50, message: "Preparing theme tree..." });
-                    this._onDidPrepareCycleDataForThemeTree.fire({
-                        projectKey,
-                        cycleKey,
-                        cycleLabel,
-                        rawCycleStructure: rawCycleData
-                    });
-                    progress.report({ increment: 100, message: "Data loaded." });
+
+                    try {
+                        const rawCycleData = await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
+                        progress.report({ increment: 50, message: "Preparing theme tree..." });
+
+                        this._onDidPrepareCycleDataForThemeTree.fire({
+                            projectKey,
+                            cycleKey,
+                            cycleLabel,
+                            rawCycleStructure: rawCycleData
+                        });
+
+                        progress.report({ increment: 100, message: "Data loaded." });
+                    } catch (fetchError) {
+                        this.logger.error(`[PMTDP] Error fetching cycle data:`, fetchError);
+                        throw fetchError;
+                    }
                 }
             );
         } catch (error) {
@@ -254,25 +291,30 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
     public override clearTree(): void {
         super.clearTree();
-        this.updateMessageCallback("Not connected to TestBench or no projects available.");
-        this.logger.trace("[ProjectManagementTreeDataProvider] Tree cleared.");
+        this.logger.trace("[ProjectManagementTreeDataProvider] Tree cleared with enhanced state management.");
     }
 
     public override refresh(isHardRefresh: boolean = false): void {
         this.logger.debug(`[ProjectManagementTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
+
         if (isHardRefresh && this.isCustomRootActive()) {
             this.customRootService.resetCustomRoot();
         }
+
         // Store expansion state before fetching new data if not a hard reset of custom root
         if (!(isHardRefresh && this.isCustomRootActive())) {
             this.storeExpansionState();
         }
 
         if (this.isCustomRootActive()) {
-            this.updateMessageCallback(undefined); // Custom root view has its own context
+            // Custom root view has its own context, don't override message
+            this.updateTreeState({
+                operationalState: TreeViewOperationalState.REFRESHING
+            });
         } else {
-            this.updateMessageCallback("Loading projects...");
+            this.setLoadingState("Loading projects...");
         }
+
         this._onDidChangeTreeData.fire(undefined);
     }
 }

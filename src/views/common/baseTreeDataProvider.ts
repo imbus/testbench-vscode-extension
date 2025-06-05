@@ -7,12 +7,20 @@ import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { BaseTreeItem as BaseTreeItem } from "./baseTreeItem";
 import { CustomRootService } from "../../services/customRootService";
+import { TreeViewStateManager } from "../../services/treeViewStateManager";
+import {
+    TreeViewStateConfig,
+    TreeViewEmptyState,
+    TreeViewOperationalState,
+    StateUpdateParams
+} from "../../services/treeViewStateTypes";
 
 export interface TreeDataProviderOptions {
     contextKey: string;
     customRootContextValue: string;
     enableCustomRoot?: boolean;
     enableExpansionTracking?: boolean;
+    stateConfig?: TreeViewStateConfig;
 }
 
 export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vscode.TreeDataProvider<T> {
@@ -23,12 +31,13 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
 
     protected customRootService: CustomRootService<T>;
     protected rootElements: T[] = [];
+    protected stateManager: TreeViewStateManager;
 
     constructor(
         protected readonly extensionContext: vscode.ExtensionContext,
         protected readonly logger: TestBenchLogger,
         protected updateMessageCallback: (message: string | undefined) => void,
-        private readonly options: TreeDataProviderOptions
+        protected readonly options: TreeDataProviderOptions
     ) {
         this.customRootService = new CustomRootService<T>(
             logger,
@@ -36,6 +45,19 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
             options.customRootContextValue,
             (state) => this.onCustomRootStateChange(state)
         );
+
+        if (options.stateConfig) {
+            this.stateManager = new TreeViewStateManager(logger, options.stateConfig, updateMessageCallback);
+        } else {
+            this.stateManager = new TreeViewStateManager(
+                logger,
+                {
+                    treeViewId: options.contextKey,
+                    treeViewType: "project_management" as any
+                },
+                updateMessageCallback
+            );
+        }
     }
 
     /**
@@ -74,6 +96,10 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
     async getChildren(element?: T): Promise<T[]> {
         try {
             if (!element) {
+                this.stateManager.setLoading();
+            }
+
+            if (!element) {
                 return await this.getRootChildren();
             }
 
@@ -88,13 +114,13 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
                 `[BaseTreeDataProvider] Error in getChildren for element ${element?.label || "root"}: ${error.message}`,
                 error
             );
-            this.updateMessageCallback(`Error loading tree items: ${error.message}`);
+            this.stateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
             return [];
         }
     }
 
     /**
-     * Refresh the tree view
+     * Refresh the tree view with improved state management
      */
     public refresh(isHardRefresh: boolean = false): void {
         this.logger.debug(`[BaseTreeDataProvider] Refreshing tree. Hard refresh: ${isHardRefresh}`);
@@ -103,15 +129,15 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
             this.customRootService.handleHardRefresh();
         }
 
-        if (!this.customRootService.isActive()) {
-            this.updateMessageCallback("Loading...");
-        }
+        this.stateManager.updateState({
+            operationalState: TreeViewOperationalState.REFRESHING
+        });
 
         this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
-     * Clear tree data
+     * Clear tree data with proper state management
      */
     public clearTree(): void {
         this.logger.debug(`[${this.constructor.name}] Clearing tree`);
@@ -119,7 +145,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
             this.customRootService.resetCustomRoot();
         }
         this.rootElements = [];
-        this.updateMessageCallback(undefined);
+        this.stateManager.clear();
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -138,7 +164,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
         }
 
         this.customRootService.setCustomRoot(item);
-        this.updateMessageCallback(undefined);
+        this.stateManager.updateState({ operationalState: TreeViewOperationalState.READY });
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -185,33 +211,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
     }
 
     /**
-     * Get root children based on custom root state
-     */
-    private async getRootChildren(): Promise<T[]> {
-        if (this.customRootService.isActive()) {
-            return this.customRootService.getChildrenForCustomRoot();
-        }
-
-        this.rootElements = await this.fetchRootElements();
-        return this.rootElements;
-    }
-
-    /**
-     * Get children for custom root element
-     */
-    protected async getChildrenForCustomRoot(customRootElement: T): Promise<T[]> {
-        return await this.fetchChildrenForElement(customRootElement);
-    }
-
-    /**
-     * Handle custom root state changes
-     */
-    protected onCustomRootStateChange(state: any): void {
-        this.logger.trace(`[BaseTreeDataProvider] Custom root state changed:`, state);
-    }
-
-    /**
-     * Update tree elements and refresh
+     * Update tree elements and refresh with proper state management
      */
     protected updateElements(elements: T[]): void {
         this.rootElements = elements;
@@ -229,8 +229,87 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
             applyExpansionRecursive(elements);
         }
 
-        this.updateMessageCallback(elements.length === 0 ? "No items found" : undefined);
+        if (elements.length === 0) {
+            this.stateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
+        } else {
+            this.stateManager.setReady(elements.length);
+        }
+
         this._onDidChangeTreeData.fire(undefined);
+    }
+
+    /**
+     * Sets the data source for state tracking
+     */
+    protected setDataSource(key: string, label?: string, displayName?: string): void {
+        this.stateManager.setDataSource(key, label, displayName);
+    }
+
+    /**
+     * Records a fetch attempt with results
+     */
+    protected recordFetchAttempt(success: boolean, itemsBeforeFilter: number = 0, itemsAfterFilter: number = 0): void {
+        this.stateManager.recordFetchAttempt(success, itemsBeforeFilter, itemsAfterFilter);
+    }
+
+    /**
+     * Sets loading state with optional message
+     */
+    protected setLoadingState(message?: string): void {
+        this.stateManager.setLoading(message);
+    }
+
+    /**
+     * Sets error state
+     */
+    protected setErrorState(error: Error, emptyState: TreeViewEmptyState = TreeViewEmptyState.FETCH_ERROR): void {
+        this.stateManager.setError(error, emptyState);
+    }
+
+    /**
+     * Updates the tree state with custom parameters
+     */
+    protected updateTreeState(params: StateUpdateParams): void {
+        this.stateManager.updateState(params);
+    }
+
+    /**
+     * Get root children based on custom root state with improved error handling
+     */
+    private async getRootChildren(): Promise<T[]> {
+        try {
+            if (this.customRootService.isActive()) {
+                return this.customRootService.getChildrenForCustomRoot();
+            }
+
+            this.rootElements = await this.fetchRootElements();
+
+            if (this.rootElements.length === 0) {
+                this.stateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
+            } else {
+                this.stateManager.setReady(this.rootElements.length);
+            }
+
+            return this.rootElements;
+        } catch (error: any) {
+            this.logger.error(`[BaseTreeDataProvider] Error fetching root elements:`, error);
+            this.stateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
+            return [];
+        }
+    }
+
+    /**
+     * Get children for custom root element
+     */
+    protected async getChildrenForCustomRoot(customRootElement: T): Promise<T[]> {
+        return await this.fetchChildrenForElement(customRootElement);
+    }
+
+    /**
+     * Handle custom root state changes
+     */
+    protected onCustomRootStateChange(state: any): void {
+        this.logger.trace(`[BaseTreeDataProvider] Custom root state changed:`, state);
     }
 
     /**
@@ -276,9 +355,32 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
         return this.customRootService.getCurrentRoot();
     }
 
+    /**
+     * Show tree status message (legacy method for backward compatibility)
+     */
     public showTreeStatusMessage(message: string | undefined): void {
         this.updateMessageCallback(message);
         this.logger.trace(`[${this.constructor.name}] Status message updated to "${message}"`);
+    }
+
+    /**
+     * Get the state manager for advanced state operations
+     */
+    protected getStateManager(): TreeViewStateManager {
+        return this.stateManager;
+    }
+
+    /**
+     * Get diagnostic information about the tree state
+     */
+    public getDiagnostics(): Record<string, any> {
+        return {
+            providerType: this.constructor.name,
+            rootElementsCount: this.rootElements.length,
+            customRootActive: this.isCustomRootActive(),
+            stateManagerDiagnostics: this.stateManager.getDiagnostics(),
+            timestamp: new Date().toISOString()
+        };
     }
 
     /**
