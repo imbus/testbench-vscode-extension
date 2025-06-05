@@ -1,544 +1,568 @@
 /**
  * @file src/services/treeServiceManager.ts
- * @description Service manager for coordinating all tree view services with improved architecture
- * @author VS Code Extension Team
- * @version 2.0.0
+ * @description Enhanced TreeServiceManager with centralized tree view management
  */
 
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../testBenchLogger";
-import { IconManagementService } from "./iconManagementService";
-import { CustomRootService } from "./customRootService";
 import { ProjectDataService } from "./projectDataService";
 import { TestElementDataService } from "./testElementDataService";
 import { ResourceFileService } from "./resourceFileService";
+import { IconManagementService } from "./iconManagementService";
 import { MarkedItemStateService } from "./markedItemStateService";
-import { TreeViewStateManager } from "./treeViewStateManager";
-import { TreeViewStateConfig } from "./treeViewStateTypes";
-import { PlayServerConnection } from "../testBenchConnection";
-import { ProjectManagementTreeDataProvider } from "../views/projectManagement/projectManagementTreeDataProvider";
+import { TestElementTreeBuilder } from "../views/testElements/testElementTreeBuilder";
+import {
+    ProjectManagementTreeDataProvider,
+    CycleDataForThemeTreeEvent
+} from "../views/projectManagement/projectManagementTreeDataProvider";
 import { TestThemeTreeDataProvider } from "../views/testTheme/testThemeTreeDataProvider";
 import { TestElementsTreeDataProvider } from "../views/testElements/testElementsTreeDataProvider";
-import { TestElementTreeBuilder } from "../views/testElements/testElementTreeBuilder";
 import { BaseTreeItem } from "../views/common/baseTreeItem";
+import { ProjectManagementTreeItem } from "../views/projectManagement/projectManagementTreeItem";
+import { TestThemeTreeItem } from "../views/testTheme/testThemeTreeItem";
+import { TestElementTreeItem } from "../views/testElements/testElementTreeItem";
+import { PlayServerConnection } from "../testBenchConnection";
+import { restartLanguageClient } from "../server";
 
-/**
- * Dependencies required for the TreeServiceManager initialization
- */
 export interface TreeServiceDependencies {
-    readonly extensionContext: vscode.ExtensionContext;
-    readonly logger: TestBenchLogger;
-    readonly getConnection: () => PlayServerConnection | null;
+    extensionContext: vscode.ExtensionContext;
+    logger: TestBenchLogger;
+    getConnection: () => PlayServerConnection | null;
+}
+
+export interface TreeViewContainer {
+    provider: any;
+    treeView: vscode.TreeView<any>;
+    updateMessage: (message?: string) => void;
 }
 
 /**
- * Health status information for individual services
- */
-export interface ServiceHealthInfo {
-    readonly service: string;
-    readonly status: ServiceStatus;
-    readonly details?: string;
-    readonly lastCheck?: Date;
-}
-
-/**
- * Validation result for service dependencies
- */
-export interface ValidationResult {
-    readonly valid: boolean;
-    readonly issues: readonly string[];
-    readonly timestamp: Date;
-}
-
-/**
- * Provider dependencies that will be injected into tree data providers
- */
-export interface ProviderDependencies {
-    readonly extensionContext: vscode.ExtensionContext;
-    readonly logger: TestBenchLogger;
-    readonly iconManagementService: IconManagementService;
-    readonly projectDataService: ProjectDataService;
-    readonly testElementDataService: TestElementDataService;
-    readonly resourceFileService: ResourceFileService;
-    readonly markedItemStateService: MarkedItemStateService;
-    readonly createCustomRootService: <T extends BaseTreeItem>(
-        contextKey: string,
-        customContextValue: string,
-        onStateChange?: (state: any) => void
-    ) => CustomRootService<T>;
-    readonly createTreeViewStateManager: (
-        config: TreeViewStateConfig,
-        updateMessageCallback: (message: string | undefined) => void
-    ) => TreeViewStateManager;
-}
-
-/**
- * Factory function type for creating tree data providers
- */
-export type ProviderFactory<T> = (updateMessageCallback: (message: string | undefined) => void) => T;
-
-/**
- * Service factory interface containing all provider creation methods
- */
-export interface TreeServiceFactory {
-    readonly createProjectManagementProvider: ProviderFactory<ProjectManagementTreeDataProvider>;
-    readonly createTestThemeProvider: ProviderFactory<TestThemeTreeDataProvider>;
-    readonly createTestElementsProvider: ProviderFactory<TestElementsTreeDataProvider>;
-}
-
-/**
- * Possible service status values
- */
-export type ServiceStatus = "active" | "inactive" | "initializing" | "waiting_for_connection" | "error";
-
-/**
- * Service manager for coordinating all tree view services.
- *
- * This class follows the Dependency Injection pattern and provides a centralized
- * way to manage all services required by tree view providers. It handles service
- * initialization, health monitoring, and provides factory methods for creating
- * tree data providers with proper dependency injection.
+ * Centralized manager for all tree-related services and views
  */
 export class TreeServiceManager {
-    // Core services - readonly to prevent external modification
-    public readonly iconManagementService: IconManagementService;
-    public readonly projectDataService: ProjectDataService;
-    public readonly testElementDataService: TestElementDataService;
-    public readonly resourceFileService: ResourceFileService;
-    public readonly markedItemStateService: MarkedItemStateService;
+    public readonly logger: TestBenchLogger;
+    public readonly extensionContext: vscode.ExtensionContext;
+    private readonly getConnection: () => PlayServerConnection | null;
 
-    // Service state
-    private _isInitialized: boolean = false;
-    private _initializationPromise: Promise<void> | null = null;
-    private readonly _disposables: vscode.Disposable[] = [];
+    // Core Services
+    private _projectDataService: ProjectDataService | null = null;
+    private _testElementDataService: TestElementDataService | null = null;
+    private _resourceFileService: ResourceFileService | null = null;
+    private _iconManagementService: IconManagementService | null = null;
+    private _markedItemStateService: MarkedItemStateService | null = null;
+    private _testElementTreeBuilder: TestElementTreeBuilder | null = null;
 
-    /**
-     * Creates a new TreeServiceManager instance.
-     *
-     * @param dependencies - The required dependencies for service initialization
-     */
-    constructor(private readonly dependencies: TreeServiceDependencies) {
-        const { extensionContext, logger, getConnection } = dependencies;
+    // Tree Management
+    private readonly treeViews = new Map<string, TreeViewContainer>();
+    private _isInitialized = false;
 
-        // Initialize core services with dependency injection
-        this.iconManagementService = new IconManagementService(logger, extensionContext);
-        this.projectDataService = new ProjectDataService(getConnection, logger);
-        this.testElementDataService = new TestElementDataService(getConnection, logger);
-        this.resourceFileService = new ResourceFileService(logger);
-        this.markedItemStateService = new MarkedItemStateService(extensionContext, logger);
-
-        logger.trace("[TreeServiceManager] Services created successfully");
+    constructor(dependencies: TreeServiceDependencies) {
+        this.extensionContext = dependencies.extensionContext;
+        this.logger = dependencies.logger;
+        this.getConnection = dependencies.getConnection;
+        this.logger.trace("[TreeServiceManager] Initialized with enhanced tree view management");
     }
 
     /**
-     * Initializes all services asynchronously.
-     *
-     * This method ensures that all services are properly initialized before they can be used.
-     * It's safe to call this method multiple times - subsequent calls will return the same promise.
-     *
-     * @returns Promise that resolves when all services are initialized
-     * @throws Error if any service fails to initialize
+     * Initialize all services and prepare for tree view creation
      */
     public async initialize(): Promise<void> {
-        // Return existing promise if initialization is already in progress
-        if (this._initializationPromise) {
-            return this._initializationPromise;
-        }
-
-        // Return immediately if already initialized
         if (this._isInitialized) {
-            this.dependencies.logger.debug("[TreeServiceManager] Already initialized");
+            this.logger.warn("[TreeServiceManager] Already initialized, skipping re-initialization");
             return;
         }
 
-        // Create and cache the initialization promise
-        this._initializationPromise = this._performInitialization();
-        return this._initializationPromise;
+        try {
+            this.logger.info("[TreeServiceManager] Initializing core services...");
+
+            // Initialize core services
+            this._iconManagementService = new IconManagementService(this.logger, this.extensionContext);
+            this._resourceFileService = new ResourceFileService(this.logger);
+            this._projectDataService = new ProjectDataService(this.getConnection, this.logger);
+            this._testElementDataService = new TestElementDataService(this.getConnection, this.logger);
+            this._markedItemStateService = new MarkedItemStateService(this.extensionContext, this.logger);
+            this._testElementTreeBuilder = new TestElementTreeBuilder(this.logger);
+
+            this._isInitialized = true;
+            this.logger.info("[TreeServiceManager] All services initialized successfully");
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Failed to initialize services:", error);
+            throw new Error(`TreeServiceManager initialization failed: ${(error as Error).message}`);
+        }
     }
 
     /**
-     * Performs the actual service initialization.
-     *
-     * @private
+     * Create and register all tree views with the extension context
      */
-    private async _performInitialization(): Promise<void> {
+    public async initializeTreeViews(): Promise<void> {
+        if (!this._isInitialized) {
+            throw new Error("TreeServiceManager must be initialized before creating tree views");
+        }
+
         try {
-            this.dependencies.logger.debug("[TreeServiceManager] Starting service initialization...");
+            // Create Project Management Tree
+            await this.createProjectManagementTree();
 
-            // Initialize services that require async setup
-            await this._initializeAsyncServices();
+            // Create Test Theme Tree
+            await this.createTestThemeTree();
 
-            // Perform optional validations in trace mode
-            await this._performTraceValidations();
+            // Create Test Elements Tree
+            await this.createTestElementsTree();
 
-            this._isInitialized = true;
-            this.dependencies.logger.info("[TreeServiceManager] All services initialized successfully");
+            // Setup inter-tree communication
+            this.setupTreeViewInteractions();
+
+            this.logger.info("[TreeServiceManager] All tree views initialized successfully");
         } catch (error) {
-            this.dependencies.logger.error("[TreeServiceManager] Service initialization failed:", error);
-            this._isInitialized = false;
-            this._initializationPromise = null;
+            this.logger.error("[TreeServiceManager] Failed to initialize tree views:", error);
             throw error;
         }
     }
 
     /**
-     * Initializes services that require asynchronous setup.
-     *
-     * @private
+     * Create and configure the Project Management tree view
      */
-    private async _initializeAsyncServices(): Promise<void> {
-        await this.markedItemStateService.initialize();
-        this.dependencies.logger.trace("[TreeServiceManager] MarkedItemStateService initialized");
-    }
-
-    /**
-     * Performs validation checks when in trace logging mode.
-     *
-     * @private
-     */
-    private async _performTraceValidations(): Promise<void> {
-        if (this.dependencies.logger.level === "Trace") {
-            try {
-                const iconValidation = await this.iconManagementService.validateIcons();
-                if (iconValidation.invalid.length > 0) {
-                    this.dependencies.logger.warn(
-                        "[TreeServiceManager] Some icon files are missing:",
-                        iconValidation.invalid
-                    );
-                }
-            } catch (error) {
-                this.dependencies.logger.warn("[TreeServiceManager] Icon validation failed:", error);
+    private async createProjectManagementTree(): Promise<void> {
+        const updateMessage = (message?: string) => {
+            const container = this.treeViews.get("projectManagement");
+            if (container?.treeView) {
+                container.treeView.message = message;
             }
-        }
-    }
+        };
 
-    /**
-     * Gets the current service initialization status.
-     *
-     * @returns True if all services are initialized, false otherwise
-     */
-    public getInitializationStatus(): boolean {
-        return this._isInitialized;
-    }
-
-    /**
-     * Creates a custom root service for a specific tree.
-     *
-     * This method provides a factory function for creating CustomRootService instances
-     * with proper dependency injection and logging.
-     *
-     * @template T - The type of tree items this service will handle
-     * @param contextKey - VS Code context key for this custom root
-     * @param customContextValue - Context value to use when item is set as custom root
-     * @param onStateChange - Optional callback for state change events
-     * @returns A new CustomRootService instance
-     */
-    public createCustomRootService<T extends BaseTreeItem>(
-        contextKey: string,
-        customContextValue: string,
-        onStateChange?: (state: any) => void
-    ): CustomRootService<T> {
-        const service = new CustomRootService<T>(
-            this.dependencies.logger,
-            contextKey,
-            customContextValue,
-            onStateChange
+        const provider = new ProjectManagementTreeDataProvider(
+            this.extensionContext,
+            this.logger,
+            this.iconManagementService,
+            updateMessage,
+            this.projectDataService
         );
 
-        this.dependencies.logger.trace(`[TreeServiceManager] Created CustomRootService for context: ${contextKey}`);
-        return service;
+        const treeView = vscode.window.createTreeView("projectManagementTree", {
+            treeDataProvider: provider,
+            canSelectMany: false
+        });
+
+        // Setup selection change listener for language server context
+        this.extensionContext.subscriptions.push(
+            treeView.onDidChangeSelection(async (event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>) => {
+                await this.handleProjectTreeSelection(event, provider);
+            })
+        );
+
+        this.extensionContext.subscriptions.push(treeView);
+        this.treeViews.set("projectManagement", { provider, treeView, updateMessage });
+
+        this.logger.info("[TreeServiceManager] Project Management tree view created");
     }
 
     /**
-     * Creates a tree view state manager factory for providers
-     *
-     * @param config - Configuration for the tree view state manager
-     * @param updateMessageCallback - Callback to update tree view messages
-     * @returns A new TreeViewStateManager instance
+     * Create and configure the Test Theme tree view
      */
-    public createTreeViewStateManager(
-        config: TreeViewStateConfig,
-        updateMessageCallback: (message: string | undefined) => void
-    ): TreeViewStateManager {
-        const stateManager = new TreeViewStateManager(this.dependencies.logger, config, updateMessageCallback);
-        this.dependencies.logger.trace(`[TreeServiceManager] Created TreeViewStateManager for: ${config.treeViewId}`);
-        return stateManager;
-    }
-
-    /**
-     * Registers additional icon sets with the icon management service.
-     *
-     * @param category - The category name for the icon set
-     * @param iconSet - The icon set configuration object
-     */
-    public registerIconSet(category: string, iconSet: Record<string, Record<string, any>>): void {
-        this.iconManagementService.registerIconSet(category, iconSet);
-        this.dependencies.logger.trace(`[TreeServiceManager] Registered icon set: ${category}`);
-    }
-
-    /**
-     * Gets comprehensive health status for all managed services.
-     *
-     * @returns Array of service health information objects
-     */
-    public getServiceHealth(): ServiceHealthInfo[] {
-        const now = new Date();
-        const connection = this.dependencies.getConnection();
-
-        return [
-            {
-                service: "IconManagementService",
-                status: "active",
-                details: `Categories: ${this.iconManagementService.getAvailableCategories().join(", ")}`,
-                lastCheck: now
-            },
-            {
-                service: "ProjectDataService",
-                status: connection ? "active" : "waiting_for_connection",
-                details: connection ? "Connected" : "No connection available",
-                lastCheck: now
-            },
-            {
-                service: "TestElementDataService",
-                status: connection ? "active" : "waiting_for_connection",
-                details: connection ? "Connected" : "No connection available",
-                lastCheck: now
-            },
-            {
-                service: "ResourceFileService",
-                status: "active",
-                details: "File operations ready",
-                lastCheck: now
-            },
-            {
-                service: "MarkedItemStateService",
-                status: this._isInitialized ? "active" : "initializing",
-                details: this.markedItemStateService.getActiveMarkedItemInfo() ? "has_marked_items" : "no_marked_items",
-                lastCheck: now
+    private async createTestThemeTree(): Promise<void> {
+        const updateMessage = (message?: string) => {
+            const container = this.treeViews.get("testTheme");
+            if (container?.treeView) {
+                container.treeView.message = message;
             }
-        ];
-    }
-
-    /**
-     * Validates all service dependencies and external requirements.
-     *
-     * @returns Validation result with any detected issues
-     */
-    public async validateDependencies(): Promise<ValidationResult> {
-        const issues: string[] = [];
-        const timestamp = new Date();
-
-        try {
-            this._validateCoreDependencies(issues);
-            this._validateWorkspaceAvailability(issues);
-            await this._validateIconFiles(issues);
-        } catch (error) {
-            issues.push(`Validation error: ${error instanceof Error ? error.message : "Unknown error"}`);
-        }
-
-        return {
-            valid: issues.length === 0,
-            issues: Object.freeze(issues),
-            timestamp
         };
+
+        const provider = new TestThemeTreeDataProvider(
+            this.extensionContext,
+            this.logger,
+            updateMessage,
+            this.projectDataService,
+            this.markedItemStateService,
+            this.iconManagementService
+        );
+
+        const treeView = vscode.window.createTreeView("testThemeTree", {
+            treeDataProvider: provider
+        });
+
+        this.extensionContext.subscriptions.push(treeView);
+        this.treeViews.set("testTheme", { provider, treeView, updateMessage });
+
+        this.logger.info("[TreeServiceManager] Test Theme tree view created");
     }
 
     /**
-     * Validates core dependency availability.
-     *
-     * @private
-     * @param issues - Array to collect validation issues
+     * Create and configure the Test Elements tree view
      */
-    private _validateCoreDependencies(issues: string[]): void {
-        if (!this.dependencies.extensionContext) {
-            issues.push("Extension context not available");
-        }
-
-        if (!this.dependencies.logger) {
-            issues.push("Logger not available");
-        }
-
-        if (!this.dependencies.getConnection) {
-            issues.push("Connection factory not available");
-        }
-    }
-
-    /**
-     * Validates workspace folder availability.
-     *
-     * @private
-     * @param issues - Array to collect validation issues
-     */
-    private _validateWorkspaceAvailability(issues: string[]): void {
-        try {
-            if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-                issues.push("No workspace folders available for resource operations");
+    private async createTestElementsTree(): Promise<void> {
+        const updateMessage = (message?: string) => {
+            const container = this.treeViews.get("testElements");
+            if (container?.treeView) {
+                container.treeView.message = message;
             }
-        } catch (error) {
-            issues.push(
-                "Error accessing workspace folders: " + (error instanceof Error ? error.message : "Unknown error")
+        };
+
+        const provider = new TestElementsTreeDataProvider(
+            this.extensionContext,
+            this.logger,
+            updateMessage,
+            this.testElementDataService,
+            this.resourceFileService,
+            this.iconManagementService,
+            this.testElementTreeBuilder
+        );
+
+        const treeView = vscode.window.createTreeView("testElementsView", {
+            treeDataProvider: provider
+        });
+
+        // Setup expansion event handlers
+        this.extensionContext.subscriptions.push(
+            treeView.onDidExpandElement((event) => {
+                if (provider && typeof provider.handleItemExpansion === "function") {
+                    provider.handleItemExpansion(event.element, true);
+                }
+            })
+        );
+
+        this.extensionContext.subscriptions.push(
+            treeView.onDidCollapseElement((event) => {
+                if (provider && typeof provider.handleItemExpansion === "function") {
+                    provider.handleItemExpansion(event.element, false);
+                }
+            })
+        );
+
+        this.extensionContext.subscriptions.push(treeView);
+        this.treeViews.set("testElements", { provider, treeView, updateMessage });
+
+        // Initialize with clear state
+        provider.clearTree();
+
+        this.logger.info("[TreeServiceManager] Test Elements tree view created");
+    }
+
+    /**
+     * Setup interactions between tree views
+     */
+    private setupTreeViewInteractions(): void {
+        const projectProvider = this.getProjectManagementProvider();
+        const testThemeProvider = this.getTestThemeProvider();
+        const testThemeTreeView = this.getTestThemeTreeView();
+
+        if (projectProvider && testThemeProvider && testThemeTreeView) {
+            this.extensionContext.subscriptions.push(
+                projectProvider.onDidPrepareCycleDataForThemeTree(async (eventData: CycleDataForThemeTreeEvent) => {
+                    testThemeTreeView.title = `Test Themes (${eventData.cycleLabel})`;
+                    testThemeProvider.populateFromCycleData(eventData);
+                    this.logger.debug(`[TreeServiceManager] Cycle data prepared for ${eventData.cycleLabel}`);
+                })
             );
         }
     }
 
     /**
-     * Validates icon file availability.
-     *
-     * @private
-     * @param issues - Array to collect validation issues
+     * Handle project tree selection changes for language server context
      */
-    private async _validateIconFiles(issues: string[]): Promise<void> {
-        try {
-            const iconValidation = await this.iconManagementService.validateIcons();
-            if (iconValidation.invalid.length > 0) {
-                issues.push(`${iconValidation.invalid.length} icon files are missing or invalid`);
+    private async handleProjectTreeSelection(
+        event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>,
+        provider: ProjectManagementTreeDataProvider
+    ): Promise<void> {
+        if (event.selection.length > 0) {
+            const selectedItem = event.selection[0];
+            if (selectedItem instanceof ProjectManagementTreeItem) {
+                this.logger.trace(
+                    `[TreeServiceManager] Project Tree selection: ${selectedItem.label}, context: ${selectedItem.contextValue}`
+                );
+
+                const { projectName, tovName } = provider.getProjectAndTovNamesForItem(selectedItem);
+                this.logger.info(
+                    `[TreeServiceManager] Resolved LS Context: Project='${projectName}', TOV='${tovName}'`
+                );
+
+                if (projectName && tovName) {
+                    await restartLanguageClient(projectName, tovName);
+                }
             }
-        } catch (error) {
-            issues.push("Error validating icon files: " + (error instanceof Error ? error.message : "Unknown error"));
         }
     }
 
-    /**
-     * Resets all service state, useful for logout/login cycles.
-     *
-     * @throws Error if state reset fails
-     */
-    public async resetAllState(): Promise<void> {
-        this.dependencies.logger.debug("[TreeServiceManager] Resetting all service state...");
+    // Getter methods with proper error handling
+    public getProjectManagementProvider(): ProjectManagementTreeDataProvider {
+        const container = this.treeViews.get("projectManagement");
+        if (!container?.provider) {
+            throw new Error("Project Management provider is not initialized. Call initializeTreeViews() first.");
+        }
+        return container.provider;
+    }
 
+    public getTestThemeProvider(): TestThemeTreeDataProvider {
+        const container = this.treeViews.get("testTheme");
+        if (!container?.provider) {
+            throw new Error("Test Theme provider is not initialized. Call initializeTreeViews() first.");
+        }
+        return container.provider;
+    }
+
+    public getTestElementsProvider(): TestElementsTreeDataProvider {
+        const container = this.treeViews.get("testElements");
+        if (!container?.provider) {
+            throw new Error("Test Elements provider is not initialized. Call initializeTreeViews() first.");
+        }
+        return container.provider;
+    }
+
+    public getProjectManagementTreeView(): vscode.TreeView<BaseTreeItem> {
+        const container = this.treeViews.get("projectManagement");
+        if (!container?.treeView) {
+            throw new Error("Project Management tree view is not initialized. Call initializeTreeViews() first.");
+        }
+        return container.treeView;
+    }
+
+    public getTestThemeTreeView(): vscode.TreeView<TestThemeTreeItem> {
+        const container = this.treeViews.get("testTheme");
+        if (!container?.treeView) {
+            throw new Error("Test Theme tree view is not initialized. Call initializeTreeViews() first.");
+        }
+        return container.treeView;
+    }
+
+    public getTestElementsTreeView(): vscode.TreeView<TestElementTreeItem> {
+        const container = this.treeViews.get("testElements");
+        if (!container?.treeView) {
+            throw new Error("Test Elements tree view is not initialized. Call initializeTreeViews() first.");
+        }
+        return container.treeView;
+    }
+
+    // Utility methods for common operations
+    public async clearAllTrees(): Promise<void> {
         try {
-            await this.markedItemStateService.clearMarking();
-            this.dependencies.logger.info("[TreeServiceManager] All service state reset successfully");
+            this.getProjectManagementProvider().clearTree();
+            this.getTestThemeProvider().clearTree();
+            this.getTestElementsProvider().clearTree();
+            this.logger.info("[TreeServiceManager] All trees cleared");
         } catch (error) {
-            this.dependencies.logger.error("[TreeServiceManager] Error resetting service state:", error);
+            this.logger.error("[TreeServiceManager] Error clearing trees:", error);
+        }
+    }
+
+    public async refreshAllTrees(isHardRefresh: boolean = false): Promise<void> {
+        try {
+            this.getProjectManagementProvider().refresh(isHardRefresh);
+            this.getTestThemeProvider().refresh(isHardRefresh);
+            this.getTestElementsProvider().refresh(isHardRefresh);
+            this.logger.info(`[TreeServiceManager] All trees refreshed (hard: ${isHardRefresh})`);
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Error refreshing trees:", error);
+        }
+    }
+
+    public updateTreeTitles(titles: { project?: string; testTheme?: string; testElements?: string }): void {
+        try {
+            if (titles.testTheme) {
+                this.getTestThemeTreeView().title = titles.testTheme;
+            }
+            if (titles.testElements) {
+                this.getTestElementsTreeView().title = titles.testElements;
+            }
+            this.logger.trace("[TreeServiceManager] Tree titles updated:", titles);
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Error updating tree titles:", error);
+        }
+    }
+
+    public async handleCycleSelection(cycleItem: ProjectManagementTreeItem): Promise<void> {
+        try {
+            const projectProvider = this.getProjectManagementProvider();
+            const testThemeProvider = this.getTestThemeProvider();
+            const testElementsProvider = this.getTestElementsProvider();
+            const testElementsTreeView = this.getTestElementsTreeView();
+
+            // Clear previous content
+            testThemeProvider.clearTree();
+            testElementsProvider.clearTree();
+
+            const tovKey = cycleItem.getTovKey();
+            const tovLabel = cycleItem.parent?.label;
+
+            // Handle Test Elements
+            if (tovKey && typeof tovLabel === "string") {
+                testElementsTreeView.title = `Test Elements (${tovLabel})`;
+                try {
+                    const success = await testElementsProvider.fetchTestElements(tovKey, tovLabel);
+                    if (!success) {
+                        this.logger.warn(`[TreeServiceManager] Failed to fetch test elements for TOV: ${tovKey}`);
+                    }
+                } catch (error) {
+                    this.logger.error("[TreeServiceManager] Error fetching test elements:", error);
+                }
+            } else if (tovKey) {
+                testElementsTreeView.title = `Test Elements (TOV: ${tovKey})`;
+            } else {
+                testElementsTreeView.title = "Test Elements";
+                testElementsProvider.clearTree();
+            }
+
+            // Handle Test Themes through project provider
+            await projectProvider.handleCycleClick(cycleItem);
+
+            this.logger.info(`[TreeServiceManager] Cycle selection handled for: ${cycleItem.label}`);
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Error handling cycle selection:", error);
             throw error;
         }
     }
 
-    /**
-     * Gets dependency injection object for tree providers.
-     *
-     * @returns Object containing all dependencies needed by tree data providers
-     */
-    public getProviderDependencies(): ProviderDependencies {
-        return Object.freeze({
-            extensionContext: this.dependencies.extensionContext,
-            logger: this.dependencies.logger,
-            iconManagementService: this.iconManagementService,
-            projectDataService: this.projectDataService,
-            testElementDataService: this.testElementDataService,
-            resourceFileService: this.resourceFileService,
-            markedItemStateService: this.markedItemStateService,
-            createCustomRootService: this.createCustomRootService.bind(this),
-            createTreeViewStateManager: this.createTreeViewStateManager.bind(this)
-        });
+    // Service getters (existing implementation)
+    public get projectDataService(): ProjectDataService {
+        if (!this._projectDataService) {
+            throw new Error("ProjectDataService is not initialized. Call initialize() first.");
+        }
+        return this._projectDataService;
     }
 
-    /**
-     * Creates a service factory for consistent provider initialization.
-     *
-     * This factory ensures that all tree data providers are created with the same
-     * dependencies and follows the same initialization pattern.
-     *
-     * @returns Service factory with methods to create different types of providers
-     */
+    public get testElementDataService(): TestElementDataService {
+        if (!this._testElementDataService) {
+            throw new Error("TestElementDataService is not initialized. Call initialize() first.");
+        }
+        return this._testElementDataService;
+    }
+
+    public get resourceFileService(): ResourceFileService {
+        if (!this._resourceFileService) {
+            throw new Error("ResourceFileService is not initialized. Call initialize() first.");
+        }
+        return this._resourceFileService;
+    }
+
+    public get iconManagementService(): IconManagementService {
+        if (!this._iconManagementService) {
+            throw new Error("IconManagementService is not initialized. Call initialize() first.");
+        }
+        return this._iconManagementService;
+    }
+
+    public get markedItemStateService(): MarkedItemStateService {
+        if (!this._markedItemStateService) {
+            throw new Error("MarkedItemStateService is not initialized. Call initialize() first.");
+        }
+        return this._markedItemStateService;
+    }
+
+    public get testElementTreeBuilder(): TestElementTreeBuilder {
+        if (!this._testElementTreeBuilder) {
+            throw new Error("TestElementTreeBuilder is not initialized. Call initialize() first.");
+        }
+        return this._testElementTreeBuilder;
+    }
+
+    public getInitializationStatus(): boolean {
+        return this._isInitialized;
+    }
+
     public createServiceFactory(): TreeServiceFactory {
-        if (!this._isInitialized) {
-            this.dependencies.logger.warn("[TreeServiceManager] Creating factory before initialization is complete");
-        }
-
-        return Object.freeze({
-            createProjectManagementProvider: (updateMessageCallback: (message: string | undefined) => void) => {
-                return new ProjectManagementTreeDataProvider(
-                    this.dependencies.extensionContext,
-                    this.dependencies.logger,
-                    this.iconManagementService,
-                    updateMessageCallback,
-                    this.projectDataService
-                );
-            },
-
-            createTestThemeProvider: (updateMessageCallback: (message: string | undefined) => void) => {
-                return new TestThemeTreeDataProvider(
-                    this.dependencies.extensionContext,
-                    this.dependencies.logger,
-                    updateMessageCallback,
-                    this.projectDataService,
-                    this.markedItemStateService,
-                    this.iconManagementService
-                );
-            },
-
-            createTestElementsProvider: (updateMessageCallback: (message: string | undefined) => void) => {
-                const treeBuilder = new TestElementTreeBuilder(this.dependencies.logger);
-
-                return new TestElementsTreeDataProvider(
-                    this.dependencies.extensionContext,
-                    this.dependencies.logger,
-                    updateMessageCallback,
-                    this.testElementDataService,
-                    this.resourceFileService,
-                    this.iconManagementService,
-                    treeBuilder
-                );
-            }
-        });
+        return new TreeServiceFactory(this);
     }
 
     /**
-     * Disposes of all managed resources and services.
-     *
-     * This method should be called when the extension is deactivated to ensure
-     * proper cleanup of all resources.
-     */
-    public dispose(): void {
-        this.dependencies.logger.debug("[TreeServiceManager] Disposing services...");
-
-        try {
-            this._disposables.forEach((disposable) => {
-                try {
-                    disposable.dispose();
-                } catch (error) {
-                    this.dependencies.logger.warn("[TreeServiceManager] Error disposing resource:", error);
-                }
-            });
-            this._disposables.length = 0;
-
-            // Dispose calls are added here when services implement IDisposable
-            // this.markedItemStateService.dispose?.();
-            // this.iconManagementService.dispose?.();
-
-            // Reset state
-            this._isInitialized = false;
-            this._initializationPromise = null;
-
-            this.dependencies.logger.trace("[TreeServiceManager] Services disposed successfully");
-        } catch (error) {
-            this.dependencies.logger.error("[TreeServiceManager] Error during disposal:", error);
-        }
-    }
-
-    /**
-     * Adds a disposable resource to be cleaned up when the service manager is disposed.
-     *
-     * @param disposable - The disposable resource to track
-     */
-    public addDisposable(disposable: vscode.Disposable): void {
-        this._disposables.push(disposable);
-    }
-
-    /**
-     * Gets diagnostic information about the service manager state.
-     *
-     * @returns Object containing diagnostic information
+     * Get diagnostic information about the current tree state and services
      */
     public getDiagnostics(): Record<string, any> {
-        return {
+        const diagnostics: Record<string, any> = {
+            managerType: this.constructor.name,
             isInitialized: this._isInitialized,
-            hasInitializationPromise: this._initializationPromise !== null,
-            disposableCount: this._disposables.length,
-            serviceHealth: this.getServiceHealth(),
+            treeViewsCount: this.treeViews.size,
+            treeViews: {},
+            services: {
+                projectDataService: !!this._projectDataService,
+                testElementDataService: !!this._testElementDataService,
+                resourceFileService: !!this._resourceFileService,
+                iconManagementService: !!this._iconManagementService,
+                markedItemStateService: !!this._markedItemStateService,
+                testElementTreeBuilder: !!this._testElementTreeBuilder
+            },
             timestamp: new Date().toISOString()
         };
+
+        // Add diagnostics for each tree view
+        for (const [key, container] of this.treeViews) {
+            try {
+                const providerDiagnostics =
+                    container.provider && typeof container.provider.getDiagnostics === "function"
+                        ? container.provider.getDiagnostics()
+                        : { error: "No diagnostics available" };
+
+                diagnostics.treeViews[key] = {
+                    hasProvider: !!container.provider,
+                    hasTreeView: !!container.treeView,
+                    treeViewTitle: container.treeView?.title || "No title",
+                    providerDiagnostics
+                };
+            } catch (error) {
+                diagnostics.treeViews[key] = {
+                    error: `Failed to get diagnostics: ${(error as Error).message}`
+                };
+            }
+        }
+
+        return diagnostics;
+    }
+
+    /**
+     * Dispose of all tree views and clean up resources
+     */
+    public dispose(): void {
+        for (const [key, container] of this.treeViews) {
+            try {
+                if (container.provider && typeof container.provider.dispose === "function") {
+                    container.provider.dispose();
+                }
+            } catch (error) {
+                this.logger.error(`[TreeServiceManager] Error disposing provider for ${key}:`, error);
+            }
+        }
+        this.treeViews.clear();
+        this.logger.info("[TreeServiceManager] Disposed successfully");
+    }
+}
+
+/**
+ * Factory for creating tree providers with injected dependencies
+ */
+export class TreeServiceFactory {
+    constructor(private readonly treeServiceManager: TreeServiceManager) {}
+
+    createProjectManagementProvider(
+        updateMessageCallback: (message: string | undefined) => void
+    ): ProjectManagementTreeDataProvider {
+        return new ProjectManagementTreeDataProvider(
+            this.treeServiceManager.extensionContext,
+            this.treeServiceManager.logger,
+            this.treeServiceManager.iconManagementService,
+            updateMessageCallback,
+            this.treeServiceManager.projectDataService
+        );
+    }
+
+    createTestThemeProvider(updateMessageCallback: (message: string | undefined) => void): TestThemeTreeDataProvider {
+        return new TestThemeTreeDataProvider(
+            this.treeServiceManager.extensionContext,
+            this.treeServiceManager.logger,
+            updateMessageCallback,
+            this.treeServiceManager.projectDataService,
+            this.treeServiceManager.markedItemStateService,
+            this.treeServiceManager.iconManagementService
+        );
+    }
+
+    createTestElementsProvider(
+        updateMessageCallback: (message: string | undefined) => void
+    ): TestElementsTreeDataProvider {
+        return new TestElementsTreeDataProvider(
+            this.treeServiceManager.extensionContext,
+            this.treeServiceManager.logger,
+            updateMessageCallback,
+            this.treeServiceManager.testElementDataService,
+            this.treeServiceManager.resourceFileService,
+            this.treeServiceManager.iconManagementService,
+            this.treeServiceManager.testElementTreeBuilder
+        );
     }
 }
