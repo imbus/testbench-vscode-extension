@@ -78,9 +78,7 @@ export let projectTreeView: vscode.TreeView<BaseTreeItem> | undefined;
 export let testThemeTreeView: vscode.TreeView<TestThemeTreeItem> | undefined;
 export let testElementTreeView: vscode.TreeView<TestElementTreeItem> | undefined;
 
-// REFACTOR PROCESS
 let treeServiceManager: TreeServiceManager;
-let serviceFactory: TreeServiceFactory;
 
 // Global variable to store the authentication provider instance
 let authProviderInstance: TestBenchAuthenticationProvider | null = null;
@@ -1646,10 +1644,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Initialize TreeServiceManager (and its managed services)
         await treeServiceManager.initialize();
         logger.info("[Extension] TreeServiceManager initialized successfully.");
-
-        // Get the factory for creating tree providers
-        serviceFactory = treeServiceManager.createServiceFactory();
-        logger.info("[Extension] Service factory created.");
     } catch (error) {
         logger.error("[Extension] TreeServiceManager initialization failed:", error);
         vscode.window.showErrorMessage(
