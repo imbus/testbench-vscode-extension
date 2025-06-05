@@ -74,13 +74,18 @@ class TestBenchResourceModel:
             objects_are_equal = False
         for kw in other.keywords:
             kw_uid = other.get_kw_uid(kw)
-            kw_with_same_uid = self.get_keyword(kw_uid)
-            if not kw_with_same_uid:
+            kws_with_same_uid = self.get_keywords(kw_uid)
+            if not kws_with_same_uid:
                 print(f"Keyword '{kw.header[0]}' has been deleted.")
                 objects_are_equal = False
-            elif str(kw.header[0]) != str(kw_with_same_uid.header[0]):
+            elif len(kws_with_same_uid) > 1:
                 print(
-                    f"Keywordname has changed from '{kw.header[0]}' to '{kw_with_same_uid.header[0]}',"
+                    f"Multiple keywords with uid '{kw_uid}' found in resource file with uid {self.tb_subdivision_uid}."
+                )
+                objects_are_equal = False
+            elif str(kw.header[0]) != str(kws_with_same_uid[0].header[0]):
+                print(
+                    f"Keywordname has changed from '{kw.header[0]}' to '{kws_with_same_uid[0].header[0]}',"
                 )
         if self.keyword_names != other.keyword_names:
             print(f"Resource files with uid {self.tb_subdivision_uid} contain different keywords.")
@@ -228,12 +233,13 @@ class TestBenchResourceModel:
             kw.body.insert(0, doc)
         self.keyword_section.body.append(kw)
 
-    def get_keyword(self, uid: str) -> Keyword | None:
+    def get_keywords(self, uid: str) -> list[Keyword]:
+        keywords = []
         for kw in self.keywords:
             tags = self.get_kw_tags(kw)
             if f"tb:uid:{uid}" in tags:
-                return kw
-        return None
+                keywords.append(kw)
+        return keywords
 
     def get_kw_tags(self, kw: Keyword) -> list[str]:
         tags = []

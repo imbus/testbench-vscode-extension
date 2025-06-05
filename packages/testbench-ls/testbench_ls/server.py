@@ -312,9 +312,15 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     for new_keyword in new_resource.keyword_section.body:
         keyword_uid = new_resource.get_kw_uid(new_keyword)
-        existing_keyword = existing_resource.get_keyword(keyword_uid)
-        if existing_keyword:
-            edits.extend(create_keyword_edits(existing_keyword, new_keyword, change_identifier))
+        existing_keywords = existing_resource.get_keywords(keyword_uid)
+        if len(existing_keywords) > 1:
+            show_error(
+                ls,
+                f"Multiple keywords with uid '{keyword_uid}' found. Please resolve the conflict manually.",
+            )
+            return
+        if existing_keywords:
+            edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
         else:
             edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
     if edits:
@@ -453,11 +459,17 @@ def pull_testbench_keyword(ls: LanguageServer, args):
         return
     edits = []
     change_identifier = ChangeAnnotationIdentifier()
-    existing_keyword = resource.get_keyword(keyword_uid)
+    existing_keywords = resource.get_keywords(keyword_uid)
     new_keyword = create_keyword(
         keyword_uid,
     )
-    edits.extend(create_keyword_edits(existing_keyword, new_keyword, change_identifier))
+    if len(existing_keywords) > 1:
+        show_error(
+            ls,
+            f"Multiple keywords with uid '{keyword_uid}' found. Please resolve the conflict manually.",
+        )
+        return
+    edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
     if edits:
         edit = WorkspaceEdit(
             document_changes=[
@@ -484,7 +496,13 @@ def push_testbench_keyword(ls: LanguageServer, args):
     resource = TestBenchResourceModel.from_file(document.source)
     if not context_is_valid(ls, resource):
         return
-    robot_keyword = resource.get_keyword(keyword_uid)
+    robot_keywords = resource.get_keywords(keyword_uid)
+    if len(robot_keywords) > 1:
+        show_error(
+            ls,
+            f"Multiple keywords with uid '{keyword_uid}' found. Please resolve the conflict manually.",
+        )
+        return
     rd = ResourceDocumentation(document.path)
     new_docu = rd.get_keyword_documentation(keyword_uid)
     html_description = (
@@ -495,7 +513,7 @@ def push_testbench_keyword(ls: LanguageServer, args):
         response = patch_interaction_details(
             tb_connection,
             keyword_uid,
-            robot_keyword.name,
+            robot_keywords[0].name,
             html_description,
         )
     except requests.exceptions.HTTPError as http_error:
