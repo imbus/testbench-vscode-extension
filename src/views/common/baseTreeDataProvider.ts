@@ -23,7 +23,9 @@ export interface TreeDataProviderOptions {
     stateConfig?: TreeViewStateConfig;
 }
 
-export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vscode.TreeDataProvider<T> {
+export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
+    implements vscode.TreeDataProvider<T>, vscode.Disposable
+{
     public _onDidChangeTreeData: vscode.EventEmitter<T | T[] | undefined | void> = new vscode.EventEmitter<
         T | T[] | undefined | void
     >();
@@ -32,6 +34,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
     protected customRootService: CustomRootService<T>;
     protected rootElements: T[] = [];
     protected stateManager: TreeViewStateManager;
+    private readonly _disposables: vscode.Disposable[] = [];
 
     constructor(
         protected readonly extensionContext: vscode.ExtensionContext,
@@ -58,6 +61,9 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
                 updateMessageCallback
             );
         }
+        // Register disposables for cleanup
+        this._disposables.push(this._onDidChangeTreeData);
+        this._disposables.push(this.customRootService);
     }
 
     /**
@@ -141,9 +147,22 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
      */
     public clearTree(): void {
         this.logger.debug(`[${this.constructor.name}] Clearing tree`);
+
+        // Dispose all current elements
+        this.rootElements.forEach((element) => {
+            try {
+                if (element && typeof element.dispose === "function") {
+                    element.dispose();
+                }
+            } catch (error) {
+                this.logger.error(`[${this.constructor.name}] Error disposing element during clear:`, error);
+            }
+        });
+
         if (this.options.enableCustomRoot) {
             this.customRootService.resetCustomRoot();
         }
+
         this.rootElements = [];
         this.stateManager.clear();
         this._onDidChangeTreeData.fire(undefined);
@@ -214,10 +233,20 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
      * Update tree elements and refresh with proper state management
      */
     protected updateElements(elements: T[]): void {
+        // Dispose old elements before replacing
+        this.rootElements.forEach((element) => {
+            try {
+                if (element && typeof element.dispose === "function") {
+                    element.dispose();
+                }
+            } catch (error) {
+                this.logger.error(`[${this.constructor.name}] Error disposing old element:`, error);
+            }
+        });
+
         this.rootElements = elements;
 
         if (this.options.enableExpansionTracking) {
-            // Apply expansion state to new elements
             const applyExpansionRecursive = (items: T[]) => {
                 for (const item of items) {
                     this.applyStoredExpansionState(item);
@@ -384,10 +413,26 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem> implements vs
     }
 
     /**
-     * Dispose of the provider
+     * Dispose of the provider and all resources
      */
     public dispose(): void {
-        this.customRootService.dispose();
-        this._onDidChangeTreeData.dispose();
+        this.logger.debug(`[${this.constructor.name}] Disposing provider`);
+
+        try {
+            // Clear tree first
+            this.clearTree();
+
+            // Dispose all registered disposables
+            this._disposables.forEach((disposable) => {
+                try {
+                    disposable.dispose();
+                } catch (error) {
+                    this.logger.error(`[${this.constructor.name}] Error disposing resource:`, error);
+                }
+            });
+            this._disposables.length = 0;
+        } catch (error) {
+            this.logger.error(`[${this.constructor.name}] Error during provider disposal:`, error);
+        }
     }
 }

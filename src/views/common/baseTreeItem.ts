@@ -24,7 +24,7 @@ export interface TreeItemState {
 /**
  * Base class for all tree items providing common functionality
  */
-export abstract class BaseTreeItem extends vscode.TreeItem {
+export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Disposable {
     public parent: BaseTreeItem | null;
     public children?: BaseTreeItem[];
     public readonly originalContextValue: string;
@@ -35,6 +35,10 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
     protected readonly logger: TestBenchLogger;
     protected readonly iconService: IconManagementService;
     protected readonly extensionContext: vscode.ExtensionContext;
+
+    // Resource management
+    private _isDisposed = false;
+    private readonly _disposables: vscode.Disposable[] = [];
 
     constructor(
         label: string,
@@ -73,6 +77,87 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
     }
 
     /**
+     * Registers a disposable resource to be cleaned up when this item is disposed
+     * @param disposable The resource to register for cleanup
+     * @returns The disposable for chaining
+     */
+    protected registerDisposable<T extends vscode.Disposable>(disposable: T): T {
+        if (this._isDisposed) {
+            this.logger.warn(`[BaseTreeItem] Attempting to register disposable on disposed item: ${this.label}`);
+            disposable.dispose();
+            return disposable;
+        }
+        this._disposables.push(disposable);
+        return disposable;
+    }
+
+    /**
+     * Safely disposes of this tree item and all its resources
+     * Breaks circular references and cleans up child items
+     */
+    public dispose(): void {
+        if (this._isDisposed) {
+            return;
+        }
+
+        this._isDisposed = true;
+
+        try {
+            // Dispose all registered disposables
+            this._disposables.forEach((disposable) => {
+                try {
+                    disposable.dispose();
+                } catch (error) {
+                    this.logger.error(`[BaseTreeItem] Error disposing resource for ${this.label}:`, error);
+                }
+            });
+            this._disposables.length = 0;
+
+            // Recursively dispose children to prevent memory leaks
+            if (this.children) {
+                this.children.forEach((child) => {
+                    if (child && typeof child.dispose === "function") {
+                        try {
+                            child.dispose();
+                        } catch (error) {
+                            this.logger.error(`[BaseTreeItem] Error disposing child ${child.label}:`, error);
+                        }
+                    }
+                });
+                this.children = undefined;
+            }
+
+            // Break parent reference to prevent circular references
+            this.parent = null;
+
+            // Clear item data reference
+            this.itemData = null;
+
+            this.logger.trace(`[BaseTreeItem] Successfully disposed: ${this.label}`);
+        } catch (error) {
+            this.logger.error(`[BaseTreeItem] Error during disposal of ${this.label}:`, error);
+        }
+    }
+
+    /**
+     * Checks if this item has been disposed
+     * @returns True if the item has been disposed
+     */
+    public get isDisposed(): boolean {
+        return this._isDisposed;
+    }
+
+    /**
+     * Throws an error if this item has been disposed
+     * @param operation The operation being attempted
+     */
+    protected throwIfDisposed(operation: string): void {
+        if (this._isDisposed) {
+            throw new Error(`[BaseTreeItem] Cannot ${operation} on disposed item: ${this.label}`);
+        }
+    }
+
+    /**
      * Extract status from item data
      */
     protected extractStatus(): string {
@@ -97,9 +182,11 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
     protected abstract getIconCategory(): string;
 
     /**
-     * Update the icon based on current state using icon management service
+     * Update the icon based on current state with disposal check
      */
     public updateIcon(): void {
+        this.throwIfDisposed("update icon");
+
         try {
             if (!this.iconService) {
                 this.logger.warn(`[BaseTreeItem] IconService not available for ${String(this.label)}`);
@@ -136,9 +223,10 @@ export abstract class BaseTreeItem extends vscode.TreeItem {
     }
 
     /**
-     * Update tree item state
+     * Update tree item state with disposal check
      */
     public updateState(newState: Partial<TreeItemState>): void {
+        this.throwIfDisposed("update state");
         this.state = { ...this.state, ...newState };
         this.updateIcon();
 

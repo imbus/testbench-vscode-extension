@@ -12,6 +12,7 @@ import { ResourceFileService } from "../../services/resourceFileService";
 import { TestElementTreeBuilder } from "./testElementTreeBuilder";
 import { IconManagementService } from "../../services/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
+import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
 
 export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
 
@@ -44,6 +45,11 @@ function removeRobotResourceFromPathString(pathStr: string, logger: TestBenchLog
 
 export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestElementTreeItem> {
     private currentTovKey: string = "";
+    private readonly operationManager: CancellableOperationManager;
+
+    // Operation IDs for different background tasks
+    private static readonly ICON_UPDATE_OPERATION = "iconUpdate";
+    private static readonly FETCH_OPERATION = "fetchTestElements";
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -68,6 +74,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             }
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
+        this.operationManager = new CancellableOperationManager(logger);
         this.logger.trace("[TestElementsTreeDataProvider] Initialized with enhanced state management");
     }
 
@@ -116,23 +123,36 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
      * @returns Promise<boolean> indicating success/failure
      */
     public async fetchTestElements(tovKey: string, newTreeViewTitle?: string): Promise<boolean> {
-        this.logger.debug(`[TETDP] Fetching test elements for TOV: ${tovKey}`);
+        this.operationManager.cancelOperation(TestElementsTreeDataProvider.FETCH_OPERATION);
 
-        const tovDisplayName = newTreeViewTitle || tovKey;
+        const operation = this.operationManager.createOperation(
+            TestElementsTreeDataProvider.FETCH_OPERATION,
+            `Fetch test elements for TOV: ${tovKey}`
+        );
+
         const tovLabel = newTreeViewTitle || tovKey;
-
-        this.setDataSource(tovKey, tovLabel, tovDisplayName);
-        this.setLoadingState(`Loading test elements for TOV: ${tovLabel}...`);
-
-        const isRefreshingSameTov = this.currentTovKey === tovKey;
-        if (isRefreshingSameTov && this.rootElements.length > 0) {
-            this.storeExpansionState();
-        }
-
-        this.updateElements([]);
-
         try {
+            this.logger.debug(`[TETDP] Fetching test elements for TOV: ${tovKey}`);
+
+            const tovDisplayName = newTreeViewTitle || tovKey;
+
+            this.setDataSource(tovKey, tovLabel, tovDisplayName);
+            this.setLoadingState(`Loading test elements for TOV: ${tovLabel}...`);
+
+            const isRefreshingSameTov = this.currentTovKey === tovKey;
+            if (isRefreshingSameTov && this.rootElements.length > 0) {
+                this.storeExpansionState();
+            }
+
+            this.updateElements([]);
+
+            // Check for cancellation before expensive operation
+            operation.throwIfCancelled("before data fetch");
+
             const rawtestElementsJsonData = await this.testElementDataService.getTestElements(tovKey);
+
+            // Check for cancellation after data fetch
+            operation.throwIfCancelled("after data fetch");
 
             if (rawtestElementsJsonData) {
                 this.currentTovKey = tovKey;
@@ -147,20 +167,26 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                     return true;
                 }
 
+                // Check for cancellation before processing
+                operation.throwIfCancelled("before tree building");
+
                 const hierarchicalData: TestElementData[] = this.testElementTreeBuilder.build(rawtestElementsJsonData);
                 const treeItems: TestElementTreeItem[] = this.convertHierarchicalDataToTreeItems(
                     hierarchicalData,
                     null
                 );
 
+                // Check for cancellation before final update
+                operation.throwIfCancelled("before tree update");
+
                 this.recordFetchAttempt(true, rawtestElementsJsonData.length, treeItems.length);
 
-                // Skip icon updates during initial load, only update basic icons
+                // Update basic icons immediately (fast operation)
                 this.updateBasicIcons(treeItems);
                 this.updateElements(treeItems);
 
-                // Update subdivision icons in background
-                this.updateSubdivisionIconsInBackground(treeItems);
+                // Start background icon updates with cancellation support
+                this.updateSubdivisionIconsInBackground(treeItems, operation);
 
                 if (treeItems.length === 0) {
                     this.updateTreeState({
@@ -175,8 +201,15 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                 return false;
             }
         } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                this.logger.debug(`[TETDP] Fetch operation cancelled for TOV: ${tovKey}`);
+                return false;
+            }
+
             this.handleFetchFailure(tovLabel, error as Error);
             return false;
+        } finally {
+            // Operation cleanup is handled by the operation manager
         }
     }
 
@@ -213,32 +246,95 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
      * @param items - Array of test element tree items to process
      * @returns Promise that resolves when all subdivision icons are updated
      */
-    private async updateSubdivisionIconsInBackground(items: TestElementTreeItem[]): Promise<void> {
-        // Process subdivision icons in background with throttling
-        const subdivisionItems: TestElementTreeItem[] = [];
-        const collectSubdivisions = (items: TestElementTreeItem[]) => {
-            for (const item of items) {
-                if (item.testElementData.elementType === "Subdivision") {
-                    subdivisionItems.push(item);
+    private async updateSubdivisionIconsInBackground(
+        items: TestElementTreeItem[],
+        operation: CancellableOperation
+    ): Promise<void> {
+        // Cancel any existing icon update operation
+        this.operationManager.cancelOperation(TestElementsTreeDataProvider.ICON_UPDATE_OPERATION);
+
+        try {
+            // Collect all subdivision items
+            const subdivisionItems: TestElementTreeItem[] = [];
+            const collectSubdivisions = (items: TestElementTreeItem[]) => {
+                for (const item of items) {
+                    if (operation.isCancelled) {
+                        return;
+                    }
+
+                    if (item.testElementData.elementType === "Subdivision") {
+                        subdivisionItems.push(item);
+                    }
+                    if (item.children) {
+                        collectSubdivisions(item.children as TestElementTreeItem[]);
+                    }
                 }
-                if (item.children) {
-                    collectSubdivisions(item.children as TestElementTreeItem[]);
+            };
+
+            collectSubdivisions(items);
+
+            // Process in batches with cancellation checks
+            const batchSize = 10;
+            const totalBatches = Math.ceil(subdivisionItems.length / batchSize);
+
+            this.logger.trace(
+                `[TETDP] Starting background icon update for ${subdivisionItems.length} subdivisions in ${totalBatches} batches`
+            );
+
+            for (let i = 0; i < subdivisionItems.length; i += batchSize) {
+                // Check for cancellation before each batch
+                operation.throwIfCancelled(`batch ${Math.floor(i / batchSize) + 1}/${totalBatches}`);
+
+                const batch = subdivisionItems.slice(i, i + batchSize);
+
+                // Process batch with error handling
+                await Promise.allSettled(batch.map((item) => this.updateSingleItemIconSafely(item, operation)));
+
+                // Check for cancellation before UI update
+                operation.throwIfCancelled("before UI update");
+
+                // Fire update event for this batch
+                this._onDidChangeTreeData.fire(undefined);
+
+                // Small delay between batches to keep UI responsive
+                if (i + batchSize < subdivisionItems.length) {
+                    await operation.delay(10);
                 }
             }
-        };
-        collectSubdivisions(items);
 
-        // Process in batches of 10 to avoid overwhelming the file system
-        const batchSize = 10;
-        for (let i = 0; i < subdivisionItems.length; i += batchSize) {
-            const batch = subdivisionItems.slice(i, i + batchSize);
-            await Promise.all(batch.map((item) => this.updateSingleItemIcon(item)));
+            this.logger.trace(`[TETDP] Completed background icon update for ${subdivisionItems.length} subdivisions`);
+        } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                this.logger.debug(`[TETDP] Background icon update cancelled`);
+            } else {
+                this.logger.error(`[TETDP] Error during background icon update:`, error);
+            }
+        }
+    }
 
-            // Fire update event for this batch
-            this._onDidChangeTreeData.fire(undefined);
+    /**
+     * Safely updates a single item icon with error handling and cancellation
+     */
+    private async updateSingleItemIconSafely(
+        item: TestElementTreeItem,
+        operation: CancellableOperation
+    ): Promise<void> {
+        try {
+            operation.throwIfCancelled(`icon update for ${item.label}`);
 
-            // Small delay between batches to keep UI responsive
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            if (item.isDisposed) {
+                this.logger.trace(`[TETDP] Skipping icon update for disposed item: ${item.label}`);
+                return;
+            }
+
+            await this.updateSingleItemIcon(item);
+        } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                throw error; // Re-throw cancellation errors
+            }
+
+            this.logger.error(`[TETDP] Error updating icon for item ${item.label}:`, error);
+            // Continue with other items despite individual failures
         }
     }
 
@@ -511,9 +607,43 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
      * Resets the current TOV key, data fetch flag, and updates the tree view status message.
      */
     public override clearTree(): void {
+        this.logger.trace("[TestElementsTreeDataProvider] Clearing tree and cancelling operations");
+
+        // Cancel all background operations before clearing
+        this.operationManager.cancelAllOperations();
+
+        // Dispose existing tree items
+        this.rootElements.forEach((item) => {
+            try {
+                item.dispose();
+            } catch (error) {
+                this.logger.error(`[TETDP] Error disposing tree item during clear:`, error);
+            }
+        });
+
         this.currentTovKey = "";
         super.clearTree();
-        this.logger.trace("[TestElementsTreeDataProvider] Tree cleared with enhanced state management.");
+    }
+
+    /**
+     * Dispose of the provider and all resources
+     */
+    public override dispose(): void {
+        this.logger.trace("[TestElementsTreeDataProvider] Disposing provider");
+
+        // Cancel all operations
+        this.operationManager.dispose();
+
+        // Dispose all tree items
+        this.rootElements.forEach((item) => {
+            try {
+                item.dispose();
+            } catch (error) {
+                this.logger.error(`[TETDP] Error disposing tree item:`, error);
+            }
+        });
+
+        super.dispose();
     }
 
     /**

@@ -12,6 +12,7 @@ import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
 import { IconManagementService } from "../../services/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
+import { CancellableOperationManager } from "../../services/cancellableOperationService";
 
 export interface CycleDataForThemeTreeEvent {
     projectKey: string;
@@ -24,6 +25,13 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     private _onDidPrepareCycleDataForThemeTree = new vscode.EventEmitter<CycleDataForThemeTreeEvent>();
     public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
         this._onDidPrepareCycleDataForThemeTree.event;
+
+    private readonly operationManager: CancellableOperationManager;
+
+    // Operation IDs for different async operations
+    private static readonly FETCH_PROJECTS_OPERATION = "fetchProjects";
+    private static readonly FETCH_PROJECT_TREE_OPERATION = "fetchProjectTree";
+    private static readonly HANDLE_CYCLE_CLICK_OPERATION = "handleCycleClick";
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -45,15 +53,37 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             }
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
+        this.operationManager = new CancellableOperationManager(logger);
         this.logger.trace("[ProjectManagementTreeDataProvider] Initialized with enhanced state management");
     }
 
+    /**
+     * Fetches and returns the root-level project elements for the tree view.
+     *
+     * Cancels any existing fetch operation, retrieves projects from the data service,
+     * and converts them to tree items. Updates the tree state based on the operation result.
+     *
+     * @returns Promise resolving to an array of ProjectManagementTreeItem objects,
+     *          or empty array if fetch fails or is cancelled
+     * @throws Handles cancellation and fetch errors internally, returning empty array
+     */
     protected async fetchRootElements(): Promise<ProjectManagementTreeItem[]> {
-        this.logger.debug("[ProjectManagementTreeDataProvider] Fetching root projects");
-        this.setLoadingState("Loading projects...");
+        this.operationManager.cancelOperation(ProjectManagementTreeDataProvider.FETCH_PROJECTS_OPERATION);
+
+        const operation = this.operationManager.createOperation(
+            ProjectManagementTreeDataProvider.FETCH_PROJECTS_OPERATION,
+            "Fetch projects list"
+        );
 
         try {
+            this.logger.debug("[ProjectManagementTreeDataProvider] Fetching root projects");
+            this.setLoadingState("Loading projects...");
+
+            operation.throwIfCancelled("before projects fetch");
+
             const projectList: Project[] | null = await this.projectDataService.getProjectsList();
+
+            operation.throwIfCancelled("after projects fetch");
 
             if (projectList === null) {
                 this.setErrorState(new Error("Failed to fetch projects"), TreeViewEmptyState.FETCH_ERROR);
@@ -80,12 +110,22 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
             return projectItems;
         } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                this.logger.debug("[ProjectManagementTreeDataProvider] Projects fetch cancelled");
+                return [];
+            }
+
             this.logger.error("[ProjectManagementTreeDataProvider] Error fetching projects:", error);
             this.setErrorState(error as Error, TreeViewEmptyState.FETCH_ERROR);
             return [];
         }
     }
 
+    /**
+     * Fetches child elements for a given tree item based on its context type.
+     * @param element - The parent tree item to fetch children for
+     * @returns Promise that resolves to an array of child tree items
+     */
     protected async fetchChildrenForElement(element: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
         this.logger.debug(`[ProjectManagementTreeDataProvider] Fetching children for: ${element.label}`);
         const itemContext = element.originalContextValue;
@@ -105,6 +145,13 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         }
     }
 
+    /**
+     * Creates a ProjectManagementTreeItem from raw data with validation and state management.
+     *
+     * @param data - The raw project or tree node data containing key and name properties
+     * @param parent - The parent tree item, or null if this is a root item
+     * @returns A new ProjectManagementTreeItem instance, or null if data is invalid
+     */
     protected createTreeItemFromData(
         data: any, // Project or TreeNode
         parent: ProjectManagementTreeItem | null
@@ -132,6 +179,12 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         return treeItem;
     }
 
+    /**
+     * Determines the appropriate context value for a tree item based on its data structure.
+     *
+     * @param data - The data object to analyze for context determination
+     * @returns The context value string indicating the item type (PROJECT, VERSION, or CYCLE)
+     */
     private determineContextValue(data: any): string {
         if (data.nodeType) {
             return data.nodeType;
@@ -146,6 +199,13 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         return TreeItemContextValues.CYCLE;
     }
 
+    /**
+     * Determines the collapsible state of a tree item based on its context and data.
+     *
+     * @param data - The data object associated with the tree item
+     * @param contextValue - The context value identifying the type of tree item
+     * @returns The appropriate TreeItemCollapsibleState for the given item
+     */
     private determineCollapsibleState(data: any, contextValue: string): vscode.TreeItemCollapsibleState {
         switch (contextValue) {
             case TreeItemContextValues.PROJECT: {
@@ -167,6 +227,13 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         }
     }
 
+    /**
+     * Retrieves and converts child nodes for a given project tree item.
+     * Cancels any existing fetch operations for the same project before starting a new one.
+     *
+     * @param projectElement - The project tree item to get children for
+     * @returns Promise that resolves to an array of child tree items, or empty array on error/cancellation
+     */
     private async getChildrenForProject(
         projectElement: ProjectManagementTreeItem
     ): Promise<ProjectManagementTreeItem[]> {
@@ -176,20 +243,44 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             return [];
         }
 
+        const operationId = `${ProjectManagementTreeDataProvider.FETCH_PROJECT_TREE_OPERATION}_${projectKey}`;
+        this.operationManager.cancelOperation(operationId);
+
+        const operation = this.operationManager.createOperation(
+            operationId,
+            `Fetch project tree for: ${projectElement.label}`
+        );
+
         try {
+            operation.throwIfCancelled("before project tree fetch");
+
             const projectTree: TreeNode | null = await this.projectDataService.getProjectTree(projectKey);
+
+            operation.throwIfCancelled("after project tree fetch");
+
             if (!projectTree?.children?.length) {
                 return [];
             }
+
             return projectTree.children
                 .map((tovNode) => this.createTreeItemFromData(tovNode, projectElement))
                 .filter((item): item is ProjectManagementTreeItem => item !== null);
         } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                this.logger.debug(`[PMTDP] Project tree fetch cancelled for ${projectKey}`);
+                return [];
+            }
+
             this.logger.error(`[PMTDP] Error fetching children for project ${projectKey}:`, error);
             return [];
         }
     }
 
+    /**
+     * Retrieves and creates tree items for all child cycles of a version element.
+     * @param versionElement - The parent version tree item to get children for
+     * @returns Array of ProjectManagementTreeItem representing the child cycles
+     */
     private getChildrenForVersion(versionElement: ProjectManagementTreeItem): ProjectManagementTreeItem[] {
         const cycleNodes: TreeNode[] = versionElement.itemData.children ?? [];
         return cycleNodes
@@ -197,9 +288,24 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             .filter((item): item is ProjectManagementTreeItem => item !== null);
     }
 
+    /**
+     * Handles click events on cycle tree items by fetching cycle structure data
+     * and preparing it for the theme tree view.
+     *
+     * @param cycleItem - The clicked cycle tree item containing project and cycle information
+     * @throws {Error} When cycle data cannot be fetched or processed
+     * @returns Promise that resolves when cycle data is successfully loaded and prepared
+     */
     public async handleCycleClick(cycleItem: ProjectManagementTreeItem): Promise<void> {
         const cycleLabel = typeof cycleItem.label === "string" ? cycleItem.label : "N/A";
-        this.logger.trace(`[PMTDP] Handling cycle click: ${cycleLabel}`);
+
+        // Cancel any existing cycle click operation
+        this.operationManager.cancelOperation(ProjectManagementTreeDataProvider.HANDLE_CYCLE_CLICK_OPERATION);
+
+        const operation = this.operationManager.createOperation(
+            ProjectManagementTreeDataProvider.HANDLE_CYCLE_CLICK_OPERATION,
+            `Handle cycle click: ${cycleLabel}`
+        );
 
         if (cycleItem.originalContextValue !== TreeItemContextValues.CYCLE) {
             this.logger.error("Clicked item is not a cycle.");
@@ -220,13 +326,23 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: `Fetching data for cycle: ${cycleLabel}`,
-                    cancellable: false
+                    cancellable: true // Allow user to cancel
                 },
-                async (progress) => {
+                async (progress, cancellationToken) => {
+                    // Link VS Code's cancellation token with our operation
+                    cancellationToken.onCancellationRequested(() => {
+                        operation.cancel();
+                    });
+
                     progress.report({ increment: 0, message: "Fetching cycle structure..." });
 
                     try {
+                        operation.throwIfCancelled("before cycle structure fetch");
+
                         const rawCycleData = await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
+
+                        operation.throwIfCancelled("after cycle structure fetch");
+
                         progress.report({ increment: 50, message: "Preparing theme tree..." });
 
                         this._onDidPrepareCycleDataForThemeTree.fire({
@@ -238,12 +354,22 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
                         progress.report({ increment: 100, message: "Data loaded." });
                     } catch (fetchError) {
+                        if (fetchError instanceof vscode.CancellationError) {
+                            this.logger.debug(`[PMTDP] Cycle click operation cancelled for: ${cycleLabel}`);
+                            throw fetchError;
+                        }
+
                         this.logger.error(`[PMTDP] Error fetching cycle data:`, fetchError);
                         throw fetchError;
                     }
                 }
             );
         } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                this.logger.debug(`[PMTDP] Cycle click cancelled by user: ${cycleLabel}`);
+                return;
+            }
+
             this.logger.error(`[PMTDP] Error handling cycle click:`, error);
             vscode.window.showErrorMessage(
                 `Failed to load data for cycle '${cycleLabel}': ${error instanceof Error ? error.message : "Unknown error"}`
@@ -251,6 +377,12 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         }
     }
 
+    /**
+     * Retrieves the project and TOV (Test Object Version) names for a given tree item by traversing up the parent hierarchy.
+     *
+     * @param item - The tree item to resolve names for
+     * @returns An object containing the resolved project name and TOV name, if found
+     */
     public getProjectAndTovNamesForItem(item: ProjectManagementTreeItem): { projectName?: string; tovName?: string } {
         let projectName: string | undefined;
         let tovName: string | undefined;
@@ -289,25 +421,35 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         return { projectName, tovName };
     }
 
+    /**
+     * Clears the project management tree and resets its state.
+     */
     public override clearTree(): void {
         super.clearTree();
         this.logger.trace("[ProjectManagementTreeDataProvider] Tree cleared with enhanced state management.");
     }
 
+    /**
+     * Refreshes the project management tree view.
+     *
+     * @param isHardRefresh - Whether to perform a hard refresh that resets custom root state
+     */
     public override refresh(isHardRefresh: boolean = false): void {
         this.logger.debug(`[ProjectManagementTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
 
+        // Cancel all ongoing operations before refreshing
+        this.operationManager.cancelAllOperations();
+
+        // Continue with existing refresh logic
         if (isHardRefresh && this.isCustomRootActive()) {
             this.customRootService.resetCustomRoot();
         }
 
-        // Store expansion state before fetching new data if not a hard reset of custom root
         if (!(isHardRefresh && this.isCustomRootActive())) {
             this.storeExpansionState();
         }
 
         if (this.isCustomRootActive()) {
-            // Custom root view has its own context, don't override message
             this.updateTreeState({
                 operationalState: TreeViewOperationalState.REFRESHING
             });
@@ -316,5 +458,13 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         }
 
         this._onDidChangeTreeData.fire(undefined);
+    }
+
+    /**
+     * Dispose with operation cleanup
+     */
+    public override dispose(): void {
+        this.operationManager.dispose();
+        super.dispose();
     }
 }

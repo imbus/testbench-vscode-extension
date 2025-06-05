@@ -14,12 +14,19 @@ import { CycleNodeData, CycleStructure } from "../../testBenchTypes";
 import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
 import { IconManagementService } from "../../services/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
+import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
 
 export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTreeItem> {
     private currentCycleKey: string | null = null;
     private currentProjectKey: string | null = null;
     private currentCycleLabel: string | null = null;
     private readonly iconService: IconManagementService;
+
+    private readonly operationManager: CancellableOperationManager;
+
+    // Operation IDs
+    private static readonly FETCH_CYCLE_STRUCTURE_OPERATION = "fetchCycleStructure";
+    private static readonly REFRESH_OPERATION = "refreshTestThemes";
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -43,6 +50,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
         this.iconService = iconManagementService;
+        this.operationManager = new CancellableOperationManager(logger);
         this.logger.trace("[TestThemeTreeDataProvider] Initialized with enhanced state management");
     }
 
@@ -53,6 +61,13 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         return this.currentProjectKey;
     }
 
+    /**
+     * Populates the tree data provider with cycle data from the provided event.
+     * Sets the current cycle context, builds the tree structure from raw cycle data,
+     * and updates the tree view elements. Handles error states for invalid data.
+     *
+     * @param eventData - The cycle data event containing cycle information and structure
+     */
     public populateFromCycleData(eventData: CycleDataForThemeTreeEvent): void {
         this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.cycleKey}`);
 
@@ -100,17 +115,31 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             return [];
         }
 
-        this.logger.debug(`[TTTDP] fetchRootElements for cycle ${this.currentCycleKey}`);
-        this.setLoadingState(`Loading test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`);
+        // Cancel any existing fetch operation
+        this.operationManager.cancelOperation(TestThemeTreeDataProvider.FETCH_CYCLE_STRUCTURE_OPERATION);
+
+        const operation = this.operationManager.createOperation(
+            TestThemeTreeDataProvider.FETCH_CYCLE_STRUCTURE_OPERATION,
+            `Fetch cycle structure: ${this.currentCycleLabel || this.currentCycleKey}`
+        );
 
         try {
+            this.logger.debug(`[TTTDP] fetchRootElements for cycle ${this.currentCycleKey}`);
+            this.setLoadingState(`Loading test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`);
+
+            operation.throwIfCancelled("before cycle structure fetch");
+
             const cycleStructure = await this.projectDataService.fetchCycleStructure(
                 this.currentProjectKey,
                 this.currentCycleKey
             );
 
+            operation.throwIfCancelled("after cycle structure fetch");
+
             if (cycleStructure) {
                 const newRootElements = this.buildTreeFromCycleStructure(cycleStructure);
+
+                // Apply expansion state to new elements
                 const applyExpansionRecursive = (items: TestThemeTreeItem[]) => {
                     for (const item of items) {
                         this.applyStoredExpansionState(item);
@@ -141,16 +170,33 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                 return [];
             }
         } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                this.logger.debug(`[TTTDP] Cycle structure fetch cancelled for: ${this.currentCycleKey}`);
+                return [];
+            }
+
             this.logger.error(`[TTTDP] Error in fetchRootElements:`, error);
             this.setErrorState(error as Error, TreeViewEmptyState.FETCH_ERROR);
             return [];
         }
     }
 
+    /**
+     * Fetches child elements for a given test theme tree item.
+     * @param element - The parent tree item to retrieve children for
+     * @returns A promise that resolves to an array of child tree items, or empty array if none exist
+     */
     protected async fetchChildrenForElement(element: TestThemeTreeItem): Promise<TestThemeTreeItem[]> {
         return (element.children as TestThemeTreeItem[]) || [];
     }
 
+    /**
+     * Creates a TestThemeTreeItem from cycle node data with proper validation and state management.
+     *
+     * @param data - The cycle node data containing base information and element type
+     * @param parent - The parent tree item, or null if this is a root item
+     * @returns A configured TestThemeTreeItem or null if data is invalid
+     */
     protected createTreeItemFromData(data: CycleNodeData, parent: TestThemeTreeItem | null): TestThemeTreeItem | null {
         if (!data?.base?.key || !data?.base?.name) {
             this.logger.warn("[TTTDP] Invalid cycle node data for tree item creation:", data);
@@ -185,7 +231,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         return treeItem;
     }
 
-    // Helper to get the current set of all nodes being processed
+    /**
+     * Retrieves the raw node data from the current active root element.
+     *
+     * @returns An array of CycleNodeData representing the child nodes of the current root,
+     * or an empty array if no nodes are available or the structure cannot be accessed.
+     */
     private getRawNodesFromCurrentRoot(): CycleNodeData[] {
         const activeRoot = this.isCustomRootActive()
             ? this.getCurrentCustomRoot()?.itemData
@@ -200,6 +251,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         return [];
     }
 
+    /**
+     * Determines if a node will have any visible children in the test theme tree.
+     * @param nodeData - The parent node to check for visible children
+     * @param allNodes - Array of all available nodes to search through
+     * @returns True if the node has at least one visible child, false otherwise
+     */
     private nodeWillHaveVisibleChildren(nodeData: CycleNodeData, allNodes: CycleNodeData[]): boolean {
         return allNodes.some(
             (childNode) =>
@@ -207,6 +264,13 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         );
     }
 
+    /**
+     * Builds a tree structure from cycle structure data by creating a map of nodes
+     * and recursively constructing the tree starting from the root node.
+     *
+     * @param cycleStructure - The cycle structure containing nodes and root information
+     * @returns Array of TestThemeTreeItem representing the built tree, or empty array if no valid nodes found
+     */
     private buildTreeFromCycleStructure(cycleStructure: CycleStructure): TestThemeTreeItem[] {
         const elementsByKey = new Map<string, CycleNodeData>();
         cycleStructure.nodes.forEach((node) => {
@@ -223,6 +287,14 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         return this.buildTreeRecursively(rootCycleKey, null, elementsByKey);
     }
 
+    /**
+     * Recursively builds a tree structure from flat node data.
+     *
+     * @param parentKey - The key of the parent node to build children for
+     * @param parentItem - The parent tree item, or null for root level
+     * @param elementsByKey - Map containing all node data indexed by key
+     * @returns Array of tree items that are children of the specified parent
+     */
     private buildTreeRecursively(
         parentKey: string,
         parentItem: TestThemeTreeItem | null,
@@ -248,6 +320,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         return children;
     }
 
+    /**
+     * Determines whether a node should be visible in the test theme tree view.
+     *
+     * @param nodeData - The cycle node data to evaluate for visibility
+     * @returns `false` if the node is a test case, has "NotPlanned" status, or has locker value "-2"; otherwise `true`
+     */
     private isNodeVisibleInTestThemeTree(nodeData: CycleNodeData): boolean {
         if (nodeData.elementType === TreeItemContextValues.TEST_CASE_NODE) {
             return false;
@@ -258,12 +336,22 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         return true;
     }
 
+    /**
+     * Retrieves the report root UID for a given test theme tree item.
+     *
+     * @param item - The test theme tree item to get the report root UID for
+     * @returns The report root UID if the item has both a unique ID and UID, undefined otherwise
+     */
     public getReportRootUIDForItem(item: TestThemeTreeItem): string | undefined {
         const itemKey = item.getUniqueId();
         const itemUID = item.getUID();
         return itemKey && itemUID ? this.markedItemStateService.getReportRootUID(itemKey, itemUID) : undefined;
     }
 
+    /**
+     * Clears the test theme tree and resets all current state variables.
+     * Extends the base clearTree functionality by resetting cycle and project tracking.
+     */
     public override clearTree(): void {
         this.currentCycleKey = null;
         this.currentProjectKey = null;
@@ -272,37 +360,61 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         this.logger.trace("[TestThemeTreeDataProvider] Tree cleared with enhanced state management.");
     }
 
+    /**
+     * Refreshes the test theme tree data by fetching the latest cycle structure.
+     *
+     * @param isHardRefresh - If true, resets custom root and forces a complete refresh
+     * @returns Promise that resolves when the refresh operation completes
+     *
+     * @remarks
+     * - Cancels any ongoing refresh operations before starting
+     * - Preserves tree expansion state during refresh
+     * - Handles both normal and custom root refresh scenarios
+     * - Sets appropriate loading and error states during the operation
+     */
     public override async refresh(isHardRefresh: boolean = false): Promise<void> {
-        this.logger.debug(`[TestThemeTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
+        // Cancel any ongoing refresh operations
+        this.operationManager.cancelOperation(TestThemeTreeDataProvider.REFRESH_OPERATION);
 
-        if (isHardRefresh && this.isCustomRootActive()) {
-            this.customRootService.resetCustomRoot();
-        }
-        this.storeExpansionState();
-
-        if (!this.currentCycleKey || !this.currentProjectKey) {
-            this.clearTree();
-            return;
-        }
-
-        this.setDataSource(this.currentCycleKey, this.currentCycleLabel || this.currentCycleKey);
-
-        const loadingMessage =
-            this.isCustomRootActive() && this.getCurrentCustomRoot()
-                ? `Refreshing: ${this.getCurrentCustomRoot()?.label}...`
-                : `Refreshing test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`;
-
-        this.setLoadingState(loadingMessage);
+        const operation = this.operationManager.createOperation(
+            TestThemeTreeDataProvider.REFRESH_OPERATION,
+            "Refresh test themes"
+        );
 
         try {
+            this.logger.debug(`[TestThemeTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
+
+            if (isHardRefresh && this.isCustomRootActive()) {
+                this.customRootService.resetCustomRoot();
+            }
+            this.storeExpansionState();
+
+            if (!this.currentCycleKey || !this.currentProjectKey) {
+                this.clearTree();
+                return;
+            }
+
+            this.setDataSource(this.currentCycleKey, this.currentCycleLabel || this.currentCycleKey);
+
+            const loadingMessage =
+                this.isCustomRootActive() && this.getCurrentCustomRoot()
+                    ? `Refreshing: ${this.getCurrentCustomRoot()?.label}...`
+                    : `Refreshing test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`;
+
+            this.setLoadingState(loadingMessage);
+
+            operation.throwIfCancelled("before cycle structure fetch in refresh");
+
             const cycleStructure = await this.projectDataService.fetchCycleStructure(
                 this.currentProjectKey,
                 this.currentCycleKey
             );
 
+            operation.throwIfCancelled("after cycle structure fetch in refresh");
+
             if (cycleStructure) {
                 if (this.isCustomRootActive() && !isHardRefresh) {
-                    await this.refreshCustomRootNode(cycleStructure);
+                    await this.refreshCustomRootNode(cycleStructure, operation);
                 } else {
                     const elements = this.buildTreeFromCycleStructure(cycleStructure);
                     this.recordFetchAttempt(true, cycleStructure.nodes?.length || 0, elements.length);
@@ -312,16 +424,34 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                 this.setErrorState(new Error("Failed to fetch cycle structure"), TreeViewEmptyState.FETCH_ERROR);
             }
         } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                this.logger.debug("[TTTDP] Refresh operation cancelled");
+                return;
+            }
+
             this.logger.error(`[TTTDP] Error during refresh:`, error);
             this.setErrorState(error as Error, TreeViewEmptyState.FETCH_ERROR);
         }
     }
 
-    private async refreshCustomRootNode(cycleStructure: CycleStructure): Promise<void> {
+    /**
+     * Refreshes the custom root node with updated cycle structure data while preserving expansion state.
+     * If the custom root is not found in the updated data, resets the custom root and triggers a full refresh.
+     *
+     * @param cycleStructure - The updated cycle structure containing node data
+     * @param operation - Cancellable operation to check for cancellation during refresh
+     * @throws If the operation is cancelled before refresh begins
+     */
+    private async refreshCustomRootNode(
+        cycleStructure: CycleStructure,
+        operation: CancellableOperation
+    ): Promise<void> {
         const currentRoot = this.getCurrentCustomRoot();
         if (!currentRoot) {
             return;
         }
+
+        operation.throwIfCancelled("before custom root refresh");
 
         const currentRootKey = currentRoot.getUniqueId();
         const elementsByKey = new Map<string, CycleNodeData>();
@@ -347,5 +477,13 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             this.customRootService.resetCustomRoot();
             this.refresh(true);
         }
+    }
+
+    /**
+     * Dispose with operation cleanup
+     */
+    public override dispose(): void {
+        this.operationManager.dispose();
+        super.dispose();
     }
 }
