@@ -425,11 +425,9 @@ export class TreeServiceManager {
     public async handleCycleSelection(cycleItem: ProjectManagementTreeItem): Promise<void> {
         try {
             const projectProvider = this.getProjectManagementProvider();
-            const testThemeProvider = this.getTestThemeProvider();
             const testElementsProvider = this.getTestElementsProvider();
             const testElementsTreeView = this.getTestElementsTreeView();
 
-            testThemeProvider.clearTree();
             testElementsProvider.clearTree();
 
             const tovKey = cycleItem.getTovKey();
