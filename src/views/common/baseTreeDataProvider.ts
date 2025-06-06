@@ -101,7 +101,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     async getChildren(treeItem?: T): Promise<T[]> {
         try {
             if (!treeItem) {
-                this.unifiedStateManager.setLoading();
+                return await this.getRootChildren();
             }
 
             if (!treeItem) {
@@ -372,18 +372,21 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
                 return [state.customRootItem as T];
             }
 
-            this.rootTreeItems = await this.fetchRootTreeItems();
+            // Only fetch if the state is not already considered final (READY or EMPTY).
+            // This prevents re-fetching if a manual refresh operation has already populated the data.
+            const isDataFetchRequired =
+                state.operationalState !== TreeViewOperationalState.READY &&
+                state.operationalState !== TreeViewOperationalState.EMPTY;
 
-            if (this.rootTreeItems.length === 0) {
-                this.unifiedStateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
-            } else {
-                this.unifiedStateManager.setReady(this.rootTreeItems.length);
+            if (isDataFetchRequired) {
+                this.rootTreeItems = await this.fetchRootTreeItems();
             }
 
             return this.rootTreeItems;
         } catch (error: any) {
             this.logger.error(`[BaseTreeDataProvider] Error fetching root tree items:`, error);
             this.unifiedStateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
+            this.rootTreeItems = [];
             return [];
         }
     }
