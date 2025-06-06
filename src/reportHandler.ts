@@ -1316,7 +1316,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 if (wasConsecutiveImport) {
                     const reimportPromptChoice = await vscode.window.showWarningMessage(
-                        `You have just imported results for "${invokedOnItem.label}". Do you want to import them again?`,
+                        `You have already imported results for "${invokedOnItem.label}". Do you want to import them again?`,
                         { modal: true },
                         "Yes, Import Again",
                         "Cancel"
