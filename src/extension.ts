@@ -1284,6 +1284,11 @@ async function handleTestBenchSessionChange(
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
+            // Only display projects tree view after a login,
+            // so that the user won't other tree views in loading state
+            await hideTestThemeTreeView();
+            await hideTestElementsTreeView();
+
             if (
                 !wasPreviouslyConnected ||
                 (connection && connection.getSessionToken() !== newConnection.getSessionToken())
