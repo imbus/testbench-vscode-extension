@@ -372,11 +372,11 @@ async function registerExtensionCommands(context) {
                 if (itemKeyToMark &&
                     itemUIDToMark &&
                     originalContext &&
-                    (originalContext === constants_1.TreeItemContextValues.TEST_THEME_NODE ||
-                        originalContext === constants_1.TreeItemContextValues.TEST_CASE_SET_NODE)) {
+                    (originalContext === constants_1.TreeItemContextValues.TEST_THEME_TREE_ITEM ||
+                        originalContext === constants_1.TreeItemContextValues.TEST_CASE_SET_TREE_ITEM)) {
                     const descendantUIDs = treeItem.getDescendantUIDs();
                     const descendantKeysWithUIDs = treeItem.getDescendantKeysWithUIDs();
-                    await markedItemStateService.markItem(itemKeyToMark, itemUIDToMark, originalContext, true, descendantUIDs, descendantKeysWithUIDs);
+                    await markedItemStateService.markItem(itemKeyToMark, itemUIDToMark, projectKey, cycleKey, originalContext, true, descendantUIDs, descendantKeysWithUIDs);
                     testThemeProvider.refresh();
                 }
                 else {
@@ -448,7 +448,7 @@ async function registerExtensionCommands(context) {
             }
             const itemKey = item.getUniqueId();
             const itemUID = item.getUID();
-            const resolvedReportRootUID = markedItemStateService.getReportRootUID(itemKey, itemUID);
+            const resolvedReportRootUID = markedItemStateService.getReportRootUID(itemKey, itemUID, targetProjectKey, targetCycleKey);
             if (!resolvedReportRootUID) {
                 const errorMsg = `Cannot determine Report Root UID for item: ${item.label}. This item may not be eligible for import or was not properly marked after test generation.`;
                 exports.logger.error(errorMsg);
@@ -528,7 +528,12 @@ async function registerExtensionCommands(context) {
             }
             // Check if the item belongs to the Test Theme Tree
             else if (treeItem.contextValue &&
-                [constants_1.TreeItemContextValues.TEST_THEME_NODE, constants_1.TreeItemContextValues.TEST_CASE_SET_NODE].includes(treeItem.contextValue)) {
+                [
+                    constants_1.TreeItemContextValues.TEST_THEME_TREE_ITEM,
+                    constants_1.TreeItemContextValues.TEST_CASE_SET_TREE_ITEM,
+                    constants_1.TreeItemContextValues.MARKED_TEST_THEME_TREE_ITEM,
+                    constants_1.TreeItemContextValues.MARKED_TEST_CASE_SET_TREE_ITEM
+                ].includes(treeItem.contextValue)) {
                 const testThemeProvider = treeServiceManager.getTestThemeProvider();
                 if (typeof testThemeProvider.makeRoot === "function") {
                     testThemeProvider.makeRoot(treeItem);
@@ -1013,6 +1018,10 @@ async function handleTestBenchSessionChange(context, existingSession) {
             setConnection(newConnection);
             await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, true);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
+            // Only display projects tree view after a login,
+            // so that the user won't other tree views in loading state
+            await hideTestThemeTreeView();
+            await hideTestElementsTreeView();
             if (!wasPreviouslyConnected ||
                 (exports.connection && exports.connection.getSessionToken() !== newConnection.getSessionToken())) {
                 exports.logger.info("[Extension] New session established. Setting default view to 'Projects' and refreshing data.");

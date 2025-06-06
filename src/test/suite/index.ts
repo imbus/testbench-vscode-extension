@@ -1,3 +1,8 @@
+/**
+ * @file src/test/suite/index.ts
+ * @description This script is used to run tests for the VS Code extension.
+ */
+
 import * as path from "path";
 import Mocha from "mocha";
 import { glob } from "glob";

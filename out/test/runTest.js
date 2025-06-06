@@ -1,5 +1,9 @@
 "use strict";
-// Simplify the process of downloading, unzipping, and launching VS Code with extension test parameters
+/**
+ * @file src/test/runTest.ts
+ * @description This script is used to run integration tests for the VS Code extension.
+ * Simplifies the process of downloading, unzipping, and launching VS Code with extension test parameters
+ */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);

@@ -1,4 +1,8 @@
 "use strict";
+/**
+ * @file src/test/suite/extension.test.ts
+ * @description This file contains unit tests for the VS Code extension.
+ */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -34,70 +38,44 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
-const vscode = __importStar(require("vscode"));
-const sinon = __importStar(require("sinon"));
-const extension_1 = require("../../extension");
-const testBenchLogger_1 = require("../../testBenchLogger");
-const constants_1 = require("../../constants");
-const configuration_1 = require("../../configuration");
-const projectManagementTreeDataProvider_1 = require("../../views/projectManagement/projectManagementTreeDataProvider");
-const testElementsTreeDataProvider_1 = require("../../views/testElements/testElementsTreeDataProvider");
+const extension_1 = require("../../extension"); // The function we want to test
+const testSetup_1 = require("../setup/testSetup");
+const testBenchAuthenticationProvider_1 = require("../../testBenchAuthenticationProvider");
 suite("Extension Test Suite", () => {
-    let sandbox;
-    let getConfigurationStub;
-    let context;
-    let loggerStub;
-    let projectManagementTreeDataProviderStub;
-    let testElementsTreeDataProviderStub;
+    // Declare a variable to hold our test environment
+    let testEnv;
+    // Use a beforeEach hook to set up a clean, sandboxed environment for each test
     setup(() => {
-        sandbox = sinon.createSandbox();
-        // Stub the VS Code API and assign it to a SinonStub variable
-        getConfigurationStub = sandbox.stub(vscode.workspace, "getConfiguration");
-        getConfigurationStub.returns({
-            get: sandbox.stub().returns("defaultValue"),
-            update: sandbox.stub().resolves()
-        });
-        // Mock the ExtensionContext
-        context = {
-            subscriptions: [],
-            secrets: {
-                get: sandbox.stub().resolves("storedPassword"),
-                store: sandbox.stub().resolves(),
-                delete: sandbox.stub().resolves()
-            }
-        };
-        // Mock the logger
-        loggerStub = sandbox.createStubInstance(testBenchLogger_1.TestBenchLogger);
-        // Mock the tree data providers
-        projectManagementTreeDataProviderStub = sandbox.createStubInstance(projectManagementTreeDataProvider_1.ProjectManagementTreeDataProvider);
-        testElementsTreeDataProviderStub = sandbox.createStubInstance(testElementsTreeDataProvider_1.TestElementsTreeDataProvider);
-        // Stub the VS Code API
-        sandbox.stub(vscode.workspace, "getConfiguration").returns({
-            get: sandbox.stub().returns("defaultValue"),
-            update: sandbox.stub().resolves()
-        });
-        sandbox.stub(vscode.window, "showErrorMessage").resolves();
-        sandbox.stub(vscode.window, "showInformationMessage").resolves();
-        sandbox.stub(vscode.window, "showOpenDialog").resolves([vscode.Uri.file("/fake/path")]);
-        sandbox.stub(vscode.commands, "executeCommand").resolves();
+        testEnv = (0, testSetup_1.setupTestEnvironment)();
     });
+    // Use an afterEach hook to restore all stubs and mocks after each test
     teardown(() => {
-        sandbox.restore();
+        testEnv.sandbox.restore();
     });
-    test("activate should initialize the extension", async () => {
-        await (0, extension_1.activate)(context);
-        assert.ok(loggerStub.info.calledWith("Extension activated."), "Logger should log activation message");
-        assert.ok(getConfigurationStub.calledWith(constants_1.baseKeyOfExtension), "Configuration should be loaded");
-        assert.ok(context.subscriptions.length > 0, "Subscriptions should be added to the context");
-    });
-    test("getExtensionConfiguration should return the current configuration", () => {
-        const config = (0, configuration_1.getExtensionConfiguration)();
-        assert.ok(config, "Configuration should be returned");
-    });
-    test("initializeTreeViews should initialize the tree views", () => {
-        (0, extension_1.initializeTreeViews)();
-        assert.ok(projectManagementTreeDataProviderStub, "Project management tree view should be initialized");
-        assert.ok(testElementsTreeDataProviderStub, "Test elements tree view should be initialized");
+    suite("Activation", () => {
+        test("should register the TestBenchAuthenticationProvider on activation", async () => {
+            // Arrange:
+            // 1. Get the stub for the vscode.authentication.registerAuthenticationProvider function.
+            //    This stub was created for us by setupTestEnvironment().
+            const registerStub = testEnv.vscodeMocks.registerAuthenticationProviderStub;
+            // 2. Ensure the stub has not been called before the test.
+            assert.ok(registerStub.notCalled, "Pre-condition failed: registerAuthenticationProvider should not have been called yet");
+            // Act:
+            // 1. Call the activate function with our mock context.
+            await (0, extension_1.activate)(testEnv.mockContext);
+            // Assert:
+            // 1. Verify that registerAuthenticationProvider was called exactly once.
+            assert.ok(registerStub.calledOnce, "registerAuthenticationProvider should have been called once");
+            // 2. Get the arguments from the call to inspect them.
+            const [id, label, providerInstance] = registerStub.firstCall.args;
+            // 3. Verify the provider was registered with the correct ID and label.
+            assert.strictEqual(id, testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, "Authentication provider registered with incorrect ID");
+            assert.strictEqual(label, "TestBench", "Authentication provider registered with incorrect label");
+            // 4. Verify that the object passed as the provider is indeed an instance of our class.
+            assert.ok(providerInstance instanceof testBenchAuthenticationProvider_1.TestBenchAuthenticationProvider, "The registered provider is not an instance of TestBenchAuthenticationProvider");
+            // 5. Verify that the new provider instance was added to the context's subscriptions for proper disposal.
+            assert.ok(testEnv.mockContext.subscriptions.length > 0, "A disposable should have been added to the context subscriptions");
+        });
     });
 });
 //# sourceMappingURL=extension.test.js.map

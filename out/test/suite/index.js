@@ -1,4 +1,8 @@
 "use strict";
+/**
+ * @file src/test/suite/index.ts
+ * @description This script is used to run tests for the VS Code extension.
+ */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);

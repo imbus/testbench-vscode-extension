@@ -903,7 +903,7 @@ async function importReportWithResultsToTestbench(connection, projectKeyString, 
         // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
         // Later, we should fetch the project tree from the server and search for the cycle key there.
         /*
-        // For debugging, save the tree elements to a file called allTreeElements.json
+        // For debugging, save the tree items to a file called allTreeElements.json
         const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
         utils.saveJsonDataToFile(allTreeElementsPath, allTreeElementsInTreeView);
         console.log(`allTreeElements saved to ${allTreeElementsPath}`);

@@ -1,4 +1,8 @@
-// Simplify the process of downloading, unzipping, and launching VS Code with extension test parameters
+/**
+ * @file src/test/runTest.ts
+ * @description This script is used to run integration tests for the VS Code extension.
+ * Simplifies the process of downloading, unzipping, and launching VS Code with extension test parameters
+ */
 
 import * as path from "path";
 import { runTests } from "@vscode/test-electron";
