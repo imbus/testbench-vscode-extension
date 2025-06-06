@@ -9,6 +9,13 @@ ERROR_SUBDIVISON_MAPPING_FORMAT = (
     "The subdivision and library mapping must be specified in the format 'name:value'."
 )
 ERROR_EMPTY_OUTPUT_DIRECTORY = "Output Directory of TestBench2RobotFramework cannot be empty."
+ERROR_DUPLICATE_KEYWORD_UID = (
+    "Multiplee keywords with uid '{uid}' found. Please resolve the conflict manually."
+)
+
+# DEBUG MESSAGES
+DEBUG_CHECK_CONTEXT = "Checking testbench context. Selected context: {selected_context} - Resource context: {resource_context} "
+
 
 # COMMANDS
 COMMAND_GENERATE_TEST_SUITES = "testbench_ls.generateTestSuites"
@@ -20,12 +27,14 @@ COMMAND_UPDATE_SESSION_TOKEN = "testbench_ls.updateSessionToken"
 COMMAND_UPDATE_PROJECT = "testbench_ls.updateProject"
 COMMAND_UPDATE_TOV = "testbench_ls.updateTov"
 COMMAND_PULL_SUBDIVISION = "testbench_ls.pullSubdivision"
+COMMAND_PUSH_SUBDIVISION = "testbench_ls.pushSubdivision"
 COMMAND_PULL_KEYWORD = "testbench_ls.pullKeyword"
 COMMAND_PUSH_KEYWORD = "testbench_ls.pushKeyword"
 
 # constants
 TESTBENCH_LS_CLASS_NAME = "testbench-language-server"
 PULL_SUBDIVISON_TITLE = "Pull TestBench Subdivision"
+PUSH_SUBDIVISON_TITLE = "Push TestBench Subdivision"
 PULL_KEYWORD_TITLE = "Pull TestBench Keyword"
 PUSH_KEYWORD_TITLE = "Push TestBench Keyword"
 KEYWORD_INTERFACE_CHANGE_LABEL = "Keyword interface changes"
