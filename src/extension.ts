@@ -1301,7 +1301,6 @@ async function handleTestBenchSessionChange(
                 }
             }
         } else {
-            // TODO: Check if a logout is needed after a reload VS Code
             logger.warn("[Extension] Session exists, but no active connection. Clearing connection.");
             if (connection) {
                 await connection.logoutUserOnServer();
