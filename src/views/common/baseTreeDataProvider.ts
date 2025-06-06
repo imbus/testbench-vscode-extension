@@ -30,7 +30,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     >();
     public readonly onDidChangeTreeData: vscode.Event<T | T[] | undefined | void> = this._onDidChangeTreeData.event;
 
-    protected rootElements: T[] = [];
+    protected rootTreeItems: T[] = [];
     protected unifiedStateManager: UnifiedTreeStateManager<T>;
     private readonly _disposables: vscode.Disposable[] = [];
 
@@ -67,57 +67,57 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     /**
      * Abstract methods that must be implemented by subclasses
      */
-    protected abstract fetchRootElements(): Promise<T[]>;
-    protected abstract fetchChildrenForElement(element: T): Promise<T[]>;
-    protected abstract createTreeItemFromData(data: any, parent: T | null): T | null;
+    protected abstract fetchRootTreeItems(): Promise<T[]>;
+    protected abstract fetchChildrenForTreeItem(treeItem: T): Promise<T[]>;
+    protected abstract createTestThemeTreeItemFromData(data: any, parent: T | null): T | null;
 
     /**
      * Get tree item representation
      */
-    getTreeItem(element: T): vscode.TreeItem {
-        return element;
+    getTreeItem(treeItem: T): vscode.TreeItem {
+        return treeItem;
     }
 
     /**
-     * Get parent of an element
+     * Get parent of a tre item
      */
-    getParent(element: T): vscode.ProviderResult<T> {
+    getParent(treeItem: T): vscode.ProviderResult<T> {
         const state = this.unifiedStateManager.getCurrentUnifiedState();
-        if (state.customRootActive) {
+        if (state.isCustomRootActive) {
             const currentRoot = state.customRootItem;
-            if (element === currentRoot) {
+            if (treeItem === currentRoot) {
                 return null;
             }
-            if (element.parent === currentRoot) {
+            if (treeItem.parent === currentRoot) {
                 return currentRoot;
             }
         }
-        return element.parent as T;
+        return treeItem.parent as T;
     }
 
     /**
-     * Get children of an element or root elements
+     * Get children of a tree item or root tree tems
      */
-    async getChildren(element?: T): Promise<T[]> {
+    async getChildren(treeItem?: T): Promise<T[]> {
         try {
-            if (!element) {
+            if (!treeItem) {
                 this.unifiedStateManager.setLoading();
             }
 
-            if (!element) {
+            if (!treeItem) {
                 return await this.getRootChildren();
             }
 
             // Check if this is a custom root request
             const state = this.unifiedStateManager.getCurrentUnifiedState();
-            if (state.customRootActive && this.isCurrentRoot(element)) {
-                return await this.getChildrenForCustomRoot(element);
+            if (state.isCustomRootActive && this.isCurrentRoot(treeItem)) {
+                return await this.getChildrenForCustomRoot(treeItem);
             }
 
-            return await this.fetchChildrenForElement(element);
+            return await this.fetchChildrenForTreeItem(treeItem);
         } catch (error: any) {
             this.logger.error(
-                `[BaseTreeDataProvider] Error in getChildren for element ${element?.label || "root"}: ${error.message}`,
+                `[BaseTreeDataProvider] Error in getChildren for tree item ${treeItem?.label || "root"}: ${error.message}`,
                 error
             );
             this.unifiedStateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
@@ -148,18 +148,18 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     public clearTree(): void {
         this.logger.debug(`[${this.constructor.name}] Clearing tree`);
 
-        // Dispose all current elements
-        this.rootElements.forEach((element) => {
+        // Dispose all current tree items
+        this.rootTreeItems.forEach((treeItem) => {
             try {
-                if (element && typeof element.dispose === "function") {
-                    element.dispose();
+                if (treeItem && typeof treeItem.dispose === "function") {
+                    treeItem.dispose();
                 }
             } catch (error) {
-                this.logger.error(`[${this.constructor.name}] Error disposing element during clear:`, error);
+                this.logger.error(`[${this.constructor.name}] Error disposing tree item during clear:`, error);
             }
         });
 
-        this.rootElements = [];
+        this.rootTreeItems = [];
         this.unifiedStateManager.clear();
         this._onDidChangeTreeData.fire(undefined);
     }
@@ -193,11 +193,11 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     /**
      * Handle expansion of an item
      */
-    public handleExpansion(element: T, expanded: boolean): void {
-        element.handleExpansion(expanded);
+    public handleExpansion(treeItem: T, expanded: boolean): void {
+        treeItem.handleExpansion(expanded);
 
         if (this.options.enableExpansionTracking) {
-            const itemId = element.getUniqueId();
+            const itemId = treeItem.getUniqueId();
             this.unifiedStateManager.setItemExpansion(itemId, expanded);
         }
     }
@@ -235,30 +235,30 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
                 }
             };
 
-            collectExpanded(this.rootElements);
+            collectExpanded(this.rootTreeItems);
             this.unifiedStateManager.updateState({ expandedItems: expandedIds });
         }
     }
 
     /**
-     * Update tree elements and refresh with proper state management
+     * Update tree tree items and refresh with proper state management
      */
-    protected updateElements(elements: T[]): void {
-        // Dispose old elements before replacing
-        this.rootElements.forEach((element) => {
+    protected updateTreeItem(treeItems: T[]): void {
+        // Dispose old tree items before replacing
+        this.rootTreeItems.forEach((treeItem) => {
             try {
-                if (element && typeof element.dispose === "function") {
-                    element.dispose();
+                if (treeItem && typeof treeItem.dispose === "function") {
+                    treeItem.dispose();
                 }
             } catch (error) {
-                this.logger.error(`[${this.constructor.name}] Error disposing old element:`, error);
+                this.logger.error(`[${this.constructor.name}] Error disposing old tree item:`, error);
             }
         });
 
-        this.rootElements = elements;
+        this.rootTreeItems = treeItems;
 
         // Apply expansion state if tracking is enabled
-        if (this.options.enableExpansionTracking && elements.length > 0) {
+        if (this.options.enableExpansionTracking && treeItems.length > 0) {
             const applyExpansionRecursive = (items: T[]) => {
                 for (const item of items) {
                     this.applyStoredExpansionState(item);
@@ -267,14 +267,14 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
                     }
                 }
             };
-            applyExpansionRecursive(elements);
+            applyExpansionRecursive(treeItems);
         }
 
-        // Update state based on element count
-        if (elements.length === 0) {
+        // Update state based on tree item count
+        if (treeItems.length === 0) {
             this.unifiedStateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
         } else {
-            this.unifiedStateManager.setReady(elements.length);
+            this.unifiedStateManager.setReady(treeItems.length);
         }
 
         this._onDidChangeTreeData.fire(undefined);
@@ -319,7 +319,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      * Check if custom root is active
      */
     public isCustomRootActive(): boolean {
-        return this.unifiedStateManager.getCurrentUnifiedState().customRootActive;
+        return this.unifiedStateManager.getCurrentUnifiedState().isCustomRootActive;
     }
 
     /**
@@ -334,7 +334,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      */
     public isCurrentRoot(item: T): boolean {
         const state = this.unifiedStateManager.getCurrentUnifiedState();
-        if (!state.customRootActive || !state.customRootItem) {
+        if (!state.isCustomRootActive || !state.customRootItem) {
             return false;
         }
         return (state.customRootItem as T).getUniqueId() === item.getUniqueId();
@@ -353,31 +353,31 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     private async getRootChildren(): Promise<T[]> {
         try {
             const state = this.unifiedStateManager.getCurrentUnifiedState();
-            if (state.customRootActive && state.customRootItem) {
+            if (state.isCustomRootActive && state.customRootItem) {
                 return [state.customRootItem as T];
             }
 
-            this.rootElements = await this.fetchRootElements();
+            this.rootTreeItems = await this.fetchRootTreeItems();
 
-            if (this.rootElements.length === 0) {
+            if (this.rootTreeItems.length === 0) {
                 this.unifiedStateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
             } else {
-                this.unifiedStateManager.setReady(this.rootElements.length);
+                this.unifiedStateManager.setReady(this.rootTreeItems.length);
             }
 
-            return this.rootElements;
+            return this.rootTreeItems;
         } catch (error: any) {
-            this.logger.error(`[BaseTreeDataProvider] Error fetching root elements:`, error);
+            this.logger.error(`[BaseTreeDataProvider] Error fetching root tree items:`, error);
             this.unifiedStateManager.setError(error, TreeViewEmptyState.FETCH_ERROR);
             return [];
         }
     }
 
     /**
-     * Get children for custom root element
+     * Get children for custom root tree item
      */
-    protected async getChildrenForCustomRoot(customRootElement: T): Promise<T[]> {
-        return await this.fetchChildrenForElement(customRootElement);
+    protected async getChildrenForCustomRoot(customRootTreeItem: T): Promise<T[]> {
+        return await this.fetchChildrenForTreeItem(customRootTreeItem);
     }
 
     /**
@@ -402,7 +402,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      * Find item by unique ID
      */
     protected findItemById(id: string, items?: T[]): T | null {
-        const searchItems = items || this.rootElements;
+        const searchItems = items || this.rootTreeItems;
 
         for (const item of searchItems) {
             if (item.getUniqueId() === id) {
@@ -421,10 +421,10 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Get current root elements
+     * Get current root tree items
      */
-    public getCurrentElements(): T[] {
-        return [...this.rootElements];
+    public getCurrentRootTreeItems(): T[] {
+        return [...this.rootTreeItems];
     }
 
     /**
@@ -455,7 +455,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     public getDiagnostics(): Record<string, any> {
         return {
             providerType: this.constructor.name,
-            rootElementsCount: this.rootElements.length,
+            rootTreeItemsCount: this.rootTreeItems.length,
             unifiedStateDiagnostics: this.unifiedStateManager.getDiagnostics(),
             timestamp: new Date().toISOString()
         };

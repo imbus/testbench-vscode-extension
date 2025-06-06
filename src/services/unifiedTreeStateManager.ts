@@ -29,13 +29,13 @@ export interface UnifiedTreeState {
     dataSourceDisplayName: string;
 
     // Data fetch tracking
-    dataFetchAttempted: boolean;
-    serverDataReceived: boolean;
+    hasDataFetchBeenAttempted: boolean;
+    isServerDataReceived: boolean;
     itemsBeforeFiltering: number;
     itemsAfterFiltering: number;
 
     // Custom root state
-    customRootActive: boolean;
+    isCustomRootActive: boolean;
     customRootItem: any | null;
     customRootOriginalContext: string | null;
 
@@ -109,13 +109,13 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
             dataSourceDisplayName: viewState.currentDataSourceDisplayName,
 
             // Fetch tracking from TreeViewStateManager
-            dataFetchAttempted: viewState.dataFetchAttempted,
-            serverDataReceived: viewState.serverDataReceived,
+            hasDataFetchBeenAttempted: viewState.dataFetchAttempted,
+            isServerDataReceived: viewState.serverDataReceived,
             itemsBeforeFiltering: viewState.itemsBeforeFiltering,
             itemsAfterFiltering: viewState.itemsAfterFiltering,
 
             // Custom root state from CustomRootService
-            customRootActive: customRootState.isActive,
+            isCustomRootActive: customRootState.isActive,
             customRootItem: customRootState.rootItem,
             customRootOriginalContext: customRootState.originalContextValue,
 
@@ -189,19 +189,19 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
             }
 
             if (
-                updates.dataFetchAttempted !== undefined &&
-                updates.dataFetchAttempted !== previousState.dataFetchAttempted
+                updates.hasDataFetchBeenAttempted !== undefined &&
+                updates.hasDataFetchBeenAttempted !== previousState.hasDataFetchBeenAttempted
             ) {
-                viewStateUpdates.dataFetchAttempted = updates.dataFetchAttempted;
+                viewStateUpdates.dataFetchAttempted = updates.hasDataFetchBeenAttempted;
                 hasViewStateUpdates = true;
                 changedFields.push("dataFetchAttempted");
             }
 
             if (
-                updates.serverDataReceived !== undefined &&
-                updates.serverDataReceived !== previousState.serverDataReceived
+                updates.isServerDataReceived !== undefined &&
+                updates.isServerDataReceived !== previousState.isServerDataReceived
             ) {
-                viewStateUpdates.serverDataReceived = updates.serverDataReceived;
+                viewStateUpdates.serverDataReceived = updates.isServerDataReceived;
                 hasViewStateUpdates = true;
                 changedFields.push("serverDataReceived");
             }
@@ -242,10 +242,13 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
             }
 
             // Handle custom root state changes
-            if (updates.customRootActive !== undefined && updates.customRootActive !== previousState.customRootActive) {
-                if (updates.customRootActive && updates.customRootItem) {
+            if (
+                updates.isCustomRootActive !== undefined &&
+                updates.isCustomRootActive !== previousState.isCustomRootActive
+            ) {
+                if (updates.isCustomRootActive && updates.customRootItem) {
                     this.customRootService.setCustomRoot(updates.customRootItem);
-                } else if (!updates.customRootActive) {
+                } else if (!updates.isCustomRootActive) {
                     this.customRootService.resetCustomRoot();
                 }
                 changedFields.push("customRootActive");
@@ -355,8 +358,8 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
         itemsAfterFilter: number = 0
     ): StateChangeNotification {
         return this.updateState({
-            dataFetchAttempted: true,
-            serverDataReceived: serverReturnedData,
+            hasDataFetchBeenAttempted: true,
+            isServerDataReceived: serverReturnedData,
             itemsBeforeFiltering: itemsBeforeFilter,
             itemsAfterFiltering: itemsAfterFilter
         });
@@ -368,7 +371,7 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
      */
     public setCustomRoot(item: T): StateChangeNotification {
         return this.updateState({
-            customRootActive: true,
+            isCustomRootActive: true,
             customRootItem: item
         });
     }
@@ -378,7 +381,7 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
      */
     public resetCustomRoot(): StateChangeNotification {
         return this.updateState({
-            customRootActive: false,
+            isCustomRootActive: false,
             customRootItem: null,
             customRootOriginalContext: null
         });
@@ -414,7 +417,7 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
         return this.updateState({
             operationalState: TreeViewOperationalState.EMPTY,
             emptyState: TreeViewEmptyState.NO_DATA_SOURCE,
-            customRootActive: false,
+            isCustomRootActive: false,
             customRootItem: null,
             customRootOriginalContext: null,
             expandedItems: new Set()
@@ -483,7 +486,7 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
     private handleCustomRootStateChange(state: any, originalCallback?: (state: any) => void): void {
         if (!this.isUpdating) {
             this.updateState({
-                customRootActive: state.isActive,
+                isCustomRootActive: state.isActive,
                 customRootItem: state.rootItem,
                 customRootOriginalContext: state.originalContextValue
             });

@@ -73,7 +73,7 @@ export interface CycleStructure {
     }>;
 }
 
-export type CycleNodeData = {
+export type CycleTreeItemData = {
     base: {
         key: string;
         numbering: string;

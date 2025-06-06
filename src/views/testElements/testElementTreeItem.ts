@@ -26,7 +26,7 @@ export interface TestElementData {
     libraryKey: string | null;
     jsonString: string;
     details: any;
-    elementType: TestElementType;
+    testElementType: TestElementType;
     directRegexMatch: boolean;
     children?: TestElementData[];
     hierarchicalName?: string;
@@ -50,7 +50,7 @@ export class TestElementTreeItem extends BaseTreeItem {
                 : vscode.TreeItemCollapsibleState.None;
         super(
             label,
-            TestElementTreeItem.getContextValueForElementType(testElementData.elementType),
+            TestElementTreeItem.getContextValueForElementType(testElementData.testElementType),
             collapsibleState,
             testElementData,
             extensionContext,
@@ -60,7 +60,7 @@ export class TestElementTreeItem extends BaseTreeItem {
         );
 
         this.testElementData = testElementData;
-        this.contextValue = TestElementTreeItem.getContextValueForElementType(testElementData.elementType);
+        this.contextValue = TestElementTreeItem.getContextValueForElementType(testElementData.testElementType);
 
         // Display the uniqueID as a description next to the label
         this.description = testElementData.uniqueID || "";
@@ -80,7 +80,7 @@ export class TestElementTreeItem extends BaseTreeItem {
         }
 
         this.logger.trace(
-            `[TestElementTreeItem] Updating icon for element: ${this.label}, type: ${this.testElementData.elementType}`
+            `[TestElementTreeItem] Updating icon for test element: ${this.label}, type: ${this.testElementData.testElementType}`
         );
 
         try {
@@ -112,11 +112,11 @@ export class TestElementTreeItem extends BaseTreeItem {
             return "Other";
         }
 
-        if (this.testElementData.elementType === "Subdivision") {
+        if (this.testElementData.testElementType === "Subdivision") {
             return this.state.subdivisionIconType || "MissingSubdivision";
         }
 
-        return this.testElementData.elementType;
+        return this.testElementData.testElementType;
     }
 
     protected extractStatus(): string {
@@ -126,7 +126,7 @@ export class TestElementTreeItem extends BaseTreeItem {
 
     protected buildTooltipContent(): vscode.MarkdownString {
         const data = this.itemData as TestElementData;
-        const lines: string[] = [`Type: ${data.elementType || "N/A"}`, `Name: ${data.name || this.label}`];
+        const lines: string[] = [`Type: ${data.testElementType || "N/A"}`, `Name: ${data.name || this.label}`];
 
         if (data.uniqueID) {
             lines.push(`UniqueID: ${data.uniqueID}`);
@@ -154,8 +154,8 @@ export class TestElementTreeItem extends BaseTreeItem {
         return "testElement";
     }
 
-    private static getContextValueForElementType(elementType: TestElementType): string {
-        switch (elementType) {
+    private static getContextValueForElementType(testElementType: TestElementType): string {
+        switch (testElementType) {
             case "Subdivision":
                 return TreeItemContextValues.SUBDIVISION;
             case "Interaction":
@@ -173,7 +173,7 @@ export class TestElementTreeItem extends BaseTreeItem {
      * Update icon for subdivision based on file existence
      */
     public updateSubdivisionIcon(iconType: "LocalSubdivision" | "MissingSubdivision"): void {
-        if (this.testElementData.elementType === "Subdivision") {
+        if (this.testElementData.testElementType === "Subdivision") {
             this.updateState({ subdivisionIconType: iconType });
         }
     }
@@ -203,7 +203,7 @@ export class TestElementTreeItem extends BaseTreeItem {
      * Check if this is a final subdivision (has no subdivision children)
      */
     public isFinalSubdivision(): boolean {
-        if (this.testElementData.elementType !== "Subdivision") {
+        if (this.testElementData.testElementType !== "Subdivision") {
             return false;
         }
 
@@ -211,7 +211,7 @@ export class TestElementTreeItem extends BaseTreeItem {
             return true;
         }
 
-        return !this.testElementData.children.some((child) => child.elementType === "Subdivision");
+        return !this.testElementData.children.some((child) => child.testElementType === "Subdivision");
     }
 
     /**
@@ -221,7 +221,7 @@ export class TestElementTreeItem extends BaseTreeItem {
         let current = this.parent as TestElementTreeItem | null;
 
         while (current) {
-            if (current.testElementData.elementType === "Subdivision" && current.testElementData.directRegexMatch) {
+            if (current.testElementData.testElementType === "Subdivision" && current.testElementData.directRegexMatch) {
                 return current;
             }
             current = current.parent as TestElementTreeItem | null;
@@ -237,7 +237,7 @@ export class TestElementTreeItem extends BaseTreeItem {
         let current = this.parent as TestElementTreeItem | null;
 
         while (current) {
-            if (current.testElementData.elementType === "Subdivision") {
+            if (current.testElementData.testElementType === "Subdivision") {
                 return current;
             }
             current = current.parent as TestElementTreeItem | null;
@@ -253,7 +253,7 @@ export class TestElementTreeItem extends BaseTreeItem {
         let current = this.parent as TestElementTreeItem | null;
 
         while (current) {
-            if (current.testElementData.elementType === "Subdivision" && current.isFinalSubdivision()) {
+            if (current.testElementData.testElementType === "Subdivision" && current.isFinalSubdivision()) {
                 return current;
             }
             current = current.parent as TestElementTreeItem | null;

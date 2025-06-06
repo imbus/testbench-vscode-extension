@@ -66,10 +66,10 @@ export class TestThemeTreeItem extends BaseTreeItem {
      */
     public updateContextForMarking(marked: boolean): void {
         if (marked) {
-            if (this.originalContextValue === TreeItemContextValues.TEST_THEME_NODE) {
-                this.contextValue = TreeItemContextValues.MARKED_TEST_THEME_NODE;
-            } else if (this.originalContextValue === TreeItemContextValues.TEST_CASE_SET_NODE) {
-                this.contextValue = TreeItemContextValues.MARKED_TEST_CASE_SET_NODE;
+            if (this.originalContextValue === TreeItemContextValues.TEST_THEME_TREE_ITEM) {
+                this.contextValue = TreeItemContextValues.MARKED_TEST_THEME_TREE_ITEM;
+            } else if (this.originalContextValue === TreeItemContextValues.TEST_CASE_SET_TREE_ITEM) {
+                this.contextValue = TreeItemContextValues.MARKED_TEST_CASE_SET_TREE_ITEM;
             }
         } else {
             this.contextValue = this.originalContextValue;
@@ -104,8 +104,8 @@ export class TestThemeTreeItem extends BaseTreeItem {
      */
     public canGenerateTests(): boolean {
         return (
-            this.originalContextValue === TreeItemContextValues.TEST_THEME_NODE ||
-            this.originalContextValue === TreeItemContextValues.TEST_CASE_SET_NODE
+            this.originalContextValue === TreeItemContextValues.TEST_THEME_TREE_ITEM ||
+            this.originalContextValue === TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
         );
     }
 

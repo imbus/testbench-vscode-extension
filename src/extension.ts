@@ -448,8 +448,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         itemKeyToMark &&
                         itemUIDToMark &&
                         originalContext &&
-                        (originalContext === TreeItemContextValues.TEST_THEME_NODE ||
-                            originalContext === TreeItemContextValues.TEST_CASE_SET_NODE)
+                        (originalContext === TreeItemContextValues.TEST_THEME_TREE_ITEM ||
+                            originalContext === TreeItemContextValues.TEST_CASE_SET_TREE_ITEM)
                     ) {
                         const descendantUIDs = treeItem.getDescendantUIDs();
                         const descendantKeysWithUIDs = treeItem.getDescendantKeysWithUIDs();
@@ -665,7 +665,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             else if (
                 treeItem.contextValue &&
                 (
-                    [TreeItemContextValues.TEST_THEME_NODE, TreeItemContextValues.TEST_CASE_SET_NODE] as string[]
+                    [
+                        TreeItemContextValues.TEST_THEME_TREE_ITEM,
+                        TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
+                    ] as string[]
                 ).includes(treeItem.contextValue)
             ) {
                 const testThemeProvider = treeServiceManager.getTestThemeProvider();

@@ -10,7 +10,7 @@ import { TestThemeTreeItem } from "./testThemeTreeItem";
 import { ProjectDataService } from "../../services/projectDataService";
 import { MarkedItemStateService } from "../../services/markedItemStateService";
 import { ContextKeys, TreeItemContextValues } from "../../constants";
-import { CycleNodeData, CycleStructure } from "../../testBenchTypes";
+import { CycleTreeItemData, CycleStructure } from "../../testBenchTypes";
 import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
 import { IconManagementService } from "../../services/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
@@ -62,7 +62,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
         if (notification.changedFields.includes("customRootActive")) {
             const state = notification.newState;
-            if (state.customRootActive) {
+            if (state.isCustomRootActive) {
                 this.logger.debug(`[TestThemeTreeDataProvider] Custom root activated: ${state.customRootItem?.label}`);
             } else {
                 this.logger.debug("[TestThemeTreeDataProvider] Custom root deactivated");
@@ -98,7 +98,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         this.currentCycleLabel = eventData.cycleLabel;
 
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
-        if (state.customRootActive) {
+        if (state.isCustomRootActive) {
             this.getUnifiedStateManager().resetCustomRoot();
         }
 
@@ -106,7 +106,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
         if (!eventData.rawCycleStructure?.nodes?.length || !eventData.rawCycleStructure.root?.base?.key) {
             this.logger.warn(`[TestThemeTreeDataProvider] Invalid cycle structure for: ${eventData.cycleLabel}`);
-            this.updateElements([]);
+            this.updateTreeItem([]);
             this.getUnifiedStateManager().setError(
                 new Error("Invalid cycle structure"),
                 TreeViewEmptyState.PROCESSING_ERROR
@@ -115,27 +115,27 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         }
 
         try {
-            const elements = this.buildTreeFromCycleStructure(eventData.rawCycleStructure);
+            const testThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(eventData.rawCycleStructure);
 
             // Coordinated state update for successful population
             this.getUnifiedStateManager().updateState({
-                dataFetchAttempted: true,
-                serverDataReceived: true,
+                hasDataFetchBeenAttempted: true,
+                isServerDataReceived: true,
                 itemsBeforeFiltering: eventData.rawCycleStructure.nodes.length,
-                itemsAfterFiltering: elements.length,
+                itemsAfterFiltering: testThemeTreeItems.length,
                 operationalState:
-                    elements.length === 0 ? TreeViewOperationalState.EMPTY : TreeViewOperationalState.READY,
-                emptyState: elements.length === 0 ? TreeViewEmptyState.SERVER_NO_DATA : undefined
+                    testThemeTreeItems.length === 0 ? TreeViewOperationalState.EMPTY : TreeViewOperationalState.READY,
+                emptyState: testThemeTreeItems.length === 0 ? TreeViewEmptyState.SERVER_NO_DATA : undefined
             });
 
-            this.updateElements(elements);
+            this.updateTreeItem(testThemeTreeItems);
         } catch (error) {
             this.logger.error(`[TestThemeTreeDataProvider] Error building tree from cycle structure:`, error);
             this.getUnifiedStateManager().setError(error as Error, TreeViewEmptyState.PROCESSING_ERROR);
         }
     }
 
-    protected async fetchRootElements(): Promise<TestThemeTreeItem[]> {
+    protected async fetchRootTreeItems(): Promise<TestThemeTreeItem[]> {
         if (!this.currentCycleKey || !this.currentProjectKey) {
             this.getUnifiedStateManager().setEmpty(TreeViewEmptyState.NO_DATA_SOURCE);
             return [];
@@ -165,7 +165,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             operation.throwIfCancelled("after cycle structure fetch");
 
             if (cycleStructure) {
-                const newRootElements = this.buildTreeFromCycleStructure(cycleStructure);
+                const newRootTestThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(cycleStructure);
 
                 const applyExpansionRecursive = (items: TestThemeTreeItem[]) => {
                     for (const item of items) {
@@ -175,21 +175,23 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                         }
                     }
                 };
-                applyExpansionRecursive(newRootElements);
-                this.rootElements = newRootElements;
+                applyExpansionRecursive(newRootTestThemeTreeItems);
+                this.rootTreeItems = newRootTestThemeTreeItems;
 
                 // Single coordinated state update for successful fetch
                 this.getUnifiedStateManager().updateState({
-                    dataFetchAttempted: true,
-                    serverDataReceived: true,
+                    hasDataFetchBeenAttempted: true,
+                    isServerDataReceived: true,
                     itemsBeforeFiltering: cycleStructure.nodes?.length || 0,
-                    itemsAfterFiltering: newRootElements.length,
+                    itemsAfterFiltering: newRootTestThemeTreeItems.length,
                     operationalState:
-                        newRootElements.length === 0 ? TreeViewOperationalState.EMPTY : TreeViewOperationalState.READY,
-                    emptyState: newRootElements.length === 0 ? TreeViewEmptyState.SERVER_NO_DATA : undefined
+                        newRootTestThemeTreeItems.length === 0
+                            ? TreeViewOperationalState.EMPTY
+                            : TreeViewOperationalState.READY,
+                    emptyState: newRootTestThemeTreeItems.length === 0 ? TreeViewEmptyState.SERVER_NO_DATA : undefined
                 });
 
-                return newRootElements;
+                return newRootTestThemeTreeItems;
             } else {
                 this.getUnifiedStateManager().setError(
                     new Error("Failed to fetch cycle structure"),
@@ -214,19 +216,22 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     /**
      * Fetches child elements for a given test theme tree item.
      */
-    protected async fetchChildrenForElement(element: TestThemeTreeItem): Promise<TestThemeTreeItem[]> {
-        return (element.children as TestThemeTreeItem[]) || [];
+    protected async fetchChildrenForTreeItem(testThemeTreeItem: TestThemeTreeItem): Promise<TestThemeTreeItem[]> {
+        return (testThemeTreeItem.children as TestThemeTreeItem[]) || [];
     }
 
     /**
      * Creates a TestThemeTreeItem from cycle node data with proper validation and state management.
      */
-    protected createTreeItemFromData(data: CycleNodeData, parent: TestThemeTreeItem | null): TestThemeTreeItem | null {
+    protected createTestThemeTreeItemFromData(
+        data: CycleTreeItemData,
+        parent: TestThemeTreeItem | null
+    ): TestThemeTreeItem | null {
         if (!data?.base?.key || !data?.base?.name) {
             this.logger.warn("[TestThemeTreeDataProvider] Invalid cycle node data for tree item creation:", data);
             return null;
         }
-        const label = data.base.numbering ? `${data.base.numbering} ${data.base.name}` : data.base.name;
+        const testThemeLabel = data.base.numbering ? `${data.base.numbering} ${data.base.name}` : data.base.name;
         const hasChildren = this.nodeWillHaveVisibleChildren(data, this.getRawNodesFromCurrentRoot());
 
         const collapsibleState = hasChildren
@@ -234,7 +239,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             : vscode.TreeItemCollapsibleState.None;
 
         const treeItem = new TestThemeTreeItem(
-            label,
+            testThemeLabel,
             data.elementType,
             collapsibleState,
             data,
@@ -258,18 +263,18 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     /**
      * Retrieves the raw node data from the current active root element.
      */
-    private getRawNodesFromCurrentRoot(): CycleNodeData[] {
+    private getRawNodesFromCurrentRoot(): CycleTreeItemData[] {
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
-        const activeRoot = state.customRootActive
+        const activeRoot = state.isCustomRootActive
             ? state.customRootItem?.itemData
-            : (this.rootElements[0]?.itemData as CycleNodeData);
+            : (this.rootTreeItems[0]?.itemData as CycleTreeItemData);
 
         if (activeRoot && activeRoot.nodes) {
             return activeRoot.nodes;
         }
 
-        if (this.rootElements.length > 0 && this.rootElements[0]?.itemData?.parentCycleStructure?.nodes) {
-            return this.rootElements[0].itemData.parentCycleStructure.nodes;
+        if (this.rootTreeItems.length > 0 && this.rootTreeItems[0]?.itemData?.parentCycleStructure?.nodes) {
+            return this.rootTreeItems[0].itemData.parentCycleStructure.nodes;
         }
 
         this.logger.warn(
@@ -281,69 +286,92 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     /**
      * Determines if a node will have any visible children in the test theme tree.
      */
-    private nodeWillHaveVisibleChildren(nodeData: CycleNodeData, allNodes: CycleNodeData[]): boolean {
-        return allNodes.some(
+    private nodeWillHaveVisibleChildren(
+        cycleNodeData: CycleTreeItemData,
+        allCycleNodeData: CycleTreeItemData[]
+    ): boolean {
+        return allCycleNodeData.some(
             (childNode) =>
-                childNode.base.parentKey === nodeData.base.key && this.isNodeVisibleInTestThemeTree(childNode)
+                childNode.base.parentKey === cycleNodeData.base.key && this.isTreeItemVisibleInTestThemeTree(childNode)
         );
     }
 
     /**
-     * Builds a tree structure from cycle structure data by creating a map of nodes
-     * and recursively constructing the tree starting from the root node.
+     * Builds a tree of `TestThemeTreeItem` objects from a given `CycleStructure`.
+     *
+     * This method first maps all nodes within the `cycleStructure` by their `base.key`
+     * for lookup, then initiates a recursive build process starting
+     * from the root node of the `cycleStructure`.
+     *
+     * If the `cycleStructure` contains nodes but none of them have a `base.key`,
+     * an error is logged, and an empty array is returned.
+     *
+     * @param cycleStructure The cycle structure data used to build the tree.
+     * @returns An array of `TestThemeTreeItem` representing the root level of the constructed tree,
+     * or an empty array if no valid nodes are found or an error occurs.
      */
-    private buildTreeFromCycleStructure(cycleStructure: CycleStructure): TestThemeTreeItem[] {
-        const elementsByKey = new Map<string, CycleNodeData>();
+    private buildTestThemeTreeFromCycleStructure(cycleStructure: CycleStructure): TestThemeTreeItem[] {
+        const treeItemsByKey = new Map<string, CycleTreeItemData>();
         cycleStructure.nodes.forEach((node) => {
             if (node?.base?.key) {
-                elementsByKey.set(node.base.key, node);
+                treeItemsByKey.set(node.base.key, node);
             }
         });
 
-        if (elementsByKey.size === 0 && cycleStructure.nodes.length > 0) {
+        if (treeItemsByKey.size === 0 && cycleStructure.nodes.length > 0) {
             this.logger.error("[TestThemeTreeDataProvider] No nodes with base.key found in cycle structure.");
             return [];
         }
         const rootCycleKey = cycleStructure.root.base.key;
-        return this.buildTreeRecursively(rootCycleKey, null, elementsByKey);
+        return this.buildTestThemeTreeRecursively(rootCycleKey, null, treeItemsByKey);
     }
 
     /**
      * Recursively builds a tree structure from flat node data.
      */
-    private buildTreeRecursively(
-        parentKey: string,
-        parentItem: TestThemeTreeItem | null,
-        elementsByKey: Map<string, CycleNodeData>
+    private buildTestThemeTreeRecursively(
+        parentTestThemeKey: string,
+        parentTestThemeTreeItem: TestThemeTreeItem | null,
+        testThemeItemsByKey: Map<string, CycleTreeItemData>
     ): TestThemeTreeItem[] {
-        const children: TestThemeTreeItem[] = [];
-        for (const nodeData of elementsByKey.values()) {
-            if (nodeData.base.parentKey === parentKey && this.isNodeVisibleInTestThemeTree(nodeData)) {
-                const treeItem = this.createTreeItemFromData(nodeData, parentItem);
-                if (treeItem) {
-                    const grandChildren = this.buildTreeRecursively(nodeData.base.key, treeItem, elementsByKey);
-                    treeItem.children = grandChildren;
-                    if (grandChildren.length > 0) {
-                        treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        const childTestThemeTreeItems: TestThemeTreeItem[] = [];
+        for (const testThemeItemData of testThemeItemsByKey.values()) {
+            if (
+                testThemeItemData.base.parentKey === parentTestThemeKey &&
+                this.isTreeItemVisibleInTestThemeTree(testThemeItemData)
+            ) {
+                const testThemeTreeItem = this.createTestThemeTreeItemFromData(
+                    testThemeItemData,
+                    parentTestThemeTreeItem
+                );
+                if (testThemeTreeItem) {
+                    const grandChildrenOfTestThemeTreeItem = this.buildTestThemeTreeRecursively(
+                        testThemeItemData.base.key,
+                        testThemeTreeItem,
+                        testThemeItemsByKey
+                    );
+                    testThemeTreeItem.children = grandChildrenOfTestThemeTreeItem;
+                    if (grandChildrenOfTestThemeTreeItem.length > 0) {
+                        testThemeTreeItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
                     } else {
-                        treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
+                        testThemeTreeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
                     }
-                    this.applyStoredExpansionState(treeItem);
-                    children.push(treeItem);
+                    this.applyStoredExpansionState(testThemeTreeItem);
+                    childTestThemeTreeItems.push(testThemeTreeItem);
                 }
             }
         }
-        return children;
+        return childTestThemeTreeItems;
     }
 
     /**
      * Determines whether a node should be visible in the test theme tree view.
      */
-    private isNodeVisibleInTestThemeTree(nodeData: CycleNodeData): boolean {
-        if (nodeData.elementType === TreeItemContextValues.TEST_CASE_NODE) {
+    private isTreeItemVisibleInTestThemeTree(cycleTreeItemData: CycleTreeItemData): boolean {
+        if (cycleTreeItemData.elementType === TreeItemContextValues.TEST_CASE_TREE_ITEM) {
             return false;
         }
-        if (nodeData.exec?.status === "NotPlanned" || nodeData.exec?.locker === "-2") {
+        if (cycleTreeItemData.exec?.status === "NotPlanned" || cycleTreeItemData.exec?.locker === "-2") {
             return false;
         }
         return true;
@@ -352,10 +380,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     /**
      * Retrieves the report root UID for a given test theme tree item.
      */
-    public getReportRootUIDForItem(item: TestThemeTreeItem): string | undefined {
-        const itemKey = item.getUniqueId();
-        const itemUID = item.getUID();
-        return itemKey && itemUID ? this.markedItemStateService.getReportRootUID(itemKey, itemUID) : undefined;
+    public getReportRootUIDForItem(testThemeTreeItem: TestThemeTreeItem): string | undefined {
+        const testThemeTreeItemKey = testThemeTreeItem.getUniqueId();
+        const testThemeTreeItemUID = testThemeTreeItem.getUID();
+        return testThemeTreeItemKey && testThemeTreeItemUID
+            ? this.markedItemStateService.getReportRootUID(testThemeTreeItemKey, testThemeTreeItemUID)
+            : undefined;
     }
 
     /**
@@ -398,8 +428,8 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
             // Coordinated state update for refresh
             const state = this.getUnifiedStateManager().getCurrentUnifiedState();
-            const loadingMessage =
-                state.customRootActive && state.customRootItem
+            const loadingTreeItemsMessage =
+                state.isCustomRootActive && state.customRootItem
                     ? `Refreshing: ${state.customRootItem.label}...`
                     : `Refreshing test themes for cycle: ${this.currentCycleLabel || this.currentCycleKey}...`;
 
@@ -407,34 +437,34 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                 dataSourceKey: this.currentCycleKey,
                 dataSourceLabel: this.currentCycleLabel || this.currentCycleKey,
                 operationalState: TreeViewOperationalState.REFRESHING,
-                metadata: { loadingMessage }
+                metadata: { loadingMessage: loadingTreeItemsMessage }
             });
 
             operation.throwIfCancelled("before cycle structure fetch in refresh");
 
-            const cycleStructure = await this.projectDataService.fetchCycleStructure(
+            const fetchedCycleStructure = await this.projectDataService.fetchCycleStructure(
                 this.currentProjectKey,
                 this.currentCycleKey
             );
 
             operation.throwIfCancelled("after cycle structure fetch in refresh");
 
-            if (cycleStructure) {
-                if (state.customRootActive && !isHardRefresh) {
-                    await this.refreshCustomRootNode(cycleStructure, operation);
+            if (fetchedCycleStructure) {
+                if (state.isCustomRootActive && !isHardRefresh) {
+                    await this.refreshCustomRootTreeItem(fetchedCycleStructure, operation);
                 } else {
-                    const elements = this.buildTreeFromCycleStructure(cycleStructure);
+                    const testThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(fetchedCycleStructure);
 
                     // Single coordinated update for successful refresh
                     this.getUnifiedStateManager().updateState({
-                        dataFetchAttempted: true,
-                        serverDataReceived: true,
-                        itemsBeforeFiltering: cycleStructure.nodes?.length || 0,
-                        itemsAfterFiltering: elements.length,
+                        hasDataFetchBeenAttempted: true,
+                        isServerDataReceived: true,
+                        itemsBeforeFiltering: fetchedCycleStructure.nodes?.length || 0,
+                        itemsAfterFiltering: testThemeTreeItems.length,
                         operationalState: TreeViewOperationalState.READY
                     });
 
-                    this.updateElements(elements);
+                    this.updateTreeItem(testThemeTreeItems);
                 }
             } else {
                 this.getUnifiedStateManager().setError(
@@ -456,40 +486,44 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     /**
      * Refreshes the custom root node with updated cycle structure data while preserving expansion state.
      */
-    private async refreshCustomRootNode(
+    private async refreshCustomRootTreeItem(
         cycleStructure: CycleStructure,
         operation: CancellableOperation
     ): Promise<void> {
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
-        const currentRoot = state.customRootItem as TestThemeTreeItem;
-        if (!currentRoot) {
+        const currentTestThemeRootItem = state.customRootItem as TestThemeTreeItem;
+        if (!currentTestThemeRootItem) {
             return;
         }
 
         operation.throwIfCancelled("before custom root refresh");
 
-        const currentRootKey = currentRoot.getUniqueId();
-        const elementsByKey = new Map<string, CycleNodeData>();
-        cycleStructure.nodes.forEach((node) => node?.base?.key && elementsByKey.set(node.base.key, node));
+        const currentTestThemeRootItemKey = currentTestThemeRootItem.getUniqueId();
+        const testThemeTreeItemDataMap = new Map<string, CycleTreeItemData>(); // Map to hold cycle nodes by key
+        cycleStructure.nodes.forEach((node) => node?.base?.key && testThemeTreeItemDataMap.set(node.base.key, node));
 
-        const updatedNodeData = elementsByKey.get(currentRootKey);
+        const updatedCycleTreeItemData = testThemeTreeItemDataMap.get(currentTestThemeRootItemKey);
 
-        if (updatedNodeData) {
-            currentRoot.itemData = updatedNodeData;
-            currentRoot.label = updatedNodeData.base.numbering
-                ? `${updatedNodeData.base.numbering} ${updatedNodeData.base.name}`
-                : updatedNodeData.base.name;
-            currentRoot.children = this.buildTreeRecursively(currentRootKey, currentRoot, elementsByKey);
-            currentRoot.collapsibleState =
-                currentRoot.children.length > 0
+        if (updatedCycleTreeItemData) {
+            currentTestThemeRootItem.itemData = updatedCycleTreeItemData;
+            currentTestThemeRootItem.label = updatedCycleTreeItemData.base.numbering
+                ? `${updatedCycleTreeItemData.base.numbering} ${updatedCycleTreeItemData.base.name}`
+                : updatedCycleTreeItemData.base.name;
+            currentTestThemeRootItem.children = this.buildTestThemeTreeRecursively(
+                currentTestThemeRootItemKey,
+                currentTestThemeRootItem,
+                testThemeTreeItemDataMap
+            );
+            currentTestThemeRootItem.collapsibleState =
+                currentTestThemeRootItem.children.length > 0
                     ? vscode.TreeItemCollapsibleState.Expanded
                     : vscode.TreeItemCollapsibleState.None;
 
-            this.applyStoredExpansionState(currentRoot);
-            this.updateElements([currentRoot]);
+            this.applyStoredExpansionState(currentTestThemeRootItem);
+            this.updateTreeItem([currentTestThemeRootItem]);
         } else {
             this.logger.warn(
-                `[TestThemeTreeDataProvider] Custom root ${currentRootKey} not found in refreshed data. Resetting.`
+                `[TestThemeTreeDataProvider] Custom root ${currentTestThemeRootItemKey} not found in refreshed data. Resetting.`
             );
             this.getUnifiedStateManager().resetCustomRoot();
             this.refresh(true);

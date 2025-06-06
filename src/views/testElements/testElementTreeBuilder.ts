@@ -41,7 +41,7 @@ export class TestElementTreeBuilder {
         return regexList.some((regex) => regex.test(value));
     }
 
-    private getElementType(item: any): TestElementType {
+    private getTestElementType(item: any): TestElementType {
         if (item.Subdivision_key && item.Subdivision_key.serial) {
             return "Subdivision";
         }
@@ -74,18 +74,18 @@ export class TestElementTreeBuilder {
         return null;
     }
 
-    public generateTestElementTreeItemId(item: any, elementType: TestElementType, uniqueID: string): string {
-        switch (elementType) {
+    public generateTestElementTreeItemId(item: any, testElementType: TestElementType, uniqueID: string): string {
+        switch (testElementType) {
             case "Subdivision":
             case "Interaction":
             case "Condition":
             case "DataType": {
-                const specificKey = item[`${elementType}_key`];
+                const specificKey = item[`${testElementType}_key`];
                 if (specificKey && specificKey.serial && uniqueID) {
                     return `${specificKey.serial}_${uniqueID}`;
                 }
                 this.logger.warn(
-                    `[generateTestElementTreeItemId] Element type ${elementType} for item ${uniqueID} missing specific key serial.`
+                    `[generateTestElementTreeItemId] Test element type ${testElementType} for item ${uniqueID} missing specific key serial.`
                 );
                 return uniqueID || `fallback_${Date.now()}_${Math.random()}`;
             }
@@ -102,7 +102,7 @@ export class TestElementTreeBuilder {
             "[TestElementTreeBuilder] Building tree with regex patterns:",
             this.resourceRegexPatterns.map((p) => p.source)
         );
-        const elementIdToDataMap: { [id: string]: TestElementData } = {};
+        const testElementIdToDataMap: { [id: string]: TestElementData } = {};
 
         flatJsonTestElements.forEach((jsonTestElement) => {
             let libraryKey: string | null = null;
@@ -113,46 +113,51 @@ export class TestElementTreeBuilder {
                         : jsonTestElement.libraryKey;
             }
 
-            const elementType: TestElementType = this.getElementType(jsonTestElement);
-            const elementOwnUniqueID = jsonTestElement.uniqueID;
+            const testElementType: TestElementType = this.getTestElementType(jsonTestElement);
+            const testElementOwnUniqueID = jsonTestElement.uniqueID;
             const compositeId: string = this.generateTestElementTreeItemId(
                 jsonTestElement,
-                elementType,
-                elementOwnUniqueID
+                testElementType,
+                testElementOwnUniqueID
             );
 
             const parentIdString: string | null = this.getParentId(jsonTestElement, libraryKey);
 
             const testElement: TestElementData = {
-                id: compositeId, // Element's own composite ID used as key in map
+                id: compositeId, // Test element's own composite ID used as key in map
                 parentId: parentIdString,
                 name: jsonTestElement.name,
-                uniqueID: elementOwnUniqueID,
+                uniqueID: testElementOwnUniqueID,
                 libraryKey,
                 jsonString: JSON.stringify(jsonTestElement, null, 2),
                 details: jsonTestElement || {},
-                elementType: elementType,
+                testElementType: testElementType,
                 directRegexMatch:
                     this.resourceRegexPatterns.length > 0
                         ? this.matchesRegex(jsonTestElement.name, this.resourceRegexPatterns)
                         : true,
                 children: []
             };
-            elementIdToDataMap[compositeId] = testElement;
+            testElementIdToDataMap[compositeId] = testElement;
         });
 
         const roots: TestElementData[] = [];
-        Object.values(elementIdToDataMap).forEach((testElement) => {
-            if (testElement.parentId) {
-                let foundParentElement: TestElementData | undefined = elementIdToDataMap[testElement.parentId];
+        Object.values(testElementIdToDataMap).forEach((testElementData) => {
+            if (testElementData.parentId) {
+                let foundParentTestElementData: TestElementData | undefined =
+                    testElementIdToDataMap[testElementData.parentId];
 
-                if (!foundParentElement && testElement.parentId && !testElement.parentId.includes("_")) {
-                    const serialToFind = testElement.parentId;
+                if (
+                    !foundParentTestElementData &&
+                    testElementData.parentId &&
+                    !testElementData.parentId.includes("_")
+                ) {
+                    const serialToFind = testElementData.parentId;
                     this.logger.trace(
-                        `[Builder] Attempting fallback link for child '${testElement.name}' (ID: ${testElement.id}) using parent serial: '${serialToFind}'`
+                        `[Builder] Attempting fallback link for child '${testElementData.name}' (ID: ${testElementData.id}) using parent serial: '${serialToFind}'`
                     );
 
-                    for (const potentialParent of Object.values(elementIdToDataMap)) {
+                    for (const potentialParent of Object.values(testElementIdToDataMap)) {
                         let parentSerialFromDetails: string | undefined;
                         if (potentialParent.details?.Subdivision_key?.serial) {
                             parentSerialFromDetails = String(potentialParent.details.Subdivision_key.serial);
@@ -161,86 +166,93 @@ export class TestElementTreeBuilder {
                         }
 
                         if (parentSerialFromDetails === serialToFind) {
-                            foundParentElement = potentialParent;
+                            foundParentTestElementData = potentialParent;
                             this.logger.trace(
-                                `[Builder] Fallback link successful for child '${testElement.name}' to parent '${foundParentElement.name}' (ID: ${foundParentElement.id}) via serial '${serialToFind}'`
+                                `[Builder] Fallback link successful for child '${testElementData.name}' to parent '${foundParentTestElementData.name}' (ID: ${foundParentTestElementData.id}) via serial '${serialToFind}'`
                             );
                             break;
                         }
                     }
                 }
 
-                if (foundParentElement) {
-                    testElement.parent = foundParentElement;
-                    foundParentElement.children!.push(testElement);
+                if (foundParentTestElementData) {
+                    testElementData.parent = foundParentTestElementData;
+                    foundParentTestElementData.children!.push(testElementData);
                 } else {
                     this.logger.warn(
-                        `[TestElementTreeBuilder] Parent with ID '${testElement.parentId}' not found for element '${testElement.name}' (ID: ${testElement.id}). Making it a root.`
+                        `[TestElementTreeBuilder] Parent with ID '${testElementData.parentId}' not found for element '${testElementData.name}' (ID: ${testElementData.id}). Making it a root.`
                     );
-                    roots.push(testElement);
+                    roots.push(testElementData);
                 }
             } else {
-                roots.push(testElement);
+                roots.push(testElementData);
             }
         });
 
-        const filterAndBuildHierarchy = (element: TestElementData, inheritedMatch: boolean): TestElementData | null => {
+        const filterAndBuildHierarchy = (
+            testElementData: TestElementData,
+            inheritedMatch: boolean
+        ): TestElementData | null => {
             let validChildren: TestElementData[] = [];
-            if (element.children) {
-                const childrenInherit: boolean = inheritedMatch || element.directRegexMatch;
-                validChildren = element.children
+            if (testElementData.children) {
+                const childrenInherit: boolean = inheritedMatch || testElementData.directRegexMatch;
+                validChildren = testElementData.children
                     .map((child) => filterAndBuildHierarchy(child, childrenInherit))
                     .filter((child) => child !== null) as TestElementData[];
             }
 
-            if (element.elementType === "DataType" || element.elementType === "Condition") {
+            if (testElementData.testElementType === "DataType" || testElementData.testElementType === "Condition") {
                 return null;
             }
-            if (element.elementType === "Subdivision" && !element.directRegexMatch && inheritedMatch) {
+            if (
+                testElementData.testElementType === "Subdivision" &&
+                !testElementData.directRegexMatch &&
+                inheritedMatch
+            ) {
                 if (validChildren.length === 0) {
                     return null;
                 }
             }
-            if (element.directRegexMatch || inheritedMatch || validChildren.length > 0) {
-                element.children = validChildren;
-                return element;
+            if (testElementData.directRegexMatch || inheritedMatch || validChildren.length > 0) {
+                testElementData.children = validChildren;
+                return testElementData;
             }
             return null;
         };
 
-        const filteredRoots = roots
+        const filteredTestElementDataRoots = roots
             .map((root) => filterAndBuildHierarchy(root, false))
             .filter((node) => node !== null) as TestElementData[];
 
-        const assignNames = (element: TestElementData, parentPath: string): void => {
-            const currentPath = parentPath ? `${parentPath}/${element.name}` : element.name;
-            element.hierarchicalName = currentPath;
-            element.children?.forEach((child) => assignNames(child, currentPath));
+        const assignNames = (testElementData: TestElementData, parentPath: string): void => {
+            const currentPath = parentPath ? `${parentPath}/${testElementData.name}` : testElementData.name;
+            testElementData.hierarchicalName = currentPath;
+            testElementData.children?.forEach((child) => assignNames(child, currentPath));
         };
-        filteredRoots.forEach((root) => assignNames(root, ""));
+        filteredTestElementDataRoots.forEach((rootTestElementData) => assignNames(rootTestElementData, ""));
 
         const nestedResourceWarnings: string[] = [];
-        const checkNested = (element: TestElementData): void => {
-            if (element.directRegexMatch) {
-                element.children?.forEach((child) => {
+        const checkNested = (testElementData: TestElementData): void => {
+            if (testElementData.directRegexMatch) {
+                testElementData.children?.forEach((child) => {
                     if (child.directRegexMatch) {
                         nestedResourceWarnings.push(
-                            `Robot resource '${element.name}' contains another resource '${child.name}'.`
+                            `Robot resource '${testElementData.name}' contains another resource '${child.name}'.`
                         );
                     }
                     checkNested(child);
                 });
             } else {
-                element.children?.forEach(checkNested);
+                testElementData.children?.forEach(checkNested);
             }
         };
-        filteredRoots.forEach(checkNested);
+        filteredTestElementDataRoots.forEach(checkNested);
         if (nestedResourceWarnings.length > 0) {
             this.logger.warn("[TestElementTreeBuilder] Nested robot resources found:", nestedResourceWarnings);
             vscode.window.showWarningMessage(
                 `Warning: Nested robot resources found: ${nestedResourceWarnings.join("; ")}. Please review in TestBench Client.`
             );
         }
-        return filteredRoots;
+        return filteredTestElementDataRoots;
     }
 }

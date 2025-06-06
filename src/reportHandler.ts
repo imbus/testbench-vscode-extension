@@ -32,7 +32,7 @@ import { ProjectManagementTreeItem } from "./views/projectManagement/projectMana
  * Saves the last generated report parameters to workspace storage.
  *
  * @param {vscode.ExtensionContext} context The extension context providing access to workspaceState.
- * @param {string} UID The unique ID of the root element used for generation.
+ * @param {string} UID The unique ID of the root tree item used for generation.
  * @param {string} projectKey The project key used.
  * @param {string} cycleKey The cycle key used.
  * @param {ExecutionMode} executionMode Whether the report was execution-based.
@@ -597,8 +597,8 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
     selectedTreeItem: TestThemeTreeItem,
     providedCycleKey?: string
 ): Promise<void | null> {
-    logger.debug("Generating tests for non-cycle element:", selectedTreeItem.label);
-    const treeElementUID = selectedTreeItem.getUID();
+    logger.debug("Generating tests for non-cycle tree item:", selectedTreeItem.label);
+    const treeItemUID = selectedTreeItem.getUID();
     const cycleKey: string | null = providedCycleKey || null;
     let projectKey: string | null = null;
 
@@ -637,7 +637,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         return null;
     }
 
-    if (!treeElementUID) {
+    if (!treeItemUID) {
         logger.error(`Cannot generate RF Tests. Missing UID for item ${selectedTreeItem.label}.`);
         return null;
     }
@@ -650,7 +650,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : selectedTreeItem.itemData?.name || "",
         projectKey,
         cycleKey,
-        treeElementUID
+        treeItemUID
     );
 }
 
@@ -662,7 +662,7 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
  * @param {string} itemLabel The label of the selected item.
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
- * @param {string} elementUID Cycle UID or Theme/Set UID.
+ * @param {string} treeItemUID Cycle UID or Theme/Set UID.
  * @returns {Promise<boolean>} Resolves with true if successful, false otherwise
  */
 export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
@@ -671,7 +671,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     itemLabel: string,
     projectKey: string,
     cycleKey: string,
-    elementUID: string
+    treeItemUID: string
 ): Promise<boolean> {
     let testGenerationSuccessful: boolean = false;
     try {
@@ -685,11 +685,11 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             logger.debug("Generating tests for the entire cycle.");
             UIDforRequest = "";
         } else if (
-            effectiveContext === TreeItemContextValues.TEST_THEME_NODE ||
-            effectiveContext === TreeItemContextValues.TEST_CASE_SET_NODE
+            effectiveContext === TreeItemContextValues.TEST_THEME_TREE_ITEM ||
+            effectiveContext === TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
         ) {
-            logger.debug(`Generating tests for specific element UID: ${elementUID}.`);
-            UIDforRequest = elementUID;
+            logger.debug(`Generating tests for specific tree item UID: ${treeItemUID}.`);
+            UIDforRequest = treeItemUID;
         } else {
             logger.error(`Unsupported item type for test generation: ${effectiveContext}`);
             vscode.window.showErrorMessage(`Cannot generate tests for item type: ${effectiveContext}`);
@@ -712,7 +712,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
                     projectKey,
                     cycleKey,
                     defaultExecutionMode,
-                    elementUID,
+                    treeItemUID,
                     cycleReportOptionsRequestParams,
                     progress,
                     cancellationToken
@@ -757,7 +757,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
  * @param {string} projectKey The project key.
  * @param {string} cycleKey The cycle key.
  * @param {ExecutionMode} executionMode Execution mode for the test generation.
- * @param {string} elementUID The UID of the selected element.
+ * @param {string} treeItemUID The UID of the selected tree item.
  * @param {testBenchTypes.OptionalJobIDRequestParameter} cycleStructureOptionsRequestParams Request parameters for the cycle report.
  * @param {vscode.Progress} progress The VS Code progress reporter.
  * @param {vscode.CancellationToken} cancellationToken The cancellation token.
@@ -768,7 +768,7 @@ async function runRobotFrameworkTestGenerationProcess(
     projectKey: string,
     cycleKey: string,
     executionMode: ExecutionMode,
-    elementUID: string,
+    treeItemUID: string,
     cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
@@ -808,7 +808,7 @@ async function runRobotFrameworkTestGenerationProcess(
     }
 
     // Update the last generated report parameters workspaceState to be able to import the generated tests later
-    await saveLastGeneratedReportParams(context, elementUID, projectKey, cycleKey, executionMode, false);
+    await saveLastGeneratedReportParams(context, treeItemUID, projectKey, cycleKey, executionMode, false);
 
     logger.trace("[runRobotFrameworkTestGenerationProcess] Test generation process completed successfully.");
     return true;
@@ -1145,7 +1145,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
  * @param {string} projectKeyString The project key as a string.
  * @param {string} cycleKeyString The cycle key as a string.
  * @param {string} reportWithResultsZipFilePath The path to the report zip file with results.
- * @param {string} reportRootUID The specific UID for the report root element.
+ * @param {string} reportRootUID The specific UID for the report root tree item.
  * @returns {Promise<void | null>} Resolves when the import is complete, or null if an error occurs.
  */
 async function importReportWithResultsToTestbenchWithSpecificUID(
@@ -1203,7 +1203,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
         };
 
         try {
-            logger.debug(`Starting import execution results for specific element with UID: ${reportRootUID}`);
+            logger.debug(`Starting import execution results for specific tree item with UID: ${reportRootUID}`);
             const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
                 projectKeyString,
@@ -1212,7 +1212,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             );
 
             if (!importJobStatus || isImportJobFailed(importJobStatus)) {
-                const importJobFailedMessage: string = `Import job for element "${reportRootUID}" could not be completed.`;
+                const importJobFailedMessage: string = `Import job for tree item UID "${reportRootUID}" could not be completed.`;
                 logger.warn(importJobFailedMessage);
                 vscode.window.showErrorMessage(importJobFailedMessage);
                 return null;
@@ -1223,68 +1223,71 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
                 vscode.window.showWarningMessage("Import job status unknown after polling.");
             }
         } catch (error: any) {
-            logger.error(`Error during import job for specific element ${reportRootUID}:`, error.message);
+            logger.error(`Error during import job for specific tree item UID ${reportRootUID}:`, error.message);
             return null;
         }
     } catch (error: any) {
-        logger.error("Error importing report for specific element:", error.message);
+        logger.error("Error importing report for specific tree item:", error.message);
         vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
         return null;
     }
 }
 
 /**
- * Checks if a specific sub-element was already imported
+ * Checks if a specific sub-tree-item was already imported
  */
-async function checkIfSubElementWasImported(context: vscode.ExtensionContext, reportRootUID: string): Promise<boolean> {
+async function checkIfSubTreeItemWasImported(
+    context: vscode.ExtensionContext,
+    reportRootUID: string
+): Promise<boolean> {
     try {
         const storedArray: string[] | undefined = context.workspaceState.get<string[]>(
-            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY
+            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY
         );
 
         if (storedArray && Array.isArray(storedArray)) {
-            const importedSubElementsSet: Set<string> = new Set(storedArray);
-            return importedSubElementsSet.has(reportRootUID);
+            const importedSubTreeItemsSet: Set<string> = new Set(storedArray);
+            return importedSubTreeItemsSet.has(reportRootUID);
         }
         return false;
     } catch (error) {
-        logger.error("Error checking sub-element import status:", error);
+        logger.error("Error checking sub-tree-item import status:", error);
         return false;
     }
 }
 
 /**
- * Marks a specific sub-element as imported
+ * Marks a specific sub-tree-item as imported
  */
-async function markSubElementAsImported(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
+async function markSubTreeItemsAsImported(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
     try {
         const storedArray: string[] | undefined = context.workspaceState.get<string[]>(
-            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY
+            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY
         );
         // Convert Array to a Set for lookups
-        const importedSubElements: Set<string> =
+        const importedSubTreeItems: Set<string> =
             storedArray && Array.isArray(storedArray) ? new Set(storedArray) : new Set();
 
-        importedSubElements.add(reportRootUID);
+        importedSubTreeItems.add(reportRootUID);
         await context.workspaceState.update(
-            StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY,
-            Array.from(importedSubElements)
+            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY,
+            Array.from(importedSubTreeItems)
         );
-        logger.debug(`Marked sub-element ${reportRootUID} as imported.`);
+        logger.debug(`Marked sub-tree-item ${reportRootUID} as imported.`);
     } catch (error) {
-        logger.error("Error marking sub-element as imported:", error);
+        logger.error("Error marking sub-tree-item as imported:", error);
     }
 }
 
 /**
- * Clears the imported sub-elements tracking (useful when starting fresh test generation)
+ * Clears the imported sub-tree-item tracking (useful when starting fresh test generation)
  */
-export async function clearImportedSubElementsTracking(context: vscode.ExtensionContext): Promise<void> {
+export async function clearImportedSubTreeItemsTracking(context: vscode.ExtensionContext): Promise<void> {
     try {
-        await context.workspaceState.update(StorageKeys.SUB_ELEMENT_IMPORT_STORAGE_KEY, undefined);
-        logger.debug("Cleared imported sub-elements tracking.");
+        await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, undefined);
+        logger.debug("Cleared imported sub-tree-items tracking.");
     } catch (error) {
-        logger.error("Error clearing imported sub-elements tracking:", error);
+        logger.error("Error clearing imported sub-tree-items tracking:", error);
     }
 }
 
@@ -1322,12 +1325,12 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 progress.report({ message: "Step 1/4: Validating parameters...", increment: 10 });
 
-                const wasSubElementImported: boolean = await checkIfSubElementWasImported(
+                const wasSubTreeItemImported: boolean = await checkIfSubTreeItemWasImported(
                     context,
                     resolvedReportRootUID
                 );
 
-                if (wasSubElementImported) {
+                if (wasSubTreeItemImported) {
                     const reimportPromptChoice = await vscode.window.showWarningMessage(
                         `You are about to import results for "${invokedOnItem.label}" again. Do you want to proceed?`,
                         { modal: true },
@@ -1335,7 +1338,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                         "Cancel"
                     );
                     if (reimportPromptChoice !== "Yes, Import Again") {
-                        logger.trace("User cancelled re-import of the same sub-element.");
+                        logger.trace("User cancelled re-import of the same sub-tree item.");
                         return null;
                     }
                 }
@@ -1378,7 +1381,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 }
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
-                await markSubElementAsImported(context, resolvedReportRootUID); // Mark this specific UID as imported
+                await markSubTreeItemsAsImported(context, resolvedReportRootUID); // Mark this specific UID as imported
 
                 await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
 
@@ -1392,7 +1395,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     );
                 }
 
-                logger.trace("Process Completed: Read, Create, and Import specific element to Testbench.");
+                logger.trace("Process Completed: Read, Create, and Import specific tree item to Testbench.");
             } catch (error) {
                 const errorMsg: string = `An error occurred during the import process: ${error instanceof Error ? error.message : String(error)}`;
                 logger.error(errorMsg, error);
@@ -1403,7 +1406,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     );
 }
 /**
- * Starts robotframework test generation for a cycle element.
+ * Starts robotframework test generation for a cycle tree item.
  *
  * @param {vscode.ExtensionContext} context The extension context.
  * @param {ProjectManagementTreeItem } selectedCycleTreeItem The selected cycle tree item.

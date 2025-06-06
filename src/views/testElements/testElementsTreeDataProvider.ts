@@ -99,7 +99,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     public isTreeDataEmpty(): boolean {
-        return this.rootElements.length === 0;
+        return this.rootTreeItems.length === 0;
     }
 
     /**
@@ -115,9 +115,11 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     /**
      * Handles tree item expansion/collapse events to maintain state.
      */
-    public handleItemExpansion(element: TestElementTreeItem, expanded: boolean): void {
-        this.logger.trace(`[TestElementsTreeDataProvider] Item ${element.label} expansion changed to: ${expanded}`);
-        this.handleExpansion(element, expanded);
+    public handleItemExpansion(testElementTreeItem: TestElementTreeItem, expanded: boolean): void {
+        this.logger.trace(
+            `[TestElementsTreeDataProvider] Item ${testElementTreeItem.label} expansion changed to: ${expanded}`
+        );
+        this.handleExpansion(testElementTreeItem, expanded);
     }
 
     /**
@@ -147,11 +149,11 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             });
 
             const isRefreshingSameTov = this.currentTovKey === tovKey;
-            if (isRefreshingSameTov && this.rootElements.length > 0) {
+            if (isRefreshingSameTov && this.rootTreeItems.length > 0) {
                 this.storeExpansionState();
             }
 
-            this.updateElements([]);
+            this.updateTreeItem([]);
 
             operation.throwIfCancelled("before data fetch");
 
@@ -165,14 +167,14 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                 if (rawtestElementsJsonData.length === 0) {
                     // Coordinated state update for empty server data
                     this.getUnifiedStateManager().updateState({
-                        dataFetchAttempted: true,
-                        serverDataReceived: true,
+                        hasDataFetchBeenAttempted: true,
+                        isServerDataReceived: true,
                         itemsBeforeFiltering: 0,
                         itemsAfterFiltering: 0,
                         operationalState: TreeViewOperationalState.EMPTY,
                         emptyState: TreeViewEmptyState.SERVER_NO_DATA
                     });
-                    this.updateElements([]);
+                    this.updateTreeItem([]);
                     return true;
                 }
 
@@ -188,8 +190,8 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
                 // Coordinated state update for successful fetch
                 this.getUnifiedStateManager().updateState({
-                    dataFetchAttempted: true,
-                    serverDataReceived: true,
+                    hasDataFetchBeenAttempted: true,
+                    isServerDataReceived: true,
                     itemsBeforeFiltering: rawtestElementsJsonData.length,
                     itemsAfterFiltering: treeItems.length,
                     operationalState:
@@ -199,7 +201,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
                 // Update basic icons immediately
                 this.updateBasicIcons(treeItems);
-                this.updateElements(treeItems);
+                this.updateTreeItem(treeItems);
 
                 // Start background icon updates with cancellation support
                 this.updateSubdivisionIconsInBackground(treeItems, operation);
@@ -226,7 +228,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     private updateBasicIcons(items: TestElementTreeItem[]): void {
         const updateRecursive = (items: TestElementTreeItem[]) => {
             for (const item of items) {
-                if (item.testElementData.elementType !== "Subdivision") {
+                if (item.testElementData.testElementType !== "Subdivision") {
                     item.updateIcon();
                 } else {
                     // Set default subdivision icon without file check
@@ -241,7 +243,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     }
 
     /**
-     * Updates subdivision element icons in the background using batched processing.
+     * Updates subdivision tree item icons in the background using batched processing.
      */
     private async updateSubdivisionIconsInBackground(
         items: TestElementTreeItem[],
@@ -258,7 +260,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                         return;
                     }
 
-                    if (item.testElementData.elementType === "Subdivision") {
+                    if (item.testElementData.testElementType === "Subdivision") {
                         subdivisionItems.push(item);
                     }
                     if (item.children) {
@@ -347,7 +349,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     ): TestElementTreeItem[] {
         try {
             return dataArray.map((data) => {
-                const treeItem = this.createTreeItemFromData(data, parent);
+                const treeItem = this.createTestThemeTreeItemFromData(data, parent);
                 if (data.children && data.children.length > 0) {
                     treeItem.children = this.convertHierarchicalDataToTreeItems(data.children, treeItem);
                     treeItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
@@ -372,8 +374,8 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
      * Updates the icon for a single test element tree item based on its type and file existence.
      */
     private async updateSingleItemIcon(item: TestElementTreeItem): Promise<void> {
-        const elementData = item.testElementData;
-        if (elementData.elementType === "Subdivision") {
+        const treeItemData = item.testElementData;
+        if (treeItemData.testElementType === "Subdivision") {
             const hierarchicalName = item.getHierarchicalName();
             const absolutePath = await this.resourceFileService.constructAbsolutePath(hierarchicalName);
             if (absolutePath) {
@@ -395,21 +397,24 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     /**
      * Fetches the root test elements for the tree view.
      */
-    protected async fetchRootElements(): Promise<TestElementTreeItem[]> {
-        return this.rootElements;
+    protected async fetchRootTreeItems(): Promise<TestElementTreeItem[]> {
+        return this.rootTreeItems;
     }
 
     /**
      * Retrieves the child elements for a given test element tree item.
      */
-    protected async fetchChildrenForElement(element: TestElementTreeItem): Promise<TestElementTreeItem[]> {
-        return (element.children as TestElementTreeItem[]) || [];
+    protected async fetchChildrenForTreeItem(treeItem: TestElementTreeItem): Promise<TestElementTreeItem[]> {
+        return (treeItem.children as TestElementTreeItem[]) || [];
     }
 
     /**
      * Creates a tree item from test element data with proper state initialization.
      */
-    protected createTreeItemFromData(data: TestElementData, parent: TestElementTreeItem | null): TestElementTreeItem {
+    protected createTestThemeTreeItemFromData(
+        data: TestElementData,
+        parent: TestElementTreeItem | null
+    ): TestElementTreeItem {
         const item = new TestElementTreeItem(
             data,
             this.extensionContext,
@@ -433,16 +438,16 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
 
         this.getUnifiedStateManager().setError(error || new Error(errorMsg), TreeViewEmptyState.FETCH_ERROR);
         vscode.window.showErrorMessage(`Failed to fetch test elements for TOV "${tovLabel}".`);
-        this.updateElements([]);
+        this.updateTreeItem([]);
     }
 
     /**
      * Updates the tree elements and applies expansion state tracking if enabled.
      */
-    protected override updateElements(elements: TestElementTreeItem[]): void {
-        this.rootElements = elements;
+    protected override updateTreeItem(treItems: TestElementTreeItem[]): void {
+        this.rootTreeItems = treItems;
 
-        if (this.options.enableExpansionTracking && elements.length > 0) {
+        if (this.options.enableExpansionTracking && treItems.length > 0) {
             const applyExpansionRecursive = (items: TestElementTreeItem[]) => {
                 for (const item of items) {
                     this.applyStoredExpansionState(item);
@@ -451,12 +456,12 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                     }
                 }
             };
-            applyExpansionRecursive(elements);
+            applyExpansionRecursive(treItems);
         }
 
         this._onDidChangeTreeData.fire(undefined);
 
-        if (elements.length !== 0) {
+        if (treItems.length !== 0) {
             this.getUnifiedStateManager().updateState({
                 operationalState: TreeViewOperationalState.READY
             });
@@ -466,27 +471,27 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     /**
      * Handles the "Go to Resource" command for a test element tree item.
      */
-    public async handleGoToResourceCommand(item: TestElementTreeItem): Promise<void> {
-        if (!item || !item.testElementData) {
+    public async handleGoToResourceCommand(treeItem: TestElementTreeItem): Promise<void> {
+        if (!treeItem || !treeItem.testElementData) {
             return;
         }
-        const hierarchicalName = item.getHierarchicalName();
+        const hierarchicalName = treeItem.getHierarchicalName();
         const absolutePath = await this.resourceFileService.constructAbsolutePath(hierarchicalName);
 
         if (!absolutePath) {
-            vscode.window.showErrorMessage(`Could not determine path for ${item.label}.`);
+            vscode.window.showErrorMessage(`Could not determine path for ${treeItem.label}.`);
             return;
         }
 
         try {
-            if (item.testElementData.elementType === "Subdivision") {
+            if (treeItem.testElementData.testElementType === "Subdivision") {
                 const processedPath = removeRobotResourceFromPathString(absolutePath, this.logger);
-                if (item.isFinalSubdivision()) {
+                if (treeItem.isFinalSubdivision()) {
                     const resourcePath = appendResourceExtensionAndTrimPathLocal(processedPath, this.logger);
-                    const uid = item.getUID();
+                    const uid = treeItem.getUID();
                     if (!uid) {
-                        this.logger.error(`Subdivision ${item.label} has no UID for file content.`);
-                        vscode.window.showErrorMessage(`Cannot create file for ${item.label}: Missing Unique ID.`);
+                        this.logger.error(`Subdivision ${treeItem.label} has no UID for file content.`);
+                        vscode.window.showErrorMessage(`Cannot create file for ${treeItem.label}: Missing Unique ID.`);
                         return;
                     }
                     const initialContent: string = `${fileContentOfRobotResourceSubdivisionFile}${uid}\n\n`;
@@ -496,26 +501,28 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                     await this.resourceFileService.ensureFolderPathExists(processedPath);
                     await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(processedPath));
                 }
-                await this.updateSingleItemIcon(item);
-                this._onDidChangeTreeData.fire(item);
-            } else if (item.testElementData.elementType === "Interaction") {
-                const robotResourceAncestor = item.getRobotResourceAncestor();
+                await this.updateSingleItemIcon(treeItem);
+                this._onDidChangeTreeData.fire(treeItem);
+            } else if (treeItem.testElementData.testElementType === "Interaction") {
+                const robotResourceAncestor = treeItem.getRobotResourceAncestor();
                 if (!robotResourceAncestor) {
-                    const subdivisionAncestor = item.getSubdivisionAncestor();
+                    const subdivisionAncestor = treeItem.getSubdivisionAncestor();
                     if (subdivisionAncestor) {
                         await this.handleGoToResourceCommand(subdivisionAncestor);
                         return;
                     }
-                    vscode.window.showErrorMessage(`Cannot find resource file for interaction '${item.label}'.`);
+                    vscode.window.showErrorMessage(`Cannot find resource file for interaction '${treeItem.label}'.`);
                     return;
                 }
                 await this.handleGoToResourceCommand(robotResourceAncestor);
             } else {
-                vscode.window.showInformationMessage(`No file action for type: ${item.testElementData.elementType}`);
+                vscode.window.showInformationMessage(
+                    `No file action for type: ${treeItem.testElementData.testElementType}`
+                );
             }
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Error processing resource for ${item.label}: ${error.message}`);
-            this.logger.error(`GoToResource failed for ${item.label}:`, error);
+            vscode.window.showErrorMessage(`Error processing resource for ${treeItem.label}: ${error.message}`);
+            this.logger.error(`GoToResource failed for ${treeItem.label}:`, error);
         }
     }
 
@@ -526,7 +533,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         subdivisionItem: TestElementTreeItem,
         interactionName: string
     ): Promise<TestElementData | null> {
-        if (subdivisionItem.testElementData.elementType !== "Subdivision") {
+        if (subdivisionItem.testElementData.testElementType !== "Subdivision") {
             vscode.window.showErrorMessage("Can only create interactions under subdivisions.");
             return null;
         }
@@ -554,7 +561,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             libraryKey: subdivisionItem.testElementData.libraryKey,
             jsonString: JSON.stringify(newInteractionRaw, null, 2),
             details: newInteractionRaw,
-            elementType: "Interaction",
+            testElementType: "Interaction",
             directRegexMatch: false,
             children: [],
             parent: subdivisionItem.testElementData, // Link to parent TestElementData
@@ -579,7 +586,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         this.operationManager.cancelAllOperations();
 
         // Dispose existing tree items
-        this.rootElements.forEach((item) => {
+        this.rootTreeItems.forEach((item) => {
             try {
                 item.dispose();
             } catch (error) {
@@ -601,7 +608,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
         this.operationManager.dispose();
 
         // Dispose all tree items
-        this.rootElements.forEach((item) => {
+        this.rootTreeItems.forEach((item) => {
             try {
                 item.dispose();
             } catch (error) {
@@ -640,7 +647,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     public getDiagnostics(): Record<string, any> {
         return {
             currentTovKey: this.currentTovKey,
-            rootElementsCount: this.rootElements.length,
+            rootTreeItemsCount: this.rootTreeItems.length,
             isTreeEmpty: this.isTreeDataEmpty(),
             unifiedStateDiagnostics: this.getUnifiedStateManager().getDiagnostics(),
             timestamp: new Date().toISOString()

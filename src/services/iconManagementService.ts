@@ -50,7 +50,7 @@ export class IconManagementService {
         });
 
         this.registerIconSet("testTheme", {
-            [TreeItemContextValues.TEST_THEME_NODE]: {
+            [TreeItemContextValues.TEST_THEME_TREE_ITEM]: {
                 default: {
                     light: "TestThemeOriginal-light.svg",
                     dark: "TestThemeOriginal-dark.svg",
@@ -58,7 +58,7 @@ export class IconManagementService {
                     markedDark: "TestThemeOriginal-marked-dark.svg"
                 }
             },
-            [TreeItemContextValues.TEST_CASE_SET_NODE]: {
+            [TreeItemContextValues.TEST_CASE_SET_TREE_ITEM]: {
                 default: {
                     light: "TestCaseSetOriginal-light.svg",
                     dark: "TestCaseSetOriginal-dark.svg",
@@ -66,7 +66,7 @@ export class IconManagementService {
                     markedDark: "TestCaseSetOriginal-marked-dark.svg"
                 }
             },
-            [TreeItemContextValues.TEST_CASE_NODE]: {
+            [TreeItemContextValues.TEST_CASE_TREE_ITEM]: {
                 default: { light: "TestCase-light.svg", dark: "TestCase-dark.svg" }
             }
         });
@@ -152,8 +152,8 @@ export class IconManagementService {
         let contextValueForIcon = context.contextValue;
 
         if (
-            context.contextValue === TreeItemContextValues.MARKED_TEST_THEME_NODE ||
-            context.contextValue === TreeItemContextValues.MARKED_TEST_CASE_SET_NODE
+            context.contextValue === TreeItemContextValues.MARKED_TEST_THEME_TREE_ITEM ||
+            context.contextValue === TreeItemContextValues.MARKED_TEST_CASE_SET_TREE_ITEM
         ) {
             contextValueForIcon = context.originalContextValue || context.contextValue;
         } else if (context.isCustomRoot && context.originalContextValue) {

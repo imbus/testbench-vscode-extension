@@ -72,10 +72,10 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     }
 
     /**
-     * Fetches and returns the root-level project elements for the tree view.
+     * Fetches and returns the root-level project tree items for the tree view.
      * Uses unified state management for coordinated state updates.
      */
-    protected async fetchRootElements(): Promise<ProjectManagementTreeItem[]> {
+    protected async fetchRootTreeItems(): Promise<ProjectManagementTreeItem[]> {
         this.operationManager.cancelOperation(ProjectManagementTreeDataProvider.FETCH_PROJECTS_OPERATION);
 
         const operation = this.operationManager.createOperation(
@@ -103,8 +103,8 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
             // Single coordinated state update for successful fetch
             this.getUnifiedStateManager().updateState({
-                dataFetchAttempted: true,
-                serverDataReceived: true,
+                hasDataFetchBeenAttempted: true,
+                isServerDataReceived: true,
                 itemsBeforeFiltering: projectList.length,
                 itemsAfterFiltering: projectList.length,
                 operationalState:
@@ -113,7 +113,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             });
 
             const projectItems = projectList
-                .map((project) => this.createTreeItemFromData(project, null))
+                .map((project) => this.createTestThemeTreeItemFromData(project, null))
                 .filter((item): item is ProjectManagementTreeItem => item !== null);
 
             return projectItems;
@@ -130,22 +130,24 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     }
 
     /**
-     * Fetches child elements for a given tree item based on its context type.
+     * Fetches child tree items for a given tree item based on its context type.
      */
-    protected async fetchChildrenForElement(element: ProjectManagementTreeItem): Promise<ProjectManagementTreeItem[]> {
-        this.logger.debug(`[ProjectManagementTreeDataProvider] Fetching children for: ${element.label}`);
-        const itemContext = element.originalContextValue;
+    protected async fetchChildrenForTreeItem(
+        projectsTreeItem: ProjectManagementTreeItem
+    ): Promise<ProjectManagementTreeItem[]> {
+        this.logger.debug(`[ProjectManagementTreeDataProvider] Fetching children for: ${projectsTreeItem.label}`);
+        const itemContext = projectsTreeItem.originalContextValue;
 
         switch (itemContext) {
             case TreeItemContextValues.PROJECT:
-                return this.getChildrenForProject(element);
+                return this.getChildrenForProject(projectsTreeItem);
             case TreeItemContextValues.VERSION:
-                return this.getChildrenForVersion(element);
+                return this.getChildrenForVersion(projectsTreeItem);
             case TreeItemContextValues.CYCLE:
                 return []; // Cycles don't show direct children in this tree
             default:
                 this.logger.warn(
-                    `[ProjectManagementTreeDataProvider] Unknown element type for fetching children: ${itemContext}`
+                    `[ProjectManagementTreeDataProvider] Unknown tree item type for fetching children: ${itemContext}`
                 );
                 return [];
         }
@@ -154,7 +156,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     /**
      * Creates a ProjectManagementTreeItem from raw data with validation and state management.
      */
-    protected createTreeItemFromData(
+    protected createTestThemeTreeItemFromData(
         data: any, // Project or TreeNode
         parent: ProjectManagementTreeItem | null
     ): ProjectManagementTreeItem | null {
@@ -163,7 +165,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             return null;
         }
 
-        const contextValue = this.determineContextValue(data);
+        const contextValue = this.determineContextValueFromData(data);
         const label = data.name;
         const collapsibleState = this.determineCollapsibleState(data, contextValue);
 
@@ -184,7 +186,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     /**
      * Determines the appropriate context value for a tree item based on its data structure.
      */
-    private determineContextValue(data: any): string {
+    private determineContextValueFromData(data: any): string {
         if (data.nodeType) {
             return data.nodeType;
         } // "Version" or "Cycle" for TreeNodes
@@ -226,11 +228,11 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
      * Retrieves and converts child nodes for a given project tree item.
      */
     private async getChildrenForProject(
-        projectElement: ProjectManagementTreeItem
+        projectTreeItem: ProjectManagementTreeItem
     ): Promise<ProjectManagementTreeItem[]> {
-        const projectKey = projectElement.getUniqueId();
+        const projectKey = projectTreeItem.getUniqueId();
         if (!projectKey) {
-            this.logger.error(`[ProjectManagementTreeDataProvider] Project key missing for: ${projectElement.label}`);
+            this.logger.error(`[ProjectManagementTreeDataProvider] Project key missing for: ${projectTreeItem.label}`);
             return [];
         }
 
@@ -239,7 +241,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
         const operation = this.operationManager.createOperation(
             operationId,
-            `Fetch project tree for: ${projectElement.label}`
+            `Fetch project tree for: ${projectTreeItem.label}`
         );
 
         try {
@@ -254,7 +256,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             }
 
             return projectTree.children
-                .map((tovNode) => this.createTreeItemFromData(tovNode, projectElement))
+                .map((tovNode) => this.createTestThemeTreeItemFromData(tovNode, projectTreeItem))
                 .filter((item): item is ProjectManagementTreeItem => item !== null);
         } catch (error) {
             if (error instanceof vscode.CancellationError) {
@@ -271,12 +273,12 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     }
 
     /**
-     * Retrieves and creates tree items for all child cycles of a version element.
+     * Retrieves and creates tree items for all child cycles of a version tree item.
      */
-    private getChildrenForVersion(versionElement: ProjectManagementTreeItem): ProjectManagementTreeItem[] {
-        const cycleNodes: TreeNode[] = versionElement.itemData.children ?? [];
+    private getChildrenForVersion(versionTreeItem: ProjectManagementTreeItem): ProjectManagementTreeItem[] {
+        const cycleNodes: TreeNode[] = versionTreeItem.itemData.children ?? [];
         return cycleNodes
-            .map((cycleNode) => this.createTreeItemFromData(cycleNode, versionElement))
+            .map((cycleNode) => this.createTestThemeTreeItemFromData(cycleNode, versionTreeItem))
             .filter((item): item is ProjectManagementTreeItem => item !== null);
     }
 
@@ -378,7 +380,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         while (current) {
             const state = this.getUnifiedStateManager().getCurrentUnifiedState();
             const context =
-                state.customRootActive && this.isCurrentRoot(current)
+                state.isCustomRootActive && this.isCurrentRoot(current)
                     ? state.customRootOriginalContext
                     : current.originalContextValue;
             const name = current.itemData?.name;
@@ -398,7 +400,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
         // If the item itself is Project/Version and names not set by parent traversal
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
         const selectedContext =
-            state.customRootActive && this.isCurrentRoot(item)
+            state.isCustomRootActive && this.isCurrentRoot(item)
                 ? state.customRootOriginalContext
                 : item.originalContextValue;
 
@@ -420,7 +422,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
      */
     public isCurrentRoot(item: ProjectManagementTreeItem): boolean {
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
-        if (!state.customRootActive || !state.customRootItem) {
+        if (!state.isCustomRootActive || !state.customRootItem) {
             return false;
         }
         return (state.customRootItem as ProjectManagementTreeItem).getUniqueId() === item.getUniqueId();

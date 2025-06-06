@@ -90,7 +90,7 @@ export const StorageKeys = {
     ACTIVE_CONNECTION_ID_KEY: "testbenchExtension.activeConnectionId",
     CONNECTION_PASSWORD_SECRET_PREFIX: "testbenchExtension.connection.password.",
     MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem",
-    SUB_ELEMENT_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubElements"
+    SUB_TREE_ITEM_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubTreeItems"
 } as const;
 
 // --- Tree Item Context Values ---
@@ -98,9 +98,9 @@ export const TreeItemContextValues = {
     PROJECT: "Project",
     VERSION: "Version",
     CYCLE: "Cycle",
-    TEST_THEME_NODE: "TestThemeNode",
-    TEST_CASE_SET_NODE: "TestCaseSetNode",
-    TEST_CASE_NODE: "TestCaseNode",
+    TEST_THEME_TREE_ITEM: "TestThemeNode",
+    TEST_CASE_SET_TREE_ITEM: "TestCaseSetNode",
+    TEST_CASE_TREE_ITEM: "TestCaseNode",
     SUBDIVISION: "subdivision",
     INTERACTION: "interaction",
     DATA_TYPE: "dataType",
@@ -108,8 +108,8 @@ export const TreeItemContextValues = {
     TEST_ELEMENT: "testElement",
     CUSTOM_ROOT_PROJECT: "customRoot.project",
     CUSTOM_ROOT_TEST_THEME: "customRoot.testTheme",
-    MARKED_TEST_THEME_NODE: "MarkedForImport.TestThemeNode",
-    MARKED_TEST_CASE_SET_NODE: "MarkedForImport.TestCaseSetNode"
+    MARKED_TEST_THEME_TREE_ITEM: "MarkedForImport.TestThemeNode",
+    MARKED_TEST_CASE_SET_TREE_ITEM: "MarkedForImport.TestCaseSetNode"
 } as const;
 
 // --- Job Types ---
@@ -151,5 +151,5 @@ export const allExtensionCommands = {
     resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
     getFilters: `${baseKeyOfExtension}.getFilters`,
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
-    clearImportedSubElementsTracking: `${baseKeyOfExtension}.clearImportedSubElementsTracking`
+    clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`
 };
