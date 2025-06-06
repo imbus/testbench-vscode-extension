@@ -508,28 +508,63 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         operation.throwIfCancelled("before custom root refresh");
 
         const currentTestThemeRootItemKey = currentTestThemeRootItem.getUniqueId();
-        const testThemeTreeItemDataMap = new Map<string, CycleTreeItemData>(); // Map to hold cycle nodes by key
+        const testThemeTreeItemDataMap = new Map<string, CycleTreeItemData>();
         cycleStructure.nodes.forEach((node) => node?.base?.key && testThemeTreeItemDataMap.set(node.base.key, node));
 
         const updatedCycleTreeItemData = testThemeTreeItemDataMap.get(currentTestThemeRootItemKey);
 
         if (updatedCycleTreeItemData) {
+            // Dispose existing children before rebuilding
+            if (currentTestThemeRootItem.children) {
+                currentTestThemeRootItem.children.forEach((child) => {
+                    try {
+                        if (child && typeof child.dispose === "function") {
+                            child.dispose();
+                        }
+                    } catch (error) {
+                        this.logger.error(
+                            `[TestThemeTreeDataProvider] Error disposing child during custom root refresh:`,
+                            error
+                        );
+                    }
+                });
+            }
+
             currentTestThemeRootItem.itemData = updatedCycleTreeItemData;
             currentTestThemeRootItem.label = updatedCycleTreeItemData.base.numbering
                 ? `${updatedCycleTreeItemData.base.numbering} ${updatedCycleTreeItemData.base.name}`
                 : updatedCycleTreeItemData.base.name;
+
             currentTestThemeRootItem.children = this.buildTestThemeTreeRecursively(
                 currentTestThemeRootItemKey,
                 currentTestThemeRootItem,
                 testThemeTreeItemDataMap
             );
+
             currentTestThemeRootItem.collapsibleState =
                 currentTestThemeRootItem.children.length > 0
                     ? vscode.TreeItemCollapsibleState.Expanded
                     : vscode.TreeItemCollapsibleState.None;
 
             this.applyStoredExpansionState(currentTestThemeRootItem);
-            this.updateTreeItem([currentTestThemeRootItem]);
+
+            // Update the root tree items array directly without calling updateTreeItem
+            // This preserves the custom root item without disposing it
+            this.rootTreeItems = [currentTestThemeRootItem];
+
+            this.getUnifiedStateManager().updateState({
+                hasDataFetchBeenAttempted: true,
+                isServerDataReceived: true,
+                itemsBeforeFiltering: cycleStructure.nodes?.length || 0,
+                itemsAfterFiltering: 1, // Custom root counts as 1 item
+                operationalState: TreeViewOperationalState.READY
+            });
+
+            this._onDidChangeTreeData.fire(undefined);
+
+            this.logger.debug(
+                `[TestThemeTreeDataProvider] Custom root refreshed successfully with ${currentTestThemeRootItem.children.length} children`
+            );
         } else {
             this.logger.warn(
                 `[TestThemeTreeDataProvider] Custom root ${currentTestThemeRootItemKey} not found in refreshed data. Resetting.`

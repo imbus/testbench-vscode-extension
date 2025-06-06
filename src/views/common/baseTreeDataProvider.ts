@@ -249,10 +249,20 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      * Update tree tree items and refresh with proper state management
      */
     protected updateTreeItem(treeItems: T[]): void {
-        // Dispose old tree items before replacing
+        const state = this.unifiedStateManager.getCurrentUnifiedState();
+        const customRootItem = state.customRootItem as T;
+
+        // Dispose old tree items before replacing, but preserve custom root if it's in the new items
         this.rootTreeItems.forEach((treeItem) => {
             try {
-                if (treeItem && typeof treeItem.dispose === "function") {
+                // Don't dispose the custom root if it's being preserved in the new tree items
+                const shouldPreserve =
+                    state.isCustomRootActive &&
+                    customRootItem &&
+                    treeItems.includes(customRootItem) &&
+                    treeItem === customRootItem;
+
+                if (treeItem && typeof treeItem.dispose === "function" && !shouldPreserve) {
                     treeItem.dispose();
                 }
             } catch (error) {

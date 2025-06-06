@@ -31,6 +31,9 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
     public state: TreeItemState = {};
     public itemData: any;
 
+    // Store unique ID separately to survive disposal
+    private readonly _uniqueId: string;
+
     // Dependencies
     protected readonly logger: TestBenchLogger;
     protected readonly iconService: IconManagementService;
@@ -59,21 +62,25 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
         this.iconService = iconService;
         this.parent = parent;
 
+        // Extract and store unique ID immediately, before any potential disposal
+        this._uniqueId = this.extractUniqueId();
+
         this.initializeState();
         this.setupTooltip();
         this.updateIcon();
     }
 
     /**
-     * Initialize the tree item state from item data
+     * Extract unique ID from item data
      */
-    protected initializeState(): void {
-        this.state = {
-            isMarked: false,
-            isExpanded: this.collapsibleState === vscode.TreeItemCollapsibleState.Expanded,
-            isCustomRoot: false,
-            status: this.extractStatus()
-        };
+    private extractUniqueId(): string {
+        return (
+            this.itemData?.key ||
+            this.itemData?.base?.key ||
+            this.itemData?.uniqueID ||
+            this.itemData?.base?.uniqueID ||
+            `fallback_${Date.now()}`
+        );
     }
 
     /**
@@ -132,6 +139,7 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
 
             // Clear item data reference
             this.itemData = null;
+            // NOTE: We intentionally keep _uniqueId intact to support disposed item identification
 
             this.logger.trace(`[BaseTreeItem] Successfully disposed: ${this.label}`);
         } catch (error) {
@@ -155,6 +163,18 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
         if (this._isDisposed) {
             throw new Error(`[BaseTreeItem] Cannot ${operation} on disposed item: ${this.label}`);
         }
+    }
+
+    /**
+     * Initialize the tree item state from item data
+     */
+    protected initializeState(): void {
+        this.state = {
+            isMarked: false,
+            isExpanded: this.collapsibleState === vscode.TreeItemCollapsibleState.Expanded,
+            isCustomRoot: false,
+            status: this.extractStatus()
+        };
     }
 
     /**
@@ -270,21 +290,20 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
 
     /**
      * Get unique identifier for this item
+     * This now returns the preserved unique ID that survives disposal
      */
     public getUniqueId(): string {
-        return (
-            this.itemData?.key ||
-            this.itemData?.base?.key ||
-            this.itemData?.uniqueID ||
-            this.itemData?.base?.uniqueID ||
-            `fallback_${Date.now()}`
-        );
+        return this._uniqueId;
     }
 
     /**
      * Get UID if available
      */
     public getUID(): string | undefined {
+        if (this._isDisposed) {
+            // For disposed items, we can't access itemData, so return undefined
+            return undefined;
+        }
         return this.itemData?.base?.uniqueID || this.itemData?.uniqueID;
     }
 
