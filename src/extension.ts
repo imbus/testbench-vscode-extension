@@ -667,7 +667,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 (
                     [
                         TreeItemContextValues.TEST_THEME_TREE_ITEM,
-                        TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
+                        TreeItemContextValues.TEST_CASE_SET_TREE_ITEM,
+                        TreeItemContextValues.MARKED_TEST_THEME_TREE_ITEM,
+                        TreeItemContextValues.MARKED_TEST_CASE_SET_TREE_ITEM
                     ] as string[]
                 ).includes(treeItem.contextValue)
             ) {
