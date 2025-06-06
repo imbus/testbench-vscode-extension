@@ -531,14 +531,13 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode')",
+                    "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme')",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == testThemeTree && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode')",
-                    "group": "inline@1",
-                    "title": "Read & Import RF Results"
+                    "when": "view == testThemeTree && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme')",
+                    "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
