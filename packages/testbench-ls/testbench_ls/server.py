@@ -45,8 +45,10 @@ from .messages import (
     COMMAND_UPDATE_SERVER_PORT,
     COMMAND_UPDATE_SESSION_TOKEN,
     COMMAND_UPDATE_TOV,
+    DEBUG_CHECK_CONTEXT,
     ERROR_CONTEXT_MISMATCH,
     ERROR_CONTEXT_NOT_SET,
+    ERROR_DUPLICATE_KEYWORD_UID,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
@@ -288,7 +290,10 @@ def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceMod
     project, tov = existing_resource.tb_tov_context
     log(
         ls,
-        f"Checking testbench context. Selected context: {ls.project}/{ls.tov} - Resource context: {project}/{tov} ",
+        DEBUG_CHECK_CONTEXT.format(
+            selected_context=f"{ls.project}/{ls.tov}",
+            resource_context=f"{project}/{tov}",
+        ),
         LogLevel.DEBUG,
     )
     if not project or not tov:
@@ -314,11 +319,15 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         if len(existing_keywords) > 1:
             show_error(
                 ls,
-                f"Multiple keywords with uid '{keyword_uid}' found. Please resolve the conflict manually.",
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
             )
             continue
-        new_docu = rd.get_keyword_documentation(keyword_uid)
-        html_description = f"<html><body>{new_docu.replace('<br>', '<br/>').replace('<hr>', '<br/>')}</body></html>"
+        new_docu = (
+            rd.get_keyword_documentation(keyword_uid)
+            .replace("<br>", "<br/>")
+            .replace("<hr>", "<br/>")
+        )
+        html_description = f"<html><body>{new_docu}</body></html>"
         try:
             tb_connection = TestBenchResourceConnection.singleton()
             response = patch_interaction_details(
@@ -361,7 +370,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         if len(existing_keywords) > 1:
             show_error(
                 ls,
-                f"Multiple keywords with uid '{keyword_uid}' found. Please resolve the conflict manually.",
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
             )
             return
         if existing_keywords:
@@ -511,7 +520,7 @@ def pull_testbench_keyword(ls: LanguageServer, args):
     if len(existing_keywords) > 1:
         show_error(
             ls,
-            f"Multiple keywords with uid '{keyword_uid}' found. Please resolve the conflict manually.",
+            ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
         )
         return
     edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
@@ -545,14 +554,14 @@ def push_testbench_keyword(ls: LanguageServer, args):
     if len(robot_keywords) > 1:
         show_error(
             ls,
-            f"Multiple keywords with uid '{keyword_uid}' found. Please resolve the conflict manually.",
+            ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
         )
         return
     rd = ResourceDocumentation(document.path)
-    new_docu = rd.get_keyword_documentation(keyword_uid)
-    html_description = (
-        f"<html><body>{new_docu.replace('<br>', '<br/>').replace('<hr>', '<br/>')}</body></html>"
+    new_docu = (
+        rd.get_keyword_documentation(keyword_uid).replace("<br>", "<br/>").replace("<hr>", "<br/>")
     )
+    html_description = f"<html><body>{new_docu}</body></html>"
     try:
         tb_connection = TestBenchResourceConnection.singleton()
         response = patch_interaction_details(

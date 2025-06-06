@@ -9,6 +9,13 @@ ERROR_SUBDIVISON_MAPPING_FORMAT = (
     "The subdivision and library mapping must be specified in the format 'name:value'."
 )
 ERROR_EMPTY_OUTPUT_DIRECTORY = "Output Directory of TestBench2RobotFramework cannot be empty."
+ERROR_DUPLICATE_KEYWORD_UID = (
+    "Multiplee keywords with uid '{uid}' found. Please resolve the conflict manually."
+)
+
+# DEBUG MESSAGES
+DEBUG_CHECK_CONTEXT = "Checking testbench context. Selected context: {selected_context} - Resource context: {resource_context} "
+
 
 # COMMANDS
 COMMAND_GENERATE_TEST_SUITES = "testbench_ls.generateTestSuites"
