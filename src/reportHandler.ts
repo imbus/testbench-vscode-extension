@@ -586,6 +586,38 @@ export async function fetchReportZipFromServer(
 }
 
 /**
+ * Checks if the last import was for the same tree item.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} reportRootUID The UID of the item being imported.
+ * @returns {Promise<boolean>} True if the last import was for the same UID, otherwise false.
+ */
+async function wasLastImportForItem(context: vscode.ExtensionContext, reportRootUID: string): Promise<boolean> {
+    try {
+        const lastImportedUID: string | undefined = context.workspaceState.get<string>(
+            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY
+        );
+        return lastImportedUID === reportRootUID;
+    } catch (error) {
+        logger.error("Error checking last imported item UID:", error);
+        return false;
+    }
+}
+
+/**
+ * Sets the UID of the last imported tree item in storage, overwriting any previous value.
+ * @param {vscode.ExtensionContext} context The extension context.
+ * @param {string} reportRootUID The UID of the successfully imported item.
+ */
+async function setLastImportedItem(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
+    try {
+        await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, reportRootUID);
+        logger.debug(`Set last imported item UID to ${reportRootUID}.`);
+    } catch (error) {
+        logger.error("Error setting last imported item UID:", error);
+    }
+}
+
+/**
  * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
@@ -1234,60 +1266,15 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
 }
 
 /**
- * Checks if a specific sub-tree-item was already imported
- */
-async function checkIfSubTreeItemWasImported(
-    context: vscode.ExtensionContext,
-    reportRootUID: string
-): Promise<boolean> {
-    try {
-        const storedArray: string[] | undefined = context.workspaceState.get<string[]>(
-            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY
-        );
-
-        if (storedArray && Array.isArray(storedArray)) {
-            const importedSubTreeItemsSet: Set<string> = new Set(storedArray);
-            return importedSubTreeItemsSet.has(reportRootUID);
-        }
-        return false;
-    } catch (error) {
-        logger.error("Error checking sub-tree-item import status:", error);
-        return false;
-    }
-}
-
-/**
- * Marks a specific sub-tree-item as imported
- */
-async function markSubTreeItemsAsImported(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
-    try {
-        const storedArray: string[] | undefined = context.workspaceState.get<string[]>(
-            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY
-        );
-        // Convert Array to a Set for lookups
-        const importedSubTreeItems: Set<string> =
-            storedArray && Array.isArray(storedArray) ? new Set(storedArray) : new Set();
-
-        importedSubTreeItems.add(reportRootUID);
-        await context.workspaceState.update(
-            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY,
-            Array.from(importedSubTreeItems)
-        );
-        logger.debug(`Marked sub-tree-item ${reportRootUID} as imported.`);
-    } catch (error) {
-        logger.error("Error marking sub-tree-item as imported:", error);
-    }
-}
-
-/**
- * Clears the imported sub-tree-item tracking (useful when starting fresh test generation)
+ * Clears the tracked UID of the last imported item.
+ * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function clearImportedSubTreeItemsTracking(context: vscode.ExtensionContext): Promise<void> {
     try {
         await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, undefined);
-        logger.debug("Cleared imported sub-tree-items tracking.");
+        logger.debug("Cleared last imported item tracking.");
     } catch (error) {
-        logger.error("Error clearing imported sub-tree-items tracking:", error);
+        logger.error("Error clearing last imported item tracking:", error);
     }
 }
 
@@ -1325,20 +1312,17 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 progress.report({ message: "Step 1/4: Validating parameters...", increment: 10 });
 
-                const wasSubTreeItemImported: boolean = await checkIfSubTreeItemWasImported(
-                    context,
-                    resolvedReportRootUID
-                );
+                const wasConsecutiveImport: boolean = await wasLastImportForItem(context, resolvedReportRootUID);
 
-                if (wasSubTreeItemImported) {
+                if (wasConsecutiveImport) {
                     const reimportPromptChoice = await vscode.window.showWarningMessage(
-                        `You are about to import results for "${invokedOnItem.label}" again. Do you want to proceed?`,
+                        `You have just imported results for "${invokedOnItem.label}". Do you want to import them again?`,
                         { modal: true },
                         "Yes, Import Again",
                         "Cancel"
                     );
                     if (reimportPromptChoice !== "Yes, Import Again") {
-                        logger.trace("User cancelled re-import of the same sub-tree item.");
+                        logger.trace("User cancelled consecutive re-import.");
                         return null;
                     }
                 }
@@ -1353,15 +1337,13 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     context,
                     progress
                 );
-
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("Failed to create report with results, or process was cancelled. Aborting import.");
                     return null;
                 }
 
-                const { createdReportPath } = reportCreationDetails!; // Assert not null after check
+                const { createdReportPath } = reportCreationDetails!;
                 const reportFileNameForDisplay: string = path.basename(createdReportPath);
-
                 progress.report({ message: "Step 3/4: Importing to TestBench...", increment: 30 });
                 const importTargetMessage: string = `Importing "${invokedOnItem.label}" from report '${reportFileNameForDisplay}' to TestBench Project: ${resolvedTargetProjectKey}, Cycle: ${resolvedTargetCycleKey}.`;
                 logger.trace(importTargetMessage);
@@ -1381,10 +1363,9 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 }
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
-                await markSubTreeItemsAsImported(context, resolvedReportRootUID); // Mark this specific UID as imported
+                await setLastImportedItem(context, resolvedReportRootUID);
 
                 await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
-
                 if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
                     logger.debug(
                         `[ReportHandler] Import successful. Command handler should clear marked state for item: ${invokedOnItem.label} if configured.`
@@ -1397,7 +1378,9 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 logger.trace("Process Completed: Read, Create, and Import specific tree item to Testbench.");
             } catch (error) {
-                const errorMsg: string = `An error occurred during the import process: ${error instanceof Error ? error.message : String(error)}`;
+                const errorMsg: string = `An error occurred during the import process: ${
+                    error instanceof Error ? error.message : String(error)
+                }`;
                 logger.error(errorMsg, error);
                 vscode.window.showErrorMessage(errorMsg);
                 return null;
