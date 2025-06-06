@@ -1275,24 +1275,12 @@ async function handleTestBenchSessionChange(
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-            // Restore the previously visible tree views.
-            if (treeServiceManager) {
-                treeServiceManager.restoreVisibleViewsState();
-            } else {
-                // Fallback in case manager is not ready, though it should be.
-                logger.warn(
-                    "[Extension] TreeServiceManager not available during session change, defaulting to project view."
-                );
-                await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
-            }
-
             // Refresh tree providers as the session has changed.
             if (
                 !wasPreviouslyConnected ||
                 (connection && connection.getSessionToken() !== newConnection.getSessionToken())
             ) {
                 logger.info("[Extension] New session established. Refreshing project data.");
-                await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
                 try {
                     const projectProvider = treeServiceManager.getProjectManagementProvider();
                     const testThemeProvider = treeServiceManager.getTestThemeProvider();
@@ -1303,10 +1291,13 @@ async function handleTestBenchSessionChange(
                     testElementsProvider.clearTree();
 
                     logger.debug("[Extension] Restoring data and view state after login.");
+
                     await treeServiceManager.restoreDataState();
+
                     treeServiceManager.restoreVisibleViewsState();
                 } catch (error) {
                     logger.warn("[Extension] Error managing trees during session change:", error);
+                    await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
                 }
             }
         } else {
@@ -1339,9 +1330,9 @@ async function handleTestBenchSessionChange(
         getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
         try {
-            treeServiceManager.clearAllTrees();
+            await treeServiceManager.clearAllTreesData();
         } catch (error) {
-            logger.warn("[Extension] Error clearing trees during logout:", error);
+            logger.warn("[Extension] Error clearing tree data during session change:", error);
         }
     }
 }
