@@ -38,14 +38,17 @@ from .messages import (
     COMMAND_PULL_KEYWORD,
     COMMAND_PULL_SUBDIVISION,
     COMMAND_PUSH_KEYWORD,
+    COMMAND_PUSH_SUBDIVISION,
     COMMAND_UPDATE_LOGIN_NAME,
     COMMAND_UPDATE_PROJECT,
     COMMAND_UPDATE_SERVER_NAME,
     COMMAND_UPDATE_SERVER_PORT,
     COMMAND_UPDATE_SESSION_TOKEN,
     COMMAND_UPDATE_TOV,
+    DEBUG_CHECK_CONTEXT,
     ERROR_CONTEXT_MISMATCH,
     ERROR_CONTEXT_NOT_SET,
+    ERROR_DUPLICATE_KEYWORD_UID,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
@@ -54,6 +57,7 @@ from .messages import (
     PULL_KEYWORD_TITLE,
     PULL_SUBDIVISON_TITLE,
     PUSH_KEYWORD_TITLE,
+    PUSH_SUBDIVISON_TITLE,
     TESTBENCH_LS_CLASS_NAME,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
@@ -240,6 +244,15 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
         ),
     )
     code_lenses.append(pull_resource_lens)
+    push_resource_lens = CodeLens(
+        range=Range(start=Position(line=0, character=0), end=Position(line=0, character=0)),
+        command=Command(
+            title=PUSH_SUBDIVISON_TITLE,
+            command=COMMAND_PUSH_SUBDIVISION,
+            arguments=[document_uri, testbench_resource.tb_subdivision_uid],
+        ),
+    )
+    code_lenses.append(push_resource_lens)
     for keyword in testbench_resource.keywords:
         keyword_uid = testbench_resource.get_kw_uid(keyword)
         if keyword_uid:
@@ -277,7 +290,10 @@ def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceMod
     project, tov = existing_resource.tb_tov_context
     log(
         ls,
-        f"Checking testbench context. Selected context: {ls.project}/{ls.tov} - Resource context: {project}/{tov} ",
+        DEBUG_CHECK_CONTEXT.format(
+            selected_context=f"{ls.project}/{ls.tov}",
+            resource_context=f"{project}/{tov}",
+        ),
         LogLevel.DEBUG,
     )
     if not project or not tov:
@@ -287,6 +303,44 @@ def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceMod
         show_error(ls, ERROR_CONTEXT_MISMATCH)
         return False
     return True
+
+
+@testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
+def pull_testbench_subdivision(ls: LanguageServer, args):
+    document_uri, subdivision_uid, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    existing_resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, existing_resource):
+        return
+    rd = ResourceDocumentation(document.path)
+    for keyword in existing_resource.keyword_section.body:
+        keyword_uid = existing_resource.get_kw_uid(keyword)
+        existing_keywords = existing_resource.get_keywords(keyword_uid)
+        if len(existing_keywords) > 1:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+            )
+            continue
+        new_docu = (
+            rd.get_keyword_documentation(keyword_uid)
+            .replace("<br>", "<br/>")
+            .replace("<hr>", "<br/>")
+        )
+        html_description = f"<html><body>{new_docu}</body></html>"
+        try:
+            tb_connection = TestBenchResourceConnection.singleton()
+            response = patch_interaction_details(
+                tb_connection,
+                keyword_uid,
+                keyword.name,
+                html_description,
+            )
+        except requests.exceptions.HTTPError as http_error:
+            if http_error.response.status_code == 409:
+                show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
+            else:
+                show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
 
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
@@ -312,9 +366,15 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     for new_keyword in new_resource.keyword_section.body:
         keyword_uid = new_resource.get_kw_uid(new_keyword)
-        existing_keyword = existing_resource.get_keyword(keyword_uid)
-        if existing_keyword:
-            edits.extend(create_keyword_edits(existing_keyword, new_keyword, change_identifier))
+        existing_keywords = existing_resource.get_keywords(keyword_uid)
+        if len(existing_keywords) > 1:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+            )
+            return
+        if existing_keywords:
+            edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
         else:
             edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
     if edits:
@@ -453,11 +513,17 @@ def pull_testbench_keyword(ls: LanguageServer, args):
         return
     edits = []
     change_identifier = ChangeAnnotationIdentifier()
-    existing_keyword = resource.get_keyword(keyword_uid)
+    existing_keywords = resource.get_keywords(keyword_uid)
     new_keyword = create_keyword(
         keyword_uid,
     )
-    edits.extend(create_keyword_edits(existing_keyword, new_keyword, change_identifier))
+    if len(existing_keywords) > 1:
+        show_error(
+            ls,
+            ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+        )
+        return
+    edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
     if edits:
         edit = WorkspaceEdit(
             document_changes=[
@@ -484,18 +550,24 @@ def push_testbench_keyword(ls: LanguageServer, args):
     resource = TestBenchResourceModel.from_file(document.source)
     if not context_is_valid(ls, resource):
         return
-    robot_keyword = resource.get_keyword(keyword_uid)
+    robot_keywords = resource.get_keywords(keyword_uid)
+    if len(robot_keywords) > 1:
+        show_error(
+            ls,
+            ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+        )
+        return
     rd = ResourceDocumentation(document.path)
-    new_docu = rd.get_keyword_documentation(keyword_uid)
-    html_description = (
-        f"<html><body>{new_docu.replace('<br>', '<br/>').replace('<hr>', '<br/>')}</body></html>"
+    new_docu = (
+        rd.get_keyword_documentation(keyword_uid).replace("<br>", "<br/>").replace("<hr>", "<br/>")
     )
+    html_description = f"<html><body>{new_docu}</body></html>"
     try:
         tb_connection = TestBenchResourceConnection.singleton()
         response = patch_interaction_details(
             tb_connection,
             keyword_uid,
-            robot_keyword.name,
+            robot_keywords[0].name,
             html_description,
         )
     except requests.exceptions.HTTPError as http_error:
