@@ -1185,13 +1185,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     // --- Command: Open TOV Test Elements ---
     registerSafeCommand(
         context,
-        allExtensionCommands.openTOVTestElements,
+        allExtensionCommands.openTOVFromProjectsView,
         async (tovItem: ProjectManagementTreeItem) => {
-            logger.debug(`Command Called: ${allExtensionCommands.openTOVTestElements} for item: ${tovItem.label}`);
+            logger.debug(
+                `Command Called: ${allExtensionCommands.openTOVFromProjectsView} for TOV item: ${tovItem.label}`
+            );
 
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.error(`${allExtensionCommands.openTOVTestElements} command called without connection.`);
+                logger.error(`${allExtensionCommands.openTOVFromProjectsView} command called without connection.`);
                 return;
             }
 
@@ -1242,7 +1244,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     }
                 }
             } catch (error) {
-                logger.error(`[Cmd] Error in openTOVTestElements command:`, error);
+                logger.error(`[Cmd] Error in OpenTOVFromProjectsView command:`, error);
                 try {
                     const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
                     const testElementsProvider = treeServiceManager.getTestElementsProvider();
@@ -1261,13 +1263,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     // --- Command: Open Cycle Test Themes ---
     registerSafeCommand(
         context,
-        allExtensionCommands.openCycleTestThemes,
-        async (cycleItem: ProjectManagementTreeItem) => {
-            logger.debug(`Command Called: ${allExtensionCommands.openCycleTestThemes} for item: ${cycleItem.label}`);
+        allExtensionCommands.openCycleFromProjectsView,
+        async (cycleTreeItem: ProjectManagementTreeItem) => {
+            logger.debug(
+                `Command Called: ${allExtensionCommands.openCycleFromProjectsView} for cycle tree item: ${cycleTreeItem.label}`
+            );
 
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.error(`${allExtensionCommands.openCycleTestThemes} command called without connection.`);
+                logger.error(`${allExtensionCommands.openCycleFromProjectsView} command called without connection.`);
                 return;
             }
 
@@ -1281,9 +1285,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 await displayTestThemeTreeView();
                 await displayTestElementsTreeView();
 
-                await treeServiceManager.handleCycleSelection(cycleItem);
+                await treeServiceManager.handleCycleSelection(cycleTreeItem);
             } catch (error) {
-                logger.error("[Cmd OpenCycleTestThemes] Error during cycle open handling:", error);
+                logger.error("[Cmd OpenCycleFromProjectsView] Error during cycle open handling:", error);
 
                 // Reset Test Elements tree view on error
                 try {
@@ -1292,7 +1296,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     const testElementsProvider = treeServiceManager.getTestElementsProvider();
                     testElementsProvider.updateTreeViewStatusMessage();
                 } catch (resetError) {
-                    logger.error("[Cmd OpenCycleTestThemes] Error resetting tree view after failure:", resetError);
+                    logger.error(
+                        "[Cmd OpenCycleFromProjectsView] Error resetting tree view after failure:",
+                        resetError
+                    );
                 }
 
                 vscode.window.showErrorMessage(

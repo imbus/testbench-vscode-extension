@@ -63,6 +63,7 @@ export class TreeServiceManager {
     private lastClickTime = 0;
     private lastClickedItem: ProjectManagementTreeItem | null = null;
     private readonly DOUBLE_CLICK_THRESHOLD_MS = 400;
+    private clickTimer: NodeJS.Timeout | null = null;
 
     // State change listeners for coordination
     private readonly stateChangeListeners = new Map<string, (notification: StateChangeNotification) => void>();
@@ -288,27 +289,23 @@ export class TreeServiceManager {
                 if (event.selection.length > 0) {
                     const selectedItem = event.selection[0];
 
-                    if (selectedItem instanceof ProjectManagementTreeItem) {
-                        const currentTime = Date.now();
-                        const timeDiff = currentTime - this.lastClickTime;
+                    // Check if the selected item is a cycle to handle double-click
+                    if (
+                        selectedItem instanceof ProjectManagementTreeItem &&
+                        selectedItem.originalContextValue === TreeItemContextValues.CYCLE
+                    ) {
+                        // If a timer is running for the same item, its a double-click
+                        if (this.clickTimer && this.lastClickedItem?.getUniqueId() === selectedItem.getUniqueId()) {
+                            clearTimeout(this.clickTimer);
+                            this.clickTimer = null;
+                            this.lastClickedItem = null;
 
-                        // Check if this is a double-click on a cycle item
-                        if (
-                            selectedItem.originalContextValue === TreeItemContextValues.CYCLE &&
-                            this.lastClickedItem?.getUniqueId() === selectedItem.getUniqueId() &&
-                            timeDiff < this.DOUBLE_CLICK_THRESHOLD_MS
-                        ) {
                             this.logger.debug(
                                 `[TreeServiceManager] Double-click detected on cycle: ${selectedItem.label}`
                             );
-
-                            // Reset click tracking
-                            this.lastClickTime = 0;
-                            this.lastClickedItem = null;
-
                             try {
                                 await vscode.commands.executeCommand(
-                                    allExtensionCommands.openCycleTestThemes,
+                                    allExtensionCommands.openCycleFromProjectsView,
                                     selectedItem
                                 );
                             } catch (error) {
@@ -321,14 +318,28 @@ export class TreeServiceManager {
                                 );
                             }
                         } else {
-                            // Single-click or first click: update tracking and handle selection
-                            this.lastClickTime = currentTime;
+                            // First click, start a timer
+                            if (this.clickTimer) {
+                                clearTimeout(this.clickTimer);
+                            }
                             this.lastClickedItem = selectedItem;
-
-                            // Handle normal selection for language server context updates
-                            await this.handleProjectTreeSelection(event, provider);
+                            this.clickTimer = setTimeout(async () => {
+                                this.logger.trace(
+                                    `[TreeServiceManager] Single-click timeout executed for cycle: ${selectedItem.label}`
+                                );
+                                // If the timer completes, it was a single click
+                                await this.handleProjectTreeSelection(event, provider);
+                                this.clickTimer = null;
+                                this.lastClickedItem = null;
+                            }, this.DOUBLE_CLICK_THRESHOLD_MS);
                         }
                     } else {
+                        // Not a cycle item, standard single-click
+                        if (this.clickTimer) {
+                            clearTimeout(this.clickTimer);
+                            this.clickTimer = null;
+                        }
+                        this.lastClickedItem = null;
                         await this.handleProjectTreeSelection(event, provider);
                     }
                 }
