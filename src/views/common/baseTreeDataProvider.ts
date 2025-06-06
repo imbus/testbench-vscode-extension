@@ -192,6 +192,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      */
     public resetCustomRoot(): void {
         this.unifiedStateManager.resetCustomRoot();
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     /**
