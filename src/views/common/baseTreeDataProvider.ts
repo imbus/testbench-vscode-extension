@@ -178,7 +178,12 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             return;
         }
 
+        this.storeExpansionState();
         this.unifiedStateManager.setCustomRoot(item);
+
+        // Immediately set ready state to prevent loading message
+        this.unifiedStateManager.setReady(1);
+
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -350,10 +355,11 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     /**
      * Get root children based on custom root state with improved error handling
      */
-    private async getRootChildren(): Promise<T[]> {
+    protected async getRootChildren(): Promise<T[]> {
         try {
             const state = this.unifiedStateManager.getCurrentUnifiedState();
             if (state.isCustomRootActive && state.customRootItem) {
+                this.unifiedStateManager.setReady(1);
                 return [state.customRootItem as T];
             }
 

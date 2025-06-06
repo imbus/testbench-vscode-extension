@@ -483,6 +483,15 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         }
     }
 
+    protected override async getRootChildren(): Promise<TestThemeTreeItem[]> {
+        const state = this.getUnifiedStateManager().getCurrentUnifiedState();
+        if (state.isCustomRootActive && state.customRootItem) {
+            this.getUnifiedStateManager().setReady(1);
+            return [state.customRootItem as TestThemeTreeItem];
+        }
+        return super.getRootChildren();
+    }
+
     /**
      * Refreshes the custom root node with updated cycle structure data while preserving expansion state.
      */
