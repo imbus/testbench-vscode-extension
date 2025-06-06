@@ -143,11 +143,23 @@ export class TreeServiceManager {
             updateMessage,
             this.projectDataService
         );
-
         const treeView = vscode.window.createTreeView("projectManagementTree", {
             treeDataProvider: provider,
             canSelectMany: false
         });
+
+        // Add expansion event listeners to keep the data provider's state in sync with the UI
+        this.extensionContext.subscriptions.push(
+            treeView.onDidExpandElement((event: vscode.TreeViewExpansionEvent<ProjectManagementTreeItem>) => {
+                provider.handleExpansion(event.element, true);
+            })
+        );
+
+        this.extensionContext.subscriptions.push(
+            treeView.onDidCollapseElement((event: vscode.TreeViewExpansionEvent<ProjectManagementTreeItem>) => {
+                provider.handleExpansion(event.element, false);
+            })
+        );
 
         // Setup selection change listener for language server context
         this.extensionContext.subscriptions.push(
@@ -155,13 +167,11 @@ export class TreeServiceManager {
                 await this.handleProjectTreeSelection(event, provider);
             })
         );
-
         this.extensionContext.subscriptions.push(treeView);
         this.treeViews.set("projectManagement", { provider, treeView, updateMessage });
 
         // Setup state change listener for this provider
         this.setupProviderStateListener("projectManagement", provider);
-
         this.logger.info("[TreeServiceManager] Project Management tree view created with unified state management");
     }
 
@@ -184,17 +194,28 @@ export class TreeServiceManager {
             this.markedItemStateService,
             this.iconManagementService
         );
-
         const treeView = vscode.window.createTreeView("testThemeTree", {
             treeDataProvider: provider
         });
+
+        // Add expansion event listeners to keep the data provider's state in sync with the UI
+        this.extensionContext.subscriptions.push(
+            treeView.onDidExpandElement((event: vscode.TreeViewExpansionEvent<TestThemeTreeItem>) => {
+                provider.handleExpansion(event.element, true);
+            })
+        );
+
+        this.extensionContext.subscriptions.push(
+            treeView.onDidCollapseElement((event: vscode.TreeViewExpansionEvent<TestThemeTreeItem>) => {
+                provider.handleExpansion(event.element, false);
+            })
+        );
 
         this.extensionContext.subscriptions.push(treeView);
         this.treeViews.set("testTheme", { provider, treeView, updateMessage });
 
         // Setup state change listener for this provider
         this.setupProviderStateListener("testTheme", provider);
-
         this.logger.info("[TreeServiceManager] Test Theme tree view created with unified state management");
     }
 

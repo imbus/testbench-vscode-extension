@@ -235,11 +235,10 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             return null;
         }
         const testThemeLabel = data.base.numbering ? `${data.base.numbering} ${data.base.name}` : data.base.name;
-        const hasChildren = this.nodeWillHaveVisibleChildren(data, this.getRawNodesFromCurrentRoot());
 
-        const collapsibleState = hasChildren
-            ? vscode.TreeItemCollapsibleState.Collapsed
-            : vscode.TreeItemCollapsibleState.None;
+        // Default to collapsed. The recursive build function will set the final state.
+        const collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+
         const treeItem = new TestThemeTreeItem(
             testThemeLabel,
             data.elementType,
@@ -263,7 +262,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             treeItem.updateContextForMarking(importState.shouldShow);
         }
 
-        this.applyStoredExpansionState(treeItem);
         return treeItem;
     }
 
@@ -369,12 +367,17 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                         testThemeItemsByKey
                     );
                     testThemeTreeItem.children = grandChildrenOfTestThemeTreeItem;
+
+                    // Set the final state based on whether children exist.
                     if (grandChildrenOfTestThemeTreeItem.length > 0) {
                         testThemeTreeItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
                     } else {
                         testThemeTreeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
                     }
+
+                    // after setting the default state, apply the stored expansion state to override it if necessary.
                     this.applyStoredExpansionState(testThemeTreeItem);
+
                     childTestThemeTreeItems.push(testThemeTreeItem);
                 }
             }
@@ -524,30 +527,16 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
      */
     public override resetCustomRoot(): void {
         this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root and restoring full tree");
-
-        this.storeExpansionState();
         this.getUnifiedStateManager().resetCustomRoot();
 
         // Restore the full tree structure if we have valid cycle data
         if (this.currentCycleKey && this.currentProjectKey && this.rawCycleData) {
             try {
                 this.logger.debug("[TestThemeTreeDataProvider] Rebuilding full tree from cached cycle data");
-                const fullTreeItems = this.buildTestThemeTreeFromCycleStructure(this.rawCycleData);
-
-                // Apply stored expansion state to the rebuilt tree
-                const applyExpansionRecursive = (items: TestThemeTreeItem[]) => {
-                    for (const item of items) {
-                        this.applyStoredExpansionState(item);
-                        if (item.children) {
-                            applyExpansionRecursive(item.children as TestThemeTreeItem[]);
-                        }
-                    }
-                };
-                applyExpansionRecursive(fullTreeItems);
+                const allTestThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(this.rawCycleData);
 
                 // Update the tree with the full structure
-                this.updateTreeItem(fullTreeItems);
-
+                this.updateTreeItem(allTestThemeTreeItems);
                 this.logger.info("[TestThemeTreeDataProvider] Custom root reset and full tree restored successfully");
             } catch (error) {
                 this.logger.error(
@@ -568,6 +557,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             }
         }
     }
+
     protected override async getRootChildren(): Promise<TestThemeTreeItem[]> {
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
         if (state.isCustomRootActive && state.customRootItem) {

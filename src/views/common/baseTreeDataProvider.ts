@@ -185,6 +185,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         this.unifiedStateManager.setReady(1);
 
         this._onDidChangeTreeData.fire(undefined);
+        this.logger.debug(`[BaseTreeDataProvider] Set custom root to item: ${item.label} (${item.getUniqueId()})`);
     }
 
     /**
@@ -205,6 +206,9 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             const itemId = treeItem.getUniqueId();
             this.unifiedStateManager.setItemExpansion(itemId, expanded);
         }
+        this.logger.debug(
+            `[BaseTreeDataProvider] Item ${treeItem.label} (${treeItem.getUniqueId()}) expansion set to ${expanded}`
+        );
     }
 
     /**
@@ -220,6 +224,9 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
                 }
             }
         }
+        this.logger.debug(
+            `[BaseTreeDataProvider] Applied expansion state for item ${item.label} (${item.getUniqueId()})`
+        );
     }
 
     /**
@@ -242,6 +249,9 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
 
             collectExpanded(this.rootTreeItems);
             this.unifiedStateManager.updateState({ expandedItems: expandedIds });
+            this.logger.debug(
+                `[BaseTreeDataProvider] Stored expansion state for ${expandedIds.size} items: ${[...expandedIds].join(", ")}`
+            );
         }
     }
 
