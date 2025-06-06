@@ -6,7 +6,7 @@
 import * as vscode from "vscode";
 import { BaseTreeItem } from "../common/baseTreeItem";
 import { TreeItemContextValues } from "../../constants";
-import { IconManagementService } from "../../services/iconManagementService";
+import { IconManagementService } from "../common/iconManagementService";
 import { TestBenchLogger } from "../../testBenchLogger";
 
 export class TestThemeTreeItem extends BaseTreeItem {

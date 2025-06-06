@@ -6,7 +6,7 @@
 import * as vscode from "vscode";
 import { BaseTreeItem } from "../common/baseTreeItem";
 import { TreeItemContextValues } from "../../constants";
-import { IconContext, IconManagementService } from "../../services/iconManagementService";
+import { IconContext, IconManagementService } from "../common/iconManagementService";
 import { TestBenchLogger } from "../../testBenchLogger";
 
 // Extend TreeItemState interface for test elements

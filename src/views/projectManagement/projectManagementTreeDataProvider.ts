@@ -7,13 +7,13 @@ import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { BaseTreeDataProvider, TreeDataProviderOptions } from "../common/baseTreeDataProvider";
 import { ProjectManagementTreeItem } from "./projectManagementTreeItem";
-import { ProjectDataService } from "../../services/projectDataService";
+import { ProjectDataService } from "./projectDataService";
 import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
-import { IconManagementService } from "../../services/iconManagementService";
-import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
+import { IconManagementService } from "../common/iconManagementService";
+import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperationManager } from "../../services/cancellableOperationService";
-import { StateChangeNotification } from "../../services/unifiedTreeStateManager";
+import { StateChangeNotification } from "../common/unifiedTreeStateManager";
 
 export interface CycleDataForThemeTreeEvent {
     projectKey: string;

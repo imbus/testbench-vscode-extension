@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { IconManagementService } from "../../services/iconManagementService";
+import { IconManagementService } from "./iconManagementService";
 import { TestBenchLogger } from "../../testBenchLogger";
 
 export interface TreeItemIconConfig {

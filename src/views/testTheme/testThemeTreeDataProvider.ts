@@ -7,15 +7,15 @@ import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { BaseTreeDataProvider, TreeDataProviderOptions } from "../common/baseTreeDataProvider";
 import { TestThemeTreeItem } from "./testThemeTreeItem";
-import { ProjectDataService } from "../../services/projectDataService";
-import { MarkedItemStateService } from "../../services/markedItemStateService";
+import { ProjectDataService } from "../projectManagement/projectDataService";
+import { MarkedItemStateService } from "./markedItemStateService";
 import { ContextKeys, TreeItemContextValues } from "../../constants";
 import { CycleTreeItemData, CycleStructure } from "../../testBenchTypes";
 import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
-import { IconManagementService } from "../../services/iconManagementService";
-import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
+import { IconManagementService } from "../common/iconManagementService";
+import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
-import { StateChangeNotification } from "../../services/unifiedTreeStateManager";
+import { StateChangeNotification } from "../common/unifiedTreeStateManager";
 
 export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTreeItem> {
     private currentCycleKey: string | null = null;

@@ -1,13 +1,13 @@
 /**
- * @file src/services/resourceFileService.ts
+ * @file src/views/testElements/resourceFileService.ts
  * @description Service for managing resource files related to Test Elements Tree.
  */
 
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { TestBenchLogger } from "../testBenchLogger";
-import * as utils from "../utils";
+import { TestBenchLogger } from "../../testBenchLogger";
+import * as utils from "../../utils";
 
 export class ResourceFileService {
     constructor(private readonly logger: TestBenchLogger) {}

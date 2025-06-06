@@ -1,10 +1,10 @@
 /**
- * @file src/services/testElementDataService.ts
+ * @file src/views/testElements/testElementDataService.ts
  * @description Service for fetching test elements data from the TestBench server.
  */
 
-import { PlayServerConnection } from "../testBenchConnection";
-import { TestBenchLogger } from "../testBenchLogger";
+import { PlayServerConnection } from "../../testBenchConnection";
+import { TestBenchLogger } from "../../testBenchLogger";
 
 export class TestElementDataService {
     private readonly getConnection: () => PlayServerConnection | null;

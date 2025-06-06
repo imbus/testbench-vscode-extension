@@ -7,13 +7,13 @@ import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { BaseTreeDataProvider, TreeDataProviderOptions } from "../common/baseTreeDataProvider";
 import { TestElementTreeItem, TestElementData } from "./testElementTreeItem";
-import { TestElementDataService } from "../../services/testElementDataService";
-import { ResourceFileService } from "../../services/resourceFileService";
+import { TestElementDataService } from "./testElementDataService";
+import { ResourceFileService } from "./resourceFileService";
 import { TestElementTreeBuilder } from "./testElementTreeBuilder";
-import { IconManagementService } from "../../services/iconManagementService";
-import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../../services/treeViewStateTypes";
+import { IconManagementService } from "../common/iconManagementService";
+import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
-import { StateChangeNotification } from "../../services/unifiedTreeStateManager";
+import { StateChangeNotification } from "../common/unifiedTreeStateManager";
 
 export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
 

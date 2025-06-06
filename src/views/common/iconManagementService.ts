@@ -1,11 +1,11 @@
 /**
- * @file src/services/iconManagementService.ts
+ * @file src/views/common/iconManagementService.ts
  * @description Centralized icon management service for all tree items
  */
 
 import * as vscode from "vscode";
-import { TestBenchLogger } from "../testBenchLogger";
-import { TreeItemContextValues } from "../constants";
+import { TestBenchLogger } from "../../testBenchLogger";
+import { TreeItemContextValues } from "../../constants";
 
 export interface IconDefinition {
     light: string;

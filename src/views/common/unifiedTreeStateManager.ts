@@ -1,12 +1,12 @@
 /**
- * @file src/services/unifiedTreeStateManager.ts
+ * @file src/views/common/unifiedTreeStateManager.ts
  * @description Unified state manager that coordinates all tree-related state management
  */
 
-import { TestBenchLogger } from "../testBenchLogger";
+import { TestBenchLogger } from "../../testBenchLogger";
 import { TreeViewStateManager } from "./treeViewStateManager";
 import { CustomRootService } from "./customRootService";
-import { BaseTreeItem } from "../views/common/baseTreeItem";
+import { BaseTreeItem } from "./baseTreeItem";
 import {
     TreeViewStateConfig,
     TreeViewOperationalState,

@@ -1,11 +1,11 @@
 /**
- * @file src/services/customRootService.ts
+ * @file src/views/common/customRootService.ts
  * @description Service for managing custom root state across tree providers
  */
 
 import * as vscode from "vscode";
-import { TestBenchLogger } from "../testBenchLogger";
-import { BaseTreeItem as BaseTreeItem } from "../views/common/baseTreeItem";
+import { TestBenchLogger } from "../../testBenchLogger";
+import { BaseTreeItem as BaseTreeItem } from "./baseTreeItem";
 
 export interface CustomRootState<T extends BaseTreeItem> {
     isActive: boolean;

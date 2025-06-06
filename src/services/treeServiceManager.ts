@@ -5,11 +5,11 @@
 
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../testBenchLogger";
-import { ProjectDataService } from "./projectDataService";
-import { TestElementDataService } from "./testElementDataService";
-import { ResourceFileService } from "./resourceFileService";
-import { IconManagementService } from "./iconManagementService";
-import { MarkedItemStateService } from "./markedItemStateService";
+import { ProjectDataService } from "../views/projectManagement/projectDataService";
+import { TestElementDataService } from "../views/testElements/testElementDataService";
+import { ResourceFileService } from "../views/testElements/resourceFileService";
+import { IconManagementService } from "../views/common/iconManagementService";
+import { MarkedItemStateService } from "../views/testTheme/markedItemStateService";
 import { TestElementTreeBuilder } from "../views/testElements/testElementTreeBuilder";
 import {
     ProjectManagementTreeDataProvider,
@@ -23,7 +23,7 @@ import { TestThemeTreeItem } from "../views/testTheme/testThemeTreeItem";
 import { TestElementTreeItem } from "../views/testElements/testElementTreeItem";
 import { PlayServerConnection } from "../testBenchConnection";
 import { restartLanguageClient } from "../server";
-import { StateChangeNotification } from "./unifiedTreeStateManager";
+import { StateChangeNotification } from "../views/common/unifiedTreeStateManager";
 
 export interface TreeServiceDependencies {
     extensionContext: vscode.ExtensionContext;

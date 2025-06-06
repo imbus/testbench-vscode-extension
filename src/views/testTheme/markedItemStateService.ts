@@ -1,11 +1,11 @@
 /**
- * @file src/services/markedItemStateService.ts
+ * @file src/views/testTheme/markedItemStateService.ts
  * @description Service to manage the state of marked items in the Test Theme Tree.
  */
 
 import * as vscode from "vscode";
-import { TestBenchLogger } from "../testBenchLogger";
-import { StorageKeys } from "../constants";
+import { TestBenchLogger } from "../../testBenchLogger";
+import { StorageKeys } from "../../constants";
 
 export interface MarkedItemInfo {
     key: string;

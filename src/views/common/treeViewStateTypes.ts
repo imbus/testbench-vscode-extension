@@ -1,5 +1,5 @@
 /**
- * @file src/services/treeViewStateTypes.ts
+ * @file src/views/common/treeViewStateTypes.ts
  * @description Common interfaces and types for tree view state management
  */
 

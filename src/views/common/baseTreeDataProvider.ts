@@ -6,13 +6,13 @@
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { BaseTreeItem as BaseTreeItem } from "./baseTreeItem";
-import { UnifiedTreeStateManager, StateChangeNotification } from "../../services/unifiedTreeStateManager";
+import { UnifiedTreeStateManager, StateChangeNotification } from "./unifiedTreeStateManager";
 import {
     TreeViewStateConfig,
     TreeViewEmptyState,
     TreeViewOperationalState,
     StateUpdateParams
-} from "../../services/treeViewStateTypes";
+} from "./treeViewStateTypes";
 
 export interface TreeDataProviderOptions {
     contextKey: string;

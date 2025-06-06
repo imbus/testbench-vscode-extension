@@ -1,11 +1,11 @@
 /**
- * @file src/services/treeViewStateManager.ts
+ * @file src/views/common/treeViewStateManager.ts
  * @description Service for managing tree view states and messages across all tree views
  */
 
-import { TestBenchLogger } from "../testBenchLogger";
-import { getExtensionConfiguration } from "../configuration";
-import { ConfigKeys } from "../constants";
+import { TestBenchLogger } from "../../testBenchLogger";
+import { getExtensionConfiguration } from "../../configuration";
+import { ConfigKeys } from "../../constants";
 import {
     TreeViewState,
     TreeViewEmptyState,

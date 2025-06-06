@@ -1,11 +1,11 @@
 /**
- * @file src/services/projectDataService.ts
+ * @file src/views/projectManagement/projectDataService.ts
  * @description Service for managing project data.
  */
 
-import { PlayServerConnection } from "../testBenchConnection";
-import { TestBenchLogger } from "../testBenchLogger";
-import { Project, TreeNode, CycleStructure } from "../testBenchTypes";
+import { PlayServerConnection } from "../../testBenchConnection";
+import { TestBenchLogger } from "../../testBenchLogger";
+import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
 
 export class ProjectDataService {
     private readonly getConnection: () => PlayServerConnection | null;
