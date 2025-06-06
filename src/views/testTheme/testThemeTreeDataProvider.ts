@@ -526,36 +526,8 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
      * Override the base method to ensure proper tree restoration
      */
     public override resetCustomRoot(): void {
-        this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root and restoring full tree");
-        this.getUnifiedStateManager().resetCustomRoot();
-
-        // Restore the full tree structure if we have valid cycle data
-        if (this.currentCycleKey && this.currentProjectKey && this.rawCycleData) {
-            try {
-                this.logger.debug("[TestThemeTreeDataProvider] Rebuilding full tree from cached cycle data");
-                const allTestThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(this.rawCycleData);
-
-                // Update the tree with the full structure
-                this.updateTreeItem(allTestThemeTreeItems);
-                this.logger.info("[TestThemeTreeDataProvider] Custom root reset and full tree restored successfully");
-            } catch (error) {
-                this.logger.error(
-                    "[TestThemeTreeDataProvider] Error restoring full tree after custom root reset:",
-                    error
-                );
-                // Fallback to refresh if tree restoration fails
-                this.refresh(false);
-            }
-        } else {
-            // No active cycle or no cached data, clear the tree or trigger refresh
-            if (this.currentCycleKey && this.currentProjectKey) {
-                this.logger.debug("[TestThemeTreeDataProvider] No cached data available, triggering refresh");
-                this.refresh(false);
-            } else {
-                this.logger.debug("[TestThemeTreeDataProvider] No active cycle, clearing tree after custom root reset");
-                this.clearTree();
-            }
-        }
+        this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root by triggering a hard refresh.");
+        this.refresh(true);
     }
 
     protected override async getRootChildren(): Promise<TestThemeTreeItem[]> {
