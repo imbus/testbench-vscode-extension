@@ -9,6 +9,8 @@ import { StorageKeys } from "../../constants";
 
 export interface MarkedItemInfo {
     key: string;
+    projectKey: string;
+    cycleKey: string;
     originalContextValue: string;
     isDirectlyGenerated: boolean;
     uniqueID: string;
@@ -17,8 +19,11 @@ export interface MarkedItemInfo {
 export interface GeneratedItemHierarchy {
     rootKey: string;
     rootUID: string;
+    projectKey: string;
+    cycleKey: string;
     markedSubItemUIDs: Set<string>;
-    markedSubItemsWithUID: Map<string, string>; // Map<subItemKey, subItemUID>
+    markedSubItemsWithUID: Map<string, string>;
+    // Map<subItemKey, subItemUID>
 }
 
 export class MarkedItemStateService {
@@ -43,10 +48,14 @@ export class MarkedItemStateService {
                 if (
                     storedMarkedItem.key &&
                     storedMarkedItem.originalContextValue &&
-                    storedMarkedItem.uniqueID !== undefined
+                    storedMarkedItem.uniqueID !== undefined &&
+                    storedMarkedItem.projectKey &&
+                    storedMarkedItem.cycleKey
                 ) {
                     this.currentMarkedItemInfo = {
                         key: storedMarkedItem.key,
+                        projectKey: storedMarkedItem.projectKey,
+                        cycleKey: storedMarkedItem.cycleKey,
                         originalContextValue: storedMarkedItem.originalContextValue,
                         isDirectlyGenerated: storedMarkedItem.isDirectlyGenerated ?? true,
                         uniqueID: storedMarkedItem.uniqueID
@@ -56,7 +65,7 @@ export class MarkedItemStateService {
                     );
                 } else {
                     this.logger.warn(
-                        "[MarkedItemStateService] Stored marked item is missing required properties, ignoring."
+                        "[MarkedItemStateService] Stored marked item is missing required context properties, ignoring."
                     );
                     this.currentMarkedItemInfo = null;
                 }
@@ -68,10 +77,18 @@ export class MarkedItemStateService {
             if (storedHierarchies && Array.isArray(storedHierarchies)) {
                 this.generatedItemHierarchies = new Map();
                 for (const [key, hierarchyData] of storedHierarchies) {
-                    if (hierarchyData.rootKey && hierarchyData.rootUID && hierarchyData.markedSubItemUIDs) {
+                    if (
+                        hierarchyData.rootKey &&
+                        hierarchyData.rootUID &&
+                        hierarchyData.markedSubItemUIDs &&
+                        hierarchyData.projectKey &&
+                        hierarchyData.cycleKey
+                    ) {
                         const hierarchy: GeneratedItemHierarchy = {
                             rootKey: hierarchyData.rootKey,
                             rootUID: hierarchyData.rootUID,
+                            projectKey: hierarchyData.projectKey,
+                            cycleKey: hierarchyData.cycleKey,
                             markedSubItemUIDs: new Set(
                                 Array.isArray(hierarchyData.markedSubItemUIDs) ? hierarchyData.markedSubItemUIDs : []
                             ),
@@ -94,20 +111,20 @@ export class MarkedItemStateService {
             this.currentMarkedItemInfo = null;
         }
     }
-
     private async _saveState(): Promise<void> {
         try {
             await this.context.workspaceState.update(
                 StorageKeys.MARKED_TEST_GENERATION_ITEM,
                 this.currentMarkedItemInfo
             );
-
             const hierarchiesForStorage = Array.from(this.generatedItemHierarchies.entries()).map(
                 ([key, hierarchy]) => [
                     key,
                     {
                         rootKey: hierarchy.rootKey,
                         rootUID: hierarchy.rootUID,
+                        projectKey: hierarchy.projectKey,
+                        cycleKey: hierarchy.cycleKey,
                         markedSubItemUIDs: Array.from(hierarchy.markedSubItemUIDs),
                         markedSubItemsWithUID: Array.from(hierarchy.markedSubItemsWithUID.entries())
                     }
@@ -130,29 +147,33 @@ export class MarkedItemStateService {
     public async markItem(
         itemKey: string,
         itemUID: string,
+        projectKey: string,
+        cycleKey: string,
         originalContextValue: string,
         isDirectlyGenerated: boolean, // True for the root of generation
         descendantUIDs: string[],
         descendantKeysWithUIDs: Array<[string, string]> // Array of [key, UID]
     ): Promise<void> {
         this.logger.info(
-            `[MarkedItemStateService] Marking item ${itemKey} (UID: ${itemUID}) and ${descendantUIDs.length} descendants.`
+            `[MarkedItemStateService] Marking item ${itemKey} (UID: ${itemUID}) for project ${projectKey}, cycle ${cycleKey}.`
         );
         // Clear previous state
         this.currentMarkedItemInfo = null;
         this.generatedItemHierarchies.clear();
-
         this.currentMarkedItemInfo = {
             key: itemKey,
+            projectKey,
+            cycleKey,
             originalContextValue,
             isDirectlyGenerated,
             uniqueID: itemUID
         };
-
         // Create and store hierarchy for this newly marked root item
         const newHierarchy: GeneratedItemHierarchy = {
             rootKey: itemKey,
             rootUID: itemUID,
+            projectKey,
+            cycleKey,
             markedSubItemUIDs: new Set(descendantUIDs),
             markedSubItemsWithUID: new Map(descendantKeysWithUIDs)
         };
@@ -186,9 +207,19 @@ export class MarkedItemStateService {
      * Checks if an item should display an import button.
      * Based on original `shouldTreeItemDisplayImportButton` logic
      */
-    public getItemImportState(itemKey: string, itemUID: string | undefined): { shouldShow: boolean; rootUID?: string } {
+    public getItemImportState(
+        itemKey: string,
+        itemUID: string | undefined,
+        projectKey: string | null,
+        cycleKey: string | null
+    ): {
+        shouldShow: boolean;
+        rootUID?: string;
+    } {
         if (
             this.currentMarkedItemInfo &&
+            this.currentMarkedItemInfo.projectKey === projectKey &&
+            this.currentMarkedItemInfo.cycleKey === cycleKey &&
             this.currentMarkedItemInfo.key === itemKey &&
             this.currentMarkedItemInfo.uniqueID === itemUID
         ) {
@@ -197,7 +228,12 @@ export class MarkedItemStateService {
 
         if (itemUID) {
             for (const hierarchy of this.generatedItemHierarchies.values()) {
-                if (hierarchy.markedSubItemUIDs && hierarchy.markedSubItemUIDs.has(itemUID)) {
+                if (
+                    hierarchy.projectKey === projectKey &&
+                    hierarchy.cycleKey === cycleKey &&
+                    hierarchy.markedSubItemUIDs &&
+                    hierarchy.markedSubItemUIDs.has(itemUID)
+                ) {
                     return { shouldShow: true, rootUID: itemUID };
                 }
             }
@@ -209,7 +245,12 @@ export class MarkedItemStateService {
      * Determines the report root UID for an item, essential for report operations.
      * Based on original `getReportRootUIDForItem` logic
      */
-    public getReportRootUID(itemKey: string, itemUID: string | undefined): string | undefined {
+    public getReportRootUID(
+        itemKey: string,
+        itemUID: string | undefined,
+        projectKey: string | null,
+        cycleKey: string | null
+    ): string | undefined {
         if (!itemKey || !itemUID) {
             this.logger.trace(
                 `[MarkedItemStateService] getReportRootUID: Item key or UID is missing for item with key ${itemKey}.`
@@ -217,7 +258,7 @@ export class MarkedItemStateService {
             return undefined;
         }
 
-        const importState = this.getItemImportState(itemKey, itemUID);
+        const importState = this.getItemImportState(itemKey, itemUID, projectKey, cycleKey);
         if (importState.shouldShow && importState.rootUID) {
             // If it's eligible for import, its own UID is the relevant root for that specific import.
             this.logger.trace(
@@ -228,6 +269,8 @@ export class MarkedItemStateService {
 
         if (
             this.currentMarkedItemInfo &&
+            this.currentMarkedItemInfo.projectKey === projectKey &&
+            this.currentMarkedItemInfo.cycleKey === cycleKey &&
             this.currentMarkedItemInfo.key === itemKey &&
             this.currentMarkedItemInfo.uniqueID === itemUID &&
             this.currentMarkedItemInfo.isDirectlyGenerated

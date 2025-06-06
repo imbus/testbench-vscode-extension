@@ -237,7 +237,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         const collapsibleState = hasChildren
             ? vscode.TreeItemCollapsibleState.Collapsed
             : vscode.TreeItemCollapsibleState.None;
-
         const treeItem = new TestThemeTreeItem(
             testThemeLabel,
             data.elementType,
@@ -252,7 +251,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         const itemKey = treeItem.getUniqueId();
         const itemUID = treeItem.getUID();
         if (itemKey && itemUID) {
-            const importState = this.markedItemStateService.getItemImportState(itemKey, itemUID);
+            const importState = this.markedItemStateService.getItemImportState(
+                itemKey,
+                itemUID,
+                this.currentProjectKey,
+                this.currentCycleKey
+            );
             treeItem.updateContextForMarking(importState.shouldShow);
         }
 
@@ -384,7 +388,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         const testThemeTreeItemKey = testThemeTreeItem.getUniqueId();
         const testThemeTreeItemUID = testThemeTreeItem.getUID();
         return testThemeTreeItemKey && testThemeTreeItemUID
-            ? this.markedItemStateService.getReportRootUID(testThemeTreeItemKey, testThemeTreeItemUID)
+            ? this.markedItemStateService.getReportRootUID(
+                  testThemeTreeItemKey,
+                  testThemeTreeItemUID,
+                  this.currentProjectKey,
+                  this.currentCycleKey
+              )
             : undefined;
     }
 

@@ -457,6 +457,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         await markedItemStateService.markItem(
                             itemKeyToMark,
                             itemUIDToMark,
+                            projectKey,
+                            cycleKey,
                             originalContext,
                             true,
                             descendantUIDs,
@@ -556,7 +558,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
                 const itemKey = item.getUniqueId();
                 const itemUID = item.getUID();
-                const resolvedReportRootUID = markedItemStateService.getReportRootUID(itemKey, itemUID);
+                const resolvedReportRootUID = markedItemStateService.getReportRootUID(
+                    itemKey,
+                    itemUID,
+                    targetProjectKey,
+                    targetCycleKey
+                );
 
                 if (!resolvedReportRootUID) {
                     const errorMsg = `Cannot determine Report Root UID for item: ${item.label}. This item may not be eligible for import or was not properly marked after test generation.`;
