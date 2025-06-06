@@ -1,4 +1,4 @@
-import { StorageKeys } from "./../constants";
+import { allExtensionCommands, StorageKeys, TreeItemContextValues } from "./../constants";
 /**
  * @file src/services/treeServiceManager.ts
  * @description TreeServiceManager
@@ -59,6 +59,11 @@ export class TreeServiceManager {
     private readonly treeViews = new Map<string, TreeViewContainer>();
     private _isInitialized = false;
 
+    // Double-click detection state
+    private lastClickTime = 0;
+    private lastClickedItem: ProjectManagementTreeItem | null = null;
+    private readonly DOUBLE_CLICK_THRESHOLD_MS = 400;
+
     // State change listeners for coordination
     private readonly stateChangeListeners = new Map<string, (notification: StateChangeNotification) => void>();
     private readonly debouncedSaveVisibleViews: () => void;
@@ -68,7 +73,6 @@ export class TreeServiceManager {
         this.logger = dependencies.logger;
         this.getConnection = dependencies.getConnection;
         this.debouncedSaveVisibleViews = debounce(() => this.saveVisibleViewsState(), 500);
-
         this.logger.trace("[TreeServiceManager] Initialized with unified state management integration");
     }
 
@@ -264,6 +268,8 @@ export class TreeServiceManager {
             treeDataProvider: provider,
             canSelectMany: false
         });
+
+        // Handle expansion/collapse events
         this.extensionContext.subscriptions.push(
             treeView.onDidExpandElement((event: vscode.TreeViewExpansionEvent<ProjectManagementTreeItem>) => {
                 provider.handleExpansion(event.element, true);
@@ -274,11 +280,61 @@ export class TreeServiceManager {
                 provider.handleExpansion(event.element, false);
             })
         );
+
+        // Handle selection events with double-click detection
         this.extensionContext.subscriptions.push(
             treeView.onDidChangeSelection(async (event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>) => {
-                await this.handleProjectTreeSelection(event, provider);
+                this.logger.debug(`[TreeServiceManager] Selection changed, items: ${event.selection.length}`);
+                if (event.selection.length > 0) {
+                    const selectedItem = event.selection[0];
+
+                    if (selectedItem instanceof ProjectManagementTreeItem) {
+                        const currentTime = Date.now();
+                        const timeDiff = currentTime - this.lastClickTime;
+
+                        // Check if this is a double-click on a cycle item
+                        if (
+                            selectedItem.originalContextValue === TreeItemContextValues.CYCLE &&
+                            this.lastClickedItem?.getUniqueId() === selectedItem.getUniqueId() &&
+                            timeDiff < this.DOUBLE_CLICK_THRESHOLD_MS
+                        ) {
+                            this.logger.debug(
+                                `[TreeServiceManager] Double-click detected on cycle: ${selectedItem.label}`
+                            );
+
+                            // Reset click tracking
+                            this.lastClickTime = 0;
+                            this.lastClickedItem = null;
+
+                            try {
+                                await vscode.commands.executeCommand(
+                                    allExtensionCommands.openCycleTestThemes,
+                                    selectedItem
+                                );
+                            } catch (error) {
+                                this.logger.error(
+                                    "[TreeServiceManager] Error executing openCycleTestThemes command:",
+                                    error
+                                );
+                                vscode.window.showErrorMessage(
+                                    `Failed to open cycle: ${error instanceof Error ? error.message : "Unknown error"}`
+                                );
+                            }
+                        } else {
+                            // Single-click or first click: update tracking and handle selection
+                            this.lastClickTime = currentTime;
+                            this.lastClickedItem = selectedItem;
+
+                            // Handle normal selection for language server context updates
+                            await this.handleProjectTreeSelection(event, provider);
+                        }
+                    } else {
+                        await this.handleProjectTreeSelection(event, provider);
+                    }
+                }
             })
         );
+
         // Listen for visibility changes to persist the state.
         this.extensionContext.subscriptions.push(
             treeView.onDidChangeVisibility(() => {
@@ -288,7 +344,9 @@ export class TreeServiceManager {
         this.extensionContext.subscriptions.push(treeView);
         this.treeViews.set(viewId, { provider, treeView, updateMessage });
         this.setupProviderStateListener(viewId, provider);
-        this.logger.info("[TreeServiceManager] Project Management tree view created with unified state management");
+        this.logger.info(
+            "[TreeServiceManager] Project Management tree view created with unified state management and double-click handling"
+        );
     }
 
     /**

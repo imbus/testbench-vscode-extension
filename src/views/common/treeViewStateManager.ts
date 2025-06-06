@@ -456,7 +456,7 @@ export class TreeViewStateManager {
         if (this.config.treeViewType === TreeViewType.TEST_ELEMENTS) {
             const filterPatterns = getExtensionConfiguration().get<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER, []);
             if (filterPatterns && filterPatterns.length > 0) {
-                return `All test elements (${this.state.itemsBeforeFiltering}) were filtered out by current filter criteria. Consider reviewing your resource marker settings.`;
+                return `All test elements (${this.state.itemsBeforeFiltering}) were filtered out by current filter criteria.`;
             } else {
                 return `Test elements were processed but none matched the display criteria for TOV "${displayName}".`;
             }

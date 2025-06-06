@@ -1760,3 +1760,138 @@ function extractPrefix(fileName: string): string | null {
     const match: RegExpMatchArray | null = fileName.match(prefixRegex);
     return match ? match[1] : null;
 }
+
+/**
+ * Starts test generation for a Test Object Version (TOV).
+ * This generates tests for all test themes within the TOV.
+ *
+ * @param {vscode.ExtensionContext} context - VS Code extension context
+ * @param {ProjectManagementTreeItem} tovItem - The TOV tree item
+ * @param {string} projectKey - The project key
+ * @param {string} tovKey - The TOV key
+ * @returns {Promise<boolean>} True if generation was successful
+ */
+export async function startTestGenerationForTOV(
+    context: vscode.ExtensionContext,
+    tovItem: ProjectManagementTreeItem,
+    projectKey: string,
+    tovKey: string
+): Promise<boolean> {
+    logger.debug(`[ReportHandler] Starting test generation for TOV: ${tovItem.label} (${tovKey})`);
+
+    try {
+        return await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: `Generating tests for TOV: ${tovItem.label}`,
+                cancellable: true
+            },
+            async (progress, cancellationToken) => {
+                progress.report({ increment: 0, message: "Fetching TOV structure..." });
+
+                if (!connection) {
+                    throw new Error("No connection available");
+                }
+
+                // Fetch TOV structure to get all test themes
+                const tovStructureOptions: testBenchTypes.TovStructureOptions = {
+                    treeRootUID: undefined, // Use default root
+                    suppressFilteredData: false,
+                    suppressEmptyTestThemes: true,
+                    filters: []
+                };
+
+                const tovStructure = await connection.fetchTovStructure(projectKey, tovKey, tovStructureOptions);
+
+                if (cancellationToken.isCancellationRequested) {
+                    return false;
+                }
+
+                if (!tovStructure) {
+                    throw new Error("Failed to fetch TOV structure");
+                }
+
+                progress.report({ increment: 30, message: "Processing TOV structure..." });
+
+                const testThemes = extractTestThemesFromTovStructure(tovStructure);
+                let currentProgress = 30;
+                const progressIncrement = Math.floor(60 / Math.max(testThemes.length, 1));
+
+                for (const testTheme of testThemes) {
+                    if (cancellationToken.isCancellationRequested) {
+                        return false;
+                    }
+
+                    progress.report({
+                        increment: progressIncrement,
+                        message: `Generating tests for: ${testTheme.name}...`
+                    });
+
+                    await generateTestsForTestTheme(context, testTheme, projectKey, tovKey);
+                    currentProgress += progressIncrement;
+                }
+
+                progress.report({ increment: 100 - currentProgress, message: "Test generation completed" });
+
+                const successMessage = `Test generation completed for TOV: ${tovItem.label}`;
+                logger.info(`[ReportHandler] ${successMessage}`);
+                vscode.window.showInformationMessage(successMessage);
+
+                return true;
+            }
+        );
+    } catch (error) {
+        const errorMessage = `Test generation failed for TOV ${tovItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
+        logger.error(`[ReportHandler] ${errorMessage}`, error);
+        vscode.window.showErrorMessage(errorMessage);
+        return false;
+    }
+}
+
+/**
+ * Helper function to extract test themes from TOV structure
+ * @param tovStructure The TOV structure from the server
+ * @returns Array of test theme objects
+ */
+function extractTestThemesFromTovStructure(tovStructure: any): any[] {
+    // TODO: Imlement based on the TOV structure format
+    const testThemes: any[] = [];
+
+    function traverse(node: any) {
+        if (node.nodeType === "TestTheme" || node.type === "TestTheme") {
+            testThemes.push(node);
+        }
+
+        if (node.children) {
+            for (const child of node.children) {
+                traverse(child);
+            }
+        }
+    }
+
+    if (tovStructure.root) {
+        traverse(tovStructure.root);
+    }
+
+    return testThemes;
+}
+
+/**
+ * Helper function to generate tests for a specific test theme
+ * @param context VS Code extension context
+ * @param testTheme The test theme object
+ * @param projectKey The project key
+ * @param tovKey The TOV key
+ */
+async function generateTestsForTestTheme(
+    context: vscode.ExtensionContext,
+    testTheme: any,
+    projectKey: string,
+    tovKey: string
+): Promise<void> {
+    // TODO: Implement the actual test generation logic (using testbench2robotframework library?)
+
+    logger.debug(
+        `[ReportHandler] Generating tests for Test Theme: ${testTheme.name} (Project: ${projectKey}, TOV: ${tovKey})`
+    );
+}

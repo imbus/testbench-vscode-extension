@@ -268,12 +268,42 @@
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
                 "title": "Generate Tests",
-                "icon": "$(robotcode-robot)"
+                "icon": {
+                    "light": "resources/icons/robot-light.svg",
+                    "dark": "resources/icons/robot-dark.svg"
+                }
             },
             {
                 "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
                 "title": "Generate Tests",
-                "icon": "$(robotcode-robot)"
+                "icon": {
+                    "light": "resources/icons/robot-light.svg",
+                    "dark": "resources/icons/robot-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.generateTestCasesForTOV",
+                "title": "Generate Tests",
+                "icon": {
+                    "light": "resources/icons/robot-light.svg",
+                    "dark": "resources/icons/robot-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.openTOVTestElements",
+                "title": "Open",
+                "icon": {
+                    "light": "resources/icons/open-light.svg",
+                    "dark": "resources/icons/open-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.openCycleTestThemes",
+                "title": "Open",
+                "icon": {
+                    "light": "resources/icons/open-light.svg",
+                    "dark": "resources/icons/open-dark.svg"
+                }
             },
             {
                 "command": "projectManagementTree.removeView",
@@ -385,14 +415,6 @@
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
                     "dark": "resources/icons/refresh-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.displayInteractionsForSelectedTOV",
-                "title": "Show Robotframework Resources",
-                "icon": {
-                    "light": "resources/icons/test-elements-light.svg",
-                    "dark": "resources/icons/test-elements-dark.svg"
                 }
             },
             {
@@ -530,6 +552,21 @@
                     "group": "inline@1"
                 },
                 {
+                    "command": "testbenchExtension.openCycleTestThemes",
+                    "when": "view == projectManagementTree && viewItem == Cycle",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "testbenchExtension.generateTestCasesForTOV",
+                    "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.openTOVTestElements",
+                    "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
+                    "group": "inline@2"
+                },
+                {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
                     "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme')",
                     "group": "inline@2"
@@ -543,11 +580,6 @@
                     "command": "testbenchExtension.makeRoot",
                     "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == TestThemeNode || viewItem == 'MarkedForImport.TestThemeNode')",
                     "group": "navigation"
-                },
-                {
-                    "command": "testbenchExtension.displayInteractionsForSelectedTOV",
-                    "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
-                    "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openOrCreateRobotResourceFile",

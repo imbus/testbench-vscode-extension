@@ -62,7 +62,7 @@ The extension settings contains following configurations:
 
 - **Extension Views**
 
-    After selecting a project, the **Project Contents** will be displayed. Navigate through the project elements by expanding or clicking on the tree items. Clicking on a test cycle in the project management tree will automatically initialize the **Test Themes** and **Test Elements** views. In the test themes view, not executable elements and elements that are locked by the system are hidden. For a test object version element in the project contents view, you can click on the **Show Robotframework Resources** button to display the test elements tree for that version element.
+    After selecting a project, the **Project Contents** will be displayed. Navigate through the project elements by expanding or clicking on the tree items. Clicking on a test cycle in the project management tree will automatically initialize the **Test Themes** and **Test Elements** views. In the test themes view, not executable elements and elements that are locked by the system are hidden.
 
 - **Generate Test Cases**
 
@@ -77,9 +77,6 @@ The extension settings contains following configurations:
 - **Execute and Import Test Results**
 
     Once you’ve executed the generated Robot Framework tests (for example via [RobotCode](https://robotcode.io/)), you can click the **Import** button in the **Test Themes** view to send the test results back to the TestBench server. The extension locates the output.xml file that stores the Robot Framework test results inside your working directory using the path specified in the extension settings. During the creation process of the test results, a report file named `ReportWithResults_<TIMESTAMP>.zip` with a timestamp at the end of the file will be created, containing the test results. If you choose to clear the report file after processing in the extension settings, this report file will be deleted automatically after the import process.
-
-- **Test Elements Tree**
-  Upon clicking on **"Show Robotframework Resources"** button for a version element in the project management tree, the extension will display the test elements tree in a separate view, where you view the robotframework resource files and open them in the editor by right-clicking on the resource file and selecting "Go to Robot Resource". Robot Resources that locally exist in the workspace will be displayed in a different color than the resources that are not available in the workspace.
 
 ## License
 

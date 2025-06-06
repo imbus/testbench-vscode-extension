@@ -769,79 +769,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     });
 
-    // --- Command: Display Interactions For Selected TOV ---
-    registerSafeCommand(
-        context,
-        allExtensionCommands.displayInteractionsForSelectedTOV,
-        async (treeItem: ProjectManagementTreeItem) => {
-            logger.debug(
-                `Command Called: ${allExtensionCommands.displayInteractionsForSelectedTOV} for tree item:`,
-                treeItem
-            );
-
-            try {
-                const projectProvider = treeServiceManager.getProjectManagementProvider();
-                const testElementsProvider = treeServiceManager.getTestElementsProvider();
-                const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
-
-                if (treeItem.contextValue === TreeItemContextValues.VERSION) {
-                    const tovKeyOfSelectedTreeElement = treeItem.itemData?.key?.toString();
-                    const tovLabel = typeof treeItem.label === "string" ? treeItem.label : "Unknown TOV";
-
-                    if (tovKeyOfSelectedTreeElement) {
-                        testElementsTreeView.title = `Test Elements (Loading...)`;
-
-                        const areTestElementsFetched: boolean = await testElementsProvider.fetchTestElements(
-                            tovKeyOfSelectedTreeElement,
-                            tovLabel
-                        );
-
-                        if (areTestElementsFetched) {
-                            await hideProjectManagementTreeView();
-                            await displayTestElementsTreeView();
-                            testElementsTreeView.title = `Test Elements (${tovLabel})`;
-
-                            // Persist the active TOV context for restoration
-                            const tovContext = { tovKey: tovKeyOfSelectedTreeElement, tovLabel };
-                            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, tovContext);
-                            logger.trace(`[Cmd] Persisted active TOV context:`, tovContext);
-
-                            // Restart language client for the selected project/TOV
-                            const projectAndTovNameObj = projectProvider.getProjectAndTovNamesForItem(treeItem);
-                            if (projectAndTovNameObj) {
-                                const { projectName, tovName } = projectAndTovNameObj;
-                                if (projectName && tovName) {
-                                    await restartLanguageClient(projectName, tovName);
-                                }
-                            }
-                        } else {
-                            testElementsTreeView.title = "Test Elements";
-                            logger.warn(`Test Elements fetch failed for TOV: ${tovKeyOfSelectedTreeElement}`);
-                            vscode.window.showErrorMessage(`Failed to fetch test elements for TOV: ${tovLabel}`);
-                        }
-                    } else {
-                        const errorMsg = "Invalid TOV selection for test elements display.";
-                        logger.warn(errorMsg);
-                        vscode.window.showWarningMessage(errorMsg);
-                    }
-                }
-            } catch (error) {
-                logger.error(`[Cmd] Error in display interactions command:`, error);
-                try {
-                    const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
-                    const testElementsProvider = treeServiceManager.getTestElementsProvider();
-                    testElementsTreeView.title = "Test Elements";
-                    testElementsProvider.updateTreeViewStatusMessage();
-                } catch (resetError) {
-                    logger.error("[Cmd] Error resetting test elements view after failure:", resetError);
-                }
-                vscode.window.showErrorMessage(
-                    `Error loading test elements: ${error instanceof Error ? error.message : "Unknown error"}`
-                );
-            }
-        }
-    );
-
     // --- Command: Go To Resource File ---
     registerSafeCommand(
         context,
@@ -1209,6 +1136,171 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             vscode.window.showErrorMessage(`Failed to retrieve TOV structure: ${(error as Error).message}`);
         }
     });
+
+    // --- Command: Generate Test Cases For TOV ---
+    registerSafeCommand(
+        context,
+        allExtensionCommands.generateTestCasesForTOV,
+        async (tovItem: ProjectManagementTreeItem) => {
+            logger.debug(`Command Called: ${allExtensionCommands.generateTestCasesForTOV} for item: ${tovItem.label}`);
+
+            if (!connection) {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
+                logger.error(`${allExtensionCommands.generateTestCasesForTOV} command called without connection.`);
+                return;
+            }
+
+            if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
+                await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
+            }
+
+            try {
+                const projectKey = tovItem.getProjectKey();
+                const tovKey = tovItem.getUniqueId();
+                const tovName = typeof tovItem.label === "string" ? tovItem.label : "Unknown TOV";
+
+                if (!projectKey || !tovKey) {
+                    const errorMessage = "Could not determine project or TOV key for test generation.";
+                    vscode.window.showErrorMessage(errorMessage);
+                    logger.error(`${errorMessage} Project: ${projectKey}, TOV: ${tovKey}`);
+                    return;
+                }
+
+                // For TOV-level generation, we'll need to handle this differently than cycle generation
+                // This would generate tests for the entire TOV rather than a specific cycle
+                logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
+
+                // Here you would implement TOV-level test generation logic
+                // This might involve fetching TOV structure and generating tests for all test themes
+                await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey);
+            } catch (error) {
+                logger.error("[Cmd] Error in generateTestCasesForTOV:", error);
+                vscode.window.showErrorMessage(
+                    `Error generating tests for TOV: ${error instanceof Error ? error.message : "Unknown error"}`
+                );
+            }
+        }
+    );
+
+    // --- Command: Open TOV Test Elements ---
+    registerSafeCommand(
+        context,
+        allExtensionCommands.openTOVTestElements,
+        async (tovItem: ProjectManagementTreeItem) => {
+            logger.debug(`Command Called: ${allExtensionCommands.openTOVTestElements} for item: ${tovItem.label}`);
+
+            if (!connection) {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
+                logger.error(`${allExtensionCommands.openTOVTestElements} command called without connection.`);
+                return;
+            }
+
+            try {
+                const projectProvider = treeServiceManager.getProjectManagementProvider();
+                const testElementsProvider = treeServiceManager.getTestElementsProvider();
+                const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
+
+                if (tovItem.contextValue === TreeItemContextValues.VERSION) {
+                    const tovKeyOfSelectedTreeElement = tovItem.itemData?.key?.toString();
+                    const tovLabel = typeof tovItem.label === "string" ? tovItem.label : "Unknown TOV";
+
+                    if (tovKeyOfSelectedTreeElement) {
+                        testElementsTreeView.title = `Test Elements (Loading...)`;
+
+                        const areTestElementsFetched: boolean = await testElementsProvider.fetchTestElements(
+                            tovKeyOfSelectedTreeElement,
+                            tovLabel
+                        );
+
+                        if (areTestElementsFetched) {
+                            await hideProjectManagementTreeView();
+                            await displayTestElementsTreeView();
+                            testElementsTreeView.title = `Test Elements (${tovLabel})`;
+
+                            // Persist the active TOV context for restoration
+                            const tovContext = { tovKey: tovKeyOfSelectedTreeElement, tovLabel };
+                            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, tovContext);
+                            logger.trace(`[Cmd] Persisted active TOV context:`, tovContext);
+
+                            // Restart language client for the selected project/TOV
+                            const projectAndTovNameObj = projectProvider.getProjectAndTovNamesForItem(tovItem);
+                            if (projectAndTovNameObj) {
+                                const { projectName, tovName } = projectAndTovNameObj;
+                                if (projectName && tovName) {
+                                    await restartLanguageClient(projectName, tovName);
+                                }
+                            }
+                        } else {
+                            testElementsTreeView.title = "Test Elements";
+                            logger.warn(`Test Elements fetch failed for TOV: ${tovKeyOfSelectedTreeElement}`);
+                            vscode.window.showErrorMessage(`Failed to fetch test elements for TOV: ${tovLabel}`);
+                        }
+                    } else {
+                        const errorMsg = "Invalid TOV selection for test elements display.";
+                        logger.warn(errorMsg);
+                        vscode.window.showWarningMessage(errorMsg);
+                    }
+                }
+            } catch (error) {
+                logger.error(`[Cmd] Error in openTOVTestElements command:`, error);
+                try {
+                    const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
+                    const testElementsProvider = treeServiceManager.getTestElementsProvider();
+                    testElementsTreeView.title = "Test Elements";
+                    testElementsProvider.updateTreeViewStatusMessage();
+                } catch (resetError) {
+                    logger.error("[Cmd] Error resetting test elements view after failure:", resetError);
+                }
+                vscode.window.showErrorMessage(
+                    `Error loading test elements: ${error instanceof Error ? error.message : "Unknown error"}`
+                );
+            }
+        }
+    );
+
+    // --- Command: Open Cycle Test Themes ---
+    registerSafeCommand(
+        context,
+        allExtensionCommands.openCycleTestThemes,
+        async (cycleItem: ProjectManagementTreeItem) => {
+            logger.debug(`Command Called: ${allExtensionCommands.openCycleTestThemes} for item: ${cycleItem.label}`);
+
+            if (!connection) {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
+                logger.error(`${allExtensionCommands.openCycleTestThemes} command called without connection.`);
+                return;
+            }
+
+            try {
+                if (!treeServiceManager || !treeServiceManager.getInitializationStatus()) {
+                    throw new Error("TreeServiceManager is not initialized");
+                }
+
+                // Hide Projects view, show Test Theme and Test Elements views
+                await hideProjectManagementTreeView();
+                await displayTestThemeTreeView();
+                await displayTestElementsTreeView();
+
+                await treeServiceManager.handleCycleSelection(cycleItem);
+            } catch (error) {
+                logger.error("[Cmd OpenCycleTestThemes] Error during cycle open handling:", error);
+
+                // Reset Test Elements tree view on error
+                try {
+                    const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
+                    testElementsTreeView.title = "Test Elements";
+                    const testElementsProvider = treeServiceManager.getTestElementsProvider();
+                    testElementsProvider.updateTreeViewStatusMessage();
+                } catch (resetError) {
+                    logger.error("[Cmd OpenCycleTestThemes] Error resetting tree view after failure:", resetError);
+                }
+
+                vscode.window.showErrorMessage(
+                    `Error opening cycle: ${error instanceof Error ? error.message : "Unknown error"}`
+                );
+            }
+        }
+    );
 }
 
 /**

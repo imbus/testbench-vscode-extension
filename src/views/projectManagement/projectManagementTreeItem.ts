@@ -5,7 +5,7 @@
 
 import * as vscode from "vscode";
 import { BaseTreeItem } from "../common/baseTreeItem";
-import { TreeItemContextValues, allExtensionCommands } from "../../constants";
+import { TreeItemContextValues } from "../../constants";
 import { IconManagementService } from "../common/iconManagementService";
 import { TestBenchLogger } from "../../testBenchLogger";
 
@@ -30,15 +30,6 @@ export class ProjectManagementTreeItem extends BaseTreeItem {
             iconServiceFromFactory,
             parent
         );
-
-        // Set command for cycle items
-        if (contextValue === TreeItemContextValues.CYCLE) {
-            this.command = {
-                command: allExtensionCommands.handleProjectCycleClick,
-                title: "Show Test Themes",
-                arguments: [this]
-            };
-        }
     }
 
     protected buildTooltipContent(): string {
