@@ -1324,9 +1324,9 @@ async function handleTestBenchSessionChange(
             treeServiceManager.restoreVisibleViewsState();
 
             try {
-                treeServiceManager.clearAllTrees();
+                await treeServiceManager.clearAllTreesData();
             } catch (error) {
-                logger.warn("[Extension] Error clearing trees during logout:", error);
+                logger.warn("[Extension] Error clearing tree data during session change:", error);
             }
         }
     } else {
@@ -1341,7 +1341,7 @@ async function handleTestBenchSessionChange(
         try {
             treeServiceManager.clearAllTrees();
         } catch (error) {
-            logger.warn("[Extension] Error clearing trees during session cleanup:", error);
+            logger.warn("[Extension] Error clearing trees during logout:", error);
         }
     }
 }

@@ -193,7 +193,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      * Clear tree data with proper state management
      */
     public clearTree(): void {
-        this.logger.debug(`[${this.constructor.name}] Clearing tree`);
+        this.logger.debug(`[${this.constructor.name}] Clearing tree data (preserving expansion state)`);
 
         // Dispose all current tree items
         this.rootTreeItems.forEach((treeItem) => {
@@ -207,7 +207,42 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         });
 
         this.rootTreeItems = [];
-        this.unifiedStateManager.clear();
+
+        // Update operational state without clearing expansion state
+        this.unifiedStateManager.updateState({
+            operationalState: TreeViewOperationalState.EMPTY,
+            emptyState: TreeViewEmptyState.NO_DATA_SOURCE,
+            itemsAfterFiltering: 0
+        });
+
+        this._onDidChangeTreeData.fire(undefined);
+    }
+
+    /**
+     * Clear tree data AND all persistent state (expansion state, custom root, etc.)
+     * Use this when completely resetting the tree (e.g., switching projects, logout)
+     */
+    public clearTreeAndState(): void {
+        this.logger.debug(`[${this.constructor.name}] Clearing tree data and all state`);
+
+        // Store current expansion state before clearing if we have tree items
+        if (this.options.enableExpansionTracking && this.rootTreeItems.length > 0) {
+            this.storeExpansionState();
+        }
+
+        // Dispose all current tree items
+        this.rootTreeItems.forEach((treeItem) => {
+            try {
+                if (treeItem && typeof treeItem.dispose === "function") {
+                    treeItem.dispose();
+                }
+            } catch (error) {
+                this.logger.error(`[${this.constructor.name}] Error disposing tree item during clear:`, error);
+            }
+        });
+
+        this.rootTreeItems = [];
+        this.unifiedStateManager.clear(); // clears all state including expansion
         this._onDidChangeTreeData.fire(undefined);
     }
 

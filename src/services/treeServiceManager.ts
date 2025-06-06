@@ -185,9 +185,9 @@ export class TreeServiceManager {
             this.logger.error("[TreeServiceManager] Failed to initiate restore of visible tree views state:", error);
         }
     }
+
     /**
-     * Restores the data state of dependent views (Test Themes, Test Elements)
-     * by using persisted context from the last session.
+     * Restores the data state while ensuring expansion state is preserved
      */
     public async restoreDataState(): Promise<void> {
         this.logger.debug("[TreeServiceManager] Attempting to restore data state for dependent views.");
@@ -199,11 +199,13 @@ export class TreeServiceManager {
                 cycleKey: string;
                 cycleLabel: string;
             }>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+
             if (cycleContext?.projectKey && cycleContext?.cycleKey) {
                 this.logger.trace(
                     `[TreeServiceManager] Found persisted Cycle context. Restoring Test Themes for cycle: ${cycleContext.cycleLabel}`
                 );
-                // Manually replicate the data flow that happens on a cycle click
+
+                // Fetch cycle data
                 const rawCycleData = await this.projectDataService.fetchCycleStructure(
                     cycleContext.projectKey,
                     cycleContext.cycleKey
@@ -212,18 +214,27 @@ export class TreeServiceManager {
                 const testThemeProvider = this.getTestThemeProvider();
                 const testThemeTreeView = this.getTestThemeTreeView();
                 testThemeTreeView.title = `Test Themes (${cycleContext.cycleLabel})`;
-                testThemeProvider.populateFromCycleData({ ...cycleContext, rawCycleStructure: rawCycleData });
+
+                // Preserves expansion state
+                testThemeProvider.populateFromCycleData({
+                    ...cycleContext,
+                    rawCycleStructure: rawCycleData
+                });
             }
 
             // Restore Test Elements View if context is available
-            const tovContext = this.extensionContext.workspaceState.get<{ tovKey: string; tovLabel: string }>(
-                StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY
-            );
+            const tovContext = this.extensionContext.workspaceState.get<{
+                tovKey: string;
+                tovLabel: string;
+            }>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+
             if (tovContext?.tovKey) {
                 this.logger.trace(
                     `[TreeServiceManager] Found persisted TOV context. Restoring Test Elements for TOV: ${tovContext.tovKey}`
                 );
+
                 const testElementsProvider = this.getTestElementsProvider();
+                // fetchTestElements already handles expansion state properly
                 await testElementsProvider.fetchTestElements(tovContext.tovKey, tovContext.tovLabel);
             }
         } catch (error) {
@@ -325,7 +336,7 @@ export class TreeServiceManager {
     }
 
     /**
-     * Create and configure the Test Elements tree view
+     * Initialize Test Elements tree without clearing expansion state
      */
     private async createTestElementsTree(): Promise<void> {
         const viewId = "testElementsView";
@@ -347,6 +358,8 @@ export class TreeServiceManager {
         const treeView = vscode.window.createTreeView(viewId, {
             treeDataProvider: provider
         });
+
+        // Set up event handlers
         this.extensionContext.subscriptions.push(
             treeView.onDidExpandElement((event) => {
                 if (provider && typeof provider.handleItemExpansion === "function") {
@@ -361,16 +374,21 @@ export class TreeServiceManager {
                 }
             })
         );
-        // Listen for visibility changes to persist the state.
+
+        // Listen for visibility changes to persist the state
         this.extensionContext.subscriptions.push(
             treeView.onDidChangeVisibility(() => {
                 this.debouncedSaveVisibleViews();
             })
         );
+
         this.extensionContext.subscriptions.push(treeView);
         this.treeViews.set(viewId, { provider, treeView, updateMessage });
         this.setupProviderStateListener(viewId, provider);
-        provider.clearTree();
+
+        // Initialize with empty state but preserve expansion state
+        provider.updateTreeViewStatusMessage();
+
         this.logger.info("[TreeServiceManager] Test Elements tree view created with unified state management");
     }
 
@@ -459,6 +477,20 @@ export class TreeServiceManager {
         }
     }
 
+    /**
+     * Clear tree data while preserving expansion state (for refresh/repopulation scenarios)
+     */
+    public async clearAllTreesData(): Promise<void> {
+        try {
+            this.getProjectManagementProvider().clearTree();
+            this.getTestThemeProvider().clearTree();
+            this.getTestElementsProvider().clearTree();
+            this.logger.info("[TreeServiceManager] All tree data cleared (expansion state preserved)");
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Error clearing tree data:", error);
+        }
+    }
+
     public getProjectManagementProvider(): ProjectManagementTreeDataProvider {
         const container = this.treeViews.get("projectManagementTree"); // Corrected Key
         if (!container?.provider) {
@@ -507,14 +539,17 @@ export class TreeServiceManager {
         return container.treeView;
     }
 
+    /**
+     * Clear all trees and their persistent state (for logout/disconnect scenarios)
+     */
     public async clearAllTrees(): Promise<void> {
         try {
-            this.getProjectManagementProvider().clearTree();
-            this.getTestThemeProvider().clearTree();
-            this.getTestElementsProvider().clearTree();
-            this.logger.info("[TreeServiceManager] All trees cleared using unified state management");
+            this.getProjectManagementProvider().clearTreeAndState();
+            this.getTestThemeProvider().clearTreeAndState();
+            this.getTestElementsProvider().clearTreeAndState();
+            this.logger.info("[TreeServiceManager] All trees and state cleared");
         } catch (error) {
-            this.logger.error("[TreeServiceManager] Error clearing trees:", error);
+            this.logger.error("[TreeServiceManager] Error clearing trees and state:", error);
         }
     }
 
