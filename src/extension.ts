@@ -1,3 +1,4 @@
+import { StorageKeys } from "./constants";
 /**
  * @file extension.ts
  * @description Main entry point for the TestBench VS Code extension.
@@ -800,6 +801,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                             await displayTestElementsTreeView();
                             testElementsTreeView.title = `Test Elements (${tovLabel})`;
 
+                            // Persist the active TOV context for restoration
+                            const tovContext = { tovKey: tovKeyOfSelectedTreeElement, tovLabel };
+                            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, tovContext);
+                            logger.trace(`[Cmd] Persisted active TOV context:`, tovContext);
+
                             // Restart language client for the selected project/TOV
                             const projectAndTovNameObj = projectProvider.getProjectAndTovNamesForItem(treeItem);
                             if (projectAndTovNameObj) {
@@ -1245,21 +1251,6 @@ async function handleTestBenchSessionChange(
                 logger.info(
                     `[Extension] Connection for connection '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
                 );
-                if (!wasPreviouslyConnected) {
-                    logger.info("[Extension] Re-asserting UI state for existing matching connection.");
-                    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
-                    getLoginWebViewProvider()?.updateWebviewHTMLContent();
-                    await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
-
-                    try {
-                        const projectProvider = treeServiceManager.getProjectManagementProvider();
-                        const testThemeProvider = treeServiceManager.getTestThemeProvider();
-                        projectProvider.refresh(true);
-                        testThemeProvider.clearTree();
-                    } catch (error) {
-                        logger.warn("[Extension] Error refreshing trees during session restore:", error);
-                    }
-                }
                 return;
             }
 
@@ -1284,20 +1275,24 @@ async function handleTestBenchSessionChange(
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-            // Only display projects tree view after a login,
-            // so that the user won't other tree views in loading state
-            await hideTestThemeTreeView();
-            await hideTestElementsTreeView();
+            // Restore the previously visible tree views.
+            if (treeServiceManager) {
+                treeServiceManager.restoreVisibleViewsState();
+            } else {
+                // Fallback in case manager is not ready, though it should be.
+                logger.warn(
+                    "[Extension] TreeServiceManager not available during session change, defaulting to project view."
+                );
+                await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
+            }
 
+            // Refresh tree providers as the session has changed.
             if (
                 !wasPreviouslyConnected ||
                 (connection && connection.getSessionToken() !== newConnection.getSessionToken())
             ) {
-                logger.info(
-                    "[Extension] New session established. Setting default view to 'Projects' and refreshing data."
-                );
+                logger.info("[Extension] New session established. Refreshing project data.");
                 await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
-
                 try {
                     const projectProvider = treeServiceManager.getProjectManagementProvider();
                     const testThemeProvider = treeServiceManager.getTestThemeProvider();
@@ -1306,28 +1301,16 @@ async function handleTestBenchSessionChange(
                     projectProvider.refresh(true);
                     testThemeProvider.clearTree();
                     testElementsProvider.clearTree();
+
+                    logger.debug("[Extension] Restoring data and view state after login.");
+                    await treeServiceManager.restoreDataState();
+                    treeServiceManager.restoreVisibleViewsState();
                 } catch (error) {
                     logger.warn("[Extension] Error managing trees during session change:", error);
                 }
-            } else {
-                logger.info(
-                    "[Extension] Session changed while already connected. Resetting view to 'Projects' and refreshing data."
-                );
-                await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
-
-                try {
-                    const projectProvider = treeServiceManager.getProjectManagementProvider();
-                    const testThemeProvider = treeServiceManager.getTestThemeProvider();
-                    const testElementsProvider = treeServiceManager.getTestElementsProvider();
-
-                    projectProvider.refresh(true);
-                    testThemeProvider.clearTree();
-                    testElementsProvider.clearTree();
-                } catch (error) {
-                    logger.warn("[Extension] Error managing trees during session update:", error);
-                }
             }
         } else {
+            // TODO: Check if a logout is needed after a reload VS Code
             logger.warn("[Extension] Session exists, but no active connection. Clearing connection.");
             if (connection) {
                 await connection.logoutUserOnServer();
@@ -1336,9 +1319,9 @@ async function handleTestBenchSessionChange(
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-            await hideProjectManagementTreeView();
-            await hideTestThemeTreeView();
-            await hideTestElementsTreeView();
+            logger.debug("[Extension] Restoring data and view state after session change.");
+            await treeServiceManager.restoreDataState();
+            treeServiceManager.restoreVisibleViewsState();
 
             try {
                 treeServiceManager.clearAllTrees();
@@ -1354,10 +1337,6 @@ async function handleTestBenchSessionChange(
         setConnection(null);
         await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
         getLoginWebViewProvider()?.updateWebviewHTMLContent();
-
-        await hideProjectManagementTreeView();
-        await hideTestThemeTreeView();
-        await hideTestElementsTreeView();
 
         try {
             treeServiceManager.clearAllTrees();

@@ -13,6 +13,7 @@ import {
     TreeViewOperationalState,
     StateUpdateParams
 } from "./treeViewStateTypes";
+import { debounce } from "../../utils";
 
 export interface TreeDataProviderOptions {
     contextKey: string;
@@ -33,6 +34,8 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     protected rootTreeItems: T[] = [];
     protected unifiedStateManager: UnifiedTreeStateManager<T>;
     private readonly _disposables: vscode.Disposable[] = [];
+    private readonly storageKey: string;
+    private readonly debouncedPersistExpansionState: () => void;
 
     constructor(
         protected readonly extensionContext: vscode.ExtensionContext,
@@ -44,6 +47,11 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             treeViewId: options.contextKey,
             treeViewType: "project_management" as any
         };
+
+        this.storageKey = `testbench.expandedItems.${stateConfig.treeViewId}`;
+
+        // Debounce the persistence function to avoid excessive writes on frequent UI interactions.
+        this.debouncedPersistExpansionState = debounce(() => this.persistExpansionState(), 500);
 
         this.unifiedStateManager = new UnifiedTreeStateManager<T>(
             logger,
@@ -61,7 +69,46 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         this._disposables.push(this._onDidChangeTreeData);
         this._disposables.push(this.unifiedStateManager);
 
+        // Load the persisted expansion state when the provider is first created.
+        this.loadExpansionState();
+
         this.logger.trace("[BaseTreeDataProvider] Initialized with unified state management");
+    }
+
+    /**
+     * Loads the expansion state from workspace storage and applies it to the state manager.
+     */
+    private loadExpansionState(): void {
+        try {
+            const expandedIds = this.extensionContext.workspaceState.get<string[]>(this.storageKey, []);
+            if (expandedIds.length > 0) {
+                this.unifiedStateManager.updateState({ expandedItems: new Set(expandedIds) });
+                this.logger.trace(
+                    `[BaseTreeDataProvider] Loaded ${expandedIds.length} expanded items for ${this.storageKey}`
+                );
+            }
+        } catch (error) {
+            this.logger.error(`[BaseTreeDataProvider] Error loading expansion state for ${this.storageKey}:`, error);
+        }
+    }
+
+    /**
+     * Persists the current expansion state to the workspace storage.
+     */
+    private persistExpansionState(): void {
+        try {
+            if (!this.options.enableExpansionTracking) {
+                return;
+            }
+            const state = this.unifiedStateManager.getCurrentUnifiedState();
+            const expandedIds = Array.from(state.expandedItems);
+            this.extensionContext.workspaceState.update(this.storageKey, expandedIds);
+            this.logger.trace(
+                `[BaseTreeDataProvider] Persisted ${expandedIds.length} expanded items for ${this.storageKey}`
+            );
+        } catch (error) {
+            this.logger.error(`[BaseTreeDataProvider] Error persisting expansion state for ${this.storageKey}:`, error);
+        }
     }
 
     /**
@@ -197,14 +244,17 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Handle expansion of an item
+     * Handle expansion of an item, update the state, and trigger persistence.
+     * @param treeItem The item being expanded or collapsed.
+     * @param expanded The new expansion state.
      */
     public handleExpansion(treeItem: T, expanded: boolean): void {
         treeItem.handleExpansion(expanded);
-
         if (this.options.enableExpansionTracking) {
             const itemId = treeItem.getUniqueId();
             this.unifiedStateManager.setItemExpansion(itemId, expanded);
+            // Trigger the debounced persistence to save the state after a short delay.
+            this.debouncedPersistExpansionState();
         }
         this.logger.debug(
             `[BaseTreeDataProvider] Item ${treeItem.label} (${treeItem.getUniqueId()}) expansion set to ${expanded}`
@@ -230,29 +280,36 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Store expansion state from current tree
+     * Store expansion state from current tree.
      */
     protected storeExpansionState(): void {
-        if (this.options.enableExpansionTracking) {
-            const expandedIds = new Set<string>();
-
-            const collectExpanded = (items: T[]) => {
-                for (const item of items) {
-                    if (item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
-                        expandedIds.add(item.getUniqueId());
-                    }
-                    if (item.children) {
-                        collectExpanded(item.children as T[]);
-                    }
-                }
-            };
-
-            collectExpanded(this.rootTreeItems);
-            this.unifiedStateManager.updateState({ expandedItems: expandedIds });
-            this.logger.debug(
-                `[BaseTreeDataProvider] Stored expansion state for ${expandedIds.size} items: ${[...expandedIds].join(", ")}`
-            );
+        if (!this.options.enableExpansionTracking) {
+            return;
         }
+
+        if (this.rootTreeItems.length === 0) {
+            this.logger.trace(
+                `[BaseTreeDataProvider] storeExpansionState skipped for ${this.storageKey} because tree is empty.`
+            );
+            return;
+        }
+        const expandedIds = new Set<string>();
+        const collectExpanded = (items: T[]) => {
+            for (const item of items) {
+                if (item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                    expandedIds.add(item.getUniqueId());
+                }
+                if (item.children) {
+                    collectExpanded(item.children as T[]);
+                }
+            }
+        };
+
+        collectExpanded(this.rootTreeItems);
+        this.unifiedStateManager.updateState({ expandedItems: expandedIds });
+        this.logger.debug(
+            `[BaseTreeDataProvider] Stored expansion state for ${expandedIds.size} items: ${[...expandedIds].join(", ")}`
+        );
     }
 
     /**
@@ -491,12 +548,13 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Dispose of the provider and all resources
+     * Dispose of the provider and all resources, ensuring the final state is saved.
      */
     public dispose(): void {
         this.logger.debug(`[${this.constructor.name}] Disposing provider`);
-
         try {
+            // Persist state one last time on dispose to capture the final state.
+            this.persistExpansionState();
             this.clearTree();
             this._disposables.forEach((disposable) => {
                 try {

@@ -772,8 +772,6 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     }
 
     if (testGenerationSuccessful) {
-        // REMOVED: Direct call to testThemeTreeDataProvider.markItemAsGenerated(selectedTreeItem);
-        // This state change will be handled by the command handler in extension.ts using MarkedItemStateService
         vscode.window.showInformationMessage("Robot Framework test generation successful.");
         logger.info("Test generation successful.");
         await vscode.commands.executeCommand("workbench.view.extension.test"); // Assuming this command is still relevant

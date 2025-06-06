@@ -1,3 +1,4 @@
+import { StorageKeys } from "./../constants";
 /**
  * @file src/services/treeServiceManager.ts
  * @description TreeServiceManager
@@ -24,6 +25,7 @@ import { TestElementTreeItem } from "../views/testElements/testElementTreeItem";
 import { PlayServerConnection } from "../testBenchConnection";
 import { restartLanguageClient } from "../server";
 import { StateChangeNotification } from "../views/common/unifiedTreeStateManager";
+import { debounce } from "../utils";
 
 export interface TreeServiceDependencies {
     extensionContext: vscode.ExtensionContext;
@@ -59,11 +61,14 @@ export class TreeServiceManager {
 
     // State change listeners for coordination
     private readonly stateChangeListeners = new Map<string, (notification: StateChangeNotification) => void>();
+    private readonly debouncedSaveVisibleViews: () => void;
 
     constructor(dependencies: TreeServiceDependencies) {
         this.extensionContext = dependencies.extensionContext;
         this.logger = dependencies.logger;
         this.getConnection = dependencies.getConnection;
+        this.debouncedSaveVisibleViews = debounce(() => this.saveVisibleViewsState(), 500);
+
         this.logger.trace("[TreeServiceManager] Initialized with unified state management integration");
     }
 
@@ -100,19 +105,16 @@ export class TreeServiceManager {
     }
 
     /**
-     * Create and register all tree views with the extension context
+     * Create and register all tree views with the extension context.
      */
     public async initializeTreeViews(): Promise<void> {
         if (!this._isInitialized) {
             throw new Error("TreeServiceManager must be initialized before creating tree views");
         }
-
         try {
             await this.createProjectManagementTree();
             await this.createTestThemeTree();
             await this.createTestElementsTree();
-
-            // Setup inter-tree communication and state coordination
             this.setupTreeViewInteractions();
             this.setupUnifiedStateCoordination();
 
@@ -126,16 +128,120 @@ export class TreeServiceManager {
     }
 
     /**
+     * Saves the list of currently visible tree view IDs to workspace storage.
+     */
+    private async saveVisibleViewsState(): Promise<void> {
+        try {
+            const visibleViewIds: string[] = [];
+            for (const [id, container] of this.treeViews) {
+                if (container.treeView.visible) {
+                    visibleViewIds.push(id);
+                }
+            }
+            await this.extensionContext.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, visibleViewIds);
+            this.logger.trace("[TreeServiceManager] Saved visible tree views:", visibleViewIds);
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Failed to save visible tree views state:", error);
+        }
+    }
+
+    /**
+     * Restores the visibility of tree views based on the persisted state.
+     */
+    public restoreVisibleViewsState(): void {
+        try {
+            const visibleViewIds = this.extensionContext.workspaceState.get<string[]>(
+                StorageKeys.VISIBLE_VIEWS_STORAGE_KEY
+            );
+
+            // Use a small delay to ensure the views are fully registered before we try to focus them.
+            setTimeout(() => {
+                // If the key is undefined, it's the first run, so show the default view.
+                if (visibleViewIds === undefined) {
+                    this.logger.trace(
+                        "[TreeServiceManager] No saved view state found, focusing on default project view."
+                    );
+                    vscode.commands.executeCommand("projectManagementTree.focus").then(undefined, (err) => {
+                        this.logger.warn(`[TreeServiceManager] Could not set default focus for project view:`, err);
+                    });
+                    return;
+                }
+
+                // If the array exists (even if empty), respect the saved state.
+                if (visibleViewIds.length > 0) {
+                    this.logger.trace("[TreeServiceManager] Restoring visible tree views:", visibleViewIds);
+                    for (const viewId of visibleViewIds) {
+                        vscode.commands.executeCommand(`${viewId}.focus`).then(undefined, (err) => {
+                            this.logger.warn(`[TreeServiceManager] Could not restore focus for view ${viewId}:`, err);
+                        });
+                    }
+                } else {
+                    this.logger.trace(
+                        "[TreeServiceManager] User had no TestBench views visible. Respecting saved state."
+                    );
+                }
+            }, 500); // 500ms delay for safety.
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Failed to initiate restore of visible tree views state:", error);
+        }
+    }
+    /**
+     * Restores the data state of dependent views (Test Themes, Test Elements)
+     * by using persisted context from the last session.
+     */
+    public async restoreDataState(): Promise<void> {
+        this.logger.debug("[TreeServiceManager] Attempting to restore data state for dependent views.");
+
+        try {
+            // Restore Test Theme View if context is available
+            const cycleContext = this.extensionContext.workspaceState.get<{
+                projectKey: string;
+                cycleKey: string;
+                cycleLabel: string;
+            }>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+            if (cycleContext?.projectKey && cycleContext?.cycleKey) {
+                this.logger.trace(
+                    `[TreeServiceManager] Found persisted Cycle context. Restoring Test Themes for cycle: ${cycleContext.cycleLabel}`
+                );
+                // Manually replicate the data flow that happens on a cycle click
+                const rawCycleData = await this.projectDataService.fetchCycleStructure(
+                    cycleContext.projectKey,
+                    cycleContext.cycleKey
+                );
+
+                const testThemeProvider = this.getTestThemeProvider();
+                const testThemeTreeView = this.getTestThemeTreeView();
+                testThemeTreeView.title = `Test Themes (${cycleContext.cycleLabel})`;
+                testThemeProvider.populateFromCycleData({ ...cycleContext, rawCycleStructure: rawCycleData });
+            }
+
+            // Restore Test Elements View if context is available
+            const tovContext = this.extensionContext.workspaceState.get<{ tovKey: string; tovLabel: string }>(
+                StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY
+            );
+            if (tovContext?.tovKey) {
+                this.logger.trace(
+                    `[TreeServiceManager] Found persisted TOV context. Restoring Test Elements for TOV: ${tovContext.tovKey}`
+                );
+                const testElementsProvider = this.getTestElementsProvider();
+                await testElementsProvider.fetchTestElements(tovContext.tovKey, tovContext.tovLabel);
+            }
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Failed to restore a view's data state:", error);
+        }
+    }
+
+    /**
      * Create and configure the Project Management tree view
      */
     private async createProjectManagementTree(): Promise<void> {
+        const viewId = "projectManagementTree";
         const updateMessage = (message?: string) => {
-            const container = this.treeViews.get("projectManagement");
+            const container = this.treeViews.get(viewId);
             if (container?.treeView) {
                 container.treeView.message = message;
             }
         };
-
         const provider = new ProjectManagementTreeDataProvider(
             this.extensionContext,
             this.logger,
@@ -143,35 +249,34 @@ export class TreeServiceManager {
             updateMessage,
             this.projectDataService
         );
-        const treeView = vscode.window.createTreeView("projectManagementTree", {
+        const treeView = vscode.window.createTreeView(viewId, {
             treeDataProvider: provider,
             canSelectMany: false
         });
-
-        // Add expansion event listeners to keep the data provider's state in sync with the UI
         this.extensionContext.subscriptions.push(
             treeView.onDidExpandElement((event: vscode.TreeViewExpansionEvent<ProjectManagementTreeItem>) => {
                 provider.handleExpansion(event.element, true);
             })
         );
-
         this.extensionContext.subscriptions.push(
             treeView.onDidCollapseElement((event: vscode.TreeViewExpansionEvent<ProjectManagementTreeItem>) => {
                 provider.handleExpansion(event.element, false);
             })
         );
-
-        // Setup selection change listener for language server context
         this.extensionContext.subscriptions.push(
             treeView.onDidChangeSelection(async (event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>) => {
                 await this.handleProjectTreeSelection(event, provider);
             })
         );
+        // Listen for visibility changes to persist the state.
+        this.extensionContext.subscriptions.push(
+            treeView.onDidChangeVisibility(() => {
+                this.debouncedSaveVisibleViews();
+            })
+        );
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set("projectManagement", { provider, treeView, updateMessage });
-
-        // Setup state change listener for this provider
-        this.setupProviderStateListener("projectManagement", provider);
+        this.treeViews.set(viewId, { provider, treeView, updateMessage });
+        this.setupProviderStateListener(viewId, provider);
         this.logger.info("[TreeServiceManager] Project Management tree view created with unified state management");
     }
 
@@ -179,13 +284,13 @@ export class TreeServiceManager {
      * Create and configure the Test Theme tree view
      */
     private async createTestThemeTree(): Promise<void> {
+        const viewId = "testThemeTree";
         const updateMessage = (message?: string) => {
-            const container = this.treeViews.get("testTheme");
+            const container = this.treeViews.get(viewId);
             if (container?.treeView) {
                 container.treeView.message = message;
             }
         };
-
         const provider = new TestThemeTreeDataProvider(
             this.extensionContext,
             this.logger,
@@ -194,28 +299,28 @@ export class TreeServiceManager {
             this.markedItemStateService,
             this.iconManagementService
         );
-        const treeView = vscode.window.createTreeView("testThemeTree", {
+        const treeView = vscode.window.createTreeView(viewId, {
             treeDataProvider: provider
         });
-
-        // Add expansion event listeners to keep the data provider's state in sync with the UI
         this.extensionContext.subscriptions.push(
             treeView.onDidExpandElement((event: vscode.TreeViewExpansionEvent<TestThemeTreeItem>) => {
                 provider.handleExpansion(event.element, true);
             })
         );
-
         this.extensionContext.subscriptions.push(
             treeView.onDidCollapseElement((event: vscode.TreeViewExpansionEvent<TestThemeTreeItem>) => {
                 provider.handleExpansion(event.element, false);
             })
         );
-
+        // Listen for visibility changes to persist the state.
+        this.extensionContext.subscriptions.push(
+            treeView.onDidChangeVisibility(() => {
+                this.debouncedSaveVisibleViews();
+            })
+        );
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set("testTheme", { provider, treeView, updateMessage });
-
-        // Setup state change listener for this provider
-        this.setupProviderStateListener("testTheme", provider);
+        this.treeViews.set(viewId, { provider, treeView, updateMessage });
+        this.setupProviderStateListener(viewId, provider);
         this.logger.info("[TreeServiceManager] Test Theme tree view created with unified state management");
     }
 
@@ -223,13 +328,13 @@ export class TreeServiceManager {
      * Create and configure the Test Elements tree view
      */
     private async createTestElementsTree(): Promise<void> {
+        const viewId = "testElementsView";
         const updateMessage = (message?: string) => {
-            const container = this.treeViews.get("testElements");
+            const container = this.treeViews.get(viewId);
             if (container?.treeView) {
                 container.treeView.message = message;
             }
         };
-
         const provider = new TestElementsTreeDataProvider(
             this.extensionContext,
             this.logger,
@@ -239,12 +344,9 @@ export class TreeServiceManager {
             this.iconManagementService,
             this.testElementTreeBuilder
         );
-
-        const treeView = vscode.window.createTreeView("testElementsView", {
+        const treeView = vscode.window.createTreeView(viewId, {
             treeDataProvider: provider
         });
-
-        // Setup expansion event handlers
         this.extensionContext.subscriptions.push(
             treeView.onDidExpandElement((event) => {
                 if (provider && typeof provider.handleItemExpansion === "function") {
@@ -252,7 +354,6 @@ export class TreeServiceManager {
                 }
             })
         );
-
         this.extensionContext.subscriptions.push(
             treeView.onDidCollapseElement((event) => {
                 if (provider && typeof provider.handleItemExpansion === "function") {
@@ -260,15 +361,16 @@ export class TreeServiceManager {
                 }
             })
         );
-
+        // Listen for visibility changes to persist the state.
+        this.extensionContext.subscriptions.push(
+            treeView.onDidChangeVisibility(() => {
+                this.debouncedSaveVisibleViews();
+            })
+        );
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set("testElements", { provider, treeView, updateMessage });
-
-        // Setup state change listener for this provider
-        this.setupProviderStateListener("testElements", provider);
-
+        this.treeViews.set(viewId, { provider, treeView, updateMessage });
+        this.setupProviderStateListener(viewId, provider);
         provider.clearTree();
-
         this.logger.info("[TreeServiceManager] Test Elements tree view created with unified state management");
     }
 
@@ -358,7 +460,7 @@ export class TreeServiceManager {
     }
 
     public getProjectManagementProvider(): ProjectManagementTreeDataProvider {
-        const container = this.treeViews.get("projectManagement");
+        const container = this.treeViews.get("projectManagementTree"); // Corrected Key
         if (!container?.provider) {
             throw new Error("Project Management provider is not initialized. Call initializeTreeViews() first.");
         }
@@ -366,7 +468,7 @@ export class TreeServiceManager {
     }
 
     public getTestThemeProvider(): TestThemeTreeDataProvider {
-        const container = this.treeViews.get("testTheme");
+        const container = this.treeViews.get("testThemeTree"); // Corrected Key
         if (!container?.provider) {
             throw new Error("Test Theme provider is not initialized. Call initializeTreeViews() first.");
         }
@@ -374,7 +476,7 @@ export class TreeServiceManager {
     }
 
     public getTestElementsProvider(): TestElementsTreeDataProvider {
-        const container = this.treeViews.get("testElements");
+        const container = this.treeViews.get("testElementsView");
         if (!container?.provider) {
             throw new Error("Test Elements provider is not initialized. Call initializeTreeViews() first.");
         }
@@ -382,7 +484,7 @@ export class TreeServiceManager {
     }
 
     public getProjectManagementTreeView(): vscode.TreeView<BaseTreeItem> {
-        const container = this.treeViews.get("projectManagement");
+        const container = this.treeViews.get("projectManagementTree");
         if (!container?.treeView) {
             throw new Error("Project Management tree view is not initialized. Call initializeTreeViews() first.");
         }
@@ -390,7 +492,7 @@ export class TreeServiceManager {
     }
 
     public getTestThemeTreeView(): vscode.TreeView<TestThemeTreeItem> {
-        const container = this.treeViews.get("testTheme");
+        const container = this.treeViews.get("testThemeTree");
         if (!container?.treeView) {
             throw new Error("Test Theme tree view is not initialized. Call initializeTreeViews() first.");
         }
@@ -398,7 +500,7 @@ export class TreeServiceManager {
     }
 
     public getTestElementsTreeView(): vscode.TreeView<TestElementTreeItem> {
-        const container = this.treeViews.get("testElements");
+        const container = this.treeViews.get("testElementsView");
         if (!container?.treeView) {
             throw new Error("Test Elements tree view is not initialized. Call initializeTreeViews() first.");
         }
@@ -596,6 +698,8 @@ export class TreeServiceManager {
      * Dispose of all tree views and clean up resources
      */
     public dispose(): void {
+        // Save visible views state one last time before disposing
+        this.saveVisibleViewsState();
         for (const [key, listener] of this.stateChangeListeners) {
             try {
                 const container = this.treeViews.get(key);
@@ -607,7 +711,6 @@ export class TreeServiceManager {
             }
         }
         this.stateChangeListeners.clear();
-
         for (const [key, container] of this.treeViews) {
             try {
                 if (container.provider && typeof container.provider.dispose === "function") {

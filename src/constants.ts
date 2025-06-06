@@ -90,7 +90,11 @@ export const StorageKeys = {
     ACTIVE_CONNECTION_ID_KEY: "testbenchExtension.activeConnectionId",
     CONNECTION_PASSWORD_SECRET_PREFIX: "testbenchExtension.connection.password.",
     MARKED_TEST_GENERATION_ITEM: "testbenchExtension.markedTestGenerationItem",
-    SUB_TREE_ITEM_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubTreeItems"
+    SUB_TREE_ITEM_IMPORT_STORAGE_KEY: "testbenchExtension.importedSubTreeItems",
+    // Persistent tree view storage for tree view restoration
+    VISIBLE_VIEWS_STORAGE_KEY: "testbenchExtension.visibleTreeViews",
+    LAST_ACTIVE_CYCLE_CONTEXT_KEY: "testbenchExtension.lastActiveCycleContext",
+    LAST_ACTIVE_TOV_CONTEXT_KEY: "testbenchExtension.lastActiveTovContext"
 } as const;
 
 // --- Tree Item Context Values ---

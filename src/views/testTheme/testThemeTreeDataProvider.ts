@@ -250,6 +250,9 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             parent
         );
 
+        // Apply the restored expansion state to the newly created item.
+        this.applyStoredExpansionState(treeItem);
+
         const itemKey = treeItem.getUniqueId();
         const itemUID = treeItem.getUID();
         if (itemKey && itemUID) {

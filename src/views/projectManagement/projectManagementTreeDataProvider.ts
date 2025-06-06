@@ -1,3 +1,4 @@
+import { StorageKeys } from "./../../constants";
 /**
  * @file src/views/projectManagement/projectManagementTreeDataProvider.ts
  * @description Project management tree data provider
@@ -328,12 +329,20 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
                     try {
                         operation.throwIfCancelled("before cycle structure fetch");
-
                         const rawCycleData = await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
-
                         operation.throwIfCancelled("after cycle structure fetch");
-
                         progress.report({ increment: 50, message: "Preparing theme tree..." });
+
+                        // Persist the active cycle context to workspace state for restoration
+                        const cycleContext = { projectKey, cycleKey, cycleLabel };
+                        await this.extensionContext.workspaceState.update(
+                            StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY,
+                            cycleContext
+                        );
+                        this.logger.trace(
+                            `[ProjectManagementTreeDataProvider] Persisted active cycle context:`,
+                            cycleContext
+                        );
 
                         this._onDidPrepareCycleDataForThemeTree.fire({
                             projectKey,
@@ -448,9 +457,11 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             this.getUnifiedStateManager().resetCustomRoot();
         }
 
+        /*
         if (!(isHardRefresh && this.isCustomRootActive())) {
             this.storeExpansionState();
         }
+        */
 
         if (this.isCustomRootActive()) {
             this.getUnifiedStateManager().updateState({
