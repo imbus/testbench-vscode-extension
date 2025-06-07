@@ -273,7 +273,7 @@ export async function clearInternalTestbenchFolder(
  * @returns A promise that resolves to the file system path of the determined workspace location,
  * or `undefined` if no suitable location can be found.
  */
-export async function validateAndReturnWorkspaceLocation(enableLogging: boolean = true): Promise<string | undefined> {
+export async function validateAndReturnWorkspaceLocation(enableLogging: boolean = false): Promise<string | undefined> {
     if (logger && enableLogging) {
         logger.trace("Validating and returning active workspace location.");
     }

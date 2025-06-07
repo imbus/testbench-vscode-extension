@@ -174,10 +174,8 @@ export async function initializeTreeViews(): Promise<void> {
     }
 
     try {
-        // Initialize all tree views through TreeServiceManager
         await treeServiceManager.initializeTreeViews();
 
-        // Initial state setup
         try {
             const projectProvider = treeServiceManager.getProjectManagementProvider();
             const testThemeProvider = treeServiceManager.getTestThemeProvider();
@@ -1261,7 +1259,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     );
 
-    // --- Command: Open Cycle Test Themes ---
+    // --- Command: Open Cycle Contents ---
     registerSafeCommand(
         context,
         allExtensionCommands.openCycleFromProjectsView,
@@ -1303,6 +1301,36 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     );
                 }
 
+                vscode.window.showErrorMessage(
+                    `Error opening cycle: ${error instanceof Error ? error.message : "Unknown error"}`
+                );
+            }
+        }
+    );
+
+    // --- Command: Check and handle double clicks on cycle ---
+    registerSafeCommand(
+        context,
+        allExtensionCommands.checkForCycleDoubleClick,
+        async (cycleTreeItem: ProjectManagementTreeItem) => {
+            logger.debug(
+                `Command Called: ${allExtensionCommands.checkForCycleDoubleClick} for cycle tree item: ${cycleTreeItem.label}`
+            );
+
+            if (!connection) {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
+                logger.error(`${allExtensionCommands.openCycleFromProjectsView} command called without connection.`);
+                return;
+            }
+
+            try {
+                if (!treeServiceManager || !treeServiceManager.getInitializationStatus()) {
+                    throw new Error("TreeServiceManager is not initialized");
+                }
+
+                await treeServiceManager.detectAndHandleCycleTreeItemDoubleClick(cycleTreeItem);
+            } catch (error) {
+                logger.error("[Cmd OpenCycleFromProjectsView] Error during cycle open handling:", error);
                 vscode.window.showErrorMessage(
                     `Error opening cycle: ${error instanceof Error ? error.message : "Unknown error"}`
                 );

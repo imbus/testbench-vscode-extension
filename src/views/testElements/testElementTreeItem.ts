@@ -97,7 +97,7 @@ export class TestElementTreeItem extends BaseTreeItem {
 
             this.iconPath = this.iconService.getIconUris(iconContext, "testElement");
 
-            this.logger.trace(`[TestElementTreeItem] Icon path set successfully for ${this.label}:`, this.iconPath);
+            // this.logger.trace(`[TestElementTreeItem] Icon path set successfully for ${this.label}:`, this.iconPath);
         } catch (error) {
             this.logger.error(`Error updating icon for test element ${this.label}:`, error);
             this.setFallbackIcon();

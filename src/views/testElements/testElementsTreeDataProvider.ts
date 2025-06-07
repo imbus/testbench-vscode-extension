@@ -21,7 +21,7 @@ export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
  * Appends `.resource` extension to a file path if not already present and normalizes the path by trimming whitespace.
  */
 function appendResourceExtensionAndTrimPathLocal(baseTargetPath: string, logger: TestBenchLogger): string {
-    logger.trace(`Adding .resource extension and trimming path: ${baseTargetPath}`);
+    // logger.trace(`Adding .resource extension and trimming path: ${baseTargetPath}`);
     let targetPath = baseTargetPath.endsWith(".resource") ? baseTargetPath : `${baseTargetPath}.resource`;
     targetPath = targetPath.replace(/\s+(\.resource)$/, "$1").trimEnd();
     targetPath = targetPath.trimStart();

@@ -78,7 +78,10 @@ export class ProjectDataService {
      * @param {string} cycleKey - The cycle key as a string.
      * @returns {Promise<CycleStructure | null>} The cycle structure or null if an error occurs or not connected.
      */
-    async fetchCycleStructure(projectKey: string, cycleKey: string): Promise<CycleStructure | null> {
+    async fetchCycleStructureUsingProjectAndCycleKey(
+        projectKey: string,
+        cycleKey: string
+    ): Promise<CycleStructure | null> {
         const currentConnection = this.getConnection();
         if (!currentConnection) {
             this.logger.error("[ProjectDataService] No active connection. Cannot fetch cycle structure.");
@@ -94,7 +97,7 @@ export class ProjectDataService {
             this.logger.debug(
                 `[ProjectDataService] Fetching cycle structure for project ${projectKey}, cycle ${cycleKey}.`
             );
-            const cycleStructure = await currentConnection.fetchCycleStructureOfCycleInProject(projectKey, cycleKey);
+            const cycleStructure = await currentConnection.fetchCycleStructureOfCycleFromServer(projectKey, cycleKey);
             if (cycleStructure === null) {
                 this.logger.warn(
                     `[ProjectDataService] fetchCycleStructureOfCycleInProject returned null for project ${projectKey}, cycle ${cycleKey}.`

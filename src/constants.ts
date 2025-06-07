@@ -157,5 +157,6 @@ export const allExtensionCommands = {
     resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
     getFilters: `${baseKeyOfExtension}.getFilters`,
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
-    clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`
+    clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`,
+    checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`
 };

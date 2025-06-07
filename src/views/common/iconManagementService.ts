@@ -118,7 +118,7 @@ export class IconManagementService {
         }
 
         this.iconRegistry.set(category, categoryMap);
-        this.logger.trace(`[IconManagementService] Registered icon set for category: ${category}`);
+        // this.logger.trace(`[IconManagementService] Registered icon set for category: ${category}`);
     }
 
     /**
@@ -160,7 +160,7 @@ export class IconManagementService {
             contextValueForIcon = context.originalContextValue;
         }
 
-        const categoryMap = this.iconRegistry.get(category);
+        const categoryMap: Map<string, IconDefinition> | undefined = this.iconRegistry.get(category);
         if (categoryMap) {
             const iconDef = this.findInCategory(categoryMap, contextValueForIcon, context.status);
             if (iconDef) {
@@ -178,13 +178,13 @@ export class IconManagementService {
         }
 
         const defaultCategory = this.iconRegistry.get("default");
-        const fallback = defaultCategory?.get(this.createIconKey("default", "default"));
+        const fallbackDefinition = defaultCategory?.get(this.createIconKey("default", "default"));
 
-        if (!fallback) {
+        if (!fallbackDefinition) {
             throw new Error("No fallback icon definition found");
         }
 
-        return fallback;
+        return fallbackDefinition;
     }
 
     /**
@@ -196,15 +196,15 @@ export class IconManagementService {
         status?: string
     ): IconDefinition | null {
         if (status) {
-            const withStatus = categoryMap.get(this.createIconKey(contextValue, status.toLowerCase()));
-            if (withStatus) {
-                return withStatus;
+            const iconDefWithStatus = categoryMap.get(this.createIconKey(contextValue, status.toLowerCase()));
+            if (iconDefWithStatus) {
+                return iconDefWithStatus;
             }
         }
 
-        const withDefault = categoryMap.get(this.createIconKey(contextValue, "default"));
-        if (withDefault) {
-            return withDefault;
+        const iconDefWithDefault = categoryMap.get(this.createIconKey(contextValue, "default"));
+        if (iconDefWithDefault) {
+            return iconDefWithDefault;
         }
 
         return null;
@@ -244,10 +244,10 @@ export class IconManagementService {
             this.iconRegistry.set(category, categoryMap);
         }
 
-        const key = this.createIconKey(contextValue, status);
-        categoryMap.set(key, iconDef);
+        const iconKey = this.createIconKey(contextValue, status);
+        categoryMap.set(iconKey, iconDef);
 
-        this.logger.trace(`[IconManagementService] Registered custom icon for ${category}:${key}`);
+        this.logger.trace(`[IconManagementService] Registered custom icon for ${category}:${iconKey}`);
     }
 
     /**
@@ -279,8 +279,8 @@ export class IconManagementService {
      * Validate icon files exist
      */
     public async validateIcons(): Promise<{ valid: string[]; invalid: string[] }> {
-        const valid: string[] = [];
-        const invalid: string[] = [];
+        const validFiles: string[] = [];
+        const invalidFiles: string[] = [];
 
         for (const [category, categoryMap] of this.iconRegistry) {
             for (const [key, iconDef] of categoryMap) {
@@ -296,18 +296,18 @@ export class IconManagementService {
                     try {
                         const uri = this.createIconUri(file);
                         await vscode.workspace.fs.stat(uri);
-                        valid.push(`${category}:${key}:${file}`);
+                        validFiles.push(`${category}:${key}:${file}`);
                     } catch {
-                        invalid.push(`${category}:${key}:${file}`);
+                        invalidFiles.push(`${category}:${key}:${file}`);
                     }
                 }
             }
         }
 
-        if (invalid.length > 0) {
-            this.logger.warn(`[IconManagementService] Invalid icon files found:`, invalid);
+        if (invalidFiles.length > 0) {
+            this.logger.warn(`[IconManagementService] Invalid icon files found:`, invalidFiles);
         }
 
-        return { valid, invalid };
+        return { valid: validFiles, invalid: invalidFiles };
     }
 }

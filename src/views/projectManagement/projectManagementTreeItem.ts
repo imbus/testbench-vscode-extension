@@ -5,7 +5,7 @@
 
 import * as vscode from "vscode";
 import { BaseTreeItem } from "../common/baseTreeItem";
-import { TreeItemContextValues } from "../../constants";
+import { allExtensionCommands, TreeItemContextValues } from "../../constants";
 import { IconManagementService } from "../common/iconManagementService";
 import { TestBenchLogger } from "../../testBenchLogger";
 
@@ -30,6 +30,14 @@ export class ProjectManagementTreeItem extends BaseTreeItem {
             iconServiceFromFactory,
             parent
         );
+
+        if (this.contextValue === TreeItemContextValues.CYCLE) {
+            this.command = {
+                title: "Select Cycle",
+                command: allExtensionCommands.checkForCycleDoubleClick,
+                arguments: [this]
+            };
+        }
     }
 
     protected buildTooltipContent(): string {

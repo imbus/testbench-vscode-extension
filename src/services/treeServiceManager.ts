@@ -1,4 +1,3 @@
-import { allExtensionCommands, StorageKeys, TreeItemContextValues } from "./../constants";
 /**
  * @file src/services/treeServiceManager.ts
  * @description TreeServiceManager
@@ -6,6 +5,7 @@ import { allExtensionCommands, StorageKeys, TreeItemContextValues } from "./../c
 
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../testBenchLogger";
+import { allExtensionCommands, StorageKeys, TreeItemContextValues } from "./../constants";
 import { ProjectDataService } from "../views/projectManagement/projectDataService";
 import { TestElementDataService } from "../views/testElements/testElementDataService";
 import { ResourceFileService } from "../views/testElements/resourceFileService";
@@ -59,10 +59,10 @@ export class TreeServiceManager {
     private readonly treeViews = new Map<string, TreeViewContainer>();
     private _isInitialized = false;
 
-    // Double-click detection state
+    // Double click detection on projects tree items
     private lastClickTime = 0;
     private lastClickedItem: ProjectManagementTreeItem | null = null;
-    private readonly DOUBLE_CLICK_THRESHOLD_MS = 400;
+    private readonly DOUBLE_CLICK_THRESHOLD_MS = 500;
     private clickTimer: NodeJS.Timeout | null = null;
 
     // State change listeners for coordination
@@ -89,7 +89,7 @@ export class TreeServiceManager {
         try {
             this.logger.info("[TreeServiceManager] Initializing core services...");
 
-            // Ccore services
+            // Core services
             this._iconManagementService = new IconManagementService(this.logger, this.extensionContext);
             this._resourceFileService = new ResourceFileService(this.logger);
             this._projectDataService = new ProjectDataService(this.getConnection, this.logger);
@@ -121,7 +121,6 @@ export class TreeServiceManager {
             await this.createTestThemeTree();
             await this.createTestElementsTree();
             this.setupTreeViewInteractions();
-            this.setupUnifiedStateCoordination();
 
             this.logger.info(
                 "[TreeServiceManager] All tree views initialized successfully with unified state management"
@@ -159,7 +158,7 @@ export class TreeServiceManager {
                 StorageKeys.VISIBLE_VIEWS_STORAGE_KEY
             );
 
-            // Use a small delay to ensure the views are fully registered before we try to focus them.
+            // Small delay to ensure the views are fully registered before focusing
             setTimeout(() => {
                 // If the key is undefined, it's the first run, so show the default view.
                 if (visibleViewIds === undefined) {
@@ -185,7 +184,7 @@ export class TreeServiceManager {
                         "[TreeServiceManager] User had no TestBench views visible. Respecting saved state."
                     );
                 }
-            }, 500); // 500ms delay for safety.
+            }, 300);
         } catch (error) {
             this.logger.error("[TreeServiceManager] Failed to initiate restore of visible tree views state:", error);
         }
@@ -210,8 +209,7 @@ export class TreeServiceManager {
                     `[TreeServiceManager] Found persisted Cycle context. Restoring Test Themes for cycle: ${cycleContext.cycleLabel}`
                 );
 
-                // Fetch cycle data
-                const rawCycleData = await this.projectDataService.fetchCycleStructure(
+                const rawCycleData = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
                     cycleContext.projectKey,
                     cycleContext.cycleKey
                 );
@@ -220,7 +218,7 @@ export class TreeServiceManager {
                 const testThemeTreeView = this.getTestThemeTreeView();
                 testThemeTreeView.title = `Test Themes (${cycleContext.cycleLabel})`;
 
-                // Preserves expansion state
+                // Preserve expansion state
                 testThemeProvider.populateFromCycleData({
                     ...cycleContext,
                     rawCycleStructure: rawCycleData
@@ -239,7 +237,7 @@ export class TreeServiceManager {
                 );
 
                 const testElementsProvider = this.getTestElementsProvider();
-                // fetchTestElements already handles expansion state properly
+                // fetchTestElements handles expansion state
                 await testElementsProvider.fetchTestElements(tovContext.tovKey, tovContext.tovLabel);
             }
         } catch (error) {
@@ -251,44 +249,43 @@ export class TreeServiceManager {
      * Create and configure the Project Management tree view
      */
     private async createProjectManagementTree(): Promise<void> {
-        const viewId = "projectManagementTree";
+        const projectManagementViewId = "projectManagementTree";
         const updateMessage = (message?: string) => {
-            const container = this.treeViews.get(viewId);
-            if (container?.treeView) {
-                container.treeView.message = message;
+            const treeViewContainer = this.treeViews.get(projectManagementViewId);
+            if (treeViewContainer?.treeView) {
+                treeViewContainer.treeView.message = message;
             }
         };
-        const provider = new ProjectManagementTreeDataProvider(
+        const projectManagementTreeProvider = new ProjectManagementTreeDataProvider(
             this.extensionContext,
             this.logger,
             this.iconManagementService,
             updateMessage,
             this.projectDataService
         );
-        const treeView = vscode.window.createTreeView(viewId, {
-            treeDataProvider: provider,
+        const treeView = vscode.window.createTreeView(projectManagementViewId, {
+            treeDataProvider: projectManagementTreeProvider,
             canSelectMany: false
         });
 
         // Handle expansion/collapse events
         this.extensionContext.subscriptions.push(
             treeView.onDidExpandElement((event: vscode.TreeViewExpansionEvent<ProjectManagementTreeItem>) => {
-                provider.handleExpansion(event.element, true);
+                projectManagementTreeProvider.handleExpansion(event.element, true);
             })
         );
         this.extensionContext.subscriptions.push(
             treeView.onDidCollapseElement((event: vscode.TreeViewExpansionEvent<ProjectManagementTreeItem>) => {
-                provider.handleExpansion(event.element, false);
+                projectManagementTreeProvider.handleExpansion(event.element, false);
             })
         );
 
-        // Handle selection events with double-click detection
+        //  Handle selection change events
         this.extensionContext.subscriptions.push(
             treeView.onDidChangeSelection(async (event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>) => {
                 this.logger.debug(`[TreeServiceManager] Selection changed, items: ${event.selection.length}`);
                 if (event.selection.length > 0) {
                     const selectedTreeItem = event.selection[0];
-
                     if (!(selectedTreeItem instanceof ProjectManagementTreeItem)) {
                         return;
                     }
@@ -297,62 +294,12 @@ export class TreeServiceManager {
                         selectedTreeItem.originalContextValue === TreeItemContextValues.CYCLE ||
                         selectedTreeItem.contextValue === TreeItemContextValues.CYCLE;
 
-                    if (isCycleItem) {
-                        // This is a cycle item, handle the click with double click detection.
-                        if (this.clickTimer && this.lastClickedItem?.getUniqueId() === selectedTreeItem.getUniqueId()) {
-                            // Double click logic
-                            this.logger.debug(
-                                `[TreeServiceManager] Double-click detected on cycle: ${selectedTreeItem.label}`
-                            );
+                    const isTovItem =
+                        selectedTreeItem.originalContextValue === TreeItemContextValues.VERSION ||
+                        selectedTreeItem.contextValue === TreeItemContextValues.VERSION;
 
-                            clearTimeout(this.clickTimer);
-                            this.clickTimer = null;
-                            this.lastClickedItem = null;
-
-                            // Execute the double-click command.
-                            try {
-                                await vscode.commands.executeCommand(
-                                    allExtensionCommands.openCycleFromProjectsView,
-                                    selectedTreeItem
-                                ); //
-                            } catch (error) {
-                                this.logger.error(
-                                    "[TreeServiceManager] Error executing openCycleFromProjectsView command:",
-                                    error
-                                );
-                                vscode.window.showErrorMessage(
-                                    `Failed to open cycle: ${error instanceof Error ? error.message : "Unknown error"}`
-                                );
-                            }
-                        } else {
-                            // Single click logic
-
-                            if (this.clickTimer) {
-                                clearTimeout(this.clickTimer);
-                            }
-
-                            // Set state for the next click to be detected as a double click.
-                            this.lastClickedItem = selectedTreeItem;
-                            this.clickTimer = setTimeout(async () => {
-                                this.logger.trace(
-                                    `[TreeServiceManager] Single-click timeout executed for cycle: ${selectedTreeItem.label}`
-                                );
-
-                                await this.handleProjectTreeItemSelectionForLS(event, provider);
-
-                                // Reset state after the single click action
-                                this.clickTimer = null;
-                                this.lastClickedItem = null;
-                            }, this.DOUBLE_CLICK_THRESHOLD_MS);
-                        }
-                    } else {
-                        if (this.clickTimer) {
-                            clearTimeout(this.clickTimer);
-                            this.clickTimer = null;
-                            this.lastClickedItem = null;
-                        }
-
-                        await this.handleProjectTreeItemSelectionForLS(event, provider);
+                    if (isCycleItem || isTovItem) {
+                        await this.handleTovOrCycleSelectionForLS(event, projectManagementTreeProvider);
                     }
                 }
             })
@@ -364,26 +311,72 @@ export class TreeServiceManager {
                 this.debouncedSaveVisibleViews();
             })
         );
+
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set(viewId, { provider, treeView, updateMessage });
-        this.setupProviderStateListener(viewId, provider);
+        this.treeViews.set(projectManagementViewId, {
+            provider: projectManagementTreeProvider,
+            treeView,
+            updateMessage
+        });
+        this.setupProviderStateListener(projectManagementViewId, projectManagementTreeProvider);
         this.logger.info(
             "[TreeServiceManager] Project Management tree view created with unified state management and double-click handling"
         );
     }
 
     /**
+     * Detects double-click events on cycle tree items and handles them appropriately.
+     * On single-click, triggers selection handling with a timer. On double-click,
+     * clears the timer and executes cycle-specific selection logic.
+     *
+     * @param cycleItem - The cycle tree item that was clicked
+     * @returns Promise that resolves when the click handling is complete
+     */
+    public async detectAndHandleCycleTreeItemDoubleClick(cycleItem: ProjectManagementTreeItem): Promise<void> {
+        const currentTime = new Date().getTime();
+
+        const isDoubleClick =
+            currentTime - this.lastClickTime < this.DOUBLE_CLICK_THRESHOLD_MS &&
+            this.lastClickedItem?.getUniqueId() === cycleItem.getUniqueId();
+
+        if (isDoubleClick) {
+            this.logger.debug(`[TreeServiceManager] Double-click detected on cycle: ${cycleItem.label}`);
+
+            if (this.clickTimer) {
+                clearTimeout(this.clickTimer);
+            }
+
+            this.clickTimer = null;
+            this.lastClickedItem = null;
+            this.lastClickTime = 0;
+
+            await vscode.commands.executeCommand(allExtensionCommands.openCycleFromProjectsView, cycleItem);
+        } else {
+            this.logger.debug(
+                `[TreeServiceManager] Single-click detected on cycle: ${cycleItem.label}. Setting timer.`
+            );
+            this.lastClickTime = currentTime;
+            this.lastClickedItem = cycleItem;
+
+            const singleClickEvent = { selection: [cycleItem] };
+            const provider = this.getProjectManagementProvider();
+
+            await this.handleTovOrCycleSelectionForLS(singleClickEvent, provider);
+        }
+    }
+
+    /**
      * Create and configure the Test Theme tree view
      */
     private async createTestThemeTree(): Promise<void> {
-        const viewId = "testThemeTree";
+        const testThemeTreeViewId = "testThemeTree";
         const updateMessage = (message?: string) => {
-            const container = this.treeViews.get(viewId);
-            if (container?.treeView) {
-                container.treeView.message = message;
+            const treeViewContainer = this.treeViews.get(testThemeTreeViewId);
+            if (treeViewContainer?.treeView) {
+                treeViewContainer.treeView.message = message;
             }
         };
-        const provider = new TestThemeTreeDataProvider(
+        const testThemeTreeDataProvider = new TestThemeTreeDataProvider(
             this.extensionContext,
             this.logger,
             updateMessage,
@@ -391,17 +384,17 @@ export class TreeServiceManager {
             this.markedItemStateService,
             this.iconManagementService
         );
-        const treeView = vscode.window.createTreeView(viewId, {
-            treeDataProvider: provider
+        const treeView = vscode.window.createTreeView(testThemeTreeViewId, {
+            treeDataProvider: testThemeTreeDataProvider
         });
         this.extensionContext.subscriptions.push(
             treeView.onDidExpandElement((event: vscode.TreeViewExpansionEvent<TestThemeTreeItem>) => {
-                provider.handleExpansion(event.element, true);
+                testThemeTreeDataProvider.handleExpansion(event.element, true);
             })
         );
         this.extensionContext.subscriptions.push(
             treeView.onDidCollapseElement((event: vscode.TreeViewExpansionEvent<TestThemeTreeItem>) => {
-                provider.handleExpansion(event.element, false);
+                testThemeTreeDataProvider.handleExpansion(event.element, false);
             })
         );
         // Listen for visibility changes to persist the state.
@@ -411,8 +404,8 @@ export class TreeServiceManager {
             })
         );
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set(viewId, { provider, treeView, updateMessage });
-        this.setupProviderStateListener(viewId, provider);
+        this.treeViews.set(testThemeTreeViewId, { provider: testThemeTreeDataProvider, treeView, updateMessage });
+        this.setupProviderStateListener(testThemeTreeViewId, testThemeTreeDataProvider);
         this.logger.info("[TreeServiceManager] Test Theme tree view created with unified state management");
     }
 
@@ -420,14 +413,14 @@ export class TreeServiceManager {
      * Initialize Test Elements tree without clearing expansion state
      */
     private async createTestElementsTree(): Promise<void> {
-        const viewId = "testElementsView";
+        const testElementsViewId = "testElementsView";
         const updateMessage = (message?: string) => {
-            const container = this.treeViews.get(viewId);
-            if (container?.treeView) {
-                container.treeView.message = message;
+            const treeViewContainer = this.treeViews.get(testElementsViewId);
+            if (treeViewContainer?.treeView) {
+                treeViewContainer.treeView.message = message;
             }
         };
-        const provider = new TestElementsTreeDataProvider(
+        const testElementsTreeProvider = new TestElementsTreeDataProvider(
             this.extensionContext,
             this.logger,
             updateMessage,
@@ -436,22 +429,22 @@ export class TreeServiceManager {
             this.iconManagementService,
             this.testElementTreeBuilder
         );
-        const treeView = vscode.window.createTreeView(viewId, {
-            treeDataProvider: provider
+        const treeView = vscode.window.createTreeView(testElementsViewId, {
+            treeDataProvider: testElementsTreeProvider
         });
 
         // Set up event handlers
         this.extensionContext.subscriptions.push(
             treeView.onDidExpandElement((event) => {
-                if (provider && typeof provider.handleItemExpansion === "function") {
-                    provider.handleItemExpansion(event.element, true);
+                if (testElementsTreeProvider && typeof testElementsTreeProvider.handleItemExpansion === "function") {
+                    testElementsTreeProvider.handleItemExpansion(event.element, true);
                 }
             })
         );
         this.extensionContext.subscriptions.push(
             treeView.onDidCollapseElement((event) => {
-                if (provider && typeof provider.handleItemExpansion === "function") {
-                    provider.handleItemExpansion(event.element, false);
+                if (testElementsTreeProvider && typeof testElementsTreeProvider.handleItemExpansion === "function") {
+                    testElementsTreeProvider.handleItemExpansion(event.element, false);
                 }
             })
         );
@@ -464,11 +457,11 @@ export class TreeServiceManager {
         );
 
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set(viewId, { provider, treeView, updateMessage });
-        this.setupProviderStateListener(viewId, provider);
+        this.treeViews.set(testElementsViewId, { provider: testElementsTreeProvider, treeView, updateMessage });
+        this.setupProviderStateListener(testElementsViewId, testElementsTreeProvider);
 
         // Initialize with empty state but preserve expansion state
-        provider.updateTreeViewStatusMessage();
+        testElementsTreeProvider.updateTreeViewStatusMessage();
 
         this.logger.info("[TreeServiceManager] Test Elements tree view created with unified state management");
     }
@@ -505,16 +498,10 @@ export class TreeServiceManager {
     }
 
     /**
-     * Setup unified state coordination between all providers
-     */
-    private setupUnifiedStateCoordination(): void {
-        // Individual providers manage their own state through the unified manager
-        // This method can be extended to add cross-provider state coordination
-        this.logger.trace("[TreeServiceManager] Unified state coordination setup completed");
-    }
-
-    /**
-     * Setup interactions between tree views
+     * Sets up event listeners and interactions between tree view providers.
+     *
+     * Currently used to handle interactions between the Project Management tree and Test Theme tree,
+     * where the Project Management tree prepares cycle data for the Test Theme tree.
      */
     private setupTreeViewInteractions(): void {
         const projectProvider = this.getProjectManagementProvider();
@@ -533,9 +520,14 @@ export class TreeServiceManager {
     }
 
     /**
-     * Handle project tree selection changes for language server context
+     * Handles tree view selection changes for language server operations when a TOV (Test Object Version)
+     * or Cycle item is selected. Restarts the language client with the appropriate project and TOV context.
+     *
+     * @param event - The tree view selection change event containing selected items
+     * @param provider - The project management tree data provider to resolve project/TOV names
+     * @returns Promise that resolves when the language client restart is complete
      */
-    private async handleProjectTreeItemSelectionForLS(
+    private async handleTovOrCycleSelectionForLS(
         event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>,
         provider: ProjectManagementTreeDataProvider
     ): Promise<void> {
@@ -586,51 +578,51 @@ export class TreeServiceManager {
     }
 
     public getProjectManagementProvider(): ProjectManagementTreeDataProvider {
-        const container = this.treeViews.get("projectManagementTree"); // Corrected Key
-        if (!container?.provider) {
+        const treeViewContainer = this.treeViews.get("projectManagementTree");
+        if (!treeViewContainer?.provider) {
             throw new Error("Project Management provider is not initialized. Call initializeTreeViews() first.");
         }
-        return container.provider;
+        return treeViewContainer.provider;
     }
 
     public getTestThemeProvider(): TestThemeTreeDataProvider {
-        const container = this.treeViews.get("testThemeTree"); // Corrected Key
-        if (!container?.provider) {
+        const treeViewContainer = this.treeViews.get("testThemeTree");
+        if (!treeViewContainer?.provider) {
             throw new Error("Test Theme provider is not initialized. Call initializeTreeViews() first.");
         }
-        return container.provider;
+        return treeViewContainer.provider;
     }
 
     public getTestElementsProvider(): TestElementsTreeDataProvider {
-        const container = this.treeViews.get("testElementsView");
-        if (!container?.provider) {
+        const treeViewContainer = this.treeViews.get("testElementsView");
+        if (!treeViewContainer?.provider) {
             throw new Error("Test Elements provider is not initialized. Call initializeTreeViews() first.");
         }
-        return container.provider;
+        return treeViewContainer.provider;
     }
 
     public getProjectManagementTreeView(): vscode.TreeView<BaseTreeItem> {
-        const container = this.treeViews.get("projectManagementTree");
-        if (!container?.treeView) {
+        const treeViewContainer = this.treeViews.get("projectManagementTree");
+        if (!treeViewContainer?.treeView) {
             throw new Error("Project Management tree view is not initialized. Call initializeTreeViews() first.");
         }
-        return container.treeView;
+        return treeViewContainer.treeView;
     }
 
     public getTestThemeTreeView(): vscode.TreeView<TestThemeTreeItem> {
-        const container = this.treeViews.get("testThemeTree");
-        if (!container?.treeView) {
+        const treeViewContainer = this.treeViews.get("testThemeTree");
+        if (!treeViewContainer?.treeView) {
             throw new Error("Test Theme tree view is not initialized. Call initializeTreeViews() first.");
         }
-        return container.treeView;
+        return treeViewContainer.treeView;
     }
 
     public getTestElementsTreeView(): vscode.TreeView<TestElementTreeItem> {
-        const container = this.treeViews.get("testElementsView");
-        if (!container?.treeView) {
+        const treeViewContainer = this.treeViews.get("testElementsView");
+        if (!treeViewContainer?.treeView) {
             throw new Error("Test Elements tree view is not initialized. Call initializeTreeViews() first.");
         }
-        return container.treeView;
+        return treeViewContainer.treeView;
     }
 
     /**
@@ -647,6 +639,12 @@ export class TreeServiceManager {
         }
     }
 
+    /**
+     * Refreshes all tree providers in the tree service manager.
+     *
+     * @param isHardRefresh - Whether to perform a hard refresh that clears cached data. Defaults to false.
+     * @returns A promise that resolves when all trees have been refreshed.
+     */
     public async refreshAllTrees(isHardRefresh: boolean = false): Promise<void> {
         try {
             this.getProjectManagementProvider().refresh(isHardRefresh);
@@ -660,7 +658,15 @@ export class TreeServiceManager {
         }
     }
 
-    public updateTreeTitles(titles: { project?: string; testTheme?: string; testElements?: string }): void {
+    /**
+     * Updates the titles of tree views based on the provided title configuration.
+     *
+     * @param titles - Object containing optional title strings for different tree views
+     * @param titles.project - Optional title for the project tree view (unused)
+     * @param titles.testTheme - Optional title for the test theme tree view
+     * @param titles.testElements - Optional title for the test elements tree view
+     */
+    public updateTreeViewTitles(titles: { project?: string; testTheme?: string; testElements?: string }): void {
         try {
             if (titles.testTheme) {
                 this.getTestThemeTreeView().title = titles.testTheme;
@@ -674,6 +680,13 @@ export class TreeServiceManager {
         }
     }
 
+    /**
+     * Handles the selection of a cycle item in the project management tree.
+     * Updates the test elements tree view and initializes test themes based on the selected cycle.
+     *
+     * @param cycleItem - The selected cycle item from the project management tree
+     * @throws Error if cycle selection handling fails
+     */
     public async handleCycleSelection(cycleItem: ProjectManagementTreeItem): Promise<void> {
         try {
             const projectProvider = this.getProjectManagementProvider();
@@ -685,11 +698,12 @@ export class TreeServiceManager {
             const tovKey = cycleItem.getTovKey();
             const tovLabel = cycleItem.parent?.label;
 
+            // Handle Test Elements
             if (tovKey && typeof tovLabel === "string") {
                 testElementsTreeView.title = `Test Elements (${tovLabel})`;
                 try {
-                    const success = await testElementsProvider.fetchTestElements(tovKey, tovLabel);
-                    if (!success) {
+                    const fetchTestElementsResult = await testElementsProvider.fetchTestElements(tovKey, tovLabel);
+                    if (!fetchTestElementsResult) {
                         this.logger.warn(`[TreeServiceManager] Failed to fetch test elements for TOV: ${tovKey}`);
                     }
                 } catch (error) {
@@ -702,8 +716,8 @@ export class TreeServiceManager {
                 testElementsProvider.clearTree();
             }
 
-            // Handle Test Themes through project provider
-            await projectProvider.handleCycleClick(cycleItem);
+            // Handle Test Themes
+            await projectProvider.initTestThemeTreeAfterCycleClick(cycleItem);
 
             this.logger.info(
                 `[TreeServiceManager] Cycle selection handled for: ${cycleItem.label} with unified state management`

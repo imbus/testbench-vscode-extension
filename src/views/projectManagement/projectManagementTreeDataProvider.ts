@@ -24,9 +24,9 @@ export interface CycleDataForThemeTreeEvent {
 }
 
 export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<ProjectManagementTreeItem> {
-    private _onDidPrepareCycleDataForThemeTree = new vscode.EventEmitter<CycleDataForThemeTreeEvent>();
+    private _onDidPrepareCycleDataForTestThemeTree = new vscode.EventEmitter<CycleDataForThemeTreeEvent>();
     public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
-        this._onDidPrepareCycleDataForThemeTree.event;
+        this._onDidPrepareCycleDataForTestThemeTree.event;
 
     private readonly operationManager: CancellableOperationManager;
 
@@ -143,7 +143,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             case TreeItemContextValues.PROJECT:
                 return this.getChildrenForProject(projectsTreeItem);
             case TreeItemContextValues.VERSION:
-                return this.getChildrenForVersion(projectsTreeItem);
+                return this.getChildrenForTOV(projectsTreeItem);
             case TreeItemContextValues.CYCLE:
                 return []; // Cycles don't show direct children in this tree
             default:
@@ -276,10 +276,10 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     /**
      * Retrieves and creates tree items for all child cycles of a version tree item.
      */
-    private getChildrenForVersion(versionTreeItem: ProjectManagementTreeItem): ProjectManagementTreeItem[] {
-        const cycleNodes: TreeNode[] = versionTreeItem.itemData.children ?? [];
-        return cycleNodes
-            .map((cycleNode) => this.createTestThemeTreeItemFromData(cycleNode, versionTreeItem))
+    private getChildrenForTOV(tovTreeItem: ProjectManagementTreeItem): ProjectManagementTreeItem[] {
+        const cycleTreeItems: TreeNode[] = tovTreeItem.itemData.children ?? [];
+        return cycleTreeItems
+            .map((cycleTreeItem) => this.createTestThemeTreeItemFromData(cycleTreeItem, tovTreeItem))
             .filter((item): item is ProjectManagementTreeItem => item !== null);
     }
 
@@ -287,7 +287,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
      * Handles click events on cycle tree items by fetching cycle structure data
      * and preparing it for the theme tree view.
      */
-    public async handleCycleClick(cycleItem: ProjectManagementTreeItem): Promise<void> {
+    public async initTestThemeTreeAfterCycleClick(cycleItem: ProjectManagementTreeItem): Promise<void> {
         const cycleLabel = typeof cycleItem.label === "string" ? cycleItem.label : "N/A";
 
         // Cancel any existing cycle click operation
@@ -317,10 +317,9 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: `Fetching data for cycle: ${cycleLabel}`,
-                    cancellable: true // Allow user to cancel
+                    cancellable: true
                 },
                 async (progress, cancellationToken) => {
-                    // Link VS Code's cancellation token with our operation
                     cancellationToken.onCancellationRequested(() => {
                         operation.cancel();
                     });
@@ -329,7 +328,10 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
                     try {
                         operation.throwIfCancelled("before cycle structure fetch");
-                        const rawCycleData = await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
+                        const rawCycleData = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
+                            projectKey,
+                            cycleKey
+                        );
                         operation.throwIfCancelled("after cycle structure fetch");
                         progress.report({ increment: 50, message: "Preparing theme tree..." });
 
@@ -344,7 +346,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                             cycleContext
                         );
 
-                        this._onDidPrepareCycleDataForThemeTree.fire({
+                        this._onDidPrepareCycleDataForTestThemeTree.fire({
                             projectKey,
                             cycleKey,
                             cycleLabel,

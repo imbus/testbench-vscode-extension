@@ -60,7 +60,7 @@ export class ResourceFileService {
         try {
             await fs.promises.stat(filePath);
             if (process.platform === "win32" || !caseSensitiveCheck) {
-                this.logger.trace(`[ResourceFileService] Path exists (basic check): ${filePath}`);
+                // this.logger.trace(`[ResourceFileService] Path exists (basic check): ${filePath}`);
                 return true;
             }
 
@@ -68,9 +68,7 @@ export class ResourceFileService {
             const filename = path.basename(filePath);
             const filesInDir = await fs.promises.readdir(dir);
             const existsWithCorrectCase = filesInDir.includes(filename);
-            this.logger.trace(
-                `[ResourceFileService] Path exists (case-sensitive check: ${existsWithCorrectCase}): ${filePath}`
-            );
+            // this.logger.trace(`[ResourceFileService] Path exists (case-sensitive check: ${existsWithCorrectCase}): ${filePath}`);
             return existsWithCorrectCase;
         } catch (err: any) {
             if (err.code === "ENOENT") {
@@ -89,12 +87,12 @@ export class ResourceFileService {
      * @returns {Promise<void>}
      */
     public async ensureFolderPathExists(folderPath: string): Promise<void> {
-        this.logger.trace(`[ResourceFileService] Ensuring folder path exists: ${folderPath}`);
+        // this.logger.trace(`[ResourceFileService] Ensuring folder path exists: ${folderPath}`);
         try {
             // `recursive: true` will not throw an error if the directory already exists.
             // It will also create parent directories if they don't exist.
             await fs.promises.mkdir(folderPath, { recursive: true });
-            this.logger.trace(`[ResourceFileService] Folder path ensured (created or already existed): ${folderPath}`);
+            // this.logger.trace(`[ResourceFileService] Folder path ensured (created or already existed): ${folderPath}`);
         } catch (error: any) {
             this.logger.error(
                 `[ResourceFileService] Failed to ensure folder path "${folderPath}": ${error.message}`,
@@ -112,17 +110,15 @@ export class ResourceFileService {
      * @returns {Promise<void>}
      */
     public async ensureFileExists(filePath: string, initialContent: string): Promise<void> {
-        this.logger.trace(`[ResourceFileService] Ensuring file exists: ${filePath}`);
-        this.logger.trace(
-            `[ResourceFileService] Initial content for new file (length ${initialContent.length}):\n${initialContent.substring(0, 100)}...`
-        );
+        // this.logger.trace(`[ResourceFileService] Ensuring file exists: ${filePath}`);
+        // this.logger.trace(`[ResourceFileService] Initial content for new file (length ${initialContent.length}):\n${initialContent.substring(0, 100)}...`);
 
         if (!(await this.pathExists(filePath))) {
             this.logger.debug(`[ResourceFileService] File not found. Creating: ${filePath}`);
             const dirName = path.dirname(filePath);
             await this.ensureFolderPathExists(dirName);
             try {
-                this.logger.trace(`[ResourceFileService] Attempting to write file: ${filePath}`);
+                // this.logger.trace(`[ResourceFileService] Attempting to write file: ${filePath}`);
                 await fs.promises.writeFile(filePath, initialContent, { encoding: "utf8" });
                 this.logger.info(`[ResourceFileService] File created and content written: ${filePath}`);
             } catch (writeError) {
@@ -142,7 +138,7 @@ export class ResourceFileService {
      * @returns {Promise<void>}
      */
     public async openFileInEditor(filePath: string): Promise<void> {
-        this.logger.trace(`[ResourceFileService] Opening file in editor: ${filePath}`);
+        // this.logger.trace(`[ResourceFileService] Opening file in editor: ${filePath}`);
         try {
             const document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
             await vscode.window.showTextDocument(document);

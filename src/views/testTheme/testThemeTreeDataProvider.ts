@@ -160,15 +160,15 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
             operation.throwIfCancelled("before cycle structure fetch");
 
-            const cycleStructure = await this.projectDataService.fetchCycleStructure(
+            const cycleStructureFromServer = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
                 this.currentProjectKey,
                 this.currentCycleKey
             );
 
             operation.throwIfCancelled("after cycle structure fetch");
 
-            if (cycleStructure) {
-                const newRootTestThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(cycleStructure);
+            if (cycleStructureFromServer) {
+                const builtRootTestThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(cycleStructureFromServer);
 
                 const applyExpansionRecursive = (items: TestThemeTreeItem[]) => {
                     for (const item of items) {
@@ -178,23 +178,23 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                         }
                     }
                 };
-                applyExpansionRecursive(newRootTestThemeTreeItems);
-                this.rootTreeItems = newRootTestThemeTreeItems;
+                applyExpansionRecursive(builtRootTestThemeTreeItems);
+                this.rootTreeItems = builtRootTestThemeTreeItems;
 
                 // Single coordinated state update for successful fetch
                 this.getUnifiedStateManager().updateState({
                     hasDataFetchBeenAttempted: true,
                     isServerDataReceived: true,
-                    itemsBeforeFiltering: cycleStructure.nodes?.length || 0,
-                    itemsAfterFiltering: newRootTestThemeTreeItems.length,
+                    itemsBeforeFiltering: cycleStructureFromServer.nodes?.length || 0,
+                    itemsAfterFiltering: builtRootTestThemeTreeItems.length,
                     operationalState:
-                        newRootTestThemeTreeItems.length === 0
+                        builtRootTestThemeTreeItems.length === 0
                             ? TreeViewOperationalState.EMPTY
                             : TreeViewOperationalState.READY,
-                    emptyState: newRootTestThemeTreeItems.length === 0 ? TreeViewEmptyState.SERVER_NO_DATA : undefined
+                    emptyState: builtRootTestThemeTreeItems.length === 0 ? TreeViewEmptyState.SERVER_NO_DATA : undefined
                 });
 
-                return newRootTestThemeTreeItems;
+                return builtRootTestThemeTreeItems;
             } else {
                 this.getUnifiedStateManager().setError(
                     new Error("Failed to fetch cycle structure"),
@@ -239,7 +239,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         // Default to collapsed. The recursive build function will set the final state.
         const collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
 
-        const treeItem = new TestThemeTreeItem(
+        const testThemeTreeItem = new TestThemeTreeItem(
             testThemeLabel,
             data.elementType,
             collapsibleState,
@@ -251,10 +251,10 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         );
 
         // Apply the restored expansion state to the newly created item.
-        this.applyStoredExpansionState(treeItem);
+        this.applyStoredExpansionState(testThemeTreeItem);
 
-        const itemKey = treeItem.getUniqueId();
-        const itemUID = treeItem.getUID();
+        const itemKey = testThemeTreeItem.getUniqueId();
+        const itemUID = testThemeTreeItem.getUID();
         if (itemKey && itemUID) {
             const importState = this.markedItemStateService.getItemImportState(
                 itemKey,
@@ -262,57 +262,10 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                 this.currentProjectKey,
                 this.currentCycleKey
             );
-            treeItem.updateContextForMarking(importState.shouldShow);
+            testThemeTreeItem.updateContextForMarking(importState.shouldShow);
         }
 
-        return treeItem;
-    }
-
-    /**
-     * Retrieves the raw node data from the current active root element.
-     * This method is more robust during refresh operations by falling back to rawCycleData.
-     */
-    private getRawNodesFromCurrentRoot(): CycleTreeItemData[] {
-        const state = this.getUnifiedStateManager().getCurrentUnifiedState();
-        const activeRoot = state.isCustomRootActive
-            ? state.customRootItem?.itemData
-            : (this.rootTreeItems[0]?.itemData as CycleTreeItemData);
-
-        // First try to get nodes from the active root
-        if (activeRoot && activeRoot.nodes) {
-            return activeRoot.nodes;
-        }
-
-        // Fallback to the first root tree item's parent cycle structure
-        if (this.rootTreeItems.length > 0 && this.rootTreeItems[0]?.itemData?.parentCycleStructure?.nodes) {
-            return this.rootTreeItems[0].itemData.parentCycleStructure.nodes;
-        }
-
-        // New fallback: use rawCycleData if available (helps during refresh operations)
-        if (this.rawCycleData && this.rawCycleData.nodes) {
-            this.logger.trace(
-                "[TestThemeTreeDataProvider] Using rawCycleData for child check during refresh operation."
-            );
-            return this.rawCycleData.nodes;
-        }
-
-        this.logger.warn(
-            "[TestThemeTreeDataProvider] Cannot get raw nodes for child check, full structure not readily available."
-        );
-        return [];
-    }
-
-    /**
-     * Determines if a node will have any visible children in the test theme tree.
-     */
-    private nodeWillHaveVisibleChildren(
-        cycleNodeData: CycleTreeItemData,
-        allCycleNodeData: CycleTreeItemData[]
-    ): boolean {
-        return allCycleNodeData.some(
-            (childNode) =>
-                childNode.base.parentKey === cycleNodeData.base.key && this.isTreeItemVisibleInTestThemeTree(childNode)
-        );
+        return testThemeTreeItem;
     }
 
     /**
@@ -472,7 +425,10 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             }
 
             operation.throwIfCancelled("before fetching cycle structure");
-            const cycleStructure = await this.projectDataService.fetchCycleStructure(projectKey, cycleKey);
+            const cycleStructure = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
+                projectKey,
+                cycleKey
+            );
             operation.throwIfCancelled("after fetching cycle structure");
 
             if (!cycleStructure) {

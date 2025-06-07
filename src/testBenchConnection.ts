@@ -534,7 +534,7 @@ export class PlayServerConnection {
      * @param {string} cycleKey - The cycle key as a string.
      * @returns {Promise<testBenchTypes.CycleStructure | null>} The cycle structure or null if an error occurs.
      */
-    async fetchCycleStructureOfCycleInProject(
+    async fetchCycleStructureOfCycleFromServer(
         projectKey: string,
         cycleKey: string
     ): Promise<testBenchTypes.CycleStructure | null> {

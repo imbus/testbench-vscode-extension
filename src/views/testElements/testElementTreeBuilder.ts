@@ -62,9 +62,11 @@ export class TestElementTreeBuilder {
             if (item.parent.uniqueID) {
                 return `${item.parent.serial}_${item.parent.uniqueID}`;
             } else {
+                /*
                 this.logger.warn(
                     `[Builder.getParentId] Parent reference for item (name: ${item.name}, uniqueID: ${item.uniqueID}) is MISSING 'parent.uniqueID'. Parent serial: ${item.parent.serial}. Falling back to using parent serial as parentId.`
                 );
+                */
                 return String(item.parent.serial);
             }
         }
@@ -153,9 +155,11 @@ export class TestElementTreeBuilder {
                     !testElementData.parentId.includes("_")
                 ) {
                     const serialToFind = testElementData.parentId;
+                    /*
                     this.logger.trace(
                         `[Builder] Attempting fallback link for child '${testElementData.name}' (ID: ${testElementData.id}) using parent serial: '${serialToFind}'`
                     );
+                    */
 
                     for (const potentialParent of Object.values(testElementIdToDataMap)) {
                         let parentSerialFromDetails: string | undefined;
@@ -167,9 +171,11 @@ export class TestElementTreeBuilder {
 
                         if (parentSerialFromDetails === serialToFind) {
                             foundParentTestElementData = potentialParent;
+                            /*
                             this.logger.trace(
                                 `[Builder] Fallback link successful for child '${testElementData.name}' to parent '${foundParentTestElementData.name}' (ID: ${foundParentTestElementData.id}) via serial '${serialToFind}'`
                             );
+                            */
                             break;
                         }
                     }
