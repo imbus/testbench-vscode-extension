@@ -287,30 +287,37 @@ export class TreeServiceManager {
             treeView.onDidChangeSelection(async (event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>) => {
                 this.logger.debug(`[TreeServiceManager] Selection changed, items: ${event.selection.length}`);
                 if (event.selection.length > 0) {
-                    const selectedItem = event.selection[0];
+                    const selectedTreeItem = event.selection[0];
 
-                    // Check if the selected item is a cycle to handle double-click
-                    if (
-                        selectedItem instanceof ProjectManagementTreeItem &&
-                        selectedItem.originalContextValue === TreeItemContextValues.CYCLE
-                    ) {
-                        // If a timer is running for the same item, its a double-click
-                        if (this.clickTimer && this.lastClickedItem?.getUniqueId() === selectedItem.getUniqueId()) {
+                    if (!(selectedTreeItem instanceof ProjectManagementTreeItem)) {
+                        return;
+                    }
+
+                    const isCycleItem =
+                        selectedTreeItem.originalContextValue === TreeItemContextValues.CYCLE ||
+                        selectedTreeItem.contextValue === TreeItemContextValues.CYCLE;
+
+                    if (isCycleItem) {
+                        // This is a cycle item, handle the click with double click detection.
+                        if (this.clickTimer && this.lastClickedItem?.getUniqueId() === selectedTreeItem.getUniqueId()) {
+                            // Double click logic
+                            this.logger.debug(
+                                `[TreeServiceManager] Double-click detected on cycle: ${selectedTreeItem.label}`
+                            );
+
                             clearTimeout(this.clickTimer);
                             this.clickTimer = null;
                             this.lastClickedItem = null;
 
-                            this.logger.debug(
-                                `[TreeServiceManager] Double-click detected on cycle: ${selectedItem.label}`
-                            );
+                            // Execute the double-click command.
                             try {
                                 await vscode.commands.executeCommand(
                                     allExtensionCommands.openCycleFromProjectsView,
-                                    selectedItem
-                                );
+                                    selectedTreeItem
+                                ); //
                             } catch (error) {
                                 this.logger.error(
-                                    "[TreeServiceManager] Error executing openCycleTestThemes command:",
+                                    "[TreeServiceManager] Error executing openCycleFromProjectsView command:",
                                     error
                                 );
                                 vscode.window.showErrorMessage(
@@ -318,29 +325,34 @@ export class TreeServiceManager {
                                 );
                             }
                         } else {
-                            // First click, start a timer
+                            // Single click logic
+
                             if (this.clickTimer) {
                                 clearTimeout(this.clickTimer);
                             }
-                            this.lastClickedItem = selectedItem;
+
+                            // Set state for the next click to be detected as a double click.
+                            this.lastClickedItem = selectedTreeItem;
                             this.clickTimer = setTimeout(async () => {
                                 this.logger.trace(
-                                    `[TreeServiceManager] Single-click timeout executed for cycle: ${selectedItem.label}`
+                                    `[TreeServiceManager] Single-click timeout executed for cycle: ${selectedTreeItem.label}`
                                 );
-                                // If the timer completes, it was a single click
-                                await this.handleProjectTreeSelection(event, provider);
+
+                                await this.handleProjectTreeItemSelectionForLS(event, provider);
+
+                                // Reset state after the single click action
                                 this.clickTimer = null;
                                 this.lastClickedItem = null;
                             }, this.DOUBLE_CLICK_THRESHOLD_MS);
                         }
                     } else {
-                        // Not a cycle item, standard single-click
                         if (this.clickTimer) {
                             clearTimeout(this.clickTimer);
                             this.clickTimer = null;
+                            this.lastClickedItem = null;
                         }
-                        this.lastClickedItem = null;
-                        await this.handleProjectTreeSelection(event, provider);
+
+                        await this.handleProjectTreeItemSelectionForLS(event, provider);
                     }
                 }
             })
@@ -523,18 +535,31 @@ export class TreeServiceManager {
     /**
      * Handle project tree selection changes for language server context
      */
-    private async handleProjectTreeSelection(
+    private async handleProjectTreeItemSelectionForLS(
         event: vscode.TreeViewSelectionChangeEvent<BaseTreeItem>,
         provider: ProjectManagementTreeDataProvider
     ): Promise<void> {
         if (event.selection.length > 0) {
-            const selectedItem = event.selection[0];
-            if (selectedItem instanceof ProjectManagementTreeItem) {
+            const selectedTreeItem = event.selection[0];
+            if (selectedTreeItem instanceof ProjectManagementTreeItem) {
+                const isCycleItem =
+                    selectedTreeItem.originalContextValue === TreeItemContextValues.CYCLE ||
+                    selectedTreeItem.contextValue === TreeItemContextValues.CYCLE;
+
+                const isTovItem =
+                    selectedTreeItem.originalContextValue === TreeItemContextValues.VERSION ||
+                    selectedTreeItem.contextValue === TreeItemContextValues.VERSION;
+
+                // Only handle cycle or TOV items
+                if (!isCycleItem && !isTovItem) {
+                    return;
+                }
+
                 this.logger.trace(
-                    `[TreeServiceManager] Project Tree selection: ${selectedItem.label}, context: ${selectedItem.contextValue}`
+                    `[TreeServiceManager] Project Tree selection: ${selectedTreeItem.label}, context: ${selectedTreeItem.contextValue}`
                 );
 
-                const { projectName, tovName } = provider.getProjectAndTovNamesForItem(selectedItem);
+                const { projectName, tovName } = provider.getProjectAndTovNamesFromProjectTreeItem(selectedTreeItem);
                 this.logger.info(
                     `[TreeServiceManager] Resolved LS Context: Project='${projectName}', TOV='${tovName}'`
                 );

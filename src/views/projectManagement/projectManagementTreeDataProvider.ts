@@ -381,7 +381,10 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     /**
      * Retrieves the project and TOV (Test Object Version) names for a given tree item by traversing up the parent hierarchy.
      */
-    public getProjectAndTovNamesForItem(item: ProjectManagementTreeItem): { projectName?: string; tovName?: string } {
+    public getProjectAndTovNamesFromProjectTreeItem(item: ProjectManagementTreeItem): {
+        projectName?: string;
+        tovName?: string;
+    } {
         let projectName: string | undefined;
         let tovName: string | undefined;
         let current: ProjectManagementTreeItem | null = item;

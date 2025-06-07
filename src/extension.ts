@@ -1225,7 +1225,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                             logger.trace(`[Cmd] Persisted active TOV context:`, tovContext);
 
                             // Restart language client for the selected project/TOV
-                            const projectAndTovNameObj = projectProvider.getProjectAndTovNamesForItem(tovItem);
+                            const projectAndTovNameObj =
+                                projectProvider.getProjectAndTovNamesFromProjectTreeItem(tovItem);
                             if (projectAndTovNameObj) {
                                 const { projectName, tovName } = projectAndTovNameObj;
                                 if (projectName && tovName) {
