@@ -461,22 +461,22 @@ export class PlayServerConnection {
     }
 
     /**
-     * Fetches the test structure of a specific Test Object Version (TOV) from the TestBench server.
+     * Sends a request to the TestBench server to package the Test Object Version (TOV) into a zip file.
      *
      * @param {string} projectKey - The project key as a string.
      * @param {string} tovKey - The Test Object Version key as a string.
      * @param {testBenchTypes.TovStructureOptions} tovStructureOptions - The TOV structure options.
-     * @returns {Promise<testBenchTypes.TovStructure | null>} The TOV structure or null if an error occurs.
+     * @returns {Promise<string | null>} The job ID of the requested job.
      */
-    async fetchTovStructure(
+    async packageTovsToZipInServerAndGetJobID(
         projectKey: string,
         tovKey: string,
         tovStructureOptions: testBenchTypes.TovStructureOptions
-    ): Promise<testBenchTypes.TovStructure | null> {
-        const tovStructureUrl: string = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+    ): Promise<string | null> {
+        const tovStructureUrl: string = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
 
         try {
-            const tovStructureResponse: AxiosResponse<testBenchTypes.TovStructure> = await withRetry(
+            const tovStructureResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
                 () =>
                     this.apiClient.post(tovStructureUrl, tovStructureOptions, {
                         headers: {
@@ -499,9 +499,9 @@ export class PlayServerConnection {
             );
 
             logger.trace(`TOV structure response for TOV key ${tovKey}:`, tovStructureResponse.status);
-            if (tovStructureResponse.data) {
+            if (tovStructureResponse.data.jobID) {
                 logger.trace(`Received TOV structure for TOV key ${tovKey}:`, tovStructureResponse.data);
-                return tovStructureResponse.data;
+                return tovStructureResponse.data.jobID;
             } else {
                 logger.error(`Unexpected response code: ${tovStructureResponse.status}`);
                 return null;

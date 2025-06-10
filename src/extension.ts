@@ -1091,7 +1091,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 },
                 async (progress) => {
                     progress.report({ message: "Retrieving TOV structure from server..." });
-                    return await connection?.fetchTovStructure(projectKey.trim(), tovKey.trim(), tovStructureOptions);
+                    return await connection?.packageTovsToZipInServerAndGetJobID(
+                        projectKey.trim(),
+                        tovKey.trim(),
+                        tovStructureOptions
+                    );
                 }
             );
 
@@ -1168,12 +1172,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     return;
                 }
 
-                // For TOV-level generation, we'll need to handle this differently than cycle generation
-                // This would generate tests for the entire TOV rather than a specific cycle
                 logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
 
-                // Here you would implement TOV-level test generation logic
-                // This might involve fetching TOV structure and generating tests for all test themes
                 await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey);
             } catch (error) {
                 logger.error("[Cmd] Error in generateTestCasesForTOV:", error);
@@ -1227,7 +1227,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                             if (projectAndTovNameObj) {
                                 const { projectName, tovName } = projectAndTovNameObj;
 
-                                // Persist the active TOV context for restoration, now including the project name
+                                // Persist the active TOV context for restoration
                                 if (projectName && tovName) {
                                     const tovContext = {
                                         tovKey: tovKeyOfSelectedTreeElement,

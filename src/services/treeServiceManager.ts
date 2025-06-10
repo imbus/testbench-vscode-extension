@@ -265,7 +265,13 @@ export class TreeServiceManager {
                 this.logger.info(
                     `[TreeServiceManager] Restoring Language Server context for Project: '${lsProjectName}', TOV: '${lsTovName}'`
                 );
-                await restartLanguageClient(lsProjectName, lsTovName);
+                const existingClient = getLanguageClientInstance();
+                if (existingClient && existingClient.state !== State.Stopped) {
+                    await vscode.commands.executeCommand("testbench_ls.updateProject", lsProjectName);
+                    await vscode.commands.executeCommand("testbench_ls.updateTov", lsTovName);
+                } else {
+                    await restartLanguageClient(lsProjectName, lsTovName);
+                }
             } else {
                 this.logger.warn(
                     "[TreeServiceManager] Could not restore Language Server context due to missing project or TOV name."

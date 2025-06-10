@@ -1776,7 +1776,7 @@ export async function startTestGenerationForTOV(
                 cancellable: true
             },
             async (progress, cancellationToken) => {
-                progress.report({ increment: 0, message: "Fetching TOV structure..." });
+                progress.report({ increment: 0, message: "Fetching TOV structure report..." });
 
                 if (!connection) {
                     throw new Error("No connection available");
@@ -1790,42 +1790,72 @@ export async function startTestGenerationForTOV(
                     filters: []
                 };
 
-                const tovStructure = await connection.fetchTovStructure(projectKey, tovKey, tovStructureOptions);
-
+                const tovReportJobID = await connection.packageTovsToZipInServerAndGetJobID(
+                    projectKey,
+                    tovKey,
+                    tovStructureOptions
+                );
                 if (cancellationToken.isCancellationRequested) {
                     return false;
                 }
 
-                if (!tovStructure) {
-                    throw new Error("Failed to fetch TOV structure");
+                if (!tovReportJobID) {
+                    logger.error("Failed to fetch TOV structure report");
+                    throw new Error("Failed to fetch TOV structure report");
                 }
 
-                progress.report({ increment: 30, message: "Processing TOV structure..." });
+                logger.debug(`TOV structure report job ID: ${tovReportJobID}`);
 
-                const testThemes = extractTestThemesFromTovStructure(tovStructure);
-                let currentProgress = 30;
-                const progressIncrement = Math.floor(60 / Math.max(testThemes.length, 1));
+                // Poll job status until completed
+                const tovReportJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
+                    projectKey,
+                    tovReportJobID,
+                    JobTypes.REPORT,
+                    progress,
+                    cancellationToken
+                );
+                if (!tovReportJobStatus || !isReportJobCompletedSuccessfully(tovReportJobStatus)) {
+                    const reportGenerationErrorMsg: string = "Report generation was unsuccessful.";
+                    logger.error(reportGenerationErrorMsg);
+                    vscode.window.showErrorMessage(reportGenerationErrorMsg);
+                    return false;
+                }
+                const downloadedTovReportName: string =
+                    tovReportJobStatus.completion.result.ReportingSuccess!.reportName;
+                logger.debug(`Report name to download: ${downloadedTovReportName}`);
 
-                for (const testTheme of testThemes) {
-                    if (cancellationToken.isCancellationRequested) {
-                        return false;
-                    }
-
-                    progress.report({
-                        increment: progressIncrement,
-                        message: `Generating tests for: ${testTheme.name}...`
-                    });
-
-                    await generateTestsForTestTheme(context, testTheme, projectKey, tovKey);
-                    currentProgress += progressIncrement;
+                const downloadedTovReportPath: string | null = await downloadReport(
+                    projectKey,
+                    downloadedTovReportName,
+                    folderNameOfInternalTestbenchFolder
+                );
+                if (!downloadedTovReportPath) {
+                    logger.warn("Report download failed or was canceled.");
+                    return false;
                 }
 
-                progress.report({ increment: 100 - currentProgress, message: "Test generation completed" });
+                logger.debug(`Report downloaded successfully to: ${downloadedTovReportPath}`);
+                progress.report({ increment: 20, message: "Generating tests for TOV..." });
 
+                // Call to language server for testbench2robotframework library test generation
+                const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
+                    await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
+                        downloadedTovReportPath
+                    );
+
+                await cleanUpReportFileIfConfiguredInSettings(downloadedTovReportPath);
+                if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
+                    const testGenerationFailedMessage: string =
+                        "[runRobotFrameworkTestGenerationProcess] Test generation failed.";
+                    logger.error(testGenerationFailedMessage);
+                    vscode.window.showErrorMessage(testGenerationFailedMessage);
+                    return false;
+                }
+
+                progress.report({ increment: 30, message: "Test generation completed" });
                 const successMessage = `Test generation completed for TOV: ${tovItem.label}`;
                 logger.info(`[ReportHandler] ${successMessage}`);
                 vscode.window.showInformationMessage(successMessage);
-
                 return true;
             }
         );
@@ -1835,52 +1865,4 @@ export async function startTestGenerationForTOV(
         vscode.window.showErrorMessage(errorMessage);
         return false;
     }
-}
-
-/**
- * Helper function to extract test themes from TOV structure
- * @param tovStructure The TOV structure from the server
- * @returns Array of test theme objects
- */
-function extractTestThemesFromTovStructure(tovStructure: any): any[] {
-    // TODO: Implement based on the TOV structure format
-    const testThemes: any[] = [];
-
-    function traverse(node: any) {
-        if (node.nodeType === "TestTheme" || node.type === "TestTheme") {
-            testThemes.push(node);
-        }
-
-        if (node.children) {
-            for (const child of node.children) {
-                traverse(child);
-            }
-        }
-    }
-
-    if (tovStructure.root) {
-        traverse(tovStructure.root);
-    }
-
-    return testThemes;
-}
-
-/**
- * Helper function to generate tests for a specific test theme
- * @param context VS Code extension context
- * @param testTheme The test theme object
- * @param projectKey The project key
- * @param tovKey The TOV key
- */
-async function generateTestsForTestTheme(
-    context: vscode.ExtensionContext,
-    testTheme: any,
-    projectKey: string,
-    tovKey: string
-): Promise<void> {
-    // TODO: Implement the actual test generation logic (using testbench2robotframework library?)
-
-    logger.debug(
-        `[ReportHandler] Generating tests for Test Theme: ${testTheme.name} (Project: ${projectKey}, TOV: ${tovKey})`
-    );
 }

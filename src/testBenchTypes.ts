@@ -238,9 +238,4 @@ export interface TovStructureNode {
     [key: string]: any;
 }
 
-export interface TovStructureItem {
-    root: TovStructureNode;
-    nodes: TovStructureNode[];
-}
-
-export type TovStructure = TovStructureItem[];
+export type TovStructure = TovStructureOptions[];
