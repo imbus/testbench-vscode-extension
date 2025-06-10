@@ -297,7 +297,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Apply stored expansion state to an item
+     * Apply stored expansion state to an item and ensure its parents are expanded
      */
     protected applyStoredExpansionState(item: T): void {
         if (this.options.enableExpansionTracking) {
@@ -306,6 +306,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             if (state.expandedItems.has(itemId)) {
                 if (item.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
                     item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                    this.ensureParentsExpanded(item);
                 }
             }
         }
@@ -315,7 +316,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Store expansion state from current tree.
+     * Store expansion state from current tree, including parent chain information.
      */
     protected storeExpansionState(): void {
         if (!this.options.enableExpansionTracking) {
@@ -329,22 +330,58 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             return;
         }
         const expandedIds = new Set<string>();
-        const collectExpanded = (items: T[]) => {
+        const implicitlyExpandedIds = new Set<string>(); // Parents that must be expanded
+
+        const collectExpanded = (items: T[], parentChain: T[] = []) => {
             for (const item of items) {
+                const itemId = item.getUniqueId();
+
                 if (item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
-                    expandedIds.add(item.getUniqueId());
+                    expandedIds.add(itemId);
+
+                    // Mark all parents as implicitly expanded
+                    parentChain.forEach((parent) => {
+                        implicitlyExpandedIds.add(parent.getUniqueId());
+                    });
                 }
                 if (item.children) {
-                    collectExpanded(item.children as T[]);
+                    collectExpanded(item.children as T[], [...parentChain, item]);
                 }
             }
         };
 
         collectExpanded(this.rootTreeItems);
+
+        // Merge explicitly and implicitly expanded items
+        implicitlyExpandedIds.forEach((id) => expandedIds.add(id));
+
         this.unifiedStateManager.updateState({ expandedItems: expandedIds });
         this.logger.debug(
-            `[BaseTreeDataProvider] Stored expansion state for ${expandedIds.size} items: ${[...expandedIds].join(", ")}`
+            `[BaseTreeDataProvider] Stored expansion state for ${expandedIds.size} items (including parent chains): ${[...expandedIds].join(", ")}`
         );
+    }
+
+    /**
+     * Ensures all parent items in the hierarchy are expanded for a given item.
+     * This is necessary when restoring expansion state to ensure items remain visible.
+     * @param item The item for which to ensure parents are expanded.
+     */
+    protected ensureParentsExpanded(item: T): void {
+        const parentsToExpand: T[] = [];
+        let current = item.parent as T | null;
+
+        while (current) {
+            parentsToExpand.push(current);
+            current = current.parent as T | null;
+        }
+
+        // Expand parents from root to immediate parent
+        parentsToExpand.reverse().forEach((parent) => {
+            if (parent.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+                parent.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                this.unifiedStateManager.setItemExpansion(parent.getUniqueId(), true);
+            }
+        });
     }
 
     /**

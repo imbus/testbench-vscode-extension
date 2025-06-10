@@ -482,14 +482,31 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Reset custom root and restore the full tree view
-     * Override the base method to ensure proper tree restoration
+     * Reset custom root and restore the full tree view with proper expansion state
      */
     public override resetCustomRoot(): void {
-        this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root by triggering a hard refresh.");
+        this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root and preserving expansion state.");
+
+        // Store current expansion state before reset
+        if (this.isCustomRootActive()) {
+            const customRoot = this.getCurrentCustomRoot();
+            if (customRoot) {
+                // Ensure the custom root and its parents will be expanded after reset
+                const expandedIds = new Set(this.unifiedStateManager.getCurrentUnifiedState().expandedItems);
+                expandedIds.add(customRoot.getUniqueId());
+
+                // Add all parents of the custom root
+                let parent = customRoot.parent as TestThemeTreeItem | null;
+                while (parent) {
+                    expandedIds.add(parent.getUniqueId());
+                    parent = parent.parent as TestThemeTreeItem | null;
+                }
+
+                this.unifiedStateManager.updateState({ expandedItems: expandedIds });
+            }
+        }
         this.refresh(true);
     }
-
     protected override async getRootChildren(): Promise<TestThemeTreeItem[]> {
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
         if (state.isCustomRootActive && state.customRootItem) {
@@ -506,13 +523,21 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         cycleStructure: CycleStructure,
         operation: CancellableOperation
     ): Promise<void> {
-        const state = this.getUnifiedStateManager().getCurrentUnifiedState();
+        const state = this.unifiedStateManager.getCurrentUnifiedState();
         const currentTestThemeRootItem = state.customRootItem as TestThemeTreeItem;
         if (!currentTestThemeRootItem) {
             return;
         }
 
         operation.throwIfCancelled("before custom root refresh");
+
+        // Store parent chain expansion state
+        const parentsToKeepExpanded: string[] = [];
+        let parent = currentTestThemeRootItem.parent as TestThemeTreeItem | null;
+        while (parent) {
+            parentsToKeepExpanded.push(parent.getUniqueId());
+            parent = parent.parent as TestThemeTreeItem | null;
+        }
 
         const currentTestThemeRootItemKey = currentTestThemeRootItem.getUniqueId();
         const testThemeTreeItemDataMap = new Map<string, CycleTreeItemData>();
@@ -554,6 +579,13 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                     : vscode.TreeItemCollapsibleState.None;
 
             this.applyStoredExpansionState(currentTestThemeRootItem);
+
+            // After rebuilding, ensure parent chain remains expanded
+            if (parentsToKeepExpanded.length > 0) {
+                const currentExpanded = new Set(this.unifiedStateManager.getCurrentUnifiedState().expandedItems);
+                parentsToKeepExpanded.forEach((id) => currentExpanded.add(id));
+                this.unifiedStateManager.updateState({ expandedItems: currentExpanded });
+            }
 
             // Update the root tree items array directly without calling updateTreeItem
             // This preserves the custom root item without disposing it
