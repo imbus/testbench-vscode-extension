@@ -24,6 +24,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     private readonly iconService: IconManagementService;
     private readonly operationManager: CancellableOperationManager;
     private rawCycleData: CycleStructure | null = null;
+    public isTestThemeOpenedFromACycle: boolean = false;
 
     // Operation IDs
     private static readonly FETCH_CYCLE_STRUCTURE_OPERATION = "fetchCycleStructure";
@@ -85,7 +86,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
      */
     public populateFromCycleData(eventData: CycleDataForThemeTreeEvent): void {
         this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.cycleKey}`);
-
+        this.isTestThemeOpenedFromACycle = true;
         this.rawCycleData = eventData.rawCycleStructure;
 
         // Single coordinated state update through unified manager

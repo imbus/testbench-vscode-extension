@@ -453,15 +453,15 @@ class PlayServerConnection {
         }
     }
     /**
-     * Fetches the test structure of a specific Test Object Version (TOV) from the TestBench server.
+     * Sends a request to the TestBench server to package the Test Object Version (TOV) into a zip file.
      *
      * @param {string} projectKey - The project key as a string.
      * @param {string} tovKey - The Test Object Version key as a string.
      * @param {testBenchTypes.TovStructureOptions} tovStructureOptions - The TOV structure options.
-     * @returns {Promise<testBenchTypes.TovStructure | null>} The TOV structure or null if an error occurs.
+     * @returns {Promise<string | null>} The job ID of the requested job.
      */
-    async fetchTovStructure(projectKey, tovKey, tovStructureOptions) {
-        const tovStructureUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+    async packageTovsToZipInServerAndGetJobID(projectKey, tovKey, tovStructureOptions) {
+        const tovStructureUrl = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
         try {
             const tovStructureResponse = await withRetry(() => this.apiClient.post(tovStructureUrl, tovStructureOptions, {
                 headers: {
@@ -481,9 +481,9 @@ class PlayServerConnection {
                 return true;
             });
             extension_1.logger.trace(`TOV structure response for TOV key ${tovKey}:`, tovStructureResponse.status);
-            if (tovStructureResponse.data) {
+            if (tovStructureResponse.data.jobID) {
                 extension_1.logger.trace(`Received TOV structure for TOV key ${tovKey}:`, tovStructureResponse.data);
-                return tovStructureResponse.data;
+                return tovStructureResponse.data.jobID;
             }
             else {
                 extension_1.logger.error(`Unexpected response code: ${tovStructureResponse.status}`);
@@ -516,7 +516,7 @@ class PlayServerConnection {
      * @param {string} cycleKey - The cycle key as a string.
      * @returns {Promise<testBenchTypes.CycleStructure | null>} The cycle structure or null if an error occurs.
      */
-    async fetchCycleStructureOfCycleInProject(projectKey, cycleKey) {
+    async fetchCycleStructureOfCycleFromServer(projectKey, cycleKey) {
         const cycleStructureUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
         const requestBody = {
             executionMode: testBenchTypes_1.ExecutionMode.Execute,

@@ -39,7 +39,7 @@ suite("MarkedItemStateService Tests", () => {
         const saveStateSpy = testEnv.sandbox.spy(service as any, "_saveState");
 
         // Act
-        await service.markItem(
+        await service.markItemWithDescendants(
             testData.rootKey,
             testData.rootUID,
             testData.projectKey,
@@ -60,7 +60,7 @@ suite("MarkedItemStateService Tests", () => {
 
     test("getItemImportState should return true for the directly marked root item", async () => {
         // Arrange
-        await service.markItem(
+        await service.markItemWithDescendants(
             testData.rootKey,
             testData.rootUID,
             testData.projectKey,
@@ -85,7 +85,7 @@ suite("MarkedItemStateService Tests", () => {
 
     test("getItemImportState should return true for a descendant of the marked item", async () => {
         // Arrange
-        await service.markItem(
+        await service.markItemWithDescendants(
             testData.rootKey,
             testData.rootUID,
             testData.projectKey,
@@ -106,7 +106,7 @@ suite("MarkedItemStateService Tests", () => {
 
     test("getItemImportState should return false for an unrelated item", async () => {
         // Arrange
-        await service.markItem(
+        await service.markItemWithDescendants(
             testData.rootKey,
             testData.rootUID,
             testData.projectKey,
@@ -132,7 +132,7 @@ suite("MarkedItemStateService Tests", () => {
 
     test("clearMarking should reset all state", async () => {
         // Arrange
-        await service.markItem(
+        await service.markItemWithDescendants(
             testData.rootKey,
             testData.rootUID,
             testData.projectKey,
@@ -147,7 +147,7 @@ suite("MarkedItemStateService Tests", () => {
         const saveStateSpy = testEnv.sandbox.spy(service as any, "_saveState");
 
         // Act
-        await service.clearMarking();
+        await service.clearItemMarkingIncludingDescendants();
 
         // Assert
         assert.strictEqual(service.getActiveMarkedItemInfo(), null, "Active marked item should be null after clearing");

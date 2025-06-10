@@ -577,7 +577,7 @@
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == testThemeTree && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme')",
+                    "when": "view == testThemeTree && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme') && testbenchExtension.isTestThemeOpenedFromCycle",
                     "group": "inline@1"
                 },
                 {

@@ -80,7 +80,8 @@ export const ConfigKeys = {
 export const ContextKeys = {
     CONNECTION_ACTIVE: "testbenchExtension.connectionActive",
     PROJECT_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.projectTreeHasCustomRoot",
-    THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot"
+    THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot",
+    IS_TT_OPENED_FROM_CYCLE: "testbenchExtension.isTestThemeOpenedFromCycle"
 } as const;
 
 // --- Storage Keys ---

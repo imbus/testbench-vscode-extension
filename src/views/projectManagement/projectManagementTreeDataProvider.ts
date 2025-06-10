@@ -288,6 +288,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
      * and preparing it for the theme tree view.
      */
     public async initTestThemeTreeAfterCycleClick(cycleItem: ProjectManagementTreeItem): Promise<void> {
+        await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
         const cycleLabel = typeof cycleItem.label === "string" ? cycleItem.label : "N/A";
 
         // Cancel any existing cycle click operation

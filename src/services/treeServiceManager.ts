@@ -211,7 +211,7 @@ export class TreeServiceManager {
             const tovContext = this.extensionContext.workspaceState.get<{
                 tovKey: string;
                 tovLabel: string;
-                projectName?: string; // Project name is now optional to support old format
+                projectName?: string;
             }>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
 
             if (tovContext?.tovKey && tovContext.tovLabel) {
@@ -260,7 +260,7 @@ export class TreeServiceManager {
                 }
             }
 
-            // Finally, initialize the Language Server if we have the necessary context
+            // Iinitialize the Language Server if we have the necessary context
             if (lsProjectName && lsTovName) {
                 this.logger.info(
                     `[TreeServiceManager] Restoring Language Server context for Project: '${lsProjectName}', TOV: '${lsTovName}'`

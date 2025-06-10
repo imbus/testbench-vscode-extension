@@ -457,7 +457,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         const descendantUIDs = treeItem.getDescendantUIDs();
                         const descendantKeysWithUIDs = treeItem.getDescendantKeysWithUIDs();
 
-                        await markedItemStateService.markItem(
+                        await markedItemStateService.markItemWithDescendants(
                             itemKeyToMark,
                             itemUIDToMark,
                             projectKey,
@@ -591,7 +591,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         logger.debug(
                             `Clearing marked state for item: ${item.label} as ALLOW_PERSISTENT_IMPORT_BUTTON is false.`
                         );
-                        await markedItemStateService.clearMarking(itemKey);
+                        await markedItemStateService.clearItemMarkingIncludingDescendants(itemKey);
                     } else {
                         logger.debug(
                             `ALLOW_PERSISTENT_IMPORT_BUTTON is true. Import button will persist for item: ${item.label}`
@@ -1200,6 +1200,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             }
 
             try {
+                await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
                 const projectProvider = treeServiceManager.getProjectManagementProvider();
                 const testElementsProvider = treeServiceManager.getTestElementsProvider();
                 const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
@@ -1218,6 +1219,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
                         if (areTestElementsFetched) {
                             await hideProjectManagementTreeView();
+                            await displayTestThemeTreeView();
+                            treeServiceManager.getTestThemeProvider().isTestThemeOpenedFromACycle = false;
                             await displayTestElementsTreeView();
                             testElementsTreeView.title = `Test Elements (${tovLabel})`;
 
@@ -1567,6 +1570,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     await vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
     await vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
+    await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
 
     // Initialize login webview
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);

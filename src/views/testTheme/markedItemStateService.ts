@@ -111,7 +111,18 @@ export class MarkedItemStateService {
             this.currentMarkedItemInfo = null;
         }
     }
-    private async _saveState(): Promise<void> {
+
+    /**
+     * Persists the current marked test item and its hierarchy data into the VS Code workspace state.
+     *
+     * Serializes and updates:
+     *  - The marked test item under `StorageKeys.MARKED_TEST_GENERATION_ITEM`
+     *  - The generated item hierarchies (with sets and maps converted to arrays) under
+     *    `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`
+     *
+     * @returns {Promise<void>} Resolves when storage is updated successfully; logs an error on failure.
+     */
+    private async _saveMarkedItemsStateWithHierarchy(): Promise<void> {
         try {
             await this.context.workspaceState.update(
                 StorageKeys.MARKED_TEST_GENERATION_ITEM,
@@ -144,7 +155,7 @@ export class MarkedItemStateService {
      * Marks an item and its descendants as generated.
      * Clears any previous markings and hierarchies.
      */
-    public async markItem(
+    public async markItemWithDescendants(
         itemKey: string,
         itemUID: string,
         projectKey: string,
@@ -179,14 +190,14 @@ export class MarkedItemStateService {
         };
         this.generatedItemHierarchies.set(itemKey, newHierarchy);
 
-        await this._saveState();
+        await this._saveMarkedItemsStateWithHierarchy();
     }
 
     /**
      * Clears the marking state for a specific item and its associated hierarchy.
      * If no itemKey is provided, clears all markings.
      */
-    public async clearMarking(itemKeyToClear?: string): Promise<void> {
+    public async clearItemMarkingIncludingDescendants(itemKeyToClear?: string): Promise<void> {
         if (itemKeyToClear) {
             if (this.currentMarkedItemInfo && this.currentMarkedItemInfo.key === itemKeyToClear) {
                 this.currentMarkedItemInfo = null;
@@ -200,7 +211,7 @@ export class MarkedItemStateService {
             this.generatedItemHierarchies.clear();
             this.logger.info("[MarkedItemStateService] Cleared all marked item states and hierarchies.");
         }
-        await this._saveState();
+        await this._saveMarkedItemsStateWithHierarchy();
     }
 
     /**
