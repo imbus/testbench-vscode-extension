@@ -8,6 +8,7 @@ import * as sinon from "sinon";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { TreeViewStateManager } from "../../../views/common/treeViewStateManager";
 import { TreeViewType, TreeViewEmptyState, TreeViewStateConfig } from "../../../views/common/treeViewStateTypes";
+import { testElementsTreeViewID, testThemeTreeViewID } from "../../../constants";
 
 suite("TreeViewStateManager Tests", () => {
     let testEnv: TestEnvironment;
@@ -26,7 +27,7 @@ suite("TreeViewStateManager Tests", () => {
     test("should generate a specific 'no data source' message when set to empty", () => {
         // Arrange
         const config: TreeViewStateConfig = {
-            treeViewId: "testThemeTree",
+            treeViewId: testThemeTreeViewID,
             treeViewType: TreeViewType.TEST_THEME,
             noDataSourceMessage: "Please select a cycle to begin." // Custom message
         };
@@ -49,7 +50,7 @@ suite("TreeViewStateManager Tests", () => {
     test("should generate a formatted error message when set to an error state", () => {
         // Arrange
         const config: TreeViewStateConfig = {
-            treeViewId: "testElementsView",
+            treeViewId: testElementsTreeViewID,
             treeViewType: TreeViewType.TEST_ELEMENTS
         };
         const manager = new TreeViewStateManager(testEnv.logger, config, updateMessageCallback);

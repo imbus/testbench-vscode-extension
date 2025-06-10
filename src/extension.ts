@@ -1,4 +1,3 @@
-import { StorageKeys } from "./constants";
 /**
  * @file extension.ts
  * @description Main entry point for the TestBench VS Code extension.
@@ -22,11 +21,14 @@ import {
     ConfigKeys,
     ContextKeys,
     folderNameOfInternalTestbenchFolder,
-    TreeItemContextValues
+    TreeItemContextValues,
+    projectManagementTreeViewID,
+    StorageKeys,
+    testElementsTreeViewID,
+    testThemeTreeViewID
 } from "./constants";
 import { client, restartLanguageClient, stopLanguageClient, getLanguageClientInstance } from "./server";
 import { State } from "vscode-languageclient/node";
-
 import {
     TestBenchAuthenticationProvider,
     TESTBENCH_AUTH_PROVIDER_ID,
@@ -134,27 +136,27 @@ function registerSafeCommand(
  * Utility functions for tree view visibility management
  */
 async function hideProjectManagementTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("projectManagementTree.removeView");
+    await vscode.commands.executeCommand(`${projectManagementTreeViewID}.removeView`);
 }
 
 async function displayProjectManagementTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("projectManagementTree.focus");
+    await vscode.commands.executeCommand(`${projectManagementTreeViewID}.focus`);
 }
 
 async function hideTestThemeTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testThemeTree.removeView");
+    await vscode.commands.executeCommand(`${testThemeTreeViewID}.removeView`);
 }
 
 async function displayTestThemeTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testThemeTree.focus");
+    await vscode.commands.executeCommand(`${testThemeTreeViewID}.focus`);
 }
 
 async function hideTestElementsTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testElementsView.removeView");
+    await vscode.commands.executeCommand(`${testElementsTreeViewID}.removeView`);
 }
 
 async function displayTestElementsTreeView(): Promise<void> {
-    await vscode.commands.executeCommand("testElementsView.focus");
+    await vscode.commands.executeCommand(`${testElementsTreeViewID}.focus`);
 }
 
 /**

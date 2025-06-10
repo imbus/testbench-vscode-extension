@@ -636,11 +636,6 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
 
     if (!cycleKey) {
         logger.warn(`CycleKey not provided for ${selectedTreeItem.label}, attempting to find via parent traversal.`);
-        // Need a way to get cycleKey. This might involve TestThemeTreeDataProvider or a helper.
-        // For now, assume the caller (command handler in extension.ts) will provide it or resolve it.
-        // This simplifies reportHandler.ts changes.
-        // If TestThemeTreeDataProvider is available, use it:
-        // cycleKey = testThemeTreeDataProvider?.getCurrentCycleKey(); // Avoid direct access if possible
         return null;
     }
 
@@ -650,7 +645,6 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         return null;
     }
 
-    // This is not ideal for decoupling
     const currentTdpProjectKey = (globalThis as any).testThemeTreeDataProvider?.getCurrentProjectKey();
     if (currentTdpProjectKey && (globalThis as any).testThemeTreeDataProvider?.getCurrentCycleKey() === cycleKey) {
         projectKey = currentTdpProjectKey;
@@ -658,12 +652,9 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         logger.warn(
             `ProjectKey not directly available for cycle ${cycleKey}. This might require caller to provide it.`
         );
-        // Fallback or error if truly needed by internal logic not being refactored.
-        // For now, this demo proceeds assuming it can be found if critical for downstream.
     }
 
     if (!projectKey) {
-        // If still not found, it's an issue.
         logger.error(`Project key not found for cycle ${cycleKey}.`);
         vscode.window.showErrorMessage(`Error: Project key could not be determined for the current cycle.`);
         return null;
@@ -674,11 +665,9 @@ export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
         return null;
     }
 
-    // Pass the necessary data. The `selectedTreeItem` type is updated.
-    // The marking logic is now outside this function, handled by command handler + MarkedItemStateService.
     await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
         context,
-        selectedTreeItem, // Pass the new type
+        selectedTreeItem,
         typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : selectedTreeItem.itemData?.name || "",
         projectKey,
         cycleKey,
@@ -1854,7 +1843,7 @@ export async function startTestGenerationForTOV(
  * @returns Array of test theme objects
  */
 function extractTestThemesFromTovStructure(tovStructure: any): any[] {
-    // TODO: Imlement based on the TOV structure format
+    // TODO: Implement based on the TOV structure format
     const testThemes: any[] = [];
 
     function traverse(node: any) {

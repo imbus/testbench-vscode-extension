@@ -5,7 +5,14 @@
 
 import * as vscode from "vscode";
 import { TestBenchLogger } from "../testBenchLogger";
-import { allExtensionCommands, StorageKeys, TreeItemContextValues } from "./../constants";
+import {
+    allExtensionCommands,
+    projectManagementTreeViewID,
+    StorageKeys,
+    testElementsTreeViewID,
+    testThemeTreeViewID,
+    TreeItemContextValues
+} from "./../constants";
 import { ProjectDataService } from "../views/projectManagement/projectDataService";
 import { TestElementDataService } from "../views/testElements/testElementDataService";
 import { ResourceFileService } from "../views/testElements/resourceFileService";
@@ -166,7 +173,7 @@ export class TreeServiceManager {
                     this.logger.trace(
                         "[TreeServiceManager] No saved view state found, focusing on default project view."
                     );
-                    vscode.commands.executeCommand("projectManagementTree.focus").then(undefined, (err) => {
+                    vscode.commands.executeCommand(`${projectManagementTreeViewID}.focus`).then(undefined, (err) => {
                         this.logger.warn(`[TreeServiceManager] Could not set default focus for project view:`, err);
                     });
                     return;
@@ -250,9 +257,8 @@ export class TreeServiceManager {
      * Create and configure the Project Management tree view
      */
     private async createProjectManagementTree(): Promise<void> {
-        const projectManagementViewId = "projectManagementTree";
         const updateMessage = (message?: string) => {
-            const treeViewContainer = this.treeViews.get(projectManagementViewId);
+            const treeViewContainer = this.treeViews.get(projectManagementTreeViewID);
             if (treeViewContainer?.treeView) {
                 treeViewContainer.treeView.message = message;
             }
@@ -264,7 +270,7 @@ export class TreeServiceManager {
             updateMessage,
             this.projectDataService
         );
-        const treeView = vscode.window.createTreeView(projectManagementViewId, {
+        const treeView = vscode.window.createTreeView(projectManagementTreeViewID, {
             treeDataProvider: projectManagementTreeProvider,
             canSelectMany: false
         });
@@ -314,12 +320,12 @@ export class TreeServiceManager {
         );
 
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set(projectManagementViewId, {
+        this.treeViews.set(projectManagementTreeViewID, {
             provider: projectManagementTreeProvider,
             treeView,
             updateMessage
         });
-        this.setupProviderStateListener(projectManagementViewId, projectManagementTreeProvider);
+        this.setupProviderStateListener(projectManagementTreeViewID, projectManagementTreeProvider);
         this.logger.info(
             "[TreeServiceManager] Project Management tree view created with unified state management and double-click handling"
         );
@@ -370,9 +376,8 @@ export class TreeServiceManager {
      * Create and configure the Test Theme tree view
      */
     private async createTestThemeTree(): Promise<void> {
-        const testThemeTreeViewId = "testThemeTree";
         const updateMessage = (message?: string) => {
-            const treeViewContainer = this.treeViews.get(testThemeTreeViewId);
+            const treeViewContainer = this.treeViews.get(testThemeTreeViewID);
             if (treeViewContainer?.treeView) {
                 treeViewContainer.treeView.message = message;
             }
@@ -385,7 +390,7 @@ export class TreeServiceManager {
             this.markedItemStateService,
             this.iconManagementService
         );
-        const treeView = vscode.window.createTreeView(testThemeTreeViewId, {
+        const treeView = vscode.window.createTreeView(testThemeTreeViewID, {
             treeDataProvider: testThemeTreeDataProvider
         });
         this.extensionContext.subscriptions.push(
@@ -405,8 +410,8 @@ export class TreeServiceManager {
             })
         );
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set(testThemeTreeViewId, { provider: testThemeTreeDataProvider, treeView, updateMessage });
-        this.setupProviderStateListener(testThemeTreeViewId, testThemeTreeDataProvider);
+        this.treeViews.set(testThemeTreeViewID, { provider: testThemeTreeDataProvider, treeView, updateMessage });
+        this.setupProviderStateListener(testThemeTreeViewID, testThemeTreeDataProvider);
         this.logger.info("[TreeServiceManager] Test Theme tree view created with unified state management");
     }
 
@@ -414,9 +419,8 @@ export class TreeServiceManager {
      * Initialize Test Elements tree without clearing expansion state
      */
     private async createTestElementsTree(): Promise<void> {
-        const testElementsViewId = "testElementsView";
         const updateMessage = (message?: string) => {
-            const treeViewContainer = this.treeViews.get(testElementsViewId);
+            const treeViewContainer = this.treeViews.get(testElementsTreeViewID);
             if (treeViewContainer?.treeView) {
                 treeViewContainer.treeView.message = message;
             }
@@ -430,7 +434,7 @@ export class TreeServiceManager {
             this.iconManagementService,
             this.testElementTreeBuilder
         );
-        const treeView = vscode.window.createTreeView(testElementsViewId, {
+        const treeView = vscode.window.createTreeView(testElementsTreeViewID, {
             treeDataProvider: testElementsTreeProvider
         });
 
@@ -458,8 +462,8 @@ export class TreeServiceManager {
         );
 
         this.extensionContext.subscriptions.push(treeView);
-        this.treeViews.set(testElementsViewId, { provider: testElementsTreeProvider, treeView, updateMessage });
-        this.setupProviderStateListener(testElementsViewId, testElementsTreeProvider);
+        this.treeViews.set(testElementsTreeViewID, { provider: testElementsTreeProvider, treeView, updateMessage });
+        this.setupProviderStateListener(testElementsTreeViewID, testElementsTreeProvider);
 
         // Initialize with empty state but preserve expansion state
         testElementsTreeProvider.updateTreeViewStatusMessage();
@@ -585,7 +589,7 @@ export class TreeServiceManager {
     }
 
     public getProjectManagementProvider(): ProjectManagementTreeDataProvider {
-        const treeViewContainer = this.treeViews.get("projectManagementTree");
+        const treeViewContainer = this.treeViews.get(projectManagementTreeViewID);
         if (!treeViewContainer?.provider) {
             throw new Error("Project Management provider is not initialized. Call initializeTreeViews() first.");
         }
@@ -593,7 +597,7 @@ export class TreeServiceManager {
     }
 
     public getTestThemeProvider(): TestThemeTreeDataProvider {
-        const treeViewContainer = this.treeViews.get("testThemeTree");
+        const treeViewContainer = this.treeViews.get(testThemeTreeViewID);
         if (!treeViewContainer?.provider) {
             throw new Error("Test Theme provider is not initialized. Call initializeTreeViews() first.");
         }
@@ -601,7 +605,7 @@ export class TreeServiceManager {
     }
 
     public getTestElementsProvider(): TestElementsTreeDataProvider {
-        const treeViewContainer = this.treeViews.get("testElementsView");
+        const treeViewContainer = this.treeViews.get(testElementsTreeViewID);
         if (!treeViewContainer?.provider) {
             throw new Error("Test Elements provider is not initialized. Call initializeTreeViews() first.");
         }
@@ -609,7 +613,7 @@ export class TreeServiceManager {
     }
 
     public getProjectManagementTreeView(): vscode.TreeView<BaseTreeItem> {
-        const treeViewContainer = this.treeViews.get("projectManagementTree");
+        const treeViewContainer = this.treeViews.get(projectManagementTreeViewID);
         if (!treeViewContainer?.treeView) {
             throw new Error("Project Management tree view is not initialized. Call initializeTreeViews() first.");
         }
@@ -617,7 +621,7 @@ export class TreeServiceManager {
     }
 
     public getTestThemeTreeView(): vscode.TreeView<TestThemeTreeItem> {
-        const treeViewContainer = this.treeViews.get("testThemeTree");
+        const treeViewContainer = this.treeViews.get(testThemeTreeViewID);
         if (!treeViewContainer?.treeView) {
             throw new Error("Test Theme tree view is not initialized. Call initializeTreeViews() first.");
         }
@@ -625,7 +629,7 @@ export class TreeServiceManager {
     }
 
     public getTestElementsTreeView(): vscode.TreeView<TestElementTreeItem> {
-        const treeViewContainer = this.treeViews.get("testElementsView");
+        const treeViewContainer = this.treeViews.get(testElementsTreeViewID);
         if (!treeViewContainer?.treeView) {
             throw new Error("Test Elements tree view is not initialized. Call initializeTreeViews() first.");
         }

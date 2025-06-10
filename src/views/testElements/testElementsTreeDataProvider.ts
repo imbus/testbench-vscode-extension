@@ -14,6 +14,7 @@ import { IconManagementService } from "../common/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
 import { StateChangeNotification } from "../common/unifiedTreeStateManager";
+import { testElementsTreeViewID } from "../../constants";
 
 export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
 
@@ -61,7 +62,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             enableCustomRoot: false,
             enableExpansionTracking: true,
             stateConfig: {
-                treeViewId: "testElementsView",
+                treeViewId: testElementsTreeViewID,
                 treeViewType: TreeViewType.TEST_ELEMENTS,
                 noDataSourceMessage:
                     "Select a Test Object Version (TOV) from the 'Projects' view to load test elements.",

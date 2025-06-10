@@ -9,7 +9,7 @@ import { BaseTreeDataProvider, TreeDataProviderOptions } from "../common/baseTre
 import { TestThemeTreeItem } from "./testThemeTreeItem";
 import { ProjectDataService } from "../projectManagement/projectDataService";
 import { MarkedItemStateService } from "./markedItemStateService";
-import { ContextKeys, TreeItemContextValues } from "../../constants";
+import { ContextKeys, testThemeTreeViewID, TreeItemContextValues } from "../../constants";
 import { CycleTreeItemData, CycleStructure } from "../../testBenchTypes";
 import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
 import { IconManagementService } from "../common/iconManagementService";
@@ -43,7 +43,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             enableCustomRoot: true,
             enableExpansionTracking: true,
             stateConfig: {
-                treeViewId: "testThemeTree",
+                treeViewId: testThemeTreeViewID,
                 treeViewType: TreeViewType.TEST_THEME,
                 noDataSourceMessage: "Select a cycle from the 'Projects' view to see test themes.",
                 loadingMessageTemplate: "Loading test themes for {dataSource}..."

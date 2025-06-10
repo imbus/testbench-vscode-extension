@@ -25,6 +25,12 @@ export const LANGUAGE_SERVER_DEBUG_PATH: string = path.join(
 /** Prefix of the extension commands and settings in package.json */
 export const baseKeyOfExtension: string = "testbenchExtension";
 
+// --- Tree View IDs defined in package.json ---
+// TODO: Rename these IDs to be more consistent
+export const projectManagementTreeViewID: string = "projectManagementTree";
+export const testThemeTreeViewID: string = "testThemeTree";
+export const testElementsTreeViewID: string = "testElementsView";
+
 // --- Webview Message Commands ---
 export const WebviewMessageCommands = {
     LOGIN: "login",

@@ -1,4 +1,4 @@
-import { StorageKeys } from "./../../constants";
+import { projectManagementTreeViewID, StorageKeys } from "./../../constants";
 /**
  * @file src/views/projectManagement/projectManagementTreeDataProvider.ts
  * @description Project management tree data provider
@@ -48,7 +48,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             enableCustomRoot: true,
             enableExpansionTracking: true,
             stateConfig: {
-                treeViewId: "projectManagementTree",
+                treeViewId: projectManagementTreeViewID,
                 treeViewType: TreeViewType.PROJECT_MANAGEMENT,
                 noDataSourceMessage: "Not connected to TestBench or no projects available.",
                 loadingMessageTemplate: "Loading projects..."
