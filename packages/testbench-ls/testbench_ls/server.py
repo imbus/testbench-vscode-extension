@@ -219,12 +219,16 @@ def update_session_token(ls: LanguageServer, args):
 def update_project(ls: LanguageServer, args):
     new_project, *_ = args
     ls.set_project(new_project)
+    tb_connection = TestBenchResourceConnection.singleton()
+    tb_connection.update_project(new_project)
 
 
 @testbench_ls.command(COMMAND_UPDATE_TOV)
 def update_tov(ls: LanguageServer, args):
     new_tov, *_ = args
     ls.set_tov(new_tov)
+    tb_connection = TestBenchResourceConnection.singleton()
+    tb_connection.update_tov(new_tov)
 
 
 @testbench_ls.feature(TEXT_DOCUMENT_CODE_LENS)

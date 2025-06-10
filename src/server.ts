@@ -56,7 +56,7 @@ export function setCurrentLsOperationId(value: number): void {
     currentLsOperationId = value;
 }
 
-function getLanguageClientInstance(): LanguageClient | undefined {
+export function getLanguageClientInstance(): LanguageClient | undefined {
     return client;
 }
 

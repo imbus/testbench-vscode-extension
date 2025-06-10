@@ -26,7 +26,9 @@ import {
     TreeItemContextValues
 } from "./constants";
 import { CycleDataForThemeTreeEvent } from "./projectManagementTreeView";
-import { client, restartLanguageClient, stopLanguageClient } from "./server";
+import { client, restartLanguageClient, stopLanguageClient, getLanguageClientInstance } from "./server";
+import { State } from "vscode-languageclient/node";
+
 import { hideTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { clearTestElementsTreeView, displayTestElementsTreeView } from "./testElementsTreeView";
 import {
@@ -695,7 +697,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         if (projectAndTovNameObj) {
                             const { projectName, tovName } = projectAndTovNameObj;
                             if (projectName && tovName) {
-                                await restartLanguageClient(projectName, tovName);
+                                const existingClient = getLanguageClientInstance();
+                                if (existingClient && existingClient.state !== State.Stopped) {
+                                    await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
+                                    await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
+                                } else {
+                                    await restartLanguageClient(projectName, tovName);
+                                }
                             }
                         }
                     } else {
