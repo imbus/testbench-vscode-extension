@@ -25,6 +25,8 @@ import {
     testElementTreeView,
     ENABLE_ICON_MARKING_ON_GENERATE
 } from "./extension";
+import { getLanguageClientInstance } from "./server";
+import { State } from "vscode-languageclient/node";
 import { allExtensionCommands, ContextKeys, TreeItemContextValues } from "./constants";
 import { displayTestThemeTreeView, TestThemeTreeDataProvider } from "./testThemeTreeView";
 import { displayTestElementsTreeView } from "./testElementsTreeView";
@@ -1311,7 +1313,13 @@ export function setupProjectTreeViewEventListeners(
                 logger.trace(`Selected Project: ${projectName}, TOV: ${tovName}`);
 
                 if (projectName && tovName) {
-                    await restartLanguageClient(projectName, tovName);
+                    const existingClient = getLanguageClientInstance();
+                    if (existingClient && existingClient.state !== State.Stopped) {
+                        await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
+                        await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
+                    } else {
+                        await restartLanguageClient(projectName, tovName);
+                    }
                 } else {
                     // If only a project is selected (tovName is undefined), stop the LS.
                     if (projectName && !tovName) {

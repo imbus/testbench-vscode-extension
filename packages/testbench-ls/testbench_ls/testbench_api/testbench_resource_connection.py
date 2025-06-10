@@ -33,6 +33,12 @@ class TestBenchResourceConnection:
             )
             TestBenchResourceConnection._initialized = True
 
+    def update_project(self, project_name: str):
+        self.project_key = self.connection.get_project_key_new_play(project_name)
+
+    def update_tov(self, tov_name: str):
+        self.tov_key = self.connection.get_tov_key_new_play(self.project_key, tov_name)
+
     @classmethod
     def singleton(cls):
         if cls._instance is None:
