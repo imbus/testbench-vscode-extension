@@ -23,9 +23,10 @@ import { ProjectManagementTreeItem } from "../views/projectManagement/projectMan
 import { TestThemeTreeItem } from "../views/testTheme/testThemeTreeItem";
 import { TestElementTreeItem } from "../views/testElements/testElementTreeItem";
 import { PlayServerConnection } from "../testBenchConnection";
-import { restartLanguageClient } from "../server";
+import { getLanguageClientInstance, restartLanguageClient } from "../server";
 import { StateChangeNotification } from "../views/common/unifiedTreeStateManager";
 import { debounce } from "../utils";
+import { State } from "vscode-languageclient";
 
 export interface TreeServiceDependencies {
     extensionContext: vscode.ExtensionContext;
@@ -557,7 +558,13 @@ export class TreeServiceManager {
                 );
 
                 if (projectName && tovName) {
-                    await restartLanguageClient(projectName, tovName);
+                    const existingClient = getLanguageClientInstance();
+                    if (existingClient && existingClient.state !== State.Stopped) {
+                        await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
+                        await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
+                    } else {
+                        await restartLanguageClient(projectName, tovName);
+                    }
                 }
             }
         }
