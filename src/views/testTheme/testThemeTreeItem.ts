@@ -62,16 +62,30 @@ export class TestThemeTreeItem extends BaseTreeItem {
     }
 
     /**
-     * Update context value for marked state
+     * Update context value for marked state, preserving custom root context.
+     */
+    /**
+     * Update context value for marked state, correctly handling custom roots.
      */
     public updateContextForMarking(marked: boolean): void {
-        if (marked) {
+        const isCustomRoot =
+            this.contextValue === TreeItemContextValues.CUSTOM_ROOT_TEST_THEME ||
+            this.contextValue === TreeItemContextValues.MARKED_CUSTOM_ROOT_TEST_THEME;
+
+        if (isCustomRoot) {
+            // If the item is a custom root, toggle between the two custom root context values.
+            this.contextValue = marked
+                ? TreeItemContextValues.MARKED_CUSTOM_ROOT_TEST_THEME
+                : TreeItemContextValues.CUSTOM_ROOT_TEST_THEME;
+        } else if (marked) {
+            // If it's a regular item being marked, set the appropriate marked context.
             if (this.originalContextValue === TreeItemContextValues.TEST_THEME_TREE_ITEM) {
                 this.contextValue = TreeItemContextValues.MARKED_TEST_THEME_TREE_ITEM;
             } else if (this.originalContextValue === TreeItemContextValues.TEST_CASE_SET_TREE_ITEM) {
                 this.contextValue = TreeItemContextValues.MARKED_TEST_CASE_SET_TREE_ITEM;
             }
         } else {
+            // If it's a regular item being unmarked, revert to its original context.
             this.contextValue = this.originalContextValue;
         }
 

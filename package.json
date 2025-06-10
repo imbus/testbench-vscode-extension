@@ -572,12 +572,12 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == testThemeTree && (viewItem == TestThemeNode || viewItem == TestCaseSetNode || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme')",
+                    "when": "view == testThemeTree && (viewItem == 'TestThemeNode' || viewItem == 'TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme')",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == testThemeTree && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme') && testbenchExtension.isTestThemeOpenedFromCycle",
+                    "when": "view == testThemeTree && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.testTheme') && testbenchExtension.isTestThemeOpenedFromCycle",
                     "group": "inline@1"
                 },
                 {
@@ -603,7 +603,7 @@
                 },
                 {
                     "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "view == testThemeTree && viewItem == customRoot.testTheme",
+                    "when": "view == testThemeTree && (viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme')",
                     "group": "navigation@1",
                     "title": "Reset Custom Root"
                 }

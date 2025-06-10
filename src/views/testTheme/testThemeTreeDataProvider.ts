@@ -59,6 +59,28 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
+     * Overrides the base makeRoot to ensure the item's marked status is correctly
+     * applied when it becomes a custom root.
+     */
+    public override makeRoot(item: TestThemeTreeItem): void {
+        super.makeRoot(item);
+
+        const itemKey = item.getUniqueId();
+        const itemUID = item.getUID();
+
+        if (itemKey && itemUID) {
+            const importState = this.markedItemStateService.getItemImportState(
+                itemKey,
+                itemUID,
+                this.currentProjectKey,
+                this.currentCycleKey
+            );
+
+            item.updateContextForMarking(importState.shouldShow);
+        }
+    }
+
+    /**
      * Handle unified state changes for better coordination
      */
     protected override onUnifiedStateChange(notification: StateChangeNotification): void {
@@ -625,7 +647,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         cycleStructure.nodes.forEach((node) => node?.base?.key && testThemeTreeItemDataMap.set(node.base.key, node));
 
         const updatedCycleTreeItemData = testThemeTreeItemDataMap.get(currentTestThemeRootItemKey);
-
         if (updatedCycleTreeItemData) {
             // Dispose existing children before rebuilding
             if (currentTestThemeRootItem.children) {
@@ -647,18 +668,15 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             currentTestThemeRootItem.label = updatedCycleTreeItemData.base.numbering
                 ? `${updatedCycleTreeItemData.base.numbering} ${updatedCycleTreeItemData.base.name}`
                 : updatedCycleTreeItemData.base.name;
-
             currentTestThemeRootItem.children = this.buildTestThemeTreeRecursively(
                 currentTestThemeRootItemKey,
                 currentTestThemeRootItem,
                 testThemeTreeItemDataMap
             );
-
             currentTestThemeRootItem.collapsibleState =
                 currentTestThemeRootItem.children.length > 0
                     ? vscode.TreeItemCollapsibleState.Expanded
                     : vscode.TreeItemCollapsibleState.None;
-
             this.applyStoredExpansionState(currentTestThemeRootItem);
 
             // After rebuilding, ensure parent chain remains expanded
@@ -666,6 +684,19 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                 const currentExpanded = new Set(this.unifiedStateManager.getCurrentUnifiedState().expandedItems);
                 parentsToKeepExpanded.forEach((id) => currentExpanded.add(id));
                 this.unifiedStateManager.updateState({ expandedItems: currentExpanded });
+            }
+
+            // Re-apply marked state for the root item itself
+            const rootKey = currentTestThemeRootItem.getUniqueId();
+            const rootUID = currentTestThemeRootItem.getUID();
+            if (rootKey && rootUID) {
+                const importState = this.markedItemStateService.getItemImportState(
+                    rootKey,
+                    rootUID,
+                    this.currentProjectKey,
+                    this.currentCycleKey
+                );
+                currentTestThemeRootItem.updateContextForMarking(importState.shouldShow);
             }
 
             // Update the root tree items array directly without calling updateTreeItem

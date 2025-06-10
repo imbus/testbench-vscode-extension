@@ -1570,7 +1570,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     await vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
     await vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
+    await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
 
     // Initialize login webview
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);

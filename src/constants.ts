@@ -81,6 +81,7 @@ export const ContextKeys = {
     CONNECTION_ACTIVE: "testbenchExtension.connectionActive",
     PROJECT_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.projectTreeHasCustomRoot",
     THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot",
+    // Decides if the test themes tree should display import icons for marked tree items
     IS_TT_OPENED_FROM_CYCLE: "testbenchExtension.isTestThemeOpenedFromCycle"
 } as const;
 
@@ -124,7 +125,8 @@ export const TreeItemContextValues = {
     CUSTOM_ROOT_PROJECT: "customRoot.project",
     CUSTOM_ROOT_TEST_THEME: "customRoot.testTheme",
     MARKED_TEST_THEME_TREE_ITEM: "MarkedForImport.TestThemeNode",
-    MARKED_TEST_CASE_SET_TREE_ITEM: "MarkedForImport.TestCaseSetNode"
+    MARKED_TEST_CASE_SET_TREE_ITEM: "MarkedForImport.TestCaseSetNode",
+    MARKED_CUSTOM_ROOT_TEST_THEME: "MarkedForImport.customRoot.testTheme"
 } as const;
 
 // --- Job Types ---
