@@ -9,13 +9,14 @@ import { BaseTreeDataProvider, TreeDataProviderOptions } from "../common/baseTre
 import { TestThemeTreeItem } from "./testThemeTreeItem";
 import { ProjectDataService } from "../projectManagement/projectDataService";
 import { MarkedItemStateService } from "./markedItemStateService";
-import { ContextKeys, testThemeTreeViewID, TreeItemContextValues } from "../../constants";
+import { ContextKeys, StorageKeys, testThemeTreeViewID, TreeItemContextValues } from "../../constants";
 import { CycleTreeItemData, CycleStructure } from "../../testBenchTypes";
 import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
 import { IconManagementService } from "../common/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
 import { StateChangeNotification } from "../common/unifiedTreeStateManager";
+import { SerializedCustomRootState } from "../common/customRootService";
 
 export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTreeItem> {
     private currentCycleKey: string | null = null;
@@ -25,6 +26,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     private readonly operationManager: CancellableOperationManager;
     private rawCycleData: CycleStructure | null = null;
     public isTestThemeOpenedFromACycle: boolean = false;
+    private isInitialLoad: boolean = true;
 
     // Operation IDs
     private static readonly FETCH_CYCLE_STRUCTURE_OPERATION = "fetchCycleStructure";
@@ -72,6 +74,28 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         }
     }
 
+    protected getCustomRootStorageKey(): string {
+        return StorageKeys.CUSTOM_ROOT_TEST_THEME_TREE;
+    }
+
+    protected getCurrentContextData(): any {
+        return {
+            projectKey: this.currentProjectKey,
+            cycleKey: this.currentCycleKey
+        };
+    }
+
+    protected isCustomRootContextValid(savedState: SerializedCustomRootState): boolean {
+        if (this.pendingCustomRootRestore && this.currentProjectKey === null && this.currentCycleKey === null) {
+            return true;
+        }
+
+        return (
+            savedState.contextData?.projectKey === this.currentProjectKey &&
+            savedState.contextData?.cycleKey === this.currentCycleKey
+        );
+    }
+
     public getCurrentCycleKey(): string | null {
         return this.currentCycleKey;
     }
@@ -81,33 +105,65 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
+     * Override updateTreeItem to handle custom root restoration after context is set
+     */
+    protected updateTreeItem(treeItems: TestThemeTreeItem[]): void {
+        // Call parent implementation
+        super.updateTreeItem(treeItems);
+
+        // If we still have pending custom root and context is now set, try restoration
+        if (
+            this.pendingCustomRootRestore &&
+            this.currentProjectKey !== null &&
+            this.currentCycleKey !== null &&
+            treeItems.length > 0
+        ) {
+            // Re-validate with current context
+            if (this.isCustomRootContextValid(this.pendingCustomRootRestore)) {
+                setTimeout(() => {
+                    this.tryRestoreCustomRoot();
+                }, 200); // Slightly longer delay for test theme tree
+            } else {
+                this.logger.info(
+                    "[TestThemeTreeDataProvider] Custom root context doesn't match current context, clearing pending restore"
+                );
+                this.pendingCustomRootRestore = null;
+                this.saveCustomRootState();
+            }
+        }
+    }
+
+    /**
      * Populates the tree data provider with cycle data from the provided event.
-     * Uses unified state management for coordinated state updates.
+     * Preserves custom root if we're in the same cycle context.
      */
     public populateFromCycleData(eventData: CycleDataForThemeTreeEvent): void {
         this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.cycleKey}`);
         this.isTestThemeOpenedFromACycle = true;
         this.rawCycleData = eventData.rawCycleStructure;
 
-        // Single coordinated state update through unified manager
+        const isContextChanging = this.isInitialLoad
+            ? false
+            : this.currentCycleKey !== eventData.cycleKey || this.currentProjectKey !== eventData.projectKey;
+
+        const hasPendingCustomRootForThisContext =
+            this.pendingCustomRootRestore &&
+            this.pendingCustomRootRestore.contextData?.projectKey === eventData.projectKey &&
+            this.pendingCustomRootRestore.contextData?.cycleKey === eventData.cycleKey;
+
+        // Set context and loading state
         this.getUnifiedStateManager().updateState({
             dataSourceKey: eventData.cycleKey,
             dataSourceLabel: eventData.cycleLabel,
             dataSourceDisplayName: eventData.cycleLabel,
             operationalState: TreeViewOperationalState.LOADING
         });
-
         this.currentCycleKey = eventData.cycleKey;
         this.currentProjectKey = eventData.projectKey;
         this.currentCycleLabel = eventData.cycleLabel;
+        this.isInitialLoad = false;
 
-        const state = this.getUnifiedStateManager().getCurrentUnifiedState();
-        if (state.isCustomRootActive) {
-            this.getUnifiedStateManager().resetCustomRoot();
-        }
-
-        this.storeExpansionState();
-
+        // Validate data
         if (!eventData.rawCycleStructure?.nodes?.length || !eventData.rawCycleStructure.root?.base?.key) {
             this.logger.warn(`[TestThemeTreeDataProvider] Invalid cycle structure for: ${eventData.cycleLabel}`);
             this.updateTreeItem([]);
@@ -118,10 +174,43 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             return;
         }
 
+        const currentState = this.getUnifiedStateManager().getCurrentUnifiedState();
+
+        if (isContextChanging && !hasPendingCustomRootForThisContext) {
+            // Context is changing, so reset any existing custom root from a different context
+            if (currentState.isCustomRootActive) {
+                this.logger.info("[TestThemeTreeDataProvider] Context changed, resetting custom root");
+                this.getUnifiedStateManager().resetCustomRoot();
+                this.pendingCustomRootRestore = null;
+            }
+        }
+
+        // If a custom root is active and we are not changing context, use the non destructive refresh
+        if (currentState.isCustomRootActive && !isContextChanging) {
+            this.logger.debug(
+                `[TestThemeTreeDataProvider] Repopulating with active custom root. Using non-destructive refresh.`
+            );
+            const operation = this.operationManager.createOperation(
+                "populateCustomRoot",
+                `Populate custom root: ${currentState.customRootItem?.label}`
+            );
+            try {
+                this.refreshCustomRootTreeItem(eventData.rawCycleStructure, operation);
+            } catch (error) {
+                this.logger.error(`[TestThemeTreeDataProvider] Error during custom root repopulation:`, error);
+                this.getUnifiedStateManager().setError(error as Error, TreeViewEmptyState.PROCESSING_ERROR);
+            } finally {
+                operation.dispose();
+            }
+            return;
+        }
+
+        // Perform full/destructive rebuild for new contexts or if no custom root is active
+        this.logger.debug("[TestThemeTreeDataProvider] Performing full tree rebuild.");
+        this.storeExpansionState();
+
         try {
             const testThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(eventData.rawCycleStructure);
-
-            // Coordinated state update for successful population
             this.getUnifiedStateManager().updateState({
                 hasDataFetchBeenAttempted: true,
                 isServerDataReceived: true,
@@ -131,7 +220,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                     testThemeTreeItems.length === 0 ? TreeViewOperationalState.EMPTY : TreeViewOperationalState.READY,
                 emptyState: testThemeTreeItems.length === 0 ? TreeViewEmptyState.SERVER_NO_DATA : undefined
             });
-
             this.updateTreeItem(testThemeTreeItems);
         } catch (error) {
             this.logger.error(`[TestThemeTreeDataProvider] Error building tree from cycle structure:`, error);
@@ -376,9 +464,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
      * Uses unified state management for coordinated clearing.
      */
     public override clearTree(): void {
-        this.currentCycleKey = null;
-        this.currentProjectKey = null;
-        this.currentCycleLabel = null;
+        this.isInitialLoad = true;
         super.clearTree();
         this.logger.trace("[TestThemeTreeDataProvider] Tree cleared with unified state management.");
     }
@@ -482,31 +568,26 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Reset custom root and restore the full tree view with proper expansion state
+     * Reset custom root and restore the full tree view
      */
     public override resetCustomRoot(): void {
-        this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root and preserving expansion state.");
+        this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root");
 
-        // Store current expansion state before reset
-        if (this.isCustomRootActive()) {
-            const customRoot = this.getCurrentCustomRoot();
-            if (customRoot) {
-                // Ensure the custom root and its parents will be expanded after reset
-                const expandedIds = new Set(this.unifiedStateManager.getCurrentUnifiedState().expandedItems);
-                expandedIds.add(customRoot.getUniqueId());
+        // Clear the saved state first
+        this.pendingCustomRootRestore = null;
+        this.saveCustomRootState();
 
-                // Add all parents of the custom root
-                let parent = customRoot.parent as TestThemeTreeItem | null;
-                while (parent) {
-                    expandedIds.add(parent.getUniqueId());
-                    parent = parent.parent as TestThemeTreeItem | null;
-                }
+        // Use the unified state manager to reset
+        this.getUnifiedStateManager().resetCustomRoot();
 
-                this.unifiedStateManager.updateState({ expandedItems: expandedIds });
-            }
+        // If we have cycle data, refresh with it
+        if (this.currentCycleKey && this.currentProjectKey) {
+            this.refresh(false); // Soft refresh to maintain tree structure
+        } else {
+            this._onDidChangeTreeData.fire(undefined);
         }
-        this.refresh(true);
     }
+
     protected override async getRootChildren(): Promise<TestThemeTreeItem[]> {
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
         if (state.isCustomRootActive && state.customRootItem) {

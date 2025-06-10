@@ -14,6 +14,18 @@ export interface CustomRootState<T extends BaseTreeItem> {
     customContextValue: string;
 }
 
+export interface SerializedCustomRootState {
+    isActive: boolean;
+    rootItemId: string | null;
+    rootItemLabel: string | null;
+    originalContextValue: string | null;
+    expandedItems: string[];
+    contextData?: {
+        projectKey?: string;
+        cycleKey?: string;
+        tovKey?: string;
+    };
+}
 export class CustomRootService<T extends BaseTreeItem> {
     private state: CustomRootState<T>;
     private expandedItems: Set<string> = new Set();
@@ -75,6 +87,37 @@ export class CustomRootService<T extends BaseTreeItem> {
 
         this.resetPreviousRoot();
         this.clearState();
+    }
+
+    /**
+     * Serialize the current custom root state for persistence
+     */
+    public serialize(): SerializedCustomRootState {
+        return {
+            isActive: this.state.isActive,
+            rootItemId: this.state.rootItem?.getUniqueId() || null,
+            rootItemLabel: (this.state.rootItem?.label as string) || null,
+            originalContextValue: this.state.originalContextValue,
+            expandedItems: this.getExpandedItems()
+        };
+    }
+
+    /**
+     * Get a deserializable state object (without the actual tree item)
+     */
+    public getSerializableState(): SerializedCustomRootState {
+        return this.serialize();
+    }
+
+    /**
+     * Prepare for restoration - store the state that will be restored later
+     */
+    public prepareForRestoration(serializedState: SerializedCustomRootState): void {
+        if (serializedState.expandedItems) {
+            this.setExpandedItems(serializedState.expandedItems);
+        }
+
+        this.logger.trace(`[CustomRootService] Prepared for restoration with root ID: ${serializedState.rootItemId}`);
     }
 
     /**

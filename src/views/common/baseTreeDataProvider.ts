@@ -14,6 +14,7 @@ import {
     StateUpdateParams
 } from "./treeViewStateTypes";
 import { debounce } from "../../utils";
+import { SerializedCustomRootState } from "./customRootService";
 
 export interface TreeDataProviderOptions {
     contextKey: string;
@@ -36,6 +37,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     private readonly _disposables: vscode.Disposable[] = [];
     private readonly storageKey: string;
     private readonly debouncedPersistExpansionState: () => void;
+    public pendingCustomRootRestore: SerializedCustomRootState | null = null;
 
     constructor(
         protected readonly extensionContext: vscode.ExtensionContext,
@@ -72,7 +74,117 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         // Load the persisted expansion state when the provider is first created.
         this.loadExpansionState();
 
+        // Load custom root state if available
+        if (this.options.enableCustomRoot) {
+            this.loadCustomRootState();
+        }
+
         this.logger.trace("[BaseTreeDataProvider] Initialized with unified state management");
+    }
+
+    /**
+     * Get the storage key for custom root state based on tree type
+     */
+    protected abstract getCustomRootStorageKey(): string;
+
+    /**
+     * Load custom root state from storage
+     */
+    private loadCustomRootState(): void {
+        try {
+            const storageKey = this.getCustomRootStorageKey();
+            const savedState = this.extensionContext.workspaceState.get<SerializedCustomRootState>(storageKey);
+
+            if (savedState && savedState.isActive && savedState.rootItemId) {
+                this.pendingCustomRootRestore = savedState;
+                this.logger.info(
+                    `[BaseTreeDataProvider] Loaded custom root state for restoration: ${savedState.rootItemLabel}`
+                );
+            }
+        } catch (error) {
+            this.logger.error("[BaseTreeDataProvider] Error loading custom root state:", error);
+        }
+    }
+
+    /**
+     * Save custom root state to storage
+     */
+    protected saveCustomRootState(): void {
+        if (!this.options.enableCustomRoot) {
+            return;
+        }
+
+        try {
+            const storageKey = this.getCustomRootStorageKey();
+            const customRootService = this.unifiedStateManager.getCustomRootService();
+            const state = customRootService.serialize();
+
+            state.contextData = this.getCurrentContextData();
+
+            this.extensionContext.workspaceState.update(storageKey, state);
+            this.logger.trace(
+                `[BaseTreeDataProvider] Saved custom root state with context: ${state.isActive ? state.rootItemLabel : "none"}`
+            );
+        } catch (error) {
+            this.logger.error("[BaseTreeDataProvider] Error saving custom root state:", error);
+        }
+    }
+
+    /**
+     * Check if the current context matches the saved custom root context
+     */
+    protected isCustomRootContextValid(savedState: SerializedCustomRootState): boolean {
+        // Default implementation. Overridden by subclasses.
+        this.logger.trace(
+            `[BaseTreeDataProvider] Checking custom root context validity for saved state: ${savedState.rootItemLabel}`
+        );
+        return true;
+    }
+
+    /**
+     * Get current context data for saving with custom root
+     */
+    protected getCurrentContextData(): any {
+        // Default implementation. Overridden by subclasses.
+        return {};
+    }
+
+    /**
+     * Try to restore custom root after tree items are loaded
+     */
+    protected tryRestoreCustomRoot(): void {
+        if (!this.pendingCustomRootRestore || !this.pendingCustomRootRestore.isActive) {
+            return;
+        }
+
+        const { rootItemId, rootItemLabel } = this.pendingCustomRootRestore;
+
+        if (!rootItemId) {
+            this.logger.warn("[BaseTreeDataProvider] No root item ID in pending restore state");
+            this.pendingCustomRootRestore = null;
+            return;
+        }
+
+        // Find the item in the tree
+        const item = this.findItemById(rootItemId);
+
+        if (item && !item.isDisposed) {
+            this.logger.info(`[BaseTreeDataProvider] Restoring custom root: ${item.label} (${rootItemId})`);
+
+            const customRootService = this.unifiedStateManager.getCustomRootService();
+            customRootService.prepareForRestoration(this.pendingCustomRootRestore);
+
+            this.makeRoot(item);
+
+            this.pendingCustomRootRestore = null;
+        } else {
+            this.logger.warn(
+                `[BaseTreeDataProvider] Could not find valid item to restore as custom root: ${rootItemLabel} (${rootItemId})`
+            );
+
+            this.pendingCustomRootRestore = null;
+            this.saveCustomRootState();
+        }
     }
 
     /**
@@ -267,6 +379,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         this.unifiedStateManager.setReady(1);
 
         this._onDidChangeTreeData.fire(undefined);
+        this.saveCustomRootState();
         this.logger.debug(`[BaseTreeDataProvider] Set custom root to item: ${item.label} (${item.getUniqueId()})`);
     }
 
@@ -275,6 +388,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      */
     public resetCustomRoot(): void {
         this.unifiedStateManager.resetCustomRoot();
+        this.saveCustomRootState();
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -432,6 +546,14 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         }
 
         this._onDidChangeTreeData.fire(undefined);
+
+        // After updating tree items, try to restore custom root if pending
+        if (this.pendingCustomRootRestore && treeItems.length > 0) {
+            // Use a small delay to ensure the tree is fully rendered
+            setTimeout(() => {
+                this.tryRestoreCustomRoot();
+            }, 100);
+        }
     }
 
     /**
@@ -502,7 +624,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Get root children based on custom root state with improved error handling
+     * Override getRootChildren to ensure custom root restoration
      */
     protected async getRootChildren(): Promise<T[]> {
         try {
@@ -512,14 +634,23 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
                 return [state.customRootItem as T];
             }
 
-            // Only fetch if the state is not already considered final (READY or EMPTY).
-            // This prevents re-fetching if a manual refresh operation has already populated the data.
             const isDataFetchRequired =
                 state.operationalState !== TreeViewOperationalState.READY &&
                 state.operationalState !== TreeViewOperationalState.EMPTY;
 
             if (isDataFetchRequired) {
                 this.rootTreeItems = await this.fetchRootTreeItems();
+
+                if (this.pendingCustomRootRestore && this.rootTreeItems.length > 0) {
+                    if (this.isCustomRootContextValid(this.pendingCustomRootRestore)) {
+                        setTimeout(() => {
+                            this.tryRestoreCustomRoot();
+                        }, 100);
+                    } else {
+                        this.logger.info("[BaseTreeDataProvider] Custom root context changed, not restoring");
+                        this.pendingCustomRootRestore = null;
+                    }
+                }
             }
 
             return this.rootTreeItems;
@@ -553,6 +684,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
      * Handle custom root state changes (for backwards compatibility)
      */
     protected onCustomRootStateChange(state: any): void {
+        this.saveCustomRootState();
         this.logger.trace(`[BaseTreeDataProvider] Custom root state changed:`, state);
     }
 

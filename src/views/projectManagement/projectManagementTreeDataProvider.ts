@@ -15,6 +15,7 @@ import { IconManagementService } from "../common/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperationManager } from "../../services/cancellableOperationService";
 import { StateChangeNotification } from "../common/unifiedTreeStateManager";
+import { SerializedCustomRootState } from "../common/customRootService";
 
 export interface CycleDataForThemeTreeEvent {
     projectKey: string;
@@ -70,6 +71,24 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                 `[ProjectManagementTreeDataProvider] Operational state changed to: ${notification.newState.operationalState}`
             );
         }
+    }
+
+    protected getCustomRootStorageKey(): string {
+        return StorageKeys.CUSTOM_ROOT_PROJECT_TREE;
+    }
+
+    protected getCurrentContextData(): any {
+        // Project tree doesn't have specific context
+        return {};
+    }
+
+    protected isCustomRootContextValid(savedState: SerializedCustomRootState): boolean {
+        // Project tree custom root is always valid
+        this.logger.trace(
+            `[ProjectManagementTreeDataProvider] isCustomRootContextValid called with state:`,
+            savedState
+        );
+        return true;
     }
 
     /**
@@ -452,7 +471,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     }
 
     /**
-     * Refreshes the project management tree view using unified state management.
+     * Override refresh to handle custom root restoration properly
      */
     public override refresh(isHardRefresh: boolean = false): void {
         this.logger.debug(`[ProjectManagementTreeDataProvider] Refreshing. Hard refresh: ${isHardRefresh}`);
@@ -463,13 +482,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             this.getUnifiedStateManager().resetCustomRoot();
         }
 
-        /*
-        if (!(isHardRefresh && this.isCustomRootActive())) {
-            this.storeExpansionState();
-        }
-        */
-
-        if (this.isCustomRootActive()) {
+        if (!isHardRefresh && this.isCustomRootActive()) {
             this.getUnifiedStateManager().updateState({
                 operationalState: TreeViewOperationalState.REFRESHING
             });

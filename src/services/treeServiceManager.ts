@@ -199,11 +199,16 @@ export class TreeServiceManager {
     }
 
     /**
-     * Restores the data state while ensuring expansion state is preserved
+     * Restores the data state while ensuring expansion state and custom roots are preserved
      */
     public async restoreDataState(): Promise<void> {
         this.logger.debug("[TreeServiceManager] Attempting to restore data state for dependent views.");
         try {
+            const projectProvider = this.getProjectManagementProvider();
+            projectProvider.refresh(false);
+            // Small delay to ensure project tree is loaded
+            await new Promise((resolve) => setTimeout(resolve, 200));
+
             let lsProjectName: string | undefined;
             let lsTovName: string | undefined;
 
@@ -608,6 +613,9 @@ export class TreeServiceManager {
      */
     public async clearAllTreesData(): Promise<void> {
         try {
+            await this.extensionContext.workspaceState.update(StorageKeys.CUSTOM_ROOT_PROJECT_TREE, undefined);
+            await this.extensionContext.workspaceState.update(StorageKeys.CUSTOM_ROOT_TEST_THEME_TREE, undefined);
+
             this.getProjectManagementProvider().clearTree();
             this.getTestThemeProvider().clearTree();
             this.getTestElementsProvider().clearTree();

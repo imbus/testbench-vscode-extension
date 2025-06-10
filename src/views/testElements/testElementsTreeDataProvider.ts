@@ -14,7 +14,7 @@ import { IconManagementService } from "../common/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
 import { StateChangeNotification } from "../common/unifiedTreeStateManager";
-import { testElementsTreeViewID } from "../../constants";
+import { StorageKeys, testElementsTreeViewID } from "../../constants";
 
 export const fileContentOfRobotResourceSubdivisionFile = `tb:uid:`;
 
@@ -85,6 +85,10 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
                 `[TestElementsTreeDataProvider] Operational state changed to: ${notification.newState.operationalState}`
             );
         }
+    }
+
+    protected getCustomRootStorageKey(): string {
+        return StorageKeys.CUSTOM_ROOT_TEST_ELEMENTS_TREE;
     }
 
     public getCurrentTovKey(): string {

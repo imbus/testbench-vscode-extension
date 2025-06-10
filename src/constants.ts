@@ -101,7 +101,11 @@ export const StorageKeys = {
     // Persistent tree view storage for tree view restoration
     VISIBLE_VIEWS_STORAGE_KEY: "testbenchExtension.visibleTreeViews",
     LAST_ACTIVE_CYCLE_CONTEXT_KEY: "testbenchExtension.lastActiveCycleContext",
-    LAST_ACTIVE_TOV_CONTEXT_KEY: "testbenchExtension.lastActiveTovContext"
+    LAST_ACTIVE_TOV_CONTEXT_KEY: "testbenchExtension.lastActiveTovContext",
+    // Custom root persistence
+    CUSTOM_ROOT_PROJECT_TREE: "testbenchExtension.customRoot.projectTree",
+    CUSTOM_ROOT_TEST_THEME_TREE: "testbenchExtension.customRoot.testThemeTree",
+    CUSTOM_ROOT_TEST_ELEMENTS_TREE: "testbenchExtension.customRoot.testElementsTree"
 } as const;
 
 // --- Tree Item Context Values ---
