@@ -203,8 +203,29 @@ export class TreeServiceManager {
      */
     public async restoreDataState(): Promise<void> {
         this.logger.debug("[TreeServiceManager] Attempting to restore data state for dependent views.");
-
         try {
+            let lsProjectName: string | undefined;
+            let lsTovName: string | undefined;
+
+            // Restore Test Elements View if context is available
+            const tovContext = this.extensionContext.workspaceState.get<{
+                tovKey: string;
+                tovLabel: string;
+                projectName?: string; // Project name is now optional to support old format
+            }>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+
+            if (tovContext?.tovKey && tovContext.tovLabel) {
+                this.logger.trace(
+                    `[TreeServiceManager] Found persisted TOV context. Restoring Test Elements for TOV: ${tovContext.tovKey}`
+                );
+                const testElementsProvider = this.getTestElementsProvider();
+                await testElementsProvider.fetchTestElements(tovContext.tovKey, tovContext.tovLabel);
+
+                // Set LS context variables from TOV context if available
+                lsTovName = tovContext.tovLabel;
+                lsProjectName = tovContext.projectName;
+            }
+
             // Restore Test Theme View if context is available
             const cycleContext = this.extensionContext.workspaceState.get<{
                 projectKey: string;
@@ -216,37 +237,39 @@ export class TreeServiceManager {
                 this.logger.trace(
                     `[TreeServiceManager] Found persisted Cycle context. Restoring Test Themes for cycle: ${cycleContext.cycleLabel}`
                 );
-
                 const rawCycleData = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
                     cycleContext.projectKey,
                     cycleContext.cycleKey
                 );
-
                 const testThemeProvider = this.getTestThemeProvider();
                 const testThemeTreeView = this.getTestThemeTreeView();
                 testThemeTreeView.title = `Test Themes (${cycleContext.cycleLabel})`;
-
-                // Preserve expansion state
                 testThemeProvider.populateFromCycleData({
                     ...cycleContext,
                     rawCycleStructure: rawCycleData
                 });
+
+                // If LS Project Name could not be determined from TOV context, derive it from cycle context
+                if (lsTovName && !lsProjectName) {
+                    this.logger.trace("[TreeServiceManager] Deriving project name from cycle context for LS.");
+                    const projects = await this.projectDataService.getProjectsList();
+                    const project = projects?.find((p) => p.key.toString() === cycleContext.projectKey);
+                    if (project) {
+                        lsProjectName = project.name;
+                    }
+                }
             }
 
-            // Restore Test Elements View if context is available
-            const tovContext = this.extensionContext.workspaceState.get<{
-                tovKey: string;
-                tovLabel: string;
-            }>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
-
-            if (tovContext?.tovKey) {
-                this.logger.trace(
-                    `[TreeServiceManager] Found persisted TOV context. Restoring Test Elements for TOV: ${tovContext.tovKey}`
+            // Finally, initialize the Language Server if we have the necessary context
+            if (lsProjectName && lsTovName) {
+                this.logger.info(
+                    `[TreeServiceManager] Restoring Language Server context for Project: '${lsProjectName}', TOV: '${lsTovName}'`
                 );
-
-                const testElementsProvider = this.getTestElementsProvider();
-                // fetchTestElements handles expansion state
-                await testElementsProvider.fetchTestElements(tovContext.tovKey, tovContext.tovLabel);
+                await restartLanguageClient(lsProjectName, lsTovName);
+            } else {
+                this.logger.warn(
+                    "[TreeServiceManager] Could not restore Language Server context due to missing project or TOV name."
+                );
             }
         } catch (error) {
             this.logger.error("[TreeServiceManager] Failed to restore a view's data state:", error);

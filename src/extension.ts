@@ -1221,17 +1221,25 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                             await displayTestElementsTreeView();
                             testElementsTreeView.title = `Test Elements (${tovLabel})`;
 
-                            // Persist the active TOV context for restoration
-                            const tovContext = { tovKey: tovKeyOfSelectedTreeElement, tovLabel };
-                            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, tovContext);
-                            logger.trace(`[Cmd] Persisted active TOV context:`, tovContext);
-
                             // Restart language client for the selected project/TOV
                             const projectAndTovNameObj =
                                 projectProvider.getProjectAndTovNamesFromProjectTreeItem(tovItem);
                             if (projectAndTovNameObj) {
                                 const { projectName, tovName } = projectAndTovNameObj;
+
+                                // Persist the active TOV context for restoration, now including the project name
                                 if (projectName && tovName) {
+                                    const tovContext = {
+                                        tovKey: tovKeyOfSelectedTreeElement,
+                                        tovLabel: tovName,
+                                        projectName
+                                    };
+                                    await context.workspaceState.update(
+                                        StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY,
+                                        tovContext
+                                    );
+                                    logger.trace(`[Cmd] Persisted active TOV context:`, tovContext);
+
                                     const existingClient = getLanguageClientInstance();
                                     if (existingClient && existingClient.state !== State.Stopped) {
                                         await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
