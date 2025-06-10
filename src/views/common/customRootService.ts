@@ -50,7 +50,6 @@ export class CustomRootService<T extends BaseTreeItem> {
     public setCustomRoot(item: T): void {
         this.logger.debug(`[CustomRootService] Setting custom root: ${item.label}`);
 
-        // Reset previous custom root if exists
         if (this.state.rootItem && this.state.rootItem !== item) {
             this.resetPreviousRoot();
         }

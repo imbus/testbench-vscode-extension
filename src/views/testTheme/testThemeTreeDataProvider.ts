@@ -30,7 +30,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
     // Operation IDs
     private static readonly FETCH_CYCLE_STRUCTURE_OPERATION = "fetchCycleStructure";
-    private static readonly REFRESH_OPERATION = "refreshTestThemes";
 
     constructor(
         extensionContext: vscode.ExtensionContext,

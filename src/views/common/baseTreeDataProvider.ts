@@ -67,14 +67,11 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         // Register for state change notifications
         this.unifiedStateManager.onStateChange((notification) => this.onUnifiedStateChange(notification));
 
-        // Register disposables for cleanup
         this._disposables.push(this._onDidChangeTreeData);
         this._disposables.push(this.unifiedStateManager);
 
-        // Load the persisted expansion state when the provider is first created.
         this.loadExpansionState();
 
-        // Load custom root state if available
         if (this.options.enableCustomRoot) {
             this.loadCustomRootState();
         }
@@ -165,7 +162,6 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             return;
         }
 
-        // Find the item in the tree
         const item = this.findItemById(rootItemId);
 
         if (item && !item.isDisposed) {
@@ -173,9 +169,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
 
             const customRootService = this.unifiedStateManager.getCustomRootService();
             customRootService.prepareForRestoration(this.pendingCustomRootRestore);
-
             this.makeRoot(item);
-
             this.pendingCustomRootRestore = null;
         } else {
             this.logger.warn(
@@ -307,7 +301,6 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     public clearTree(): void {
         this.logger.debug(`[${this.constructor.name}] Clearing tree data (preserving expansion state)`);
 
-        // Dispose all current tree items
         this.rootTreeItems.forEach((treeItem) => {
             try {
                 if (treeItem && typeof treeItem.dispose === "function") {
@@ -331,7 +324,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     }
 
     /**
-     * Clear tree data AND all persistent state (expansion state, custom root, etc.)
+     * Clear tree data and all persistent state (expansion state, custom root, etc.)
      * Use this when completely resetting the tree (e.g., switching projects, logout)
      */
     public clearTreeAndState(): void {
@@ -342,7 +335,6 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             this.storeExpansionState();
         }
 
-        // Dispose all current tree items
         this.rootTreeItems.forEach((treeItem) => {
             try {
                 if (treeItem && typeof treeItem.dispose === "function") {
@@ -354,7 +346,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         });
 
         this.rootTreeItems = [];
-        this.unifiedStateManager.clear(); // clears all state including expansion
+        this.unifiedStateManager.clear();
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -525,7 +517,6 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
 
         this.rootTreeItems = treeItems;
 
-        // Apply expansion state if tracking is enabled
         if (this.options.enableExpansionTracking && treeItems.length > 0) {
             const applyExpansionRecursive = (items: T[]) => {
                 for (const item of items) {
@@ -538,7 +529,6 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
             applyExpansionRecursive(treeItems);
         }
 
-        // Update state based on tree item count
         if (treeItems.length === 0) {
             this.unifiedStateManager.setEmpty(TreeViewEmptyState.SERVER_NO_DATA);
         } else {
@@ -676,8 +666,6 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
         this.logger.trace(
             `[BaseTreeDataProvider] Unified state changed. Fields: ${notification.changedFields.join(", ")}`
         );
-
-        // Can be overridden by subclasses for custom behavior
     }
 
     /**

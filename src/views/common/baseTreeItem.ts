@@ -110,7 +110,6 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
         this._isDisposed = true;
 
         try {
-            // Dispose all registered disposables
             this._disposables.forEach((disposable) => {
                 try {
                     disposable.dispose();
@@ -120,7 +119,6 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
             });
             this._disposables.length = 0;
 
-            // Recursively dispose children to prevent memory leaks
             if (this.children) {
                 this.children.forEach((child) => {
                     if (child && typeof child.dispose === "function") {
@@ -136,10 +134,8 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
 
             // Break parent reference to prevent circular references
             this.parent = null;
-
-            // Clear item data reference
             this.itemData = null;
-            // NOTE: We intentionally keep _uniqueId intact to support disposed item identification
+            // Keep _uniqueId intact to support disposed item identification
 
             this.logger.trace(`[BaseTreeItem] Successfully disposed: ${this.label}`);
         } catch (error) {
@@ -301,7 +297,6 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
      */
     public getUID(): string | undefined {
         if (this._isDisposed) {
-            // For disposed items, we can't access itemData, so return undefined
             return undefined;
         }
         return this.itemData?.base?.uniqueID || this.itemData?.uniqueID;

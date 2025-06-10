@@ -151,7 +151,6 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
         const changedFields: string[] = [];
 
         try {
-            // Update TreeViewStateManager if relevant fields changed
             const viewStateUpdates: StateUpdateParams = {};
             let hasViewStateUpdates = false;
 
@@ -492,7 +491,6 @@ export class UnifiedTreeStateManager<T extends BaseTreeItem> {
             });
         }
 
-        // Call the original callback if provided
         if (originalCallback) {
             originalCallback(state);
         }
