@@ -370,7 +370,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     );
 
-    // --- Command: Generate Test Cases For Cycle ---
+    // --- Command: Generate Tests For Cycle ---
     registerSafeCommand(
         context,
         allExtensionCommands.generateTestCasesForCycle,
@@ -390,7 +390,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     );
 
-    // --- Command: Generate Test Cases For Test Theme or Test Case Set ---
+    // --- Command: Generate Tests For Test Theme or Test Case Set ---
     registerSafeCommand(
         context,
         allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet,

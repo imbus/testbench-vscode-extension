@@ -231,7 +231,7 @@ export async function pollJobStatus(
  * @param {testBenchTypes.OptionalJobIDRequestParameter} requestParams Optional request parameters.
  * @returns {Promise<string | null>} The job ID as a string or null if not found.
  */
-export async function getJobId(
+export async function getJobIdOfCycleReport(
     projectKey: string,
     cycleKey: string,
     requestParams?: testBenchTypes.OptionalJobIDRequestParameter
@@ -282,6 +282,7 @@ export async function getJobId(
         return jobIdResponse.data.jobID;
     } catch (error: any) {
         logger.error("Error fetching job ID:", error);
+        vscode.window.showErrorMessage(`Failed to fetch job ID: ${error.message}`);
         return null;
     }
 }
@@ -525,7 +526,7 @@ async function promptUserForSaveLocationAndSaveReportToFile(
  * @param {vscode.CancellationToken} cancellationToken Optional cancellation token.
  * @returns {Promise<string | null>} A promise that resolves with the absolute path of the downloaded zip file or null if unsuccessful.
  */
-export async function fetchReportZipFromServer(
+export async function fetchReportZipOfCycleFromServer(
     projectKey: string,
     cycleKey: string,
     folderNameToDownloadReport: string,
@@ -544,7 +545,7 @@ export async function fetchReportZipFromServer(
         );
         logger.trace("Request parameters:", requestParameters);
 
-        const jobId: string | null = await getJobId(projectKey, cycleKey, requestParameters);
+        const jobId: string | null = await getJobIdOfCycleReport(projectKey, cycleKey, requestParameters);
         if (!jobId) {
             logger.error("Job ID not received from server.");
             return null;
@@ -793,7 +794,7 @@ async function runRobotFrameworkTestGenerationProcess(
     cancellationToken: vscode.CancellationToken
 ): Promise<boolean> {
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
-    const downloadedReportZipPath: string | null = await fetchReportZipFromServer(
+    const downloadedReportZipPath: string | null = await fetchReportZipOfCycleFromServer(
         projectKey,
         cycleKey,
         folderNameOfInternalTestbenchFolder,
@@ -1081,7 +1082,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 treeRootUID: UID
             };
 
-            const downloadedReportWithoutResultsZip: string | null = await fetchReportZipFromServer(
+            const downloadedReportWithoutResultsZip: string | null = await fetchReportZipOfCycleFromServer(
                 projectKey,
                 cycleKey,
                 folderNameOfInternalTestbenchFolder,

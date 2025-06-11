@@ -152,8 +152,17 @@ export class MarkedItemStateService {
     }
 
     /**
+     * Clears all in-memory marking state. Does not save to storage.
+     */
+    private _clearAllMarkings(): void {
+        this.logger.trace("[MarkedItemStateService] Clearing all in-memory marked item states and hierarchies.");
+        this.currentMarkedItemInfo = null;
+        this.generatedItemHierarchies.clear();
+    }
+
+    /**
      * Marks an item and its descendants as generated.
-     * Clears any previous markings and hierarchies.
+     * Clears any previous markings and hierarchies before applying the new one.
      */
     public async markItemWithDescendants(
         itemKey: string,
@@ -168,9 +177,10 @@ export class MarkedItemStateService {
         this.logger.info(
             `[MarkedItemStateService] Marking item ${itemKey} (UID: ${itemUID}) for project ${projectKey}, cycle ${cycleKey}.`
         );
-        // Clear previous state
-        this.currentMarkedItemInfo = null;
-        this.generatedItemHierarchies.clear();
+
+        // Prepare a clean state before marking.
+        this._clearAllMarkings();
+
         this.currentMarkedItemInfo = {
             key: itemKey,
             projectKey,
@@ -179,7 +189,6 @@ export class MarkedItemStateService {
             isDirectlyGenerated,
             uniqueID: itemUID
         };
-        // Create and store hierarchy for this newly marked root item
         const newHierarchy: GeneratedItemHierarchy = {
             rootKey: itemKey,
             rootUID: itemUID,
@@ -207,8 +216,7 @@ export class MarkedItemStateService {
                 `[MarkedItemStateService] Cleared marking for item hierarchy rooted by key: ${itemKeyToClear}.`
             );
         } else {
-            this.currentMarkedItemInfo = null;
-            this.generatedItemHierarchies.clear();
+            this._clearAllMarkings();
             this.logger.info("[MarkedItemStateService] Cleared all marked item states and hierarchies.");
         }
         await this._saveMarkedItemsStateWithHierarchy();
