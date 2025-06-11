@@ -109,7 +109,8 @@ suite("TestThemeTreeDataProvider Tests", () => {
             projectKey: "proj_1",
             key: "cycle_1",
             label: "Root Cycle",
-            rawTestStructure: mockCycleStructure
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
         };
         // Ensure the marked state service returns false for these items
         mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
@@ -185,7 +186,8 @@ suite("TestThemeTreeDataProvider Tests", () => {
             projectKey: "p1",
             key: "c1",
             label: "L1",
-            rawTestStructure: mockCycleStructure
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
         };
 
         // Configure the service to "mark" the first theme but not the second

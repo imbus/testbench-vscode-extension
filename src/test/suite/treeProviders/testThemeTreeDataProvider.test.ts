@@ -46,7 +46,8 @@ suite("TestThemeTreeDataProvider Foundational Tests", () => {
             projectKey: "proj_42",
             key: "cycle_101",
             label: "Cycle 101",
-            rawTestStructure: { nodes: [] } as any // Type cast to avoid filling out all properties
+            rawTestStructure: { nodes: [] } as any, // Type cast to avoid filling out all properties
+            isFromCycle: true
         };
 
         // Act
@@ -77,7 +78,8 @@ suite("TestThemeTreeDataProvider Foundational Tests", () => {
             projectKey: "proj_1",
             key: "cycle_1",
             label: "Root Cycle",
-            rawTestStructure: mockCycleStructure
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
         };
 
         // Ensure the dependency returns a default "unmarked" state.
