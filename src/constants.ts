@@ -148,7 +148,7 @@ export const allExtensionCommands = {
     logout: `${baseKeyOfExtension}.logout`,
     generateTestCasesForCycle: `${baseKeyOfExtension}.generateTestCasesForCycle`,
     generateTestCasesForTestThemeOrTestCaseSet: `${baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`,
-    generateTestCasesForTestThemeFromTOV: `${baseKeyOfExtension}.generateTestCasesForTestThemeFromTOV`,
+    generateTestsForTestThemeTreeItemFromTOV: `${baseKeyOfExtension}.generateTestsForTestThemeTreeItemFromTOV`,
     generateTestCasesForTOV: `${baseKeyOfExtension}.generateTestCasesForTOV`,
     readRFTestResultsAndCreateReportWithResults: `${baseKeyOfExtension}.readRFTestResultsAndCreateReportWithResults`,
     makeRoot: `${baseKeyOfExtension}.makeRoot`,

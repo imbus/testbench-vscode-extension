@@ -970,7 +970,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
                 logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
 
-                await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey, false);
+                await reportHandler.startTestGenerationUsingTOV(context, tovItem, projectKey, tovKey, false);
             } catch (error) {
                 logger.error("[Cmd] Error in generateTestCasesForTOV:", error);
                 vscode.window.showErrorMessage(
@@ -980,19 +980,19 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     );
 
-    // --- Command: Generate Tests for a Test Theme opened from a TOV ---
+    // --- Command: Generate Tests for a Test Theme Tree Item opened from a TOV ---
     registerSafeCommand(
         context,
-        allExtensionCommands.generateTestCasesForTestThemeFromTOV,
-        async (tovItem: ProjectManagementTreeItem) => {
+        allExtensionCommands.generateTestsForTestThemeTreeItemFromTOV,
+        async (treeItem: TestThemeTreeItem) => {
             logger.debug(
-                `Command Called: ${allExtensionCommands.generateTestCasesForTestThemeFromTOV} for item: ${tovItem.label}`
+                `Command Called: ${allExtensionCommands.generateTestsForTestThemeTreeItemFromTOV} for item: ${treeItem.label}`
             );
 
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
                 logger.error(
-                    `${allExtensionCommands.generateTestCasesForTestThemeFromTOV} command called without connection.`
+                    `${allExtensionCommands.generateTestsForTestThemeTreeItemFromTOV} command called without connection.`
                 );
                 return;
             }
@@ -1002,9 +1002,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             }
 
             try {
-                const projectKey = tovItem.getProjectKey();
-                const tovKey = tovItem.getUniqueId();
-                const tovName = typeof tovItem.label === "string" ? tovItem.label : "Unknown TOV";
+                const testThemeProvider = treeServiceManager.getTestThemeProvider();
+                const projectKey = testThemeProvider.getCurrentProjectKey();
+                const testElementsProvider = treeServiceManager.getTestElementsProvider();
+                const tovKey = testElementsProvider.getCurrentTovKey();
+
+                const treeItemLabel = typeof treeItem.label === "string" ? treeItem.label : "Unknown Tree Item";
 
                 if (!projectKey || !tovKey) {
                     const errorMessage = "Could not determine project or TOV key for test generation.";
@@ -1013,11 +1016,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     return;
                 }
 
-                logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
+                logger.info(
+                    `Starting test generation for tree Item: ${treeItemLabel} (${tovKey}) in project: ${projectKey}`
+                );
 
-                await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey, true);
+                await reportHandler.startTestGenerationUsingTOV(context, treeItem, projectKey, tovKey, true);
             } catch (error) {
-                logger.error("[Cmd] Error in generateTestCasesForTestThemeFromTOV:", error);
+                logger.error("[Cmd] Error in generateTestsForTestThemeTreeItemFromTOV:", error);
                 vscode.window.showErrorMessage(
                     `Error generating tests for TOV: ${error instanceof Error ? error.message : "Unknown error"}`
                 );

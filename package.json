@@ -282,7 +282,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.generateTestCasesForTestThemeFromTOV",
+                "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
                 "title": "Generate Tests of TOV",
                 "icon": {
                     "light": "resources/icons/robot-light.svg",
@@ -579,7 +579,7 @@
                     "group": "inline@2"
                 },
                 {
-                    "command": "testbenchExtension.generateTestCasesForTestThemeFromTOV",
+                    "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
                     "when": "view == testThemeTree && (viewItem == 'TestThemeNode' || viewItem == 'TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme')  && !testbenchExtension.isTestThemeOpenedFromCycle",
                     "group": "inline@2"
                 },

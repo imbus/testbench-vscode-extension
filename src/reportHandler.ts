@@ -27,6 +27,7 @@ import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionConfiguration } from "./configuration";
 import { TestThemeTreeItem } from "./views/testTheme/testThemeTreeItem";
 import { ProjectManagementTreeItem } from "./views/projectManagement/projectManagementTreeItem";
+import { BaseTreeItem } from "./views/common/baseTreeItem";
 
 /**
  * Saves the last generated report parameters to workspace storage.
@@ -1756,25 +1757,25 @@ function extractPrefix(fileName: string): string | null {
  * This generates tests for all test themes within the TOV.
  *
  * @param {vscode.ExtensionContext} context - VS Code extension context
- * @param {ProjectManagementTreeItem} tovItem - The TOV tree item
+ * @param {ProjectManagementTreeItem} treeItem - The tree item
  * @param {string} projectKey - The project key
  * @param {string} tovKey - The TOV key
  * @returns {Promise<boolean>} True if generation was successful
  */
-export async function startTestGenerationForTOV(
+export async function startTestGenerationUsingTOV(
     context: vscode.ExtensionContext,
-    tovItem: ProjectManagementTreeItem,
+    treeItem: BaseTreeItem,
     projectKey: string,
     tovKey: string,
-    generateTestForTestThemeTreeItem: boolean = false
+    generateTestForSpecificTestThemeTreeItem: boolean = false
 ): Promise<boolean> {
-    logger.debug(`[ReportHandler] Starting test generation for TOV: ${tovItem.label} (${tovKey})`);
+    logger.debug(`[ReportHandler] Starting test generation for TOV: ${treeItem.label} (${tovKey})`);
 
     try {
         return await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Generating tests for TOV: ${tovItem.label}`,
+                title: `Generating tests for TOV: ${treeItem.label}`,
                 cancellable: true
             },
             async (progress, cancellationToken) => {
@@ -1785,7 +1786,7 @@ export async function startTestGenerationForTOV(
                 }
 
                 // Use undefined for root when generating tests for all test themes in TOV
-                const rootUIDToUse = generateTestForTestThemeTreeItem ? tovItem.getUniqueId() : undefined;
+                const rootUIDToUse = generateTestForSpecificTestThemeTreeItem ? treeItem.itemData?.uniqueID : undefined;
 
                 // Fetch TOV structure to get all test themes
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
@@ -1860,14 +1861,14 @@ export async function startTestGenerationForTOV(
                 }
 
                 progress.report({ increment: 30, message: "Test generation completed" });
-                const successMessage = `Test generation completed for TOV: ${tovItem.label}`;
+                const successMessage = `Test generation completed for TOV: ${treeItem.label}`;
                 logger.info(`[ReportHandler] ${successMessage}`);
                 vscode.window.showInformationMessage(successMessage);
                 return true;
             }
         );
     } catch (error) {
-        const errorMessage = `Test generation failed for TOV ${tovItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
+        const errorMessage = `Test generation failed for TOV ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
         logger.error(`[ReportHandler] ${errorMessage}`, error);
         vscode.window.showErrorMessage(errorMessage);
         return false;

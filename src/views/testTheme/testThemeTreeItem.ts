@@ -62,9 +62,6 @@ export class TestThemeTreeItem extends BaseTreeItem {
     }
 
     /**
-     * Update context value for marked state, preserving custom root context.
-     */
-    /**
      * Update context value for marked state, correctly handling custom roots.
      */
     public updateContextForMarking(marked: boolean): void {
