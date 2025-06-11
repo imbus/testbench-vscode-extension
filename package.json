@@ -530,11 +530,6 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "group": "navigation@6",
-                    "when": "view == projectManagementTree"
-                },
-                {
                     "command": "testbenchExtension.showExtensionSettings",
                     "group": "navigation@8",
                     "when": "view == projectManagementTree || view == testbenchExtension.webView"
