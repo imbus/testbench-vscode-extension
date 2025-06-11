@@ -449,6 +449,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
     /**
      * Updates the tree elements and applies expansion state tracking if enabled.
      */
+    /*
     protected override updateTreeItem(treItems: TestElementTreeItem[]): void {
         this.rootTreeItems = treItems;
 
@@ -472,6 +473,7 @@ export class TestElementsTreeDataProvider extends BaseTreeDataProvider<TestEleme
             });
         }
     }
+    */
 
     /**
      * Handles the "Go to Resource" command for a test element tree item.

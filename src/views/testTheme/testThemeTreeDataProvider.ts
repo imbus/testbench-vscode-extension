@@ -232,15 +232,6 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
         try {
             const testThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(eventData.rawTestStructure);
-            this.getUnifiedStateManager().updateState({
-                hasDataFetchBeenAttempted: true,
-                isServerDataReceived: true,
-                itemsBeforeFiltering: eventData.rawTestStructure.nodes.length,
-                itemsAfterFiltering: testThemeTreeItems.length,
-                operationalState:
-                    testThemeTreeItems.length === 0 ? TreeViewOperationalState.EMPTY : TreeViewOperationalState.READY,
-                emptyState: testThemeTreeItems.length === 0 ? TreeViewEmptyState.SERVER_NO_DATA : undefined
-            });
             this.updateTreeItem(testThemeTreeItems);
         } catch (error) {
             this.logger.error(`[TestThemeTreeDataProvider] Error building tree from cycle structure:`, error);
