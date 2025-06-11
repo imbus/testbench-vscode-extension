@@ -119,9 +119,14 @@ export class TestElementTreeItem extends BaseTreeItem {
         return this.testElementData.testElementType;
     }
 
-    protected extractStatus(): string {
+    protected extractStatusFromItemData(): string {
         const data = this.itemData as TestElementData;
-        return data.details?.status || "None";
+        const status = data.details?.status;
+
+        if (status !== null) {
+            return String(status);
+        }
+        return "None";
     }
 
     protected buildTooltipContent(): vscode.MarkdownString {

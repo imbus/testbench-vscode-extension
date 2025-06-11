@@ -169,14 +169,14 @@ export abstract class BaseTreeItem extends vscode.TreeItem implements vscode.Dis
             isMarked: false,
             isExpanded: this.collapsibleState === vscode.TreeItemCollapsibleState.Expanded,
             isCustomRoot: false,
-            status: this.extractStatus()
+            status: this.extractStatusFromItemData()
         };
     }
 
     /**
      * Extract status from item data
      */
-    protected extractStatus(): string {
+    protected extractStatusFromItemData(): string {
         return this.itemData?.exec?.status || this.itemData?.status || this.itemData?.base?.status || "None";
     }
 

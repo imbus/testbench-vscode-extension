@@ -135,6 +135,12 @@ export class IconManagementService {
                 };
             }
 
+            /*
+            this.logger.trace(
+                `[IconManagementService] Getting icon URIs for context: ${context.contextValue}, category: ${category}`,
+                iconFiles
+            );*/
+
             return {
                 light: this.createIconUri(iconFiles.light),
                 dark: this.createIconUri(iconFiles.dark)
@@ -150,6 +156,10 @@ export class IconManagementService {
      */
     private findIconDefinition(context: IconContext, category: string): IconDefinition {
         let contextValueForIcon = context.contextValue;
+        /*
+        this.logger.trace(
+            `[IconManagementService] Finding icon definition for context: ${contextValueForIcon}, category: ${category}`
+        );*/
 
         if (
             context.contextValue === TreeItemContextValues.MARKED_TEST_THEME_TREE_ITEM ||
@@ -168,6 +178,8 @@ export class IconManagementService {
             }
         }
 
+        // this.logger.trace(`[IconManagementService] Icon definition not found in category: ${category}, trying other categories`);
+
         for (const [catName, catMap] of this.iconRegistry) {
             if (catName !== category) {
                 const iconDef = this.findInCategory(catMap, contextValueForIcon, context.status);
@@ -179,6 +191,8 @@ export class IconManagementService {
 
         const defaultCategory = this.iconRegistry.get("default");
         const fallbackDefinition = defaultCategory?.get(this.createIconKey("default", "default"));
+
+        // this.logger.trace(`[IconManagementService] Fallback icon definition: ${fallbackDefinition ? "found" : "not found"}`);
 
         if (!fallbackDefinition) {
             throw new Error("No fallback icon definition found");
