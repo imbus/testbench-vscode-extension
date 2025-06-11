@@ -267,7 +267,7 @@
             },
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
-                "title": "Generate Tests",
+                "title": "Generate Tests For Cycle",
                 "icon": {
                     "light": "resources/icons/robot-light.svg",
                     "dark": "resources/icons/robot-dark.svg"
@@ -275,7 +275,15 @@
             },
             {
                 "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                "title": "Generate Tests",
+                "title": "Generate Tests of Cycle",
+                "icon": {
+                    "light": "resources/icons/robot-light.svg",
+                    "dark": "resources/icons/robot-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.generateTestCasesForTestThemeFromTOV",
+                "title": "Generate Tests of TOV",
                 "icon": {
                     "light": "resources/icons/robot-light.svg",
                     "dark": "resources/icons/robot-dark.svg"
@@ -283,7 +291,7 @@
             },
             {
                 "command": "testbenchExtension.generateTestCasesForTOV",
-                "title": "Generate Tests",
+                "title": "Generate Tests For TOV",
                 "icon": {
                     "light": "resources/icons/robot-light.svg",
                     "dark": "resources/icons/robot-dark.svg"
@@ -291,7 +299,7 @@
             },
             {
                 "command": "testbenchExtension.openTOVFromProjectsView",
-                "title": "Open",
+                "title": "Open TOV",
                 "icon": {
                     "light": "resources/icons/open-light.svg",
                     "dark": "resources/icons/open-dark.svg"
@@ -299,7 +307,7 @@
             },
             {
                 "command": "testbenchExtension.openCycleFromProjectsView",
-                "title": "Open",
+                "title": "Open Cycle",
                 "icon": {
                     "light": "resources/icons/open-light.svg",
                     "dark": "resources/icons/open-dark.svg"
@@ -567,7 +575,12 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == testThemeTree && (viewItem == 'TestThemeNode' || viewItem == 'TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme')",
+                    "when": "view == testThemeTree && (viewItem == 'TestThemeNode' || viewItem == 'TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme') && testbenchExtension.isTestThemeOpenedFromCycle",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "testbenchExtension.generateTestCasesForTestThemeFromTOV",
+                    "when": "view == testThemeTree && (viewItem == 'TestThemeNode' || viewItem == 'TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme')  && !testbenchExtension.isTestThemeOpenedFromCycle",
                     "group": "inline@2"
                 },
                 {

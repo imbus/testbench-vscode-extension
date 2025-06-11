@@ -310,6 +310,8 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
      */
     public async initTestThemeTreeAfterCycleClick(cycleItem: ProjectManagementTreeItem): Promise<void> {
         await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
+        await this.extensionContext.globalState.update(StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY, true);
+
         const cycleLabel = typeof cycleItem.label === "string" ? cycleItem.label : "N/A";
 
         // Cancel any existing cycle click operation
@@ -406,7 +408,9 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
      * Initializes the test theme tree after a TOV is opened.
      */
     public async initTestThemeTreeAfterTOVClick(tovItem: ProjectManagementTreeItem): Promise<void> {
-        await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
+        await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
+        await this.extensionContext.globalState.update(StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY, false);
+
         const tovLabel = typeof tovItem.label === "string" ? tovItem.label : "N/A";
 
         // Cancel any existing cycle click operation

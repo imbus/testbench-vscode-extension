@@ -970,9 +970,54 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
                 logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
 
-                await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey);
+                await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey, false);
             } catch (error) {
                 logger.error("[Cmd] Error in generateTestCasesForTOV:", error);
+                vscode.window.showErrorMessage(
+                    `Error generating tests for TOV: ${error instanceof Error ? error.message : "Unknown error"}`
+                );
+            }
+        }
+    );
+
+    // --- Command: Generate Tests for a Test Theme opened from a TOV ---
+    registerSafeCommand(
+        context,
+        allExtensionCommands.generateTestCasesForTestThemeFromTOV,
+        async (tovItem: ProjectManagementTreeItem) => {
+            logger.debug(
+                `Command Called: ${allExtensionCommands.generateTestCasesForTestThemeFromTOV} for item: ${tovItem.label}`
+            );
+
+            if (!connection) {
+                vscode.window.showErrorMessage("No connection available. Please log in first.");
+                logger.error(
+                    `${allExtensionCommands.generateTestCasesForTestThemeFromTOV} command called without connection.`
+                );
+                return;
+            }
+
+            if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)) {
+                await vscode.commands.executeCommand(allExtensionCommands.clearInternalTestbenchFolder);
+            }
+
+            try {
+                const projectKey = tovItem.getProjectKey();
+                const tovKey = tovItem.getUniqueId();
+                const tovName = typeof tovItem.label === "string" ? tovItem.label : "Unknown TOV";
+
+                if (!projectKey || !tovKey) {
+                    const errorMessage = "Could not determine project or TOV key for test generation.";
+                    vscode.window.showErrorMessage(errorMessage);
+                    logger.error(`${errorMessage} Project: ${projectKey}, TOV: ${tovKey}`);
+                    return;
+                }
+
+                logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
+
+                await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey, true);
+            } catch (error) {
+                logger.error("[Cmd] Error in generateTestCasesForTestThemeFromTOV:", error);
                 vscode.window.showErrorMessage(
                     `Error generating tests for TOV: ${error instanceof Error ? error.message : "Unknown error"}`
                 );
@@ -997,6 +1042,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
             try {
                 await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
+                await context.globalState.update(StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY, false);
                 const projectProvider = treeServiceManager.getProjectManagementProvider();
                 const testElementsProvider = treeServiceManager.getTestElementsProvider();
                 const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
@@ -1367,7 +1413,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     await vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
     await vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
+
+    const isTTOpenedFromCycle = context.globalState.get<string | undefined>(
+        StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY
+    );
+    await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
 
     // Initialize login webview
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);

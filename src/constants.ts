@@ -106,7 +106,8 @@ export const StorageKeys = {
     // Custom root persistence
     CUSTOM_ROOT_PROJECT_TREE: "testbenchExtension.customRoot.projectTree",
     CUSTOM_ROOT_TEST_THEME_TREE: "testbenchExtension.customRoot.testThemeTree",
-    CUSTOM_ROOT_TEST_ELEMENTS_TREE: "testbenchExtension.customRoot.testElementsTree"
+    CUSTOM_ROOT_TEST_ELEMENTS_TREE: "testbenchExtension.customRoot.testElementsTree",
+    IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY: "testbenchExtension.isTestThemeOpenedFromCycleStorageKey"
 } as const;
 
 // --- Tree Item Context Values ---
@@ -147,6 +148,7 @@ export const allExtensionCommands = {
     logout: `${baseKeyOfExtension}.logout`,
     generateTestCasesForCycle: `${baseKeyOfExtension}.generateTestCasesForCycle`,
     generateTestCasesForTestThemeOrTestCaseSet: `${baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`,
+    generateTestCasesForTestThemeFromTOV: `${baseKeyOfExtension}.generateTestCasesForTestThemeFromTOV`,
     generateTestCasesForTOV: `${baseKeyOfExtension}.generateTestCasesForTOV`,
     readRFTestResultsAndCreateReportWithResults: `${baseKeyOfExtension}.readRFTestResultsAndCreateReportWithResults`,
     makeRoot: `${baseKeyOfExtension}.makeRoot`,

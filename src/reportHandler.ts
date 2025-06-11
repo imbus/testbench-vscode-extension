@@ -1765,7 +1765,8 @@ export async function startTestGenerationForTOV(
     context: vscode.ExtensionContext,
     tovItem: ProjectManagementTreeItem,
     projectKey: string,
-    tovKey: string
+    tovKey: string,
+    generateTestForTestThemeTreeItem: boolean = false
 ): Promise<boolean> {
     logger.debug(`[ReportHandler] Starting test generation for TOV: ${tovItem.label} (${tovKey})`);
 
@@ -1783,11 +1784,14 @@ export async function startTestGenerationForTOV(
                     throw new Error("No connection available");
                 }
 
+                // Use undefined for root when generating tests for all test themes in TOV
+                const rootUIDToUse = generateTestForTestThemeTreeItem ? tovItem.getUniqueId() : undefined;
+
                 // Fetch TOV structure to get all test themes
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
-                    treeRootUID: undefined, // Use default root
+                    treeRootUID: rootUIDToUse,
                     suppressFilteredData: false,
-                    suppressEmptyTestThemes: true,
+                    suppressEmptyTestThemes: false,
                     filters: []
                 };
 
@@ -1796,6 +1800,7 @@ export async function startTestGenerationForTOV(
                     tovKey,
                     tovStructureOptions
                 );
+
                 if (cancellationToken.isCancellationRequested) {
                     return false;
                 }
@@ -1830,6 +1835,7 @@ export async function startTestGenerationForTOV(
                     downloadedTovReportName,
                     folderNameOfInternalTestbenchFolder
                 );
+
                 if (!downloadedTovReportPath) {
                     logger.warn("Report download failed or was canceled.");
                     return false;

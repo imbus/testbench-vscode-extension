@@ -510,40 +510,51 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         this.updateTreeState({
             operationalState: TreeViewOperationalState.REFRESHING
         });
-
         try {
             const projectKey = this.getCurrentProjectKey();
-            const cycleKey = this.getCurrentCycleKey();
+            const dataSourceKey = this.getCurrentCycleKey();
 
-            if (!projectKey || !cycleKey) {
+            if (!projectKey || !dataSourceKey) {
                 this.logger.warn(
-                    "[TestThemeTreeDataProvider] Refresh called but no active project/cycle key. Clearing tree."
+                    "[TestThemeTreeDataProvider] Refresh called but no active project/dataSource key. Clearing tree."
                 );
                 this.clearTree();
                 return;
             }
 
-            operation.throwIfCancelled("before fetching cycle structure");
-            const cycleStructure = await this.projectDataService.fetchTestStructureUsingProjectAndCycleKey(
-                projectKey,
-                cycleKey
-            );
-            operation.throwIfCancelled("after fetching cycle structure");
+            operation.throwIfCancelled("before fetching data structure");
+
+            let cycleStructure: TestStructure | null;
+            if (this.isTestThemeOpenedFromACycle) {
+                this.logger.debug(`Refreshing with Cycle key: ${dataSourceKey}`);
+                cycleStructure = await this.projectDataService.fetchTestStructureUsingProjectAndCycleKey(
+                    projectKey,
+                    dataSourceKey
+                );
+            } else {
+                this.logger.debug(`Refreshing with TOV key: ${dataSourceKey}`);
+                cycleStructure = await this.projectDataService.fetchTestStructureUsingProjectAndTOVKey(
+                    projectKey,
+                    dataSourceKey
+                );
+            }
+
+            operation.throwIfCancelled("after fetching data structure");
 
             if (!cycleStructure) {
-                this.logger.warn("[TestThemeTreeDataProvider] No cycle structure returned during refresh");
-                this.setErrorState(new Error("Failed to fetch cycle structure"), TreeViewEmptyState.FETCH_ERROR);
+                this.logger.warn("[TestThemeTreeDataProvider] No data structure returned during refresh");
+                this.setErrorState(new Error("Failed to fetch data structure"), TreeViewEmptyState.FETCH_ERROR);
                 return;
             }
 
-            // If custom root was active before refresh, use specialized refresh method
+            // This condition will now be correctly false after a hard refresh
             if (isCustomRootActive && activeCustomRootId && !isHardRefresh) {
                 this.logger.debug(
                     `[TestThemeTreeDataProvider] Refreshing with custom root: ${this.getCurrentCustomRoot()?.label}`
                 );
                 await this.refreshCustomRootTreeItem(cycleStructure, operation);
             } else {
-                // Standard refresh: rebuild entire tree
+                // This block will now correctly execute on a reset.
                 const newItems = this.buildTestThemeTreeFromCycleStructure(cycleStructure);
                 this.updateTreeItem(newItems);
 
@@ -580,24 +591,11 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Reset custom root and restore the full tree view
+     * Reset custom root and restore the full tree view by performing a hard refresh.
      */
-    public override resetCustomRoot(): void {
-        this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root");
-
-        // Clear the saved state first
-        this.pendingCustomRootRestore = null;
-        this.saveCustomRootState();
-
-        // Use the unified state manager to reset
-        this.getUnifiedStateManager().resetCustomRoot();
-
-        // If we have cycle data, refresh with it
-        if (this.currentCycleKey && this.currentProjectKey) {
-            this.refresh(false); // Soft refresh to maintain tree structure
-        } else {
-            this._onDidChangeTreeData.fire(undefined);
-        }
+    public override async resetCustomRoot(): Promise<void> {
+        this.logger.debug("[TestThemeTreeDataProvider] Resetting custom root via hard refresh.");
+        await this.refresh(true);
     }
 
     protected override async getRootChildren(): Promise<TestThemeTreeItem[]> {

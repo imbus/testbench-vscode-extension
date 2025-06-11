@@ -7,6 +7,7 @@ import * as vscode from "vscode";
 import { TestBenchLogger } from "../testBenchLogger";
 import {
     allExtensionCommands,
+    ContextKeys,
     projectManagementTreeViewID,
     StorageKeys,
     testElementsTreeViewID,
@@ -786,6 +787,9 @@ export class TreeServiceManager {
      */
     public async openTovAndInitTestThemes(tovItem: ProjectManagementTreeItem): Promise<void> {
         try {
+            await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
+            await this.extensionContext.globalState.update(StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY, false);
+
             const projectProvider = this.getProjectManagementProvider();
             const testThemeProvider = this.getTestThemeProvider();
             testThemeProvider.clearTree();
