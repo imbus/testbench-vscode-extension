@@ -22,6 +22,7 @@ export interface DataForThemeTreeEvent {
     key: string;
     label: string;
     rawTestStructure: TestStructure | null;
+    isFromCycle: boolean;
 }
 
 export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<ProjectManagementTreeItem> {
@@ -360,7 +361,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                         progress.report({ increment: 50, message: "Preparing theme tree..." });
 
                         // Persist the active cycle context to workspace state for restoration
-                        const cycleContext = { projectKey, cycleKey, cycleLabel };
+                        const cycleContext = { projectKey, key: cycleKey, label: cycleLabel };
                         await this.extensionContext.workspaceState.update(
                             StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY,
                             cycleContext
@@ -374,7 +375,8 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                             projectKey,
                             key: cycleKey,
                             label: cycleLabel,
-                            rawTestStructure: rawCycleData
+                            rawTestStructure: rawCycleData,
+                            isFromCycle: true
                         });
 
                         progress.report({ increment: 100, message: "Data loaded." });
@@ -473,7 +475,8 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                             projectKey,
                             key: tovKey,
                             label: tovLabel,
-                            rawTestStructure: rawTestStructureData
+                            rawTestStructure: rawTestStructureData,
+                            isFromCycle: false
                         });
 
                         progress.report({ increment: 100, message: "Data loaded." });

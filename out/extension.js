@@ -306,7 +306,7 @@ async function registerExtensionCommands(context) {
             if (!treeServiceManager || !treeServiceManager.getInitializationStatus()) {
                 throw new Error("TreeServiceManager is not initialized");
             }
-            await treeServiceManager.handleCycleSelection(cycleItem); // TODO: TEST: Call this earlier than display view commands?
+            await treeServiceManager.handleCycleSelection(cycleItem);
             // Hide Projects view, show Test Theme and Test Elements views
             await hideProjectManagementTreeView();
             await displayTestThemeTreeView();
@@ -327,7 +327,7 @@ async function registerExtensionCommands(context) {
             vscode.window.showErrorMessage(`Error handling cycle selection: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
     });
-    // --- Command: Generate Test Cases For Cycle ---
+    // --- Command: Generate Tests For Cycle ---
     registerSafeCommand(context, constants_1.allExtensionCommands.generateTestCasesForCycle, async (item) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.generateTestCasesForCycle}`);
         if (!exports.connection) {
@@ -340,7 +340,7 @@ async function registerExtensionCommands(context) {
         }
         await reportHandler.startTestGenerationForCycle(context, item);
     });
-    // --- Command: Generate Test Cases For Test Theme or Test Case Set ---
+    // --- Command: Generate Tests For Test Theme or Test Case Set ---
     registerSafeCommand(context, constants_1.allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet, async (treeItem) => {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet} for item: ${treeItem.label}`);
         if (!exports.connection) {
@@ -755,10 +755,39 @@ async function registerExtensionCommands(context) {
                 return;
             }
             exports.logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
-            await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey);
+            await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey, false);
         }
         catch (error) {
             exports.logger.error("[Cmd] Error in generateTestCasesForTOV:", error);
+            vscode.window.showErrorMessage(`Error generating tests for TOV: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
+    });
+    // --- Command: Generate Tests for a Test Theme opened from a TOV ---
+    registerSafeCommand(context, constants_1.allExtensionCommands.generateTestCasesForTestThemeFromTOV, async (tovItem) => {
+        exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.generateTestCasesForTestThemeFromTOV} for item: ${tovItem.label}`);
+        if (!exports.connection) {
+            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            exports.logger.error(`${constants_1.allExtensionCommands.generateTestCasesForTestThemeFromTOV} command called without connection.`);
+            return;
+        }
+        if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.CLEAR_INTERNAL_DIR)) {
+            await vscode.commands.executeCommand(constants_1.allExtensionCommands.clearInternalTestbenchFolder);
+        }
+        try {
+            const projectKey = tovItem.getProjectKey();
+            const tovKey = tovItem.getUniqueId();
+            const tovName = typeof tovItem.label === "string" ? tovItem.label : "Unknown TOV";
+            if (!projectKey || !tovKey) {
+                const errorMessage = "Could not determine project or TOV key for test generation.";
+                vscode.window.showErrorMessage(errorMessage);
+                exports.logger.error(`${errorMessage} Project: ${projectKey}, TOV: ${tovKey}`);
+                return;
+            }
+            exports.logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
+            await reportHandler.startTestGenerationForTOV(context, tovItem, projectKey, tovKey, true);
+        }
+        catch (error) {
+            exports.logger.error("[Cmd] Error in generateTestCasesForTestThemeFromTOV:", error);
             vscode.window.showErrorMessage(`Error generating tests for TOV: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
     });
@@ -772,6 +801,7 @@ async function registerExtensionCommands(context) {
         }
         try {
             await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
+            await context.globalState.update(constants_1.StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY, false);
             const projectProvider = treeServiceManager.getProjectManagementProvider();
             const testElementsProvider = treeServiceManager.getTestElementsProvider();
             const testElementsTreeView = treeServiceManager.getTestElementsTreeView();
@@ -782,11 +812,10 @@ async function registerExtensionCommands(context) {
                     testElementsTreeView.title = `Test Elements (Loading...)`;
                     const areTestElementsFetched = await testElementsProvider.fetchTestElements(tovKeyOfSelectedTreeElement, tovLabel);
                     if (areTestElementsFetched) {
-                        await hideProjectManagementTreeView();
-                        // TODO: Populate Test Theme Tree View with TOV data
                         await treeServiceManager.openTovAndInitTestThemes(tovItem);
-                        await displayTestThemeTreeView();
                         treeServiceManager.getTestThemeProvider().isTestThemeOpenedFromACycle = false;
+                        await hideProjectManagementTreeView();
+                        await displayTestThemeTreeView();
                         await displayTestElementsTreeView();
                         testElementsTreeView.title = `Test Elements (${tovLabel})`;
                         // Restart language client for the selected project/TOV
@@ -795,6 +824,8 @@ async function registerExtensionCommands(context) {
                             const { projectName, tovName } = projectAndTovNameObj;
                             // Persist the active TOV context for restoration
                             if (projectName && tovName) {
+                                // Clear last active cycle context when opening TOV
+                                await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
                                 const tovContext = {
                                     tovKey: tovKeyOfSelectedTreeElement,
                                     tovLabel: tovName,
@@ -1052,7 +1083,8 @@ async function activate(context) {
     exports.logger.trace(`Initial connectionActive context set to: ${exports.connection !== null}`);
     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
-    await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
+    const isTTOpenedFromCycle = context.globalState.get(constants_1.StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY);
+    await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
     // Initialize login webview
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(loginWebView.LoginWebViewProvider.viewId, loginWebViewProvider, {

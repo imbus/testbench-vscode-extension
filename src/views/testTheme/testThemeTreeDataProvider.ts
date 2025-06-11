@@ -52,6 +52,10 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             }
         };
         super(extensionContext, logger, updateMessageCallback, providerOptions);
+        this.isTestThemeOpenedFromACycle = this.extensionContext.workspaceState.get<boolean>(
+            StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY,
+            false
+        );
         this.iconService = iconManagementService;
         this.operationManager = new CancellableOperationManager(logger);
         this.logger.trace("[TestThemeTreeDataProvider] Initialized with unified state management");
@@ -160,12 +164,11 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
      */
     public loadTestThemesDataFromCycleData(eventData: DataForThemeTreeEvent): void {
         this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.key}`);
-        this.isTestThemeOpenedFromACycle = true;
         this.rawCycleData = eventData.rawTestStructure;
 
-        const isContextChanging = this.isInitialLoad
-            ? false
-            : this.currentCycleKey !== eventData.key || this.currentProjectKey !== eventData.projectKey;
+        // Compare the current context with the new one, even on initial load.
+        const isContextChanging =
+            this.currentCycleKey !== eventData.key || this.currentProjectKey !== eventData.projectKey;
 
         const hasPendingCustomRootForThisContext =
             this.pendingCustomRootRestore &&
@@ -179,6 +182,11 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             dataSourceDisplayName: eventData.label,
             operationalState: TreeViewOperationalState.LOADING
         });
+        this.isTestThemeOpenedFromACycle = eventData.isFromCycle;
+        this.extensionContext.workspaceState.update(
+            StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY,
+            this.isTestThemeOpenedFromACycle
+        );
         this.currentCycleKey = eventData.key;
         this.currentProjectKey = eventData.projectKey;
         this.currentCycleLabel = eventData.label;
@@ -444,6 +452,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
     /**
      * Determines whether a node should be visible in the test theme tree view.
+     * Filters out items that are locked by the system (-2) or not planned.
      */
     private isTreeItemVisibleInTestThemeTree(cycleTreeItemData: CycleTreeItemData): boolean {
         if (cycleTreeItemData.elementType === TreeItemContextValues.TEST_CASE_TREE_ITEM) {
@@ -537,6 +546,12 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                     projectKey,
                     dataSourceKey
                 );
+            }
+
+            if (!cycleStructure) {
+                this.logger.warn("[TestThemeTreeDataProvider] No data structure returned during refresh");
+                this.setErrorState(new Error("Failed to fetch data structure"), TreeViewEmptyState.FETCH_ERROR);
+                return;
             }
 
             operation.throwIfCancelled("after fetching data structure");

@@ -460,7 +460,7 @@ class PlayServerConnection {
      * @param {testBenchTypes.TovStructureOptions} tovStructureOptions - The TOV structure options.
      * @returns {Promise<string | null>} The job ID of the requested job.
      */
-    async packageTovsToZipInServerAndGetJobID(projectKey, tovKey, tovStructureOptions) {
+    async requestToPackageTovsInServerAndGetJobID(projectKey, tovKey, tovStructureOptions) {
         const tovReportUrl = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
         try {
             const tovReportJobResponse = await withRetry(() => this.apiClient.post(tovReportUrl, tovStructureOptions, {
@@ -575,7 +575,6 @@ class PlayServerConnection {
             return null;
         }
     }
-    // TODO:
     /**
      * Fetches the test structure of a specific TOV within a project from the TestBench server.
      *

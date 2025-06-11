@@ -1075,6 +1075,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
                                 // Persist the active TOV context for restoration
                                 if (projectName && tovName) {
+                                    // Clear last active cycle context when opening TOV
+                                    await context.workspaceState.update(
+                                        StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY,
+                                        undefined
+                                    );
+
                                     const tovContext = {
                                         tovKey: tovKeyOfSelectedTreeElement,
                                         tovLabel: tovName,
