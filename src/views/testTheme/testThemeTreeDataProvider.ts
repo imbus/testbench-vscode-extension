@@ -62,8 +62,13 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Overrides the base makeRoot to ensure the item's marked status is correctly
-     * applied when it becomes a custom root.
+     * Extends the base `makeRoot` functionality to also update the item's context for marking.
+     *
+     * After the superclass method sets the item as root, this method checks if the item
+     * has a unique key and UID. If so, it fetches the item's import state and updates
+     * the item's context, determining if marking options should be shown for the item.
+     *
+     * @param item The `TestThemeTreeItem` to be set as the root and have its context updated.
      */
     public override makeRoot(item: TestThemeTreeItem): void {
         super.makeRoot(item);
@@ -84,7 +89,13 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Handle unified state changes for better coordination
+     * Handles notifications about changes in the unified application state for better coordination.
+     *
+     * Overrides the base class implementation to specifically react
+     * to changes in the `customRootActive` field.
+     *
+     * @param notification - The state change notification object containing
+     *                       information about the changed fields and the new state.
      */
     protected override onUnifiedStateChange(notification: StateChangeNotification): void {
         super.onUnifiedStateChange(notification);
@@ -130,7 +141,16 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Override updateTreeItem to handle custom root restoration after context is set
+     * Updates the tree items in the view and handles custom root restoration after context is set
+     *
+     * This method first calls the parent class's `updateTreeItem` method.
+     * If there's a pending custom root to restore and the necessary context
+     * (project key, cycle key) is available, it attempts to restore the custom root.
+     *
+     * If the context for the pending custom root is valid, the restoration is scheduled
+     * with a slight delay. Otherwise, the pending restoration is cleared.
+     *
+     * @param treeItems - An array of `TestThemeTreeItem` objects to update in the tree.
      */
     protected updateTreeItem(treeItems: TestThemeTreeItem[]): void {
         // Call parent implementation
@@ -159,8 +179,16 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Populates the tree data provider with cycle data from the provided event.
-     * Preserves custom root if we're in the same cycle context.
+     * Loads and processes test theme data based on the provided cycle event data,
+     * preserves custom root if we're in the same cycle context.
+     *
+     * This function updates the tree view's state, handles context changes (project/cycle),
+     * validates the incoming data structure, and decides whether to perform a full tree
+     * rebuild or a non-destructive refresh if a custom root is active and the context
+     * remains the same. It also manages the storage of the current operational context.
+     *
+     * @param eventData - The event data containing the raw test structure, cycle key,
+     * project key, label, and an indicator if the data is from a cycle.
      */
     public loadTestThemesDataFromCycleData(eventData: DataForThemeTreeEvent): void {
         this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.key}`);
@@ -247,6 +275,18 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         }
     }
 
+    /**
+     * Fetches the root tree items for the test theme tree view.
+     *
+     * This method orchestrates the process of retrieving test structure data based on the
+     * current project and cycle keys. It handles operation management (cancellation),
+     * updates the UI with loading states, fetches data from the `projectDataService`,
+     * builds the tree structure, applies previously stored expansion states, and updates
+     * a unified state manager with the outcome (success, empty data, or error).
+     *
+     * @returns A promise that resolves to an array of {@link TestThemeTreeItem} representing
+     * the root nodes of the tree, or an empty array if no data is available or an error occurs.
+     */
     protected async fetchRootTreeItems(): Promise<TestThemeTreeItem[]> {
         if (!this.currentCycleKey || !this.currentProjectKey) {
             this.getUnifiedStateManager().setEmpty(TreeViewEmptyState.NO_DATA_SOURCE);
@@ -326,14 +366,27 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Fetches child elements for a given test theme tree item.
+     * Asynchronously fetches the children of a given TestThemeTreeItem.
+     *
+     * @param testThemeTreeItem - The parent tree item whose children are to be fetched.
+     * @returns A promise that resolves to an array of TestThemeTreeItem,
+     *          representing the children, or an empty array if no children exist.
      */
     protected async fetchChildrenForTreeItem(testThemeTreeItem: TestThemeTreeItem): Promise<TestThemeTreeItem[]> {
         return (testThemeTreeItem.children as TestThemeTreeItem[]) || [];
     }
 
     /**
-     * Creates a TestThemeTreeItem from cycle node data with proper validation and state management.
+     * Creates a TestThemeTreeItem from the provided cycle data and parent item.
+     *
+     * This method validates the input data, constructs the tree item label,
+     * initializes the tree item with a default collapsed state, applies any
+     * previously stored expansion state, and updates the item's context
+     * based on its import state.
+     *
+     * @param data The data object for the cycle tree item.
+     * @param parent The parent TestThemeTreeItem, or null if it's a root item.
+     * @returns A new TestThemeTreeItem instance, or null if the input data is invalid.
      */
     protected createTestThemeTreeItemFromData(
         data: CycleTreeItemData,
@@ -408,7 +461,18 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Recursively builds a tree structure from flat node data.
+     * Recursively builds a tree of `TestThemeTreeItem` objects.
+     *
+     * This function iterates through a map of test theme items, identifies children
+     * of the given parent, and constructs `TestThemeTreeItem` instances for them.
+     * It then recursively calls itself to build the sub-tree for each child.
+     * The collapsible state of each item is determined by the presence of its children
+     * and any stored expansion state.
+     *
+     * @param parentTestThemeKey - The key of the parent item for which to find children.
+     * @param parentTestThemeTreeItem - The parent `TestThemeTreeItem` in the tree, or `null` if it's a root item.
+     * @param testThemeItemsByKey - A map containing all available `CycleTreeItemData` keyed by their unique identifier.
+     * @returns An array of `TestThemeTreeItem` objects representing the direct children of the specified parent.
      */
     private buildTestThemeTreeRecursively(
         parentTestThemeKey: string,
@@ -451,8 +515,15 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Determines whether a node should be visible in the test theme tree view.
-     * Filters out items that are locked by the system (-2) or not planned.
+     * Determines if a tree item should be visible in the Test Theme Tree.
+     *
+     * An item is considered not visible if:
+     * - Its element type is a test case.
+     * - Its execution status is "NotPlanned".
+     * - Its execution locker value is "-2" (Locked by system).
+     *
+     * @param cycleTreeItemData The data object for the tree item.
+     * @returns `true` if the item should be visible, `false` otherwise.
      */
     private isTreeItemVisibleInTestThemeTree(cycleTreeItemData: CycleTreeItemData): boolean {
         if (cycleTreeItemData.elementType === TreeItemContextValues.TEST_CASE_TREE_ITEM) {
@@ -466,6 +537,13 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
     /**
      * Retrieves the report root UID for a given test theme tree item.
+     *
+     * This function first obtains the unique ID (key) and UID from the provided `testThemeTreeItem`.
+     * If both are available, it then queries the `markedItemStateService` to get the
+     * corresponding report root UID, using the current project and cycle keys.
+     *
+     * @param testThemeTreeItem - The test theme tree item for which to find the report root UID.
+     * @returns The report root UID as a string if found, otherwise undefined.
      */
     public getReportRootUIDForItem(testThemeTreeItem: TestThemeTreeItem): string | undefined {
         const testThemeTreeItemKey = testThemeTreeItem.getUniqueId();
@@ -613,6 +691,15 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         await this.refresh(true);
     }
 
+    /**
+     * Retrieves the root children for the tree view.
+     *
+     * If a custom root item is active and available in the current state,
+     * it returns that custom root item. Otherwise, it falls back to the
+     * base class implementation to get the default root children.
+     *
+     * @returns A promise that resolves to an array of `TestThemeTreeItem` representing the root children.
+     */
     protected override async getRootChildren(): Promise<TestThemeTreeItem[]> {
         const state = this.getUnifiedStateManager().getCurrentUnifiedState();
         if (state.isCustomRootActive && state.customRootItem) {
@@ -623,7 +710,17 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     }
 
     /**
-     * Refreshes the custom root node with updated cycle structure data while preserving expansion state.
+     * Refreshes a specific "custom root" tree item and its descendants.
+     *
+     * This method updates the data, label, children, and expansion state of an existing
+     * custom root item based on the provided `cycleStructure`. It preserves the
+     * expansion state of the custom root's parent chain and re-applies any marking.
+     * If the custom root item is not found in the new data, it resets the custom root
+     * and triggers a full refresh of the tree.
+     *
+     * @param cycleStructure - The new test structure data to refresh from.
+     * @param operation - A cancellable operation to allow interruption of the refresh process.
+     * @returns A promise that resolves when the custom root item has been refreshed.
      */
     private async refreshCustomRootTreeItem(
         cycleStructure: TestStructure,

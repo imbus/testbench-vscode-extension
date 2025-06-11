@@ -200,145 +200,124 @@ export class TreeServiceManager {
     }
 
     /**
-     * Restores the data state while ensuring expansion state and custom roots are preserved
+     * Asynchronously restores the data state for all tree views.
+     *
+     * Attempts to retrieve the last active context (either a test cycle or a
+     * Test Object Version - TOV) from the workspace state. Based on the retrieved context,
+     * it fetches the necessary data (project tree, test elements, test themes) and updates
+     * the respective tree view providers. It also updates the language server with the
+     * current project and TOV context.
+     *
+     * If no active context is found, or if a project key cannot be resolved, the restoration
+     * process is aborted. Errors during the process are logged.
+     *
+     * @returns A promise that resolves when the data state restoration is complete or aborted.
      */
     public async restoreDataState(): Promise<void> {
-        this.logger.debug("[TreeServiceManager] Attempting to restore data state for dependent views.");
-        try {
-            const projectProvider = this.getProjectManagementProvider();
-            projectProvider.refresh(false);
-            // Delay to ensure project tree has a chance to load before we query it
-            await new Promise((resolve) => setTimeout(resolve, 200));
+        this.logger.debug("[TreeServiceManager] Attempting to restore data state for all views.");
 
-            // Get both contexts from storage
+        try {
+            const cycleContext = this.extensionContext.workspaceState.get<{
+                projectKey: string;
+                key: string;
+                label: string;
+            }>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
             const tovContext = this.extensionContext.workspaceState.get<{
                 tovKey: string;
                 tovLabel: string;
                 projectName?: string;
             }>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
 
-            const cycleContext = this.extensionContext.workspaceState.get<{
-                projectKey: string;
-                key: string;
-                label: string;
-            }>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
-
-            // Track if we need to restart language server
-            let projectNameForLS: string | null = null;
-            let tovNameForLS: string | null = null;
-
-            // Restore Test Elements View
-            // This view depends on the TOV context.
-            if (tovContext?.tovKey && tovContext.tovLabel) {
+            if (!cycleContext && !tovContext) {
                 this.logger.trace(
-                    `[TreeServiceManager] Found persisted TOV context. Restoring Test Elements for TOV: ${tovContext.tovKey}`
+                    "[TreeServiceManager] No active context found in storage. Skipping data state restore."
                 );
-                const testElementsProvider = this.getTestElementsProvider();
-                await testElementsProvider.fetchTestElements(tovContext.tovKey, tovContext.tovLabel);
-
-                // Set language server context from TOV
-                if (tovContext.projectName) {
-                    projectNameForLS = tovContext.projectName;
-                    // For TOV context, the TOV label is the TOV name
-                    tovNameForLS = tovContext.tovLabel;
-                }
+                return;
             }
 
-            // Restore Test Theme View
-            // This view prioritizes Cycle context, but can fall back to TOV context.
-            if (cycleContext?.projectKey && cycleContext?.key) {
-                this.logger.trace(
-                    `[TreeServiceManager] Found persisted Cycle context. Restoring Test Themes for cycle: ${cycleContext.label}`
+            const projectKey = cycleContext?.projectKey || (await this.findProjectKeyForTov(tovContext));
+            if (!projectKey) {
+                this.logger.error(
+                    "[TreeServiceManager] Could not resolve a projectKey from stored context. Aborting restore."
                 );
+                return;
+            }
+
+            const projectTree = await this.projectDataService.getProjectTree(projectKey);
+            const tovNode = cycleContext
+                ? projectTree?.children?.find((tov) => tov.children?.some((c) => c.key === cycleContext.key))
+                : projectTree?.children?.find((tov) => tov.key === tovContext?.tovKey);
+
+            const projectName = (await this.projectDataService.getProjectsList())?.find(
+                (p) => p.key.toString() === projectKey
+            )?.name;
+            const tovKey = tovNode?.key;
+            const tovName = tovNode?.name;
+
+            if (tovKey && tovName) {
+                this.logger.trace(`[TreeServiceManager] Restoring Test Elements for TOV: ${tovName} (${tovKey})`);
+                await this.getTestElementsProvider().fetchTestElements(tovKey, tovName);
+            }
+
+            if (cycleContext) {
+                this.logger.trace(`[TreeServiceManager] Restoring Test Themes for Cycle: ${cycleContext.label}`);
                 const rawCycleData = await this.projectDataService.fetchTestStructureUsingProjectAndCycleKey(
-                    cycleContext.projectKey,
+                    projectKey,
                     cycleContext.key
                 );
-                const testThemeProvider = this.getTestThemeProvider();
-                const testThemeTreeView = this.getTestThemeTreeView();
-                testThemeTreeView.title = `Test Themes (${cycleContext.label})`;
-                testThemeProvider.isTestThemeOpenedFromACycle = true;
-                testThemeProvider.loadTestThemesDataFromCycleData({
-                    ...cycleContext,
+                this.getTestThemeProvider().loadTestThemesDataFromCycleData({
+                    projectKey,
+                    key: cycleContext.key,
+                    label: cycleContext.label,
                     rawTestStructure: rawCycleData,
                     isFromCycle: true
                 });
-
-                if (!projectNameForLS || !tovNameForLS) {
-                    // Find the project and TOV names from the cycle context
-                    const projects = await this.projectDataService.getProjectsList();
-                    const project = projects?.find((p) => p.key.toString() === cycleContext.projectKey);
-                    if (project) {
-                        projectNameForLS = project.name;
-                        // For cycle context, we need to find the TOV that contains this cycle
-                        const projectTree = await this.projectDataService.getProjectTree(cycleContext.projectKey);
-                        if (projectTree?.children) {
-                            // Find the TOV that contains this cycle
-                            for (const tovNode of projectTree.children) {
-                                if (tovNode.children?.some((child) => child.key === cycleContext.key)) {
-                                    tovNameForLS = tovNode.name;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if (tovContext?.tovKey && tovContext.projectName) {
-                // No Cycle context was found, fall back to using the TOV context.
-                this.logger.trace(
-                    `[TreeServiceManager] No Cycle context. Using persisted TOV context for Test Themes: ${tovContext.tovLabel}`
+                this.getTestThemeTreeView().title = `Test Themes (${cycleContext.label})`;
+            } else if (tovContext) {
+                this.logger.trace(`[TreeServiceManager] Restoring Test Themes for TOV: ${tovContext.tovLabel}`);
+                const rawTovData = await this.projectDataService.fetchTestStructureUsingProjectAndTOVKey(
+                    projectKey,
+                    tovContext.tovKey
                 );
-                const projects = await this.projectDataService.getProjectsList();
-                const project = projects?.find((p) => p.name === tovContext.projectName);
-                if (project?.key) {
-                    const rawTovData = await this.projectDataService.fetchTestStructureUsingProjectAndTOVKey(
-                        project.key.toString(),
-                        tovContext.tovKey
-                    );
-                    const testThemeProvider = this.getTestThemeProvider();
-                    const testThemeTreeView = this.getTestThemeTreeView();
-                    testThemeTreeView.title = `Test Themes (${tovContext.tovLabel})`;
-                    testThemeProvider.isTestThemeOpenedFromACycle = false;
-                    testThemeProvider.loadTestThemesDataFromCycleData({
-                        projectKey: project.key.toString(),
-                        key: tovContext.tovKey,
-                        label: tovContext.tovLabel,
-                        rawTestStructure: rawTovData,
-                        isFromCycle: false
-                    });
-                }
+                this.getTestThemeProvider().loadTestThemesDataFromCycleData({
+                    projectKey,
+                    key: tovContext.tovKey,
+                    label: tovContext.tovLabel,
+                    rawTestStructure: rawTovData,
+                    isFromCycle: false
+                });
+                this.getTestThemeTreeView().title = `Test Themes (${tovContext.tovLabel})`;
             }
 
-            // Restart language server with the correct context if we have both project and TOV
-            if (projectNameForLS && tovNameForLS) {
+            if (projectName && tovName) {
                 this.logger.info(
-                    `[TreeServiceManager] Restarting language server with restored context: Project='${projectNameForLS}', TOV='${tovNameForLS}'`
+                    `[TreeServiceManager] Updating language server with context: Project='${projectName}', TOV='${tovName}'`
                 );
-
                 const existingClient = getLanguageClientInstance();
                 if (existingClient && existingClient.state !== State.Stopped) {
-                    try {
-                        await vscode.commands.executeCommand("testbench_ls.updateProject", projectNameForLS);
-                        await vscode.commands.executeCommand("testbench_ls.updateTov", tovNameForLS);
-                        this.logger.info("[TreeServiceManager] Updated language server context successfully");
-                    } catch (error) {
-                        this.logger.warn(
-                            "[TreeServiceManager] Failed to update language server context, will restart instead:",
-                            error
-                        );
-                        await restartLanguageClient(projectNameForLS, tovNameForLS);
-                    }
+                    await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
+                    await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
                 } else {
-                    await restartLanguageClient(projectNameForLS, tovNameForLS);
+                    await restartLanguageClient(projectName, tovName);
                 }
-            } else {
-                this.logger.warn(
-                    `[TreeServiceManager] Could not determine project/TOV context for language server. Project: ${projectNameForLS}, TOV: ${tovNameForLS}`
-                );
             }
         } catch (error) {
-            this.logger.error("[TreeServiceManager] Failed to restore a view's data state:", error);
+            this.logger.error("[TreeServiceManager] Failed to restore view data state due to an error:", error);
         }
+    }
+
+    /**
+     * Finds the project key for a given project name.
+     *
+     * @param tovContext - An object optionally containing the project name.
+     * @returns A promise that resolves to the project key as a string if found, otherwise undefined.
+     */
+    private async findProjectKeyForTov(tovContext: { projectName?: string } | undefined): Promise<string | undefined> {
+        if (!tovContext?.projectName) {
+            return undefined;
+        }
+        const projects = await this.projectDataService.getProjectsList();
+        return projects?.find((p) => p.name === tovContext.projectName)?.key.toString();
     }
 
     /**
