@@ -468,17 +468,17 @@ export class PlayServerConnection {
      * @param {testBenchTypes.TovStructureOptions} tovStructureOptions - The TOV structure options.
      * @returns {Promise<string | null>} The job ID of the requested job.
      */
-    async packageTovsToZipInServerAndGetJobID(
+    async requestToPackageTovsInServerAndGetJobID(
         projectKey: string,
         tovKey: string,
         tovStructureOptions: testBenchTypes.TovStructureOptions
     ): Promise<string | null> {
-        const tovStructureUrl: string = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
+        const tovReportUrl: string = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
 
         try {
-            const tovStructureResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
+            const tovReportJobResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
                 () =>
-                    this.apiClient.post(tovStructureUrl, tovStructureOptions, {
+                    this.apiClient.post(tovReportUrl, tovStructureOptions, {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
@@ -498,12 +498,12 @@ export class PlayServerConnection {
                 }
             );
 
-            logger.trace(`TOV structure response for TOV key ${tovKey}:`, tovStructureResponse.status);
-            if (tovStructureResponse.data.jobID) {
-                logger.trace(`Received TOV structure for TOV key ${tovKey}:`, tovStructureResponse.data);
-                return tovStructureResponse.data.jobID;
+            logger.trace(`TOV report job ID response for TOV key ${tovKey}:`, tovReportJobResponse.status);
+            if (tovReportJobResponse.data.jobID) {
+                logger.trace(`Received TOV report Job ID for TOV key ${tovKey}:`, tovReportJobResponse.data);
+                return tovReportJobResponse.data.jobID;
             } else {
-                logger.error(`Unexpected response code: ${tovStructureResponse.status}`);
+                logger.error(`Unexpected response code: ${tovReportJobResponse.status}`);
                 return null;
             }
         } catch (error) {
@@ -511,34 +511,39 @@ export class PlayServerConnection {
                 switch (error.response.status) {
                     case 404:
                         logger.error(
-                            `TOV structure fetch failed: Project (${projectKey}) or TOV (${tovKey}) not found.`
+                            `TOV report job ID fetch failed: Project (${projectKey}) or TOV (${tovKey}) not found.`
                         );
                         break;
                     case 422:
-                        logger.error(`TOV structure fetch failed: Invalid tree root UID, filter, or test theme UID.`);
+                        logger.error(
+                            `TOV report job ID fetch failed: Invalid tree root UID, filter, or test theme UID.`
+                        );
                         break;
                     default:
-                        logger.error(`TOV structure fetch failed with status ${error.response.status}:`, error.message);
+                        logger.error(
+                            `TOV report job ID fetch failed with status ${error.response.status}:`,
+                            error.message
+                        );
                 }
             } else {
-                logger.error("Error fetching TOV structure:", error);
+                logger.error("Error fetching TOV report job ID:", error);
             }
             return null;
         }
     }
 
     /**
-     * Fetches the cycle structure of a specific cycle within a project from the TestBench server.
+     * Fetches the tests structure of a specific cycle within a project from the TestBench server.
      *
      * @param {string} projectKey - The project key as a string.
      * @param {string} cycleKey - The cycle key as a string.
-     * @returns {Promise<testBenchTypes.CycleStructure | null>} The cycle structure or null if an error occurs.
+     * @returns {Promise<testBenchTypes.TestStructure | null>} The test structure or null if an error occurs.
      */
-    async fetchCycleStructureOfCycleFromServer(
+    async fetchTestStructureOfCycleFromServer(
         projectKey: string,
         cycleKey: string
-    ): Promise<testBenchTypes.CycleStructure | null> {
-        const cycleStructureUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
+    ): Promise<testBenchTypes.TestStructure | null> {
+        const testStructureOfCycleUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
             executionMode: ExecutionMode.Execute,
             suppressFilteredData: false,
@@ -548,9 +553,9 @@ export class PlayServerConnection {
         };
 
         try {
-            const cycleStructureResponse: AxiosResponse<testBenchTypes.CycleStructure> = await withRetry(
+            const testStructureOfCycleResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
                 () =>
-                    this.apiClient.post(cycleStructureUrl, requestBody, {
+                    this.apiClient.post(testStructureOfCycleUrl, requestBody, {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
@@ -587,17 +592,95 @@ export class PlayServerConnection {
             }
             */
 
-            logger.trace(`Cycle structure response for cycle key ${cycleKey}:`, cycleStructureResponse.status);
-            if (cycleStructureResponse.data) {
+            logger.trace(
+                `Test structure of cycle response for cycle key ${cycleKey}:`,
+                testStructureOfCycleResponse.status
+            );
+            if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
                 // logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, cycleStructureResponse.data);
-                return cycleStructureResponse.data;
+                return testStructureOfCycleResponse.data;
             } else {
-                logger.error(`Unexpected response code: ${cycleStructureResponse.status}`);
+                logger.error(`Unexpected response code: ${testStructureOfCycleResponse.status}`);
                 return null;
             }
         } catch (error) {
-            logger.error("Error fetching cycle structure:", error);
+            logger.error("Error fetching test structure for cycle:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Fetches the test structure of a specific TOV within a project from the TestBench server.
+     *
+     * @param {string} projectKey - The project key as a string.
+     * @param {string} tovKey - The TOV key as a string.
+     * @returns {Promise<testBenchTypes.TestStructure | null>} The cycle structure or null if an error occurs.
+     */
+    async fetchTestStructureOfTOVFromServer(
+        projectKey: string,
+        tovKey: string
+    ): Promise<testBenchTypes.TestStructure | null> {
+        const testStructureOfTOVUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+        const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
+            executionMode: ExecutionMode.Execute,
+            suppressFilteredData: false,
+            suppressNotExecutable: false,
+            suppressEmptyTestThemes: false,
+            filters: []
+        };
+
+        try {
+            const testStructureOfTOVResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
+                () =>
+                    this.apiClient.post(testStructureOfTOVUrl, requestBody, {
+                        headers: {
+                            accept: "application/json",
+                            "Content-Type": "application/json"
+                        }
+                    }),
+                3, // maxRetries
+                2000, // delayMs
+                (error) => {
+                    if (axios.isAxiosError(error) && error.response) {
+                        // Retry predicates
+                        const nonRetryableStatusCodes = [400, 404, 422];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            );
+
+            // Save the JSON to a file for analyzing the structure
+            /*
+            const savePath: vscode.Uri | undefined = await vscode.window.showSaveDialog({
+                saveLabel: "Save Cycle Structure",
+                filters: {
+                    "JSON Files": ["json"],
+                    "All Files": ["*"],
+                },
+            });
+            if (savePath) {
+                const filePath: string = savePath.fsPath;
+                utils.saveJsonDataToFile(filePath, cycleStructureResponse.data);
+            } else {
+                vscode.window.showErrorMessage("No file path selected.");
+            }
+            */
+
+            logger.trace(`Test structure of TOV response for TOV key ${tovKey}:`, testStructureOfTOVResponse.status);
+            if (testStructureOfTOVResponse.data) {
+                // Note: The output is large
+                // logger.trace(`Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
+                return testStructureOfTOVResponse.data;
+            } else {
+                logger.error(`Unexpected response code: ${testStructureOfTOVResponse.status}`);
+                return null;
+            }
+        } catch (error) {
+            logger.error("Error fetching test structure for TOV:", error);
             return null;
         }
     }

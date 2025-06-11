@@ -21,7 +21,7 @@ import { MarkedItemStateService } from "../views/testTheme/markedItemStateServic
 import { TestElementTreeBuilder } from "../views/testElements/testElementTreeBuilder";
 import {
     ProjectManagementTreeDataProvider,
-    CycleDataForThemeTreeEvent
+    DataForThemeTreeEvent
 } from "../views/projectManagement/projectManagementTreeDataProvider";
 import { TestThemeTreeDataProvider } from "../views/testTheme/testThemeTreeDataProvider";
 import { TestElementsTreeDataProvider } from "../views/testElements/testElementsTreeDataProvider";
@@ -232,26 +232,27 @@ export class TreeServiceManager {
             }
 
             // Restore Test Theme View if context is available
+            // TODO: Check if Test Theme View was opened from a cycle or TOV, and restore accordingly.
             const cycleContext = this.extensionContext.workspaceState.get<{
                 projectKey: string;
-                cycleKey: string;
-                cycleLabel: string;
+                key: string;
+                label: string;
             }>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
 
-            if (cycleContext?.projectKey && cycleContext?.cycleKey) {
+            if (cycleContext?.projectKey && cycleContext?.key) {
                 this.logger.trace(
-                    `[TreeServiceManager] Found persisted Cycle context. Restoring Test Themes for cycle: ${cycleContext.cycleLabel}`
+                    `[TreeServiceManager] Found persisted Cycle context. Restoring Test Themes for cycle: ${cycleContext.label}`
                 );
-                const rawCycleData = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
+                const rawCycleData = await this.projectDataService.fetchTestStructureUsingProjectAndCycleKey(
                     cycleContext.projectKey,
-                    cycleContext.cycleKey
+                    cycleContext.key
                 );
                 const testThemeProvider = this.getTestThemeProvider();
                 const testThemeTreeView = this.getTestThemeTreeView();
-                testThemeTreeView.title = `Test Themes (${cycleContext.cycleLabel})`;
-                testThemeProvider.populateFromCycleData({
+                testThemeTreeView.title = `Test Themes (${cycleContext.label})`;
+                testThemeProvider.loadTestThemesDataFromCycleData({
                     ...cycleContext,
-                    rawCycleStructure: rawCycleData
+                    rawTestStructure: rawCycleData
                 });
 
                 // If LS Project Name could not be determined from TOV context, derive it from cycle context
@@ -549,10 +550,10 @@ export class TreeServiceManager {
 
         if (projectProvider && testThemeProvider && testThemeTreeView) {
             this.extensionContext.subscriptions.push(
-                projectProvider.onDidPrepareCycleDataForThemeTree(async (eventData: CycleDataForThemeTreeEvent) => {
-                    testThemeTreeView.title = `Test Themes (${eventData.cycleLabel})`;
-                    testThemeProvider.populateFromCycleData(eventData);
-                    this.logger.debug(`[TreeServiceManager] Cycle data prepared for ${eventData.cycleLabel}`);
+                projectProvider.onDidPrepareDataForThemeTree(async (eventData: DataForThemeTreeEvent) => {
+                    testThemeTreeView.title = `Test Themes (${eventData.label})`;
+                    testThemeProvider.loadTestThemesDataFromCycleData(eventData);
+                    this.logger.debug(`[TreeServiceManager] Cycle data prepared for ${eventData.label}`);
                 })
             );
         }
@@ -772,6 +773,28 @@ export class TreeServiceManager {
             );
         } catch (error) {
             this.logger.error("[TreeServiceManager] Error handling cycle selection:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * Handles the open command for a TOV item in projects tree.
+     * Initializes the test themes based on the selected TOV.
+     *
+     * @param tovItem - The selected TOV item from the project management tree
+     * @throws Error if TOV opening fails
+     */
+    public async openTovAndInitTestThemes(tovItem: ProjectManagementTreeItem): Promise<void> {
+        try {
+            const projectProvider = this.getProjectManagementProvider();
+            const testThemeProvider = this.getTestThemeProvider();
+            testThemeProvider.clearTree();
+
+            await projectProvider.initTestThemeTreeAfterTOVClick(tovItem);
+
+            this.logger.info(`[TreeServiceManager] Opened TOV for: ${tovItem.label} with unified state management`);
+        } catch (error) {
+            this.logger.error("[TreeServiceManager] Error opening TOV:", error);
             throw error;
         }
     }

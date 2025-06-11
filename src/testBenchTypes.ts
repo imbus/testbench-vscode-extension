@@ -29,7 +29,7 @@ export interface LastGeneratedReportParams {
     alreadyImported: boolean;
 }
 
-export interface CycleStructure {
+export interface TestStructure {
     root: {
         base: {
             key: string;

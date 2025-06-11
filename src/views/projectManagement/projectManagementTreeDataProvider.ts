@@ -10,24 +10,24 @@ import { BaseTreeDataProvider, TreeDataProviderOptions } from "../common/baseTre
 import { ProjectManagementTreeItem } from "./projectManagementTreeItem";
 import { ProjectDataService } from "./projectDataService";
 import { ContextKeys, TreeItemContextValues } from "../../constants";
-import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
+import { Project, TreeNode, TestStructure } from "../../testBenchTypes";
 import { IconManagementService } from "../common/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperationManager } from "../../services/cancellableOperationService";
 import { StateChangeNotification } from "../common/unifiedTreeStateManager";
 import { SerializedCustomRootState } from "../common/customRootService";
 
-export interface CycleDataForThemeTreeEvent {
+export interface DataForThemeTreeEvent {
     projectKey: string;
-    cycleKey: string;
-    cycleLabel: string;
-    rawCycleStructure: CycleStructure | null;
+    key: string;
+    label: string;
+    rawTestStructure: TestStructure | null;
 }
 
 export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<ProjectManagementTreeItem> {
-    private _onDidPrepareCycleDataForTestThemeTree = new vscode.EventEmitter<CycleDataForThemeTreeEvent>();
-    public readonly onDidPrepareCycleDataForThemeTree: vscode.Event<CycleDataForThemeTreeEvent> =
-        this._onDidPrepareCycleDataForTestThemeTree.event;
+    private _onDidPrepareDataForTestThemeTree = new vscode.EventEmitter<DataForThemeTreeEvent>();
+    public readonly onDidPrepareDataForThemeTree: vscode.Event<DataForThemeTreeEvent> =
+        this._onDidPrepareDataForTestThemeTree.event;
 
     private readonly operationManager: CancellableOperationManager;
 
@@ -35,6 +35,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     private static readonly FETCH_PROJECTS_OPERATION = "fetchProjects";
     private static readonly FETCH_PROJECT_TREE_OPERATION = "fetchProjectTree";
     private static readonly HANDLE_CYCLE_CLICK_OPERATION = "handleCycleClick";
+    private static readonly INIT_TT_FROM_TOV = "initTestThemeTreeFromTOV";
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -305,6 +306,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
     /**
      * Handles click events on cycle tree items by fetching cycle structure data
      * and preparing it for the theme tree view.
+     * @param cycleItem The clicked cycle tree item.
      */
     public async initTestThemeTreeAfterCycleClick(cycleItem: ProjectManagementTreeItem): Promise<void> {
         await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
@@ -348,7 +350,7 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
 
                     try {
                         operation.throwIfCancelled("before cycle structure fetch");
-                        const rawCycleData = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
+                        const rawCycleData = await this.projectDataService.fetchTestStructureUsingProjectAndCycleKey(
                             projectKey,
                             cycleKey
                         );
@@ -366,11 +368,11 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
                             cycleContext
                         );
 
-                        this._onDidPrepareCycleDataForTestThemeTree.fire({
+                        this._onDidPrepareDataForTestThemeTree.fire({
                             projectKey,
-                            cycleKey,
-                            cycleLabel,
-                            rawCycleStructure: rawCycleData
+                            key: cycleKey,
+                            label: cycleLabel,
+                            rawTestStructure: rawCycleData
                         });
 
                         progress.report({ increment: 100, message: "Data loaded." });
@@ -396,6 +398,103 @@ export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<Proj
             this.logger.error(`[ProjectManagementTreeDataProvider] Error handling cycle click:`, error);
             vscode.window.showErrorMessage(
                 `Failed to load data for cycle '${cycleLabel}': ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
+    }
+
+    /**
+     * Initializes the test theme tree after a TOV is opened.
+     */
+    public async initTestThemeTreeAfterTOVClick(tovItem: ProjectManagementTreeItem): Promise<void> {
+        await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
+        const tovLabel = typeof tovItem.label === "string" ? tovItem.label : "N/A";
+
+        // Cancel any existing cycle click operation
+        this.operationManager.cancelOperation(ProjectManagementTreeDataProvider.INIT_TT_FROM_TOV);
+
+        const operation = this.operationManager.createOperation(
+            ProjectManagementTreeDataProvider.INIT_TT_FROM_TOV,
+            `Open TOV: ${tovLabel}`
+        );
+
+        if (tovItem.originalContextValue !== TreeItemContextValues.VERSION) {
+            this.logger.error("[initTestThemeTreeAfterTOVClick] Opened item is not a TOV.");
+            return;
+        }
+
+        const projectKey = tovItem.getProjectKey();
+        const tovKey = tovItem.getTovKey();
+
+        if (!tovKey || !projectKey) {
+            this.logger.error(`Missing keys when opening a TOV. Tov key: ${tovKey}, Project key: ${projectKey}`);
+            vscode.window.showErrorMessage(`Could not determine context for TOV '${tovLabel}'.`);
+            return;
+        }
+
+        try {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Fetching data for TOV: ${tovLabel}`,
+                    cancellable: true
+                },
+                async (progress, cancellationToken) => {
+                    cancellationToken.onCancellationRequested(() => {
+                        operation.cancel();
+                    });
+
+                    progress.report({ increment: 0, message: "Fetching test structure of TOV..." });
+
+                    try {
+                        operation.throwIfCancelled("before test structure of TOV fetch");
+                        const rawTestStructureData =
+                            await this.projectDataService.fetchTestStructureUsingProjectAndTOVKey(projectKey, tovKey);
+                        operation.throwIfCancelled("after test structure of TOV fetch");
+                        progress.report({ increment: 50, message: "Preparing theme tree..." });
+
+                        /*
+                        // Persist the active cycle context to workspace state for restoration
+                        const tovContext = { projectKey, tovKey, tovLabel };  
+                        await this.extensionContext.workspaceState.update(
+                            StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, // TODO: What to use here?
+                            tovContext
+                        );
+                        this.logger.trace(
+                            `[ProjectManagementTreeDataProvider] Persisted active tov context:`,
+                            tovContext
+                        );
+                        */
+
+                        this._onDidPrepareDataForTestThemeTree.fire({
+                            projectKey,
+                            key: tovKey,
+                            label: tovLabel,
+                            rawTestStructure: rawTestStructureData
+                        });
+
+                        progress.report({ increment: 100, message: "Data loaded." });
+                    } catch (fetchError) {
+                        if (fetchError instanceof vscode.CancellationError) {
+                            this.logger.debug(
+                                `[ProjectManagementTreeDataProvider] Opening TOV cancelled for: ${tovLabel}`
+                            );
+                            throw fetchError;
+                        }
+
+                        this.logger.error(`[ProjectManagementTreeDataProvider] Error fetching TOV data:`, fetchError);
+                        throw fetchError;
+                    }
+                }
+            );
+        } catch (error) {
+            if (error instanceof vscode.CancellationError) {
+                this.logger.debug(`[ProjectManagementTreeDataProvider] Opening TOV cancelled by user: ${tovLabel}`);
+                return;
+            }
+
+            this.logger.error(`[ProjectManagementTreeDataProvider] Error opening TOV:`, error);
+            vscode.window.showErrorMessage(
+                `Failed to load data for TOV '${tovLabel}': ${error instanceof Error ? error.message : "Unknown error"}`
             );
         }
     }

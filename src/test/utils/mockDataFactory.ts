@@ -4,7 +4,7 @@
  * This file provides factory functions to easily create mock data objects that match the extension's types, ensuring consistency.
  */
 
-import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
+import { Project, TreeNode, TestStructure } from "../../testBenchTypes";
 import { TestElementData } from "../../views/testElements/testElementTreeItem";
 
 // Counter to ensure unique keys/ids in sequential calls
@@ -42,7 +42,7 @@ export function createMockTreeNode(overrides: Partial<TreeNode> = {}): TreeNode 
     };
 }
 
-export function createMockCycleStructure(overrides: Partial<CycleStructure> = {}): CycleStructure {
+export function createMockCycleStructure(overrides: Partial<TestStructure> = {}): TestStructure {
     const rootKey = `cycle_root_${idCounter++}`;
     return {
         root: {

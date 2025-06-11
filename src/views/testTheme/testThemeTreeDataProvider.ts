@@ -10,8 +10,8 @@ import { TestThemeTreeItem } from "./testThemeTreeItem";
 import { ProjectDataService } from "../projectManagement/projectDataService";
 import { MarkedItemStateService } from "./markedItemStateService";
 import { ContextKeys, StorageKeys, testThemeTreeViewID, TreeItemContextValues } from "../../constants";
-import { CycleTreeItemData, CycleStructure } from "../../testBenchTypes";
-import { CycleDataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
+import { CycleTreeItemData, TestStructure } from "../../testBenchTypes";
+import { DataForThemeTreeEvent } from "../projectManagement/projectManagementTreeDataProvider";
 import { IconManagementService } from "../common/iconManagementService";
 import { TreeViewType, TreeViewEmptyState, TreeViewOperationalState } from "../common/treeViewStateTypes";
 import { CancellableOperation, CancellableOperationManager } from "../../services/cancellableOperationService";
@@ -24,7 +24,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
     private currentCycleLabel: string | null = null;
     private readonly iconService: IconManagementService;
     private readonly operationManager: CancellableOperationManager;
-    private rawCycleData: CycleStructure | null = null;
+    private rawCycleData: TestStructure | null = null;
     public isTestThemeOpenedFromACycle: boolean = false;
     private isInitialLoad: boolean = true;
 
@@ -158,35 +158,35 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
      * Populates the tree data provider with cycle data from the provided event.
      * Preserves custom root if we're in the same cycle context.
      */
-    public populateFromCycleData(eventData: CycleDataForThemeTreeEvent): void {
-        this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.cycleKey}`);
+    public loadTestThemesDataFromCycleData(eventData: DataForThemeTreeEvent): void {
+        this.logger.trace(`[TestThemeTreeDataProvider] Populating from cycle data: ${eventData.key}`);
         this.isTestThemeOpenedFromACycle = true;
-        this.rawCycleData = eventData.rawCycleStructure;
+        this.rawCycleData = eventData.rawTestStructure;
 
         const isContextChanging = this.isInitialLoad
             ? false
-            : this.currentCycleKey !== eventData.cycleKey || this.currentProjectKey !== eventData.projectKey;
+            : this.currentCycleKey !== eventData.key || this.currentProjectKey !== eventData.projectKey;
 
         const hasPendingCustomRootForThisContext =
             this.pendingCustomRootRestore &&
             this.pendingCustomRootRestore.contextData?.projectKey === eventData.projectKey &&
-            this.pendingCustomRootRestore.contextData?.cycleKey === eventData.cycleKey;
+            this.pendingCustomRootRestore.contextData?.cycleKey === eventData.key;
 
         // Set context and loading state
         this.getUnifiedStateManager().updateState({
-            dataSourceKey: eventData.cycleKey,
-            dataSourceLabel: eventData.cycleLabel,
-            dataSourceDisplayName: eventData.cycleLabel,
+            dataSourceKey: eventData.key,
+            dataSourceLabel: eventData.label,
+            dataSourceDisplayName: eventData.label,
             operationalState: TreeViewOperationalState.LOADING
         });
-        this.currentCycleKey = eventData.cycleKey;
+        this.currentCycleKey = eventData.key;
         this.currentProjectKey = eventData.projectKey;
-        this.currentCycleLabel = eventData.cycleLabel;
+        this.currentCycleLabel = eventData.label;
         this.isInitialLoad = false;
 
         // Validate data
-        if (!eventData.rawCycleStructure?.nodes?.length || !eventData.rawCycleStructure.root?.base?.key) {
-            this.logger.warn(`[TestThemeTreeDataProvider] Invalid cycle structure for: ${eventData.cycleLabel}`);
+        if (!eventData.rawTestStructure?.nodes?.length || !eventData.rawTestStructure.root?.base?.key) {
+            this.logger.warn(`[TestThemeTreeDataProvider] Invalid cycle structure for: ${eventData.label}`);
             this.updateTreeItem([]);
             this.getUnifiedStateManager().setError(
                 new Error("Invalid cycle structure"),
@@ -216,7 +216,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
                 `Populate custom root: ${currentState.customRootItem?.label}`
             );
             try {
-                this.refreshCustomRootTreeItem(eventData.rawCycleStructure, operation);
+                this.refreshCustomRootTreeItem(eventData.rawTestStructure, operation);
             } catch (error) {
                 this.logger.error(`[TestThemeTreeDataProvider] Error during custom root repopulation:`, error);
                 this.getUnifiedStateManager().setError(error as Error, TreeViewEmptyState.PROCESSING_ERROR);
@@ -231,11 +231,11 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         this.storeExpansionState();
 
         try {
-            const testThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(eventData.rawCycleStructure);
+            const testThemeTreeItems = this.buildTestThemeTreeFromCycleStructure(eventData.rawTestStructure);
             this.getUnifiedStateManager().updateState({
                 hasDataFetchBeenAttempted: true,
                 isServerDataReceived: true,
-                itemsBeforeFiltering: eventData.rawCycleStructure.nodes.length,
+                itemsBeforeFiltering: eventData.rawTestStructure.nodes.length,
                 itemsAfterFiltering: testThemeTreeItems.length,
                 operationalState:
                     testThemeTreeItems.length === 0 ? TreeViewOperationalState.EMPTY : TreeViewOperationalState.READY,
@@ -270,7 +270,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
             operation.throwIfCancelled("before cycle structure fetch");
 
-            const cycleStructureFromServer = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
+            const cycleStructureFromServer = await this.projectDataService.fetchTestStructureUsingProjectAndCycleKey(
                 this.currentProjectKey,
                 this.currentCycleKey
             );
@@ -392,7 +392,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
      * @returns An array of `TestThemeTreeItem` representing the root level of the constructed tree,
      * or an empty array if no valid nodes are found or an error occurs.
      */
-    private buildTestThemeTreeFromCycleStructure(cycleStructure: CycleStructure): TestThemeTreeItem[] {
+    private buildTestThemeTreeFromCycleStructure(cycleStructure: TestStructure): TestThemeTreeItem[] {
         const treeItemsByKey = new Map<string, CycleTreeItemData>();
         cycleStructure.nodes.forEach((node) => {
             if (node?.base?.key) {
@@ -533,7 +533,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
             }
 
             operation.throwIfCancelled("before fetching cycle structure");
-            const cycleStructure = await this.projectDataService.fetchCycleStructureUsingProjectAndCycleKey(
+            const cycleStructure = await this.projectDataService.fetchTestStructureUsingProjectAndCycleKey(
                 projectKey,
                 cycleKey
             );
@@ -622,7 +622,7 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
      * Refreshes the custom root node with updated cycle structure data while preserving expansion state.
      */
     private async refreshCustomRootTreeItem(
-        cycleStructure: CycleStructure,
+        cycleStructure: TestStructure,
         operation: CancellableOperation
     ): Promise<void> {
         const state = this.unifiedStateManager.getCurrentUnifiedState();

@@ -10,8 +10,8 @@ import { TestThemeTreeDataProvider } from "../../../views/testTheme/testThemeTre
 import { TestThemeTreeItem } from "../../../views/testTheme/testThemeTreeItem";
 import { MarkedItemStateService } from "../../../views/testTheme/markedItemStateService";
 import { ProjectDataService } from "../../../views/projectManagement/projectDataService";
-import { CycleDataForThemeTreeEvent } from "../../../views/projectManagement/projectManagementTreeDataProvider";
-import { CycleStructure } from "../../../testBenchTypes";
+import { DataForThemeTreeEvent } from "../../../views/projectManagement/projectManagementTreeDataProvider";
+import { TestStructure } from "../../../testBenchTypes";
 import { TreeViewEmptyState } from "../../../views/common/treeViewStateTypes";
 import { TreeItemContextValues } from "../../../constants";
 
@@ -58,7 +58,7 @@ suite("TestThemeTreeDataProvider Tests", () => {
 
     test("should populate a hierarchical tree from flat cycle data", async () => {
         // Arrange
-        const mockCycleStructure: CycleStructure = {
+        const mockCycleStructure: TestStructure = {
             root: {
                 base: {
                     key: "cycle_1",
@@ -105,17 +105,17 @@ suite("TestThemeTreeDataProvider Tests", () => {
                 }
             ]
         };
-        const mockEventData: CycleDataForThemeTreeEvent = {
+        const mockEventData: DataForThemeTreeEvent = {
             projectKey: "proj_1",
-            cycleKey: "cycle_1",
-            cycleLabel: "Root Cycle",
-            rawCycleStructure: mockCycleStructure
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure
         };
         // Ensure the marked state service returns false for these items
         mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
 
         // Act
-        provider.populateFromCycleData(mockEventData);
+        provider.loadTestThemesDataFromCycleData(mockEventData);
         const rootItems = await provider.getChildren(undefined);
 
         // Assert
@@ -135,7 +135,7 @@ suite("TestThemeTreeDataProvider Tests", () => {
 
     test("should query MarkedItemStateService to set item context", async () => {
         // Arrange
-        const mockCycleStructure: CycleStructure = {
+        const mockCycleStructure: TestStructure = {
             root: {
                 base: {
                     key: "cycle_1",
@@ -181,11 +181,11 @@ suite("TestThemeTreeDataProvider Tests", () => {
                 }
             ]
         };
-        const mockEventData: CycleDataForThemeTreeEvent = {
+        const mockEventData: DataForThemeTreeEvent = {
             projectKey: "p1",
-            cycleKey: "c1",
-            cycleLabel: "L1",
-            rawCycleStructure: mockCycleStructure
+            key: "c1",
+            label: "L1",
+            rawTestStructure: mockCycleStructure
         };
 
         // Configure the service to "mark" the first theme but not the second
@@ -200,7 +200,7 @@ suite("TestThemeTreeDataProvider Tests", () => {
         const updateContextSpy = testEnv.sandbox.spy(TestThemeTreeItem.prototype, "updateContextForMarking");
 
         // Act
-        provider.populateFromCycleData(mockEventData);
+        provider.loadTestThemesDataFromCycleData(mockEventData);
         const rootItems = await provider.getChildren(undefined);
 
         // Assert

@@ -5,7 +5,7 @@
 
 import { PlayServerConnection } from "../../testBenchConnection";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { Project, TreeNode, CycleStructure } from "../../testBenchTypes";
+import { Project, TreeNode, TestStructure } from "../../testBenchTypes";
 
 export class ProjectDataService {
     private readonly getConnection: () => PlayServerConnection | null;
@@ -73,40 +73,79 @@ export class ProjectDataService {
     }
 
     /**
-     * Fetches the cycle structure of a specific cycle within a project from the TestBench server.
+     * Fetches the test structure of a specific cycle within a project from the TestBench server.
      * @param {string} projectKey - The project key as a string.
      * @param {string} cycleKey - The cycle key as a string.
-     * @returns {Promise<CycleStructure | null>} The cycle structure or null if an error occurs or not connected.
+     * @returns {Promise<TestStructure | null>} The test structure or null if an error occurs or not connected.
      */
-    async fetchCycleStructureUsingProjectAndCycleKey(
+    async fetchTestStructureUsingProjectAndCycleKey(
         projectKey: string,
         cycleKey: string
-    ): Promise<CycleStructure | null> {
+    ): Promise<TestStructure | null> {
         const currentConnection = this.getConnection();
         if (!currentConnection) {
-            this.logger.error("[ProjectDataService] No active connection. Cannot fetch cycle structure.");
+            this.logger.error("[ProjectDataService] No active connection. Cannot fetch tests structure.");
             return null;
         }
         if (!projectKey || !cycleKey) {
             this.logger.error(
-                `[ProjectDataService] ProjectKey ${projectKey} or CycleKey ${cycleKey} is null/undefined. Cannot fetch cycle structure.`
+                `[ProjectDataService] ProjectKey ${projectKey} or CycleKey ${cycleKey} is null/undefined. Cannot fetch test structure.`
             );
             return null;
         }
         try {
             this.logger.debug(
-                `[ProjectDataService] Fetching cycle structure for project ${projectKey}, cycle ${cycleKey}.`
+                `[ProjectDataService] Fetching test structure for project ${projectKey}, cycle ${cycleKey}.`
             );
-            const cycleStructure = await currentConnection.fetchCycleStructureOfCycleFromServer(projectKey, cycleKey);
-            if (cycleStructure === null) {
+            const testStructure = await currentConnection.fetchTestStructureOfCycleFromServer(projectKey, cycleKey);
+            if (testStructure === null) {
                 this.logger.warn(
-                    `[ProjectDataService] fetchCycleStructureOfCycleInProject returned null for project ${projectKey}, cycle ${cycleKey}.`
+                    `[ProjectDataService] fetchTestStructureUsingProjectAndCycleKey returned null for project ${projectKey}, cycle ${cycleKey}.`
                 );
             }
-            return cycleStructure;
+            return testStructure;
         } catch (error) {
             this.logger.error(
-                `[ProjectDataService] Error fetching cycle structure for project ${projectKey}, cycle ${cycleKey}:`,
+                `[ProjectDataService] Error fetching test structure for project ${projectKey}, cycle ${cycleKey}:`,
+                error
+            );
+            return null;
+        }
+    }
+
+    // TODO:
+    /**
+     * Fetches the test structure of a specific TOV within a project from the TestBench server.
+     * @param {string} projectKey - The project key as a string.
+     * @param {string} tovKey - The TOV key as a string.
+     * @returns {Promise<TestStructure | null>} The test structure or null if an error occurs or not connected.
+     */
+    async fetchTestStructureUsingProjectAndTOVKey(projectKey: string, tovKey: string): Promise<TestStructure | null> {
+        const currentConnection = this.getConnection();
+        if (!currentConnection) {
+            this.logger.error("[ProjectDataService] No active connection. Cannot fetch test structure.");
+            return null;
+        }
+        if (!projectKey || !tovKey) {
+            this.logger.error(
+                `[ProjectDataService] Project key ${projectKey} or TOV key ${tovKey} is null/undefined. Cannot fetch test structure.`
+            );
+            return null;
+        }
+        try {
+            this.logger.debug(
+                `[ProjectDataService] Fetching test structure for project ${projectKey}, TOV key ${tovKey}.`
+            );
+            const testStructure = await currentConnection.fetchTestStructureOfTOVFromServer(projectKey, tovKey);
+            if (testStructure === null) {
+                this.logger.warn(
+                    `[ProjectDataService] fetchTestStructureUsingProjectAndTOVKey returned null for project ${projectKey}, TOV key ${tovKey}.`
+                );
+            }
+            return testStructure;
+        } catch (error) {
+            this.logger.error(
+                `[ProjectDataService] Error fetching test structure for project ${projectKey}, TOV key ${tovKey}:`,
                 error
             );
             return null;

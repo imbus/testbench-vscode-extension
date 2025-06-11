@@ -36,7 +36,6 @@ import {
 } from "./testBenchAuthenticationProvider";
 import * as connectionManager from "./connectionManager";
 import { PlayServerConnection } from "./testBenchConnection";
-import { TovStructureOptions } from "./testBenchTypes";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
 import { BaseTreeItem } from "./views/common/baseTreeItem";
 import { ProjectManagementTreeItem } from "./views/projectManagement/projectManagementTreeItem";
@@ -345,12 +344,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     throw new Error("TreeServiceManager is not initialized");
                 }
 
+                await treeServiceManager.handleCycleSelection(cycleItem);
+
                 // Hide Projects view, show Test Theme and Test Elements views
                 await hideProjectManagementTreeView();
                 await displayTestThemeTreeView();
                 await displayTestElementsTreeView();
-
-                await treeServiceManager.handleCycleSelection(cycleItem);
             } catch (error) {
                 logger.error("[Cmd CycleClick] Error during cycle click handling:", error);
 
@@ -940,209 +939,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     });
 
-    // TODO: Remove / reimplement after testing
-    // --- Command: Get TOV Structure ---
-    registerSafeCommand(context, allExtensionCommands.fetchTovStructure, async () => {
-        logger.debug(`Command Called: ${allExtensionCommands.fetchTovStructure}`);
-        if (!connection) {
-            vscode.window.showErrorMessage("No connection available. Please log in first.");
-            logger.error(`${allExtensionCommands.fetchTovStructure} command called without connection.`);
-            return;
-        }
-        try {
-            // Get Project Key from user input
-            const projectKey = await vscode.window.showInputBox({
-                prompt: "Enter the Project Key",
-                placeHolder: "e.g., 30",
-                validateInput: (value) => {
-                    if (!value || value.trim() === "") {
-                        return "Project Key cannot be empty";
-                    }
-                    if (!/^\d+$/.test(value.trim())) {
-                        return "Project Key must be a number";
-                    }
-                    return null;
-                }
-            });
-
-            if (!projectKey) {
-                logger.info("User cancelled project key input.");
-                return;
-            }
-
-            // Get TOV Key from user input
-            const tovKey = await vscode.window.showInputBox({
-                prompt: "Enter the TOV (Test Object Version) Key",
-                placeHolder: "e.g., 176",
-                validateInput: (value) => {
-                    if (!value || value.trim() === "") {
-                        return "TOV Key cannot be empty";
-                    }
-                    if (!/^\d+$/.test(value.trim())) {
-                        return "TOV Key must be a number";
-                    }
-                    return null;
-                }
-            });
-
-            if (!tovKey) {
-                logger.info("User cancelled TOV key input.");
-                return;
-            }
-
-            // Get Tree Root UID from user input
-            const treeRootUID = await vscode.window.showInputBox({
-                prompt: "Enter the Tree Root UID (optional)",
-                placeHolder: "e.g., iTB-TT-299 (leave empty for default)",
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                validateInput: (value) => {
-                    // Tree Root UID is optional, so empty values are allowed
-                    return null;
-                }
-            });
-
-            // Get filters from server and let user select
-            let selectedFilters: any[] = [];
-
-            try {
-                const filters = await connection.getFiltersFromOldPlayServer();
-
-                if (filters && Array.isArray(filters) && filters.length > 0) {
-                    // Ask user if they want to apply filters
-                    const applyFilters = await vscode.window.showQuickPick(["No filters", "Select filters"], {
-                        placeHolder: "Do you want to apply filters to the TOV structure?",
-                        title: "Filter Selection"
-                    });
-
-                    if (applyFilters === "Select filters") {
-                        // Create QuickPick items from the filters with multi-select capability
-                        const quickPickItems: vscode.QuickPickItem[] = filters.map(
-                            (filter: any) =>
-                                ({
-                                    label: filter.name || "Unnamed Filter",
-                                    description: `Type: ${filter.type || "Unknown"} | ${filter.public ? "Public" : "Private"}`,
-                                    detail: `Key: ${filter.key?.serial || "No Key"}`,
-                                    filterData: filter
-                                }) as vscode.QuickPickItem & { filterData: any }
-                        );
-
-                        // Create a multi-select QuickPick
-                        const quickPick = vscode.window.createQuickPick();
-                        quickPick.items = quickPickItems;
-                        quickPick.canSelectMany = true;
-                        quickPick.placeholder = "Select filters to apply (you can select multiple)";
-                        quickPick.title = "Select Filters for TOV Structure";
-
-                        quickPick.show();
-
-                        const selectedItems = await new Promise<vscode.QuickPickItem[]>((resolve) => {
-                            quickPick.onDidAccept(() => {
-                                resolve([...quickPick.selectedItems]);
-                                quickPick.hide();
-                            });
-                            quickPick.onDidHide(() => {
-                                resolve([]);
-                                quickPick.dispose();
-                            });
-                        });
-
-                        // Convert selected items to filter format expected by the API
-                        selectedFilters = selectedItems
-                            .map((item: any) => {
-                                const filterData = item.filterData;
-                                return {
-                                    name: filterData.name,
-                                    filterType: filterData.type,
-                                    testThemeUID: filterData.type === "TestTheme" ? filterData.key?.serial : undefined
-                                };
-                            })
-                            .filter((filter) => filter.filterType); // Remove any invalid filters
-
-                        logger.info(`User selected ${selectedFilters.length} filters:`, selectedFilters);
-                    }
-                } else {
-                    logger.info("No filters available from server for TOV structure.");
-                }
-            } catch (filterError) {
-                logger.warn("Could not retrieve filters for TOV structure, proceeding without filters:", filterError);
-                vscode.window.showWarningMessage("Could not retrieve filters. Proceeding without filters.");
-            }
-
-            // Build TOV Structure Options with user inputs
-            const tovStructureOptions: TovStructureOptions = {
-                treeRootUID: treeRootUID?.trim() || "iTB-TT-299", // Use default if empty
-                suppressFilteredData: false,
-                suppressEmptyTestThemes: true,
-                filters: selectedFilters
-            };
-
-            logger.info(`Fetching TOV structure with options:`, {
-                projectKey: projectKey.trim(),
-                tovKey: tovKey.trim(),
-                options: tovStructureOptions
-            });
-
-            // Show progress while fetching
-            const tovStructure = await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "Fetching TOV Structure",
-                    cancellable: false
-                },
-                async (progress) => {
-                    progress.report({ message: "Retrieving TOV structure from server..." });
-                    return await connection?.packageTovsToZipInServerAndGetJobID(
-                        projectKey.trim(),
-                        tovKey.trim(),
-                        tovStructureOptions
-                    );
-                }
-            );
-
-            if (tovStructure) {
-                logger.info("TOV structure retrieved successfully:", JSON.stringify(tovStructure, null, 2));
-
-                // Show result in information message with option to save
-                const action = await vscode.window.showInformationMessage(
-                    `TOV Structure retrieved successfully for Project ${projectKey}, TOV ${tovKey}.\n\nFilters applied: ${selectedFilters.length}\nTree Root UID: ${tovStructureOptions.treeRootUID}`,
-                    { modal: true },
-                    "View Details",
-                    "Save to File"
-                );
-
-                if (action === "View Details") {
-                    // Show detailed structure in a new document
-                    const doc = await vscode.workspace.openTextDocument({
-                        content: JSON.stringify(tovStructure, null, 2),
-                        language: "json"
-                    });
-                    await vscode.window.showTextDocument(doc);
-                } else if (action === "Save to File") {
-                    // Let user save the structure to a file
-                    const saveUri = await vscode.window.showSaveDialog({
-                        filters: {
-                            "JSON Files": ["json"],
-                            "All Files": ["*"]
-                        },
-                        defaultUri: vscode.Uri.file(`tov_structure_${projectKey}_${tovKey}.json`)
-                    });
-
-                    if (saveUri) {
-                        const content = JSON.stringify(tovStructure, null, 2);
-                        await vscode.workspace.fs.writeFile(saveUri, Buffer.from(content, "utf8"));
-                        vscode.window.showInformationMessage(`TOV structure saved to ${saveUri.fsPath}`);
-                    }
-                }
-            } else {
-                // Undefined is expected if no TOV structure is found or filtering results in no data
-                logger.warn("TOV structure retrieval returned null or undefined.");
-            }
-        } catch (error) {
-            logger.error("Error fetching TOV structure:", error);
-            vscode.window.showErrorMessage(`Failed to retrieve TOV structure: ${(error as Error).message}`);
-        }
-    });
-
     // --- Command: Generate Test Cases For TOV ---
     registerSafeCommand(
         context,
@@ -1184,7 +980,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     );
 
-    // --- Command: Open TOV Test Elements ---
+    // --- Command: Open TOV From Projects View ---
     registerSafeCommand(
         context,
         allExtensionCommands.openTOVFromProjectsView,
@@ -1218,9 +1014,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         );
 
                         if (areTestElementsFetched) {
+                            await treeServiceManager.openTovAndInitTestThemes(tovItem);
+                            treeServiceManager.getTestThemeProvider().isTestThemeOpenedFromACycle = false;
                             await hideProjectManagementTreeView();
                             await displayTestThemeTreeView();
-                            treeServiceManager.getTestThemeProvider().isTestThemeOpenedFromACycle = false;
                             await displayTestElementsTreeView();
                             testElementsTreeView.title = `Test Elements (${tovLabel})`;
 

@@ -9,8 +9,8 @@ import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { TestThemeTreeDataProvider } from "../../../views/testTheme/testThemeTreeDataProvider";
 import { MarkedItemStateService } from "../../../views/testTheme/markedItemStateService";
 import { ProjectDataService } from "../../../views/projectManagement/projectDataService";
-import { CycleDataForThemeTreeEvent } from "../../../views/projectManagement/projectManagementTreeDataProvider";
-import { CycleStructure } from "../../../testBenchTypes";
+import { DataForThemeTreeEvent } from "../../../views/projectManagement/projectManagementTreeDataProvider";
+import { TestStructure } from "../../../testBenchTypes";
 import { TreeItemContextValues } from "../../../constants";
 
 suite("TestThemeTreeDataProvider Foundational Tests", () => {
@@ -42,16 +42,16 @@ suite("TestThemeTreeDataProvider Foundational Tests", () => {
     test("should set the current project and cycle key when populated", () => {
         // Arrange
         // Create a minimal mock event. The rawCycleStructure can be empty for this test.
-        const mockEventData: CycleDataForThemeTreeEvent = {
+        const mockEventData: DataForThemeTreeEvent = {
             projectKey: "proj_42",
-            cycleKey: "cycle_101",
-            cycleLabel: "Cycle 101",
-            rawCycleStructure: { nodes: [] } as any // Type cast to avoid filling out all properties
+            key: "cycle_101",
+            label: "Cycle 101",
+            rawTestStructure: { nodes: [] } as any // Type cast to avoid filling out all properties
         };
 
         // Act
         // Call the method that populates the provider.
-        provider.populateFromCycleData(mockEventData);
+        provider.loadTestThemesDataFromCycleData(mockEventData);
 
         // Assert
         // Check that the provider's internal state was updated correctly.
@@ -63,7 +63,7 @@ suite("TestThemeTreeDataProvider Foundational Tests", () => {
     test("should create a single root item from simple cycle data", async () => {
         // Arrange
         // Create a mock structure with only one valid node.
-        const mockCycleStructure: CycleStructure = {
+        const mockCycleStructure: TestStructure = {
             root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
             nodes: [
                 {
@@ -73,18 +73,18 @@ suite("TestThemeTreeDataProvider Foundational Tests", () => {
             ]
         } as any;
 
-        const mockEventData: CycleDataForThemeTreeEvent = {
+        const mockEventData: DataForThemeTreeEvent = {
             projectKey: "proj_1",
-            cycleKey: "cycle_1",
-            cycleLabel: "Root Cycle",
-            rawCycleStructure: mockCycleStructure
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure
         };
 
         // Ensure the dependency returns a default "unmarked" state.
         mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
 
         // Act
-        provider.populateFromCycleData(mockEventData);
+        provider.loadTestThemesDataFromCycleData(mockEventData);
         const rootItems = await provider.getChildren(undefined);
 
         // Assert

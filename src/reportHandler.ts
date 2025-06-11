@@ -1790,7 +1790,7 @@ export async function startTestGenerationForTOV(
                     filters: []
                 };
 
-                const tovReportJobID = await connection.packageTovsToZipInServerAndGetJobID(
+                const tovReportJobID = await connection.requestToPackageTovsInServerAndGetJobID(
                     projectKey,
                     tovKey,
                     tovStructureOptions
