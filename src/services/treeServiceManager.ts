@@ -223,6 +223,10 @@ export class TreeServiceManager {
                 label: string;
             }>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
 
+            // Track if we need to restart language server
+            let projectNameForLS: string | null = null;
+            let tovNameForLS: string | null = null;
+
             // Restore Test Elements View
             // This view depends on the TOV context.
             if (tovContext?.tovKey && tovContext.tovLabel) {
@@ -231,6 +235,13 @@ export class TreeServiceManager {
                 );
                 const testElementsProvider = this.getTestElementsProvider();
                 await testElementsProvider.fetchTestElements(tovContext.tovKey, tovContext.tovLabel);
+
+                // Set language server context from TOV
+                if (tovContext.projectName) {
+                    projectNameForLS = tovContext.projectName;
+                    // For TOV context, the TOV label is the TOV name
+                    tovNameForLS = tovContext.tovLabel;
+                }
             }
 
             // Restore Test Theme View
@@ -252,6 +263,26 @@ export class TreeServiceManager {
                     rawTestStructure: rawCycleData,
                     isFromCycle: true
                 });
+
+                if (!projectNameForLS || !tovNameForLS) {
+                    // Find the project and TOV names from the cycle context
+                    const projects = await this.projectDataService.getProjectsList();
+                    const project = projects?.find((p) => p.key.toString() === cycleContext.projectKey);
+                    if (project) {
+                        projectNameForLS = project.name;
+                        // For cycle context, we need to find the TOV that contains this cycle
+                        const projectTree = await this.projectDataService.getProjectTree(cycleContext.projectKey);
+                        if (projectTree?.children) {
+                            // Find the TOV that contains this cycle
+                            for (const tovNode of projectTree.children) {
+                                if (tovNode.children?.some((child) => child.key === cycleContext.key)) {
+                                    tovNameForLS = tovNode.name;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
             } else if (tovContext?.tovKey && tovContext.projectName) {
                 // No Cycle context was found, fall back to using the TOV context.
                 this.logger.trace(
@@ -276,6 +307,34 @@ export class TreeServiceManager {
                         isFromCycle: false
                     });
                 }
+            }
+
+            // Restart language server with the correct context if we have both project and TOV
+            if (projectNameForLS && tovNameForLS) {
+                this.logger.info(
+                    `[TreeServiceManager] Restarting language server with restored context: Project='${projectNameForLS}', TOV='${tovNameForLS}'`
+                );
+
+                const existingClient = getLanguageClientInstance();
+                if (existingClient && existingClient.state !== State.Stopped) {
+                    try {
+                        await vscode.commands.executeCommand("testbench_ls.updateProject", projectNameForLS);
+                        await vscode.commands.executeCommand("testbench_ls.updateTov", tovNameForLS);
+                        this.logger.info("[TreeServiceManager] Updated language server context successfully");
+                    } catch (error) {
+                        this.logger.warn(
+                            "[TreeServiceManager] Failed to update language server context, will restart instead:",
+                            error
+                        );
+                        await restartLanguageClient(projectNameForLS, tovNameForLS);
+                    }
+                } else {
+                    await restartLanguageClient(projectNameForLS, tovNameForLS);
+                }
+            } else {
+                this.logger.warn(
+                    `[TreeServiceManager] Could not determine project/TOV context for language server. Project: ${projectNameForLS}, TOV: ${tovNameForLS}`
+                );
             }
         } catch (error) {
             this.logger.error("[TreeServiceManager] Failed to restore a view's data state:", error);
