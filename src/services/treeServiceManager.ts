@@ -582,7 +582,7 @@ export class TreeServiceManager {
 
         if (projectProvider && testThemeProvider && testThemeTreeView) {
             this.extensionContext.subscriptions.push(
-                projectProvider.onDidPrepareDataForThemeTree(async (eventData: DataForThemeTreeEvent) => {
+                projectProvider.onDidPrepareDataForTestThemeTree(async (eventData: DataForThemeTreeEvent) => {
                     testThemeTreeView.title = `Test Themes (${eventData.label})`;
                     testThemeProvider.loadTestThemesDataFromCycleData(eventData);
                     this.logger.debug(`[TreeServiceManager] Cycle data prepared for ${eventData.label}`);

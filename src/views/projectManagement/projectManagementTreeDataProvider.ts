@@ -27,7 +27,7 @@ export interface DataForThemeTreeEvent {
 
 export class ProjectManagementTreeDataProvider extends BaseTreeDataProvider<ProjectManagementTreeItem> {
     private _onDidPrepareDataForTestThemeTree = new vscode.EventEmitter<DataForThemeTreeEvent>();
-    public readonly onDidPrepareDataForThemeTree: vscode.Event<DataForThemeTreeEvent> =
+    public readonly onDidPrepareDataForTestThemeTree: vscode.Event<DataForThemeTreeEvent> =
         this._onDidPrepareDataForTestThemeTree.event;
 
     private readonly operationManager: CancellableOperationManager;
