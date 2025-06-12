@@ -15,8 +15,8 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-latest, windows-latest, macos-latest]
-                node-version: [18.x, 20.x] # Test on multiple Node versions
+                os: [ubuntu-latest, windows-latest, macos-latest] # Test on multiple OS
+                node-version: [20.x] # Test on multiple Node versions possible
 
         steps:
             # Checkout the repository
@@ -68,12 +68,13 @@ jobs:
                       vscode-test-${{ runner.os }}-
 
             # Run unit tests directly with Mocha
-            - name: Run Unit Tests (Linux)
+            - name: Run Tests (Linux)
               if: runner.os == 'Linux'
-              run: xvfb-run -a npm run test:unit
-            - name: Run Unit Tests (Windows/macOS)
+              run: xvfb-run -a npm test
+
+            - name: Run Tests (Windows/macOS)
               if: runner.os != 'Linux'
-              run: npm run test:unit
+              run: npm test
 
             # Upload test results
             - name: Upload Test Results
