@@ -129,30 +129,33 @@ export class TestElementTreeItem extends BaseTreeItem {
         return "None";
     }
 
-    protected buildTooltipContent(): vscode.MarkdownString {
+    protected buildTooltipContent(): string {
         const data = this.itemData as TestElementData;
-        const lines: string[] = [`Type: ${data.testElementType || "N/A"}`, `Name: ${data.name || this.label}`];
+        const tooltipContextLines: string[] = [
+            `Type: ${data.testElementType || "N/A"}`,
+            `Name: ${data.name || this.label}`
+        ];
 
         if (data.uniqueID) {
-            lines.push(`UniqueID: ${data.uniqueID}`);
+            tooltipContextLines.push(`UniqueID: ${data.uniqueID}`);
         }
 
         if (data.libraryKey) {
-            lines.push(`LibraryKey: ${data.libraryKey}`);
+            tooltipContextLines.push(`LibraryKey: ${data.libraryKey}`);
         }
 
         if (data.details) {
             if (data?.details?.hasVersion !== undefined) {
-                lines.push(`Has Version: ${data?.details?.hasVersion}`);
+                tooltipContextLines.push(`Has Version: ${data?.details?.hasVersion}`);
             }
             if (data?.details?.status !== undefined) {
-                lines.push(`Status: ${data?.details?.status}`);
+                tooltipContextLines.push(`Status: ${data?.details?.status}`);
             }
         } else {
-            lines.push("Details: Not available");
+            tooltipContextLines.push("Details: Not available");
         }
 
-        return new vscode.MarkdownString(lines.join("\n"));
+        return tooltipContextLines.join("\n");
     }
 
     protected getIconCategory(): string {
