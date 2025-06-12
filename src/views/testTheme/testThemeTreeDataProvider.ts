@@ -198,6 +198,16 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
         const isContextChanging =
             this.currentCycleKey !== eventData.key || this.currentProjectKey !== eventData.projectKey;
 
+        // If context is changing, invalidate any pending restore from a previous context.
+        // Prevent a stale root from being applied to the new data.
+        if (isContextChanging && this.pendingCustomRootRestore) {
+            this.logger.info(
+                `[TestThemeTreeDataProvider] Context changed from '${this.currentCycleKey}' to '${eventData.key}'. Clearing stale pending custom root.`
+            );
+            this.pendingCustomRootRestore = null;
+            this.saveCustomRootState();
+        }
+
         const hasPendingCustomRootForThisContext =
             this.pendingCustomRootRestore &&
             this.pendingCustomRootRestore.contextData?.projectKey === eventData.projectKey &&
