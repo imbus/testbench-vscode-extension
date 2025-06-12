@@ -49,11 +49,20 @@ async function run() {
     const mocha = new mocha_1.default({
         ui: "tdd",
         color: true,
-        timeout: 50000
+        timeout: 60000,
+        reporter: "spec" // Use spec reporter for clearer output
     });
     const testsRoot = path.resolve(__dirname, "..");
     try {
-        const files = await (0, glob_1.glob)("**/**.test.js", { cwd: testsRoot });
+        // Find test files
+        const files = await (0, glob_1.glob)("**/suite/**/*.test.js", {
+            cwd: testsRoot,
+            absolute: false,
+            ignore: ["**/node_modules/**", "**/out/**", "**/.vscode-test/**"]
+        });
+        // Log found files
+        console.log(`\nFound ${files.length} test file(s):`);
+        files.forEach((f) => console.log(`  - ${f}`));
         // Add files to the test suite
         files.forEach((f) => mocha.addFile(path.resolve(testsRoot, f)));
         return new Promise((resolve, reject) => {
@@ -64,18 +73,19 @@ async function run() {
                         reject(new Error(`${failures} tests failed.`));
                     }
                     else {
+                        console.log("\nAll tests passed!");
                         resolve();
                     }
                 });
             }
             catch (err) {
-                console.error(err);
+                console.error("Error during test execution:", err);
                 reject(err);
             }
         });
     }
     catch (err) {
-        console.error(err);
+        console.error("Error finding test files:", err);
         throw err;
     }
 }

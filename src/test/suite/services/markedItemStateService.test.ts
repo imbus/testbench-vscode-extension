@@ -35,8 +35,8 @@ suite("MarkedItemStateService Tests", () => {
 
     test("should correctly mark an item and trigger a state save", async () => {
         // Arrange
-        // Spy on the private _saveState method to ensure it's called.
-        const saveStateSpy = testEnv.sandbox.spy(service as any, "_saveState");
+        // Spy on the private _saveMarkedItemsStateWithHierarchy method to ensure it's called.
+        const saveStateSpy = testEnv.sandbox.spy(service as any, "_saveMarkedItemsStateWithHierarchy");
 
         // Act
         await service.markItemWithDescendants(
@@ -55,7 +55,10 @@ suite("MarkedItemStateService Tests", () => {
         assert.ok(activeItem, "An active item should be set");
         assert.strictEqual(activeItem?.key, testData.rootKey, "The correct item key should be stored");
         assert.strictEqual(activeItem?.uniqueID, testData.rootUID, "The correct item UID should be stored");
-        assert.ok(saveStateSpy.calledOnce, "_saveState should be called to persist the new state");
+        assert.ok(
+            saveStateSpy.calledOnce,
+            "_saveMarkedItemsStateWithHierarchy should be called to persist the new state"
+        );
     });
 
     test("getItemImportState should return true for the directly marked root item", async () => {
@@ -144,7 +147,7 @@ suite("MarkedItemStateService Tests", () => {
         );
         assert.ok(service.getActiveMarkedItemInfo(), "Pre-condition: An item should be marked");
 
-        const saveStateSpy = testEnv.sandbox.spy(service as any, "_saveState");
+        const saveStateSpy = testEnv.sandbox.spy(service as any, "_saveMarkedItemsStateWithHierarchy");
 
         // Act
         await service.clearItemMarkingIncludingDescendants();
@@ -158,6 +161,9 @@ suite("MarkedItemStateService Tests", () => {
             testData.cycleKey
         );
         assert.strictEqual(state.shouldShow, false, "Previously marked item should no longer be marked");
-        assert.ok(saveStateSpy.calledOnce, "_saveState should be called to persist the cleared state");
+        assert.ok(
+            saveStateSpy.calledOnce,
+            "_saveMarkedItemsStateWithHierarchy should be called to persist the cleared state"
+        );
     });
 });

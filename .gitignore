@@ -34,6 +34,7 @@ lib-cov
 coverage
 .nyc_output
 coverage.*
+test-results/
 
 # Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
@@ -46,6 +47,9 @@ build/Release
 
 # Dependency directory
 node_modules
+
+# npm
+package-lock.json
 
 # Optional npm cache directory
 .npm
@@ -113,6 +117,15 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Test configuration conflicts
+.vscode-test.mjs.disabled
+.vscode-test.mjs
+
+# Temporary files
+*.tmp
+*.temp
+.testbench/
+
 # Translations
 *.mo
 *.pot
@@ -165,6 +178,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
 .venv
 env/
 venv/

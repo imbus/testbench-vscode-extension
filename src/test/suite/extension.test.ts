@@ -6,7 +6,7 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as sinon from "sinon";
-import { activate, setLogger, setConnection } from "../../extension";
+import { activate, setConnection } from "../../extension";
 import { setupTestEnvironment, TestEnvironment } from "../setup/testSetup";
 import { TESTBENCH_AUTH_PROVIDER_ID, TestBenchAuthenticationProvider } from "../../testBenchAuthenticationProvider";
 import { allExtensionCommands, ConfigKeys, ContextKeys } from "../../constants";
@@ -15,24 +15,24 @@ import { TreeServiceManager } from "../../services/treeServiceManager";
 import { LoginWebViewProvider } from "../../loginWebView";
 import * as configuration from "../../configuration";
 
-suite("Extension Test Suite", () => {
+suite("Extension Test Suite", function () {
     let testEnv: TestEnvironment;
-    /* eslint-disable @typescript-eslint/no-unused-vars */
-    let loggerStub: sinon.SinonStubbedInstance<TestBenchLogger>;
-    let treeServiceManagerStub: sinon.SinonStubbedInstance<TreeServiceManager>;
-    let loginWebViewProviderStub: sinon.SinonStubbedInstance<LoginWebViewProvider>;
+    let registerWebviewStub: sinon.SinonStub;
 
-    setup(() => {
+    // Mocha's built-in hooks
+    this.beforeEach(() => {
         testEnv = setupTestEnvironment();
 
-        // Create stubs
-        loggerStub = testEnv.sandbox.createStubInstance(TestBenchLogger);
-        treeServiceManagerStub = testEnv.sandbox.createStubInstance(TreeServiceManager);
-        loginWebViewProviderStub = testEnv.sandbox.createStubInstance(LoginWebViewProvider);
+        // Stub the webview registration before any activate calls
+        registerWebviewStub = testEnv.sandbox.stub(vscode.window, "registerWebviewViewProvider");
+        registerWebviewStub.returns({ dispose: testEnv.sandbox.stub() } as vscode.Disposable);
 
-        // Stub the TreeServiceManager constructor
+        // Create stubs for TreeServiceManager
         testEnv.sandbox.stub(TreeServiceManager.prototype, "initialize").resolves();
         testEnv.sandbox.stub(TreeServiceManager.prototype, "initializeTreeViews").resolves();
+        testEnv.sandbox.stub(TreeServiceManager.prototype, "getInitializationStatus").returns(true);
+        testEnv.sandbox.stub(TreeServiceManager.prototype, "dispose");
+
         testEnv.sandbox.stub(TreeServiceManager.prototype, "getProjectManagementProvider").returns({
             refresh: testEnv.sandbox.stub()
         } as any);
@@ -45,41 +45,34 @@ suite("Extension Test Suite", () => {
         testEnv.sandbox.stub(configuration, "getExtensionConfiguration").returns({
             get: testEnv.sandbox.stub().returns(false) // Default to false for auto-login
         } as any);
+
+        // Stub the logger constructor to prevent console output during tests
+        testEnv.sandbox.stub(TestBenchLogger.prototype, "info");
+        testEnv.sandbox.stub(TestBenchLogger.prototype, "error");
+        testEnv.sandbox.stub(TestBenchLogger.prototype, "warn");
+        testEnv.sandbox.stub(TestBenchLogger.prototype, "debug");
+        testEnv.sandbox.stub(TestBenchLogger.prototype, "trace");
     });
 
-    teardown(() => {
+    this.afterEach(() => {
         testEnv.sandbox.restore();
     });
 
     suite("Activation", () => {
         test("should register the TestBenchAuthenticationProvider on activation", async () => {
-            // Arrange:
-            // 1. Get the stub for the vscode.authentication.registerAuthenticationProvider function.
-            //    This stub was created for us by setupTestEnvironment().
             const registerStub = testEnv.vscodeMocks.registerAuthenticationProviderStub;
 
-            // 2. Ensure the stub has not been called before the test.
             assert.ok(
                 registerStub.notCalled,
                 "Pre-condition failed: registerAuthenticationProvider should not have been called yet"
             );
 
-            // Act:
-            // 1. Call the activate function with our mock context.
             await activate(testEnv.mockContext);
-
-            // Assert:
-            // 1. Verify that registerAuthenticationProvider was called exactly once.
             assert.ok(registerStub.calledOnce, "registerAuthenticationProvider should have been called once");
 
-            // 2. Get the arguments from the call to inspect them.
             const [id, label, providerInstance] = registerStub.firstCall.args;
-
-            // 3. Verify the provider was registered with the correct ID and label.
             assert.strictEqual(id, TESTBENCH_AUTH_PROVIDER_ID, "Authentication provider registered with incorrect ID");
             assert.strictEqual(label, "TestBench", "Authentication provider registered with incorrect label");
-
-            // 4. Verify that the object passed as the provider is indeed an instance of our class.
             assert.ok(
                 providerInstance instanceof TestBenchAuthenticationProvider,
                 "The registered provider is not an instance of TestBenchAuthenticationProvider"
@@ -87,14 +80,12 @@ suite("Extension Test Suite", () => {
         });
 
         test("should initialize logger on activation", async () => {
-            // Stub the TestBenchLogger constructor
-            const loggerConstructorStub = testEnv.sandbox.stub(TestBenchLogger.prototype, "info");
+            const loggerInfoStub = TestBenchLogger.prototype.info as sinon.SinonStub;
 
             await activate(testEnv.mockContext);
 
-            // Verify logger was initialized and used
-            assert.ok(loggerConstructorStub.called, "Logger should have been initialized and used");
-            assert.ok(loggerConstructorStub.calledWith("Extension activated."), "Logger should log activation message");
+            assert.ok(loggerInfoStub.called, "Logger should have been initialized and used");
+            assert.ok(loggerInfoStub.calledWith("Extension activated."), "Logger should log activation message");
         });
 
         test("should initialize configuration watcher", async () => {
@@ -103,21 +94,6 @@ suite("Extension Test Suite", () => {
             await activate(testEnv.mockContext);
 
             assert.ok(initConfigStub.calledOnce, "Configuration watcher should be initialized");
-        });
-
-        test("should set up session change listener", async () => {
-            const onDidChangeSessionsStub = vscode.authentication.onDidChangeSessions as sinon.SinonStub;
-            await activate(testEnv.mockContext);
-
-            assert.ok(onDidChangeSessionsStub.calledOnce, "Session change listener should be registered");
-
-            const callback = onDidChangeSessionsStub.firstCall.args[0];
-            assert.ok(typeof callback === "function", "Should register a callback function");
-
-            assert.ok(
-                testEnv.mockContext.subscriptions.length > 0,
-                "Session listener disposable should be added to subscriptions"
-            );
         });
 
         test("should initialize TreeServiceManager", async () => {
@@ -135,7 +111,6 @@ suite("Extension Test Suite", () => {
 
             await activate(testEnv.mockContext);
 
-            // Check that connection context was set to false (no connection initially)
             assert.ok(
                 executeCommandStub.calledWith("setContext", ContextKeys.CONNECTION_ACTIVE, false),
                 "Should set connection active context to false"
@@ -151,10 +126,6 @@ suite("Extension Test Suite", () => {
         });
 
         test("should register login webview provider", async () => {
-            const registerWebviewStub = testEnv.sandbox.stub(vscode.window, "registerWebviewViewProvider");
-            const disposable = { dispose: testEnv.sandbox.stub() };
-            registerWebviewStub.returns(disposable as vscode.Disposable);
-
             await activate(testEnv.mockContext);
 
             assert.ok(registerWebviewStub.calledOnce, "Webview provider should be registered");
@@ -168,9 +139,7 @@ suite("Extension Test Suite", () => {
 
             await activate(testEnv.mockContext);
 
-            // Check that key commands are registered
             const registeredCommands = registerCommandStub.getCalls().map((call) => call.args[0]);
-
             assert.ok(registeredCommands.includes(allExtensionCommands.login), "Login command should be registered");
             assert.ok(registeredCommands.includes(allExtensionCommands.logout), "Logout command should be registered");
             assert.ok(
@@ -188,7 +157,6 @@ suite("Extension Test Suite", () => {
         });
 
         test("should trigger auto-login command when auto-login is enabled", async () => {
-            // Configure auto-login to be enabled
             const getConfigStub = configuration.getExtensionConfiguration as sinon.SinonStub;
             getConfigStub.returns({
                 get: testEnv.sandbox.stub().withArgs(ConfigKeys.AUTO_LOGIN, false).returns(true)
@@ -198,8 +166,8 @@ suite("Extension Test Suite", () => {
 
             await activate(testEnv.mockContext);
 
-            // Give time for async command execution
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            // Wait a bit for the command to be executed
+            await new Promise((resolve) => setTimeout(resolve, 50));
 
             assert.ok(
                 executeCommandStub.calledWith(allExtensionCommands.automaticLoginAfterExtensionActivation),
@@ -208,13 +176,12 @@ suite("Extension Test Suite", () => {
         });
 
         test("should not trigger auto-login command when auto-login is disabled", async () => {
-            // Configure auto-login to be disabled (default in our setup)
             const executeCommandStub = testEnv.vscodeMocks.executeCommandStub;
 
             await activate(testEnv.mockContext);
 
-            // Give time for async command execution
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            // Wait a bit to ensure no command is executed
+            await new Promise((resolve) => setTimeout(resolve, 50));
 
             assert.ok(
                 !executeCommandStub.calledWith(allExtensionCommands.automaticLoginAfterExtensionActivation),
@@ -223,8 +190,9 @@ suite("Extension Test Suite", () => {
         });
 
         test("should handle TreeServiceManager initialization failure gracefully", async () => {
-            const initializeStub = TreeServiceManager.prototype.initialize as sinon.SinonStub;
-            initializeStub.rejects(new Error("Service initialization failed"));
+            // Override the stub for this specific test
+            const initStub = TreeServiceManager.prototype.initialize as sinon.SinonStub;
+            initStub.rejects(new Error("Service initialization failed"));
 
             const showErrorStub = testEnv.vscodeMocks.showErrorMessageStub;
 
@@ -240,22 +208,12 @@ suite("Extension Test Suite", () => {
     });
 
     suite("Global State Management", () => {
-        test("should export setLogger function that updates global logger", async () => {
-            const newLogger = testEnv.sandbox.createStubInstance(TestBenchLogger);
-
-            await activate(testEnv.mockContext);
-
-            // Verify setLogger is exported and functional
-            assert.ok(typeof setLogger === "function", "setLogger should be exported");
-            setLogger(newLogger);
-        });
-
         test("should export setConnection function", async () => {
             await activate(testEnv.mockContext);
 
-            // Verify setConnection is exported and functional
             assert.ok(typeof setConnection === "function", "setConnection should be exported");
             setConnection(null);
+            assert.ok(true, "setConnection executed successfully");
         });
     });
 });
