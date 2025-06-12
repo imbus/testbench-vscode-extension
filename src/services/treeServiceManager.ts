@@ -31,10 +31,9 @@ import { ProjectManagementTreeItem } from "../views/projectManagement/projectMan
 import { TestThemeTreeItem } from "../views/testTheme/testThemeTreeItem";
 import { TestElementTreeItem } from "../views/testElements/testElementTreeItem";
 import { PlayServerConnection } from "../testBenchConnection";
-import { getLanguageClientInstance, restartLanguageClient } from "../server";
 import { StateChangeNotification } from "../views/common/unifiedTreeStateManager";
 import { debounce } from "../utils";
-import { State } from "vscode-languageclient";
+import { updateOrRestartLS } from "../extension";
 
 export interface TreeServiceDependencies {
     extensionContext: vscode.ExtensionContext;
@@ -293,13 +292,7 @@ export class TreeServiceManager {
                 this.logger.info(
                     `[TreeServiceManager] Updating language server with context: Project='${projectName}', TOV='${tovName}'`
                 );
-                const existingClient = getLanguageClientInstance();
-                if (existingClient && existingClient.state !== State.Stopped) {
-                    await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
-                    await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
-                } else {
-                    await restartLanguageClient(projectName, tovName);
-                }
+                await updateOrRestartLS(projectName, tovName);
             }
         } catch (error) {
             this.logger.error("[TreeServiceManager] Failed to restore view data state due to an error:", error);
@@ -424,6 +417,7 @@ export class TreeServiceManager {
             this.lastClickedItem = null;
             this.lastClickTime = 0;
 
+            await this.handleTovOrCycleSelectionForLS({ selection: [cycleItem] }, this.getProjectManagementProvider());
             await vscode.commands.executeCommand(allExtensionCommands.openCycleFromProjectsView, cycleItem);
         } else {
             this.logger.debug(
@@ -434,7 +428,6 @@ export class TreeServiceManager {
 
             const singleClickEvent = { selection: [cycleItem] };
             const provider = this.getProjectManagementProvider();
-
             await this.handleTovOrCycleSelectionForLS(singleClickEvent, provider);
         }
     }
@@ -628,15 +621,7 @@ export class TreeServiceManager {
                     `[TreeServiceManager] Resolved LS Context: Project='${projectName}', TOV='${tovName}'`
                 );
 
-                if (projectName && tovName) {
-                    const existingClient = getLanguageClientInstance();
-                    if (existingClient && existingClient.state !== State.Stopped) {
-                        await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
-                        await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
-                    } else {
-                        await restartLanguageClient(projectName, tovName);
-                    }
-                }
+                await updateOrRestartLS(projectName, tovName);
             }
         }
     }

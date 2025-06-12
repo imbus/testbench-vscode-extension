@@ -1097,13 +1097,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                                     );
                                     logger.trace(`[Cmd] Persisted active TOV context:`, tovContext);
 
-                                    const existingClient = getLanguageClientInstance();
-                                    if (existingClient && existingClient.state !== State.Stopped) {
-                                        await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
-                                        await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
-                                    } else {
-                                        await restartLanguageClient(projectName, tovName);
-                                    }
+                                    await updateOrRestartLS(projectName, tovName);
                                 }
                             }
                         } else {
@@ -1194,7 +1188,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
             if (!connection) {
                 vscode.window.showErrorMessage("No connection available. Please log in first.");
-                logger.error(`${allExtensionCommands.openCycleFromProjectsView} command called without connection.`);
+                logger.error(`${allExtensionCommands.checkForCycleDoubleClick} command called without connection.`);
                 return;
             }
 
@@ -1205,7 +1199,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
                 await treeServiceManager.detectAndHandleCycleTreeItemDoubleClick(cycleTreeItem);
             } catch (error) {
-                logger.error("[Cmd OpenCycleFromProjectsView] Error during cycle open handling:", error);
+                logger.error("[Cmd checkForCycleDoubleClick] Error during cycle open handling:", error);
                 vscode.window.showErrorMessage(
                     `Error opening cycle: ${error instanceof Error ? error.message : "Unknown error"}`
                 );
@@ -1471,6 +1465,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     logger.info("Extension activated successfully.");
+}
+
+/**
+ * Updates or restarts the language server based on the current state.
+ * @param projectName the name of the project to update or restart the language server for.
+ * @param tovName the name of the TOV to update or restart the language server for.
+ */
+export async function updateOrRestartLS(projectName: string | undefined, tovName: string | undefined): Promise<void> {
+    if (!projectName || !tovName) {
+        logger.error("[Cmd] updateOrRestartLS called with invalid project or TOV name.");
+        vscode.window.showErrorMessage("Invalid project or TOV name provided for language server update.");
+        return;
+    }
+
+    const existingClient = getLanguageClientInstance();
+    logger.debug(
+        `[Cmd] updateOrRestartLS called with projectName: ${projectName}, tovName: ${tovName}, existingClient state: ${existingClient ? existingClient.state : "none"}`
+    );
+    if (existingClient && existingClient.state !== State.Stopped && existingClient.state !== State.Starting) {
+        logger.debug(`[Cmd] Updating language client with project name: ${projectName}, TOV name: ${tovName}`);
+        await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
+        await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
+    } else {
+        await restartLanguageClient(projectName, tovName);
+    }
 }
 
 /**

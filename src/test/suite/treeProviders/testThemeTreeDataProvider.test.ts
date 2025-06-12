@@ -12,8 +12,10 @@ import { ProjectDataService } from "../../../views/projectManagement/projectData
 import { DataForThemeTreeEvent } from "../../../views/projectManagement/projectManagementTreeDataProvider";
 import { TestStructure } from "../../../testBenchTypes";
 import { TreeItemContextValues } from "../../../constants";
+import { TreeViewEmptyState } from "../../../views/common/treeViewStateTypes";
+import { TestThemeTreeItem } from "../../../views/testTheme/testThemeTreeItem";
 
-suite("TestThemeTreeDataProvider Foundational Tests", () => {
+suite("TestThemeTreeDataProvider Tests", () => {
     let testEnv: TestEnvironment;
     let provider: TestThemeTreeDataProvider;
     let mockProjectDataService: sinon.SinonStubbedInstance<ProjectDataService>;
@@ -546,5 +548,238 @@ suite("TestThemeTreeDataProvider Foundational Tests", () => {
 
         // Act
         provider.loadTestThemesDataFromCycleData(mockEventData);
+    });
+
+    test("should refresh children of a custom root without resetting the root itself", async () => {
+        // Arrange: Initial data load
+        const initialTestStructure: TestStructure = {
+            root: { base: { key: "c1", name: "Cycle" } } as any,
+            nodes: [
+                {
+                    base: { key: "t1", parentKey: "c1", name: "Theme 1", uniqueID: "uid-t1" },
+                    elementType: "TestThemeNode"
+                },
+                {
+                    base: { key: "s1", parentKey: "t1", name: "Set 1.1", uniqueID: "uid-s1" },
+                    elementType: "TestCaseSetNode"
+                }
+            ]
+        } as any;
+        provider.loadTestThemesDataFromCycleData({
+            projectKey: "p1",
+            key: "c1",
+            label: "Cycle",
+            rawTestStructure: initialTestStructure,
+            isFromCycle: true
+        });
+        const initialRootItems = await provider.getChildren(undefined);
+        const testTheme1 = initialRootItems[0];
+        provider.makeRoot(testTheme1);
+
+        // Arrange: New data for the refresh
+        const refreshedStructure: TestStructure = {
+            root: { base: { key: "c1", name: "Cycle" } } as any,
+            nodes: [
+                // Theme 1 still exists, but has a new child
+                {
+                    base: { key: "t1", parentKey: "c1", name: "Theme 1", uniqueID: "uid-t1" },
+                    elementType: "TestThemeNode"
+                },
+                {
+                    base: { key: "s2", parentKey: "t1", name: "New Set 1.2", uniqueID: "uid-s2" },
+                    elementType: "TestCaseSetNode"
+                }
+            ]
+        } as any;
+        mockProjectDataService.fetchTestStructureUsingProjectAndCycleKey.resolves(refreshedStructure);
+
+        // Act
+        await provider.refresh(false); // Soft refresh
+        const customRootItems = await provider.getChildren(undefined);
+        const childrenOfRoot = await provider.getChildren(customRootItems[0]);
+
+        // Assert
+        assert.ok(provider.isCustomRootActive(), "Custom root should remain active after a soft refresh");
+        assert.strictEqual(customRootItems.length, 1, "The custom root 'Theme 1' should still be the only root item");
+        assert.strictEqual(childrenOfRoot.length, 1, "The custom root should now have one child");
+        assert.strictEqual(
+            childrenOfRoot[0].label,
+            "New Set 1.2",
+            "The child of the custom root should be the new data"
+        );
+    });
+
+    test("should reset custom root if the root item disappears on refresh", async () => {
+        // Arrange
+        const initialStructure: TestStructure = {
+            root: { base: { key: "c1" } } as any,
+            nodes: [
+                {
+                    base: { key: "t1", parentKey: "c1", name: "Theme To Be Removed", uniqueID: "uid-t1" },
+                    elementType: "TestThemeNode"
+                },
+                {
+                    base: { key: "t2", parentKey: "c1", name: "Remaining Theme", uniqueID: "uid-t2" },
+                    elementType: "TestThemeNode"
+                }
+            ]
+        } as any;
+        provider.loadTestThemesDataFromCycleData({
+            projectKey: "p1",
+            key: "c1",
+            label: "Cycle",
+            rawTestStructure: initialStructure,
+            isFromCycle: true
+        });
+        const initialRootItems = await provider.getChildren(undefined);
+        const themeToRemove = initialRootItems.find((i) => i.label === "Theme To Be Removed")!;
+        provider.makeRoot(themeToRemove);
+        assert.ok(provider.isCustomRootActive(), "Pre-condition: Custom root should be active");
+
+        // Arrange: New data without the custom root item
+        const refreshedStructure: TestStructure = {
+            root: { base: { key: "c1" } } as any,
+            nodes: [
+                {
+                    base: { key: "t2", parentKey: "c1", name: "Remaining Theme", uniqueID: "uid-t2" },
+                    elementType: "TestThemeNode"
+                }
+            ]
+        } as any;
+        mockProjectDataService.fetchTestStructureUsingProjectAndCycleKey.resolves(refreshedStructure);
+
+        // Act
+        await provider.refresh(false); // The provider should detect the missing root and trigger a hard refresh internally
+        const finalRootItems = await provider.getChildren(undefined);
+
+        // Assert
+        assert.strictEqual(provider.isCustomRootActive(), false, "Custom root should be reset when the item is gone");
+        assert.strictEqual(finalRootItems.length, 1, "The tree should now show the full view");
+        assert.strictEqual(finalRootItems[0].label, "Remaining Theme", "The remaining theme should be the new root");
+    });
+
+    test("should reset custom root when loading data for a different cycle", async () => {
+        // Arrange
+        const cycle1Structure: TestStructure = {
+            root: { base: { key: "c1" } } as any,
+            nodes: [
+                {
+                    base: { key: "t1", parentKey: "c1", name: "Theme From Cycle 1", uniqueID: "uid-t1" },
+                    elementType: "TestThemeNode"
+                }
+            ]
+        } as any;
+        provider.loadTestThemesDataFromCycleData({
+            projectKey: "p1",
+            key: "c1",
+            label: "Cycle 1",
+            rawTestStructure: cycle1Structure,
+            isFromCycle: true
+        });
+        const initialItems = await provider.getChildren(undefined);
+        provider.makeRoot(initialItems[0]);
+        assert.ok(provider.isCustomRootActive(), "Pre-condition: Custom root should be active");
+
+        // Act
+        const cycle2Structure: TestStructure = {
+            root: { base: { key: "c2" } } as any,
+            nodes: [
+                {
+                    base: { key: "t2", parentKey: "c2", name: "Theme From Cycle 2", uniqueID: "uid-t2" },
+                    elementType: "TestThemeNode"
+                }
+            ]
+        } as any;
+        provider.loadTestThemesDataFromCycleData({
+            projectKey: "p1",
+            key: "c2",
+            label: "Cycle 2",
+            rawTestStructure: cycle2Structure,
+            isFromCycle: true
+        });
+        const finalItems = await provider.getChildren(undefined);
+
+        // Assert
+        assert.strictEqual(
+            provider.isCustomRootActive(),
+            false,
+            "Custom root should be deactivated when cycle context changes"
+        );
+        assert.strictEqual(
+            provider.getCurrentCycleKey(),
+            "c2",
+            "The provider should now be tracking the new cycle key"
+        );
+        assert.strictEqual(finalItems.length, 1, "The tree should show one item from the new cycle");
+        assert.strictEqual(
+            finalItems[0].label,
+            "Theme From Cycle 2",
+            "The tree should display data from the new cycle"
+        );
+    });
+
+    test("should correctly return the report root UID from the state service", () => {
+        // Arrange
+        const mockItem = {
+            getUniqueId: () => "item_key_1",
+            getUID: () => "item_uid_1"
+        } as TestThemeTreeItem;
+        provider.loadTestThemesDataFromCycleData({
+            projectKey: "p1",
+            key: "c1",
+            label: "C1",
+            rawTestStructure: { nodes: [] } as any,
+            isFromCycle: true
+        });
+        mockMarkedItemStateService.getReportRootUID
+            .withArgs("item_key_1", "item_uid_1", "p1", "c1")
+            .returns("report_root_uid_123");
+
+        // Act
+        const reportRootUID = provider.getReportRootUIDForItem(mockItem);
+
+        // Assert
+        assert.strictEqual(reportRootUID, "report_root_uid_123", "Should return the UID provided by the state service");
+        assert.ok(
+            mockMarkedItemStateService.getReportRootUID.calledOnce,
+            "The state service method should have been called"
+        );
+    });
+
+    test("should enter an error state if refresh fails during data fetch", async () => {
+        // Arrange
+        const initialStructure: TestStructure = {
+            root: { base: { key: "c1" } } as any,
+            nodes: [
+                {
+                    base: { key: "t1", parentKey: "c1", name: "Initial Theme", uniqueID: "uid-t1" },
+                    elementType: "TestThemeNode"
+                }
+            ]
+        } as any;
+        provider.loadTestThemesDataFromCycleData({
+            projectKey: "p1",
+            key: "c1",
+            label: "C1",
+            rawTestStructure: initialStructure,
+            isFromCycle: true
+        });
+
+        mockProjectDataService.fetchTestStructureUsingProjectAndCycleKey.rejects(new Error("Network Error"));
+        const setErrorStub = testEnv.sandbox.spy(provider["unifiedStateManager"], "setError");
+
+        // Act
+        await provider.refresh(false);
+
+        // Assert
+        assert.ok(
+            setErrorStub.calledOnceWith(sinon.match.instanceOf(Error), TreeViewEmptyState.FETCH_ERROR),
+            "Provider should enter an error state on fetch failure"
+        );
+        assert.strictEqual(
+            setErrorStub.firstCall.args[0].message,
+            "Network Error",
+            "The correct error should be propagated"
+        );
     });
 });

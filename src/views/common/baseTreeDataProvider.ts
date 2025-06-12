@@ -496,16 +496,21 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     protected updateTreeItem(treeItems: T[]): void {
         const state = this.unifiedStateManager.getCurrentUnifiedState();
         const customRootItem = state.customRootItem as T;
+        const customRootId = state.isCustomRootActive && customRootItem ? customRootItem.getUniqueId() : null;
 
         // Dispose old tree items before replacing, but preserve custom root if it's in the new items
         this.rootTreeItems.forEach((treeItem) => {
             try {
-                // Don't dispose the custom root if it's being preserved in the new tree items
-                const shouldPreserve =
-                    state.isCustomRootActive &&
-                    customRootItem &&
-                    treeItems.includes(customRootItem) &&
-                    treeItem === customRootItem;
+                // Determine if the current item from the old tree is the custom root
+                const isTheCustomRoot = customRootId ? treeItem.getUniqueId() === customRootId : false;
+
+                // Check if an item with the same ID as the custom root exists in the new data set
+                const newTreeHasRoot = customRootId
+                    ? treeItems.some((newItem) => newItem.getUniqueId() === customRootId)
+                    : false;
+
+                // Preserve the item instance only if it's the custom root and it still exists in the new data
+                const shouldPreserve = isTheCustomRoot && newTreeHasRoot;
 
                 if (treeItem && typeof treeItem.dispose === "function" && !shouldPreserve) {
                     treeItem.dispose();
