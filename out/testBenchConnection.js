@@ -675,7 +675,7 @@ class PlayServerConnection {
             });
             switch (importZipResponse.status) {
                 case 201: {
-                    extension_1.logger.debug("Report imported successfully.");
+                    extension_1.logger.debug("Report imported to TestBench server successfully.");
                     const fileName = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
@@ -732,6 +732,7 @@ class PlayServerConnection {
      */
     async getJobIDOfImportJob(projectKey, cycleKey, importData) {
         const getJobIDOfImportUrl = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+        extension_1.logger.debug(`Requesting job ID for import job with project key ${projectKey} and cycle key ${cycleKey}. API URL: ${getJobIDOfImportUrl}`);
         try {
             const importJobIDResponse = await withRetry(() => this.apiClient.post(getJobIDOfImportUrl, importData, {
                 headers: {
@@ -799,7 +800,7 @@ class PlayServerConnection {
                 }
             }
             else {
-                extension_1.logger.error("Unexpected error during import job ID retrieval:", error);
+                extension_1.logger.error("Unexpected error during import job ID retrieval:", error.message);
             }
             throw error;
         }
@@ -1080,6 +1081,14 @@ async function extractDataFromReport(zipFilePath) {
         const projectFileName = "project.json";
         const cycleStructureJson = await utils.extractAndParseJsonContent(zipContents, cycleStructureFileName);
         const projectJson = await utils.extractAndParseJsonContent(zipContents, projectFileName);
+        extension_1.logger.debug(`Extracted JSONs from report zip file "${zipFilePath}":\n` +
+            `cycle_structure.json:\n ${cycleStructureJson ? JSON.stringify(cycleStructureJson, null, 2) : "Not found or invalid"}\n` +
+            `project.json:\n ${projectJson ? JSON.stringify(projectJson, null, 2) : "Not found or invalid"}`);
+        if (!cycleStructureJson || !projectJson) {
+            extension_1.logger.error(`Failed to extract required JSON files from "${zipFilePath}":\n` +
+                `cycle_structure.json: ${cycleStructureJson ? "OK" : "Missing or invalid"}\n` +
+                `project.json: ${projectJson ? "OK" : "Missing or invalid"}`);
+        }
         const uniqueID = cycleStructureJson?.root?.base?.uniqueID || null;
         const projectKey = projectJson?.key || null;
         const cycleNameOfProject = projectJson?.projectContext?.cycleName || null;

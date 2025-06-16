@@ -48,6 +48,7 @@ exports.getLoginWebViewProvider = getLoginWebViewProvider;
 exports.safeCommandHandler = safeCommandHandler;
 exports.initializeTreeViews = initializeTreeViews;
 exports.activate = activate;
+exports.updateOrRestartLS = updateOrRestartLS;
 exports.deactivate = deactivate;
 // Before releasing the extension:
 // TODO: Add License.md to the extension
@@ -835,14 +836,7 @@ async function registerExtensionCommands(context) {
                                 };
                                 await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, tovContext);
                                 exports.logger.trace(`[Cmd] Persisted active TOV context:`, tovContext);
-                                const existingClient = (0, server_1.getLanguageClientInstance)();
-                                if (existingClient && existingClient.state !== node_1.State.Stopped) {
-                                    await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
-                                    await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
-                                }
-                                else {
-                                    await (0, server_1.restartLanguageClient)(projectName, tovName);
-                                }
+                                await updateOrRestartLS(projectName, tovName);
                             }
                         }
                     }
@@ -911,7 +905,7 @@ async function registerExtensionCommands(context) {
         exports.logger.debug(`Command Called: ${constants_1.allExtensionCommands.checkForCycleDoubleClick} for cycle tree item: ${cycleTreeItem.label}`);
         if (!exports.connection) {
             vscode.window.showErrorMessage("No connection available. Please log in first.");
-            exports.logger.error(`${constants_1.allExtensionCommands.openCycleFromProjectsView} command called without connection.`);
+            exports.logger.error(`${constants_1.allExtensionCommands.checkForCycleDoubleClick} command called without connection.`);
             return;
         }
         try {
@@ -921,7 +915,7 @@ async function registerExtensionCommands(context) {
             await treeServiceManager.detectAndHandleCycleTreeItemDoubleClick(cycleTreeItem);
         }
         catch (error) {
-            exports.logger.error("[Cmd OpenCycleFromProjectsView] Error during cycle open handling:", error);
+            exports.logger.error("[Cmd checkForCycleDoubleClick] Error during cycle open handling:", error);
             vscode.window.showErrorMessage(`Error opening cycle: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
     });
@@ -1125,6 +1119,28 @@ async function activate(context) {
         exports.logger.info("[Extension] Auto-login is disabled. Skipping automatic login command.");
     }
     exports.logger.info("Extension activated successfully.");
+}
+/**
+ * Updates or restarts the language server based on the current state.
+ * @param projectName the name of the project to update or restart the language server for.
+ * @param tovName the name of the TOV to update or restart the language server for.
+ */
+async function updateOrRestartLS(projectName, tovName) {
+    if (!projectName || !tovName) {
+        exports.logger.error("[Cmd] updateOrRestartLS called with invalid project or TOV name.");
+        vscode.window.showErrorMessage("Invalid project or TOV name provided for language server update.");
+        return;
+    }
+    const existingClient = (0, server_1.getLanguageClientInstance)();
+    exports.logger.debug(`[Cmd] updateOrRestartLS called with projectName: ${projectName}, tovName: ${tovName}, existingClient state: ${existingClient ? existingClient.state : "none"}`);
+    if (existingClient && existingClient.state !== node_1.State.Stopped && existingClient.state !== node_1.State.Starting) {
+        exports.logger.debug(`[Cmd] Updating language client with project name: ${projectName}, TOV name: ${tovName}`);
+        await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
+        await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
+    }
+    else {
+        await (0, server_1.restartLanguageClient)(projectName, tovName);
+    }
 }
 /**
  * Called when the extension is deactivated.

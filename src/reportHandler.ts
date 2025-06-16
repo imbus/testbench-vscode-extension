@@ -156,6 +156,8 @@ export async function pollJobStatus(
     let jobStatus: testBenchTypes.JobStatusResponse | null = null;
     let lastProgressIncrement: number = 0;
 
+    logger.debug(`Starting job status polling for jobId: ${jobId}, jobType: ${jobType}`);
+
     // Poll the job status until the job is completed with either success or failure.
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
