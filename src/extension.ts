@@ -69,7 +69,7 @@ export function getLoginWebViewProvider(): loginWebView.LoginWebViewProvider | n
 }
 
 // Centralized tree service manager
-let treeServiceManager: TreeServiceManager;
+export let treeServiceManager: TreeServiceManager;
 
 // Global variable to store the authentication provider instance
 let authProviderInstance: TestBenchAuthenticationProvider | null = null;

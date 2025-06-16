@@ -16,6 +16,7 @@ import { logger } from "./extension";
 import * as utils from "./utils";
 import { JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
 import { ExecutionMode } from "./testBenchTypes";
+import { treeServiceManager } from "./extension";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -1198,41 +1199,62 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
     cycleKey: string | null;
 }> {
     try {
+        logger.debug(`[extractDataFromReport] Starting extraction from file: ${zipFilePath}`);
         const zipData: Buffer = await fs.promises.readFile(path.resolve(zipFilePath));
         const zip: JSZip = new JSZip();
         const zipContents: JSZip = await zip.loadAsync(zipData);
+        logger.debug(`[extractDataFromReport] Successfully loaded zip file contents`);
 
         const cycleStructureFileName: string = "cycle_structure.json";
         const projectFileName: string = "project.json";
 
         const cycleStructureJson = await utils.extractAndParseJsonContent(zipContents, cycleStructureFileName);
         const projectJson = await utils.extractAndParseJsonContent(zipContents, projectFileName);
+
         logger.debug(
-            `Extracted JSONs from report zip file "${zipFilePath}":\n` +
+            `[extractDataFromReport] Extracted JSONs from report zip file "${zipFilePath}":\n` +
                 `cycle_structure.json:\n ${cycleStructureJson ? JSON.stringify(cycleStructureJson, null, 2) : "Not found or invalid"}\n` +
                 `project.json:\n ${projectJson ? JSON.stringify(projectJson, null, 2) : "Not found or invalid"}`
         );
 
-        if (!cycleStructureJson || !projectJson) {
-            logger.error(
-                `Failed to extract required JSON files from "${zipFilePath}":\n` +
-                    `cycle_structure.json: ${cycleStructureJson ? "OK" : "Missing or invalid"}\n` +
-                    `project.json: ${projectJson ? "OK" : "Missing or invalid"}`
-            );
+        let cycleKey: string | null = null;
+        try {
+            const testThemeProvider = treeServiceManager.getTestThemeProvider();
+            cycleKey = testThemeProvider.getCurrentCycleKey();
+            logger.debug(`[extractDataFromReport] Found cycleKey from test theme provider: ${cycleKey}`);
+        } catch (error) {
+            logger.debug(`[extractDataFromReport] Error getting cycleKey from test theme provider: ${error}`);
         }
 
-        const uniqueID: string | null = cycleStructureJson?.root?.base?.uniqueID || null;
-        const projectKey: string | null = projectJson?.key || null;
-        const cycleNameOfProject: string | null = projectJson?.projectContext?.cycleName || null;
-        const cycleKey: string | null = projectJson?.projectContext?.cycleKey || null;
+        const projectKey = projectJson?.key || null;
+        logger.debug(`[extractDataFromReport] Extracted projectKey: ${projectKey}`);
 
-        logger.debug(
-            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`
-        );
-        return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
+        const cycleNameOfProject = projectJson?.projectContext?.cycleName || null;
+        logger.debug(`[extractDataFromReport] Extracted cycleName from project context: ${cycleNameOfProject}`);
+
+        const uniqueID = cycleStructureJson?.root?.base?.uniqueID || null;
+        logger.debug(`[extractDataFromReport] Extracted uniqueID: ${uniqueID}`);
+
+        const result = {
+            uniqueID,
+            projectKey,
+            cycleNameOfProject,
+            cycleKey
+        };
+        logger.debug(`[extractDataFromReport] Final extracted data:`, result);
+
+        return result;
     } catch (error) {
-        logger.error("Error extracting JSON data from zip file:", error);
-        return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
+        logger.error(`[extractDataFromReport] Error extracting data from report: ${error}`);
+        if (error instanceof Error) {
+            logger.error(`[extractDataFromReport] Error stack: ${error.stack}`);
+        }
+        return {
+            uniqueID: null,
+            projectKey: null,
+            cycleNameOfProject: null,
+            cycleKey: null
+        };
     }
 }
 
