@@ -245,11 +245,9 @@ export class TestThemeTreeDataProvider extends BaseTreeDataProvider<TestThemeTre
 
         if (isContextChanging && !hasPendingCustomRootForThisContext) {
             // Context is changing, so reset any existing custom root from a different context
-            if (currentState.isCustomRootActive) {
-                this.logger.info("[TestThemeTreeDataProvider] Context changed, resetting custom root");
-                this.getUnifiedStateManager().resetCustomRoot();
-                this.pendingCustomRootRestore = null;
-            }
+            this.logger.info("[TestThemeTreeDataProvider] Context changed, resetting custom root");
+            this.getUnifiedStateManager().resetCustomRoot();
+            this.pendingCustomRootRestore = null;
         }
 
         // If a custom root is active and we are not changing context, use the non destructive refresh

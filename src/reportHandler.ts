@@ -1378,6 +1378,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
         }
     );
 }
+
 /**
  * Starts robotframework test generation for a cycle tree item.
  *
