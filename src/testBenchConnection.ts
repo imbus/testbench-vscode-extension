@@ -825,48 +825,51 @@ export class PlayServerConnection {
                         logger.debug(`Import initiated successfully. Job ID: ${jobID}`);
                         return jobID;
                     } else {
-                        const importJobIDNotFoundMessage: string =
-                            "Success response received but no jobID found in the response.";
+                        const importJobIDNotFoundMessage: string = `Success response received but no jobID found in the response.`;
                         logger.error(importJobIDNotFoundMessage);
                         throw new Error(importJobIDNotFoundMessage);
                     }
                 }
                 case 400: {
-                    const importBadRequestMessage: string = "Bad Request: The request body is invalid.";
+                    const importBadRequestMessage: string = `Bad Request: The request body is invalid for API call ${getJobIDOfImportUrl}`;
                     logger.error(importBadRequestMessage);
                     throw new Error(importBadRequestMessage);
                 }
                 case 403: {
-                    const importForbiddenMessage: string =
-                        "Forbidden: You do not have permission to import execution results.";
+                    const importForbiddenMessage: string = `Forbidden: You do not have permission to import execution results for API call ${getJobIDOfImportUrl}`;
                     logger.error(importForbiddenMessage);
                     throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const importNotFoundMessage: string = "Not Found: Project or test cycle not found.";
+                    const importNotFoundMessage: string = `Not Found: Project or test cycle not found  for API call ${getJobIDOfImportUrl}`;
                     logger.error(importNotFoundMessage);
                     throw new Error(importNotFoundMessage);
                 }
                 case 422: {
-                    const importUnprocessableEntityMessage: string =
-                        "Unprocessable Entity: The server cannot process the request.";
+                    const importUnprocessableEntityMessage: string = `Unprocessable Entity: The server cannot process the request  for API call ${getJobIDOfImportUrl}`;
                     logger.error(importUnprocessableEntityMessage);
                     throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importJobIDResponse.status} received.`;
+                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importJobIDResponse.status} received for API call ${getJobIDOfImportUrl}`;
                     logger.error(importUnexpectedErrorMessage);
                     throw new Error(importUnexpectedErrorMessage);
                 }
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                logger.error("Axios error during import job ID retrieval:", error.message);
+                logger.error(
+                    `Axios error during import job ID retrieval for API call ${getJobIDOfImportUrl}:`,
+                    error.message
+                );
                 if (error.response) {
-                    logger.error("Error response data:", error.response.data);
+                    logger.error(`Error response data:`, error.response.data);
                 }
             } else {
-                logger.error("Unexpected error during import job ID retrieval:", (error as Error).message);
+                logger.error(
+                    `Unexpected error during import job ID retrieval for API call ${getJobIDOfImportUrl}:`,
+                    (error as Error).message
+                );
             }
             throw error;
         }

@@ -175,7 +175,9 @@ export async function pollJobStatus(
         try {
             jobStatus = await getJobStatus(projectKey, jobId, jobType);
             if (!jobStatus) {
-                logger.error("Job status not received from server.");
+                logger.error(
+                    `Job status not received from server. Project Key: ${projectKey}, Job ID: ${jobId}, Job Type: ${jobType}`
+                );
                 return null;
             }
 
@@ -308,7 +310,7 @@ export async function getJobStatus(
         return null;
     }
     const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
-    logger.debug(`Checking job status at: ${getJobStatusUrl}`);
+    logger.debug(`Checking job status at API endpoint: ${getJobStatusUrl}`);
 
     const apiClient: axios.AxiosInstance = connection.getApiClient();
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
@@ -334,7 +336,7 @@ export async function getJobStatus(
         }
     );
 
-    logger.trace("Job status response:", jobStatusResponse.data);
+    logger.trace(`Job status response for API call: ${getJobStatusUrl}:`, jobStatusResponse.data);
     if (jobStatusResponse.status !== 200) {
         logger.error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
         throw new Error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
@@ -1185,7 +1187,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
 
         const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
         if (!uniqueID) {
-            const extractionErrorMsg: string = "Error extracting unique ID from the zip file.";
+            const extractionErrorMsg: string = "[Import] Error extracting unique ID from the zip file.";
             vscode.window.showErrorMessage(extractionErrorMsg);
             logger.error(extractionErrorMsg);
             return null;
@@ -1199,9 +1201,9 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
 
         if (isNaN(projectKey) || isNaN(cycleKey)) {
             logger.error(
-                `Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`
+                `[Import] Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`
             );
-            vscode.window.showErrorMessage("Internal error: Invalid project or cycle identifier for import.");
+            vscode.window.showErrorMessage("Error: Invalid project or cycle identifier for import.");
             return null;
         }
 
@@ -1226,7 +1228,9 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
         };
 
         try {
-            logger.debug(`Starting import execution results for specific tree item with UID: ${reportRootUID}`);
+            logger.debug(
+                `[Import] Starting import execution results for specific tree item with UID: ${reportRootUID}`
+            );
             const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
                 projectKeyString,
@@ -1242,7 +1246,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             } else if (isImportJobCompletedSuccessfully(importJobStatus)) {
                 vscode.window.showInformationMessage(`Import completed successfully for "${reportRootUID}".`);
             } else {
-                logger.warn("Import job finished polling but status is unknown.", importJobStatus);
+                logger.warn("[Import] Import job finished polling but status is unknown.", importJobStatus);
                 vscode.window.showWarningMessage("Import job status unknown after polling.");
             }
         } catch (error: any) {
@@ -1250,7 +1254,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             return null;
         }
     } catch (error: any) {
-        logger.error("Error importing report for specific tree item:", error.message);
+        logger.error("[Import] Error importing report for specific tree item:", error.message);
         vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
         return null;
     }
