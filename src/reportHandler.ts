@@ -1282,10 +1282,10 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     resolvedTargetProjectKey: string,
     resolvedTargetCycleKey: string,
     resolvedReportRootUID: string
-): Promise<void | null> {
+): Promise<boolean> {
     logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
     logger.trace(`Invoked on item: ${invokedOnItem.label}`);
-    await vscode.window.withProgress(
+    return vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
             title: "Reading Test Results and Creating Report",
@@ -1296,7 +1296,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 if (cancellationToken.isCancellationRequested) {
                     logger.trace("User cancelled the import process at the beginning.");
                     vscode.window.showInformationMessage("Import process cancelled.");
-                    return null;
+                    return false;
                 }
 
                 progress.report({ message: "Step 1/4: Validating parameters...", increment: 10 });
@@ -1312,13 +1312,13 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     );
                     if (reimportPromptChoice !== "Yes, Import Again") {
                         logger.trace("User cancelled consecutive re-import.");
-                        return null;
+                        return false;
                     }
                 }
 
                 if (cancellationToken.isCancellationRequested) {
                     logger.trace("Cancelled after param retrieval.");
-                    return null;
+                    return false;
                 }
 
                 progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });
@@ -1328,7 +1328,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("Failed to create report with results, or process was cancelled. Aborting import.");
-                    return null;
+                    return false;
                 }
 
                 const { createdReportPath } = reportCreationDetails!;
@@ -1348,7 +1348,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 if (cancellationToken.isCancellationRequested) {
                     logger.trace("Cancelled after import to TestBench.");
-                    return null;
+                    return false;
                 }
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
@@ -1366,13 +1366,14 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 }
 
                 logger.trace("Process Completed: Read, Create, and Import specific tree item to Testbench.");
+                return true;
             } catch (error) {
                 const errorMsg: string = `An error occurred during the import process: ${
                     error instanceof Error ? error.message : String(error)
                 }`;
                 logger.error(errorMsg, error);
                 vscode.window.showErrorMessage(errorMsg);
-                return null;
+                return false;
             }
         }
     );
