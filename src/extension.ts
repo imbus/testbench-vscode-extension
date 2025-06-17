@@ -135,26 +135,32 @@ function registerSafeCommand(
  * Utility functions for tree view visibility management
  */
 async function hideProjectManagementTreeView(): Promise<void> {
+    logger.debug("[View Visibility] Hiding Project Management Tree View");
     await vscode.commands.executeCommand(`${projectManagementTreeViewID}.removeView`);
 }
 
 async function displayProjectManagementTreeView(): Promise<void> {
+    logger.debug("[View Visibility] Displaying Project Management Tree View");
     await vscode.commands.executeCommand(`${projectManagementTreeViewID}.focus`);
 }
 
 async function hideTestThemeTreeView(): Promise<void> {
+    logger.debug("[View Visibility] Hiding Test Theme Tree View");
     await vscode.commands.executeCommand(`${testThemeTreeViewID}.removeView`);
 }
 
 async function displayTestThemeTreeView(): Promise<void> {
+    logger.debug("[View Visibility] Displaying Test Theme Tree View");
     await vscode.commands.executeCommand(`${testThemeTreeViewID}.focus`);
 }
 
 async function hideTestElementsTreeView(): Promise<void> {
+    logger.debug("[View Visibility] Hiding Test Elements Tree View");
     await vscode.commands.executeCommand(`${testElementsTreeViewID}.removeView`);
 }
 
 async function displayTestElementsTreeView(): Promise<void> {
+    logger.debug("[View Visibility] Displaying Test Elements Tree View");
     await vscode.commands.executeCommand(`${testElementsTreeViewID}.focus`);
 }
 
@@ -347,9 +353,25 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 await treeServiceManager.handleCycleSelection(cycleItem);
 
                 // Hide Projects view, show Test Theme and Test Elements views
-                await hideProjectManagementTreeView();
-                await displayTestThemeTreeView();
-                await displayTestElementsTreeView();
+                try {
+                    await displayTestThemeTreeView();
+                    await displayTestElementsTreeView();
+                    await hideProjectManagementTreeView();
+                } catch (viewError) {
+                    logger.error("[Cmd CycleClick] Error managing view visibility:", viewError);
+                    try {
+                        await displayTestThemeTreeView();
+                        await displayTestElementsTreeView();
+                    } catch (recoveryError) {
+                        logger.error("[Cmd CycleClick] Failed to recover view visibility:", recoveryError);
+                    }
+                    throw new Error(
+                        `Failed to manage view visibility: ${viewError instanceof Error ? viewError.message : "Unknown error"}`
+                    );
+                }
+
+                // Explicitly trigger saving of visible views after all display/hide commands.
+                treeServiceManager.debouncedSaveVisibleViews();
             } catch (error) {
                 logger.error("[Cmd CycleClick] Error during cycle click handling:", error);
 
@@ -1067,10 +1089,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                         if (areTestElementsFetched) {
                             await treeServiceManager.openTovAndInitTestThemes(tovItem);
                             treeServiceManager.getTestThemeProvider().isTestThemeOpenedFromACycle = false;
-                            await hideProjectManagementTreeView();
                             await displayTestThemeTreeView();
                             await displayTestElementsTreeView();
+                            await hideProjectManagementTreeView();
                             testElementsTreeView.title = `Test Elements (${tovLabel})`;
+                            // Explicitly trigger saving of visible views after all display/hide commands.
+                            treeServiceManager.debouncedSaveVisibleViews();
 
                             // Restart language client for the selected project/TOV
                             const projectAndTovNameObj =
@@ -1149,9 +1173,25 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 }
 
                 // Hide Projects view, show Test Theme and Test Elements views
-                await hideProjectManagementTreeView();
-                await displayTestThemeTreeView();
-                await displayTestElementsTreeView();
+                try {
+                    await displayTestThemeTreeView();
+                    await displayTestElementsTreeView();
+                    await hideProjectManagementTreeView();
+                } catch (viewError) {
+                    logger.error("[Cmd OpenCycleFromProjectsView] Error managing view visibility:", viewError);
+                    try {
+                        await displayTestThemeTreeView();
+                        await displayTestElementsTreeView();
+                    } catch (recoveryError) {
+                        logger.error(
+                            "[Cmd OpenCycleFromProjectsView] Failed to recover view visibility:",
+                            recoveryError
+                        );
+                    }
+                    throw new Error(
+                        `Failed to manage view visibility: ${viewError instanceof Error ? viewError.message : "Unknown error"}`
+                    );
+                }
 
                 await treeServiceManager.handleCycleSelection(cycleTreeItem);
             } catch (error) {
@@ -1222,10 +1262,16 @@ async function handleTestBenchSessionChange(
     let sessionToProcess = existingSession;
     if (!sessionToProcess) {
         try {
+            logger.debug(
+                "[handleTestBenchSessionChange] No existing session provided, attempting to get current session"
+            );
             sessionToProcess = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
                 createIfNone: false,
                 silent: true
             });
+            logger.debug(
+                `[handleTestBenchSessionChange] Retrieved current session: ${sessionToProcess ? "exists" : "none"}`
+            );
         } catch (error) {
             logger.warn("[Extension] Error getting current session during handleTestBenchSessionChange:", error);
             sessionToProcess = undefined;
@@ -1233,6 +1279,7 @@ async function handleTestBenchSessionChange(
     }
 
     const wasPreviouslyConnected = !!connection;
+    logger.debug(`[handleTestBenchSessionChange] Was previously connected: ${wasPreviouslyConnected}`);
 
     if (sessionToProcess && sessionToProcess.accessToken) {
         const activeConnection = await connectionManager.getActiveConnection(context);
@@ -1290,7 +1337,6 @@ async function handleTestBenchSessionChange(
                     logger.debug("[Extension] Restoring data and view state after login.");
 
                     await treeServiceManager.restoreDataState();
-
                     treeServiceManager.restoreVisibleViewsState();
                 } catch (error) {
                     logger.warn("[Extension] Error managing trees during session change:", error);

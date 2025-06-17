@@ -75,7 +75,7 @@ export class TreeServiceManager {
 
     // State change listeners for coordination
     private readonly stateChangeListeners = new Map<string, (notification: StateChangeNotification) => void>();
-    private readonly debouncedSaveVisibleViews: () => void;
+    public readonly debouncedSaveVisibleViews: () => void;
 
     constructor(dependencies: TreeServiceDependencies) {
         this.extensionContext = dependencies.extensionContext;
@@ -768,8 +768,8 @@ export class TreeServiceManager {
             if (tovKey && typeof tovLabel === "string") {
                 testElementsTreeView.title = `Test Elements (${tovLabel})`;
                 try {
-                    const fetchTestElementsResult = await testElementsProvider.fetchTestElements(tovKey, tovLabel);
-                    if (!fetchTestElementsResult) {
+                    const isTestElementFetchSuccessful = await testElementsProvider.fetchTestElements(tovKey, tovLabel);
+                    if (!isTestElementFetchSuccessful) {
                         this.logger.warn(`[TreeServiceManager] Failed to fetch test elements for TOV: ${tovKey}`);
                     }
                 } catch (error) {
@@ -787,9 +787,7 @@ export class TreeServiceManager {
             testThemeProvider.isTestThemeOpenedFromACycle = true;
             await projectProvider.initTestThemeTreeAfterCycleClick(cycleItem);
 
-            this.logger.info(
-                `[TreeServiceManager] Cycle selection handled for: ${cycleItem.label} with unified state management`
-            );
+            this.logger.info(`[TreeServiceManager] Cycle selection handled for: ${cycleItem.label}.`);
         } catch (error) {
             this.logger.error("[TreeServiceManager] Error handling cycle selection:", error);
             throw error;

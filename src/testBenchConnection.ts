@@ -914,6 +914,9 @@ export class PlayServerConnection {
         }
 
         try {
+            logger.debug(
+                `[PlayServerConnection] Sending keep-alive request to ${this.serverName} for user ${this.username}`
+            );
             await withRetry(
                 () =>
                     this.apiClient.get(`/login/session/v1`, {
@@ -922,10 +925,15 @@ export class PlayServerConnection {
                 5, // maxRetries
                 2000 // delayMs
             );
-            logger.trace("Keep-alive request sent.");
+            logger.trace("[PlayServerConnection] Keep-alive request successful.");
         } catch (error) {
-            logger.error("Keep-alive request failed after retries:", error);
-            logger.warn("Logging out the user after keep-alive failure.");
+            logger.error("[PlayServerConnection] Keep-alive request failed after retries:", error);
+            if (axios.isAxiosError(error)) {
+                logger.error(
+                    `[PlayServerConnection] Keep-alive error details - Status: ${error.response?.status}, Message: ${error.message}`
+                );
+            }
+            logger.warn("[PlayServerConnection] Logging out the user after keep-alive failure.");
             await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
         }
     }
