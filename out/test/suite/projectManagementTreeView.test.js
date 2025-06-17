@@ -580,5 +580,109 @@ suite("ProjectManagementTreeDataProvider Tests", () => {
             assert.ok(savedStateCall.calledOnce, "The invalid custom root state should be cleared from storage");
         });
     });
+    suite("State Management and Transitions", () => {
+        test("should transition through loading states correctly", async () => {
+            // Arrange
+            const stateManager = provider["unifiedStateManager"];
+            const stateSpy = testEnv.sandbox.spy(stateManager, "updateState");
+            const mockProjects = [(0, mockDataFactory_1.createMockProject)({ key: "proj_state" })];
+            mockProjectDataService.getProjectsList.resolves(mockProjects);
+            // Act
+            await provider.getChildren(undefined);
+            // Assert
+            // Verify loading state was set
+            assert.ok(stateSpy.calledWith(sinon.match({ operationalState: treeViewStateTypes_1.TreeViewOperationalState.LOADING })), "Should set loading state");
+            // Verify final state after data is loaded
+            const finalState = stateManager.getCurrentUnifiedState();
+            assert.strictEqual(finalState.operationalState, treeViewStateTypes_1.TreeViewOperationalState.READY, "Should end in READY state");
+            assert.strictEqual(finalState.itemsAfterFiltering, 1, "Should have one item after filtering");
+        });
+        test("should maintain state after soft refreshes", async () => {
+            // Arrange
+            const projectItem = new projectManagementTreeItem_1.ProjectManagementTreeItem("Test Project", constants_1.TreeItemContextValues.PROJECT, vscode.TreeItemCollapsibleState.Collapsed, (0, mockDataFactory_1.createMockProject)({ key: "proj_state" }), testEnv.mockContext, testEnv.logger, testEnv.iconService, null);
+            provider.makeRoot(projectItem);
+            // Act
+            provider.refresh(false);
+            const stateBefore = provider["unifiedStateManager"].getCurrentUnifiedState();
+            await provider.getChildren(undefined);
+            const stateAfter = provider["unifiedStateManager"].getCurrentUnifiedState();
+            // Assert
+            assert.strictEqual(stateBefore.isCustomRootActive, stateAfter.isCustomRootActive);
+            assert.strictEqual(stateBefore.customRootItem?.getUniqueId(), stateAfter.customRootItem?.getUniqueId());
+        });
+    });
+    suite("Operation Management", () => {
+        test("should cancel pending operations when new operation starts", async () => {
+            // Arrange
+            const cancelSpy = testEnv.sandbox.spy(provider["operationManager"], "cancelOperation");
+            mockProjectDataService.getProjectsList.resolves([]);
+            // Act
+            provider.refresh();
+            await provider.getChildren(undefined);
+            // Assert
+            assert.ok(cancelSpy.called, "Should have cancelled pending operations");
+        });
+        test("should handle concurrent operations correctly", async () => {
+            // Arrange
+            const projectItem = new projectManagementTreeItem_1.ProjectManagementTreeItem("Test Project", constants_1.TreeItemContextValues.PROJECT, vscode.TreeItemCollapsibleState.Collapsed, (0, mockDataFactory_1.createMockProject)({ key: "proj_concurrent" }), testEnv.mockContext, testEnv.logger, testEnv.iconService, null);
+            // Act
+            const [children1, children2] = await Promise.all([
+                provider.getChildren(projectItem),
+                provider.getChildren(projectItem)
+            ]);
+            // Assert
+            assert.strictEqual(children1.length, children2.length, "Concurrent operations should return consistent results");
+        });
+    });
+    suite("Event Handling", () => {
+        test("should handle event cancellation gracefully", async () => {
+            // Arrange
+            const cycleItem = new projectManagementTreeItem_1.ProjectManagementTreeItem("Test Cycle", constants_1.TreeItemContextValues.CYCLE, vscode.TreeItemCollapsibleState.None, (0, mockDataFactory_1.createMockTreeNode)({ key: "cycle_cancel" }), testEnv.mockContext, testEnv.logger, testEnv.iconService, null);
+            const eventSpy = testEnv.sandbox.spy();
+            provider.onDidPrepareDataForTestThemeTree(eventSpy);
+            // Act
+            const operation = provider["operationManager"].createOperation("handleCycleClick", "Test operation");
+            operation.cancel();
+            await provider.initTestThemeTreeAfterCycleClick(cycleItem);
+            // Assert
+            assert.ok(!eventSpy.called, "Event should not be emitted when operation is cancelled");
+        });
+    });
+    suite("Data Service Integration", () => {
+        test("should handle retry behavior for failed requests", async () => {
+            const projectKey = "proj_retry";
+            const error = new Error("Network error");
+            mockProjectDataService.getProjectTree.rejects(error);
+            const projectItem = new projectManagementTreeItem_1.ProjectManagementTreeItem("Test Project", constants_1.TreeItemContextValues.PROJECT, vscode.TreeItemCollapsibleState.Collapsed, (0, mockDataFactory_1.createMockProject)({ key: projectKey }), testEnv.mockContext, testEnv.logger, testEnv.iconService, null);
+            // Act
+            const children = await provider.getChildren(projectItem);
+            // Assert
+            assert.strictEqual(children.length, 0, "Should return empty array on error");
+            assert.ok(mockProjectDataService.getProjectTree.calledOnce, "Should not retry failed request as retry behavior is not implemented");
+        });
+    });
+    suite("Tree Item Creation and Validation", () => {
+        test("should validate tree item data before creation", () => {
+            // Arrange
+            const invalidData = { name: "Invalid Item" }; // Missing key
+            // Act
+            const item = provider["createTestThemeTreeItemFromData"](invalidData, null);
+            // Assert
+            assert.strictEqual(item, null, "Should return null for invalid data");
+            assert.ok(testEnv.logger.warn.calledWith(sinon.match(/Invalid data for tree item/)), "Should log warning for invalid data");
+        });
+        test("should handle tree items with custom (not defined in the context) context values", () => {
+            // Arrange
+            const customData = (0, mockDataFactory_1.createMockTreeNode)({
+                key: "custom_node",
+                nodeType: "CustomType"
+            });
+            // Act
+            const item = provider["createTestThemeTreeItemFromData"](customData, null);
+            // Assert
+            assert.notStrictEqual(item, null, "Should create item with custom context");
+            assert.strictEqual(item?.contextValue, "CustomType", "Should use custom context value");
+        });
+    });
 });
 //# sourceMappingURL=projectManagementTreeView.test.js.map

@@ -721,7 +721,7 @@ export abstract class BaseTreeDataProvider<T extends BaseTreeItem>
     /**
      * Get the unified state manager for advanced state operations
      */
-    protected getUnifiedStateManager(): UnifiedTreeStateManager<T> {
+    public getUnifiedStateManager(): UnifiedTreeStateManager<T> {
         return this.unifiedStateManager;
     }
 

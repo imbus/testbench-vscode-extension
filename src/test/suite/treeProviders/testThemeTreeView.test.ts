@@ -5,6 +5,7 @@
 
 import * as assert from "assert";
 import * as sinon from "sinon";
+import * as vscode from "vscode";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { TestThemeTreeDataProvider } from "../../../views/testTheme/testThemeTreeDataProvider";
 import { TestThemeTreeItem } from "../../../views/testTheme/testThemeTreeItem";
@@ -232,5 +233,279 @@ suite("TestThemeTreeDataProvider Tests", () => {
         // 3. Verify the spy to confirm the internal method was called correctly.
         assert.ok(updateContextSpy.calledWith(true), "updateContextForMarking should have been called with 'true'");
         assert.ok(updateContextSpy.calledWith(false), "updateContextForMarking should have been called with 'false'");
+    });
+
+    test("should build correct tooltip content for tree items", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: {
+                        key: "theme_1",
+                        parentKey: "cycle_1",
+                        name: "Test Theme",
+                        uniqueID: "uid-theme-1",
+                        numbering: "1.2.3"
+                    },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM,
+                    exec: { status: "Active" }
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        const tooltip = rootItems[0].tooltip;
+
+        // Assert
+        assert.ok(tooltip, "Tooltip should be defined");
+        const tooltipStr = tooltip.toString();
+        assert.ok(tooltipStr.includes("Numbering: 1.2.3"), "Tooltip should include numbering");
+        assert.ok(
+            tooltipStr.includes(`Type: ${TreeItemContextValues.TEST_THEME_TREE_ITEM}`),
+            "Tooltip should include correct type"
+        );
+        assert.ok(tooltipStr.includes("Name: Test Theme"), "Tooltip should include name");
+        assert.ok(tooltipStr.includes("ID: uid-theme-1"), "Tooltip should include UID");
+    });
+
+    test("should generate correct hierarchical path for nested items", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: { key: "theme_1", parentKey: "cycle_1", name: "Parent Test Theme", uniqueID: "uid-theme-1" },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM
+                },
+                {
+                    base: { key: "set_1", parentKey: "theme_1", name: "Child Test Case Set", uniqueID: "uid-set-1" },
+                    elementType: TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        const childItems = await provider.getChildren(rootItems[0]);
+        const path = childItems[0].getHierarchicalPath();
+
+        // Assert
+        assert.strictEqual(
+            path,
+            "Parent Test Theme > Child Test Case Set",
+            "Should generate correct hierarchical path"
+        );
+    });
+
+    test("should correctly identify items that can generate tests", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: { key: "theme_1", parentKey: "cycle_1", name: "Theme", uniqueID: "uid-theme-1" },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM
+                },
+                {
+                    base: { key: "set_1", parentKey: "theme_1", name: "Set", uniqueID: "uid-set-1" },
+                    elementType: TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
+                },
+                {
+                    base: { key: "case_1", parentKey: "set_1", name: "Case", uniqueID: "uid-case-1" },
+                    elementType: TreeItemContextValues.TEST_CASE_TREE_ITEM
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        const childItems = await provider.getChildren(rootItems[0]);
+
+        // Assert
+        assert.ok(rootItems[0].canGenerateTests(), "Theme should be able to generate tests");
+        assert.ok(childItems[0].canGenerateTests(), "Set should be able to generate tests");
+    });
+
+    test("should collect all descendant UIDs correctly", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: { key: "theme_1", parentKey: "cycle_1", name: "Theme", uniqueID: "uid-theme-1" },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM
+                },
+                {
+                    base: { key: "set_1", parentKey: "theme_1", name: "Set", uniqueID: "uid-set-1" },
+                    elementType: TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
+                },
+                {
+                    base: { key: "set_2", parentKey: "theme_1", name: "Set 2", uniqueID: "uid-set-2" },
+                    elementType: TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        const descendantUIDs = rootItems[0].getDescendantUIDs();
+
+        // Assert
+        assert.strictEqual(descendantUIDs.length, 2, "Should collect all descendant UIDs");
+        assert.ok(descendantUIDs.includes("uid-set-1"), "Should include first set UID");
+        assert.ok(descendantUIDs.includes("uid-set-2"), "Should include second set UID");
+    });
+
+    test("should collect descendant keys with UIDs correctly", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: { key: "theme_1", parentKey: "cycle_1", name: "Theme", uniqueID: "uid-theme-1" },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM
+                },
+                {
+                    base: { key: "set_1", parentKey: "theme_1", name: "Set", uniqueID: "uid-set-1" },
+                    elementType: TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        const keysWithUIDs = rootItems[0].getDescendantKeysWithUIDs();
+
+        // Assert
+        assert.strictEqual(keysWithUIDs.length, 1, "Should collect all descendant key-UID pairs");
+        assert.deepStrictEqual(keysWithUIDs[0], ["set_1", "uid-set-1"], "Should include correct key-UID pair");
+    });
+
+    test("should handle operation cancellation during refresh", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: []
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        mockProjectDataService.fetchTestStructureUsingProjectAndCycleKey.rejects(new vscode.CancellationError());
+
+        // Act
+        await provider.refresh();
+        const rootItems = await provider.getChildren(undefined);
+
+        // Assert
+        assert.strictEqual(rootItems.length, 0, "Should return empty array after cancellation");
+    });
+
+    test("should validate custom root context correctly", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: { key: "theme_1", parentKey: "cycle_1", name: "Theme 1", uniqueID: "uid-theme-1" },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        provider.makeRoot(rootItems[0]);
+
+        // Change context
+        const newEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_2", // Different project
+            key: "cycle_2", // Different cycle
+            label: "New Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        provider.loadTestThemesDataFromCycleData(newEventData);
+        const newRootItems = await provider.getChildren(undefined);
+
+        // Assert
+        assert.strictEqual(newRootItems.length, 1, "Should show new root item");
+        assert.strictEqual(newRootItems[0].label, "Theme 1", "Should show theme item");
+        assert.ok(!provider.isCustomRootActive(), "Custom root should be inactive after context change");
     });
 });

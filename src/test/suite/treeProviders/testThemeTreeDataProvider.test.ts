@@ -14,6 +14,8 @@ import { TestStructure } from "../../../testBenchTypes";
 import { TreeItemContextValues } from "../../../constants";
 import { TreeViewEmptyState } from "../../../views/common/treeViewStateTypes";
 import { TestThemeTreeItem } from "../../../views/testTheme/testThemeTreeItem";
+import * as vscode from "vscode";
+import { TreeViewOperationalState } from "../../../views/common/treeViewStateTypes";
 
 suite("TestThemeTreeDataProvider Tests", () => {
     let testEnv: TestEnvironment;
@@ -612,6 +614,194 @@ suite("TestThemeTreeDataProvider Tests", () => {
             setErrorStub.firstCall.args[0].message,
             "Network Error",
             "The correct error should be propagated"
+        );
+    });
+
+    test("should handle expansion state correctly", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: { key: "theme_1", parentKey: "cycle_1", name: "Theme 1", uniqueID: "uid-theme-1" },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM
+                },
+                {
+                    base: { key: "set_1", parentKey: "theme_1", name: "Set 1", uniqueID: "uid-set-1" },
+                    elementType: TreeItemContextValues.TEST_CASE_SET_TREE_ITEM
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        const themeItem = rootItems[0];
+
+        // Get children directly to test expansion
+        const expandedItems = await provider.getChildren(themeItem);
+
+        // Assert
+        assert.strictEqual(expandedItems.length, 1, "Should show child items");
+        assert.strictEqual(expandedItems[0].label, "Set 1", "Should show correct child item");
+        assert.strictEqual(
+            themeItem.collapsibleState,
+            vscode.TreeItemCollapsibleState.Collapsed,
+            "Theme item should be collapsible"
+        );
+    });
+
+    test("should restore custom root after context change", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: { key: "theme_1", parentKey: "cycle_1", name: "Theme 1", uniqueID: "uid-theme-1" },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        provider.makeRoot(rootItems[0]);
+
+        // Change context but keep same project/cycle
+        const newEventData: DataForThemeTreeEvent = {
+            ...mockEventData,
+            label: "Updated Cycle"
+        };
+
+        provider.loadTestThemesDataFromCycleData(newEventData);
+        const newRootItems = await provider.getChildren(undefined);
+
+        // Assert
+        assert.strictEqual(newRootItems.length, 1, "Should maintain custom root");
+        assert.strictEqual(newRootItems[0].label, "Theme 1", "Should maintain same root item");
+        assert.ok(provider.isCustomRootActive(), "Custom root should remain active");
+    });
+
+    test("should handle operation cancellation during data fetch", async () => {
+        // Arrange
+        // Setup the service to reject with CancellationError
+        mockProjectDataService.fetchTestStructureUsingProjectAndCycleKey.rejects(new vscode.CancellationError());
+
+        // Act
+        await provider.refresh();
+        const rootItems = await provider.getChildren(undefined);
+
+        // Assert
+        assert.strictEqual(rootItems.length, 0, "Should return empty array after cancellation");
+    });
+
+    test("should handle state change notifications", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: []
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        const stateChangeSpy = testEnv.sandbox.spy(provider["unifiedStateManager"], "updateState");
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+
+        // Assert
+        assert.ok(stateChangeSpy.called, "Should update state when loading data");
+        assert.ok(
+            stateChangeSpy.calledWith(
+                sinon.match({
+                    dataSourceKey: "cycle_1",
+                    dataSourceLabel: "Root Cycle",
+                    operationalState: TreeViewOperationalState.LOADING
+                })
+            ),
+            "Should set correct loading state"
+        );
+    });
+
+    test("should properly dispose tree items when clearing", async () => {
+        // Arrange
+        const mockCycleStructure: TestStructure = {
+            root: { base: { key: "cycle_1", name: "Root Cycle", uniqueID: "uid-cycle-1" } } as any,
+            nodes: [
+                {
+                    base: { key: "theme_1", parentKey: "cycle_1", name: "Theme 1", uniqueID: "uid-theme-1" },
+                    elementType: TreeItemContextValues.TEST_THEME_TREE_ITEM
+                }
+            ]
+        } as any;
+
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: mockCycleStructure,
+            isFromCycle: true
+        };
+
+        mockMarkedItemStateService.getItemImportState.returns({ shouldShow: false });
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+        const rootItems = await provider.getChildren(undefined);
+        const disposeStub = testEnv.sandbox.stub(rootItems[0], "dispose");
+        provider.clearTree();
+
+        // Assert
+        assert.ok(disposeStub.called, "Should dispose tree items when clearing");
+    });
+
+    test("should handle error states correctly", async () => {
+        // Arrange
+        const mockEventData: DataForThemeTreeEvent = {
+            projectKey: "proj_1",
+            key: "cycle_1",
+            label: "Root Cycle",
+            rawTestStructure: null as any, // Invalid json test structure
+            isFromCycle: true
+        };
+
+        const setErrorStub = testEnv.sandbox.spy(provider["unifiedStateManager"], "setError");
+
+        // Act
+        provider.loadTestThemesDataFromCycleData(mockEventData);
+
+        // Assert
+        assert.ok(setErrorStub.called, "Should set error state");
+        assert.ok(
+            setErrorStub.calledWith(sinon.match.instanceOf(Error), TreeViewEmptyState.PROCESSING_ERROR),
+            "Should set correct error state"
         );
     });
 });
