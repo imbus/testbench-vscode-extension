@@ -107,7 +107,9 @@ export const StorageKeys = {
     CUSTOM_ROOT_PROJECT_TREE: "testbenchExtension.customRoot.projectTree",
     CUSTOM_ROOT_TEST_THEME_TREE: "testbenchExtension.customRoot.testThemeTree",
     CUSTOM_ROOT_TEST_ELEMENTS_TREE: "testbenchExtension.customRoot.testElementsTree",
-    IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY: "testbenchExtension.isTestThemeOpenedFromCycleStorageKey"
+    IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY: "testbenchExtension.isTestThemeOpenedFromCycleStorageKey",
+    // First-time user tracking
+    HAS_USED_EXTENSION_BEFORE: "testbenchExtension.hasUsedExtensionBefore"
 } as const;
 
 // --- Tree Item Context Values ---
@@ -173,5 +175,6 @@ export const allExtensionCommands = {
     getFilters: `${baseKeyOfExtension}.getFilters`,
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
     clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`,
-    checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`
+    checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`,
+    clearAllExtensionData: `${baseKeyOfExtension}.clearAllExtensionData`
 };

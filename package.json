@@ -448,6 +448,15 @@
             {
                 "command": "testbenchExtension.checkForCycleDoubleClick",
                 "title": "Handle Cycle Click"
+            },
+            {
+                "command": "testbenchExtension.clearAllExtensionData",
+                "title": "TestBench: Clear All Extension Data",
+                "category": "TestBench",
+                "icon": {
+                    "light": "resources/icons/clearInternalTestbenchFolder-light.svg",
+                    "dark": "resources/icons/clearInternalTestbenchFolder-dark.svg"
+                }
             }
         ],
         "views": {

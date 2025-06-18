@@ -263,6 +263,19 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     logger.info(
                         `[Cmd] Auto-login successful for connection: ${activeConnection.label} (session restored/created silently).`
                     );
+
+                    const hasUsedExtensionBefore = context.workspaceState.get<boolean>(
+                        StorageKeys.HAS_USED_EXTENSION_BEFORE,
+                        false
+                    );
+
+                    if (!hasUsedExtensionBefore) {
+                        logger.info(
+                            "[Cmd] First-time user detected during auto-login. Showing only projects view and marking extension as used."
+                        );
+                        await context.workspaceState.update(StorageKeys.HAS_USED_EXTENSION_BEFORE, true);
+                        await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
+                    }
                 } else {
                     logger.info(
                         "[Cmd] Auto-login: No session restored/created silently. User may need to login manually."
@@ -293,6 +306,22 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 try {
                     const projectProvider = treeServiceManager.getProjectManagementProvider();
                     projectProvider.refresh(true);
+
+                    // Check if this is the first time the user is using the extension
+                    const hasUsedExtensionBefore = context.workspaceState.get<boolean>(
+                        StorageKeys.HAS_USED_EXTENSION_BEFORE,
+                        false
+                    );
+
+                    if (!hasUsedExtensionBefore) {
+                        logger.info(
+                            "[Cmd] First-time user detected. Showing only projects view and marking extension as used."
+                        );
+                        // Mark that the user has now used the extension
+                        await context.workspaceState.update(StorageKeys.HAS_USED_EXTENSION_BEFORE, true);
+                        // Show only the projects view for first-time users
+                        await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
+                    }
                 } catch (error) {
                     logger.warn("[Cmd] Error refreshing project provider after login:", error);
                 }
@@ -766,6 +795,187 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             [testBenchLogger.folderNameOfLogs], // Exclude log files from deletion
             !getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR) // Ask for confirmation if not set to clear before test generation
         );
+    });
+
+    // --- Command: Clear All Extension Data ---
+    registerSafeCommand(context, allExtensionCommands.clearAllExtensionData, async () => {
+        logger.debug(`Command Called: ${allExtensionCommands.clearAllExtensionData}`);
+
+        const confirmation = await vscode.window.showWarningMessage(
+            "This will clear ALL TestBench extension data including:\n\n" +
+                "• All saved connections and passwords\n" +
+                "• Current login session\n" +
+                "• Tree view states and custom roots\n" +
+                "• Test generation history\n" +
+                "• Import tracking data\n" +
+                "• All persistent settings\n\n" +
+                "This action cannot be undone. Are you sure you want to continue?",
+            { modal: true },
+            "Clear All Data",
+            "Cancel"
+        );
+
+        if (confirmation !== "Clear All Data") {
+            logger.info("[Cmd] User cancelled clear all extension data operation.");
+            return;
+        }
+
+        try {
+            logger.info("[Cmd] Starting comprehensive extension data cleanup...");
+
+            // Logout user and clear connection
+            if (connection) {
+                logger.debug("[Cmd] Logging out from server...");
+                try {
+                    await connection.logoutUserOnServer();
+                } catch (error) {
+                    logger.warn("[Cmd] Error logging out from server:", error);
+                }
+                setConnection(null);
+            }
+
+            // Clear all VS Code authentication sessions
+            try {
+                logger.debug("[Cmd] Clearing VS Code authentication sessions...");
+                const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, [], {
+                    createIfNone: false,
+                    silent: true
+                });
+                if (session && authProviderInstance) {
+                    await authProviderInstance.removeSession(session.id);
+                }
+            } catch (error) {
+                logger.warn("[Cmd] Error clearing authentication session:", error);
+            }
+
+            // Clear all workspace state storage except for HAS_USED_EXTENSION_BEFORE.
+            // NOTE: If a new storage key is added to extension, it should be added to the list of keys to clear.
+            logger.debug("[Cmd] Clearing workspace state storage...");
+            const workspaceStateKeys = [
+                StorageKeys.LAST_GENERATED_PARAMS,
+                StorageKeys.MARKED_TEST_GENERATION_ITEM,
+                StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY,
+                StorageKeys.VISIBLE_VIEWS_STORAGE_KEY,
+                StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY,
+                StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY,
+                StorageKeys.CUSTOM_ROOT_PROJECT_TREE,
+                StorageKeys.CUSTOM_ROOT_TEST_THEME_TREE,
+                StorageKeys.CUSTOM_ROOT_TEST_ELEMENTS_TREE,
+                StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY,
+                StorageKeys.HAS_USED_EXTENSION_BEFORE,
+                `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`
+            ];
+
+            for (const key of workspaceStateKeys) {
+                try {
+                    await context.workspaceState.update(key, undefined);
+                } catch (error) {
+                    logger.warn(`[Cmd] Error clearing workspace state key ${key}:`, error);
+                }
+            }
+
+            // Clear all global state storage (connections, active connection)
+            logger.debug("[Cmd] Clearing global state storage...");
+            const globalStateKeys = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
+
+            for (const key of globalStateKeys) {
+                try {
+                    await context.globalState.update(key, undefined);
+                } catch (error) {
+                    logger.warn(`[Cmd] Error clearing global state key ${key}:`, error);
+                }
+            }
+
+            // Clear all connection passwords from secret storage
+            logger.debug("[Cmd] Clearing connection passwords from secret storage...");
+            try {
+                const connections = await connectionManager.getConnections(context);
+                for (const conn of connections) {
+                    try {
+                        await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + conn.id);
+                        logger.trace(`[Cmd] Cleared password for connection: ${conn.label}`);
+                    } catch (error) {
+                        logger.warn(`[Cmd] Error clearing password for connection ${conn.label}:`, error);
+                    }
+                }
+            } catch (error) {
+                logger.warn("[Cmd] Error clearing connection passwords:", error);
+            }
+
+            // Clear tree data and state
+            if (treeServiceManager) {
+                logger.debug("[Cmd] Clearing tree data and state...");
+                try {
+                    await treeServiceManager.clearAllTreesData();
+                } catch (error) {
+                    logger.warn("[Cmd] Error clearing tree data:", error);
+                }
+            }
+
+            // Update UI state by updating context keys
+            logger.debug("[Cmd] Updating UI state...");
+            const contextUpdates = [
+                ["setContext", ContextKeys.CONNECTION_ACTIVE, false],
+                ["setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false],
+                ["setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false],
+                ["setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false]
+            ];
+
+            for (const [command, key, value] of contextUpdates) {
+                try {
+                    await vscode.commands.executeCommand(command as string, key, value);
+                } catch (error) {
+                    logger.warn(`[Cmd] Error updating context ${key}:`, error);
+                }
+            }
+
+            // Update login webview to reflect the new clean state
+            logger.debug("[Cmd] Updating login webview...");
+            try {
+                getLoginWebViewProvider()?.updateWebviewHTMLContent();
+            } catch (error) {
+                logger.warn("[Cmd] Error updating login webview:", error);
+            }
+
+            // Stop language client if running
+            if (client) {
+                logger.debug("[Cmd] Stopping language client...");
+                try {
+                    await stopLanguageClient(true);
+                } catch (error) {
+                    logger.warn("[Cmd] Error stopping language client:", error);
+                }
+            }
+
+            // Clear internal testbench folder
+            logger.debug("[Cmd] Clearing internal testbench folder...");
+            try {
+                const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
+                if (workspaceLocation) {
+                    const testbenchWorkingDirectoryPath: string = path.join(
+                        workspaceLocation,
+                        folderNameOfInternalTestbenchFolder
+                    );
+                    await utils.clearInternalTestbenchFolder(
+                        testbenchWorkingDirectoryPath,
+                        [testBenchLogger.folderNameOfLogs], // Exclude logs folder
+                        false
+                    );
+                }
+            } catch (error) {
+                logger.warn("[Cmd] Error clearing internal testbench folder:", error);
+            }
+
+            logger.info("[Cmd] All extension data cleared successfully.");
+            vscode.window.showInformationMessage(
+                "All TestBench extension data has been cleared successfully. You will need to log in again to use the extension."
+            );
+        } catch (error) {
+            logger.error("[Cmd] Error during clear all extension data operation:", error);
+            vscode.window.showErrorMessage(
+                `Error clearing extension data: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
     });
 
     // --- Command: Refresh Test Elements Tree ---
@@ -1334,10 +1544,25 @@ async function handleTestBenchSessionChange(
                     testThemeProvider.clearTree();
                     testElementsProvider.clearTree();
 
-                    logger.debug("[Extension] Restoring data and view state after login.");
+                    // Check if this is the first time the user is using the extension
+                    const hasUsedExtensionBefore = context.workspaceState.get<boolean>(
+                        StorageKeys.HAS_USED_EXTENSION_BEFORE,
+                        false
+                    );
 
-                    await treeServiceManager.restoreDataState();
-                    treeServiceManager.restoreVisibleViewsState();
+                    if (hasUsedExtensionBefore) {
+                        logger.debug(
+                            "[Extension] User has used extension before. Restoring data and view state after login."
+                        );
+                        await treeServiceManager.restoreDataState();
+                        treeServiceManager.restoreVisibleViewsState();
+                    } else {
+                        logger.info(
+                            "[Extension] First-time user detected. Showing only projects view and marking extension as used."
+                        );
+                        await context.workspaceState.update(StorageKeys.HAS_USED_EXTENSION_BEFORE, true);
+                        await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
+                    }
                 } catch (error) {
                     logger.warn("[Extension] Error managing trees during session change:", error);
                     await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
@@ -1352,9 +1577,23 @@ async function handleTestBenchSessionChange(
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
 
-            logger.debug("[Extension] Restoring data and view state after session change.");
-            await treeServiceManager.restoreDataState();
-            treeServiceManager.restoreVisibleViewsState();
+            // Check if this is the first time the user is using the extension
+            const hasUsedExtensionBefore = context.workspaceState.get<boolean>(
+                StorageKeys.HAS_USED_EXTENSION_BEFORE,
+                false
+            );
+
+            if (hasUsedExtensionBefore) {
+                logger.debug(
+                    "[Extension] User has used extension before. Restoring data and view state after session change."
+                );
+                await treeServiceManager.restoreDataState();
+                treeServiceManager.restoreVisibleViewsState();
+            } else {
+                logger.info("[Extension] First-time user detected. Marking extension as used.");
+                // Mark that the user has now used the extension
+                await context.workspaceState.update(StorageKeys.HAS_USED_EXTENSION_BEFORE, true);
+            }
 
             try {
                 await treeServiceManager.clearAllTreesData();

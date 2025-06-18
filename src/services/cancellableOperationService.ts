@@ -92,6 +92,7 @@ export class CancellableOperation implements vscode.Disposable {
             });
         });
     }
+
     /**
      * Disposes of the operation and its resources
      */
