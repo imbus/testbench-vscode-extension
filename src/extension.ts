@@ -848,7 +848,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 logger.warn("[Cmd] Error clearing authentication session:", error);
             }
 
-            // Clear all workspace state storage except for HAS_USED_EXTENSION_BEFORE.
             // NOTE: If a new storage key is added to extension, it should be added to the list of keys to clear.
             logger.debug("[Cmd] Clearing workspace state storage...");
             const workspaceStateKeys = [
