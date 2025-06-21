@@ -4,15 +4,15 @@
  */
 
 import * as assert from "assert";
-import { 
-    TreeViewConfig, 
-    CustomRootConfig, 
-    MarkingConfig, 
-    PersistenceConfig, 
-    FilterConfig, 
-    FilterDefinition, 
-    IconConfig, 
-    ExpansionConfig 
+import {
+    TreeViewConfig,
+    CustomRootConfig,
+    MarkingConfig,
+    PersistenceConfig,
+    FilterConfig,
+    FilterDefinition,
+    IconConfig,
+    ExpansionConfig
 } from "../../../treeViews/core/TreeViewConfig";
 
 suite("TreeViewConfig", () => {
@@ -64,7 +64,7 @@ suite("TreeViewConfig", () => {
                     },
                     icons: {
                         theme: "default",
-                        customMappings: { "custom": "icon.svg" },
+                        customMappings: { custom: "icon.svg" },
                         showStatusIcons: true,
                         animateLoading: false
                     },
@@ -353,9 +353,9 @@ suite("TreeViewConfig", () => {
             const config: IconConfig = {
                 theme: "custom",
                 customMappings: {
-                    "project": "project-icon.svg",
-                    "cycle": "cycle-icon.svg",
-                    "test": "test-icon.svg"
+                    project: "project-icon.svg",
+                    cycle: "cycle-icon.svg",
+                    test: "test-icon.svg"
                 },
                 showStatusIcons: false,
                 animateLoading: false
@@ -363,9 +363,9 @@ suite("TreeViewConfig", () => {
 
             assert.strictEqual(config.theme, "custom");
             assert.deepStrictEqual(config.customMappings, {
-                "project": "project-icon.svg",
-                "cycle": "cycle-icon.svg",
-                "test": "test-icon.svg"
+                project: "project-icon.svg",
+                cycle: "cycle-icon.svg",
+                test: "test-icon.svg"
             });
             assert.strictEqual(config.showStatusIcons, false);
             assert.strictEqual(config.animateLoading, false);
@@ -417,8 +417,8 @@ suite("TreeViewConfig", () => {
     suite("Configuration Validation", () => {
         test("should validate refresh strategy values", () => {
             const validStrategies: Array<"full" | "incremental" | "smart"> = ["full", "incremental", "smart"];
-            
-            validStrategies.forEach(strategy => {
+
+            validStrategies.forEach((strategy) => {
                 const config: TreeViewConfig = {
                     id: "test",
                     title: "Test",
@@ -453,8 +453,8 @@ suite("TreeViewConfig", () => {
 
         test("should validate error handling values", () => {
             const validErrorHandling: Array<"silent" | "notify" | "throw"> = ["silent", "notify", "throw"];
-            
-            validErrorHandling.forEach(errorHandling => {
+
+            validErrorHandling.forEach((errorHandling) => {
                 const config: TreeViewConfig = {
                     id: "test",
                     title: "Test",
@@ -488,9 +488,14 @@ suite("TreeViewConfig", () => {
         });
 
         test("should validate icon theme values", () => {
-            const validThemes: Array<"default" | "minimal" | "colorful" | "custom"> = ["default", "minimal", "colorful", "custom"];
-            
-            validThemes.forEach(theme => {
+            const validThemes: Array<"default" | "minimal" | "colorful" | "custom"> = [
+                "default",
+                "minimal",
+                "colorful",
+                "custom"
+            ];
+
+            validThemes.forEach((theme) => {
                 const config: IconConfig = {
                     theme: theme,
                     showStatusIcons: true,
@@ -503,8 +508,8 @@ suite("TreeViewConfig", () => {
 
         test("should validate persistence strategy values", () => {
             const validStrategies: Array<"workspace" | "global" | "none"> = ["workspace", "global", "none"];
-            
-            validStrategies.forEach(strategy => {
+
+            validStrategies.forEach((strategy) => {
                 const config: PersistenceConfig = {
                     strategy: strategy,
                     autoSave: true,
@@ -518,4 +523,4 @@ suite("TreeViewConfig", () => {
             });
         });
     });
-}); 
+});

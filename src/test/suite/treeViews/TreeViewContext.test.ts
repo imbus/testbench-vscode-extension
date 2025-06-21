@@ -221,18 +221,18 @@ suite("TreeViewContext", function () {
 
         test("should refresh tree view", () => {
             const refreshSpy = testEnv.sandbox.spy(mockTreeView, "refresh");
-            
+
             treeViewContext.refresh();
-            
+
             assert.ok(refreshSpy.calledOnce);
             assert.ok(refreshSpy.calledWith(undefined, undefined));
         });
 
         test("should refresh tree view with immediate option", () => {
             const refreshSpy = testEnv.sandbox.spy(mockTreeView, "refresh");
-            
+
             treeViewContext.refresh({ immediate: true });
-            
+
             assert.ok(refreshSpy.calledOnce);
             assert.ok(refreshSpy.calledWith(undefined, { immediate: true }));
         });
@@ -277,31 +277,31 @@ suite("TreeViewContext", function () {
     suite("Context State Management", () => {
         test("should provide access to state manager methods", () => {
             const stateManager = treeViewContext.stateManager;
-            
+
             // Test state access
             const state = stateManager.getState();
             assert.ok(state);
             assert.strictEqual(typeof state.loading, "boolean");
             assert.strictEqual(typeof state.error, "object");
             assert.strictEqual(typeof state.initialized, "boolean");
-            
+
             // Test state updates
             stateManager.setLoading(true);
             assert.strictEqual(stateManager.isLoading(), true);
-            
+
             stateManager.setLoading(false);
             assert.strictEqual(stateManager.isLoading(), false);
         });
 
         test("should handle state changes", () => {
             const stateManager = treeViewContext.stateManager;
-            
+
             // Test error handling
             const testError = new Error("Test error");
             stateManager.setError(testError);
             assert.strictEqual(stateManager.hasError(), true);
             assert.strictEqual(stateManager.getError(), testError);
-            
+
             // Test error clearing
             stateManager.setError(null);
             assert.strictEqual(stateManager.hasError(), false);
@@ -313,14 +313,14 @@ suite("TreeViewContext", function () {
         test("should emit events through event bus", async () => {
             const eventSpy = testEnv.sandbox.spy();
             treeViewContext.eventBus.on("test:event", eventSpy);
-            
+
             await treeViewContext.eventBus.emit({
                 type: "test:event",
                 source: "test",
                 data: { message: "test" },
                 timestamp: Date.now()
             });
-            
+
             assert.ok(eventSpy.calledOnce);
             const event = eventSpy.firstCall.args[0];
             assert.strictEqual(event.type, "test:event");
@@ -331,10 +331,10 @@ suite("TreeViewContext", function () {
         test("should handle event subscriptions", () => {
             const eventSpy = testEnv.sandbox.spy();
             const subscription = treeViewContext.eventBus.on("test:event", eventSpy);
-            
+
             assert.ok(subscription);
             assert.strictEqual(typeof subscription.unsubscribe, "function");
-            
+
             subscription.unsubscribe();
             // Event bus should no longer have handlers for this event
             assert.strictEqual(treeViewContext.eventBus.getHandlerCount("test:event"), 0);
@@ -344,21 +344,21 @@ suite("TreeViewContext", function () {
     suite("Context Error Handling", () => {
         test("should provide error handler access", () => {
             const errorHandler = treeViewContext.errorHandler;
-            
+
             // Test error handling with a simple error
             const testError = new Error("Test error");
             const result = errorHandler.handle(testError, "Test operation", "default value");
-            
+
             assert.strictEqual(result, "default value");
         });
 
         test("should handle void operations", () => {
             const errorHandler = treeViewContext.errorHandler;
-            
+
             // Test void error handling
             const testError = new Error("Test error");
             errorHandler.handleVoid(testError, "Test operation");
-            
+
             // Should not throw, just log the error
             assert.ok(true);
         });
@@ -367,22 +367,22 @@ suite("TreeViewContext", function () {
     suite("Context Logging", () => {
         test("should provide logger access", () => {
             const logger = treeViewContext.logger;
-            
+
             // Test logging methods
             logger.info("Test info message");
             logger.debug("Test debug message");
             logger.warn("Test warning message");
             logger.error("Test error message");
-            
+
             // Should not throw
             assert.ok(true);
         });
 
         test("should log through context logger", () => {
             const loggerSpy = testEnv.sandbox.spy(treeViewContext.logger, "info");
-            
+
             treeViewContext.logger.info("Test message");
-            
+
             assert.ok(loggerSpy.calledOnce);
             assert.ok(loggerSpy.calledWith("Test message"));
         });
@@ -391,7 +391,7 @@ suite("TreeViewContext", function () {
     suite("Context Tree View Integration", () => {
         test("should provide access to tree view methods", () => {
             const treeView = treeViewContext.getTreeView();
-            
+
             // Test tree view methods
             assert.strictEqual(typeof treeView.refresh, "function");
             assert.strictEqual(typeof treeView.clearTree, "function");
@@ -400,15 +400,15 @@ suite("TreeViewContext", function () {
 
         test("should refresh tree view through context", () => {
             const refreshSpy = testEnv.sandbox.spy(mockTreeView, "refresh");
-            
+
             treeViewContext.refresh();
-            
+
             assert.ok(refreshSpy.calledOnce);
         });
 
         test("should get current root items through context", () => {
             const rootItems = treeViewContext.getCurrentRootItems();
-            
+
             assert.ok(Array.isArray(rootItems));
             // Initially empty
             assert.strictEqual(rootItems.length, 0);
@@ -420,7 +420,7 @@ suite("TreeViewContext", function () {
             const originalConfig = treeViewContext.config;
             const originalStateManager = treeViewContext.stateManager;
             const originalEventBus = treeViewContext.eventBus;
-            
+
             // These should remain the same references
             assert.strictEqual(treeViewContext.config, originalConfig);
             assert.strictEqual(treeViewContext.stateManager, originalStateManager);
@@ -430,8 +430,8 @@ suite("TreeViewContext", function () {
         test("should maintain consistent references", () => {
             const context1 = treeViewContext.getTreeView();
             const context2 = treeViewContext.getTreeView();
-            
+
             assert.strictEqual(context1, context2);
         });
     });
-}); 
+});

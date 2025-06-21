@@ -248,9 +248,7 @@ export abstract class TreeItemBase extends vscode.TreeItem {
         }
 
         const hasDotSeparator = this.contextValue.includes(".");
-        this.contextValue = hasDotSeparator
-            ? `${suffix}${this.contextValue}`
-            : `${this.contextValue}.${suffix}`;
+        this.contextValue = hasDotSeparator ? `${suffix}${this.contextValue}` : `${this.contextValue}.${suffix}`;
     }
 
     /**
@@ -263,7 +261,7 @@ export abstract class TreeItemBase extends vscode.TreeItem {
         }
 
         const contextParts = this.contextValue.split(".");
-        const filteredParts = contextParts.filter(part => part !== suffix);
+        const filteredParts = contextParts.filter((part) => part !== suffix);
         this.contextValue = filteredParts.join(".");
     }
 
@@ -291,7 +289,7 @@ export abstract class TreeItemBase extends vscode.TreeItem {
                 child.dispose();
             }
         }
-    
+
         this._children = [];
         this._parent = null;
         this._metadata.clear();

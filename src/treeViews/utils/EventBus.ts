@@ -191,7 +191,7 @@ export class EventBus implements vscode.Disposable {
      * Get the number of handlers for an event type
      * @param eventType The type of event to get the handler count for
      * @return The number of handlers for the event type
-    */
+     */
     public getHandlerCount(eventType?: string): number {
         if (eventType) {
             const handlers = this.handlers.get(eventType);

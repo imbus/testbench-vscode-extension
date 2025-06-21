@@ -125,7 +125,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     public async importTestResultsForTestThemeTreeItem(item: TestThemesTreeItem): Promise<void> {
         // Prevent import functionality when opened from a TOV
         if (!this.isOpenedFromCycle) {
-            const errorMessage = "Import functionality is not available when viewing test themes from a TOV. Please open from a cycle to use import features.";
+            const errorMessage =
+                "Import functionality is not available when viewing test themes from a TOV. Please open from a cycle to use import features.";
             vscode.window.showErrorMessage(errorMessage);
             this.logger.warn(errorMessage);
             return;
@@ -597,9 +598,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     );
                 }
             } else if (testGenerationSuccessful && !this.isOpenedFromCycle) {
-                this.logger.debug(
-                    `Test generation successful but not marking for import: opened from TOV context`
-                );
+                this.logger.debug(`Test generation successful but not marking for import: opened from TOV context`);
             }
         } catch (error) {
             this.logger.error("Error generating test cases:", error);
@@ -750,7 +749,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         // Prevent import marking when opened from a TOV
         if (!this.isOpenedFromCycle) {
             this.logger.warn("Cannot mark item for import: Test themes tree was opened from a TOV, not a cycle");
-            vscode.window.showWarningMessage("Import functionality is not available when viewing test themes from a TOV. Please open from a cycle to use import features.");
+            vscode.window.showWarningMessage(
+                "Import functionality is not available when viewing test themes from a TOV. Please open from a cycle to use import features."
+            );
             return;
         }
 

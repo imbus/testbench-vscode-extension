@@ -33,7 +33,7 @@ export interface TreeViewConfig {
     behavior: {
         refreshStrategy: "full" | "incremental" | "smart";
         errorHandling: "silent" | "notify" | "throw";
-        // Optional maximum time limit for data loading operations in tree views to prevent tree views 
+        // Optional maximum time limit for data loading operations in tree views to prevent tree views
         // from hanging indefinitely when data fetching operations take too long.
         // If not set, operations will wait indefinitely.
         loadingTimeout?: number;

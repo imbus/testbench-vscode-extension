@@ -63,7 +63,7 @@ export class TestElementsDataProvider {
 
     /**
      * Fetches, builds, and filters the test element hierarchy for a TOV
-     * 
+     *
      * @param tovKey The Test Object Version key
      * @return Promise resolving to hierarchical array of root TestElementData items
      * @throws Error when no connection is available
@@ -117,15 +117,15 @@ export class TestElementsDataProvider {
 
     /**
      * Transforms flat test element data into a hierarchical structure with filtering.
-     * 
+     *
      * Performs these transformations:
      * 1. Converts raw JSON elements to TestElementData objects
      * 2. Establishes parent-child relationships
      * 3. Filters elements based on regex patterns and hierarchy rules
      * 4. Assigns hierarchical names to all elements
-     * 5. Detects and warns about nested resource files 
+     * 5. Detects and warns about nested resource files
      *   (A resorce file cannot contain another resource file, but in TestBench client, its possible to create such a structure)
-     * 
+     *
      * @param flatJsonTestElements - Array of raw test element data from the server
      * @returns Array of root TestElementData objects forming the filtered hierarchy
      */

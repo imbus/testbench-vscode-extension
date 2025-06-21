@@ -65,9 +65,9 @@ class TestModule implements TreeViewModule {
     public async initialize(context: TreeViewContext): Promise<void> {
         this.context = context;
         this._initialized = true;
-        
+
         // Simulate async initialization
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
     public dispose(): void {
@@ -178,7 +178,7 @@ suite("TreeViewModule", function () {
     suite("TreeViewModule Interface", () => {
         test("should implement required interface properties", () => {
             const module: TreeViewModule = new TestModule();
-            
+
             assert.strictEqual(typeof module.id, "string");
             assert.strictEqual(typeof module.initialize, "function");
             assert.strictEqual(typeof module.dispose, "function");
@@ -187,7 +187,7 @@ suite("TreeViewModule", function () {
         test("should have unique module ID", () => {
             const module1 = new TestModule("module-1");
             const module2 = new TestModule("module-2");
-            
+
             assert.strictEqual(module1.id, "module-1");
             assert.strictEqual(module2.id, "module-2");
             assert.notStrictEqual(module1.id, module2.id);
@@ -195,7 +195,7 @@ suite("TreeViewModule", function () {
 
         test("should support optional lifecycle hooks", () => {
             const module = new TestModule();
-            
+
             // These are optional, so they might be undefined
             assert.ok(module.onConfigChange === undefined || typeof module.onConfigChange === "function");
             assert.ok(module.onStateChange === undefined || typeof module.onStateChange === "function");
@@ -203,7 +203,7 @@ suite("TreeViewModule", function () {
 
         test("should support custom properties and methods", () => {
             const module = new TestModule();
-            
+
             // Test custom method
             module.customMethod();
             assert.strictEqual(module.customMethodCalled, true);
@@ -213,20 +213,20 @@ suite("TreeViewModule", function () {
     suite("Module Initialization", () => {
         test("should initialize module with context", async () => {
             const module = new TestModule();
-            
+
             assert.strictEqual(module.initialized, false);
-            
+
             await module.initialize(treeViewContext);
-            
+
             assert.strictEqual(module.initialized, true);
             assert.strictEqual(module.moduleContext, treeViewContext);
         });
 
         test("should provide access to context properties during initialization", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
-            
+
             const context = module.moduleContext!;
             assert.strictEqual(context.extensionContext, mockContext);
             assert.strictEqual(context.config, config);
@@ -239,9 +239,9 @@ suite("TreeViewModule", function () {
         test("should handle async initialization", async () => {
             const module = new TestModule();
             const startTime = Date.now();
-            
+
             await module.initialize(treeViewContext);
-            
+
             const endTime = Date.now();
             assert.ok(endTime - startTime >= 10, "Should have waited at least 10ms");
             assert.strictEqual(module.initialized, true);
@@ -249,12 +249,12 @@ suite("TreeViewModule", function () {
 
         test("should throw error during initialization if needed", async () => {
             const failingModule = new TestModule("failing-module");
-            
+
             // Override initialize to throw an error
             failingModule.initialize = async () => {
                 throw new Error("Initialization failed");
             };
-            
+
             try {
                 await failingModule.initialize(treeViewContext);
                 assert.fail("Should have thrown an error");
@@ -268,34 +268,34 @@ suite("TreeViewModule", function () {
     suite("Module Disposal", () => {
         test("should dispose module correctly", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
             assert.strictEqual(module.initialized, true);
             assert.strictEqual(module.disposed, false);
-            
+
             module.dispose();
-            
+
             assert.strictEqual(module.disposed, true);
             assert.strictEqual(module.moduleContext, undefined);
         });
 
         test("should handle disposal of uninitialized module", () => {
             const module = new TestModule();
-            
+
             assert.strictEqual(module.initialized, false);
             assert.strictEqual(module.disposed, false);
-            
+
             module.dispose();
-            
+
             assert.strictEqual(module.disposed, true);
         });
 
         test("should clear context reference on disposal", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
             assert.strictEqual(module.moduleContext, treeViewContext);
-            
+
             module.dispose();
             assert.strictEqual(module.moduleContext, undefined);
         });
@@ -304,10 +304,10 @@ suite("TreeViewModule", function () {
     suite("Optional Lifecycle Hooks", () => {
         test("should call onConfigChange when implemented", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
             assert.strictEqual(module.onConfigChangeCalled, false);
-            
+
             if (module.onConfigChange) {
                 await module.onConfigChange(config);
                 assert.strictEqual(module.onConfigChangeCalled, true);
@@ -316,10 +316,10 @@ suite("TreeViewModule", function () {
 
         test("should call onStateChange when implemented", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
             assert.strictEqual(module.onStateChangeCalled, false);
-            
+
             if (module.onStateChange) {
                 module.onStateChange({});
                 assert.strictEqual(module.onStateChangeCalled, true);
@@ -329,12 +329,10 @@ suite("TreeViewModule", function () {
         test("should handle modules without optional hooks", () => {
             const moduleWithoutHooks: TreeViewModule = {
                 id: "no-hooks-module",
-                async initialize(context: TreeViewContext): Promise<void> {
-                },
-                dispose(): void {
-                }
+                async initialize(context: TreeViewContext): Promise<void> {},
+                dispose(): void {}
             };
-            
+
             assert.strictEqual(moduleWithoutHooks.onConfigChange, undefined);
             assert.strictEqual(moduleWithoutHooks.onStateChange, undefined);
         });
@@ -343,9 +341,9 @@ suite("TreeViewModule", function () {
     suite("Module Context Access", () => {
         test("should access extension context through module context", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
-            
+
             const context = module.moduleContext!;
             assert.strictEqual(context.extensionContext, mockContext);
             assert.strictEqual(typeof context.extensionContext.subscriptions, "object");
@@ -353,9 +351,9 @@ suite("TreeViewModule", function () {
 
         test("should access configuration through module context", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
-            
+
             const context = module.moduleContext!;
             assert.strictEqual(context.config.id, "test-tree");
             assert.strictEqual(context.config.title, "Test Tree View");
@@ -363,9 +361,9 @@ suite("TreeViewModule", function () {
 
         test("should access state manager through module context", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
-            
+
             const context = module.moduleContext!;
             const stateManager = context.stateManager;
             assert.ok(stateManager instanceof StateManager);
@@ -374,9 +372,9 @@ suite("TreeViewModule", function () {
 
         test("should access event bus through module context", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
-            
+
             const context = module.moduleContext!;
             const eventBus = context.eventBus;
             assert.ok(eventBus instanceof EventBus);
@@ -385,9 +383,9 @@ suite("TreeViewModule", function () {
 
         test("should access logger through module context", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
-            
+
             const context = module.moduleContext!;
             const logger = context.logger;
             assert.ok(logger instanceof TestBenchLogger);
@@ -396,9 +394,9 @@ suite("TreeViewModule", function () {
 
         test("should access error handler through module context", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
-            
+
             const context = module.moduleContext!;
             const errorHandler = context.errorHandler;
             assert.ok(errorHandler instanceof ErrorHandler);
@@ -409,29 +407,29 @@ suite("TreeViewModule", function () {
     suite("Module Custom Functionality", () => {
         test("should support custom methods", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
-            
+
             module.customMethod();
             assert.strictEqual(module.customMethodCalled, true);
         });
 
         test("should support custom properties", () => {
             const module = new TestModule();
-            
+
             // Add custom property
             (module as any).customProperty = "custom value";
-            
+
             assert.strictEqual((module as any).customProperty, "custom value");
         });
 
         test("should support dynamic property access", () => {
             const module = new TestModule();
-            
+
             // Test dynamic property access
             const propertyName = "dynamicProperty";
             (module as any)[propertyName] = "dynamic value";
-            
+
             assert.strictEqual((module as any)[propertyName], "dynamic value");
         });
     });
@@ -439,12 +437,12 @@ suite("TreeViewModule", function () {
     suite("Module Error Handling", () => {
         test("should handle initialization errors gracefully", async () => {
             const errorModule = new TestModule("error-module");
-            
+
             // Override initialize to throw an error
             errorModule.initialize = async () => {
                 throw new Error("Module initialization failed");
             };
-            
+
             try {
                 await errorModule.initialize(treeViewContext);
                 assert.fail("Should have thrown an error");
@@ -456,12 +454,12 @@ suite("TreeViewModule", function () {
 
         test("should handle disposal errors gracefully", () => {
             const errorModule = new TestModule("error-module");
-            
+
             // Override dispose to throw an error
             errorModule.dispose = () => {
                 throw new Error("Module disposal failed");
             };
-            
+
             try {
                 errorModule.dispose();
                 assert.fail("Should have thrown an error");
@@ -475,9 +473,9 @@ suite("TreeViewModule", function () {
     suite("Module State Management", () => {
         test("should track initialization state", () => {
             const module = new TestModule();
-            
+
             assert.strictEqual(module.initialized, false);
-            
+
             // Simulate initialization
             (module as any)._initialized = true;
             assert.strictEqual(module.initialized, true);
@@ -485,9 +483,9 @@ suite("TreeViewModule", function () {
 
         test("should track disposal state", () => {
             const module = new TestModule();
-            
+
             assert.strictEqual(module.disposed, false);
-            
+
             // Simulate disposal
             (module as any)._disposed = true;
             assert.strictEqual(module.disposed, true);
@@ -495,13 +493,13 @@ suite("TreeViewModule", function () {
 
         test("should prevent operations on disposed module", async () => {
             const module = new TestModule();
-            
+
             await module.initialize(treeViewContext);
             module.dispose();
-            
+
             // Module should be disposed
             assert.strictEqual(module.disposed, true);
             assert.strictEqual(module.moduleContext, undefined);
         });
     });
-}); 
+});

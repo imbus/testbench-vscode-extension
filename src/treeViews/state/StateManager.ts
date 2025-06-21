@@ -319,12 +319,20 @@ export class StateManager {
      * @return True if the values are deeply equal
      */
     private deepEqual(a: any, b: any): boolean {
-        if (a === b) {return true;}
-        if (a === null || b === null) {return false;}
-        if (typeof a !== typeof b) {return false;}
+        if (a === b) {
+            return true;
+        }
+        if (a === null || b === null) {
+            return false;
+        }
+        if (typeof a !== typeof b) {
+            return false;
+        }
 
         if (a instanceof Map && b instanceof Map) {
-            if (a.size !== b.size) {return false;}
+            if (a.size !== b.size) {
+                return false;
+            }
             for (const [key, value] of a) {
                 if (!b.has(key) || !this.deepEqual(value, b.get(key))) {
                     return false;
@@ -334,17 +342,25 @@ export class StateManager {
         }
 
         if (a instanceof Set && b instanceof Set) {
-            if (a.size !== b.size) {return false;}
+            if (a.size !== b.size) {
+                return false;
+            }
             for (const value of a) {
-                if (!b.has(value)) {return false;}
+                if (!b.has(value)) {
+                    return false;
+                }
             }
             return true;
         }
 
         if (Array.isArray(a) && Array.isArray(b)) {
-            if (a.length !== b.length) {return false;}
+            if (a.length !== b.length) {
+                return false;
+            }
             for (let i = 0; i < a.length; i++) {
-                if (!this.deepEqual(a[i], b[i])) {return false;}
+                if (!this.deepEqual(a[i], b[i])) {
+                    return false;
+                }
             }
             return true;
         }
@@ -352,7 +368,9 @@ export class StateManager {
         if (typeof a === "object" && typeof b === "object") {
             const keysA = Object.keys(a);
             const keysB = Object.keys(b);
-            if (keysA.length !== keysB.length) {return false;}
+            if (keysA.length !== keysB.length) {
+                return false;
+            }
             for (const key of keysA) {
                 if (!keysB.includes(key) || !this.deepEqual(a[key], b[key])) {
                     return false;

@@ -29,14 +29,14 @@ export class ProjectsTreeItem extends TreeItemBase {
 
         this.data = data;
         this.id = this.generateUniqueId();
-        
+
         // Set metadata from data.metadata into internal _metadata map
         if (data.metadata) {
             Object.entries(data.metadata).forEach(([key, value]) => {
                 this.setMetadata(key, value);
             });
         }
-        
+
         this.tooltip = this.generateTooltip();
 
         // Set context and command based on type

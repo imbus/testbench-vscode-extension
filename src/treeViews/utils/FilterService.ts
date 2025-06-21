@@ -50,18 +50,18 @@ export class FilterService {
      */
     public updateFocusHistory(treeView: TreeViewBase<TreeItemBase>): void {
         this.lastFocusedTreeView = treeView;
-        
+
         // Remove the tree view from history if it's already there
-        this.treeViewFocusHistory = this.treeViewFocusHistory.filter(tv => tv !== treeView);
-        
+        this.treeViewFocusHistory = this.treeViewFocusHistory.filter((tv) => tv !== treeView);
+
         // Add to the beginning of history
         this.treeViewFocusHistory.unshift(treeView);
-        
+
         // Keep only the last 5 focused tree views
         if (this.treeViewFocusHistory.length > 5) {
             this.treeViewFocusHistory = this.treeViewFocusHistory.slice(0, 5);
         }
-        
+
         console.log(`[FilterService] Focus history updated: ${this.getTreeViewName(treeView)}`);
     }
 
@@ -82,7 +82,7 @@ export class FilterService {
                 return treeView;
             }
         }
-        
+
         // If no tree view in history has data, fall back to priority-based detection
         return this.autoDetectActiveTreeView(allTreeViews);
     }
@@ -95,12 +95,12 @@ export class FilterService {
     private getTreeViewName(treeView: TreeViewBase<TreeItemBase>): string {
         const configId = treeView.config.id;
         switch (configId) {
-            case 'testbench.projects':
-                return 'Projects';
-            case 'testbench.testThemes':
-                return 'Test Themes';
-            case 'testbench.testElements':
-                return 'Test Elements';
+            case "testbench.projects":
+                return "Projects";
+            case "testbench.testThemes":
+                return "Test Themes";
+            case "testbench.testElements":
+                return "Test Elements";
             default:
                 return configId;
         }
@@ -118,24 +118,30 @@ export class FilterService {
     }): TreeViewBase<TreeItemBase> | null {
         // Use a priority-based approach to determine the active tree view
         // Priority: Test Themes > Test Elements > Projects
-        
+
         // Check if test themes tree has data (highest priority)
         if (allTreeViews.testThemesTree.getCurrentRootItems().length > 0) {
             this.activeTreeView = allTreeViews.testThemesTree;
-            console.log(`[FilterService] Auto-detected active tree view: Test Themes (${allTreeViews.testThemesTree.getCurrentRootItems().length} items)`);
+            console.log(
+                `[FilterService] Auto-detected active tree view: Test Themes (${allTreeViews.testThemesTree.getCurrentRootItems().length} items)`
+            );
             return allTreeViews.testThemesTree;
         }
-        
+
         // Check if test elements tree has data (second priority)
         if (allTreeViews.testElementsTree.getCurrentRootItems().length > 0) {
             this.activeTreeView = allTreeViews.testElementsTree;
-            console.log(`[FilterService] Auto-detected active tree view: Test Elements (${allTreeViews.testElementsTree.getCurrentRootItems().length} items)`);
+            console.log(
+                `[FilterService] Auto-detected active tree view: Test Elements (${allTreeViews.testElementsTree.getCurrentRootItems().length} items)`
+            );
             return allTreeViews.testElementsTree;
         }
-        
+
         // Default to projects tree (lowest priority)
         this.activeTreeView = allTreeViews.projectsTree;
-        console.log(`[FilterService] Auto-detected active tree view: Projects (${allTreeViews.projectsTree.getCurrentRootItems().length} items)`);
+        console.log(
+            `[FilterService] Auto-detected active tree view: Projects (${allTreeViews.projectsTree.getCurrentRootItems().length} items)`
+        );
         return allTreeViews.projectsTree;
     }
 
@@ -145,23 +151,26 @@ export class FilterService {
      * @param allTreeViews The map of all tree views
      * @param contextKey The context key to set the active tree view for
      */
-    public setActiveTreeViewByContext(allTreeViews: {
-        projectsTree: TreeViewBase<TreeItemBase>;
-        testThemesTree: TreeViewBase<TreeItemBase>;
-        testElementsTree: TreeViewBase<TreeItemBase>;
-    }, contextKey: string): void {
+    public setActiveTreeViewByContext(
+        allTreeViews: {
+            projectsTree: TreeViewBase<TreeItemBase>;
+            testThemesTree: TreeViewBase<TreeItemBase>;
+            testElementsTree: TreeViewBase<TreeItemBase>;
+        },
+        contextKey: string
+    ): void {
         let treeViewName = "Unknown";
-        
+
         switch (contextKey) {
-            case 'testbenchExtension.showProjectsTree':
+            case "testbenchExtension.showProjectsTree":
                 this.activeTreeView = allTreeViews.projectsTree;
                 treeViewName = "Projects";
                 break;
-            case 'testbenchExtension.showTestThemesTree':
+            case "testbenchExtension.showTestThemesTree":
                 this.activeTreeView = allTreeViews.testThemesTree;
                 treeViewName = "Test Themes";
                 break;
-            case 'testbenchExtension.showTestElementsTree':
+            case "testbenchExtension.showTestElementsTree":
                 this.activeTreeView = allTreeViews.testElementsTree;
                 treeViewName = "Test Elements";
                 break;
@@ -170,7 +179,7 @@ export class FilterService {
                 this.autoDetectActiveTreeView(allTreeViews);
                 treeViewName = this.activeTreeView ? this.getTreeViewName(this.activeTreeView) : "Unknown";
         }
-        
+
         console.log(`[FilterService] Active tree view set to: ${treeViewName} (context: ${contextKey})`);
     }
 
@@ -195,7 +204,7 @@ export class FilterService {
             }
 
             const currentFilter = filteringModule.getTextFilter();
-            
+
             // Show input box for search text
             const searchText = await vscode.window.showInputBox({
                 prompt: "Enter search text to filter tree items",
@@ -226,13 +235,14 @@ export class FilterService {
             };
 
             filteringModule.setTextFilter(filterOptions);
-            
+
             vscode.window.showInformationMessage(
                 `Filter applied to ${this.getTreeViewName(this.activeTreeView)}: "${searchText}" (${this.getFilterSummary(filterOptions)})`
             );
-
         } catch (error) {
-            vscode.window.showErrorMessage(`Error applying filter: ${error instanceof Error ? error.message : "Unknown error"}`);
+            vscode.window.showErrorMessage(
+                `Error applying filter: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
         }
     }
 
@@ -303,8 +313,8 @@ export class FilterService {
             return null;
         }
 
-        const selectedValues = selectedOptions.map(option => option.value);
-        
+        const selectedValues = selectedOptions.map((option) => option.value);
+
         return {
             caseSensitive: selectedValues.includes("caseSensitive"),
             searchInLabel: selectedValues.includes("searchInLabel"),
@@ -335,7 +345,9 @@ export class FilterService {
             filteringModule.setTextFilter(null);
             vscode.window.showInformationMessage("Text filter cleared");
         } catch (error) {
-            vscode.window.showErrorMessage(`Error clearing filter: ${error instanceof Error ? error.message : "Unknown error"}`);
+            vscode.window.showErrorMessage(
+                `Error clearing filter: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
         }
     }
 
@@ -358,15 +370,15 @@ export class FilterService {
 
             const currentDiffState = filteringModule.getFilterDiffState();
             const newState = !currentDiffState.enabled;
-            
+
             filteringModule.setFilterDiffMode(newState);
-            
-            const message = newState 
-                ? "Filter diff mode enabled" 
-                : "Filter diff mode disabled";
+
+            const message = newState ? "Filter diff mode enabled" : "Filter diff mode disabled";
             vscode.window.showInformationMessage(message);
         } catch (error) {
-            vscode.window.showErrorMessage(`Error toggling filter diff mode: ${error instanceof Error ? error.message : "Unknown error"}`);
+            vscode.window.showErrorMessage(
+                `Error toggling filter diff mode: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
         }
     }
 
@@ -399,7 +411,9 @@ export class FilterService {
                 vscode.window.showInformationMessage("All filters cleared");
             }
         } catch (error) {
-            vscode.window.showErrorMessage(`Error clearing filters: ${error instanceof Error ? error.message : "Unknown error"}`);
+            vscode.window.showErrorMessage(
+                `Error clearing filters: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
         }
     }
 
@@ -409,7 +423,9 @@ export class FilterService {
      */
     public async showFilterStatus(): Promise<void> {
         if (!this.activeTreeView) {
-            vscode.window.showInformationMessage("No active tree view for filtering. Please ensure a tree view is loaded.");
+            vscode.window.showInformationMessage(
+                "No active tree view for filtering. Please ensure a tree view is loaded."
+            );
             return;
         }
 
@@ -426,7 +442,7 @@ export class FilterService {
 
             let statusMessage = "Filter Status:\n";
             statusMessage += `• Active: ${isActive ? "Yes" : "No"}\n`;
-            
+
             if (textFilter) {
                 statusMessage += `• Text Filter: "${textFilter.searchText}"\n`;
                 statusMessage += `• Case Sensitive: ${textFilter.caseSensitive ? "Yes" : "No"}\n`;
@@ -436,16 +452,18 @@ export class FilterService {
                 statusMessage += `• Show Parents of Matches: ${textFilter.showParentsOfMatches ? "Yes" : "No"}\n`;
                 statusMessage += `• Show Children of Matches: ${textFilter.showChildrenOfMatches ? "Yes" : "No"}\n`;
             }
-            
+
             statusMessage += `• Filter Diff Mode: ${diffState.enabled ? "Enabled" : "Disabled"}\n`;
-            
+
             if (diffState.enabled) {
                 statusMessage += `• Filtered Items: ${diffState.filteredItems.size}\n`;
             }
 
             vscode.window.showInformationMessage(statusMessage);
         } catch (error) {
-            vscode.window.showErrorMessage(`Error showing filter status: ${error instanceof Error ? error.message : "Unknown error"}`);
+            vscode.window.showErrorMessage(
+                `Error showing filter status: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
         }
     }
 
@@ -453,31 +471,41 @@ export class FilterService {
      * Get a summary of filter options
      * @param options The filter options to get a summary of
      * @return The summary of the filter options
-    */
+     */
     private getFilterSummary(options: TextFilterOptions): string {
         const parts: string[] = [];
-        
+
         if (options.caseSensitive) {
             parts.push("case-sensitive");
         }
-        
+
         const searchFields: string[] = [];
-        if (options.searchInLabel) {searchFields.push("labels");}
-        if (options.searchInUniqueId) {searchFields.push("IDs");}
-        if (options.searchInDescription) {searchFields.push("descriptions");}
-        
+        if (options.searchInLabel) {
+            searchFields.push("labels");
+        }
+        if (options.searchInUniqueId) {
+            searchFields.push("IDs");
+        }
+        if (options.searchInDescription) {
+            searchFields.push("descriptions");
+        }
+
         if (searchFields.length > 0) {
             parts.push(`in ${searchFields.join(", ")}`);
         }
 
         const inclusionOptions: string[] = [];
-        if (options.showParentsOfMatches) {inclusionOptions.push("show parents");}
-        if (options.showChildrenOfMatches) {inclusionOptions.push("show children");}
-        
+        if (options.showParentsOfMatches) {
+            inclusionOptions.push("show parents");
+        }
+        if (options.showChildrenOfMatches) {
+            inclusionOptions.push("show children");
+        }
+
         if (inclusionOptions.length > 0) {
             parts.push(`include ${inclusionOptions.join(", ")}`);
         }
-        
+
         return parts.join(", ");
     }
-} 
+}

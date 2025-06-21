@@ -118,7 +118,7 @@ export class TestThemesDataProvider {
         this.cache.clear();
         this.logger.debug("Cleared all cached test structures");
     }
-    
+
     /**
      * Invalidate the cache for a specific cycle or TOV
      * @param projectKey - The project key
@@ -274,13 +274,15 @@ export class TestThemesDataProvider {
                 locker: item.aut?.locker || null,
                 status: item.aut?.status || "None"
             },
-            exec: item.exec ? {
-                status: item.exec.status || "None",
-                execStatus: item.exec.execStatus || "None",
-                verdict: item.exec.verdict || "None",
-                key: item.exec.key || "",
-                locker: item.exec.locker || null
-            } : null,
+            exec: item.exec
+                ? {
+                      status: item.exec.status || "None",
+                      execStatus: item.exec.execStatus || "None",
+                      verdict: item.exec.verdict || "None",
+                      key: item.exec.key || "",
+                      locker: item.exec.locker || null
+                  }
+                : null,
             filters: item.filters || [],
             elementType: this.determineElementType(item)
         };

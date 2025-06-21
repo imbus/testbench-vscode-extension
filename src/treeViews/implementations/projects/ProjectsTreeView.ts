@@ -383,7 +383,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const cycleKey = item.getCycleKey();
         const projectKey = item.getProjectKey();
 
-        const versionKey = item.getVersionKey(); 
+        const versionKey = item.getVersionKey();
         const tovKey = versionKey;
 
         if (!cycleKey || !projectKey) {
@@ -480,7 +480,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     public getProjectAndTovNames(item: ProjectsTreeItem): { projectName: string; tovName: string | null } {
         let projectName = "";
         let tovName: string | null = null;
-        
+
         let currentItem: ProjectsTreeItem | null = item;
         // Navigate up the tree to find project and TOV
         while (currentItem) {

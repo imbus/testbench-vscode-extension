@@ -83,7 +83,7 @@ export class TreeViewFactory {
                 projectsTree.dispose();
                 testThemesTree.dispose();
                 testElementsTree.dispose();
-                this.disposables.forEach(d => d.dispose());
+                this.disposables.forEach((d) => d.dispose());
                 this.disposables = [];
             },
             refresh: () => {

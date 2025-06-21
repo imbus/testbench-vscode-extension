@@ -37,7 +37,7 @@ export class FilteringModule implements TreeViewModule {
         filteredItems: new Set(),
         originalIcons: new Map()
     };
-    
+
     constructor() {
         this.filterState = {
             activeFilters: [],
@@ -61,13 +61,13 @@ export class FilteringModule implements TreeViewModule {
                 hiddenItems: new Set(state.filtering.hiddenItems || [])
             };
             this.compileFilters();
-            
+
             // Restore filter diff state if it exists
             if (state.filtering.filterDiffState) {
                 this.filterDiffState.enabled = state.filtering.filterDiffState.enabled || false;
                 this.filterDiffState.filteredItems = new Set(state.filtering.filterDiffState.filteredItems || []);
                 // Note: originalIcons are not restored as they are only needed during active diff mode
-                
+
                 // Update context keys to reflect the restored state
                 this.updateDiffModeContextKeys(this.filterDiffState.enabled);
             }
@@ -174,22 +174,22 @@ export class FilteringModule implements TreeViewModule {
         let contextKey: string;
 
         switch (treeViewId) {
-            case 'testbench.projects':
-                contextKey = 'testbenchExtension.filterDiffModeEnabledProjects';
+            case "testbench.projects":
+                contextKey = "testbenchExtension.filterDiffModeEnabledProjects";
                 break;
-            case 'testbench.testThemes':
-                contextKey = 'testbenchExtension.filterDiffModeEnabledTestThemes';
+            case "testbench.testThemes":
+                contextKey = "testbenchExtension.filterDiffModeEnabledTestThemes";
                 break;
-            case 'testbench.testElements':
-                contextKey = 'testbenchExtension.filterDiffModeEnabledTestElements';
+            case "testbench.testElements":
+                contextKey = "testbenchExtension.filterDiffModeEnabledTestElements";
                 break;
             default:
-                contextKey = 'testbenchExtension.filterDiffModeEnabled';
+                contextKey = "testbenchExtension.filterDiffModeEnabled";
         }
 
         // Use VS Code's setContext command to update the context key
         // This will trigger the UI to show the appropriate diff button icon
-        vscode.commands.executeCommand('setContext', contextKey, enabled);
+        vscode.commands.executeCommand("setContext", contextKey, enabled);
         this.context.logger.debug(`Updated context key ${contextKey} to ${enabled}`);
     }
 
@@ -654,10 +654,10 @@ export class FilteringModule implements TreeViewModule {
         this.filterDiffState.enabled = false;
         this.filterDiffState.filteredItems.clear();
         this.filterDiffState.originalIcons.clear();
-        
+
         // Update context keys to reflect that diff mode is disabled
         this.updateDiffModeContextKeys(false);
-        
+
         this.updateState();
         this.context.refresh({ immediate: true });
         this.context.logger.debug("All filters cleared");

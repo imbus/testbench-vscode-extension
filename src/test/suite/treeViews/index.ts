@@ -19,7 +19,7 @@ import "./ProjectsTreeView.test";
 // Export test suite names for reference
 export const treeViewsTestSuites = [
     "TreeItemBase",
-    "TreeViewConfig", 
+    "TreeViewConfig",
     "TreeViewContext",
     "TreeViewModule",
     "ModuleRegistry",
@@ -41,7 +41,9 @@ export const treeViewsTestDescriptions = {
     TreeViewBase: "Tests for the base tree view class including data loading, module management, and lifecycle",
     FilteringModule: "Tests for the filtering module including diff mode context key functionality",
     ProjectsConfig: "Tests for the projects configuration including structure validation and immutability",
-    ProjectsTreeItem: "Tests for the projects tree item class including data management, tree navigation, and serialization",
-    ProjectsDataProvider: "Tests for the projects data provider including data fetching, transformation, and validation",
+    ProjectsTreeItem:
+        "Tests for the projects tree item class including data management, tree navigation, and serialization",
+    ProjectsDataProvider:
+        "Tests for the projects data provider including data fetching, transformation, and validation",
     ProjectsTreeView: "Tests for the projects tree view including data loading, tree navigation, and command handling"
-}; 
+};

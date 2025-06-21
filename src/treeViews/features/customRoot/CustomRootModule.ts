@@ -78,14 +78,14 @@ export class CustomRootModule implements TreeViewModule {
             // This item is the active custom root, so set metadata and let the item handle context value
             item.setMetadata("isCustomRoot", true);
             // Update the context value to reflect the new state
-            if (typeof (item as any).updateContextValue === 'function') {
+            if (typeof (item as any).updateContextValue === "function") {
                 (item as any).updateContextValue();
             }
         } else {
             // This item is not the active root, clear the custom root metadata
             item.setMetadata("isCustomRoot", false);
             // Update the context value to reflect the new state
-            if (typeof (item as any).updateContextValue === 'function') {
+            if (typeof (item as any).updateContextValue === "function") {
                 (item as any).updateContextValue();
             }
         }
@@ -131,16 +131,21 @@ export class CustomRootModule implements TreeViewModule {
             return;
         }
 
-        if (customRootConfig.allowedItemTypes && !customRootConfig.allowedItemTypes.includes(item.originalContextValue)) {
+        if (
+            customRootConfig.allowedItemTypes &&
+            !customRootConfig.allowedItemTypes.includes(item.originalContextValue)
+        ) {
             this.context.logger.warn(`Item type ${item.originalContextValue} is not allowed as custom root`);
             return;
         }
-        
+
         // Check maxDepth if configured
         if (customRootConfig.maxDepth !== undefined) {
             const itemDepth = item.getDepth();
             if (itemDepth > customRootConfig.maxDepth) {
-                this.context.logger.warn(`Item depth ${itemDepth} exceeds maximum allowed depth ${customRootConfig.maxDepth}`);
+                this.context.logger.warn(
+                    `Item depth ${itemDepth} exceeds maximum allowed depth ${customRootConfig.maxDepth}`
+                );
                 return;
             }
         }
