@@ -1,5 +1,5 @@
 /**
- * @file constants.ts
+ * @file src/constants.ts
  * @description This file contains constants used throughout the extension such as
  * configuration keys, command names, context keys, and other static values.
  */
@@ -22,14 +22,8 @@ export const LANGUAGE_SERVER_DEBUG_PATH: string = path.join(
     "extension_debug_entry.py"
 );
 
-/** Prefix of the extension commands and settings in package.json */
+// Prefix of the extension commands and settings in package.json
 export const baseKeyOfExtension: string = "testbenchExtension";
-
-// --- Tree View IDs defined in package.json ---
-// TODO: Rename these IDs to be more consistent
-export const projectManagementTreeViewID: string = "projectManagementTree";
-export const testThemeTreeViewID: string = "testThemeTree";
-export const testElementsTreeViewID: string = "testElementsView";
 
 // --- Webview Message Commands ---
 export const WebviewMessageCommands = {
@@ -81,8 +75,15 @@ export const ContextKeys = {
     CONNECTION_ACTIVE: "testbenchExtension.connectionActive",
     PROJECT_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.projectTreeHasCustomRoot",
     THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot",
-    // Decides if the test themes tree should display import icons for marked tree items
-    IS_TT_OPENED_FROM_CYCLE: "testbenchExtension.isTestThemeOpenedFromCycle"
+    IS_TT_OPENED_FROM_CYCLE: "testbenchExtension.isTestThemeOpenedFromCycle",
+    SHOW_PROJECTS_TREE: "testbenchExtension.showProjectsTree",
+    SHOW_TEST_THEMES_TREE: "testbenchExtension.showTestThemesTree",
+    SHOW_TEST_ELEMENTS_TREE: "testbenchExtension.showTestElementsTree",
+    // Filter diff mode context keys
+    FILTER_DIFF_MODE_ENABLED: "testbenchExtension.filterDiffModeEnabled",
+    FILTER_DIFF_MODE_ENABLED_PROJECTS: "testbenchExtension.filterDiffModeEnabledProjects",
+    FILTER_DIFF_MODE_ENABLED_TEST_THEMES: "testbenchExtension.filterDiffModeEnabledTestThemes",
+    FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements"
 } as const;
 
 // --- Storage Keys ---
@@ -108,28 +109,35 @@ export const StorageKeys = {
     CUSTOM_ROOT_TEST_THEME_TREE: "testbenchExtension.customRoot.testThemeTree",
     CUSTOM_ROOT_TEST_ELEMENTS_TREE: "testbenchExtension.customRoot.testElementsTree",
     IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY: "testbenchExtension.isTestThemeOpenedFromCycleStorageKey",
-    // First-time user tracking
     HAS_USED_EXTENSION_BEFORE: "testbenchExtension.hasUsedExtensionBefore"
 } as const;
 
 // --- Tree Item Context Values ---
-export const TreeItemContextValues = {
+export const ProjectItemTypes = {
     PROJECT: "Project",
+    CUSTOM_ROOT_PROJECT: "customRoot.project",
     VERSION: "Version",
     CYCLE: "Cycle",
-    TEST_THEME_TREE_ITEM: "TestThemeNode",
-    TEST_CASE_SET_TREE_ITEM: "TestCaseSetNode",
-    TEST_CASE_TREE_ITEM: "TestCaseNode",
-    SUBDIVISION: "subdivision",
-    INTERACTION: "interaction",
-    DATA_TYPE: "dataType",
-    CONDITION: "condition",
-    TEST_ELEMENT: "testElement",
-    CUSTOM_ROOT_PROJECT: "customRoot.project",
+    OTHER: "Other"
+} as const;
+
+export const TestThemeItemTypes = {
+    TEST_THEME: "TestThemeNode",
     CUSTOM_ROOT_TEST_THEME: "customRoot.testTheme",
+    TEST_CASE_SET: "TestCaseSetNode",
+    TEST_CASE: "TestCaseNode",
     MARKED_TEST_THEME_TREE_ITEM: "MarkedForImport.TestThemeNode",
     MARKED_TEST_CASE_SET_TREE_ITEM: "MarkedForImport.TestCaseSetNode",
-    MARKED_CUSTOM_ROOT_TEST_THEME: "MarkedForImport.customRoot.testTheme"
+    MARKED_CUSTOM_ROOT_TEST_THEME: "MarkedForImport.customRoot.testTheme",
+    OTHER: "Other"
+} as const;
+
+export const TestElementItemTypes = {
+    SUBDIVISION: "Subdivision",
+    INTERACTION: "Interaction",
+    DATA_TYPE: "DataType",
+    CONDITION: "Condition",
+    OTHER: "Other"
 } as const;
 
 // --- Job Types ---
@@ -138,8 +146,45 @@ export const JobTypes = {
     IMPORT: "import"
 } as const;
 
-/** Internal folder name used to store and process files internally. */
+// Internal folder name used to store and process files internally.
 export const folderNameOfInternalTestbenchFolder: string = ".testbench";
+
+// --- Tree View Timing Constants ---
+export const TreeViewTiming = {
+    // Data freshness and caching
+    DATA_FRESHNESS_THRESHOLD_MS: 5000, // How long data is considered fresh
+    DATA_STALE_THRESHOLD_MS: 5000, // When data is considered stale and needs refresh
+
+    // UI refresh and debouncing
+    UI_REFRESH_DEBOUNCE_MS: 500, // Default debounce for UI refresh operations
+    EVENT_DEBOUNCE_MS: 500, // Default debounce for event handling
+
+    // Persistence and saving
+    DEFAULT_SAVE_DEBOUNCE_MS: 1000, // Default debounce for save operations
+    FAST_SAVE_DEBOUNCE_MS: 500, // Faster save debounce for responsive operations
+
+    // Configuration defaults
+    DEFAULT_DEBOUNCE_DELAY_MS: 300, // Default debounce delay for configs
+
+    // User interaction
+    DOUBLE_CLICK_THRESHOLD_MS: 800, // Threshold for double-click detection
+
+    // Loading and initialization
+    WEBVIEW_LOAD_DELAY_MS: 1000, // Delay to ensure webview is loaded
+
+    // Event handling
+    EVENT_HISTORY_MAX_SIZE: 100, // Maximum number of events to keep in history
+    ERROR_HISTORY_MAX_SIZE: 100, // Maximum number of errors to keep in history
+
+    // State management
+    STATE_SAVE_DELAY_MS: 1000, // Delay for state save operations
+
+    // Framework cache
+    DEFAULT_CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes default TTL
+
+    // Test elements specific
+    TEST_ELEMENTS_DEBOUNCE_MS: 100 // Specific debounce for test elements operations
+} as const;
 
 /**
  * All extension commands as defined in package.json.
@@ -176,5 +221,28 @@ export const allExtensionCommands = {
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
     clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`,
     checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`,
-    clearAllExtensionData: `${baseKeyOfExtension}.clearAllExtensionData`
+    updateOrRestartLS: `${baseKeyOfExtension}.updateOrRestartLS`,
+    markTestThemeForImport: "testbench.markTestThemeForImport",
+    generateTestCasesForTestTheme: "testbench.generateTestCasesForTestTheme",
+    refreshAllTrees: "testbench.refreshAllTrees",
+    clearAllCustomRoots: "testbench.clearAllCustomRoots",
+    clearAllMarks: "testbench.clearAllMarks",
+    clearAllExtensionData: `${baseKeyOfExtension}.clearAllExtensionData`,
+
+    // Tree View Filtering Commands
+    setTextFilterForProjects: `${baseKeyOfExtension}.setTextFilterForProjects`,
+    setTextFilterForTestThemes: `${baseKeyOfExtension}.setTextFilterForTestThemes`,
+    setTextFilterForTestElements: `${baseKeyOfExtension}.setTextFilterForTestElements`,
+    clearTextFilterForProjects: `${baseKeyOfExtension}.clearTextFilterForProjects`,
+    clearTextFilterForTestThemes: `${baseKeyOfExtension}.clearTextFilterForTestThemes`,
+    clearTextFilterForTestElements: `${baseKeyOfExtension}.clearTextFilterForTestElements`,
+    toggleFilterDiffModeForProjects: `${baseKeyOfExtension}.toggleFilterDiffModeForProjects`,
+    toggleFilterDiffModeForProjectsEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForProjectsEnabled`,
+    toggleFilterDiffModeForTestThemes: `${baseKeyOfExtension}.toggleFilterDiffModeForTestThemes`,
+    toggleFilterDiffModeForTestThemesEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForTestThemesEnabled`,
+    toggleFilterDiffModeForTestElements: `${baseKeyOfExtension}.toggleFilterDiffModeForTestElements`,
+    toggleFilterDiffModeForTestElementsEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForTestElementsEnabled`,
+    clearAllFiltersForProjects: `${baseKeyOfExtension}.clearAllFiltersForProjects`,
+    clearAllFiltersForTestThemes: `${baseKeyOfExtension}.clearAllFiltersForTestThemes`,
+    clearAllFiltersForTestElements: `${baseKeyOfExtension}.clearAllFiltersForTestElements`
 };

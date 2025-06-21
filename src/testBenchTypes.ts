@@ -1,23 +1,20 @@
 /**
- * @file testBenchTypes.ts
+ * @file src/testBenchTypes.ts
  * @description This file contains TypeScript interfaces and type definitions
  * used throughout the project. These interfaces define the structure
  * of various data types, server response formats, API request parameters,
  * and other project-related types.
- *
- * The purpose of this file is to centralize and organize commonly used
- * type definitions for better code reusability, consistency, and maintainability.
  */
 
 export interface TestBenchConnection {
     id: string; // Unique identifier for the connection
-    label: string; // User-friendly name for the connection (e.g., "Dev Server")
+    label: string; // User friendly name for the connection
     serverName: string;
     portNumber: number;
     username: string;
 }
 
-// Store the last successfully generated report parameters for test generation to be able to fetch the report again for read command
+// Store the last successfully generated report parameters for test generation to be able to fetch the report again for importing
 export interface LastGeneratedReportParams {
     UID: string;
     projectKey: string;
@@ -61,47 +58,37 @@ export interface TestStructure {
             locker: string | null;
             status: string;
         };
-        exec: {
-            status: string;
-            execStatus: string;
-            verdict: string;
-            key: string;
-            locker: string | null;
+        exec?: {
+            locker?: string;
+            status?: string;
         };
         filters: any[];
         elementType: string;
+        children?: any[];
     }>;
 }
 
-export type CycleTreeItemData = {
-    base: {
-        key: string;
-        numbering: string;
-        parentKey: string;
-        name: string;
-        uniqueID: string;
-        matchesFilter: boolean;
+/**
+ * Data structure for cycle tree items (test themes and test case sets)
+ */
+export interface CycleTreeItemData {
+    base: BaseItemInfo;
+    elementType: string;
+    elementKey?: string;
+    label?: string;
+    hasChildren: boolean;
+    children?: CycleTreeItemData[];
+    description?: string;
+    tooltip?: string;
+    level?: number;
+    exec?: ExecutionInfo;
+    metadata?: {
+        imported?: boolean;
+        markedForImport?: boolean;
+        generationRequested?: boolean;
+        [key: string]: any;
     };
-    spec?: {
-        key: string;
-        locker: string | null;
-        status: string;
-    };
-    aut?: {
-        key: string;
-        locker: string | null;
-        status: string;
-    };
-    exec?: {
-        status: string;
-        execStatus: string;
-        verdict: string;
-        key: string;
-        locker: string | null;
-    };
-    filters?: any[];
-    elementType: string; // e.g., TestThemeNode, TestCaseSetNode, TestCaseNode
-};
+}
 
 export interface OptionalJobIDRequestParameter {
     treeRootUID?: string;
@@ -187,7 +174,7 @@ export interface TreeNode {
     creationTime: string;
     status: string;
     visibility: boolean;
-    children?: TreeNode[]; // Not all nodes have children
+    children?: TreeNode[];
 }
 
 export interface ImportData {
@@ -239,3 +226,35 @@ export interface TovStructureNode {
 }
 
 export type TovStructure = TovStructureOptions[];
+
+/**
+ * Base information for a tree item
+ */
+export interface BaseItemInfo {
+    key: string;
+    name: string;
+    uid?: string;
+    numbering?: string;
+    description?: string;
+    parentKey?: string;
+    isTestCaseSet?: boolean;
+}
+
+/**
+ * Execution information for a tree item
+ */
+export interface ExecutionInfo {
+    status?: string;
+    locker?: string;
+    result?: string;
+    [key: string]: any;
+}
+
+/**
+ * Job types enum
+ */
+export enum JobTypes {
+    TEST_GENERATION = "testGeneration",
+    IMPORT = "import",
+    EXPORT = "export"
+}

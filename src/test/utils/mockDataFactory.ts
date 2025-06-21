@@ -5,7 +5,6 @@
  */
 
 import { Project, TreeNode, TestStructure } from "../../testBenchTypes";
-import { TestElementData } from "../../views/testElements/testElementTreeItem";
 
 // Counter to ensure unique keys/ids in sequential calls
 let idCounter = 1;
@@ -58,25 +57,6 @@ export function createMockCycleStructure(overrides: Partial<TestStructure> = {})
             filters: []
         },
         nodes: [],
-        ...overrides
-    };
-}
-
-export function createMockTestElementData(overrides: Partial<TestElementData> = {}): TestElementData {
-    const id = `elem_${idCounter++}`;
-    return {
-        id,
-        parentId: "parent_elem_1",
-        name: `Test Element ${id}`,
-        uniqueID: `uid_elem_${id}`,
-        testElementType: "Interaction",
-        libraryKey: "lib_1",
-        details: { name: `Test Element ${id}` },
-        children: [],
-        jsonString: "{}",
-        directRegexMatch: false,
-        parent: undefined,
-        hierarchicalName: `Root/${id}`,
         ...overrides
     };
 }

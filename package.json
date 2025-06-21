@@ -10,7 +10,7 @@
         "url": "https://github.com/imbus/testbench-vs-code-extension"
     },
     "engines": {
-        "vscode": "^1.95.0"
+        "vscode": "^1.101.0"
     },
     "homepage": "https://github.com/imbus/testbench-vs-code-extension",
     "bugs": {
@@ -419,7 +419,8 @@
             {
                 "command": "testbenchExtension.refreshTestElementsTree",
                 "title": "Refresh Test Elements",
-                "group": "navigation@1",
+                "when": "view == testbench.testElements",
+                "group": "navigation",
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
                     "dark": "resources/icons/refresh-dark.svg"
@@ -452,13 +453,193 @@
             {
                 "command": "testbenchExtension.clearAllExtensionData",
                 "title": "TestBench: Clear All Extension Data",
-                "category": "TestBench",
                 "icon": {
                     "light": "resources/icons/clearInternalTestbenchFolder-light.svg",
                     "dark": "resources/icons/clearInternalTestbenchFolder-dark.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.setTextFilter",
+                "title": "Set Text Filter",
+                "when": "view == testbench.projects || view == testbench.testThemes || view == testbench.testElements",
+                "group": "navigation@4",
+                "icon": {
+                    "light": "resources/icons/filter-light.svg",
+                    "dark": "resources/icons/filter-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.setTextFilterForProjects",
+                "title": "Set Text Filter",
+                "when": "view == testbench.projects",
+                "group": "navigation@4",
+                "icon": {
+                    "light": "resources/icons/filter-light.svg",
+                    "dark": "resources/icons/filter-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.setTextFilterForTestThemes",
+                "title": "Set Text Filter",
+                "when": "view == testbench.testThemes",
+                "group": "navigation@4",
+                "icon": {
+                    "light": "resources/icons/filter-light.svg",
+                    "dark": "resources/icons/filter-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.setTextFilterForTestElements",
+                "title": "Set Text Filter",
+                "when": "view == testbench.testElements",
+                "group": "navigation@4",
+                "icon": {
+                    "light": "resources/icons/filter-light.svg",
+                    "dark": "resources/icons/filter-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.clearTextFilter",
+                "title": "TestBench: Clear Text Filter",
+                "icon": {
+                    "light": "resources/icons/clear-light.svg",
+                    "dark": "resources/icons/clear-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.clearTextFilterForProjects",
+                "title": "TestBench: Clear Text Filter (Projects)",
+                "icon": {
+                    "light": "resources/icons/clear-light.svg",
+                    "dark": "resources/icons/clear-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.clearTextFilterForTestThemes",
+                "title": "TestBench: Clear Text Filter (Test Themes)",
+                "icon": {
+                    "light": "resources/icons/clear-light.svg",
+                    "dark": "resources/icons/clear-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.clearTextFilterForTestElements",
+                "title": "TestBench: Clear Text Filter (Test Elements)",
+                "icon": {
+                    "light": "resources/icons/clear-light.svg",
+                    "dark": "resources/icons/clear-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.toggleFilterDiffModeForProjects",
+                "title": "Toggle Filter Diff Mode for Projects",
+                "when": "view == testbench.projects && !testbenchExtension.filterDiffModeEnabledProjects",
+                "group": "navigation@5",
+                "icon": {
+                    "light": "resources/icons/diff-off-light.svg",
+                    "dark": "resources/icons/diff-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.toggleFilterDiffModeForProjectsEnabled",
+                "title": "Toggle Filter Diff Mode for Projects",
+                "when": "view == testbench.projects && testbenchExtension.filterDiffModeEnabledProjects",
+                "group": "navigation@5",
+                "icon": {
+                    "light": "resources/icons/diff-on-light.svg",
+                    "dark": "resources/icons/diff-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.toggleFilterDiffModeForTestThemes",
+                "title": "Toggle Filter Diff Mode for Test Themes",
+                "when": "view == testbench.testThemes && !testbenchExtension.filterDiffModeEnabledTestThemes",
+                "group": "navigation@5",
+                "icon": {
+                    "light": "resources/icons/diff-off-light.svg",
+                    "dark": "resources/icons/diff-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.toggleFilterDiffModeForTestThemesEnabled",
+                "title": "Toggle Filter Diff Mode for Test Themes",
+                "when": "view == testbench.testThemes && testbenchExtension.filterDiffModeEnabledTestThemes",
+                "group": "navigation@5",
+                "icon": {
+                    "light": "resources/icons/diff-on-light.svg",
+                    "dark": "resources/icons/diff-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.toggleFilterDiffModeForTestElements",
+                "title": "Toggle Filter Diff Mode for Test Elements",
+                "when": "view == testbench.testElements && !testbenchExtension.filterDiffModeEnabledTestElements",
+                "group": "navigation@5",
+                "icon": {
+                    "light": "resources/icons/diff-off-light.svg",
+                    "dark": "resources/icons/diff-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.toggleFilterDiffModeForTestElementsEnabled",
+                "title": "Toggle Filter Diff Mode for Test Elements",
+                "when": "view == testbench.testElements && testbenchExtension.filterDiffModeEnabledTestElements",
+                "group": "navigation@5",
+                "icon": {
+                    "light": "resources/icons/diff-on-light.svg",
+                    "dark": "resources/icons/diff-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.clearAllFilters",
+                "title": "Clear All Filters",
+                "when": "view == testbench.projects || view == testbench.testThemes || view == testbench.testElements",
+                "group": "navigation@6",
+                "icon": {
+                    "light": "resources/icons/filter-off-light.svg",
+                    "dark": "resources/icons/filter-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.clearAllFiltersForProjects",
+                "title": "Clear All Filters",
+                "when": "view == testbench.projects",
+                "group": "navigation@6",
+                "icon": {
+                    "light": "resources/icons/filter-off-light.svg",
+                    "dark": "resources/icons/filter-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.clearAllFiltersForTestThemes",
+                "title": "Clear All Filters",
+                "when": "view == testbench.testThemes",
+                "group": "navigation@6",
+                "icon": {
+                    "light": "resources/icons/filter-off-light.svg",
+                    "dark": "resources/icons/filter-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.clearAllFiltersForTestElements",
+                "title": "Clear All Filters",
+                "when": "view == testbench.testElements",
+                "group": "navigation@6",
+                "icon": {
+                    "light": "resources/icons/filter-off-light.svg",
+                    "dark": "resources/icons/filter-off-dark.svg"
+                }
             }
         ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "testBenchExplorer",
+                    "title": "TestBench",
+                    "icon": "resources/icons/testbench-logo.png"
+                }
+            ]
+        },
         "views": {
             "testBenchExplorer": [
                 {
@@ -469,21 +650,21 @@
                     "icon": "resources/icons/login.svg"
                 },
                 {
-                    "id": "projectManagementTree",
+                    "id": "testbench.projects",
                     "name": "Projects",
-                    "when": "testbenchExtension.connectionActive",
+                    "when": "testbenchExtension.connectionActive && testbenchExtension.showProjectsTree",
                     "icon": "resources/icons/project-dark.svg"
                 },
                 {
-                    "id": "testThemeTree",
+                    "id": "testbench.testThemes",
                     "name": "Test Themes",
-                    "when": "testbenchExtension.connectionActive",
+                    "when": "testbenchExtension.connectionActive && testbenchExtension.showTestThemesTree",
                     "icon": "resources/icons/TestThemeOriginal-dark.svg"
                 },
                 {
-                    "id": "testElementsView",
+                    "id": "testbench.testElements",
                     "name": "Test Elements",
-                    "when": "testbenchExtension.connectionActive",
+                    "when": "testbenchExtension.connectionActive && testbenchExtension.showTestElementsTree",
                     "icon": "resources/icons/test-elements-dark.svg"
                 }
             ]
@@ -494,7 +675,7 @@
                     "command": "testbenchExtension.login",
                     "group": "navigation@1",
                     "title": "Login",
-                    "when": "!testbenchExtension.connectionActive && (view == projectManagementTree)",
+                    "when": "!testbenchExtension.connectionActive && (view == testbench.projects)",
                     "icon": {
                         "light": "resources/icons/login.svg",
                         "dark": "resources/icons/login.svg"
@@ -504,7 +685,7 @@
                     "command": "testbenchExtension.logout",
                     "group": "navigation@2",
                     "title": "Logout",
-                    "when": "testbenchExtension.connectionActive && (view == projectManagementTree)",
+                    "when": "testbenchExtension.connectionActive && (view == testbench.projects)",
                     "icon": {
                         "light": "resources/icons/logout.svg",
                         "dark": "resources/icons/logout.svg"
@@ -513,7 +694,7 @@
                 {
                     "command": "testbenchExtension.refreshProjectTreeView",
                     "group": "navigation@3",
-                    "when": "view == projectManagementTree",
+                    "when": "view == testbench.projects",
                     "icon": {
                         "light": "resources/icons/refresh-light.svg",
                         "dark": "resources/icons/refresh-dark.svg"
@@ -522,7 +703,7 @@
                 {
                     "command": "testbenchExtension.displayAllProjects",
                     "group": "navigation@3",
-                    "when": "view == testThemeTree",
+                    "when": "view == testbench.testThemes",
                     "icon": {
                         "light": "resources/icons/menu-light.svg",
                         "dark": "resources/icons/menu-dark.svg"
@@ -531,7 +712,7 @@
                 {
                     "command": "testbenchExtension.displayAllProjects",
                     "group": "navigation@2",
-                    "when": "view == testElementsView",
+                    "when": "view == testbench.testElements",
                     "icon": {
                         "light": "resources/icons/menu-light.svg",
                         "dark": "resources/icons/menu-dark.svg"
@@ -540,7 +721,7 @@
                 {
                     "command": "testbenchExtension.refreshTestThemeTreeView",
                     "group": "navigation@1",
-                    "when": "view == testThemeTree",
+                    "when": "view == testbench.testThemes",
                     "icon": {
                         "light": "resources/icons/refresh-light.svg",
                         "dark": "resources/icons/refresh-dark.svg"
@@ -549,11 +730,12 @@
                 {
                     "command": "testbenchExtension.showExtensionSettings",
                     "group": "navigation@8",
-                    "when": "view == projectManagementTree || view == testbenchExtension.webView"
+                    "when": "view == testbench.projects || view == testbenchExtension.webView"
                 },
                 {
                     "command": "testbenchExtension.refreshTestElementsTree",
-                    "when": "view == testElementsView",
+                    "title": "Refresh Test Elements",
+                    "when": "view == testbench.testElements",
                     "group": "navigation",
                     "icon": {
                         "light": "resources/icons/refresh-light.svg",
@@ -564,74 +746,71 @@
             "view/item/context": [
                 {
                     "command": "testbenchExtension.generateTestCasesForCycle",
-                    "when": "view == projectManagementTree && viewItem == Cycle",
+                    "when": "view == testbench.projects && viewItem == Cycle",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openCycleFromProjectsView",
-                    "when": "view == projectManagementTree && viewItem == Cycle",
+                    "when": "view == testbench.projects && viewItem == Cycle",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTOV",
-                    "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
+                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version)",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openTOVFromProjectsView",
-                    "when": "view == projectManagementTree && (viewItem == tov || viewItem == Version)",
+                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version)",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == testThemeTree && (viewItem == 'TestThemeNode' || viewItem == 'TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme') && testbenchExtension.isTestThemeOpenedFromCycle",
+                    "when": "view == testbench.testThemes && testbenchExtension.isTestThemeOpenedFromCycle",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
-                    "when": "view == testThemeTree && (viewItem == 'TestThemeNode' || viewItem == 'TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme')  && !testbenchExtension.isTestThemeOpenedFromCycle",
+                    "when": "view == testbench.testThemes && !testbenchExtension.isTestThemeOpenedFromCycle",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == testThemeTree && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedSubForImport.TestThemeNode' || viewItem == 'MarkedSubForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.testTheme') && testbenchExtension.isTestThemeOpenedFromCycle",
-                    "group": "inline@1"
+                    "when": "view == testbench.testThemes && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode')",
+                    "group": "inline@1",
+                    "icon": {
+                        "light": "resources/icons/upload-light.svg",
+                        "dark": "resources/icons/upload-dark.svg"
+                    }
                 },
                 {
                     "command": "testbenchExtension.makeRoot",
-                    "when": "(view == projectManagementTree || view == testThemeTree) && (viewItem == Project || viewItem == TestThemeNode || viewItem == 'MarkedForImport.TestThemeNode')",
+                    "when": "(view == testbench.projects && viewItem == Project) || (view == testbench.testThemes && (viewItem == TestThemeNode || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForGeneration.TestThemeNode' || viewItem == 'openedFromCycle.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForGeneration.TestThemeNode'))",
                     "group": "navigation"
                 },
                 {
                     "command": "testbenchExtension.openOrCreateRobotResourceFile",
-                    "when": "view == testElementsView && (viewItem == subdivision || viewItem == interaction)",
-                    "group": "navigation"
+                    "when": "view == testbench.testElements && (viewItem == testElement.subdivision || viewItem == testElement.interaction)",
+                    "group": "navigation@1",
+                    "title": "Go To Robot Resource"
                 },
                 {
                     "command": "testbenchExtension.createInteractionUnderSubdivision",
-                    "when": "view == testElementsView && viewItem == subdivision",
-                    "group": "1_modification"
+                    "when": "view == testbench.testElements && viewItem == testElement.subdivision",
+                    "group": "1_modification",
+                    "title": "Create Interaction"
                 },
                 {
                     "command": "testbenchExtension.resetProjectTreeViewRoot",
-                    "when": "view == projectManagementTree && viewItem == customRoot.project",
+                    "when": "view == testbench.projects && (viewItem == customRoot.Project || viewItem == customRoot.Version || viewItem == customRoot.Cycle)",
                     "group": "navigation@1",
                     "title": "Reset Custom Root"
                 },
                 {
                     "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "view == testThemeTree && (viewItem == 'customRoot.testTheme' || viewItem == 'MarkedForImport.customRoot.testTheme')",
+                    "when": "view == testbench.testThemes && (viewItem == 'customRoot.TestThemeNode' || viewItem == 'customRoot.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'MarkedForGeneration.customRoot.TestThemeNode' || viewItem == 'MarkedForGeneration.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForGeneration.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForGeneration.customRoot.TestCaseSetNode')",
                     "group": "navigation@1",
                     "title": "Reset Custom Root"
-                }
-            ]
-        },
-        "viewsContainers": {
-            "activitybar": [
-                {
-                    "id": "testBenchExplorer",
-                    "title": "TestBench",
-                    "icon": "resources/icons/testbench-logo.svg"
                 }
             ]
         },
@@ -680,45 +859,45 @@
     "devDependencies": {
         "@eslint/js": "^9.20.0",
         "@semantic-release/changelog": "^6.0.3",
-        "@semantic-release/exec": "^7.0.3",
+        "@semantic-release/exec": "^7.1.0",
         "@semantic-release/git": "^10.0.1",
-        "@semantic-release/github": "^11.0.1",
+        "@semantic-release/github": "^11.0.3",
         "@semantic-release/npm": "^12.0.1",
         "@types/base-64": "^1.0.2",
         "@types/glob": "^8.1.0",
-        "@types/mocha": "^10.0.9",
-        "@types/node": "^22.7.5",
-        "@types/sinon": "^17.0.3",
+        "@types/mocha": "^10.0.10",
+        "@types/node": "^22.15.32",
+        "@types/sinon": "^17.0.4",
         "@types/uuid": "^10.0.0",
-        "@types/vscode": "^1.95.0",
+        "@types/vscode": "^1.101.0",
         "@typescript-eslint/eslint-plugin": "^8.9.0",
         "@typescript-eslint/parser": "^8.9.0",
         "@vscode/test-cli": "^0.0.10",
-        "@vscode/test-electron": "^2.4.1",
-        "@vscode/vsce": "^3.4.2",
+        "@vscode/test-electron": "^2.5.2",
+        "@vscode/vsce": "^3.5.0",
         "conventional-changelog-conventionalcommits": "^8.0.0",
-        "eslint": "^9.20.1",
+        "eslint": "^9.29.0",
         "globals": "^15.15.0",
         "husky": "^9.1.7",
-        "mocha": "^10.7.3",
+        "mocha": "^10.8.2",
         "mocha-junit-reporter": "^2.2.1",
         "nyc": "^17.1.0",
-        "prettier": "^3.5.1",
+        "prettier": "^3.5.3",
         "proxyquire": "^2.1.3",
-        "semantic-release": "^24.2.3",
-        "sinon": "^19.0.2",
-        "ts-loader": "^9.5.1",
-        "typescript": "^5.6.3",
-        "typescript-eslint": "^8.24.1",
-        "webpack": "^5.95.0",
+        "semantic-release": "^24.2.5",
+        "sinon": "^19.0.5",
+        "ts-loader": "^9.5.2",
+        "typescript": "^5.8.3",
+        "typescript-eslint": "^8.34.1",
+        "webpack": "^5.99.9",
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
-        "@vscode-elements/elements": "^1.10.0",
+        "@vscode-elements/elements": "^1.16.1",
         "@vscode/python-extension": "^1.0.5",
-        "axios": "^1.7.7",
+        "axios": "^1.10.0",
         "base-64": "^1.0.0",
-        "flatted": "^3.3.1",
+        "flatted": "^3.3.3",
         "jszip": "^3.10.1",
         "regex-translator": "^0.2.8",
         "uuid": "^11.1.0",
