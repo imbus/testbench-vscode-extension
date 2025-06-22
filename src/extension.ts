@@ -199,16 +199,87 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
         treeViews = createAllTreeViews(extensionContext, getConnection);
         await treeViews.initialize();
 
-        // Set up context keys for tree view visibility
-        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, true);
-        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, false);
-        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, false);
+        // Check for saved view state before setting default visibility
+        const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+        const savedCycleContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+        const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+        const savedContext = savedCycleContext || savedTovContext;
+
+        // Determine initial visibility based on saved state
+        let showProjects = true;
+        let showTestThemes = false;
+        let showTestElements = false;
+
+        if (savedViewId && savedViewId !== "projects" && savedContext) {
+            // Validate that the saved context has the required fields
+            const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
+            const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
+
+            if (hasValidProjectName && hasValidTovName) {
+                showProjects = false;
+                showTestThemes = savedViewId === "testThemes" || savedViewId === "testElements";
+                showTestElements = savedViewId === "testElements";
+            }
+        }
+
+        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, showProjects);
+        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, showTestThemes);
+        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, showTestElements);
 
         logger.info("Tree views initialized successfully");
     } catch (error) {
         logger.error("Failed to initialize tree views:", error);
         vscode.window.showErrorMessage("Failed to initialize tree views. Please reload the window.");
         throw error;
+    }
+}
+
+/**
+ * Restores a previously saved view state.
+ * Updates the language server, loads data into the tree views based on the saved context,
+ * and adjusts the visibility of the tree views accordingly.
+ *
+ * @param context The VS Code extension context.
+ * @param savedViewId The identifier of the view to restore.
+ * @param savedContext An object containing the saved view information (project, TOV, cycle data).
+ * @returns A promise that resolves to true if the view was successfully restored, false otherwise.
+ */
+async function performDeferredViewRestoration(
+    context: vscode.ExtensionContext,
+    savedViewId: string,
+    savedContext: any
+): Promise<boolean> {
+    if (!treeViews) {
+        return false;
+    }
+
+    try {
+        logger.info(`Performing deferred view restoration for: ${savedViewId}`);
+
+        await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
+
+        if (savedContext.isCycle) {
+            await treeViews.testThemesTree.loadCycle(
+                savedContext.projectKey,
+                savedContext.cycleKey,
+                savedContext.tovName
+            );
+        } else {
+            await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
+        }
+
+        await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
+
+        // Update visibility to show the restored views
+        await displayTestThemeTreeView();
+        await displayTestElementsTreeView();
+        await hideProjectManagementTreeView();
+
+        logger.info(`Successfully restored view to context of TOV: ${savedContext.tovName}`);
+        return true;
+    } catch (error) {
+        logger.error("Failed to restore view state:", error);
+        return false;
     }
 }
 
@@ -644,82 +715,68 @@ async function handleTestBenchSessionChange(
                         throw new Error("Tree views not initialized");
                     }
 
-                    // Clear all tree data first
                     treeViews.clear();
-
-                    // Refresh to load new data
                     treeViews.projectsTree.refresh();
+
+                    // Check if we need to restore a view
+                    const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+                    const savedCycleContext = context.workspaceState.get<any>(
+                        StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY
+                    );
+                    const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+                    const savedContext = savedCycleContext || savedTovContext;
+
+                    let areViewsRestored = false;
+                    if (savedViewId && savedViewId !== "projects" && savedContext) {
+                        // Validate that the saved context has the required fields
+                        const hasValidProjectName =
+                            savedContext.projectName && typeof savedContext.projectName === "string";
+                        const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
+
+                        if (!hasValidProjectName || !hasValidTovName) {
+                            logger.warn(
+                                `Cannot restore view state: invalid context data. ` +
+                                    `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
+                                    `Clearing invalid state and loading default view.`
+                            );
+                            // Clear the invalid state
+                            await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, undefined);
+                            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
+                            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
+                        } else {
+                            // Attempt restoration after a short delay to ensure data is loaded
+                            logger.info(`Attempting to restore previous view: ${savedViewId}`);
+                            try {
+                                areViewsRestored = await performDeferredViewRestoration(
+                                    context,
+                                    savedViewId,
+                                    savedContext
+                                );
+                            } catch (error) {
+                                logger.error("Failed to restore view state:", error);
+                                areViewsRestored = false;
+                            }
+                        }
+                    }
+
+                    if (!areViewsRestored) {
+                        // Fallback: Load default project view if no state or if restoration fails
+                        logger.info("Loading default projects view.");
+                        treeViews.projectsTree.refresh();
+                        await displayProjectManagementTreeView();
+                        await hideTestThemeTreeView();
+                        await hideTestElementsTreeView();
+                    }
                 } catch (error) {
                     logger.warn("[Extension] Error managing trees during session change:", error);
-                    await vscode.commands.executeCommand(allExtensionCommands.displayAllProjects);
-                }
-            }
-
-            // View restoration logic
-            let restored = false;
-            const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
-            const savedCycleContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
-            const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
-
-            // Determine which context to use for restoration
-            const savedContext = savedCycleContext || savedTovContext;
-
-            if (savedViewId && savedViewId !== "projects" && savedContext) {
-                // Validate that the saved context has the required fields
-                const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
-                const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
-
-                if (!hasValidProjectName || !hasValidTovName) {
-                    logger.warn(
-                        `Cannot restore view state: invalid context data. ` +
-                            `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
-                            `Clearing invalid state and loading default view.`
-                    );
-                    // Clear the invalid state
-                    await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, undefined);
-                    await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-                    await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
-                } else {
-                    logger.info(`Attempting to restore previous view: ${savedViewId}`);
-                    try {
-                        await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
-
-                        if (treeViews) {
-                            if (savedContext.isCycle) {
-                                await treeViews.testThemesTree.loadCycle(
-                                    savedContext.projectKey,
-                                    savedContext.cycleKey,
-                                    savedContext.tovName
-                                );
-                            } else {
-                                await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
-                            }
-                            await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
-                        }
-
-                        await displayTestThemeTreeView();
-                        await displayTestElementsTreeView();
-                        await hideProjectManagementTreeView();
-
-                        logger.info(`Successfully restored view to context of TOV: ${savedContext.tovName}`);
-                        restored = true;
-                    } catch (error) {
-                        logger.error("Failed to restore view state. Loading default view.", error);
-                        restored = false;
+                    // Ensure we have a working state even after error
+                    if (treeViews) {
+                        treeViews.projectsTree.refresh();
+                        await displayProjectManagementTreeView();
+                        await hideTestThemeTreeView();
+                        await hideTestElementsTreeView();
                     }
                 }
-            }
-
-            if (!restored) {
-                // Fallback: Load default project view if no state or if restoration fails
-                logger.info("Loading default projects view.");
-                if (treeViews) {
-                    treeViews.clear();
-                    treeViews.projectsTree.refresh();
-                }
-                await displayProjectManagementTreeView();
-                await hideTestThemeTreeView();
-                await hideTestElementsTreeView();
             }
         } else {
             logger.warn("[Extension] Session exists, but no active connection. Clearing connection.");
