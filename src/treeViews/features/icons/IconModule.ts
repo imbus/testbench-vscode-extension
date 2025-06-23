@@ -195,7 +195,6 @@ export class IconModule implements TreeViewModule {
     ): vscode.ThemeIcon | string | { light: vscode.Uri; dark: vscode.Uri } | undefined {
         const extensionUri = this.context.extensionContext.extensionUri;
 
-        // 1. Handle ProjectsTreeItem
         if (item instanceof ProjectsTreeItem) {
             switch (item.data.type) {
                 case "project":
@@ -216,10 +215,8 @@ export class IconModule implements TreeViewModule {
             }
         }
 
-        // 2. Handle TestThemesTreeItem
         if (item instanceof TestThemesTreeItem) {
             const isMarkedForImport = !!item.getMetadata("marked");
-            // Use the stable elementType from the data model, not the dynamic contextValue
             switch (item.data.elementType) {
                 case "TestThemeNode":
                     return {
@@ -258,16 +255,13 @@ export class IconModule implements TreeViewModule {
             }
         }
 
-        // 3. Handle TestElementsTreeItem
         if (item instanceof TestElementsTreeItem) {
             switch (item.data.testElementType) {
                 case TestElementType.Subdivision: {
-                    const iconName = item.data.isLocallyAvailable
-                        ? "localSubdivision-dark.svg"
-                        : "missingSubdivision-dark.svg";
+                    const baseIconName = item.data.isLocallyAvailable ? "localSubdivision" : "missingSubdivision";
                     return {
-                        light: vscode.Uri.joinPath(extensionUri, "resources", "icons", iconName),
-                        dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", iconName)
+                        light: vscode.Uri.joinPath(extensionUri, "resources", "icons", `${baseIconName}-light.svg`),
+                        dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", `${baseIconName}-dark.svg`)
                     };
                 }
                 case TestElementType.Interaction:
