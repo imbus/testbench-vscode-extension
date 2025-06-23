@@ -224,10 +224,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             );
 
             if (importSuccessful) {
-                this.logger.info(
-                    `Import process for item ${itemLabel} (UID: ${reportRootUID}) completed successfully.`
-                );
-                vscode.window.showInformationMessage(`Successfully imported test results for: ${itemLabel}`);
+                const importSuccessfulMessage = `Successfully imported test results for: ${itemLabel} (UID: ${reportRootUID})`;
+                this.logger.info(importSuccessfulMessage);
+                vscode.window.showInformationMessage(importSuccessfulMessage);
 
                 // Store the last imported item storage key
                 this.extensionContext.workspaceState.update(
