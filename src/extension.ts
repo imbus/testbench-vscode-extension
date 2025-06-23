@@ -262,7 +262,7 @@ async function performDeferredViewRestoration(
             await treeViews.testThemesTree.loadCycle(
                 savedContext.projectKey,
                 savedContext.cycleKey,
-                savedContext.tovName
+                savedContext.cycleLabel
             );
         } else {
             await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
@@ -366,7 +366,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     cycleKey,
                     tovKey: versionKey,
                     projectName,
-                    tovName
+                    tovName,
+                    cycleLabel: cycleItem.label?.toString()
                 });
                 await updateOrRestartLS(projectName, tovName);
                 if (treeViews?.testThemesTree) {

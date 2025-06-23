@@ -251,7 +251,7 @@ async function performDeferredViewRestoration(context, savedViewId, savedContext
         exports.logger.info(`Performing deferred view restoration for: ${savedViewId}`);
         await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
         if (savedContext.isCycle) {
-            await treeViews.testThemesTree.loadCycle(savedContext.projectKey, savedContext.cycleKey, savedContext.tovName);
+            await treeViews.testThemesTree.loadCycle(savedContext.projectKey, savedContext.cycleKey, savedContext.cycleLabel);
         }
         else {
             await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
@@ -345,7 +345,8 @@ async function registerExtensionCommands(context) {
                     cycleKey,
                     tovKey: versionKey,
                     projectName,
-                    tovName
+                    tovName,
+                    cycleLabel: cycleItem.label?.toString()
                 });
                 await updateOrRestartLS(projectName, tovName);
                 if (treeViews?.testThemesTree) {
