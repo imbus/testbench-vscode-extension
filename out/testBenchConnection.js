@@ -1,6 +1,6 @@
 "use strict";
 /**
- * @file testBenchConnection.ts
+ * @file src/testBenchConnection.ts
  * @description Handles connection and communication with the TestBench server.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -1020,7 +1020,9 @@ async function importReportWithResultsToTestbench(connection, projectKeyString, 
                 return null;
             }
             else if (reportHandler.isImportJobCompletedSuccessfully(importJobStatus)) {
-                vscode.window.showInformationMessage("Import completed successfully.");
+                const isImportJobCompletedSuccessfullyMessage = `Import job completed successfully for Project ${projectKeyString}, Cycle ${cycleKeyString}.`;
+                extension_1.logger.info(isImportJobCompletedSuccessfullyMessage);
+                // vscode.window.showInformationMessage("Import job completed successfully.");
             }
             else {
                 extension_1.logger.warn("Import job finished polling but status is unknown.", importJobStatus);

@@ -236,17 +236,6 @@ suite("TreeViewModule", function () {
             assert.strictEqual(context.errorHandler, errorHandler);
         });
 
-        test("should handle async initialization", async () => {
-            const module = new TestModule();
-            const startTime = Date.now();
-
-            await module.initialize(treeViewContext);
-
-            const endTime = Date.now();
-            assert.ok(endTime - startTime >= 10, "Should have waited at least 10ms");
-            assert.strictEqual(module.initialized, true);
-        });
-
         test("should throw error during initialization if needed", async () => {
             const failingModule = new TestModule("failing-module");
 

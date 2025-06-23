@@ -1,6 +1,6 @@
 "use strict";
 /**
- * @file extension.ts
+ * @file src/extension.ts
  * @description Main entry point for the TestBench VS Code extension.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -74,7 +74,7 @@ const FilterService_1 = require("./treeViews/utils/FilterService");
 function setLogger(newLogger) {
     exports.logger = newLogger;
 }
-/** Global connection to the (new) TestBench Play server. */
+// Global connection to the (new) TestBench Play server.
 exports.connection = null;
 function setConnection(newConnection) {
     exports.connection = newConnection;
@@ -82,7 +82,7 @@ function setConnection(newConnection) {
 function getConnection() {
     return exports.connection;
 }
-/** Login webview provider instance. */
+// Login webview provider instance.
 let loginWebViewProvider = null;
 function getLoginWebViewProvider() {
     return loginWebViewProvider;
@@ -160,7 +160,7 @@ async function displayProjectManagementTreeView() {
     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_PROJECTS_TREE, true);
     // Set the active tree view for filtering
     const filterService = FilterService_1.FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, 'testbenchExtension.showProjectsTree');
+    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showProjectsTree");
 }
 async function hideTestThemeTreeView() {
     if (!treeViews) {
@@ -175,7 +175,7 @@ async function displayTestThemeTreeView() {
     vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_TEST_THEMES_TREE, true);
     // Set the active tree view for filtering
     const filterService = FilterService_1.FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, 'testbenchExtension.showTestThemesTree');
+    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showTestThemesTree");
 }
 async function hideTestElementsTreeView() {
     if (!treeViews) {
@@ -190,7 +190,7 @@ async function displayTestElementsTreeView() {
     vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_TEST_ELEMENTS_TREE, true);
     // Set the active tree view for filtering
     const filterService = FilterService_1.FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, 'testbenchExtension.showTestElementsTree');
+    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showTestElementsTree");
 }
 /**
  * Initializes all tree views using the new tree framework.
@@ -203,16 +203,70 @@ async function initializeTreeViews(context) {
     try {
         treeViews = (0, treeViews_1.createAllTreeViews)(extensionContext, getConnection);
         await treeViews.initialize();
-        // Set up context keys for tree view visibility
-        await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_PROJECTS_TREE, true);
-        await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_TEST_THEMES_TREE, false);
-        await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_TEST_ELEMENTS_TREE, false);
+        // Check for saved view state before setting default visibility
+        const savedViewId = context.workspaceState.get(constants_1.StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+        const savedCycleContext = context.workspaceState.get(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+        const savedTovContext = context.workspaceState.get(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+        const savedContext = savedCycleContext || savedTovContext;
+        // Determine initial visibility based on saved state
+        let showProjects = true;
+        let showTestThemes = false;
+        let showTestElements = false;
+        if (savedViewId && savedViewId !== "projects" && savedContext) {
+            // Validate that the saved context has the required fields
+            const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
+            const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
+            if (hasValidProjectName && hasValidTovName) {
+                showProjects = false;
+                showTestThemes = savedViewId === "testThemes" || savedViewId === "testElements";
+                showTestElements = savedViewId === "testElements";
+            }
+        }
+        await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_PROJECTS_TREE, showProjects);
+        await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_TEST_THEMES_TREE, showTestThemes);
+        await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_TEST_ELEMENTS_TREE, showTestElements);
         exports.logger.info("Tree views initialized successfully");
     }
     catch (error) {
         exports.logger.error("Failed to initialize tree views:", error);
         vscode.window.showErrorMessage("Failed to initialize tree views. Please reload the window.");
         throw error;
+    }
+}
+/**
+ * Restores a previously saved view state.
+ * Updates the language server, loads data into the tree views based on the saved context,
+ * and adjusts the visibility of the tree views accordingly.
+ *
+ * @param context The VS Code extension context.
+ * @param savedViewId The identifier of the view to restore.
+ * @param savedContext An object containing the saved view information (project, TOV, cycle data).
+ * @returns A promise that resolves to true if the view was successfully restored, false otherwise.
+ */
+async function performDeferredViewRestoration(context, savedViewId, savedContext) {
+    if (!treeViews) {
+        return false;
+    }
+    try {
+        exports.logger.info(`Performing deferred view restoration for: ${savedViewId}`);
+        await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
+        if (savedContext.isCycle) {
+            await treeViews.testThemesTree.loadCycle(savedContext.projectKey, savedContext.cycleKey, savedContext.tovName);
+        }
+        else {
+            await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
+        }
+        await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
+        // Update visibility to show the restored views
+        await displayTestThemeTreeView();
+        await displayTestElementsTreeView();
+        await hideProjectManagementTreeView();
+        exports.logger.info(`Successfully restored view to context of TOV: ${savedContext.tovName}`);
+        return true;
+    }
+    catch (error) {
+        exports.logger.error("Failed to restore view state:", error);
+        return false;
     }
 }
 /**
@@ -230,7 +284,9 @@ async function registerExtensionCommands(context) {
         exports.logger.debug(`[Cmd] Called: ${constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation}`);
         const config = (0, configuration_1.getExtensionConfiguration)();
         if (config.get(constants_1.ConfigKeys.AUTO_LOGIN)) {
-            const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], { createIfNone: true });
+            const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+                createIfNone: true
+            });
             if (session) {
                 await handleTestBenchSessionChange(context, session);
             }
@@ -238,16 +294,20 @@ async function registerExtensionCommands(context) {
     };
     const handleLogin = async () => {
         exports.logger.debug(`[Cmd] Called: ${constants_1.allExtensionCommands.login}`);
-        const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], { createIfNone: true });
+        const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+            createIfNone: true
+        });
         if (session) {
             await handleTestBenchSessionChange(context, session);
         }
     };
     const handleLogout = async () => {
         exports.logger.debug("[Cmd] Called: logout");
-        const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], { silent: true });
+        const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+            silent: true
+        });
         if (session && authProviderInstance) {
-            // Programmatically remove the session to fire onDidChangeSessions and trigger proper UI cleanup.
+            // Remove the session to fire onDidChangeSessions and trigger proper UI cleanup.
             await authProviderInstance.removeSession(session.id);
             exports.logger.info(`[Cmd] Session ${session.id} removed by logout command.`);
         }
@@ -259,13 +319,14 @@ async function registerExtensionCommands(context) {
     const handleProjectCycleClick = async (cycleItem) => {
         exports.logger.debug(`[Cmd] Called: ${constants_1.allExtensionCommands.handleProjectCycleClick} for item ${cycleItem.label}`);
         const now = Date.now();
-        const isDoubleClick = lastCycleClick.id === cycleItem.id && now - lastCycleClick.timestamp < constants_1.TreeViewTiming.DOUBLE_CLICK_THRESHOLD_MS;
+        const isDoubleClick = lastCycleClick.id === cycleItem.id &&
+            now - lastCycleClick.timestamp < constants_1.TreeViewTiming.DOUBLE_CLICK_THRESHOLD_MS;
         if (isDoubleClick) {
             exports.logger.debug(`Cycle item double-clicked: ${cycleItem.label}`);
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
-            lastCycleClick = { id: "", timestamp: 0 }; // Reset tracker
+            lastCycleClick = { id: "", timestamp: 0 };
         }
         else {
             if (cycleItem.id) {
@@ -278,7 +339,14 @@ async function registerExtensionCommands(context) {
             const projectName = cycleItem.parent?.parent?.label?.toString();
             const tovName = cycleItem.parent?.label?.toString();
             if (projectKey && cycleKey && versionKey && projectName && tovName) {
-                await saveUIContext(context, "testThemes", { isCycle: true, projectKey, cycleKey, tovKey: versionKey, projectName, tovName });
+                await saveUIContext(context, "testThemes", {
+                    isCycle: true,
+                    projectKey,
+                    cycleKey,
+                    tovKey: versionKey,
+                    projectName,
+                    tovName
+                });
                 await updateOrRestartLS(projectName, tovName);
                 if (treeViews?.testThemesTree) {
                     await treeViews.testThemesTree.loadCycle(projectKey, cycleKey, cycleItem.label?.toString());
@@ -451,7 +519,10 @@ async function registerExtensionCommands(context) {
             id: constants_1.allExtensionCommands.setTextFilterForTestElements,
             handler: () => setFilterForView(treeViews?.testElementsTree)
         },
-        { id: constants_1.allExtensionCommands.clearTextFilterForProjects, handler: () => clearFilterForView(treeViews?.projectsTree) },
+        {
+            id: constants_1.allExtensionCommands.clearTextFilterForProjects,
+            handler: () => clearFilterForView(treeViews?.projectsTree)
+        },
         {
             id: constants_1.allExtensionCommands.clearTextFilterForTestThemes,
             handler: () => clearFilterForView(treeViews?.testThemesTree)
@@ -460,8 +531,14 @@ async function registerExtensionCommands(context) {
             id: constants_1.allExtensionCommands.clearTextFilterForTestElements,
             handler: () => clearFilterForView(treeViews?.testElementsTree)
         },
-        { id: constants_1.allExtensionCommands.toggleFilterDiffModeForProjects, handler: () => toggleDiffModeForView(treeViews?.projectsTree) },
-        { id: constants_1.allExtensionCommands.toggleFilterDiffModeForProjectsEnabled, handler: () => toggleDiffModeForView(treeViews?.projectsTree) },
+        {
+            id: constants_1.allExtensionCommands.toggleFilterDiffModeForProjects,
+            handler: () => toggleDiffModeForView(treeViews?.projectsTree)
+        },
+        {
+            id: constants_1.allExtensionCommands.toggleFilterDiffModeForProjectsEnabled,
+            handler: () => toggleDiffModeForView(treeViews?.projectsTree)
+        },
         {
             id: constants_1.allExtensionCommands.toggleFilterDiffModeForTestThemes,
             handler: () => toggleDiffModeForView(treeViews?.testThemesTree)
@@ -478,7 +555,10 @@ async function registerExtensionCommands(context) {
             id: constants_1.allExtensionCommands.toggleFilterDiffModeForTestElementsEnabled,
             handler: () => toggleDiffModeForView(treeViews?.testElementsTree)
         },
-        { id: constants_1.allExtensionCommands.clearAllFiltersForProjects, handler: () => clearAllFiltersForView(treeViews?.projectsTree) },
+        {
+            id: constants_1.allExtensionCommands.clearAllFiltersForProjects,
+            handler: () => clearAllFiltersForView(treeViews?.projectsTree)
+        },
         {
             id: constants_1.allExtensionCommands.clearAllFiltersForTestThemes,
             handler: () => clearAllFiltersForView(treeViews?.testThemesTree)
@@ -487,7 +567,7 @@ async function registerExtensionCommands(context) {
             id: constants_1.allExtensionCommands.clearAllFiltersForTestElements,
             handler: () => clearAllFiltersForView(treeViews?.testElementsTree)
         },
-        // Miscellaneous
+        // Other commands
         { id: constants_1.allExtensionCommands.clearInternalTestbenchFolder, handler: clearInternalFolder },
         { id: constants_1.allExtensionCommands.clearAllExtensionData, handler: () => clearAllExtensionData(context, true) },
         {
@@ -507,12 +587,10 @@ async function registerExtensionCommands(context) {
             handler: (item) => treeViews?.testElementsTree.createInteraction(item)
         }
     ];
-    // --- Registration Loop ---
-    // A single loop registers all commands from the registry.
+    // Registration Loop
     const existingCommands = await vscode.commands.getCommands();
     for (const { id, handler } of commandRegistry) {
         if (!existingCommands.includes(id)) {
-            // All commands are registered with the safe wrapper for consistent error handling.
             registerSafeCommand(context, id, handler);
         }
     }
@@ -568,74 +646,58 @@ async function handleTestBenchSessionChange(context, existingSession) {
                     if (!treeViews) {
                         throw new Error("Tree views not initialized");
                     }
-                    // Clear all tree data first
                     treeViews.clear();
-                    // Refresh to load new data
                     treeViews.projectsTree.refresh();
+                    // Check if we need to restore a view
+                    const savedViewId = context.workspaceState.get(constants_1.StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+                    const savedCycleContext = context.workspaceState.get(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+                    const savedTovContext = context.workspaceState.get(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+                    const savedContext = savedCycleContext || savedTovContext;
+                    let areViewsRestored = false;
+                    if (savedViewId && savedViewId !== "projects" && savedContext) {
+                        // Validate that the saved context has the required fields
+                        const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
+                        const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
+                        if (!hasValidProjectName || !hasValidTovName) {
+                            exports.logger.warn(`Cannot restore view state: invalid context data. ` +
+                                `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
+                                `Clearing invalid state and loading default view.`);
+                            // Clear the invalid state
+                            await context.workspaceState.update(constants_1.StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, undefined);
+                            await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
+                            await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
+                        }
+                        else {
+                            // Attempt restoration after a short delay to ensure data is loaded
+                            exports.logger.info(`Attempting to restore previous view: ${savedViewId}`);
+                            try {
+                                areViewsRestored = await performDeferredViewRestoration(context, savedViewId, savedContext);
+                            }
+                            catch (error) {
+                                exports.logger.error("Failed to restore view state:", error);
+                                areViewsRestored = false;
+                            }
+                        }
+                    }
+                    if (!areViewsRestored) {
+                        // Fallback: Load default project view if no state or if restoration fails
+                        exports.logger.info("Loading default projects view.");
+                        treeViews.projectsTree.refresh();
+                        await displayProjectManagementTreeView();
+                        await hideTestThemeTreeView();
+                        await hideTestElementsTreeView();
+                    }
                 }
                 catch (error) {
                     exports.logger.warn("[Extension] Error managing trees during session change:", error);
-                    await vscode.commands.executeCommand(constants_1.allExtensionCommands.displayAllProjects);
-                }
-            }
-            // --- START: VIEW RESTORATION LOGIC ---
-            let restored = false;
-            const savedViewId = context.workspaceState.get(constants_1.StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
-            const savedCycleContext = context.workspaceState.get(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
-            const savedTovContext = context.workspaceState.get(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
-            // Determine which context to use for restoration
-            let savedContext = savedCycleContext || savedTovContext;
-            if (savedViewId && savedViewId !== "projects" && savedContext) {
-                // Validate that the saved context has the required fields
-                const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === 'string';
-                const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === 'string';
-                if (!hasValidProjectName || !hasValidTovName) {
-                    exports.logger.warn(`Cannot restore view state: invalid context data. ` +
-                        `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
-                        `Clearing invalid state and loading default view.`);
-                    // Clear the invalid state
-                    await context.workspaceState.update(constants_1.StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, undefined);
-                    await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-                    await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
-                }
-                else {
-                    exports.logger.info(`Attempting to restore previous view: ${savedViewId}`);
-                    try {
-                        // 1. Restore Language Server
-                        await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
-                        // 2. Restore Tree Views with the correct context
-                        if (treeViews) {
-                            if (savedContext.isCycle) {
-                                await treeViews.testThemesTree.loadCycle(savedContext.projectKey, savedContext.cycleKey, savedContext.tovName);
-                            }
-                            else {
-                                await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
-                            }
-                            await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
-                        }
-                        // 3. Set the correct view visibility
-                        await displayTestThemeTreeView();
-                        await displayTestElementsTreeView();
-                        await hideProjectManagementTreeView();
-                        exports.logger.info(`Successfully restored view to context of TOV: ${savedContext.tovName}`);
-                        restored = true;
-                    }
-                    catch (error) {
-                        exports.logger.error("Failed to restore view state. Loading default view.", error);
-                        restored = false;
+                    // Ensure we have a working state even after error
+                    if (treeViews) {
+                        treeViews.projectsTree.refresh();
+                        await displayProjectManagementTreeView();
+                        await hideTestThemeTreeView();
+                        await hideTestElementsTreeView();
                     }
                 }
-            }
-            if (!restored) {
-                // FALLBACK: Load default project view if no state or if restoration fails
-                exports.logger.info("Loading default projects view.");
-                if (treeViews) {
-                    treeViews.clear();
-                    treeViews.projectsTree.refresh();
-                }
-                await displayProjectManagementTreeView();
-                await hideTestThemeTreeView();
-                await hideTestElementsTreeView();
             }
         }
         else {
@@ -668,15 +730,15 @@ async function handleTestBenchSessionChange(context, existingSession) {
  */
 async function saveUIContext(context, viewId, contextData) {
     await context.workspaceState.update(constants_1.StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, viewId);
-    if (viewId === 'projects') {
+    if (viewId === "projects") {
         // Clear context if the main project view is active
         await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
         await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
     }
     else if (contextData) {
         // Validate contextData before saving
-        const hasValidProjectName = contextData.projectName && typeof contextData.projectName === 'string';
-        const hasValidTovName = contextData.tovName && typeof contextData.tovName === 'string';
+        const hasValidProjectName = contextData.projectName && typeof contextData.projectName === "string";
+        const hasValidTovName = contextData.tovName && typeof contextData.tovName === "string";
         if (!hasValidProjectName || !hasValidTovName) {
             exports.logger.warn(`Cannot save UI context: invalid contextData. ` +
                 `projectName: ${contextData.projectName}, tovName: ${contextData.tovName}. ` +
@@ -780,10 +842,10 @@ async function activate(context) {
         exports.logger.warn("[Extension] Error trying to get initial session silently:", error);
         await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
     }
-    // Trigger Automatic Login Command if configured - do this asynchronously after a short delay
+    // Trigger Automatic Login Command if configured
     if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
         exports.logger.info("[Extension] Auto-login configured. Scheduling automatic login command.");
-        // Use setTimeout to ensure the webview has time to load first
+        // Short delay to ensure webview is loaded
         setTimeout(async () => {
             try {
                 await vscode.commands.executeCommand(constants_1.allExtensionCommands.automaticLoginAfterExtensionActivation);
@@ -791,7 +853,7 @@ async function activate(context) {
             catch (error) {
                 exports.logger.warn("[Extension] Error during automatic login:", error);
             }
-        }, constants_1.TreeViewTiming.WEBVIEW_LOAD_DELAY_MS); // 1 second delay to ensure webview is loaded
+        }, constants_1.TreeViewTiming.WEBVIEW_LOAD_DELAY_MS);
     }
     else {
         exports.logger.info("[Extension] Auto-login is disabled. Skipping automatic login command.");
@@ -848,8 +910,7 @@ async function deactivate() {
     }
 }
 /**
- * Utility function to clear all extension data for testing purposes.
- * This function can be called programmatically or used by the clearAllExtensionData command.
+ * Utility function to clear all extension data.
  *
  * @param {vscode.ExtensionContext} context The extension context.
  * @param {boolean} showConfirmation Whether to show a confirmation dialog (default: false for programmatic calls).
@@ -924,10 +985,7 @@ async function clearAllExtensionData(context, showConfirmation = false) {
         }
         // Clear all global state storage (connections, active connection)
         exports.logger.debug("[clearAllExtensionData] Clearing global state storage...");
-        const globalStateKeys = [
-            constants_1.StorageKeys.CONNECTIONS_STORAGE_KEY,
-            constants_1.StorageKeys.ACTIVE_CONNECTION_ID_KEY
-        ];
+        const globalStateKeys = [constants_1.StorageKeys.CONNECTIONS_STORAGE_KEY, constants_1.StorageKeys.ACTIVE_CONNECTION_ID_KEY];
         for (const key of globalStateKeys) {
             try {
                 await context.globalState.update(key, undefined);

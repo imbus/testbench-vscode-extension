@@ -176,10 +176,8 @@ suite("Extension Test Suite", function () {
         test("should export safeCommandHandler function", () => {
             assert.ok(typeof extension_1.safeCommandHandler === "function", "safeCommandHandler should be exported");
         });
-        test("safeCommandHandler should handle errors gracefully", async () => {
-        });
-        test("safeCommandHandler should handle unknown errors", async () => {
-        });
+        test("safeCommandHandler should handle errors gracefully", async () => { });
+        test("safeCommandHandler should handle unknown errors", async () => { });
     });
     suite("Language Server Management", () => {
         test("should export updateOrRestartLS function", () => {
@@ -220,12 +218,9 @@ suite("Extension Test Suite", function () {
         test("should export clearAllExtensionData function", () => {
             assert.ok(typeof extension_1.clearAllExtensionData === "function", "clearAllExtensionData should be exported");
         });
-        test("clearAllExtensionData should clear workspace state", async () => {
-        });
-        test("clearAllExtensionData should clear global state", async () => {
-        });
-        test("clearAllExtensionData should update context keys", async () => {
-        });
+        test("clearAllExtensionData should clear workspace state", async () => { });
+        test("clearAllExtensionData should clear global state", async () => { });
+        test("clearAllExtensionData should update context keys", async () => { });
     });
     suite("Tree View Management", () => {
         test("should export initializeTreeViews function", () => {
@@ -245,12 +240,9 @@ suite("Extension Test Suite", function () {
         });
     });
     suite("Error Handling", () => {
-        test("should handle authentication errors gracefully", async () => {
-        });
-        test("should handle tree view initialization errors", async () => {
-        });
-        test("should handle command registration errors", async () => {
-        });
+        test("should handle authentication errors gracefully", async () => { });
+        test("should handle tree view initialization errors", async () => { });
+        test("should handle command registration errors", async () => { });
     });
 });
 //# sourceMappingURL=extension.test.js.map

@@ -4,11 +4,9 @@
  */
 
 import * as assert from "assert";
-import * as vscode from "vscode";
 import { MarkingModule } from "../../treeViews/features/marking/MarkingModule";
 import { TreeViewContext } from "../../treeViews/core/TreeViewContext";
 import { TreeItemBase } from "../../treeViews/core/TreeItemBase";
-import { TreeViewConfig } from "../../treeViews/core/TreeViewConfig";
 
 suite("MarkingModule", () => {
     let markingModule: MarkingModule;
