@@ -58,7 +58,6 @@ const extension_1 = require("./extension");
 const utils = __importStar(require("./utils"));
 const constants_1 = require("./constants");
 const testBenchTypes_1 = require("./testBenchTypes");
-const extension_2 = require("./extension");
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 /**
@@ -147,6 +146,11 @@ class PlayServerConnection {
             }), 3, 2000);
             if (logoutResponse.status === 204) {
                 extension_1.logger.debug("[PlayServerConnection] Server logout successful (204).");
+                // Clearing the global state and session token
+                (0, extension_1.setConnection)(null);
+                await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
+                this.sessionToken = "";
+                (0, extension_1.getLoginWebViewProvider)()?.updateWebviewHTMLContent();
                 return true;
             }
             else {
@@ -563,7 +567,7 @@ class PlayServerConnection {
             extension_1.logger.trace(`Test structure of cycle response for cycle key ${cycleKey}:`, testStructureOfCycleResponse.status);
             if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
-                // logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, cycleStructureResponse.data);
+                extension_1.logger.trace(`@@@@ Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
                 return testStructureOfCycleResponse.data;
             }
             else {
@@ -629,7 +633,7 @@ class PlayServerConnection {
             extension_1.logger.trace(`Test structure of TOV response for TOV key ${tovKey}:`, testStructureOfTOVResponse.status);
             if (testStructureOfTOVResponse.data) {
                 // Note: The output is large
-                // logger.trace(`Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
+                extension_1.logger.trace(`!!!! Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
                 return testStructureOfTOVResponse.data;
             }
             else {
@@ -676,7 +680,7 @@ class PlayServerConnection {
             });
             switch (importZipResponse.status) {
                 case 201: {
-                    extension_1.logger.debug("Report imported to TestBench server successfully.");
+                    extension_1.logger.debug("Report imported successfully.");
                     const fileName = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
@@ -733,7 +737,6 @@ class PlayServerConnection {
      */
     async getJobIDOfImportJob(projectKey, cycleKey, importData) {
         const getJobIDOfImportUrl = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
-        extension_1.logger.debug(`Requesting job ID for import job with project key ${projectKey} and cycle key ${cycleKey}. API URL: ${getJobIDOfImportUrl}`);
         try {
             const importJobIDResponse = await withRetry(() => this.apiClient.post(getJobIDOfImportUrl, importData, {
                 headers: {
@@ -761,33 +764,33 @@ class PlayServerConnection {
                         return jobID;
                     }
                     else {
-                        const importJobIDNotFoundMessage = `Success response received but no jobID found in the response.`;
+                        const importJobIDNotFoundMessage = "Success response received but no jobID found in the response.";
                         extension_1.logger.error(importJobIDNotFoundMessage);
                         throw new Error(importJobIDNotFoundMessage);
                     }
                 }
                 case 400: {
-                    const importBadRequestMessage = `Bad Request: The request body is invalid for API call ${getJobIDOfImportUrl}`;
+                    const importBadRequestMessage = "Bad Request: The request body is invalid.";
                     extension_1.logger.error(importBadRequestMessage);
                     throw new Error(importBadRequestMessage);
                 }
                 case 403: {
-                    const importForbiddenMessage = `Forbidden: You do not have permission to import execution results for API call ${getJobIDOfImportUrl}`;
+                    const importForbiddenMessage = "Forbidden: You do not have permission to import execution results.";
                     extension_1.logger.error(importForbiddenMessage);
                     throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const importNotFoundMessage = `Not Found: Project or test cycle not found  for API call ${getJobIDOfImportUrl}`;
+                    const importNotFoundMessage = "Not Found: Project or test cycle not found.";
                     extension_1.logger.error(importNotFoundMessage);
                     throw new Error(importNotFoundMessage);
                 }
                 case 422: {
-                    const importUnprocessableEntityMessage = `Unprocessable Entity: The server cannot process the request  for API call ${getJobIDOfImportUrl}`;
+                    const importUnprocessableEntityMessage = "Unprocessable Entity: The server cannot process the request.";
                     extension_1.logger.error(importUnprocessableEntityMessage);
                     throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const importUnexpectedErrorMessage = `Unexpected status code ${importJobIDResponse.status} received for API call ${getJobIDOfImportUrl}`;
+                    const importUnexpectedErrorMessage = `Unexpected status code ${importJobIDResponse.status} received.`;
                     extension_1.logger.error(importUnexpectedErrorMessage);
                     throw new Error(importUnexpectedErrorMessage);
                 }
@@ -795,13 +798,13 @@ class PlayServerConnection {
         }
         catch (error) {
             if (axios_1.default.isAxiosError(error)) {
-                extension_1.logger.error(`Axios error during import job ID retrieval for API call ${getJobIDOfImportUrl}:`, error.message);
+                extension_1.logger.error("Axios error during import job ID retrieval:", error.message);
                 if (error.response) {
-                    extension_1.logger.error(`Error response data:`, error.response.data);
+                    extension_1.logger.error("Error response data:", error.response.data);
                 }
             }
             else {
-                extension_1.logger.error(`Unexpected error during import job ID retrieval for API call ${getJobIDOfImportUrl}:`, error.message);
+                extension_1.logger.error("Unexpected error during import job ID retrieval:", error);
             }
             throw error;
         }
@@ -1075,53 +1078,23 @@ async function selectReportWithResultsAndImportToTestbench(connection) {
  */
 async function extractDataFromReport(zipFilePath) {
     try {
-        extension_1.logger.debug(`[extractDataFromReport] Starting extraction from file: ${zipFilePath}`);
         const zipData = await fs.promises.readFile(path_1.default.resolve(zipFilePath));
         const zip = new jszip_1.default();
         const zipContents = await zip.loadAsync(zipData);
-        extension_1.logger.debug(`[extractDataFromReport] Successfully loaded zip file contents`);
         const cycleStructureFileName = "cycle_structure.json";
         const projectFileName = "project.json";
         const cycleStructureJson = await utils.extractAndParseJsonContent(zipContents, cycleStructureFileName);
         const projectJson = await utils.extractAndParseJsonContent(zipContents, projectFileName);
-        extension_1.logger.debug(`[extractDataFromReport] Extracted JSONs from report zip file "${zipFilePath}":\n` +
-            `cycle_structure.json:\n ${cycleStructureJson ? JSON.stringify(cycleStructureJson, null, 2) : "Not found or invalid"}\n` +
-            `project.json:\n ${projectJson ? JSON.stringify(projectJson, null, 2) : "Not found or invalid"}`);
-        let cycleKey = null;
-        try {
-            const testThemeProvider = extension_2.treeServiceManager.getTestThemeProvider();
-            cycleKey = testThemeProvider.getCurrentCycleKey();
-            extension_1.logger.debug(`[extractDataFromReport] Found cycleKey from test theme provider: ${cycleKey}`);
-        }
-        catch (error) {
-            extension_1.logger.debug(`[extractDataFromReport] Error getting cycleKey from test theme provider: ${error}`);
-        }
-        const projectKey = projectJson?.key || null;
-        extension_1.logger.debug(`[extractDataFromReport] Extracted projectKey: ${projectKey}`);
-        const cycleNameOfProject = projectJson?.projectContext?.cycleName || null;
-        extension_1.logger.debug(`[extractDataFromReport] Extracted cycleName from project context: ${cycleNameOfProject}`);
         const uniqueID = cycleStructureJson?.root?.base?.uniqueID || null;
-        extension_1.logger.debug(`[extractDataFromReport] Extracted uniqueID: ${uniqueID}`);
-        const result = {
-            uniqueID,
-            projectKey,
-            cycleNameOfProject,
-            cycleKey
-        };
-        extension_1.logger.debug(`[extractDataFromReport] Final extracted data:`, result);
-        return result;
+        const projectKey = projectJson?.key || null;
+        const cycleNameOfProject = projectJson?.projectContext?.cycleName || null;
+        const cycleKey = projectJson?.projectContext?.cycleKey || null;
+        extension_1.logger.debug(`Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`);
+        return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
     }
     catch (error) {
-        extension_1.logger.error(`[extractDataFromReport] Error extracting data from report: ${error}`);
-        if (error instanceof Error) {
-            extension_1.logger.error(`[extractDataFromReport] Error stack: ${error.stack}`);
-        }
-        return {
-            uniqueID: null,
-            projectKey: null,
-            cycleNameOfProject: null,
-            cycleKey: null
-        };
+        extension_1.logger.error("Error extracting JSON data from zip file:", error);
+        return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
     }
 }
 /**

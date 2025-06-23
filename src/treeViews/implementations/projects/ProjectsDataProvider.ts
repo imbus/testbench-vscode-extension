@@ -1,0 +1,266 @@
+/**
+ * @file src/treeViews/implementations/projects/ProjectsDataProvider.ts
+ * @description Data provider implementation for managing projects in the tree view.
+ */
+
+import { TestBenchLogger } from "../../../testBenchLogger";
+import { ErrorHandler } from "../../utils/ErrorHandler";
+import { PlayServerConnection } from "../../../testBenchConnection";
+import { TreeNode } from "../../../testBenchTypes";
+import { ProjectData } from "./ProjectsTreeItem";
+import { ProjectItemTypes } from "../../../constants";
+
+export class ProjectsDataProvider {
+    constructor(
+        private logger: TestBenchLogger,
+        private errorHandler: ErrorHandler,
+        private getConnection: () => PlayServerConnection | null
+    ) {}
+
+    /**
+     * Fetch all projects from the server and transform them to ProjectData format.
+     */
+    public async fetchProjects(): Promise<ProjectData[]> {
+        const connection = this.getConnection();
+        if (!connection) {
+            this.logger.error("No connection available");
+            throw new Error("No connection available");
+        }
+
+        try {
+            this.logger.debug("Fetching projects from server");
+            this.logger.trace(`Using connection: ${connection.getServerName()}:${connection.getServerPort()}`);
+
+            // Get the list of projects
+            const projectsFetchedFromServer = await connection.getProjectsList();
+
+            if (!projectsFetchedFromServer || !Array.isArray(projectsFetchedFromServer)) {
+                this.logger.warn("No projects returned from server or invalid response format");
+                return [];
+            }
+
+            this.logger.trace(`Processing ${projectsFetchedFromServer.length} projects`);
+
+            // Transform to ProjectData format with validation
+            const transformedProjects: ProjectData[] = [];
+            for (const project of projectsFetchedFromServer) {
+                try {
+                    if (!project || typeof project !== "object") {
+                        this.logger.warn("Invalid project data received:", project);
+                        continue;
+                    }
+
+                    if (!project.key || typeof project.key !== "string") {
+                        this.logger.warn("Project missing key or invalid key:", project);
+                        continue;
+                    }
+
+                    const transformedProject: ProjectData = {
+                        key: project.key,
+                        name: project.name || project.key, // Fallback to key if name is missing
+                        description: project.description || "",
+                        type: "project" as const,
+                        metadata: {
+                            creationTime: project.creationTime,
+                            status: project.status,
+                            visibility: project.visibility,
+                            tovsCount: project.tovsCount,
+                            cyclesCount: project.cyclesCount,
+                            lockerKey: project.lockerKey,
+                            startDate: project.startDate,
+                            endDate: project.endDate
+                        }
+                    };
+
+                    transformedProjects.push(transformedProject);
+                } catch (transformError) {
+                    this.logger.error("Error transforming project:", transformError);
+                }
+            }
+
+            this.logger.trace(`Transformed ${transformedProjects.length} projects`);
+            return transformedProjects;
+        } catch (error) {
+            this.logger.error("Failed to fetch projects:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * Fetch the complete project tree structure including versions and cycles for a given project key.
+     * @param projectKey The key of the project to fetch the tree for.
+     * @returns The project tree structure or null if no project tree is found.
+     */
+    public async fetchProjectTree(projectKey: string): Promise<TreeNode | null> {
+        const connection = this.getConnection();
+        if (!connection) {
+            this.logger.error("No connection available");
+            throw new Error("No connection available");
+        }
+
+        try {
+            this.logger.trace(
+                `Fetching project tree for ${projectKey} using connection: ${connection.getServerName()}:${connection.getServerPort()}`
+            );
+
+            const projectTreeFromServer = await connection.getProjectTreeOfProject(projectKey);
+            if (!projectTreeFromServer) {
+                this.logger.warn(`No project tree returned for ${projectKey}`);
+                return null;
+            }
+
+            this.logger.trace(`Project tree has ${projectTreeFromServer.children?.length || 0} children`);
+            return projectTreeFromServer;
+        } catch (error) {
+            this.logger.error(`Failed to fetch project tree for ${projectKey}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Transform TreeNode structure to ProjectData format.
+     * @param node The TreeNode to transform.
+     * @param type The type of the node.
+     * @param parentKey (Optional) The key of the parent node.
+     * @returns The transformed ProjectData.
+     */
+    public transformTreeNode(node: TreeNode, type: "version" | "cycle", parentKey?: string): ProjectData {
+        return {
+            key: node.key,
+            name: node.name,
+            description: "", // TreeNode doesn't have description
+            type: type,
+            parentKey: parentKey,
+            metadata: {
+                nodeType: node.nodeType,
+                creationTime: node.creationTime,
+                status: node.status,
+                visibility: node.visibility,
+                hasChildren: !!(node.children && node.children.length > 0),
+                childCount: node.children ? node.children.length : 0
+            }
+        };
+    }
+
+    /**
+     * Validate project data.
+     * @param data The data to validate.
+     * @returns True if the data is valid, false otherwise.
+     */
+    public validateProjectData(data: any): boolean {
+        return !!(
+            data &&
+            typeof data === "object" &&
+            typeof data.key === "string" &&
+            typeof data.name === "string" &&
+            ["project", "version", "cycle"].includes(data.type)
+        );
+    }
+
+    /**
+     * Extract cycles from a test object version node.
+     * @param tovNode The test object version node to extract cycles from.
+     * @returns The extracted cycles.
+     */
+    public extractCyclesFromVersion(tovNode: TreeNode): ProjectData[] {
+        if (!tovNode.children) {
+            return [];
+        }
+
+        return tovNode.children
+            .filter((child) => child.nodeType === ProjectItemTypes.CYCLE)
+            .map((cycleNode) => this.transformTreeNode(cycleNode, "cycle", tovNode.key));
+    }
+
+    /**
+     * Extract test object versions from a project tree.
+     * @param projectTree The project tree to extract versions from.
+     * @returns The extracted test object versions.
+     */
+    public extractVersionsFromProjectTree(projectTree: TreeNode): ProjectData[] {
+        if (!projectTree.children) {
+            return [];
+        }
+
+        return projectTree.children
+            .filter((child) => child.nodeType === ProjectItemTypes.VERSION)
+            .map((versionNode) => this.transformTreeNode(versionNode, "version", projectTree.key));
+    }
+
+    /**
+     * Get a flattened list of all cycles in a project.
+     * @param projectKey The key of the project to get all cycles for.
+     * @returns A promise that resolves to a list of all cycles in the project.
+     */
+    public async getAllCyclesForProject(projectKey: string): Promise<ProjectData[]> {
+        const projectTreeFromServer = await this.fetchProjectTree(projectKey);
+        if (!projectTreeFromServer || !projectTreeFromServer.children) {
+            return [];
+        }
+
+        const cycles: ProjectData[] = [];
+
+        // Iterate through test object versions
+        for (const tovNode of projectTreeFromServer.children) {
+            if (tovNode.nodeType === ProjectItemTypes.VERSION && tovNode.children) {
+                // Extract cycles from this tov
+                const tovCycles = tovNode.children
+                    .filter((child) => child.nodeType === ProjectItemTypes.CYCLE)
+                    .map((cycleNode) => this.transformTreeNode(cycleNode, "cycle", tovNode.key));
+
+                cycles.push(...tovCycles);
+            }
+        }
+
+        return cycles;
+    }
+
+    /**
+     * Find a specific node in the tree by key.
+     * @param root The root node of the tree to search in.
+     * @param targetKey The key of the node to find.
+     * @returns The node if found, null otherwise.
+     */
+    public findNodeByKey(root: TreeNode, targetKey: string): TreeNode | null {
+        if (root.key === targetKey) {
+            return root;
+        }
+
+        if (root.children) {
+            for (const child of root.children) {
+                const foundNode = this.findNodeByKey(child, targetKey);
+                if (foundNode) {
+                    return foundNode;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the path from root to a specific node.
+     * @param root The root node of the tree to search in.
+     * @param targetKey The key of the node to find.
+     * @param path The path to the node.
+     * @returns The path if found, null otherwise.
+     */
+    public getNodePath(root: TreeNode, targetKey: string, path: string[] = []): string[] | null {
+        path.push(root.key);
+
+        if (root.key === targetKey) {
+            return path;
+        }
+
+        if (root.children) {
+            for (const child of root.children) {
+                const foundPath = this.getNodePath(child, targetKey, [...path]);
+                if (foundPath) {
+                    return foundPath;
+                }
+            }
+        }
+
+        return null;
+    }
+}

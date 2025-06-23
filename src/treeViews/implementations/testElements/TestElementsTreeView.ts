@@ -1,0 +1,596 @@
+/**
+ * @file src/treeViews/implementations/testElements/TestElementsTreeView.ts
+ * @description Tree view implementation for managing test elements.
+ */
+
+import * as vscode from "vscode";
+import { TreeViewBase } from "../../core/TreeViewBase";
+import { TestElementData, TestElementItemData, TestElementsTreeItem, TestElementType } from "./TestElementsTreeItem";
+import { TreeViewConfig } from "../../core/TreeViewConfig";
+import { TestElementsDataProvider } from "./TestElementsDataProvider";
+import { testElementsConfig } from "./TestElementsConfig";
+import { PlayServerConnection } from "../../../testBenchConnection";
+import { ResourceFileService } from "./ResourceFileService";
+import { TestElementItemTypes } from "../../../constants";
+import { FilterService } from "../../utils/FilterService";
+
+export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
+    private dataProvider: TestElementsDataProvider;
+    private disposables: vscode.Disposable[] = [];
+    private currentTovKey: string | null = null;
+    private currentTovLabel: string | null = null;
+    private resourceFiles: Map<string, string[]> = new Map();
+    private resourceFileService: ResourceFileService;
+    private isUpdating: boolean = false;
+    private updateQueue: Promise<void> = Promise.resolve();
+    private filterService: FilterService;
+
+    constructor(
+        extensionContext: vscode.ExtensionContext,
+        private getConnection: () => PlayServerConnection | null,
+        config?: Partial<TreeViewConfig>
+    ) {
+        const fullConfig = { ...testElementsConfig, ...config };
+        super(extensionContext, fullConfig);
+
+        this.dataProvider = new TestElementsDataProvider(this.logger, this.errorHandler, getConnection, this.eventBus);
+        this.resourceFileService = new ResourceFileService(this.logger);
+        this.filterService = FilterService.getInstance();
+
+        // Register event handlers
+        this.registerEventHandlers();
+    }
+
+    /**
+     * Registers event handlers for various tree view events.
+     */
+    private registerEventHandlers(): void {
+        // Listen for test elements fetched event
+        this.eventBus.on("testElements:fetched", (event) => {
+            const { tovKey, count } = event.data;
+            if (tovKey === this.currentTovKey) {
+                this.logger.debug(`Received test elements fetched event for TOV ${tovKey} with ${count} elements`);
+                this.refresh();
+            }
+        });
+
+        // Listen for test elements error event
+        this.eventBus.on("testElements:error", (event) => {
+            const { tovKey, error } = event.data;
+            if (tovKey === this.currentTovKey) {
+                this.logger.error(`Error fetching test elements for TOV ${tovKey}: ${error}`);
+                this.errorHandler.handleVoid(new Error(error), "testElements:error");
+            }
+        });
+
+        // Listen for cycle selection to load the TOV
+        this.eventBus.on("cycle:selected", async () => {
+            this.logger.debug(`Cycle selected, need to find associated TOV`);
+            // handled in extension.ts handleProjectCycleClick
+        });
+
+        // Listen for TOV loaded in test themes
+        this.eventBus.on("tov:loaded", async (event) => {
+            const { tovKey, tovLabel } = event.data;
+            if (tovKey && tovKey !== this.currentTovKey) {
+                this.logger.debug(`Loading test elements for TOV ${tovKey} from test themes event`);
+                await this.loadTov(tovKey, tovLabel);
+            }
+        });
+
+        // Listen for connection changes
+        this.eventBus.on("connection:changed", async (event) => {
+            const { connected } = event.data;
+            if (connected && this.currentTovKey) {
+                this.refresh();
+            } else if (!connected) {
+                this.clearTree();
+            }
+        });
+
+        // Listen for individual test element updates for targeted refresh
+        this.eventBus.on("testElement:updated", (event) => {
+            const { id } = event.data;
+            const item = this.findItemById(this.rootItems, id);
+            if (item) {
+                // Refresh only the specific item that changed
+                this._onDidChangeTreeData.fire(item);
+            }
+        });
+    }
+
+    /**
+     * Finds a tree item recursively by its unique ID.
+     * @param items The list of items to search through.
+     * @param id The ID of the item to find.
+     * @returns The found TestElementsTreeItem or undefined.
+     */
+    private findItemById(items: TestElementsTreeItem[], id: string): TestElementsTreeItem | undefined {
+        for (const item of items) {
+            if (item.id === id) {
+                return item;
+            }
+            if (item.children && item.children.length > 0) {
+                const found = this.findItemById(item.children as TestElementsTreeItem[], id);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Loads test elements for a specific TOV (Test Object Version).
+     *
+     * @param tovKey - The unique identifier for the TOV to load.
+     * @param tovLabel - Optional label for the TOV to display in the title.
+     * @returns Promise that resolves when the TOV is loaded.
+     */
+    public async loadTov(tovKey: string, tovLabel?: string): Promise<void> {
+        try {
+            this.logger.debug(`Loading TOV ${tovKey}`);
+
+            // Clear existing state and cache
+            this.clearTree();
+            this.dataProvider.clearCache();
+
+            // Set new state
+            this.currentTovKey = tovKey;
+            this.currentTovLabel = tovLabel || null;
+            this.resourceFiles.clear();
+
+            // Update title to include TOV label
+            if (tovLabel) {
+                this.updateTitle(`${this.config.title} (${tovLabel})`);
+            } else {
+                this.updateTitle(`${this.config.title} (TOV: ${tovKey})`);
+            }
+
+            const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);
+
+            // Build tree items with proper parent-child relationships
+            this.rootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
+
+            await this.updateSubdivisionIcons(this.rootItems);
+
+            // Set the last data fetch timestamp to prevent infinite loading
+            // This is important even for empty results to prevent the tree from continuously trying to load data
+            (this as any)._lastDataFetch = Date.now();
+
+            // Force refresh now that all item states are finalized.
+            this._onDidChangeTreeData.fire(undefined);
+
+            this.eventBus.emit({
+                type: "tov:loaded",
+                source: this.config.id,
+                data: {
+                    tovKey,
+                    tovLabel: this.currentTovLabel
+                },
+                timestamp: Date.now()
+            });
+            this.logger.info(`Successfully loaded test elements for TOV ${tovKey}`);
+        } catch (error) {
+            this.logger.error("Error loading TOV:", error);
+            this.errorHandler.handleVoid(error as Error, "Failed to load test elements");
+            throw error;
+        }
+    }
+
+    /**
+     * Clears the tree view and resets all associated state.
+     */
+    public clearTree(): void {
+        super.clearTree();
+        this.currentTovKey = null;
+        this.currentTovLabel = null;
+        this.resourceFiles.clear();
+        this.resetTitle();
+    }
+
+    /**
+     * Recursively builds tree items from hierarchical test element data.
+     *
+     * @param data - The test element data to build the tree item from
+     * @param parent - Optional parent tree item
+     * @returns The constructed tree item with its children
+     */
+    private _buildTreeItems(data: TestElementData, parent?: TestElementsTreeItem): TestElementsTreeItem {
+        const item = this.createTreeItem(data, parent);
+        // Build children and set them on the item
+        if (data.children && data.children.length > 0) {
+            const childItems = data.children.map((childData) => this._buildTreeItems(childData, item));
+            // Set children array directly
+            item.children = childItems;
+            // Ensure each child knows its parent
+            childItems.forEach((child) => (child.parent = item));
+        }
+
+        return item;
+    }
+
+    /**
+     * Fetches and builds the root items for the test elements tree view.
+     *
+     * @returns Promise that resolves to an array of root tree items
+     */
+    protected async fetchRootItems(): Promise<TestElementsTreeItem[]> {
+        if (!this.currentTovKey) {
+            this.logger.debug("No TOV selected, returning empty");
+            return [];
+        }
+
+        try {
+            this.logger.debug(`Fetching root items for TOV: ${this.currentTovKey}`);
+            const hierarchicalTestElementsData = await this.dataProvider.fetchTestElements(this.currentTovKey);
+            const rootTestElementItems = hierarchicalTestElementsData.map((data) => this._buildTreeItems(data));
+
+            // Await the icon updates directly to ensure they complete before the UI is drawn.
+            await this.updateSubdivisionIcons(rootTestElementItems);
+            this.logger.info(`Built tree and updated icons for ${rootTestElementItems.length} root test elements.`);
+            return rootTestElementItems;
+        } catch (error) {
+            this.logger.error("Failed to fetch and build test elements tree:", error);
+            this.errorHandler.handleVoid(error as Error, "Could not load Test Elements.");
+            return [];
+        }
+    }
+
+    /**
+     * Updates all subdivision icons by checking for their existence on the local file system
+     * @param items Array of tree items to process
+     * @returns Promise that resolves when all icon updates are complete
+     */
+    private async updateSubdivisionIcons(items: TestElementsTreeItem[]): Promise<void> {
+        const subdivisionItems: TestElementsTreeItem[] = [];
+        const collectSubdivisions = (currentItems: TestElementsTreeItem[]) => {
+            for (const item of currentItems) {
+                if (item.data.testElementType === TestElementType.Subdivision) {
+                    subdivisionItems.push(item);
+                }
+                if (item.children) {
+                    collectSubdivisions(item.children as TestElementsTreeItem[]);
+                }
+            }
+        };
+        collectSubdivisions(items);
+
+        // Process file checks in parallel for all subdivisions.
+        await Promise.all(
+            subdivisionItems.map(async (item) => {
+                try {
+                    const hierarchicalName = item.data.hierarchicalName;
+                    if (hierarchicalName) {
+                        const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
+                        const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
+                        let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+
+                        if (resourcePath) {
+                            if (isResourceFile && !resourcePath.endsWith(".resource")) {
+                                resourcePath += ".resource";
+                            }
+                            const exists = await this.resourceFileService.pathExists(resourcePath);
+                            item.updateLocalAvailability(exists);
+                        }
+                    }
+                } catch (error) {
+                    this.logger.error(`Error updating icon for item ${item.label}:`, error);
+                }
+            })
+        );
+    }
+
+    /**
+     * Updates the icon for a single tree item by checking its local availability
+     * @param item The tree item to update
+     * @returns Promise that resolves when the icon update is complete
+     */
+    private async updateSingleItemIcon(item: TestElementsTreeItem): Promise<void> {
+        try {
+            if (item.data.testElementType === TestElementType.Subdivision) {
+                const hierarchicalName = item.data.hierarchicalName;
+                if (hierarchicalName) {
+                    // Check if this subdivision represents a resource file (has [Robot-Resource] suffix)
+                    const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
+
+                    if (isResourceFile) {
+                        // For resource files, check for the .resource file in the correct parent folder
+                        // Remove [Robot-Resource] from the end
+                        const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
+                        // Split into parent path and base name
+                        const lastSlash = cleanName.lastIndexOf("/");
+                        let parentPath = "";
+                        let baseName = cleanName;
+                        if (lastSlash !== -1) {
+                            parentPath = cleanName.substring(0, lastSlash);
+                            baseName = cleanName.substring(lastSlash + 1);
+                        }
+                        // Create the expected resource file path
+                        const resourceFileRelative = parentPath
+                            ? `${parentPath}/${baseName}.resource`
+                            : `${baseName}.resource`;
+                        const resourceFilePath =
+                            await this.resourceFileService.constructAbsolutePath(resourceFileRelative);
+                        let exists = false;
+                        if (resourceFilePath) {
+                            exists = await this.resourceFileService.fileExists(resourceFilePath);
+                        }
+                        // Fallback: check if file exists without .resource extension
+                        if (!exists) {
+                            const fallbackRelative = parentPath ? `${parentPath}/${baseName}` : baseName;
+                            const fallbackPath = await this.resourceFileService.constructAbsolutePath(fallbackRelative);
+                            if (fallbackPath) {
+                                exists = await this.resourceFileService.fileExists(fallbackPath);
+                            }
+                        }
+                        item.updateLocalAvailability(exists);
+                        this._onDidChangeTreeData.fire(item);
+                    } else {
+                        // For non-resource subdivisions, check if the folder exists locally
+                        const absolutePath = await this.resourceFileService.constructAbsolutePath(hierarchicalName);
+                        if (absolutePath) {
+                            const exists = await this.resourceFileService.directoryExists(absolutePath);
+                            item.updateLocalAvailability(exists);
+                            this._onDidChangeTreeData.fire(item);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            this.logger.error(`Error updating icon for item ${item.label}:`, error);
+        }
+    }
+
+    /**
+     * Retrieves the children for a given tree item.
+     * @param item The tree item to get children for
+     * @returns Promise resolving to an array of child tree items
+     */
+    protected async getChildrenForItem(item: TestElementsTreeItem): Promise<TestElementsTreeItem[]> {
+        if (item.children && item.children.length > 0) {
+            return item.children as TestElementsTreeItem[];
+        }
+
+        // Fallback: create children from data if not already created
+        if (item.data.children && item.data.children.length > 0) {
+            const children = item.data.children.map((childData) => this._buildTreeItems(childData, item));
+            item.children = children;
+            return children;
+        }
+
+        return [];
+    }
+
+    /**
+     * Creates a new tree item from test element data.
+     * @param data The test element data to create the item from
+     * @param parent Optional parent tree item
+     * @returns The created tree item
+     */
+    protected createTreeItem(data: TestElementData, parent?: TestElementsTreeItem): TestElementsTreeItem {
+        // Convert string literal TestElementType to enum
+        const testElementType = this.convertToTestElementTypeEnum(data.testElementType);
+
+        // Convert TestElementData to the extended TestElementItemData
+        const itemData: TestElementItemData = {
+            ...data,
+            testElementType,
+            tovKey: this.currentTovKey || undefined,
+            resourceFiles: this.resourceFiles.get(data.id) || [],
+            isLocallyAvailable: false,
+            localPath: undefined
+        };
+        const item = new TestElementsTreeItem(itemData, this.extensionContext, parent, this.eventBus);
+        this.applyModulesToTestElementsItem(item);
+
+        // Build children if they exist
+        if (data.children && data.children.length > 0) {
+            const children: TestElementsTreeItem[] = [];
+            for (const childData of data.children) {
+                const childItem = this.createTreeItem(childData, item);
+                children.push(childItem);
+            }
+            children.forEach((child) => item.addChild(child));
+        }
+
+        return item;
+    }
+
+    /**
+     * Converts a string literal test element type to its corresponding enum value.
+     * @param type The string literal type to convert
+     * @returns The corresponding TestElementType enum value
+     */
+    private convertToTestElementTypeEnum(type: string): TestElementType {
+        // Convert string literal to enum value
+        switch (type) {
+            case TestElementItemTypes.SUBDIVISION:
+                return TestElementType.Subdivision;
+            case TestElementItemTypes.INTERACTION:
+                return TestElementType.Interaction;
+            case TestElementItemTypes.DATA_TYPE:
+                return TestElementType.DataType;
+            case TestElementItemTypes.CONDITION:
+                return TestElementType.Condition;
+            case TestElementItemTypes.OTHER:
+            default:
+                return TestElementType.Other;
+        }
+    }
+
+    /**
+     * Gets the context value for a given test element type.
+     * @param testElementType The test element type to get context value for
+     * @returns The context value string for the element type
+     */
+    private getContextValueForElementType(testElementType: TestElementType): string {
+        switch (testElementType) {
+            case TestElementItemTypes.SUBDIVISION:
+                return "testElement.subdivision";
+            case TestElementItemTypes.INTERACTION:
+                return "testElement.interaction";
+            case TestElementItemTypes.DATA_TYPE:
+                return "testElement.dataType";
+            case TestElementItemTypes.CONDITION:
+                return "testElement.condition";
+            default:
+                return "testElement.other";
+        }
+    }
+
+    /**
+     * Applies modules to a test elements tree item.
+     * @param item The test elements tree item to apply modules to
+     */
+    private applyModulesToTestElementsItem(item: TestElementsTreeItem): void {
+        const expansionModule = this.getModule("expansion");
+        if (expansionModule) {
+            expansionModule.applyExpansionState(item);
+        }
+
+        const filterModule = this.getModule("filtering");
+        if (filterModule && filterModule.isActive()) {
+            // Filtering will be applied at the getChildren level
+        }
+    }
+
+    /**
+     * Gets the current TOV key.
+     * @returns The current TOV key or null if not set
+     */
+    public getCurrentTovKey(): string | null {
+        return this.currentTovKey;
+    }
+
+    /**
+     * Gets the test elements provider.
+     * @returns The tree data provider for test elements
+     */
+    public getTestElementsProvider(): vscode.TreeDataProvider<TestElementsTreeItem> {
+        return this;
+    }
+
+    /**
+     * Opens or creates a Robot resource file for the given test element item.
+     *
+     * @param item The test element tree item to open or create resource file for
+     * @returns Promise that resolves when the operation is complete
+     */
+    public async openOrCreateRobotResourceFile(item: TestElementsTreeItem): Promise<void> {
+        const itemType = item.data.testElementType;
+
+        if (itemType !== TestElementType.Subdivision && itemType !== TestElementType.Interaction) {
+            vscode.window.showErrorMessage("This command can only be used on a Subdivision or an Interaction.");
+            return;
+        }
+
+        const resourceItem = (itemType === TestElementType.Interaction ? item.parent : item) as
+            | TestElementsTreeItem
+            | undefined;
+
+        if (!resourceItem || resourceItem.data.testElementType !== TestElementType.Subdivision) {
+            vscode.window.showErrorMessage("Could not find the parent resource for this item.");
+            return;
+        }
+
+        const hierarchicalName = resourceItem.data.hierarchicalName;
+        if (!hierarchicalName) {
+            vscode.window.showErrorMessage("Cannot determine resource path: item has no hierarchical name.");
+            return;
+        }
+
+        try {
+            const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
+            const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
+            let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+
+            if (!resourcePath) {
+                return;
+            }
+
+            if (isResourceFile) {
+                if (!resourcePath.endsWith(".resource")) {
+                    resourcePath += ".resource";
+                }
+                const uid = resourceItem.data.uniqueID;
+                if (!uid) {
+                    throw new Error(`Subdivision ${resourceItem.label} has no UID.`);
+                }
+
+                const initialResourceFileContent = `tb:uid:${uid}\n\n`;
+                await this.resourceFileService.ensureFileExists(resourcePath, initialResourceFileContent);
+                const doc = await vscode.workspace.openTextDocument(resourcePath);
+                await vscode.window.showTextDocument(doc);
+            } else {
+                await this.resourceFileService.ensureFolderPathExists(resourcePath);
+                await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(resourcePath));
+            }
+
+            await this.updateSingleItemIcon(resourceItem);
+            let parent = resourceItem.parent as TestElementsTreeItem | null;
+            while (parent) {
+                if (parent.data.testElementType === TestElementType.Subdivision) {
+                    await this.updateSingleItemIcon(parent);
+                }
+                parent = parent.parent as TestElementsTreeItem | null;
+            }
+
+            // Invalidate the cache and trigger a full refresh
+            if (this.currentTovKey) {
+                this.dataProvider.clearCache(this.currentTovKey);
+            }
+
+            // Force immediate data fetch by resetting the last fetch timestamp
+            (this as any)._lastDataFetch = 0;
+
+            // Refresh will refetch and update all icons
+            this.refresh(undefined, { immediate: true });
+        } catch (error) {
+            this.errorHandler.handleVoid(error as Error, "Failed to open or create Robot resource file.");
+            vscode.window.showErrorMessage(
+                `Error handling resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
+    }
+
+    // TODO: Implement this feature after the backend API is implemented.
+    /**
+     * Handles the "Create Interaction" command for creating new interactions under subdivisions.
+     * @param item The TestElementsTreeItem representing the subdivision where the interaction will be created.
+     * @returns Promise<void> A promise that resolves when the operation completes.
+     * @throws May throw errors related to user input validation or file operations.
+     */
+    public async createInteraction(item: TestElementsTreeItem): Promise<void> {
+        if (item.data.testElementType !== TestElementType.Subdivision) {
+            vscode.window.showErrorMessage("This command can only be used on a Subdivision.");
+            return;
+        }
+
+        const interactionName = await vscode.window.showInputBox({
+            prompt: "Enter the name for the new Interaction (Keyword)",
+            placeHolder: "e.g., Log In To System",
+            validateInput: (text) => {
+                return text.trim().length > 0 ? null : "Interaction name cannot be empty.";
+            }
+        });
+
+        if (!interactionName) {
+            this.logger.debug("User cancelled 'Create Interaction' command.");
+            return;
+        }
+    }
+
+    /**
+     * @brief Disposes of all resources and cleans up the tree view.
+     * @returns void
+     */
+    public dispose(): void {
+        // Dispose of all disposables
+        for (const disposable of this.disposables) {
+            disposable.dispose();
+        }
+        this.disposables = [];
+        super.dispose();
+    }
+}

@@ -1638,10 +1638,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         if (logoutButton) {
                             logoutButton.addEventListener('click', () => {
                                 console.log("Sign Out button clicked.");
-                                vscode.postMessage({ 
-                                    command: '${WebviewMessageCommands.TRIGGER_COMMAND}', 
-                                    payload: { commandId: '${allExtensionCommands.logout}' }
-                                });                
+                                try {
+                                    vscode.postMessage({ 
+                                        command: '${WebviewMessageCommands.TRIGGER_COMMAND}', 
+                                        payload: { commandId: '${allExtensionCommands.logout}' }
+                                    });
+                                } catch (e) {
+                                    console.error("Failed to send logout command:", e);
+                                }
                             });
                         }
                     }());

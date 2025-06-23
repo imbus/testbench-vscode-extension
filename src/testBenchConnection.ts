@@ -1,5 +1,5 @@
 /**
- * @file testBenchConnection.ts
+ * @file src/testBenchConnection.ts
  * @description Handles connection and communication with the TestBench server.
  */
 
@@ -12,11 +12,10 @@ import * as base64 from "base-64";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
-import { logger } from "./extension";
+import { getLoginWebViewProvider, logger, setConnection } from "./extension";
 import * as utils from "./utils";
-import { JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
+import { ContextKeys, JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
 import { ExecutionMode } from "./testBenchTypes";
-import { treeServiceManager } from "./extension";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -130,6 +129,12 @@ export class PlayServerConnection {
 
             if (logoutResponse.status === 204) {
                 logger.debug("[PlayServerConnection] Server logout successful (204).");
+                // Clearing the global state and session token
+                setConnection(null);
+                await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
+                this.sessionToken = "";
+                getLoginWebViewProvider()?.updateWebviewHTMLContent();
+
                 return true;
             } else {
                 logger.error(
@@ -599,7 +604,10 @@ export class PlayServerConnection {
             );
             if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
-                // logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, cycleStructureResponse.data);
+                logger.trace(
+                    `@@@@ Received cycle structure for cycle key ${cycleKey}:`,
+                    testStructureOfCycleResponse.data
+                );
                 return testStructureOfCycleResponse.data;
             } else {
                 logger.error(`Unexpected response code: ${testStructureOfCycleResponse.status}`);
@@ -674,7 +682,7 @@ export class PlayServerConnection {
             logger.trace(`Test structure of TOV response for TOV key ${tovKey}:`, testStructureOfTOVResponse.status);
             if (testStructureOfTOVResponse.data) {
                 // Note: The output is large
-                // logger.trace(`Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
+                logger.trace(`!!!! Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
                 return testStructureOfTOVResponse.data;
             } else {
                 logger.error(`Unexpected response code: ${testStructureOfTOVResponse.status}`);
@@ -729,7 +737,7 @@ export class PlayServerConnection {
 
             switch (importZipResponse.status) {
                 case 201: {
-                    logger.debug("Report imported to TestBench server successfully.");
+                    logger.debug("Report imported successfully.");
                     const fileName: string | undefined = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
@@ -790,9 +798,6 @@ export class PlayServerConnection {
         importData: testBenchTypes.ImportData
     ): Promise<string> {
         const getJobIDOfImportUrl: string = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
-        logger.debug(
-            `Requesting job ID for import job with project key ${projectKey} and cycle key ${cycleKey}. API URL: ${getJobIDOfImportUrl}`
-        );
 
         try {
             const importJobIDResponse: AxiosResponse = await withRetry(
@@ -825,51 +830,48 @@ export class PlayServerConnection {
                         logger.debug(`Import initiated successfully. Job ID: ${jobID}`);
                         return jobID;
                     } else {
-                        const importJobIDNotFoundMessage: string = `Success response received but no jobID found in the response.`;
+                        const importJobIDNotFoundMessage: string =
+                            "Success response received but no jobID found in the response.";
                         logger.error(importJobIDNotFoundMessage);
                         throw new Error(importJobIDNotFoundMessage);
                     }
                 }
                 case 400: {
-                    const importBadRequestMessage: string = `Bad Request: The request body is invalid for API call ${getJobIDOfImportUrl}`;
+                    const importBadRequestMessage: string = "Bad Request: The request body is invalid.";
                     logger.error(importBadRequestMessage);
                     throw new Error(importBadRequestMessage);
                 }
                 case 403: {
-                    const importForbiddenMessage: string = `Forbidden: You do not have permission to import execution results for API call ${getJobIDOfImportUrl}`;
+                    const importForbiddenMessage: string =
+                        "Forbidden: You do not have permission to import execution results.";
                     logger.error(importForbiddenMessage);
                     throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const importNotFoundMessage: string = `Not Found: Project or test cycle not found  for API call ${getJobIDOfImportUrl}`;
+                    const importNotFoundMessage: string = "Not Found: Project or test cycle not found.";
                     logger.error(importNotFoundMessage);
                     throw new Error(importNotFoundMessage);
                 }
                 case 422: {
-                    const importUnprocessableEntityMessage: string = `Unprocessable Entity: The server cannot process the request  for API call ${getJobIDOfImportUrl}`;
+                    const importUnprocessableEntityMessage: string =
+                        "Unprocessable Entity: The server cannot process the request.";
                     logger.error(importUnprocessableEntityMessage);
                     throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importJobIDResponse.status} received for API call ${getJobIDOfImportUrl}`;
+                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importJobIDResponse.status} received.`;
                     logger.error(importUnexpectedErrorMessage);
                     throw new Error(importUnexpectedErrorMessage);
                 }
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                logger.error(
-                    `Axios error during import job ID retrieval for API call ${getJobIDOfImportUrl}:`,
-                    error.message
-                );
+                logger.error("Axios error during import job ID retrieval:", error.message);
                 if (error.response) {
-                    logger.error(`Error response data:`, error.response.data);
+                    logger.error("Error response data:", error.response.data);
                 }
             } else {
-                logger.error(
-                    `Unexpected error during import job ID retrieval for API call ${getJobIDOfImportUrl}:`,
-                    (error as Error).message
-                );
+                logger.error("Unexpected error during import job ID retrieval:", error);
             }
             throw error;
         }
@@ -914,9 +916,6 @@ export class PlayServerConnection {
         }
 
         try {
-            logger.debug(
-                `[PlayServerConnection] Sending keep-alive request to ${this.serverName} for user ${this.username}`
-            );
             await withRetry(
                 () =>
                     this.apiClient.get(`/login/session/v1`, {
@@ -925,15 +924,10 @@ export class PlayServerConnection {
                 5, // maxRetries
                 2000 // delayMs
             );
-            logger.trace("[PlayServerConnection] Keep-alive request successful.");
+            logger.trace("Keep-alive request sent.");
         } catch (error) {
-            logger.error("[PlayServerConnection] Keep-alive request failed after retries:", error);
-            if (axios.isAxiosError(error)) {
-                logger.error(
-                    `[PlayServerConnection] Keep-alive error details - Status: ${error.response?.status}, Message: ${error.message}`
-                );
-            }
-            logger.warn("[PlayServerConnection] Logging out the user after keep-alive failure.");
+            logger.error("Keep-alive request failed after retries:", error);
+            logger.warn("Logging out the user after keep-alive failure.");
             await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
         }
     }
@@ -1210,11 +1204,9 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
     cycleKey: string | null;
 }> {
     try {
-        logger.debug(`[extractDataFromReport] Starting extraction from file: ${zipFilePath}`);
         const zipData: Buffer = await fs.promises.readFile(path.resolve(zipFilePath));
         const zip: JSZip = new JSZip();
         const zipContents: JSZip = await zip.loadAsync(zipData);
-        logger.debug(`[extractDataFromReport] Successfully loaded zip file contents`);
 
         const cycleStructureFileName: string = "cycle_structure.json";
         const projectFileName: string = "project.json";
@@ -1222,50 +1214,18 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
         const cycleStructureJson = await utils.extractAndParseJsonContent(zipContents, cycleStructureFileName);
         const projectJson = await utils.extractAndParseJsonContent(zipContents, projectFileName);
 
+        const uniqueID: string | null = cycleStructureJson?.root?.base?.uniqueID || null;
+        const projectKey: string | null = projectJson?.key || null;
+        const cycleNameOfProject: string | null = projectJson?.projectContext?.cycleName || null;
+        const cycleKey: string | null = projectJson?.projectContext?.cycleKey || null;
+
         logger.debug(
-            `[extractDataFromReport] Extracted JSONs from report zip file "${zipFilePath}":\n` +
-                `cycle_structure.json:\n ${cycleStructureJson ? JSON.stringify(cycleStructureJson, null, 2) : "Not found or invalid"}\n` +
-                `project.json:\n ${projectJson ? JSON.stringify(projectJson, null, 2) : "Not found or invalid"}`
+            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`
         );
-
-        let cycleKey: string | null = null;
-        try {
-            const testThemeProvider = treeServiceManager.getTestThemeProvider();
-            cycleKey = testThemeProvider.getCurrentCycleKey();
-            logger.debug(`[extractDataFromReport] Found cycleKey from test theme provider: ${cycleKey}`);
-        } catch (error) {
-            logger.debug(`[extractDataFromReport] Error getting cycleKey from test theme provider: ${error}`);
-        }
-
-        const projectKey = projectJson?.key || null;
-        logger.debug(`[extractDataFromReport] Extracted projectKey: ${projectKey}`);
-
-        const cycleNameOfProject = projectJson?.projectContext?.cycleName || null;
-        logger.debug(`[extractDataFromReport] Extracted cycleName from project context: ${cycleNameOfProject}`);
-
-        const uniqueID = cycleStructureJson?.root?.base?.uniqueID || null;
-        logger.debug(`[extractDataFromReport] Extracted uniqueID: ${uniqueID}`);
-
-        const result = {
-            uniqueID,
-            projectKey,
-            cycleNameOfProject,
-            cycleKey
-        };
-        logger.debug(`[extractDataFromReport] Final extracted data:`, result);
-
-        return result;
+        return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
     } catch (error) {
-        logger.error(`[extractDataFromReport] Error extracting data from report: ${error}`);
-        if (error instanceof Error) {
-            logger.error(`[extractDataFromReport] Error stack: ${error.stack}`);
-        }
-        return {
-            uniqueID: null,
-            projectKey: null,
-            cycleNameOfProject: null,
-            cycleKey: null
-        };
+        logger.error("Error extracting JSON data from zip file:", error);
+        return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
     }
 }
 
