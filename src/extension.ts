@@ -336,6 +336,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const handleProjectCycleClick = async (cycleItem: ProjectsTreeItem) => {
         logger.debug(`[Cmd] Called: ${allExtensionCommands.handleProjectCycleClick} for item ${cycleItem.label}`);
+
+        if (!connection) {
+            logger.warn("[Cmd] handleProjectCycleClick called without active connection.");
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
+        }
+
         const now = Date.now();
         const isDoubleClick =
             lastCycleClick.id === cycleItem.id &&
@@ -388,6 +395,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
+        if (!connection) {
+            logger.warn("[Cmd] handleOpenTOV called without active connection.");
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
+        }
+
         const projectKey = tovItem.getProjectKey();
         const tovKey = tovItem.getVersionKey();
         const projectName = tovItem.parent?.label?.toString();
@@ -408,6 +421,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const handleOpenCycle = async (cycleItem: ProjectsTreeItem) => {
         if (!treeViews?.testThemesTree) {
+            return;
+        }
+
+        if (!connection) {
+            logger.warn("[Cmd] handleOpenCycle called without active connection.");
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
 
@@ -432,6 +451,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleGenerateForCycle = async (cycleItem: ProjectsTreeItem) => {
+        if (!connection) {
+            logger.warn("[Cmd] handleGenerateForCycle called without active connection.");
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
+        }
+
         const projectName = cycleItem.parent?.parent?.label?.toString();
         const tovName = cycleItem.parent?.label?.toString();
         await updateOrRestartLS(projectName, tovName);
@@ -666,6 +691,7 @@ async function handleTestBenchSessionChange(
     }
 
     const wasPreviouslyConnected = !!connection;
+    const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess && sessionToProcess.accessToken) {
         const activeConnection = await connectionManager.getActiveConnection(context);
@@ -704,6 +730,21 @@ async function handleTestBenchSessionChange(
             setConnection(newConnection);
             await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
+
+            const newSessionToken = newConnection.getSessionToken();
+            const sessionTokenChanged = previousSessionToken !== newSessionToken;
+
+            if (sessionTokenChanged) {
+                logger.info(
+                    "[Extension] Session token changed. Stopping language server to ensure it gets updated credentials."
+                );
+                try {
+                    await stopLanguageClient();
+                    logger.info("[Extension] Language server stopped due to session token change.");
+                } catch (error) {
+                    logger.warn("[Extension] Error stopping language server during session change:", error);
+                }
+            }
 
             // Refresh tree providers as the session has changed.
             if (
@@ -745,7 +786,6 @@ async function handleTestBenchSessionChange(
                             await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
                             await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
                         } else {
-                            // Attempt restoration after a short delay to ensure data is loaded
                             logger.info(`Attempting to restore previous view: ${savedViewId}`);
                             try {
                                 areViewsRestored = await performDeferredViewRestoration(
@@ -990,16 +1030,29 @@ export async function updateOrRestartLS(projectName: string | undefined, tovName
         return;
     }
 
+    if (!connection) {
+        logger.warn("[Cmd] updateOrRestartLS called without active connection. Cannot update language server.");
+        vscode.window.showWarningMessage("No active connection available. Please log in first.");
+        return;
+    }
+
     const existingClient = getLanguageClientInstance();
     logger.debug(
         `[Cmd] updateOrRestartLS called with projectName: ${projectName}, tovName: ${tovName}, existingClient state: ${existingClient ? existingClient.state : "none"}`
     );
-    if (existingClient && existingClient.state !== State.Stopped && existingClient.state !== State.Starting) {
-        logger.debug(`[Cmd] Updating language client with project name: ${projectName}, TOV name: ${tovName}`);
-        await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
-        await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
-    } else {
+
+    if (!existingClient || existingClient.state === State.Stopped || existingClient.state === State.Starting) {
+        logger.debug(`[Cmd] Restarting language client for project: ${projectName}, TOV: ${tovName}`);
         await restartLanguageClient(projectName, tovName);
+    } else {
+        logger.debug(`[Cmd] Updating language client with project name: ${projectName}, TOV name: ${tovName}`);
+        try {
+            await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
+            await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
+        } catch (error) {
+            logger.warn(`[Cmd] Failed to update language client, restarting instead: ${error}`);
+            await restartLanguageClient(projectName, tovName);
+        }
     }
 }
 
