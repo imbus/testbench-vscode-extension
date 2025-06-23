@@ -371,7 +371,6 @@ async function registerExtensionCommands(context) {
         if (!treeViews?.testThemesTree) {
             return;
         }
-        // Check if we have an active connection
         if (!exports.connection) {
             exports.logger.warn("[Cmd] handleOpenTOV called without active connection.");
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
@@ -397,7 +396,6 @@ async function registerExtensionCommands(context) {
         if (!treeViews?.testThemesTree) {
             return;
         }
-        // Check if we have an active connection
         if (!exports.connection) {
             exports.logger.warn("[Cmd] handleOpenCycle called without active connection.");
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
@@ -423,7 +421,6 @@ async function registerExtensionCommands(context) {
         }
     };
     const handleGenerateForCycle = async (cycleItem) => {
-        // Check if we have an active connection
         if (!exports.connection) {
             exports.logger.warn("[Cmd] handleGenerateForCycle called without active connection.");
             vscode.window.showWarningMessage("No active connection available. Please log in first.");

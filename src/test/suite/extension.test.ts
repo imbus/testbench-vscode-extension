@@ -30,6 +30,7 @@ import { delay } from "../utils/testUtils";
 import * as testBenchLogger from "../../testBenchLogger";
 import * as testBenchConnection from "../../testBenchConnection";
 import * as server from "../../server";
+import { State } from "vscode-languageclient/node";
 
 suite("Extension Test Suite", function () {
     let testEnv: TestEnvironment;
@@ -266,8 +267,10 @@ suite("Extension Test Suite", function () {
         test("updateOrRestartLS should update existing client when available", async () => {
             const executeCommandStub = testEnv.vscodeMocks.executeCommandStub;
 
-            // Mock getLanguageClientInstance to return a client
-            const mockClient = { state: "Running" } as any;
+            const mockConnection = {} as testBenchConnection.PlayServerConnection;
+            setConnection(mockConnection);
+
+            const mockClient = { state: State.Running } as any;
             testEnv.sandbox.stub(server, "getLanguageClientInstance").returns(mockClient);
 
             await updateOrRestartLS("testProject", "testTOV");
@@ -282,9 +285,10 @@ suite("Extension Test Suite", function () {
         test("updateOrRestartLS should restart client when not available", async () => {
             const restartStub = testEnv.sandbox.stub(server, "restartLanguageClient").resolves();
 
-            // Mock getLanguageClientInstance to return null
-            testEnv.sandbox.stub(server, "getLanguageClientInstance").returns(undefined);
+            const mockConnection = {} as testBenchConnection.PlayServerConnection;
+            setConnection(mockConnection);
 
+            testEnv.sandbox.stub(server, "getLanguageClientInstance").returns(undefined);
             await updateOrRestartLS("testProject", "testTOV");
 
             assert.ok(restartStub.calledWith("testProject", "testTOV"), "Should restart language client");
