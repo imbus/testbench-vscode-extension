@@ -31,7 +31,7 @@ export const testThemesConfig: TreeViewConfig = {
 
         marking: {
             enabled: true,
-            strategies: ["testGeneration", "import"],
+            strategies: ["generation", "import"],
             persistMarks: true,
             showImportButton: true,
             allowPersistentImport: false,

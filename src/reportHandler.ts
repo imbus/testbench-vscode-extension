@@ -1857,6 +1857,9 @@ export async function startTestGenerationUsingTOV(
                     : `Test generation completed for entire TOV: ${treeItem.label}`;
                 logger.info(`[ReportHandler] ${tovTestGenerationSuccessMessage}`);
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
+
+                await vscode.commands.executeCommand("workbench.view.extension.test");
+
                 return true;
             }
         );
