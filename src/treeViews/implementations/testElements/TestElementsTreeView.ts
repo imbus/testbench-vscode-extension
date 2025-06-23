@@ -50,7 +50,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const { tovKey, count } = event.data;
             if (tovKey === this.currentTovKey) {
                 this.logger.debug(`Received test elements fetched event for TOV ${tovKey} with ${count} elements`);
-                this.refresh();
             }
         });
 
@@ -133,7 +132,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             // Clear existing state and cache
             this.clearTree();
-            this.dataProvider.clearCache();
+            this.dataProvider.clearCache(tovKey); // Only clear cache for this specific TOV
 
             // Set new state
             this.currentTovKey = tovKey;
@@ -161,6 +160,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             // Force refresh now that all item states are finalized.
             this._onDidChangeTreeData.fire(undefined);
 
+            // Emit event after successful load to notify other components
             this.eventBus.emit({
                 type: "tov:loaded",
                 source: this.config.id,
@@ -217,8 +217,17 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      */
     protected async fetchRootItems(): Promise<TestElementsTreeItem[]> {
         if (!this.currentTovKey) {
-            this.logger.debug("No TOV selected, returning empty");
+            this.logger.debug("No TOV selected, returning empty array");
             return [];
+        }
+
+        // Check if we already have root items and they're fresh
+        if (this.rootItems.length > 0) {
+            const dataIsFresh = Date.now() - (this as any)._lastDataFetch < 30000; // 30 seconds
+            if (dataIsFresh) {
+                this.logger.debug(`Using cached root items for TOV: ${this.currentTovKey}`);
+                return this.rootItems;
+            }
         }
 
         try {
@@ -592,5 +601,36 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
         this.disposables = [];
         super.dispose();
+    }
+
+    /**
+     * Override the base refresh method to fetch data from the server
+     *
+     * @param item Optional specific item to refresh
+     * @param options Optional refresh options
+     */
+    public override refresh(item?: TestElementsTreeItem, options?: { immediate?: boolean }): void {
+        this.logger.debug(`Refreshing test elements tree view${item ? ` for item: ${item.label}` : ""}`);
+
+        if (item) {
+            super.refresh(item, options);
+            return;
+        }
+
+        if (this.currentTovKey) {
+            this.dataProvider.clearCache(this.currentTovKey);
+
+            this.loadTov(this.currentTovKey, this.currentTovLabel || undefined)
+                .then(() => {
+                    this.logger.debug("Successfully refreshed test elements tree from TOV context");
+                })
+                .catch((error) => {
+                    this.logger.error("Error refreshing test elements tree from TOV context:", error);
+                    // Don't clear the tree on error, keep existing data
+                });
+        } else {
+            this.logger.debug("No TOV key available, clearing tree");
+            this.clearTree();
+        }
     }
 }

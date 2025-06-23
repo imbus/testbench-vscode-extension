@@ -73,9 +73,11 @@ export class ResourceFileService {
         // Remove [Robot-Resource] suffix before checking
         const cleanedPath = this.removeRobotResourceFromPathString(filePath);
 
+        /*
         this.logger.trace(
             `[ResourceFileService] Checking if path exists: ${cleanedPath}, CaseSensitive: ${caseSensitiveCheck}`
         );
+        */
         try {
             await fs.promises.stat(cleanedPath);
 

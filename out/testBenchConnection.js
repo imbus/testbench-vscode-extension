@@ -567,7 +567,7 @@ class PlayServerConnection {
             extension_1.logger.trace(`Test structure of cycle response for cycle key ${cycleKey}:`, testStructureOfCycleResponse.status);
             if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
-                extension_1.logger.trace(`@@@@ Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
+                extension_1.logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
                 return testStructureOfCycleResponse.data;
             }
             else {

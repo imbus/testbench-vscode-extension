@@ -747,4 +747,22 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
 
         return searchItem(this.rootItems);
     }
+
+    /**
+     * Overrides the base refresh method to fetch data from the server
+     *
+     * @param item Optional specific item to refresh
+     * @param options Optional refresh options
+     */
+    public override refresh(item?: ProjectsTreeItem, options?: { immediate?: boolean }): void {
+        this.logger.debug(`Refreshing projects tree view${item ? ` for item: ${item.label}` : ""}`);
+
+        if (item) {
+            super.refresh(item, options);
+            return;
+        }
+
+        super.refresh(undefined, options);
+        this.logger.debug("Projects tree view refresh initiated - will fetch fresh data from server");
+    }
 }

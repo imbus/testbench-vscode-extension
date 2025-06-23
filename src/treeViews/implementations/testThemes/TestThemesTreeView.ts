@@ -396,12 +396,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
 
-            // Refresh marking state for all items
-            const markingModule = this.getModule("marking") as MarkingModule;
-            if (markingModule) {
-                markingModule.refreshMarkingState();
-            }
-
             this._onDidChangeTreeData.fire(undefined);
         } catch (error) {
             this.logger.error("Error loading cycle:", error);
@@ -470,13 +464,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
 
-            // Refresh marking state for all items
-            const markingModule = this.getModule("marking") as MarkingModule;
-            if (markingModule) {
-                markingModule.refreshMarkingState();
-            }
-
-            // Refresh the view
             this._onDidChangeTreeData.fire(undefined);
         } catch (error) {
             this.logger.error("Error loading TOV:", error);
@@ -888,15 +875,50 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Initializes the marking state by waiting for modules and refreshing marking state
+     * Initializes the marking state by waiting for modules
      */
     private async initializeMarkingState(): Promise<void> {
-        // Wait for modules to be initialized
         await this.initialize();
+    }
 
-        const markingModule = this.getModule("marking") as MarkingModule;
-        if (markingModule) {
-            markingModule.refreshMarkingState();
+    /**
+     * Overrides the base refresh method to fetch data from the server
+     *
+     * @param item Optional specific item to refresh
+     * @param options Optional refresh options
+     */
+    public override refresh(item?: TestThemesTreeItem, options?: { immediate?: boolean }): void {
+        this.logger.debug(`Refreshing test themes tree view${item ? ` for item: ${item.label}` : ""}`);
+
+        if (item) {
+            super.refresh(item, options);
+            return;
+        }
+
+        if (this.currentProjectKey) {
+            if (this.currentCycleKey && this.isOpenedFromCycle) {
+                this.dataProvider.invalidateCache(this.currentProjectKey, this.currentCycleKey, false);
+                this.loadCycle(this.currentProjectKey, this.currentCycleKey, this.currentCycleLabel || undefined)
+                    .then(() => {
+                        this.logger.debug("Successfully refreshed test themes tree from cycle context");
+                    })
+                    .catch((error) => {
+                        this.logger.error("Error refreshing test themes tree from cycle context:", error);
+                    });
+            } else if (this.currentTovKey) {
+                this.dataProvider.invalidateCache(this.currentProjectKey, this.currentTovKey, true);
+                this.loadTov(this.currentProjectKey, this.currentTovKey)
+                    .then(() => {
+                        this.logger.debug("Successfully refreshed test themes tree from TOV context");
+                    })
+                    .catch((error) => {
+                        this.logger.error("Error refreshing test themes tree from TOV context:", error);
+                    });
+            } else {
+                this.clearTree();
+            }
+        } else {
+            this.clearTree();
         }
     }
 }

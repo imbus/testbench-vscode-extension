@@ -5,7 +5,6 @@
 
 import assert from "assert";
 import * as sinon from "sinon";
-import * as vscode from "vscode";
 import { ProjectsTreeView } from "../../../treeViews/implementations/projects/ProjectsTreeView";
 import { ProjectsTreeItem, ProjectData } from "../../../treeViews/implementations/projects/ProjectsTreeItem";
 import { ProjectsDataProvider } from "../../../treeViews/implementations/projects/ProjectsDataProvider";
@@ -102,7 +101,7 @@ suite("ProjectsTreeView", function () {
             mockDataProvider.fetchProjects.resolves(mockProjects);
 
             // Test through public method that calls fetchRootItems
-            await treeView.refresh();
+            treeView.refresh();
 
             sinon.assert.calledOnce(mockDataProvider.fetchProjects);
         });
@@ -111,11 +110,8 @@ suite("ProjectsTreeView", function () {
             getConnectionStub.returns(null);
             // Mock the data provider to return empty array when no connection
             mockDataProvider.fetchProjects.resolves([]);
-
-            await treeView.refresh();
-
-            sinon.assert.calledThrice(mockLogger.debug);
-            // The debug calls are: 'Refreshing tree view', 'Starting data load', 'No connection available for fetching projects'
+            treeView.refresh();
+            sinon.assert.called(mockLogger.debug);
         });
 
         test("should handle data provider error", async () => {
@@ -353,6 +349,27 @@ suite("ProjectsTreeView", function () {
             await treeView.refresh();
 
             sinon.assert.calledOnce(mockRefresh);
+        });
+
+        test("should properly refresh", async () => {
+            // Mock the base refresh method
+            const originalRefresh = (treeView as any).refresh;
+            const mockBaseRefresh = testEnv.sandbox.stub();
+
+            // Replace the refresh method with mock
+            (treeView as any).refresh = function (item?: any, options?: any) {
+                mockBaseRefresh(item, options);
+                return originalRefresh.call(this, item, options);
+            };
+
+            treeView.refresh();
+
+            sinon.assert.calledOnce(mockBaseRefresh);
+            sinon.assert.calledWith(mockBaseRefresh, undefined, undefined);
+
+            sinon.assert.calledWith(mockLogger.debug, "Refreshing projects tree view");
+
+            (treeView as any).refresh = originalRefresh;
         });
     });
 

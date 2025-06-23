@@ -604,10 +604,7 @@ export class PlayServerConnection {
             );
             if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
-                logger.trace(
-                    `@@@@ Received cycle structure for cycle key ${cycleKey}:`,
-                    testStructureOfCycleResponse.data
-                );
+                logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
                 return testStructureOfCycleResponse.data;
             } else {
                 logger.error(`Unexpected response code: ${testStructureOfCycleResponse.status}`);
