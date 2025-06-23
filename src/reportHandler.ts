@@ -704,7 +704,11 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
 
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
             executionMode: defaultExecutionMode,
-            treeRootUID: UIDforRequest
+            treeRootUID: UIDforRequest,
+            suppressFilteredData: false,
+            suppressNotExecutable: true, // Exclude not executable tests (including NotPlanned)
+            suppressEmptyTestThemes: false,
+            filters: []
         };
         await vscode.window.withProgress(
             {
@@ -1779,6 +1783,7 @@ export async function startTestGenerationUsingTOV(
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
                     treeRootUID: rootUIDToUse,
                     suppressFilteredData: false,
+                    //suppressNotExecutable: true,
                     suppressEmptyTestThemes: false,
                     filters: []
                 };
@@ -1857,6 +1862,9 @@ export async function startTestGenerationUsingTOV(
                     : `Test generation completed for entire TOV: ${treeItem.label}`;
                 logger.info(`[ReportHandler] ${tovTestGenerationSuccessMessage}`);
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
+
+                await vscode.commands.executeCommand("workbench.view.extension.test");
+
                 return true;
             }
         );

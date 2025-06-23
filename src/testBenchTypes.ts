@@ -211,6 +211,7 @@ export interface LoginResponse {
 export interface TovStructureOptions {
     treeRootUID?: string;
     suppressFilteredData: boolean;
+    suppressNotExecutable?: boolean;
     suppressEmptyTestThemes: boolean;
     filters: TovFilter[];
 }

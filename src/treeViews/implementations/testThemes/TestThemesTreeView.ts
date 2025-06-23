@@ -596,8 +596,27 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                         `Could not mark item ${item.label}: Marking module not available or item has no ID.`
                     );
                 }
-            } else if (testGenerationSuccessful && !this.isOpenedFromCycle) {
-                this.logger.debug(`Test generation successful but not marking for import: opened from TOV context`);
+            } else if (
+                testGenerationSuccessful &&
+                ENABLE_ICON_MARKING_ON_TEST_GENERATION &&
+                !this.isOpenedFromCycle &&
+                tovKey
+            ) {
+                const markingModule = this.getModule("marking") as MarkingModule;
+                if (markingModule && item.id) {
+                    this.logger.debug(
+                        `Clearing all previous markings before marking item ${item.label} and its descendants for generation.`
+                    );
+
+                    markingModule.clearAllMarkings();
+                    markingModule.markItemWithDescendants(item, projectKey, tovKey, "generation");
+                } else {
+                    this.logger.warn(
+                        `Could not mark item ${item.label}: Marking module not available or item has no ID.`
+                    );
+                }
+            } else if (testGenerationSuccessful && !ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
+                this.logger.debug(`Test generation successful but icon marking is disabled`);
             }
         } catch (error) {
             this.logger.error("Error generating test cases:", error);
