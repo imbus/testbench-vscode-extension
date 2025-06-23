@@ -120,7 +120,6 @@ export class EventBus implements vscode.Disposable {
             }
         }
 
-        // Wait for all async handlers
         if (promises.length > 0) {
             await Promise.all(promises);
         }
@@ -166,13 +165,13 @@ export class EventBus implements vscode.Disposable {
     }
 
     /**
-     * Add an event to the history
+     * Add an event to the history.
+     * Limits the history size to maxHistorySize.
      * @param event The event to add to the history
      */
     private addToHistory(event: TreeViewEvent): void {
         this.eventHistory.push(event);
 
-        // Limit history size
         if (this.eventHistory.length > this.maxHistorySize) {
             this.eventHistory.shift();
         }
@@ -248,6 +247,7 @@ export const TreeViewEventTypes = {
     MARKING_ADDED: "marking:added",
     MARKING_REMOVED: "marking:removed",
     MARKING_CLEARED: "marking:cleared",
+    MARKING_CLEARED_GLOBAL: "marking:cleared:global",
 
     // Filter events
     FILTER_ADDED: "filter:added",

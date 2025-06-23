@@ -17,6 +17,7 @@ import { ALLOW_PERSISTENT_IMPORT_BUTTON, ENABLE_ICON_MARKING_ON_TEST_GENERATION 
 import { MarkingModule } from "../../features/marking/MarkingModule";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
+import { TreeViewEventTypes } from "../../utils/EventBus";
 
 export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
@@ -47,29 +48,24 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Registers all VS Code commands for the test themes tree view
      */
     private registerCommands(): void {
-        // Make root command
         this.disposables.push(
             vscode.commands.registerCommand(`${this.config.id}.makeRoot`, async (item: TestThemesTreeItem) =>
                 this.makeRoot(item)
             )
         );
 
-        // Reset custom root
         this.disposables.push(
             vscode.commands.registerCommand(`${this.config.id}.resetCustomRoot`, async () => this.resetCustomRoot())
         );
 
-        // Refresh command
         this.disposables.push(vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refresh()));
 
-        // Mark for import command
         this.disposables.push(
             vscode.commands.registerCommand(allExtensionCommands.markTestThemeForImport, (item: TestThemesTreeItem) =>
                 this.markForImport(item)
             )
         );
 
-        // Generate test cases command
         this.disposables.push(
             vscode.commands.registerCommand(
                 allExtensionCommands.generateTestCasesForTestTheme,
@@ -79,22 +75,19 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Registers event handlers for the test themes tree view
+     * Registers event handlers (listeners) for the test themes tree view
      */
     private registerEventHandlers(): void {
-        // Listen for cycle selection from projects tree
         this.eventBus.on("cycle:selected", async (event) => {
             const { projectKey, cycleKey, cycleLabel } = event.data;
             await this.loadCycle(projectKey, cycleKey, cycleLabel);
         });
 
-        // Listen for TOV selection from projects tree
         this.eventBus.on("tov:selected", async (event) => {
             const { projectKey, tovKey } = event.data;
             await this.loadTov(projectKey, tovKey);
         });
 
-        // Listen for connection changes
         this.eventBus.on("connection:changed", async (event) => {
             const { connected } = event.data;
             if (connected && (this.currentCycleKey || this.currentTovKey)) {
@@ -104,7 +97,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             }
         });
 
-        // Listen for marking events
         this.eventBus.on("item:marked", (event) => {
             if (event.source === this.config.id) {
                 const item = event.data.item as TestThemesTreeItem;
@@ -112,9 +104,20 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             }
         });
 
-        // Listen for test generation events
         this.eventBus.on("testGeneration:completed", () => {
             this.refresh();
+        });
+
+        this.eventBus.on(TreeViewEventTypes.MARKING_CLEARED_GLOBAL, (event) => {
+            // Only clear markings if this event came from another test themes tree view instance
+            // and was triggered by test generation
+            if (event.source !== this.config.id && event.data?.reason === "testGeneration") {
+                this.logger.debug("Received global marking cleared event from another test themes tree view instance");
+                const markingModule = this.getModule("marking") as MarkingModule;
+                if (markingModule) {
+                    markingModule.clearAllMarkings(false);
+                }
+            }
         });
     }
 
@@ -180,7 +183,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             this.logger.info(`Starting test result import for item: ${itemLabel} (UID: ${itemUID})`);
 
-            // Get the marking module to check if this is a properly marked item
             const markingModule = this.getModule("marking") as MarkingModule;
             if (!markingModule) {
                 throw new Error("Marking module not available");
@@ -196,7 +198,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             }
 
             // Determine which UID to use for the import
-            // If this is a descendant of a marked hierarchy, we need to use the root UID
+            // If this is a descendant of a marked hierarchy, use the root UID
             const rootId = markingModule.getRootIDForDescendant(item.id!);
             let reportRootUID = itemUID;
 
@@ -208,7 +210,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     this.logger.debug(`Using root UID ${reportRootUID} for import (item ${itemUID} is a descendant)`);
                 }
             } else {
-                // Check if this item itself is a root with descendants
                 const hierarchy = markingModule.getHierarchy(item.id!);
                 if (hierarchy) {
                     this.logger.debug(`Item ${itemUID} is a root with ${hierarchy.descendantIds.size} descendants`);
@@ -228,13 +229,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.logger.info(importSuccessfulMessage);
                 vscode.window.showInformationMessage(importSuccessfulMessage);
 
-                // Store the last imported item storage key
                 this.extensionContext.workspaceState.update(
                     `${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_last`,
                     item.id
                 );
 
-                // Check if we should clear the marking after import
                 if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
                     this.logger.debug(
                         `Clearing marked state for item: ${itemLabel} as ALLOW_PERSISTENT_IMPORT_BUTTON is false.`
@@ -245,7 +244,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     if (hierarchy) {
                         markingModule.unmarkItemByID(item.id!);
                     } else if (rootId) {
-                        // If this was a descendant, unmark from the root
                         markingModule.unmarkItemByID(rootId);
                     } else {
                         markingModule.unmarkItemByID(item.id!);
@@ -256,7 +254,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     );
                 }
 
-                // Refresh the tree to show any status updates
                 this.refresh();
             } else {
                 this.logger.warn(
@@ -326,7 +323,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             return;
         }
 
-        // Update the marking configuration to control import button visibility
         const markingConfig = this.config.modules.marking;
         if (markingConfig) {
             markingConfig.showImportButton = isOpenedFromCycle;
@@ -697,11 +693,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 elementType: data.elementType || TestThemeItemTypes.TEST_THEME,
                 hasChildren: data.hasChildren ?? false,
                 projectKey: this.currentProjectKey || undefined,
-                cycleKey: this.currentCycleKey || undefined
+                cycleKey: this.isOpenedFromCycle ? this.currentCycleKey || undefined : this.currentTovKey || undefined
             };
 
             const item = new TestThemesTreeItem(treeItemData, this.extensionContext, parent);
             item.setMetadata("openedFromCycle", this.isOpenedFromCycle);
+            item.updateId();
             this.applyModulesToTestThemesItem(item);
 
             return item;
@@ -716,7 +713,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param item The tree item to apply modules to
      */
     private applyModulesToTestThemesItem(item: TestThemesTreeItem): void {
-        // Apply any modules that need to be attached to the item
         const modules = [this.getModule("icons"), this.getModule("expansion"), this.getModule("marking")].filter(
             Boolean
         );
@@ -770,7 +766,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
 
         try {
-            // Toggle marking state
             const isCurrentlyMarked = markingModule.isMarked(item.id);
             if (isCurrentlyMarked) {
                 markingModule.unmarkItemByID(item.id);
@@ -839,13 +834,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Disposes of the tree view and all its resources
      */
     public dispose(): void {
-        // Dispose of all disposables
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
         this.disposables = [];
 
-        // Dispose of tree view
         if (this.vscTreeView) {
             this.vscTreeView.dispose();
             this.vscTreeView = undefined;

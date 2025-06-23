@@ -70,7 +70,7 @@ export class TestThemesTreeItem extends TreeItemBase {
         super(
             data.base.name,
             data.base.numbering,
-            data.elementType, // Use stable elementType for originalContextValue
+            data.elementType,
             TestThemesTreeItem.getInitialCollapsibleState(data),
             extensionContext,
             parent
@@ -79,18 +79,52 @@ export class TestThemesTreeItem extends TreeItemBase {
         this.data = data;
 
         this.tooltip = this.generateTooltip();
-        this.id = this.generateUniqueId();
         this.description = data.base.uniqueID;
         this.updateContextValue();
+
+        (this as any).id = this.generateUniqueId();
     }
 
     /**
-     * Generates a unique identifier for the tree item
-     * @return Unique identifier string combining type, parent path, and key
+     * Updates the ID when context changes (e.g., when openedFromCycle metadata is set)
      */
-    protected generateUniqueId(): string {
-        const parentPath = this.parent ? (this.parent as TestThemesTreeItem).id : "";
-        return `${this.data.elementType}:${parentPath}:${this.data.base.key}`;
+    public updateId(): void {
+        (this as any).id = this.generateUniqueId();
+    }
+
+    /**
+     * Generates a unique identifier for the tree item.
+     * @return Unique identifier string combining context, type, parent path, and key
+     */
+    public generateUniqueId(): string {
+        let parentPath = "";
+        if (this.parent && this.parent instanceof TestThemesTreeItem) {
+            try {
+                parentPath = this.parent.generateUniqueId() || "";
+            } catch {
+                // If parent ID access fails, use empty string to avoid infinite recursion
+                parentPath = "";
+            }
+        }
+
+        // Include context information to make IDs unique across different contexts
+        // (e.g. a test theme tree view opened from a  cycle vs TOV)
+        const contextInfo = this.getContextIdentifier();
+
+        return `${contextInfo}:${this.data.elementType}:${parentPath}:${this.data.base.key}`;
+    }
+
+    /**
+     * Generates a context identifier that includes project, cycle/TOV, and context type
+     * @return Context identifier string
+     */
+    private getContextIdentifier(): string {
+        const projectKey = this.data.projectKey || "unknown-project";
+        const contextKey = this.data.cycleKey || "unknown-context";
+        const isOpenedFromCycle = this.getMetadata("openedFromCycle") === true;
+        const contextType = isOpenedFromCycle ? "cycle" : "tov";
+
+        return `${contextType}:${projectKey}:${contextKey}`;
     }
 
     /**
@@ -119,12 +153,10 @@ export class TestThemesTreeItem extends TreeItemBase {
     private getContextValue(): string {
         let contextValue = this.originalContextValue;
 
-        // Add custom root context from metadata
         if (this.getMetadata("isCustomRoot") === true) {
             contextValue = `customRoot.${contextValue}`;
         }
 
-        // Add marking context from metadata
         const markingInfo = this.getMetadata("markingInfo") as MarkingInfo | undefined;
         if (markingInfo) {
             if (markingInfo.type === "import") {
@@ -134,7 +166,6 @@ export class TestThemesTreeItem extends TreeItemBase {
             }
         }
 
-        // Add cycle context from metadata
         if (this.getMetadata("openedFromCycle")) {
             contextValue = `openedFromCycle.${contextValue}`;
         }
@@ -208,7 +239,7 @@ export class TestThemesTreeItem extends TreeItemBase {
     public serialize(): any {
         return {
             data: this.data,
-            id: this.id,
+            id: this.generateUniqueId(),
             label: this.label,
             description: this.description,
             tooltip: this.tooltip instanceof vscode.MarkdownString ? this.tooltip.value : this.tooltip,
@@ -231,7 +262,6 @@ export class TestThemesTreeItem extends TreeItemBase {
         createInstance: (data: any) => T
     ): T {
         const instance = createInstance(data);
-        // Metadata is restored generically in TreeItemBase or a similar higher-level deserializer
         return instance;
     }
 
@@ -295,7 +325,6 @@ export class TestThemesTreeItem extends TreeItemBase {
      * @return True if the item type allows import and the tree view was opened from a cycle
      */
     public canImport(): boolean {
-        // Check if the tree view was opened from a cycle (import functionality is only available from cycles)
         const openedFromCycle = this.getMetadata("openedFromCycle");
         if (!openedFromCycle) {
             return false;

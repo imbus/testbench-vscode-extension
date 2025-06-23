@@ -32,7 +32,6 @@ export class CustomRootModule implements TreeViewModule {
             const changes = event.data.changes;
             const customRootChange = changes.find((c: any) => c.field === "customRoot");
             if (customRootChange) {
-                // Only update if the new value is different from the current state
                 if (this.customRootState !== customRootChange.newValue) {
                     this.customRootState = customRootChange.newValue;
                     this.updateContextKey();
@@ -53,7 +52,6 @@ export class CustomRootModule implements TreeViewModule {
             return;
         }
 
-        // Set initial context key
         this.updateContextKey();
     }
 
@@ -75,16 +73,12 @@ export class CustomRootModule implements TreeViewModule {
      */
     public applyCustomRootContext(item: TreeItemBase): void {
         if (this.isActive() && this.customRootState?.rootItemId && item.id === this.customRootState.rootItemId) {
-            // This item is the active custom root, so set metadata and let the item handle context value
             item.setMetadata("isCustomRoot", true);
-            // Update the context value to reflect the new state
             if (typeof (item as any).updateContextValue === "function") {
                 (item as any).updateContextValue();
             }
         } else {
-            // This item is not the active root, clear the custom root metadata
             item.setMetadata("isCustomRoot", false);
-            // Update the context value to reflect the new state
             if (typeof (item as any).updateContextValue === "function") {
                 (item as any).updateContextValue();
             }
@@ -108,7 +102,6 @@ export class CustomRootModule implements TreeViewModule {
             return null;
         }
 
-        // Find the item in the tree
         const state = this.context.stateManager.getState();
         const customRootItem = state.items.get(this.customRootState.rootItemId);
 
@@ -139,7 +132,6 @@ export class CustomRootModule implements TreeViewModule {
             return;
         }
 
-        // Check maxDepth if configured
         if (customRootConfig.maxDepth !== undefined) {
             const itemDepth = item.getDepth();
             if (itemDepth > customRootConfig.maxDepth) {
@@ -150,7 +142,6 @@ export class CustomRootModule implements TreeViewModule {
             }
         }
 
-        // Build root path
         const rootPath: string[] = [];
         let currentTreeItem: TreeItemBase | null = item;
         while (currentTreeItem) {
@@ -177,7 +168,6 @@ export class CustomRootModule implements TreeViewModule {
         this.context.stateManager.setState({ customRoot: newCustomRootState });
         this.updateContextKey();
 
-        // Emit an event to announce the change
         this.context.eventBus.emit({
             type: TreeViewEventTypes.CUSTOM_ROOT_SET,
             source: this.context.config.id,
@@ -202,7 +192,6 @@ export class CustomRootModule implements TreeViewModule {
         this.context.stateManager.setState({ customRoot: null });
         this.updateContextKey();
 
-        // Emit an event to announce the change
         this.context.eventBus.emit({
             type: TreeViewEventTypes.CUSTOM_ROOT_RESET,
             source: this.context.config.id,

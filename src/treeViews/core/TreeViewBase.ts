@@ -56,7 +56,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this.errorHandler,
             this
         );
-        // Listen for connection changes
+
         this.eventBus.on("connection:changed", async (event) => {
             const { connected } = event.data;
             if (connected) {
@@ -189,30 +189,26 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
-     * Converts a tree element to a VS Code tree item with applied module effects
+     * Converts a tree element to a VS Code tree item with applied module effects.
      * @param element The tree element to convert
      * @returns The VS Code tree item
      */
     getTreeItem(element: T): vscode.TreeItem {
-        // Apply custom root context from the module before returning the item to VS Code.
         const customRootModule = this.getModule("customRoot");
         if (customRootModule) {
             (customRootModule as CustomRootModule).applyCustomRootContext(element);
         }
 
-        // Apply marking state
         const markingModule = this.getModule("marking");
         if (markingModule && typeof markingModule.applyMarkingToItem === "function") {
             markingModule.applyMarkingToItem(element);
         }
 
-        // Apply filter diff visuals if enabled
         const filteringModule = this.getModule("filtering") as FilteringModule;
         if (filteringModule && typeof filteringModule.applyFilterDiffVisualsToTreeItem === "function") {
             filteringModule.applyFilterDiffVisualsToTreeItem(element);
         }
 
-        // Apply icon from the central IconModule
         const iconModule = this.getModule("icons") as IconModule | undefined;
         if (iconModule) {
             iconModule.setItemIcon(element);
@@ -268,8 +264,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             const filterModule = this.getModule("filtering");
             if (filterModule && filterModule.isActive()) {
                 this.logger.trace("Applying filtering");
-                // If this is the root level and we have parent/child inclusion enabled,
-                // we need to ensure the tree structure is properly loaded for filtering
+                // If this is the root level and parent/child inclusion is enabled,
+                // tree structure should be loaded fully for filtering
                 if (!element && this.shouldExpandForFiltering(filterModule)) {
                     this.logger.trace("Expanding tree structure for filtering");
                     children = await this.expandTreeForFiltering(children);
@@ -313,7 +309,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     private async expandTreeForFiltering(items: T[]): Promise<T[]> {
         const expandedItems: T[] = [];
         for (const item of items) {
-            // Load children for this item to ensure proper filtering evaluation
+            // Load children for this item for filtering
             const children = await this.getChildrenForItem(item);
             item.children = children;
             expandedItems.push(item);
@@ -332,7 +328,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         );
         const hasItems = this.rootItems.length > 0;
         const dataIsFresh = Date.now() - this._lastDataFetch < TreeViewTiming.DATA_FRESHNESS_THRESHOLD_MS;
-        // If we have data and it's fresh, use it
         if (hasItems && dataIsFresh) {
             this.logger.trace("Using cached root items");
             return this.rootItems;

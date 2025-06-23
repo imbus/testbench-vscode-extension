@@ -141,4 +141,42 @@ suite("MarkingModule", () => {
             "Generation marking info should be applied regardless of showImportButton setting"
         );
     });
+
+    test("should emit global marking cleared event when clearing all markings", async () => {
+        await markingModule.initialize(mockContext);
+        markingModule.markItem(mockItem, "project1", "cycle1", "import");
+
+        const emittedEvents: any[] = [];
+        const originalEmit = mockContext.eventBus.emit;
+        mockContext.eventBus.emit = (event: any) => {
+            emittedEvents.push(event);
+            return originalEmit(event);
+        };
+
+        markingModule.clearAllMarkings();
+
+        assert.strictEqual(emittedEvents.length, 1, "One event should have been emitted");
+
+        const emittedEvent = emittedEvents[0];
+        assert.strictEqual(emittedEvent.type, "marking:cleared:global");
+        assert.strictEqual(emittedEvent.source, mockContext.config.id);
+        assert.strictEqual(emittedEvent.data.reason, "testGeneration");
+        assert.ok(emittedEvent.data.timestamp, "Event should have a timestamp");
+    });
+
+    test("should not emit global marking cleared event when clearing all markings with emitGlobalEvent=false", async () => {
+        await markingModule.initialize(mockContext);
+        markingModule.markItem(mockItem, "project1", "cycle1", "import");
+
+        const emittedEvents: any[] = [];
+        const originalEmit = mockContext.eventBus.emit;
+        mockContext.eventBus.emit = (event: any) => {
+            emittedEvents.push(event);
+            return originalEmit(event);
+        };
+
+        markingModule.clearAllMarkings(false);
+
+        assert.strictEqual(emittedEvents.length, 0, "No events should have been emitted");
+    });
 });

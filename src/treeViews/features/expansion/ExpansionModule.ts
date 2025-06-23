@@ -45,7 +45,6 @@ export class ExpansionModule implements TreeViewModule {
             this.expansionState.defaultExpanded = defaultExpanded;
         }
 
-        // Listen for state changes
         context.eventBus.on("state:changed", (event) => {
             const changes = event.data.changes;
             const expansionChange = changes.find((c: any) => c.field === "expansion");
@@ -91,7 +90,6 @@ export class ExpansionModule implements TreeViewModule {
             return false;
         }
 
-        // Fall back to default
         return this.expansionState.defaultExpanded;
     }
 

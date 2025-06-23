@@ -7,6 +7,7 @@ import { TreeViewModule } from "../../core/TreeViewModule";
 import { TreeViewContext } from "../../core/TreeViewContext";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { MarkingState, MarkingInfo, MarkingHierarchy } from "../../state/StateTypes";
+import { TreeViewEventTypes } from "../../utils/EventBus";
 
 export class MarkingModule implements TreeViewModule {
     readonly id = "marking";
@@ -26,13 +27,11 @@ export class MarkingModule implements TreeViewModule {
      */
     async initialize(context: TreeViewContext): Promise<void> {
         this.context = context;
-        // Load saved marking state
         const state = context.stateManager.getState();
         if (state.marking) {
             this.markingState = state.marking;
         }
 
-        // Listen for state changes
         context.eventBus.on("state:changed", (event) => {
             const changes = event.data.changes;
             const markingChange = changes.find((c: any) => c.field === "marking");
@@ -100,7 +99,6 @@ export class MarkingModule implements TreeViewModule {
         item.setMetadata("marked", true);
         item.setMetadata("markingInfo", markingInfo);
 
-        // Emit marking event
         this.context.eventBus.emit({
             type: "item:marked",
             source: this.context.config.id,
@@ -132,7 +130,6 @@ export class MarkingModule implements TreeViewModule {
             return;
         }
 
-        // Mark the root item
         this.markItem(item, projectKey, cycleKey, type);
         const descendants = item.getDescendants();
         const validDescendants = descendants.filter((desc) => desc.id !== undefined);
@@ -155,8 +152,6 @@ export class MarkingModule implements TreeViewModule {
         });
         this.updateState();
         this.context.logger.info(`Marked item and ${validDescendants.length} descendants: ${item.label}`);
-
-        // Force immediate refresh of the entire tree to show visual changes
         this.context.refresh({ immediate: true });
     }
 
@@ -265,13 +260,27 @@ export class MarkingModule implements TreeViewModule {
     }
 
     /**
-     * Clears all markings from the marking state
+     * Clears all markings from the marking state.
+     * Emits a global event to notify other tree view instances to clear their markings.
+     * @param emitGlobalEvent Whether to emit a global event to notify other tree view instances (default: true)
      */
-    public clearAllMarkings(): void {
+    public clearAllMarkings(emitGlobalEvent: boolean = true): void {
         this.markingState = this.createEmptyState();
         this.updateState();
         this.context.refresh();
         this.context.logger.info("Cleared all markings");
+
+        if (emitGlobalEvent) {
+            this.context.eventBus.emit({
+                type: TreeViewEventTypes.MARKING_CLEARED_GLOBAL,
+                source: this.context.config.id,
+                data: {
+                    reason: "testGeneration",
+                    timestamp: Date.now()
+                },
+                timestamp: Date.now()
+            });
+        }
     }
 
     /**
@@ -309,7 +318,6 @@ export class MarkingModule implements TreeViewModule {
                 item.setMetadata("marked", false);
                 item.setMetadata("markingInfo", undefined);
             } else {
-                // Apply marking normally
                 item.setMetadata("marked", true);
                 item.setMetadata("markingInfo", markingInfo);
             }
@@ -329,7 +337,6 @@ export class MarkingModule implements TreeViewModule {
      */
     private updateState(): void {
         this.context.stateManager.setState({ marking: this.markingState });
-        // Trigger an immediate refresh of the tree view to update the visual state
         this.context.refresh({ immediate: true });
     }
 
@@ -338,30 +345,31 @@ export class MarkingModule implements TreeViewModule {
      * This should be called when the tree is rebuilt or when marking state changes
      */
     public refreshMarkingState(): void {
-        // Trigger a refresh of the tree view to update the visual state
         // The marking state will be applied to items when they are created or refreshed
         this.context.refresh({ immediate: true });
         this.context.logger.debug("Refreshed marking state for all items");
     }
 
     /**
-     * Handles configuration changes for the marking module
+     * Handles configuration changes for the marking module.
+     * Does not emit global event for configuration changes.
      * @param config The new configuration
      */
     async onConfigChange(config: any): Promise<void> {
         const markingConfig = config.modules?.marking;
         if (markingConfig && !markingConfig.enabled) {
-            this.clearAllMarkings();
+            this.clearAllMarkings(false);
         }
     }
 
     /**
      * Disposes of the marking module
-     * Clears all markings if persistence is not enabled
+     * Clears all markings if persistence is not enabled.
+     * Does not emit global event for disposal.
      */
     dispose(): void {
         if (!this.context.config.modules.marking?.persistMarks) {
-            this.clearAllMarkings();
+            this.clearAllMarkings(false);
         }
     }
 }
