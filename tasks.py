@@ -9,7 +9,7 @@ def build_vsix(c):
     if os.path.exists("bundled/libs"):
         shutil.rmtree("bundled/libs")
     c.run("pip-compile")
-    c.run("./.venv/Scrips/python -m nox --session bundle_dependencies")
+    c.run("python -m nox --session bundle_dependencies")
     # for dir in os.listdir("bundled/libs"):
     #     if dir.startswith("robot"):
     #         shutil.rmtree(f"bundled/libs/{dir}")
