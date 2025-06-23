@@ -1221,7 +1221,8 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
                 vscode.window.showErrorMessage(importJobFailedMessage);
                 return null;
             } else if (isImportJobCompletedSuccessfully(importJobStatus)) {
-                vscode.window.showInformationMessage(`Import completed successfully for "${reportRootUID}".`);
+                logger.debug(`Import job for specific tree item UID "${reportRootUID}" completed successfully.`);
+                // Do not display success message to user, only display the end result
             } else {
                 logger.warn("Import job finished polling but status is unknown.", importJobStatus);
                 vscode.window.showWarningMessage("Import job status unknown after polling.");
@@ -1301,10 +1302,12 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 const { createdReportPath } = reportCreationDetails!;
                 const reportFileNameForDisplay: string = path.basename(createdReportPath);
-                progress.report({ message: "Step 3/4: Importing to TestBench...", increment: 30 });
+                progress.report({
+                    message: `Step 3/4: Importing ${invokedOnItem.label} to TestBench...`,
+                    increment: 30
+                });
                 const importTargetMessage: string = `Importing "${invokedOnItem.label}" from report '${reportFileNameForDisplay}' to TestBench Project: ${resolvedTargetProjectKey}, Cycle: ${resolvedTargetCycleKey}.`;
                 logger.trace(importTargetMessage);
-                vscode.window.showInformationMessage(importTargetMessage);
 
                 await importReportWithResultsToTestbenchWithSpecificUID(
                     connection!,
@@ -1333,7 +1336,9 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     );
                 }
 
-                logger.trace("Process Completed: Read, Create, and Import specific tree item to Testbench.");
+                logger.trace(
+                    "[ReportHandler] Process Completed: Read, Create, and Import specific tree item to Testbench."
+                );
                 return true;
             } catch (error) {
                 const errorMsg: string = `An error occurred during the import process: ${
@@ -1749,7 +1754,12 @@ export async function startTestGenerationUsingTOV(
                 cancellable: true
             },
             async (progress, cancellationToken) => {
-                progress.report({ increment: 0, message: "Fetching TOV structure report..." });
+                progress.report({
+                    increment: 0,
+                    message: generateTestForSpecificTestThemeTreeItem
+                        ? `Fetching TOV structure report for specific item: ${treeItem.label}...`
+                        : "Fetching TOV structure report for entire TOV..."
+                });
 
                 if (!connection) {
                     throw new Error("No connection available");
@@ -1757,8 +1767,13 @@ export async function startTestGenerationUsingTOV(
 
                 // Use undefined for root when generating tests for all test themes in TOV
                 const rootUIDToUse = generateTestForSpecificTestThemeTreeItem
-                    ? (treeItem as any).data?.uniqueID
+                    ? (treeItem as any).data?.base?.uniqueID
                     : undefined;
+
+                logger.debug(
+                    `[ReportHandler] generateTestForSpecificTestThemeTreeItem: ${generateTestForSpecificTestThemeTreeItem}`
+                );
+                logger.debug(`[ReportHandler] Extracted root UID: ${rootUIDToUse}`);
 
                 // Fetch TOV structure to get all test themes
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
@@ -1767,6 +1782,10 @@ export async function startTestGenerationUsingTOV(
                     suppressEmptyTestThemes: false,
                     filters: []
                 };
+
+                logger.trace(
+                    `Requesting TOV structure for project ${projectKey} with root UID ${rootUIDToUse} and options: ${JSON.stringify(tovStructureOptions)}`
+                );
 
                 const tovReportJobID = await connection.requestToPackageTovsInServerAndGetJobID(
                     projectKey,
@@ -1833,16 +1852,20 @@ export async function startTestGenerationUsingTOV(
                 }
 
                 progress.report({ increment: 30, message: "Test generation completed" });
-                const successMessage = `Test generation completed for TOV: ${treeItem.label}`;
-                logger.info(`[ReportHandler] ${successMessage}`);
-                vscode.window.showInformationMessage(successMessage);
+                const tovTestGenerationSuccessMessage = generateTestForSpecificTestThemeTreeItem
+                    ? `Test generation completed for specific item: ${treeItem.label}`
+                    : `Test generation completed for entire TOV: ${treeItem.label}`;
+                logger.info(`[ReportHandler] ${tovTestGenerationSuccessMessage}`);
+                vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
                 return true;
             }
         );
     } catch (error) {
-        const errorMessage = `Test generation failed for TOV ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
-        logger.error(`[ReportHandler] ${errorMessage}`, error);
-        vscode.window.showErrorMessage(errorMessage);
+        const tovTestGenerationErrorMessage = generateTestForSpecificTestThemeTreeItem
+            ? `Test generation failed for specific item ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`
+            : `Test generation failed for TOV ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
+        logger.error(`[ReportHandler] ${tovTestGenerationErrorMessage}`, error);
+        vscode.window.showErrorMessage(tovTestGenerationErrorMessage);
         return false;
     }
 }

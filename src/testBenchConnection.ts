@@ -1130,7 +1130,9 @@ export async function importReportWithResultsToTestbench(
                 vscode.window.showErrorMessage(importJobFailedMessage);
                 return null;
             } else if (reportHandler.isImportJobCompletedSuccessfully(importJobStatus)) {
-                vscode.window.showInformationMessage("Import completed successfully.");
+                const isImportJobCompletedSuccessfullyMessage: string = `Import job completed successfully for Project ${projectKeyString}, Cycle ${cycleKeyString}.`;
+                logger.info(isImportJobCompletedSuccessfullyMessage);
+                // vscode.window.showInformationMessage("Import job completed successfully.");
             } else {
                 logger.warn("Import job finished polling but status is unknown.", importJobStatus);
                 vscode.window.showWarningMessage("Import job status unknown after polling.");
