@@ -27,3 +27,4 @@ requirements.txt
 .testbench/**
 .nox/**
 .ruff_cache/**
+.whl
