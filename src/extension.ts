@@ -211,7 +211,6 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
         let showTestElements = false;
 
         if (savedViewId && savedViewId !== "projects" && savedContext) {
-            // Validate that the saved context has the required fields
             const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
             const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
 
@@ -270,7 +269,6 @@ async function performDeferredViewRestoration(
 
         await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
 
-        // Update visibility to show the restored views
         await displayTestThemeTreeView();
         await displayTestElementsTreeView();
         await hideProjectManagementTreeView();
@@ -387,6 +385,31 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             } else {
                 throw new Error("Invalid cycle item: missing project, cycle, or version key");
             }
+        }
+    };
+
+    const handleProjectVersionClick = async (versionItem: ProjectsTreeItem) => {
+        logger.debug(`[Cmd] Called: ${allExtensionCommands.handleProjectVersionClick} for item ${versionItem.label}`);
+
+        if (!connection) {
+            logger.warn("[Cmd] handleProjectVersionClick called without active connection.");
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
+        }
+
+        const projectKey = versionItem.getProjectKey();
+        const tovKey = versionItem.getVersionKey();
+        const projectName = versionItem.parent?.label?.toString();
+        const tovName = versionItem.label?.toString();
+
+        if (projectKey && tovKey && projectName && tovName) {
+            logger.debug(`Version item clicked: ${tovName} in project ${projectName}`);
+
+            await updateOrRestartLS(projectName, tovName);
+        } else {
+            const errorMessage = `Cannot update language server: invalid project or TOV information. Project: ${projectName}, TOV: ${tovName}`;
+            vscode.window.showErrorMessage(errorMessage);
+            logger.error(errorMessage);
         }
     };
 
@@ -522,6 +545,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         // Tree Interaction & Navigation
         { id: allExtensionCommands.handleProjectCycleClick, handler: handleProjectCycleClick },
+        { id: allExtensionCommands.handleProjectVersionClick, handler: handleProjectVersionClick },
         { id: allExtensionCommands.openTOVFromProjectsView, handler: handleOpenTOV },
         { id: allExtensionCommands.openCycleFromProjectsView, handler: handleOpenCycle },
         {
@@ -1057,33 +1081,6 @@ export async function updateOrRestartLS(projectName: string | undefined, tovName
 }
 
 /**
- * Called when the extension is deactivated.
- */
-export async function deactivate(): Promise<void> {
-    try {
-        if (connection) {
-            logger.info("[Extension] Performing server logout on deactivation.");
-            await connection.logoutUserOnServer();
-        }
-        if (client) {
-            logger.info("[Extension] Attempting to stop language server on deactivation.");
-            await stopLanguageClient(true);
-            logger.info("[Extension] Language server stopped on deactivation.");
-        }
-        if (treeViews) {
-            logger.info("[Extension] Disposing TreeViews on deactivation.");
-            treeViews.projectsTree.dispose();
-            treeViews.testThemesTree.dispose();
-            treeViews.testElementsTree.dispose();
-            treeViews = null;
-        }
-        logger.info("Extension deactivated.");
-    } catch (error) {
-        logger.error("Error during deactivation:", error);
-    }
-}
-
-/**
  * Utility function to clear all extension data.
  *
  * @param {vscode.ExtensionContext} context The extension context.
@@ -1118,7 +1115,6 @@ export async function clearAllExtensionData(
 
         logger.info("[clearAllExtensionData] Starting comprehensive extension data cleanup...");
 
-        // Logout user and clear connection
         if (connection) {
             logger.debug("[clearAllExtensionData] Logging out from server...");
             try {
@@ -1129,7 +1125,6 @@ export async function clearAllExtensionData(
             setConnection(null);
         }
 
-        // Clear all VS Code authentication sessions
         try {
             logger.debug("[clearAllExtensionData] Clearing VS Code authentication sessions...");
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, [], {
@@ -1143,7 +1138,6 @@ export async function clearAllExtensionData(
             logger.warn("[clearAllExtensionData] Error clearing authentication session:", error);
         }
 
-        // Clear all workspace state storage
         logger.debug("[clearAllExtensionData] Clearing workspace state storage...");
         const workspaceStateKeys = [
             StorageKeys.LAST_GENERATED_PARAMS,
@@ -1169,7 +1163,6 @@ export async function clearAllExtensionData(
             }
         }
 
-        // Clear all global state storage (connections, active connection)
         logger.debug("[clearAllExtensionData] Clearing global state storage...");
         const globalStateKeys = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
 
@@ -1181,7 +1174,6 @@ export async function clearAllExtensionData(
             }
         }
 
-        // Clear all connection passwords from secret storage
         logger.debug("[clearAllExtensionData] Clearing connection passwords from secret storage...");
         try {
             const connections = await connectionManager.getConnections(context);
@@ -1197,7 +1189,6 @@ export async function clearAllExtensionData(
             logger.warn("[clearAllExtensionData] Error clearing connection passwords:", error);
         }
 
-        // Clear tree data and state
         if (treeViews) {
             logger.debug("[clearAllExtensionData] Clearing tree data and state...");
             try {
@@ -1207,7 +1198,6 @@ export async function clearAllExtensionData(
             }
         }
 
-        // Update UI state by updating context keys
         logger.debug("[clearAllExtensionData] Updating UI state...");
         const contextUpdates = [
             ["setContext", ContextKeys.CONNECTION_ACTIVE, false],
@@ -1224,7 +1214,6 @@ export async function clearAllExtensionData(
             }
         }
 
-        // Update login webview to reflect the new clean state
         logger.debug("[clearAllExtensionData] Updating login webview...");
         try {
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
@@ -1232,7 +1221,6 @@ export async function clearAllExtensionData(
             logger.warn("[clearAllExtensionData] Error updating login webview:", error);
         }
 
-        // Stop language client if running
         if (client) {
             logger.debug("[clearAllExtensionData] Stopping language client...");
             try {
@@ -1242,7 +1230,6 @@ export async function clearAllExtensionData(
             }
         }
 
-        // Clear internal testbench folder
         logger.debug("[clearAllExtensionData] Clearing internal testbench folder...");
         try {
             const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
@@ -1253,7 +1240,7 @@ export async function clearAllExtensionData(
                 );
                 await utils.clearInternalTestbenchFolder(
                     testbenchWorkingDirectoryPath,
-                    [testBenchLogger.folderNameOfLogs], // Exclude logs folder
+                    [testBenchLogger.folderNameOfLogs],
                     false
                 );
             }
@@ -1261,7 +1248,6 @@ export async function clearAllExtensionData(
             logger.warn("[clearAllExtensionData] Error clearing internal testbench folder:", error);
         }
 
-        // Show projects view and hide other views to ensure proper UI state
         try {
             await displayProjectManagementTreeView();
             await hideTestThemeTreeView();
@@ -1288,5 +1274,32 @@ export async function clearAllExtensionData(
         }
 
         return false;
+    }
+}
+
+/**
+ * Called when the extension is deactivated.
+ */
+export async function deactivate(): Promise<void> {
+    try {
+        if (connection) {
+            logger.info("[Extension] Performing server logout on deactivation.");
+            await connection.logoutUserOnServer();
+        }
+        if (client) {
+            logger.info("[Extension] Attempting to stop language server on deactivation.");
+            await stopLanguageClient(true);
+            logger.info("[Extension] Language server stopped on deactivation.");
+        }
+        if (treeViews) {
+            logger.info("[Extension] Disposing TreeViews on deactivation.");
+            treeViews.projectsTree.dispose();
+            treeViews.testThemesTree.dispose();
+            treeViews.testElementsTree.dispose();
+            treeViews = null;
+        }
+        logger.info("Extension deactivated.");
+    } catch (error) {
+        logger.error("Error during deactivation:", error);
     }
 }
