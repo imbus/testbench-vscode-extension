@@ -108,7 +108,7 @@ export class TestThemesTreeItem extends TreeItemBase {
         }
 
         // Include context information to make IDs unique across different contexts
-        // (e.g. a test theme tree view opened from a  cycle vs TOV)
+        // (e.g. a test theme tree view opened from a cycle vs TOV)
         const contextInfo = this.getContextIdentifier();
 
         return `${contextInfo}:${this.data.elementType}:${parentPath}:${this.data.base.key}`;
@@ -237,62 +237,11 @@ export class TestThemesTreeItem extends TreeItemBase {
      * @return Object containing all serializable item data
      */
     public serialize(): any {
+        const baseSerialized = super.serialize();
         return {
-            data: this.data,
-            id: this.generateUniqueId(),
-            label: this.label,
-            description: this.description,
-            tooltip: this.tooltip instanceof vscode.MarkdownString ? this.tooltip.value : this.tooltip,
-            contextValue: this.contextValue,
-            collapsibleState: this.collapsibleState,
-            metadata: Array.from(this._metadata.entries())
+            ...baseSerialized,
+            data: this.data
         };
-    }
-
-    /**
-     * Deserializes data into a tree item instance
-     * @param data The serialized data to deserialize
-     * @param extensionContext The VS Code extension context
-     * @param createInstance Function to create the instance
-     * @return The deserialized tree item instance
-     */
-    public static deserialize<T extends TreeItemBase = TestThemesTreeItem>(
-        data: any,
-        extensionContext: vscode.ExtensionContext,
-        createInstance: (data: any) => T
-    ): T {
-        const instance = createInstance(data);
-        return instance;
-    }
-
-    /**
-     * Creates a deserializer function for tree items
-     * @param parent Optional parent tree item
-     * @param extensionContext The VS Code extension context
-     * @return Function that can deserialize tree item data
-     */
-    public static createDeserializer(parent?: TestThemesTreeItem, extensionContext?: vscode.ExtensionContext) {
-        return (data: any) => {
-            if (!extensionContext) {
-                throw new Error("Extension context is required for deserialization");
-            }
-            return new TestThemesTreeItem(data.data, extensionContext, parent);
-        };
-    }
-
-    /**
-     * Deserializes a tree item with parent context
-     * @param serialized The serialized tree item data
-     * @param extensionContext The VS Code extension context
-     * @param parent Optional parent tree item
-     * @return The deserialized tree item instance
-     */
-    public static deserializeWithParent(
-        serialized: any,
-        extensionContext: vscode.ExtensionContext,
-        parent?: TestThemesTreeItem
-    ): TestThemesTreeItem {
-        return this.deserialize(serialized, extensionContext, this.createDeserializer(parent, extensionContext));
     }
 
     /**
