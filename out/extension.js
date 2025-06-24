@@ -305,7 +305,7 @@ async function registerExtensionCommands(context) {
             silent: true
         });
         if (session && authProviderInstance) {
-            // Remove the session to fire onDidChangeSessions and trigger proper UI cleanup.
+            // Removing the session fires onDidChangeSessions and triggers proper UI cleanup.
             await authProviderInstance.removeSession(session.id);
             exports.logger.info(`[Cmd] Session ${session.id} removed by logout command.`);
         }

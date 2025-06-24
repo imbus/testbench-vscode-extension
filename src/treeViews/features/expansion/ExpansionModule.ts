@@ -45,6 +45,7 @@ export class ExpansionModule implements TreeViewModule {
             this.expansionState.defaultExpanded = defaultExpanded;
         }
 
+        // Listen for state changes from other modules
         context.eventBus.on("state:changed", (event) => {
             const changes = event.data.changes;
             const expansionChange = changes.find((c: any) => c.field === "expansion");
@@ -57,6 +58,23 @@ export class ExpansionModule implements TreeViewModule {
             }
         });
 
+        // Listen for user expansion/collapse actions
+        context.eventBus.on("tree:itemExpanded", (event) => {
+            const item = event.data.item;
+            if (item && item.id) {
+                this.context.logger.debug(`Item expanded: ${item.label} (${item.id})`);
+                this.setExpanded(item.id, true);
+            }
+        });
+
+        context.eventBus.on("tree:itemCollapsed", (event) => {
+            const item = event.data.item;
+            if (item && item.id) {
+                this.context.logger.debug(`Item collapsed: ${item.label} (${item.id})`);
+                this.setExpanded(item.id, false);
+            }
+        });
+
         context.logger.debug("ExpansionModule initialized");
     }
 
@@ -66,6 +84,11 @@ export class ExpansionModule implements TreeViewModule {
      * @param expanded Whether the item should be expanded
      */
     public setExpanded(itemId: string, expanded: boolean): void {
+        const expansionConfig = this.context.config.modules.expansion;
+        if (!expansionConfig?.rememberExpansion) {
+            return;
+        }
+
         if (expanded) {
             this.expansionState.expandedItems.add(itemId);
             this.expansionState.collapsedItems.delete(itemId);
@@ -83,6 +106,11 @@ export class ExpansionModule implements TreeViewModule {
      * @return true if expanded, false otherwise
      */
     public isExpanded(itemId: string): boolean {
+        const expansionConfig = this.context.config.modules.expansion;
+        if (!expansionConfig?.rememberExpansion) {
+            return this.expansionState.defaultExpanded;
+        }
+
         if (this.expansionState.expandedItems.has(itemId)) {
             return true;
         }
