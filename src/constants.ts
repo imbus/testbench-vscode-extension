@@ -215,6 +215,7 @@ export const allExtensionCommands = {
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
     modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
     handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`,
+    handleProjectVersionClick: `${baseKeyOfExtension}.handleProjectVersionClick`,
     resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
     resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
     getFilters: `${baseKeyOfExtension}.getFilters`,
