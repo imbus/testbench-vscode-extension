@@ -36,7 +36,17 @@ export class PersistenceModule implements TreeViewModule {
         // Load initial state
         const loadedState = await this.load();
         if (loadedState) {
+            context.logger.debug("Persistence module loaded state from storage");
             context.stateManager.setState(loadedState);
+            context.logger.debug("Persistence module set state in state manager");
+
+            // Trigger a refresh to ensure expansion state is applied to existing tree items
+            setTimeout(() => {
+                context.logger.debug("Triggering refresh after persistence load to apply expansion state");
+                context.refresh();
+            }, 100); // Small delay to ensure state is fully set
+        } else {
+            context.logger.debug("Persistence module: no saved state found");
         }
 
         context.logger.debug("PersistenceModule initialized");
@@ -136,6 +146,9 @@ export class PersistenceModule implements TreeViewModule {
                 collapsedItems: Array.from(state.expansion.collapsedItems),
                 defaultExpanded: state.expansion.defaultExpanded
             };
+            this.context.logger.debug(
+                `Saving expansion state: ${dataToSave.expansion.expandedItems.length} expanded, ${dataToSave.expansion.collapsedItems.length} collapsed`
+            );
         }
 
         if (persistenceConfig.includeMarking && state.marking) {
@@ -198,6 +211,9 @@ export class PersistenceModule implements TreeViewModule {
                 collapsedItems: new Set(data.expansion.collapsedItems || []),
                 defaultExpanded: data.expansion.defaultExpanded ?? expansionConfig?.defaultExpanded ?? false
             };
+            this.context.logger.debug(
+                `Loaded expansion state: ${state.expansion.expandedItems.size} expanded, ${state.expansion.collapsedItems.size} collapsed`
+            );
         }
 
         // Restore marking state

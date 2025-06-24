@@ -73,6 +73,13 @@ export class ProjectsTreeItem extends TreeItemBase {
     }
 
     /**
+     * Updates the ID when context changes
+     */
+    public updateId(): void {
+        (this as any).id = this.generateUniqueId();
+    }
+
+    /**
      * Generates a tooltip string for this tree item
      * @return A formatted tooltip string with item information
      */

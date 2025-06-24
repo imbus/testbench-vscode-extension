@@ -37,15 +37,13 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.resourceFileService = new ResourceFileService(this.logger);
         this.filterService = FilterService.getInstance();
 
-        // Register event handlers
         this.registerEventHandlers();
     }
 
     /**
-     * Registers event handlers for various tree view events.
+     * Registers event handlers (listeners) for various tree view events.
      */
     private registerEventHandlers(): void {
-        // Listen for test elements fetched event
         this.eventBus.on("testElements:fetched", (event) => {
             const { tovKey, count } = event.data;
             if (tovKey === this.currentTovKey) {
@@ -53,7 +51,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         });
 
-        // Listen for test elements error event
         this.eventBus.on("testElements:error", (event) => {
             const { tovKey, error } = event.data;
             if (tovKey === this.currentTovKey) {
@@ -62,13 +59,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         });
 
-        // Listen for cycle selection to load the TOV
         this.eventBus.on("cycle:selected", async () => {
             this.logger.debug(`Cycle selected, need to find associated TOV`);
             // handled in extension.ts handleProjectCycleClick
         });
 
-        // Listen for TOV loaded in test themes
         this.eventBus.on("tov:loaded", async (event) => {
             const { tovKey, tovLabel } = event.data;
             if (tovKey && tovKey !== this.currentTovKey) {
@@ -77,7 +72,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         });
 
-        // Listen for connection changes
         this.eventBus.on("connection:changed", async (event) => {
             const { connected } = event.data;
             if (connected && this.currentTovKey) {
@@ -87,7 +81,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         });
 
-        // Listen for individual test element updates for targeted refresh
         this.eventBus.on("testElement:updated", (event) => {
             const { id } = event.data;
             const item = this.findItemById(this.rootItems, id);
@@ -130,16 +123,13 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         try {
             this.logger.debug(`Loading TOV ${tovKey}`);
 
-            // Clear existing state and cache
             this.clearTree();
             this.dataProvider.clearCache(tovKey); // Only clear cache for this specific TOV
 
-            // Set new state
             this.currentTovKey = tovKey;
             this.currentTovLabel = tovLabel || null;
             this.resourceFiles.clear();
 
-            // Update title to include TOV label
             if (tovLabel) {
                 this.updateTitle(`${this.config.title} (${tovLabel})`);
             } else {
@@ -148,7 +138,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);
 
-            // Build tree items with proper parent-child relationships
             this.rootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
 
             await this.updateSubdivisionIcons(this.rootItems);
@@ -157,10 +146,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
 
-            // Force refresh now that all item states are finalized.
             this._onDidChangeTreeData.fire(undefined);
 
-            // Emit event after successful load to notify other components
             this.eventBus.emit({
                 type: "tov:loaded",
                 source: this.config.id,
@@ -198,12 +185,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      */
     private _buildTreeItems(data: TestElementData, parent?: TestElementsTreeItem): TestElementsTreeItem {
         const item = this.createTreeItem(data, parent);
-        // Build children and set them on the item
         if (data.children && data.children.length > 0) {
             const childItems = data.children.map((childData) => this._buildTreeItems(childData, item));
-            // Set children array directly
             item.children = childItems;
-            // Ensure each child knows its parent
             childItems.forEach((child) => (child.parent = item));
         }
 
@@ -221,9 +205,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return [];
         }
 
-        // Check if we already have root items and they're fresh
         if (this.rootItems.length > 0) {
-            const dataIsFresh = Date.now() - (this as any)._lastDataFetch < 30000; // 30 seconds
+            const dataIsFresh = Date.now() - (this as any)._lastDataFetch < 30000;
             if (dataIsFresh) {
                 this.logger.debug(`Using cached root items for TOV: ${this.currentTovKey}`);
                 return this.rootItems;
@@ -300,14 +283,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             if (item.data.testElementType === TestElementType.Subdivision) {
                 const hierarchicalName = item.data.hierarchicalName;
                 if (hierarchicalName) {
-                    // Check if this subdivision represents a resource file (has [Robot-Resource] suffix)
                     const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
 
                     if (isResourceFile) {
-                        // For resource files, check for the .resource file in the correct parent folder
-                        // Remove [Robot-Resource] from the end
                         const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
-                        // Split into parent path and base name
                         const lastSlash = cleanName.lastIndexOf("/");
                         let parentPath = "";
                         let baseName = cleanName;
@@ -315,7 +294,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                             parentPath = cleanName.substring(0, lastSlash);
                             baseName = cleanName.substring(lastSlash + 1);
                         }
-                        // Create the expected resource file path
                         const resourceFileRelative = parentPath
                             ? `${parentPath}/${baseName}.resource`
                             : `${baseName}.resource`;
@@ -378,7 +356,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @returns The created tree item
      */
     protected createTreeItem(data: TestElementData, parent?: TestElementsTreeItem): TestElementsTreeItem {
-        // Convert string literal TestElementType to enum
         const testElementType = this.convertToTestElementTypeEnum(data.testElementType);
 
         // Convert TestElementData to the extended TestElementItemData
@@ -391,6 +368,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             localPath: undefined
         };
         const item = new TestElementsTreeItem(itemData, this.extensionContext, parent, this.eventBus);
+        item.updateId();
         this.applyModulesToTestElementsItem(item);
 
         // Build children if they exist
@@ -412,7 +390,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @returns The corresponding TestElementType enum value
      */
     private convertToTestElementTypeEnum(type: string): TestElementType {
-        // Convert string literal to enum value
         switch (type) {
             case TestElementItemTypes.SUBDIVISION:
                 return TestElementType.Subdivision;

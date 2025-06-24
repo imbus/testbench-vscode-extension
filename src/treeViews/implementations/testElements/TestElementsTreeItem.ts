@@ -126,6 +126,13 @@ export class TestElementsTreeItem extends TreeItemBase {
     }
 
     /**
+     * Updates the ID when context changes
+     */
+    public updateId(): void {
+        (this as any).id = this.generateUniqueId();
+    }
+
+    /**
      * Extracts the display label from a hierarchical name.
      * @param hierarchicalName The hierarchical name to extract the label from.
      * @returns The last part of the hierarchical name, or "Unknown" if empty.

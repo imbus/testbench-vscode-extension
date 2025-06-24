@@ -74,11 +74,6 @@ export class StateManager {
 
         // Emit state change event
         this.emitStateChange(previousState, this.state);
-
-        // Schedule save
-        if (this.shouldAutoSave(updates)) {
-            this.scheduleSave();
-        }
     }
 
     public setLoading(isLoading: boolean): void {
@@ -108,13 +103,10 @@ export class StateManager {
     }
 
     public clear(): void {
+        // Do not clear customRoot, marking, expansion, or filtering states (persistent UI states)
         this.setState({
             loading: false,
             error: null,
-            customRoot: null,
-            marking: null,
-            expansion: null,
-            filtering: null,
             items: new Map(),
             rootItems: []
         });
