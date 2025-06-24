@@ -49,8 +49,8 @@ exports.safeCommandHandler = safeCommandHandler;
 exports.initializeTreeViews = initializeTreeViews;
 exports.activate = activate;
 exports.updateOrRestartLS = updateOrRestartLS;
-exports.deactivate = deactivate;
 exports.clearAllExtensionData = clearAllExtensionData;
+exports.deactivate = deactivate;
 // Before releasing the extension:
 // TODO: Add License.md to the extension
 // TODO: Set logger level to info or debug in production, remove too detailed logs.
@@ -213,7 +213,6 @@ async function initializeTreeViews(context) {
         let showTestThemes = false;
         let showTestElements = false;
         if (savedViewId && savedViewId !== "projects" && savedContext) {
-            // Validate that the saved context has the required fields
             const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
             const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
             if (hasValidProjectName && hasValidTovName) {
@@ -257,7 +256,6 @@ async function performDeferredViewRestoration(context, savedViewId, savedContext
             await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
         }
         await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
-        // Update visibility to show the restored views
         await displayTestThemeTreeView();
         await displayTestElementsTreeView();
         await hideProjectManagementTreeView();
@@ -365,6 +363,27 @@ async function registerExtensionCommands(context) {
             else {
                 throw new Error("Invalid cycle item: missing project, cycle, or version key");
             }
+        }
+    };
+    const handleProjectVersionClick = async (versionItem) => {
+        exports.logger.debug(`[Cmd] Called: ${constants_1.allExtensionCommands.handleProjectVersionClick} for item ${versionItem.label}`);
+        if (!exports.connection) {
+            exports.logger.warn("[Cmd] handleProjectVersionClick called without active connection.");
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
+        }
+        const projectKey = versionItem.getProjectKey();
+        const tovKey = versionItem.getVersionKey();
+        const projectName = versionItem.parent?.label?.toString();
+        const tovName = versionItem.label?.toString();
+        if (projectKey && tovKey && projectName && tovName) {
+            exports.logger.debug(`Version item clicked: ${tovName} in project ${projectName}`);
+            await updateOrRestartLS(projectName, tovName);
+        }
+        else {
+            const errorMessage = `Cannot update language server: invalid project or TOV information. Project: ${projectName}, TOV: ${tovName}`;
+            vscode.window.showErrorMessage(errorMessage);
+            exports.logger.error(errorMessage);
         }
     };
     const handleOpenTOV = async (tovItem) => {
@@ -480,6 +499,7 @@ async function registerExtensionCommands(context) {
         { id: constants_1.allExtensionCommands.logout, handler: handleLogout },
         // Tree Interaction & Navigation
         { id: constants_1.allExtensionCommands.handleProjectCycleClick, handler: handleProjectCycleClick },
+        { id: constants_1.allExtensionCommands.handleProjectVersionClick, handler: handleProjectVersionClick },
         { id: constants_1.allExtensionCommands.openTOVFromProjectsView, handler: handleOpenTOV },
         { id: constants_1.allExtensionCommands.openCycleFromProjectsView, handler: handleOpenCycle },
         {
@@ -928,33 +948,6 @@ async function updateOrRestartLS(projectName, tovName) {
     }
 }
 /**
- * Called when the extension is deactivated.
- */
-async function deactivate() {
-    try {
-        if (exports.connection) {
-            exports.logger.info("[Extension] Performing server logout on deactivation.");
-            await exports.connection.logoutUserOnServer();
-        }
-        if (server_1.client) {
-            exports.logger.info("[Extension] Attempting to stop language server on deactivation.");
-            await (0, server_1.stopLanguageClient)(true);
-            exports.logger.info("[Extension] Language server stopped on deactivation.");
-        }
-        if (treeViews) {
-            exports.logger.info("[Extension] Disposing TreeViews on deactivation.");
-            treeViews.projectsTree.dispose();
-            treeViews.testThemesTree.dispose();
-            treeViews.testElementsTree.dispose();
-            treeViews = null;
-        }
-        exports.logger.info("Extension deactivated.");
-    }
-    catch (error) {
-        exports.logger.error("Error during deactivation:", error);
-    }
-}
-/**
  * Utility function to clear all extension data.
  *
  * @param {vscode.ExtensionContext} context The extension context.
@@ -978,7 +971,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
             }
         }
         exports.logger.info("[clearAllExtensionData] Starting comprehensive extension data cleanup...");
-        // Logout user and clear connection
         if (exports.connection) {
             exports.logger.debug("[clearAllExtensionData] Logging out from server...");
             try {
@@ -989,7 +981,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
             }
             setConnection(null);
         }
-        // Clear all VS Code authentication sessions
         try {
             exports.logger.debug("[clearAllExtensionData] Clearing VS Code authentication sessions...");
             const session = await vscode.authentication.getSession(testBenchAuthenticationProvider_1.TESTBENCH_AUTH_PROVIDER_ID, [], {
@@ -1003,7 +994,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
         catch (error) {
             exports.logger.warn("[clearAllExtensionData] Error clearing authentication session:", error);
         }
-        // Clear all workspace state storage
         exports.logger.debug("[clearAllExtensionData] Clearing workspace state storage...");
         const workspaceStateKeys = [
             constants_1.StorageKeys.LAST_GENERATED_PARAMS,
@@ -1028,7 +1018,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
                 exports.logger.warn(`[clearAllExtensionData] Error clearing workspace state key ${key}:`, error);
             }
         }
-        // Clear all global state storage (connections, active connection)
         exports.logger.debug("[clearAllExtensionData] Clearing global state storage...");
         const globalStateKeys = [constants_1.StorageKeys.CONNECTIONS_STORAGE_KEY, constants_1.StorageKeys.ACTIVE_CONNECTION_ID_KEY];
         for (const key of globalStateKeys) {
@@ -1039,7 +1028,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
                 exports.logger.warn(`[clearAllExtensionData] Error clearing global state key ${key}:`, error);
             }
         }
-        // Clear all connection passwords from secret storage
         exports.logger.debug("[clearAllExtensionData] Clearing connection passwords from secret storage...");
         try {
             const connections = await connectionManager.getConnections(context);
@@ -1056,7 +1044,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
         catch (error) {
             exports.logger.warn("[clearAllExtensionData] Error clearing connection passwords:", error);
         }
-        // Clear tree data and state
         if (treeViews) {
             exports.logger.debug("[clearAllExtensionData] Clearing tree data and state...");
             try {
@@ -1066,7 +1053,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
                 exports.logger.warn("[clearAllExtensionData] Error clearing tree data:", error);
             }
         }
-        // Update UI state by updating context keys
         exports.logger.debug("[clearAllExtensionData] Updating UI state...");
         const contextUpdates = [
             ["setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false],
@@ -1082,7 +1068,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
                 exports.logger.warn(`[clearAllExtensionData] Error updating context ${key}:`, error);
             }
         }
-        // Update login webview to reflect the new clean state
         exports.logger.debug("[clearAllExtensionData] Updating login webview...");
         try {
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
@@ -1090,7 +1075,6 @@ async function clearAllExtensionData(context, showConfirmation = false) {
         catch (error) {
             exports.logger.warn("[clearAllExtensionData] Error updating login webview:", error);
         }
-        // Stop language client if running
         if (server_1.client) {
             exports.logger.debug("[clearAllExtensionData] Stopping language client...");
             try {
@@ -1100,20 +1084,17 @@ async function clearAllExtensionData(context, showConfirmation = false) {
                 exports.logger.warn("[clearAllExtensionData] Error stopping language client:", error);
             }
         }
-        // Clear internal testbench folder
         exports.logger.debug("[clearAllExtensionData] Clearing internal testbench folder...");
         try {
             const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
             if (workspaceLocation) {
                 const testbenchWorkingDirectoryPath = path_1.default.join(workspaceLocation, constants_1.folderNameOfInternalTestbenchFolder);
-                await utils.clearInternalTestbenchFolder(testbenchWorkingDirectoryPath, [testBenchLogger.folderNameOfLogs], // Exclude logs folder
-                false);
+                await utils.clearInternalTestbenchFolder(testbenchWorkingDirectoryPath, [testBenchLogger.folderNameOfLogs], false);
             }
         }
         catch (error) {
             exports.logger.warn("[clearAllExtensionData] Error clearing internal testbench folder:", error);
         }
-        // Show projects view and hide other views to ensure proper UI state
         try {
             await displayProjectManagementTreeView();
             await hideTestThemeTreeView();
@@ -1135,6 +1116,33 @@ async function clearAllExtensionData(context, showConfirmation = false) {
             vscode.window.showErrorMessage(`Error clearing extension data: ${errorMessage}`);
         }
         return false;
+    }
+}
+/**
+ * Called when the extension is deactivated.
+ */
+async function deactivate() {
+    try {
+        if (exports.connection) {
+            exports.logger.info("[Extension] Performing server logout on deactivation.");
+            await exports.connection.logoutUserOnServer();
+        }
+        if (server_1.client) {
+            exports.logger.info("[Extension] Attempting to stop language server on deactivation.");
+            await (0, server_1.stopLanguageClient)(true);
+            exports.logger.info("[Extension] Language server stopped on deactivation.");
+        }
+        if (treeViews) {
+            exports.logger.info("[Extension] Disposing TreeViews on deactivation.");
+            treeViews.projectsTree.dispose();
+            treeViews.testThemesTree.dispose();
+            treeViews.testElementsTree.dispose();
+            treeViews = null;
+        }
+        exports.logger.info("Extension deactivated.");
+    }
+    catch (error) {
+        exports.logger.error("Error during deactivation:", error);
     }
 }
 //# sourceMappingURL=extension.js.map

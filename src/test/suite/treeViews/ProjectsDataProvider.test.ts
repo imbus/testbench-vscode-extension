@@ -126,6 +126,7 @@ suite("ProjectsDataProvider", function () {
 
         test("should handle invalid project data", async () => {
             const mockProjectsFromServer: any[] = [
+                // Only one valid project
                 {
                     key: "PROJ-001",
                     name: "Valid Project",
@@ -156,7 +157,7 @@ suite("ProjectsDataProvider", function () {
                     endDate: null
                 },
                 {
-                    key: 123, // Invalid key type
+                    key: 123, // Invalid (non string) key type
                     name: "Invalid Project 2",
                     type: "project",
                     creationTime: "2023-01-01T00:00:00Z",
@@ -175,7 +176,7 @@ suite("ProjectsDataProvider", function () {
 
             const result = await dataProvider.fetchProjects();
 
-            assert.strictEqual(result.length, 1); // Only the valid project should be included
+            assert.strictEqual(result.length, 1);
             assert.strictEqual(result[0].key, "PROJ-001");
             assert.strictEqual(result[0].name, "Valid Project");
 
@@ -204,7 +205,7 @@ suite("ProjectsDataProvider", function () {
             const result = await dataProvider.fetchProjects();
 
             assert.strictEqual(result.length, 1);
-            assert.strictEqual(result[0].name, "PROJ-001"); // Should use key as fallback
+            assert.strictEqual(result[0].name, "PROJ-001");
         });
 
         test("should handle server error", async () => {
