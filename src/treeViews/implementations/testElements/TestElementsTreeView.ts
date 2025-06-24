@@ -188,7 +188,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         if (data.children && data.children.length > 0) {
             const childItems = data.children.map((childData) => this._buildTreeItems(childData, item));
             item.children = childItems;
-            childItems.forEach((child) => (child.parent = item));
         }
 
         return item;
@@ -338,14 +337,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         if (item.children && item.children.length > 0) {
             return item.children as TestElementsTreeItem[];
         }
-
-        // Fallback: create children from data if not already created
-        if (item.data.children && item.data.children.length > 0) {
-            const children = item.data.children.map((childData) => this._buildTreeItems(childData, item));
-            item.children = children;
-            return children;
-        }
-
         return [];
     }
 
@@ -370,16 +361,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         const item = new TestElementsTreeItem(itemData, this.extensionContext, parent, this.eventBus);
         item.updateId();
         this.applyModulesToTestElementsItem(item);
-
-        // Build children if they exist
-        if (data.children && data.children.length > 0) {
-            const children: TestElementsTreeItem[] = [];
-            for (const childData of data.children) {
-                const childItem = this.createTreeItem(childData, item);
-                children.push(childItem);
-            }
-            children.forEach((child) => item.addChild(child));
-        }
 
         return item;
     }

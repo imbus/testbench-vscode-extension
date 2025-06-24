@@ -43,7 +43,6 @@ export class TestElementsTreeItem extends TreeItemBase {
     private _resourceStatus: "none" | "available" | "missing" | "partial" = "none";
     private eventBus: EventBus;
     private _isLocallyAvailable: boolean = false;
-    protected _children: TreeItemBase[] = [];
 
     constructor(
         data: TestElementItemData,
@@ -459,30 +458,6 @@ export class TestElementsTreeItem extends TreeItemBase {
     }
 
     /**
-     * Adds a child tree item to this test element.
-     * @param {TreeItemBase} child - The child tree item to add.
-     */
-    public addChild(child: TreeItemBase): void {
-        this._children.push(child);
-        this.updateCollapsibleState();
-    }
-
-    /**
-     * Removes a child tree item from this test element.
-     * @param {TreeItemBase} child - The child tree item to remove.
-     * @returns {boolean} True if the child was found and removed, false otherwise.
-     */
-    public removeChild(child: TreeItemBase): boolean {
-        const index = this._children.indexOf(child);
-        if (index !== -1) {
-            this._children.splice(index, 1);
-            this.updateCollapsibleState();
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * Updates the collapsible state based on the number of children.
      * For subdivisions, sets to collapsed if there are children, none otherwise.
      */
@@ -494,22 +469,5 @@ export class TestElementsTreeItem extends TreeItemBase {
                 this.collapsibleState = vscode.TreeItemCollapsibleState.None;
             }
         }
-    }
-
-    /**
-     * Gets the children of this test element.
-     * @returns {TreeItemBase[]} Array of child tree items.
-     */
-    public get children(): TreeItemBase[] {
-        return this._children;
-    }
-
-    /**
-     * Sets the children of this test element.
-     * @param {TreeItemBase[]} value - Array of child tree items.
-     */
-    public set children(value: TreeItemBase[]) {
-        this._children = value;
-        this.updateCollapsibleState();
     }
 }
