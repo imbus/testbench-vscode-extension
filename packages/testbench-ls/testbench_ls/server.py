@@ -4,15 +4,24 @@ import re
 import requests  # type: ignore
 from lsprotocol.types import (
     INITIALIZE,
+    TEXT_DOCUMENT_CODE_ACTION,
     TEXT_DOCUMENT_CODE_LENS,
+    TEXT_DOCUMENT_DID_CHANGE,
+    TEXT_DOCUMENT_DID_OPEN,
     WORKSPACE_APPLY_EDIT,
     AnnotatedTextEdit,
     ApplyWorkspaceEditParams,
     ChangeAnnotation,
     ChangeAnnotationIdentifier,
+    CodeAction,
+    CodeActionKind,
+    CodeActionParams,
     CodeLens,
     CodeLensParams,
     Command,
+    Diagnostic,
+    DiagnosticSeverity,
+    DidOpenTextDocumentParams,
     InitializeParams,
     InitializeResult,
     OptionalVersionedTextDocumentIdentifier,
@@ -24,6 +33,7 @@ from lsprotocol.types import (
     WorkspaceEdit,
 )
 from pygls.server import LanguageServer
+from pygls.workspace.text_document import TextDocument
 from robot.api.parsing import KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
@@ -45,6 +55,8 @@ from .messages import (
     COMMAND_UPDATE_SERVER_PORT,
     COMMAND_UPDATE_SESSION_TOKEN,
     COMMAND_UPDATE_TOV,
+    CONTEXT_CHANGE_LABEL,
+    CONTEXT_STRING,
     DEBUG_CHECK_CONTEXT,
     ERROR_CONTEXT_MISMATCH,
     ERROR_CONTEXT_NOT_SET,
@@ -59,6 +71,7 @@ from .messages import (
     PUSH_KEYWORD_TITLE,
     PUSH_SUBDIVISON_TITLE,
     TESTBENCH_LS_CLASS_NAME,
+    WARNING_CONTEXT_MISMATCH,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
 from .testbench_api.testbench_patch import patch_interaction_details
@@ -77,6 +90,7 @@ from .testbench_resource.resource_utils import (
     get_keyword_tags,
     get_keyword_tags_position,
     get_setting_section_position,
+    get_testbench_context_position,
     get_variables_section,
     get_variables_section_position,
     robot_model_to_string,
@@ -290,7 +304,9 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     return code_lenses
 
 
-def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceModel) -> bool:
+def context_is_valid(
+    ls: LanguageServer, existing_resource: TestBenchResourceModel, silent=False
+) -> bool:
     project, tov = existing_resource.tb_tov_context
     log(
         ls,
@@ -301,10 +317,12 @@ def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceMod
         LogLevel.DEBUG,
     )
     if not project or not tov:
-        show_error(ls, ERROR_CONTEXT_NOT_SET)
+        if not silent:
+            show_error(ls, ERROR_CONTEXT_NOT_SET)
         return False
     if project != ls.project or tov != ls.tov:
-        show_error(ls, ERROR_CONTEXT_MISMATCH)
+        if not silent:
+            show_error(ls, ERROR_CONTEXT_MISMATCH)
         return False
     return True
 
@@ -579,6 +597,114 @@ def push_testbench_keyword(ls: LanguageServer, args):
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+
+
+@testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
+def code_actions(ls: LanguageServer, params: CodeActionParams):
+    document_uri = params.text_document.uri
+    document = ls.workspace.get_text_document(params.text_document.uri)
+    resource = TestBenchResourceModel.from_file(document.source)
+    diagnostics = params.context.diagnostics
+    if not diagnostics:
+        return []
+    return [
+        CodeAction(
+            "Apply selected TestBench context",
+            CodeActionKind.QuickFix,
+            command=Command(
+                title="apply_testbench_context",
+                command="testbench_ls.applyTestBenchContext",
+                arguments=[document_uri, params.range.start.line],
+            ),
+            diagnostics=diagnostics,
+        )
+    ]
+
+
+@testbench_ls.command(
+    "testbench_ls.applyTestBenchContext",
+)
+def apply_selected_context(ls: LanguageServer, args):
+    document_uri, start_line, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    change_identifier = ChangeAnnotationIdentifier()
+    resource = TestBenchResourceModel.from_file(document.source)
+    if context_is_valid(ls, resource, silent=True):
+        return []
+    cont_start, cont_start_char, cont_end, cont_end_char = get_testbench_context_position(
+        resource.file
+    )
+    edits = [
+        AnnotatedTextEdit(
+            change_identifier,
+            range=Range(
+                start=Position(cont_start, cont_start_char),
+                end=Position(cont_end, cont_end_char),
+            ),
+            new_text=CONTEXT_STRING.format(project=ls.project, tov=ls.tov),
+        )
+    ]
+    edit = WorkspaceEdit(
+        document_changes=[
+            TextDocumentEdit(
+                text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
+                edits=edits,
+            )
+        ],
+        change_annotations={
+            change_identifier: ChangeAnnotation(CONTEXT_CHANGE_LABEL, needs_confirmation=False)
+        },
+    )
+    ls.lsp.send_request(
+        WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
+    )
+
+
+def get_context_diagnostics(ls: LanguageServer, document: TextDocument) -> list[Diagnostic]:
+    resource = TestBenchResourceModel.from_file(document.source)
+    if context_is_valid(ls, resource, silent=True):
+        return []
+    cont_start, cont_start_char, cont_end, cont_end_char = get_testbench_context_position(
+        resource.file
+    )
+    if all(v == 0 for v in (cont_start, cont_start_char, cont_end, cont_end_char)):
+        return []
+    project, tov = resource.tb_tov_context
+    return [
+        Diagnostic(
+            range=Range(
+                start=Position(cont_start, cont_start_char),
+                end=Position(cont_end, cont_end_char),
+            ),
+            message=WARNING_CONTEXT_MISMATCH.format(
+                selected_context=f"{ls.project}/{ls.tov}",
+                resource_context=f"{project}/{tov}",
+            ),
+            severity=DiagnosticSeverity.Warning,
+        )
+    ]
+
+
+@testbench_ls.feature(TEXT_DOCUMENT_DID_OPEN)
+def did_open(ls: LanguageServer, params: DidOpenTextDocumentParams):
+    document = ls.workspace.get_text_document(params.text_document.uri)
+    diagnostics = get_context_diagnostics(ls, document)
+    ls.publish_diagnostics(
+        document.uri,
+        diagnostics=diagnostics,
+        version=document.version,
+    )
+
+
+@testbench_ls.feature(TEXT_DOCUMENT_DID_CHANGE)
+def did_change(ls: LanguageServer, params: DidOpenTextDocumentParams):
+    document = ls.workspace.get_text_document(params.text_document.uri)
+    diagnostics = get_context_diagnostics(ls, document)
+    ls.publish_diagnostics(
+        document.uri,
+        diagnostics=diagnostics,
+        version=document.version,
+    )
 
 
 # @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)

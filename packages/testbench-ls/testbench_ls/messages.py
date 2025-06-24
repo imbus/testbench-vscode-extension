@@ -13,6 +13,10 @@ ERROR_DUPLICATE_KEYWORD_UID = (
     "Multiplee keywords with uid '{uid}' found. Please resolve the conflict manually."
 )
 
+# Warning messages
+WARNING_CONTEXT_MISMATCH = "TestBench context mismatch: Selected context '{selected_context}' does not match the resource context '{resource_context}'. "
+
+
 # DEBUG MESSAGES
 DEBUG_CHECK_CONTEXT = "Checking testbench context. Selected context: {selected_context} - Resource context: {resource_context} "
 
@@ -39,3 +43,7 @@ PULL_KEYWORD_TITLE = "Pull TestBench Keyword"
 PUSH_KEYWORD_TITLE = "Push TestBench Keyword"
 KEYWORD_INTERFACE_CHANGE_LABEL = "Keyword interface changes"
 WORKSPACE_APPLY_EDIT_LABEL = "Refactoring Preview"
+CONTEXT_CHANGE_LABEL = "TestBench Context Change"
+
+# Variables
+CONTEXT_STRING = "tb:context:{project}/{tov}"

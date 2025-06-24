@@ -3,6 +3,7 @@ import re
 from markdownify import MarkdownConverter
 from robot.api.parsing import (
     Arguments,
+    CommentSection,
     Documentation,
     File,
     Keyword,
@@ -188,3 +189,25 @@ class RobotDocumentationConverter(MarkdownConverter):
 
 def html_2_robot(html: str, **options) -> str:
     return RobotDocumentationConverter(heading_style="ATX_CLOSED", **options).convert(html).strip()
+
+
+def get_testbench_context_position(file: File) -> tuple[int]:
+    comment_section = get_comments_section(file)
+    if not comment_section:
+        return (0, 0, 0, 0)
+    for comment in comment_section.body:
+        context_match = re.search(
+            r".*tb:context:(?P<tb_context>.*$)", robot_model_to_string(comment), re.MULTILINE
+        )
+        if context_match:
+            return (
+                comment.lineno - 1,
+                comment.col_offset,
+                comment.end_lineno - 1,
+                comment.end_col_offset,
+            )
+    return (0, 0, 0, 0)
+
+
+def get_comments_section(file: File):
+    return next(filter(lambda item: isinstance(item, CommentSection), file.sections), None)
