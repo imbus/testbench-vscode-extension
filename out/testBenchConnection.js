@@ -146,7 +146,6 @@ class PlayServerConnection {
             }), 3, 2000);
             if (logoutResponse.status === 204) {
                 extension_1.logger.debug("[PlayServerConnection] Server logout successful (204).");
-                // Clearing the global state and session token
                 (0, extension_1.setConnection)(null);
                 await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
                 this.sessionToken = "";

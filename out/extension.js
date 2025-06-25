@@ -704,6 +704,10 @@ async function handleTestBenchSessionChange(context, existingSession) {
                     const savedCycleContext = context.workspaceState.get(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
                     const savedTovContext = context.workspaceState.get(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
                     const savedContext = savedCycleContext || savedTovContext;
+                    exports.logger.debug(`[Extension] Checking for saved view state: savedViewId=${savedViewId}, hasSavedContext=${!!savedContext}`);
+                    if (savedContext) {
+                        exports.logger.debug(`[Extension] Saved context details: projectName=${savedContext.projectName}, tovName=${savedContext.tovName}, isCycle=${savedContext.isCycle}`);
+                    }
                     let areViewsRestored = false;
                     if (savedViewId && savedViewId !== "projects" && savedContext) {
                         // Validate that the saved context has the required fields
@@ -729,7 +733,7 @@ async function handleTestBenchSessionChange(context, existingSession) {
                     }
                     if (!areViewsRestored) {
                         // Fallback: Load default project view if no state or if restoration fails
-                        exports.logger.info("Loading default projects view.");
+                        exports.logger.info("Loading default projects view (no saved state to restore or restoration failed).");
                         treeViews.projectsTree.refresh();
                         await displayProjectManagementTreeView();
                         await hideTestThemeTreeView();
@@ -760,7 +764,7 @@ async function handleTestBenchSessionChange(context, existingSession) {
             await displayProjectManagementTreeView();
             await hideTestThemeTreeView();
             await hideTestElementsTreeView();
-            await clearViewState(context);
+            exports.logger.debug("[Extension] View state preserved for potential restoration on next login.");
         }
     }
     else {
@@ -775,11 +779,12 @@ async function handleTestBenchSessionChange(context, existingSession) {
         await displayProjectManagementTreeView();
         await hideTestThemeTreeView();
         await hideTestElementsTreeView();
-        await clearViewState(context);
+        exports.logger.debug("[Extension] View state preserved for potential restoration on next login.");
     }
 }
 /**
- * Clears all view state storage to ensure only projects view is shown after logout.
+ * Clears all view state storage. This function is used to clear invalid view state
+ * when restoration fails, not for logout scenarios where view state should be preserved.
  * @param context The extension context
  */
 async function clearViewState(context) {
@@ -976,7 +981,7 @@ async function clearAllExtensionData(context, showConfirmation = false) {
                 "• Test generation history\n" +
                 "• Import tracking data\n" +
                 "• All persistent settings\n\n" +
-                "This action cannot be undone. Are you sure you want to continue?", { modal: true }, "Clear All Data", "Cancel");
+                "This action cannot be undone. Are you sure you want to continue?", { modal: true }, "Clear All Data");
             if (confirmation !== "Clear All Data") {
                 exports.logger.info("[clearAllExtensionData] User cancelled clear all extension data operation.");
                 return false;
@@ -1022,6 +1027,12 @@ async function clearAllExtensionData(context, showConfirmation = false) {
             constants_1.StorageKeys.HAS_USED_EXTENSION_BEFORE,
             `${constants_1.StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`
         ];
+        // View state storage keys (dynamic keys based on tree view IDs)
+        const treeViewIds = ["testbench.projects", "testbench.testThemes", "testbench.testElements"];
+        for (const treeViewId of treeViewIds) {
+            workspaceStateKeys.push(`treeState.${treeViewId}`);
+            workspaceStateKeys.push(`treeView.state.${treeViewId}`);
+        }
         for (const key of workspaceStateKeys) {
             try {
                 await context.workspaceState.update(key, undefined);
@@ -1032,6 +1043,9 @@ async function clearAllExtensionData(context, showConfirmation = false) {
         }
         exports.logger.debug("[clearAllExtensionData] Clearing global state storage...");
         const globalStateKeys = [constants_1.StorageKeys.CONNECTIONS_STORAGE_KEY, constants_1.StorageKeys.ACTIVE_CONNECTION_ID_KEY];
+        for (const treeViewId of treeViewIds) {
+            globalStateKeys.push(`treeView.state.${treeViewId}`);
+        }
         for (const key of globalStateKeys) {
             try {
                 await context.globalState.update(key, undefined);
@@ -1060,6 +1074,125 @@ async function clearAllExtensionData(context, showConfirmation = false) {
             exports.logger.debug("[clearAllExtensionData] Clearing tree data and state...");
             try {
                 treeViews.clear();
+                // Clear persistence modules directly to ensure all tree view state is cleared
+                if (treeViews.projectsTree) {
+                    const projectsPersistence = treeViews.projectsTree.modules?.get("persistence");
+                    if (projectsPersistence?.clear) {
+                        await projectsPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const projectsExpansion = treeViews.projectsTree.modules?.get("expansion");
+                    if (projectsExpansion?.reset) {
+                        projectsExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const projectsMarking = treeViews.projectsTree.modules?.get("marking");
+                    if (projectsMarking?.clearAllMarkings) {
+                        projectsMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const projectsFiltering = treeViews.projectsTree.modules?.get("filtering");
+                    if (projectsFiltering?.clearAllFilters) {
+                        projectsFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const projectsCustomRoot = treeViews.projectsTree.modules?.get("customRoot");
+                    if (projectsCustomRoot?.reset) {
+                        projectsCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const projectsStateManager = treeViews.projectsTree.stateManager;
+                    if (projectsStateManager?.setState) {
+                        projectsStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+                if (treeViews.testThemesTree) {
+                    const testThemesPersistence = treeViews.testThemesTree.modules?.get("persistence");
+                    if (testThemesPersistence?.clear) {
+                        await testThemesPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const testThemesExpansion = treeViews.testThemesTree.modules?.get("expansion");
+                    if (testThemesExpansion?.reset) {
+                        testThemesExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const testThemesMarking = treeViews.testThemesTree.modules?.get("marking");
+                    if (testThemesMarking?.clearAllMarkings) {
+                        testThemesMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const testThemesFiltering = treeViews.testThemesTree.modules?.get("filtering");
+                    if (testThemesFiltering?.clearAllFilters) {
+                        testThemesFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const testThemesCustomRoot = treeViews.testThemesTree.modules?.get("customRoot");
+                    if (testThemesCustomRoot?.reset) {
+                        testThemesCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const testThemesStateManager = treeViews.testThemesTree.stateManager;
+                    if (testThemesStateManager?.setState) {
+                        testThemesStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+                if (treeViews.testElementsTree) {
+                    const testElementsPersistence = treeViews.testElementsTree.modules?.get("persistence");
+                    if (testElementsPersistence?.clear) {
+                        await testElementsPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const testElementsExpansion = treeViews.testElementsTree.modules?.get("expansion");
+                    if (testElementsExpansion?.reset) {
+                        testElementsExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const testElementsMarking = treeViews.testElementsTree.modules?.get("marking");
+                    if (testElementsMarking?.clearAllMarkings) {
+                        testElementsMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const testElementsFiltering = treeViews.testElementsTree.modules?.get("filtering");
+                    if (testElementsFiltering?.clearAllFilters) {
+                        testElementsFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const testElementsCustomRoot = treeViews.testElementsTree.modules?.get("customRoot");
+                    if (testElementsCustomRoot?.reset) {
+                        testElementsCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const testElementsStateManager = treeViews.testElementsTree.stateManager;
+                    if (testElementsStateManager?.setState) {
+                        testElementsStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+                // Force refresh all tree views to ensure expansion states are cleared
+                if (treeViews.projectsTree) {
+                    treeViews.projectsTree.refresh();
+                }
+                if (treeViews.testThemesTree) {
+                    treeViews.testThemesTree.refresh();
+                }
+                if (treeViews.testElementsTree) {
+                    treeViews.testElementsTree.refresh();
+                }
             }
             catch (error) {
                 exports.logger.warn("[clearAllExtensionData] Error clearing tree data:", error);

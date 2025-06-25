@@ -1128,8 +1128,7 @@ export async function clearAllExtensionData(
                     "• All persistent settings\n\n" +
                     "This action cannot be undone. Are you sure you want to continue?",
                 { modal: true },
-                "Clear All Data",
-                "Cancel"
+                "Clear All Data"
             );
 
             if (confirmation !== "Clear All Data") {
@@ -1180,6 +1179,13 @@ export async function clearAllExtensionData(
             `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`
         ];
 
+        // View state storage keys (dynamic keys based on tree view IDs)
+        const treeViewIds = ["testbench.projects", "testbench.testThemes", "testbench.testElements"];
+        for (const treeViewId of treeViewIds) {
+            workspaceStateKeys.push(`treeState.${treeViewId}`);
+            workspaceStateKeys.push(`treeView.state.${treeViewId}`);
+        }
+
         for (const key of workspaceStateKeys) {
             try {
                 await context.workspaceState.update(key, undefined);
@@ -1189,7 +1195,11 @@ export async function clearAllExtensionData(
         }
 
         logger.debug("[clearAllExtensionData] Clearing global state storage...");
-        const globalStateKeys = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
+        const globalStateKeys: string[] = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
+
+        for (const treeViewId of treeViewIds) {
+            globalStateKeys.push(`treeView.state.${treeViewId}`);
+        }
 
         for (const key of globalStateKeys) {
             try {
@@ -1218,6 +1228,127 @@ export async function clearAllExtensionData(
             logger.debug("[clearAllExtensionData] Clearing tree data and state...");
             try {
                 treeViews.clear();
+
+                // Clear persistence modules directly to ensure all tree view state is cleared
+                if (treeViews.projectsTree) {
+                    const projectsPersistence = (treeViews.projectsTree as any).modules?.get("persistence");
+                    if (projectsPersistence?.clear) {
+                        await projectsPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const projectsExpansion = (treeViews.projectsTree as any).modules?.get("expansion");
+                    if (projectsExpansion?.reset) {
+                        projectsExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const projectsMarking = (treeViews.projectsTree as any).modules?.get("marking");
+                    if (projectsMarking?.clearAllMarkings) {
+                        projectsMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const projectsFiltering = (treeViews.projectsTree as any).modules?.get("filtering");
+                    if (projectsFiltering?.clearAllFilters) {
+                        projectsFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const projectsCustomRoot = (treeViews.projectsTree as any).modules?.get("customRoot");
+                    if (projectsCustomRoot?.reset) {
+                        projectsCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const projectsStateManager = (treeViews.projectsTree as any).stateManager;
+                    if (projectsStateManager?.setState) {
+                        projectsStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+                if (treeViews.testThemesTree) {
+                    const testThemesPersistence = (treeViews.testThemesTree as any).modules?.get("persistence");
+                    if (testThemesPersistence?.clear) {
+                        await testThemesPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const testThemesExpansion = (treeViews.testThemesTree as any).modules?.get("expansion");
+                    if (testThemesExpansion?.reset) {
+                        testThemesExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const testThemesMarking = (treeViews.testThemesTree as any).modules?.get("marking");
+                    if (testThemesMarking?.clearAllMarkings) {
+                        testThemesMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const testThemesFiltering = (treeViews.testThemesTree as any).modules?.get("filtering");
+                    if (testThemesFiltering?.clearAllFilters) {
+                        testThemesFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const testThemesCustomRoot = (treeViews.testThemesTree as any).modules?.get("customRoot");
+                    if (testThemesCustomRoot?.reset) {
+                        testThemesCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const testThemesStateManager = (treeViews.testThemesTree as any).stateManager;
+                    if (testThemesStateManager?.setState) {
+                        testThemesStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+                if (treeViews.testElementsTree) {
+                    const testElementsPersistence = (treeViews.testElementsTree as any).modules?.get("persistence");
+                    if (testElementsPersistence?.clear) {
+                        await testElementsPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const testElementsExpansion = (treeViews.testElementsTree as any).modules?.get("expansion");
+                    if (testElementsExpansion?.reset) {
+                        testElementsExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const testElementsMarking = (treeViews.testElementsTree as any).modules?.get("marking");
+                    if (testElementsMarking?.clearAllMarkings) {
+                        testElementsMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const testElementsFiltering = (treeViews.testElementsTree as any).modules?.get("filtering");
+                    if (testElementsFiltering?.clearAllFilters) {
+                        testElementsFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const testElementsCustomRoot = (treeViews.testElementsTree as any).modules?.get("customRoot");
+                    if (testElementsCustomRoot?.reset) {
+                        testElementsCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const testElementsStateManager = (treeViews.testElementsTree as any).stateManager;
+                    if (testElementsStateManager?.setState) {
+                        testElementsStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+
+                // Force refresh all tree views to ensure expansion states are cleared
+                if (treeViews.projectsTree) {
+                    treeViews.projectsTree.refresh();
+                }
+                if (treeViews.testThemesTree) {
+                    treeViews.testThemesTree.refresh();
+                }
+                if (treeViews.testElementsTree) {
+                    treeViews.testElementsTree.refresh();
+                }
             } catch (error) {
                 logger.warn("[clearAllExtensionData] Error clearing tree data:", error);
             }
