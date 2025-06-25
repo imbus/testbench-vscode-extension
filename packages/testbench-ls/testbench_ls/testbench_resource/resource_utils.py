@@ -209,5 +209,22 @@ def get_testbench_context_position(file: File) -> tuple[int]:
     return (0, 0, 0, 0)
 
 
+def get_comment_section_end_position(file: File) -> tuple[int]:
+    comment_section = get_comments_section(file)
+    position = (0, 0, 0, 0)
+    if not comment_section:
+        return position
+    for comment in comment_section.body:
+        empty_line_match = re.search(r"^\n", robot_model_to_string(comment), re.MULTILINE)
+        if not empty_line_match:
+            position = (
+                comment.lineno - 1,
+                comment.col_offset,
+                comment.end_lineno - 1,
+                comment.end_col_offset,
+            )
+    return position
+
+
 def get_comments_section(file: File):
     return next(filter(lambda item: isinstance(item, CommentSection), file.sections), None)

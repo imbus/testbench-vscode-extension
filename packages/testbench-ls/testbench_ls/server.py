@@ -81,6 +81,7 @@ from .testbench_resource.resource_creation import (
 )
 from .testbench_resource.resource_documentation import ResourceDocumentation
 from .testbench_resource.resource_utils import (
+    get_comment_section_end_position,
     get_keyword_arguments,
     get_keyword_arguments_position,
     get_keyword_documentation,
@@ -650,6 +651,12 @@ def apply_selected_context(ls: LanguageServer, args):
     cont_start, cont_start_char, cont_end, cont_end_char = get_testbench_context_position(
         resource.file
     )
+    updated_context = CONTEXT_STRING.format(project=ls.project, tov=ls.tov)
+    if all(v == 0 for v in (cont_start, cont_start_char, cont_end, cont_end_char)):
+        _, _, cont_end, cont_end_char = get_comment_section_end_position(resource.file)
+        cont_start = cont_end
+        cont_start_char = cont_end_char
+        updated_context = f"\n{updated_context}"
     edits = [
         AnnotatedTextEdit(
             change_identifier,
@@ -657,7 +664,7 @@ def apply_selected_context(ls: LanguageServer, args):
                 start=Position(cont_start, cont_start_char),
                 end=Position(cont_end, cont_end_char),
             ),
-            new_text=CONTEXT_STRING.format(project=ls.project, tov=ls.tov),
+            new_text=updated_context,
         )
     ]
     edit = WorkspaceEdit(
@@ -686,7 +693,19 @@ def get_context_diagnostics(ls: LanguageServer, document: TextDocument) -> list[
         resource.file
     )
     if all(v == 0 for v in (cont_start, cont_start_char, cont_end, cont_end_char)):
-        return []
+        comment_start, comment_start_char, comment_end, comment_end_char = (
+            get_comment_section_end_position(resource.file)
+        )
+        return [
+            Diagnostic(
+                range=Range(
+                    start=Position(comment_start, comment_start_char),
+                    end=Position(comment_end, comment_end_char),
+                ),
+                message="Missing TestBench context.",
+                severity=DiagnosticSeverity.Warning,
+            )
+        ]
     project, tov = resource.tb_tov_context
     return [
         Diagnostic(
