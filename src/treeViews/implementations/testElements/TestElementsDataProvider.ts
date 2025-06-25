@@ -116,16 +116,7 @@ export class TestElementsDataProvider {
     }
 
     /**
-     * Transforms flat test element data into a hierarchical structure with filtering.
-     *
-     * Performs these transformations:
-     * 1. Converts raw JSON elements to TestElementData objects
-     * 2. Establishes parent-child relationships
-     * 3. Filters elements based on regex patterns and hierarchy rules
-     * 4. Assigns hierarchical names to all elements
-     * 5. Detects and warns about nested resource files
-     *   (A resorce file cannot contain another resource file, but in TestBench client, its possible to create such a structure)
-     *
+     * Orchestrates the transformation of flat test element data into a filtered hierarchy.
      * @param flatJsonTestElements - Array of raw test element data from the server
      * @returns Array of root TestElementData objects forming the filtered hierarchy
      */
@@ -134,9 +125,24 @@ export class TestElementsDataProvider {
             "[TestElementsDataProvider] Building tree with regex patterns:",
             this.resourceRegexPatterns.map((p) => p.source)
         );
+
+        const testElementIdToDataMap = this._transformRawElements(flatJsonTestElements);
+        const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
+        const filteredRoots = this._filterElementTree(roots);
+        this._assignHierarchicalNames(filteredRoots);
+        this._checkForNestedResources(filteredRoots);
+
+        return filteredRoots;
+    }
+
+    /**
+     * Converts raw JSON elements to TestElementData objects.
+     * @param flatJsonTestElements The raw data from the server.
+     * @returns A map of element ID to TestElementData.
+     */
+    private _transformRawElements(flatJsonTestElements: RawTestElement[]): { [id: string]: TestElementData } {
         const testElementIdToDataMap: { [id: string]: TestElementData } = {};
 
-        // Transform all raw items into TestElementData
         flatJsonTestElements.forEach((jsonTestElement) => {
             let libraryKey: string | null = null;
             if (jsonTestElement.libraryKey) {
@@ -149,11 +155,10 @@ export class TestElementsDataProvider {
             const testElementType: TestElementType = this._getTestElementType(jsonTestElement);
             const testElementOwnUniqueID = jsonTestElement.uniqueID || "";
             const compositeId: string = this._generateElementId(jsonTestElement);
-
             const parentIdString: string | null = this._getParentId(jsonTestElement);
 
             const testElement: TestElementData = {
-                id: compositeId, // Test element's own composite ID used as key in map
+                id: compositeId,
                 parentId: parentIdString,
                 name: jsonTestElement.name,
                 uniqueID: testElementOwnUniqueID,
@@ -166,30 +171,32 @@ export class TestElementsDataProvider {
                         ? this._matchesRegex(jsonTestElement.name, this.resourceRegexPatterns)
                         : true,
                 children: [],
-                hierarchicalName: jsonTestElement.name
+                hierarchicalName: jsonTestElement.name // Will be properly set later
             };
             testElementIdToDataMap[compositeId] = testElement;
         });
 
-        // Link children to parents
+        return testElementIdToDataMap;
+    }
+
+    /**
+     * Establishes parent-child relationships from a map of elements.
+     * @param testElementIdToDataMap A map of all available elements.
+     * @returns An object containing the map and an array of root elements.
+     */
+    private _linkParentChildRelationships(testElementIdToDataMap: { [id: string]: TestElementData }): {
+        roots: TestElementData[];
+        map: { [id: string]: TestElementData };
+    } {
         const roots: TestElementData[] = [];
         Object.values(testElementIdToDataMap).forEach((testElementData) => {
             if (testElementData.parentId) {
                 let foundParentTestElementData: TestElementData | undefined =
                     testElementIdToDataMap[testElementData.parentId];
 
-                if (
-                    !foundParentTestElementData &&
-                    testElementData.parentId &&
-                    !testElementData.parentId.includes("_")
-                ) {
+                // Fallback linking logic for cases where parentId might just be the serial
+                if (!foundParentTestElementData && !testElementData.parentId.includes("_")) {
                     const serialToFind = testElementData.parentId;
-                    /*
-                    this.logger.trace(
-                        `[Builder] Attempting fallback link for child '${testElementData.name}' (ID: ${testElementData.id}) using parent serial: '${serialToFind}'`
-                    );
-                    */
-
                     for (const potentialParent of Object.values(testElementIdToDataMap)) {
                         let parentSerialFromDetails: string | undefined;
                         if (potentialParent.details?.Subdivision_key?.serial) {
@@ -200,11 +207,6 @@ export class TestElementsDataProvider {
 
                         if (parentSerialFromDetails === serialToFind) {
                             foundParentTestElementData = potentialParent;
-                            /*
-                            this.logger.trace(
-                                `[Builder] Fallback link successful for child '${testElementData.name}' to parent '${foundParentTestElementData.name}' (ID: ${foundParentTestElementData.id}) via serial '${serialToFind}'`
-                            );
-                            */
                             break;
                         }
                     }
@@ -223,17 +225,21 @@ export class TestElementsDataProvider {
                 roots.push(testElementData);
             }
         });
+        return { roots, map: testElementIdToDataMap };
+    }
 
-        // Filter and build hierarchy
-        const filterAndBuildHierarchy = (
-            testElementData: TestElementData,
-            inheritedMatch: boolean
-        ): TestElementData | null => {
+    /**
+     * Recursively filters the element tree based on regex matches and hierarchy rules.
+     * @param roots The root elements of the tree to filter.
+     * @returns A new array of filtered root elements.
+     */
+    private _filterElementTree(roots: TestElementData[]): TestElementData[] {
+        const recursiveFilter = (testElementData: TestElementData, inheritedMatch: boolean): TestElementData | null => {
             let validChildren: TestElementData[] = [];
             if (testElementData.children) {
                 const childrenInherit: boolean = inheritedMatch || testElementData.directRegexMatch;
                 validChildren = testElementData.children
-                    .map((child) => filterAndBuildHierarchy(child, childrenInherit))
+                    .map((child) => recursiveFilter(child, childrenInherit))
                     .filter((child) => child !== null) as TestElementData[];
             }
 
@@ -259,21 +265,29 @@ export class TestElementsDataProvider {
             return null;
         };
 
-        const filteredTestElementDataRoots = roots
-            .map((root) => filterAndBuildHierarchy(root, false))
-            .filter((node) => node !== null) as TestElementData[];
+        return roots.map((root) => recursiveFilter(root, false)).filter((node) => node !== null) as TestElementData[];
+    }
 
-        // Assign hierarchical names
-        const assignNames = (testElementData: TestElementData, parentPath: string): void => {
+    /**
+     * Recursively assigns a full hierarchical name to each element in the tree.
+     * @param roots The root elements of the tree.
+     */
+    private _assignHierarchicalNames(roots: TestElementData[]): void {
+        const assign = (testElementData: TestElementData, parentPath: string): void => {
             const currentPath = parentPath ? `${parentPath}/${testElementData.name}` : testElementData.name;
             testElementData.hierarchicalName = currentPath;
-            testElementData.children?.forEach((child) => assignNames(child, currentPath));
+            testElementData.children?.forEach((child) => assign(child, currentPath));
         };
-        filteredTestElementDataRoots.forEach((rootTestElementData) => assignNames(rootTestElementData, ""));
+        roots.forEach((rootTestElementData) => assign(rootTestElementData, ""));
+    }
 
-        // Check for nested resources and warn
+    /**
+     * Traverses the tree to find and log warnings for nested resource files.
+     * @param roots The root elements of the final tree.
+     */
+    private _checkForNestedResources(roots: TestElementData[]): void {
         const nestedResourceWarnings: string[] = [];
-        const checkNested = (testElementData: TestElementData): void => {
+        const check = (testElementData: TestElementData): void => {
             if (testElementData.directRegexMatch) {
                 testElementData.children?.forEach((child) => {
                     if (child.directRegexMatch) {
@@ -281,18 +295,16 @@ export class TestElementsDataProvider {
                             `Robot resource '${testElementData.name}' contains another resource '${child.name}'.`
                         );
                     }
-                    checkNested(child);
+                    check(child);
                 });
             } else {
-                testElementData.children?.forEach(checkNested);
+                testElementData.children?.forEach(check);
             }
         };
-        filteredTestElementDataRoots.forEach(checkNested);
+        roots.forEach(check);
         if (nestedResourceWarnings.length > 0) {
             this.logger.warn("[TestElementsDataProvider] Nested robot resources found:", nestedResourceWarnings);
         }
-
-        return filteredTestElementDataRoots;
     }
 
     /**

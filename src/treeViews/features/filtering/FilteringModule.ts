@@ -8,6 +8,7 @@ import { TreeViewContext } from "../../core/TreeViewContext";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { FilterState, FilterDefinition, SerializedFilterDefinition } from "../../state/StateTypes";
 import * as vscode from "vscode";
+import { ContextKeys } from "../../../constants";
 
 export interface TextFilterOptions {
     searchText: string;
@@ -200,16 +201,16 @@ export class FilteringModule implements TreeViewModule {
 
         switch (treeViewId) {
             case "testbench.projects":
-                contextKey = "testbenchExtension.filterDiffModeEnabledProjects";
+                contextKey = ContextKeys.FILTER_DIFF_MODE_ENABLED_PROJECTS;
                 break;
             case "testbench.testThemes":
-                contextKey = "testbenchExtension.filterDiffModeEnabledTestThemes";
+                contextKey = ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES;
                 break;
             case "testbench.testElements":
-                contextKey = "testbenchExtension.filterDiffModeEnabledTestElements";
+                contextKey = ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS;
                 break;
             default:
-                contextKey = "testbenchExtension.filterDiffModeEnabled";
+                contextKey = ContextKeys.FILTER_DIFF_MODE_ENABLED;
         }
 
         // Use VS Code's setContext command to update the context key
