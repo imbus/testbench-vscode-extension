@@ -6,7 +6,7 @@
 import { TreeViewModule } from "../../core/TreeViewModule";
 import { TreeViewContext } from "../../core/TreeViewContext";
 import { TreeItemBase } from "../../core/TreeItemBase";
-import { FilterState, FilterDefinition } from "../../state/StateTypes";
+import { FilterState, FilterDefinition, SerializedFilterDefinition } from "../../state/StateTypes";
 import * as vscode from "vscode";
 
 export interface TextFilterOptions {
@@ -31,6 +31,7 @@ export class FilteringModule implements TreeViewModule {
     private context!: TreeViewContext;
     private filterState: FilterState;
     private compiledFilters = new Map<string, (item: TreeItemBase) => boolean>();
+    private definedFilters = new Map<string, FilterDefinition>();
     private textFilter: TextFilterOptions | null = null;
     private filterDiffState: FilterDiffState = {
         enabled: false,
@@ -52,15 +53,18 @@ export class FilteringModule implements TreeViewModule {
      */
     async initialize(context: TreeViewContext): Promise<void> {
         this.context = context;
+
+        const filteringConfig = context.config.modules.filtering;
+        if (filteringConfig?.defaultFilters) {
+            filteringConfig.defaultFilters.forEach((filter) => {
+                this.definedFilters.set(filter.id, filter);
+            });
+        }
+
         // Load saved filter state
         const state = context.stateManager.getState();
         if (state.filtering) {
-            this.filterState = {
-                activeFilters: state.filtering.activeFilters || [],
-                customFilters: state.filtering.customFilters || [],
-                hiddenItems: new Set(state.filtering.hiddenItems || [])
-            };
-            this.compileFilters();
+            this.applyLoadedFilterState(state.filtering);
 
             // Restore filter diff state if it exists
             if (state.filtering.filterDiffState) {
@@ -71,14 +75,10 @@ export class FilteringModule implements TreeViewModule {
                 // Update context keys to reflect the restored state
                 this.updateDiffModeContextKeys(this.filterDiffState.enabled);
             }
-        }
-
-        // Initialize default filters from config
-        const filteringConfig = context.config.modules.filtering;
-        if (filteringConfig?.defaultFilters) {
-            filteringConfig.defaultFilters.forEach((filter) => {
-                this.registerFilter(filter);
-            });
+        } else if (filteringConfig?.defaultFilters) {
+            // If no state, initialize with defaults from config
+            this.filterState.customFilters = [...filteringConfig.defaultFilters];
+            this.compileFilters();
         }
 
         // Listen for state changes
@@ -86,16 +86,41 @@ export class FilteringModule implements TreeViewModule {
             const changes = event.data.changes;
             const filterChange = changes.find((c: any) => c.field === "filtering");
             if (filterChange && filterChange.newValue) {
-                this.filterState = {
-                    activeFilters: filterChange.newValue.activeFilters || [],
-                    customFilters: filterChange.newValue.customFilters || [],
-                    hiddenItems: new Set(filterChange.newValue.hiddenItems || [])
-                };
-                this.compileFilters();
+                this.applyLoadedFilterState(filterChange.newValue);
             }
         });
 
         context.logger.debug("FilteringModule initialized");
+    }
+
+    /**
+     * Applies loaded state (which has no predicate functions) with the full
+     * filter definitions from the configuration.
+     * @param loadedFilteringState The partial filter state loaded from persistence.
+     */
+    private applyLoadedFilterState(loadedFilteringState: any): void {
+        const customFilters: FilterDefinition[] = [];
+        if (loadedFilteringState.customFilters) {
+            (loadedFilteringState.customFilters as SerializedFilterDefinition[]).forEach((savedFilter) => {
+                const definedFilter = this.definedFilters.get(savedFilter.id);
+                if (definedFilter) {
+                    // Create a complete filter definition by combining persisted state with the defined predicate
+                    customFilters.push({
+                        ...definedFilter,
+                        enabled: savedFilter.enabled,
+                        metadata: savedFilter.metadata
+                    });
+                }
+            });
+        }
+
+        this.filterState = {
+            activeFilters: loadedFilteringState.activeFilters || [],
+            customFilters: customFilters,
+            hiddenItems: new Set(loadedFilteringState.hiddenItems || [])
+        };
+
+        this.compileFilters();
     }
 
     /**
@@ -390,9 +415,12 @@ export class FilteringModule implements TreeViewModule {
      * @param filter The filter definition to register
      */
     public registerFilter(filter: FilterDefinition): void {
-        const existingFilter = this.filterState.customFilters.find((f) => f.id === filter.id);
-        if (existingFilter) {
-            Object.assign(existingFilter, filter);
+        // Store the full definition
+        this.definedFilters.set(filter.id, filter);
+
+        const existingFilterIndex = this.filterState.customFilters.findIndex((f) => f.id === filter.id);
+        if (existingFilterIndex > -1) {
+            this.filterState.customFilters[existingFilterIndex] = filter;
         } else {
             this.filterState.customFilters.push(filter);
         }
@@ -704,18 +732,7 @@ export class FilteringModule implements TreeViewModule {
      */
     private compileFilter(filter: FilterDefinition): void {
         try {
-            let predicateFunction: (item: TreeItemBase) => boolean;
-            if (typeof filter.predicate === "function") {
-                predicateFunction = filter.predicate;
-            } else {
-                // If predicate is stored as string, evaluate it
-                // TODO: This is potentially unsafe
-                predicateFunction = new Function("item", `return ${filter.predicate}`) as (
-                    item: TreeItemBase
-                ) => boolean;
-            }
-
-            this.compiledFilters.set(filter.id, predicateFunction);
+            this.compiledFilters.set(filter.id, filter.predicate);
         } catch (error) {
             this.context.logger.error(`Failed to compile filter ${filter.id}:`, error);
         }

@@ -135,10 +135,10 @@ export class TestThemesTreeItem extends TreeItemBase {
     private static getInitialCollapsibleState(data: TestThemeData): vscode.TreeItemCollapsibleState {
         switch (data.elementType) {
             case "TestThemeNode":
-            case "TestCaseSetNode":
                 return data.hasChildren
                     ? vscode.TreeItemCollapsibleState.Collapsed
                     : vscode.TreeItemCollapsibleState.None;
+            case "TestCaseSetNode":
             case "TestCaseNode":
                 return vscode.TreeItemCollapsibleState.None;
             default:

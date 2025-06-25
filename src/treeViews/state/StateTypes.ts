@@ -4,7 +4,6 @@
  */
 
 import { TreeItemBase } from "../core/TreeItemBase";
-
 /**
  * Main tree view state interface
  */
@@ -102,7 +101,7 @@ export interface FilterState {
 export interface FilterDefinition {
     id: string;
     name: string;
-    predicate: ((item: TreeItemBase) => boolean) | string;
+    predicate: (item: TreeItemBase) => boolean;
     enabled: boolean;
     metadata?: Record<string, any>;
 }
@@ -146,6 +145,14 @@ export interface StateManagerOptions {
     persistence?: PersistenceConfig;
     maxHistorySize?: number;
     enableHistory?: boolean;
+}
+
+// Defines the structure of a filter definition as it is serialized.
+export interface SerializedFilterDefinition {
+    id: string;
+    name: string;
+    enabled: boolean;
+    metadata?: Record<string, any>;
 }
 
 /**
@@ -196,13 +203,7 @@ export interface SerializedExpansionState {
 
 export interface SerializedFilterState {
     activeFilters: string[];
-    customFilters: Array<{
-        id: string;
-        name: string;
-        predicate: string;
-        enabled: boolean;
-        metadata?: Record<string, any>;
-    }>;
+    customFilters: SerializedFilterDefinition[];
     hiddenItems: string[];
     textFilter?: {
         searchText: string;

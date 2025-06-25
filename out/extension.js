@@ -158,9 +158,8 @@ async function displayProjectManagementTreeView() {
         return;
     }
     await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_PROJECTS_TREE, true);
-    // Set the active tree view for filtering
     const filterService = FilterService_1.FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showProjectsTree");
+    filterService.setActiveTreeViewByContext(treeViews, constants_1.ContextKeys.SHOW_PROJECTS_TREE);
 }
 async function hideTestThemeTreeView() {
     if (!treeViews) {
@@ -173,9 +172,8 @@ async function displayTestThemeTreeView() {
         return;
     }
     vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_TEST_THEMES_TREE, true);
-    // Set the active tree view for filtering
     const filterService = FilterService_1.FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showTestThemesTree");
+    filterService.setActiveTreeViewByContext(treeViews, constants_1.ContextKeys.SHOW_TEST_THEMES_TREE);
 }
 async function hideTestElementsTreeView() {
     if (!treeViews) {
@@ -188,9 +186,8 @@ async function displayTestElementsTreeView() {
         return;
     }
     vscode.commands.executeCommand("setContext", constants_1.ContextKeys.SHOW_TEST_ELEMENTS_TREE, true);
-    // Set the active tree view for filtering
     const filterService = FilterService_1.FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showTestElementsTree");
+    filterService.setActiveTreeViewByContext(treeViews, constants_1.ContextKeys.SHOW_TEST_ELEMENTS_TREE);
 }
 /**
  * Initializes all tree views using the new tree framework.
@@ -717,9 +714,7 @@ async function handleTestBenchSessionChange(context, existingSession) {
                                 `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
                                 `Clearing invalid state and loading default view.`);
                             // Clear the invalid state
-                            await context.workspaceState.update(constants_1.StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, undefined);
-                            await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-                            await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
+                            await clearViewState(context);
                         }
                         else {
                             exports.logger.info(`Attempting to restore previous view: ${savedViewId}`);
@@ -762,6 +757,10 @@ async function handleTestBenchSessionChange(context, existingSession) {
             if (treeViews) {
                 treeViews.clear();
             }
+            await displayProjectManagementTreeView();
+            await hideTestThemeTreeView();
+            await hideTestElementsTreeView();
+            await clearViewState(context);
         }
     }
     else {
@@ -773,7 +772,20 @@ async function handleTestBenchSessionChange(context, existingSession) {
         if (treeViews) {
             treeViews.clear();
         }
+        await displayProjectManagementTreeView();
+        await hideTestThemeTreeView();
+        await hideTestElementsTreeView();
+        await clearViewState(context);
     }
+}
+/**
+ * Clears all view state storage to ensure only projects view is shown after logout.
+ * @param context The extension context
+ */
+async function clearViewState(context) {
+    await context.workspaceState.update(constants_1.StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, "projects");
+    await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
+    await context.workspaceState.update(constants_1.StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
 }
 /**
  * Saves the UI context to the workspace state for later restoration.
