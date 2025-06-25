@@ -324,7 +324,10 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
 def context_is_valid(
     ls: LanguageServer, existing_resource: TestBenchResourceModel, silent=False
 ) -> bool:
-    project, tov = existing_resource.tb_tov_context
+    try:
+        project, tov = existing_resource.tb_tov_context
+    except ValueError as e:
+        return False
     log(
         ls,
         DEBUG_CHECK_CONTEXT.format(
