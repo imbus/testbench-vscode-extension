@@ -72,6 +72,7 @@ from .messages import (
     PUSH_SUBDIVISON_TITLE,
     TESTBENCH_LS_CLASS_NAME,
     WARNING_CONTEXT_MISMATCH,
+    WARNING_MISSING_CONTEXT,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
 from .testbench_api.testbench_patch import patch_interaction_details
@@ -705,7 +706,7 @@ def get_context_diagnostics(ls: LanguageServer, document: TextDocument) -> list[
                     start=Position(comment_start, comment_start_char),
                     end=Position(comment_end, comment_end_char),
                 ),
-                message="Missing TestBench context.",
+                message=WARNING_MISSING_CONTEXT,
                 severity=DiagnosticSeverity.Warning,
             )
         ]
