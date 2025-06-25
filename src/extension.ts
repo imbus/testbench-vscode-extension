@@ -146,9 +146,8 @@ async function displayProjectManagementTreeView(): Promise<void> {
         return;
     }
     await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, true);
-    // Set the active tree view for filtering
     const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showProjectsTree");
+    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_PROJECTS_TREE);
 }
 
 async function hideTestThemeTreeView(): Promise<void> {
@@ -163,9 +162,8 @@ async function displayTestThemeTreeView(): Promise<void> {
         return;
     }
     vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, true);
-    // Set the active tree view for filtering
     const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showTestThemesTree");
+    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_THEMES_TREE);
 }
 
 async function hideTestElementsTreeView(): Promise<void> {
@@ -180,9 +178,8 @@ async function displayTestElementsTreeView(): Promise<void> {
         return;
     }
     vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, true);
-    // Set the active tree view for filtering
     const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, "testbenchExtension.showTestElementsTree");
+    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_ELEMENTS_TREE);
 }
 
 /**
@@ -322,7 +319,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             silent: true
         });
         if (session && authProviderInstance) {
-            // Remove the session to fire onDidChangeSessions and trigger proper UI cleanup.
+            // Removing the session fires onDidChangeSessions and triggers proper UI cleanup.
             await authProviderInstance.removeSession(session.id);
             logger.info(`[Cmd] Session ${session.id} removed by logout command.`);
         }
@@ -806,9 +803,7 @@ async function handleTestBenchSessionChange(
                                     `Clearing invalid state and loading default view.`
                             );
                             // Clear the invalid state
-                            await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, undefined);
-                            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-                            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
+                            await clearViewState(context);
                         } else {
                             logger.info(`Attempting to restore previous view: ${savedViewId}`);
                             try {
@@ -853,6 +848,11 @@ async function handleTestBenchSessionChange(
             if (treeViews) {
                 treeViews.clear();
             }
+
+            await displayProjectManagementTreeView();
+            await hideTestThemeTreeView();
+            await hideTestElementsTreeView();
+            await clearViewState(context);
         }
     } else {
         logger.info("[Extension] No active session. Clearing connection.");
@@ -864,7 +864,22 @@ async function handleTestBenchSessionChange(
         if (treeViews) {
             treeViews.clear();
         }
+
+        await displayProjectManagementTreeView();
+        await hideTestThemeTreeView();
+        await hideTestElementsTreeView();
+        await clearViewState(context);
     }
+}
+
+/**
+ * Clears all view state storage to ensure only projects view is shown after logout.
+ * @param context The extension context
+ */
+async function clearViewState(context: vscode.ExtensionContext): Promise<void> {
+    await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, "projects");
+    await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
+    await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
 }
 
 /**

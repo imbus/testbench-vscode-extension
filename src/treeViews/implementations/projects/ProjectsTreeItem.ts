@@ -30,7 +30,6 @@ export class ProjectsTreeItem extends TreeItemBase {
         this.data = data;
         this.id = this.generateUniqueId();
 
-        // Set metadata from data.metadata into internal _metadata map
         if (data.metadata) {
             Object.entries(data.metadata).forEach(([key, value]) => {
                 this.setMetadata(key, value);
@@ -39,7 +38,6 @@ export class ProjectsTreeItem extends TreeItemBase {
 
         this.tooltip = this.generateTooltip();
 
-        // Set context and command based on type
         switch (this.data.type) {
             case "project":
                 this.contextValue = "Project";
@@ -70,6 +68,13 @@ export class ProjectsTreeItem extends TreeItemBase {
     protected generateUniqueId(): string {
         const parentPath = this.parent ? (this.parent as ProjectsTreeItem).data.key : "";
         return `${this.data.type}:${parentPath}:${this.data.key}`;
+    }
+
+    /**
+     * Updates the ID when context changes
+     */
+    public updateId(): void {
+        (this as any).id = this.generateUniqueId();
     }
 
     /**
@@ -180,79 +185,11 @@ export class ProjectsTreeItem extends TreeItemBase {
      * @return A serialized representation of the tree item
      */
     public serialize(): any {
+        const baseSerialized = super.serialize();
         return {
-            data: this.data,
-            id: this.id,
-            label: this.label,
-            description: this.description,
-            contextValue: this.contextValue,
-            collapsibleState: this.collapsibleState,
-            metadata: Array.from(this._metadata.entries())
+            ...baseSerialized,
+            data: this.data
         };
-    }
-
-    /**
-     * Deserialize a ProjectsTreeItem from saved data
-     * @param data The serialized data to deserialize
-     * @param extensionContext The VS Code extension context
-     * @param createInstance Factory function to create the instance
-     * @returns The deserialized tree item instance
-     */
-    public static deserialize<T extends TreeItemBase = ProjectsTreeItem>(
-        data: any,
-        extensionContext: vscode.ExtensionContext,
-        createInstance: (data: any) => T
-    ): T {
-        // Create the instance using the provided factory function
-        const instance = createInstance(data);
-
-        // Restore metadata
-        if (data.metadata) {
-            data.metadata.forEach(([key, value]: [string, any]) => {
-                instance.setMetadata(key, value);
-            });
-        }
-
-        // Restore state if it's a ProjectsTreeItem
-        if (instance instanceof ProjectsTreeItem) {
-            if (data.collapsibleState !== undefined) {
-                instance.collapsibleState = data.collapsibleState;
-            }
-        }
-
-        return instance;
-    }
-
-    /**
-     * Helper method to create a deserializer function for ProjectsTreeItem
-     * @param parent Optional parent tree item
-     * @param extensionContext Optional extension context
-     * @returns A factory function for creating ProjectsTreeItem instances
-     */
-    public static createDeserializer(parent?: ProjectsTreeItem, extensionContext?: vscode.ExtensionContext) {
-        return (data: any) => {
-            const context = extensionContext || (parent?.extensionContext as vscode.ExtensionContext);
-            return new ProjectsTreeItem(data.data || data, context, parent);
-        };
-    }
-
-    /**
-     * Helper method for deserializing with a parent
-     * @param serialized The serialized data
-     * @param extensionContext The VS Code extension context
-     * @param parent Optional parent tree item
-     * @returns The deserialized ProjectsTreeItem
-     */
-    public static deserializeWithParent(
-        serialized: any,
-        extensionContext: vscode.ExtensionContext,
-        parent?: ProjectsTreeItem
-    ): ProjectsTreeItem {
-        return ProjectsTreeItem.deserialize(
-            serialized,
-            extensionContext,
-            ProjectsTreeItem.createDeserializer(parent, extensionContext)
-        );
     }
 
     /**
@@ -285,7 +222,6 @@ export class ProjectsTreeItem extends TreeItemBase {
                     ? "Cycle"
                     : "Other";
 
-        // Add custom root context if this is a custom root
         if (this._metadata.has("isCustomRoot") && this._metadata.get("isCustomRoot") === true) {
             contextValue = `customRoot.${contextValue}`;
         }

@@ -530,6 +530,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      */
     protected createTreeItem(data: ProjectData, parent?: ProjectsTreeItem): ProjectsTreeItem {
         const treeItem = new ProjectsTreeItem(data, this.extensionContext, parent);
+        treeItem.updateId();
         this.applyModulesToProjectsItem(treeItem);
         return treeItem;
     }

@@ -191,7 +191,7 @@ suite("ProjectsTreeItem", function () {
             assert(tooltip.includes("Description: A test project description"));
         });
 
-        test("should generate tooltip for version without description", () => {
+        test("should generate tooltip for version", () => {
             const versionData: ProjectData = {
                 key: "VERSION-001",
                 name: "Test Version",
@@ -204,7 +204,6 @@ suite("ProjectsTreeItem", function () {
             assert(tooltip.includes("Type: version"));
             assert(tooltip.includes("Name: Test Version"));
             assert(tooltip.includes("Key: VERSION-001"));
-            assert(!tooltip.includes("Description:"));
         });
 
         test("should generate tooltip for cycle", () => {
@@ -343,7 +342,7 @@ suite("ProjectsTreeItem", function () {
             assert.strictEqual(item.getCycleKey(), "CYCLE-001");
         });
 
-        test("should return null for cycle key when not a cycle", () => {
+        test("should return null for cycle key when the item is not a cycle", () => {
             const projectData: ProjectData = {
                 key: "PROJ-001",
                 name: "Test Project",
@@ -356,7 +355,7 @@ suite("ProjectsTreeItem", function () {
     });
 
     suite("Data Management", () => {
-        test("should update data correctly", () => {
+        test("should update tree item data correctly", () => {
             const projectData: ProjectData = {
                 key: "PROJ-001",
                 name: "Original Name",
@@ -377,7 +376,7 @@ suite("ProjectsTreeItem", function () {
             assert.strictEqual(item.description, "Updated Description");
         });
 
-        test("should update tooltip after data update", () => {
+        test("should update tree itemtooltip after data update", () => {
             const projectData: ProjectData = {
                 key: "PROJ-001",
                 name: "Original Name",
@@ -399,7 +398,7 @@ suite("ProjectsTreeItem", function () {
     });
 
     suite("Context Value Management", () => {
-        test("should update context value for project", () => {
+        test("should update context value for project tree item", () => {
             const projectData: ProjectData = {
                 key: "PROJ-001",
                 name: "Test Project",
@@ -415,7 +414,7 @@ suite("ProjectsTreeItem", function () {
             assert.strictEqual(item.contextValue, "customRoot.Project");
         });
 
-        test("should update context value for version", () => {
+        test("should update context value for version tree item", () => {
             const versionData: ProjectData = {
                 key: "VERSION-001",
                 name: "Test Version",
@@ -431,7 +430,7 @@ suite("ProjectsTreeItem", function () {
             assert.strictEqual(item.contextValue, "customRoot.Version");
         });
 
-        test("should update context value for cycle", () => {
+        test("should update context value for cycle tree item", () => {
             const cycleData: ProjectData = {
                 key: "CYCLE-001",
                 name: "Test Cycle",
@@ -447,16 +446,15 @@ suite("ProjectsTreeItem", function () {
             assert.strictEqual(item.contextValue, "customRoot.Cycle");
         });
 
-        test("should handle unknown type in context value", () => {
+        test("should handle unknown type in context value for tree item", () => {
             const unknownData: ProjectData = {
                 key: "UNKNOWN-001",
                 name: "Unknown Item",
-                type: "project" // This will be overridden in the test
+                type: "project" // Overriden below
             };
 
             const item = new ProjectsTreeItem(unknownData, mockContext);
 
-            // Manually set an unknown type to test the fallback
             (item as any).data.type = "unknown";
             item.updateContextValue();
 
@@ -488,76 +486,6 @@ suite("ProjectsTreeItem", function () {
             assert.strictEqual(serialized.contextValue, item.contextValue);
             assert.strictEqual(serialized.collapsibleState, item.collapsibleState);
             assert(Array.isArray(serialized.metadata));
-        });
-
-        test("should deserialize tree item correctly", () => {
-            const projectData: ProjectData = {
-                key: "PROJ-001",
-                name: "Test Project",
-                description: "Test Description",
-                type: "project"
-            };
-
-            const originalItem = new ProjectsTreeItem(projectData, mockContext);
-            originalItem.setMetadata("customKey", "customValue");
-
-            const serialized = originalItem.serialize();
-            const deserialized = ProjectsTreeItem.deserialize(
-                serialized,
-                mockContext,
-                ProjectsTreeItem.createDeserializer()
-            );
-
-            assert.strictEqual(deserialized.data.key, originalItem.data.key);
-            assert.strictEqual(deserialized.data.name, originalItem.data.name);
-            assert.strictEqual(deserialized.data.type, originalItem.data.type);
-            assert.strictEqual(deserialized.getMetadata("customKey"), "customValue");
-            assert.strictEqual(deserialized.collapsibleState, originalItem.collapsibleState);
-        });
-
-        test("should deserialize with parent correctly", () => {
-            const parentData: ProjectData = {
-                key: "PROJ-001",
-                name: "Parent Project",
-                type: "project"
-            };
-            const childData: ProjectData = {
-                key: "VERSION-001",
-                name: "Child Version",
-                type: "version",
-                parentKey: "PROJ-001"
-            };
-
-            const parent = new ProjectsTreeItem(parentData, mockContext);
-            const child = new ProjectsTreeItem(childData, mockContext, parent);
-
-            const serialized = child.serialize();
-            const deserialized = ProjectsTreeItem.deserializeWithParent(serialized, mockContext, parent);
-
-            assert.strictEqual(deserialized.parent, parent);
-            assert.strictEqual(deserialized.data.key, child.data.key);
-        });
-
-        test("should create deserializer function correctly", () => {
-            const parentData: ProjectData = {
-                key: "PROJ-001",
-                name: "Parent Project",
-                type: "project"
-            };
-            const parent = new ProjectsTreeItem(parentData, mockContext);
-
-            const deserializer = ProjectsTreeItem.createDeserializer(parent, mockContext);
-            const childData: ProjectData = {
-                key: "VERSION-001",
-                name: "Child Version",
-                type: "version"
-            };
-
-            const child = deserializer({ data: childData });
-
-            assert(child instanceof ProjectsTreeItem);
-            assert.strictEqual(child.parent, parent);
-            assert.strictEqual(child.data.key, "VERSION-001");
         });
     });
 

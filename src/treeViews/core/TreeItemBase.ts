@@ -309,15 +309,26 @@ export abstract class TreeItemBase extends vscode.TreeItem {
 
     /**
      * Serializes this item to a plain object.
-     * @returns Serialized data
+     * Subclasses overrides this, call super.serialize(), and add their specific data.
+     * @returns A base serialized object.
      */
-    public abstract serialize(): any;
+    public serialize(): any {
+        return {
+            id: this.id,
+            label: this.label,
+            description: this.description,
+            contextValue: this.contextValue,
+            collapsibleState: this.collapsibleState,
+            metadata: Array.from(this._metadata.entries())
+        };
+    }
 
     /**
      * Deserializes data into a tree item instance.
+     * This generic static method can be used by all subclasses.
      * @param data Serialized data
      * @param extensionContext VS Code extension context
-     * @param createInstance Factory function to create the instance
+     * @param createInstance Factory function to create the specific instance
      * @returns The deserialized instance
      */
     public static deserialize<T extends TreeItemBase>(
@@ -331,6 +342,14 @@ export abstract class TreeItemBase extends vscode.TreeItem {
             data.metadata.forEach(([key, value]: [string, any]) => {
                 instance.setMetadata(key, value);
             });
+        }
+
+        if (data.collapsibleState !== undefined) {
+            instance.collapsibleState = data.collapsibleState;
+        }
+
+        if (data.tooltip) {
+            instance.tooltip = data.tooltip;
         }
 
         return instance;

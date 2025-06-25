@@ -4,9 +4,17 @@
  */
 
 import * as vscode from "vscode";
-import { TreeViewState, StateChange, StateSnapshot, SerializedTreeViewState } from "./StateTypes";
+import {
+    TreeViewState,
+    StateChange,
+    StateSnapshot,
+    SerializedTreeViewState,
+    SerializedFilterDefinition,
+    FilterDefinition
+} from "./StateTypes";
 import { EventBus, TreeViewEvent } from "../utils/EventBus";
 import { TreeViewTiming } from "../../constants";
+import deepEqual from "fast-deep-equal";
 
 export class StateManager {
     private state: TreeViewState;
@@ -69,16 +77,8 @@ export class StateManager {
         Object.assign(this.state, updates);
         this.state.lastRefresh = Date.now();
 
-        // Add to history
         this.addToHistory(previousState);
-
-        // Emit state change event
         this.emitStateChange(previousState, this.state);
-
-        // Schedule save
-        if (this.shouldAutoSave(updates)) {
-            this.scheduleSave();
-        }
     }
 
     public setLoading(isLoading: boolean): void {
@@ -108,13 +108,10 @@ export class StateManager {
     }
 
     public clear(): void {
+        // Do not clear customRoot, marking, expansion, or filtering states (persistent UI states)
         this.setState({
             loading: false,
             error: null,
-            customRoot: null,
-            marking: null,
-            expansion: null,
-            filtering: null,
             items: new Map(),
             rootItems: []
         });
@@ -299,7 +296,7 @@ export class StateManager {
         ];
 
         for (const field of fields) {
-            if (!this.deepEqual(prev[field], next[field])) {
+            if (!deepEqual(prev[field], next[field])) {
                 changes.push({
                     field,
                     oldValue: prev[field],
@@ -310,76 +307,6 @@ export class StateManager {
         }
 
         return changes;
-    }
-
-    /**
-     * Checks if two values are deeply equal
-     * @param a The first value
-     * @param b The second value
-     * @return True if the values are deeply equal
-     */
-    private deepEqual(a: any, b: any): boolean {
-        if (a === b) {
-            return true;
-        }
-        if (a === null || b === null) {
-            return false;
-        }
-        if (typeof a !== typeof b) {
-            return false;
-        }
-
-        if (a instanceof Map && b instanceof Map) {
-            if (a.size !== b.size) {
-                return false;
-            }
-            for (const [key, value] of a) {
-                if (!b.has(key) || !this.deepEqual(value, b.get(key))) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        if (a instanceof Set && b instanceof Set) {
-            if (a.size !== b.size) {
-                return false;
-            }
-            for (const value of a) {
-                if (!b.has(value)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        if (Array.isArray(a) && Array.isArray(b)) {
-            if (a.length !== b.length) {
-                return false;
-            }
-            for (let i = 0; i < a.length; i++) {
-                if (!this.deepEqual(a[i], b[i])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        if (typeof a === "object" && typeof b === "object") {
-            const keysA = Object.keys(a);
-            const keysB = Object.keys(b);
-            if (keysA.length !== keysB.length) {
-                return false;
-            }
-            for (const key of keysA) {
-                if (!keysB.includes(key) || !this.deepEqual(a[key], b[key])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        return false;
     }
 
     /**
@@ -471,10 +398,15 @@ export class StateManager {
                 filtering: state.filtering
                     ? {
                           activeFilters: state.filtering.activeFilters,
-                          customFilters: state.filtering.customFilters.map((f) => ({
-                              ...f,
-                              predicate: typeof f.predicate === "function" ? f.predicate.toString() : f.predicate
-                          })),
+                          // No predicate function during serialization
+                          customFilters: state.filtering.customFilters.map(
+                              (f: FilterDefinition): SerializedFilterDefinition => ({
+                                  id: f.id,
+                                  name: f.name,
+                                  enabled: f.enabled,
+                                  metadata: f.metadata
+                              })
+                          ),
                           hiddenItems: Array.from(state.filtering.hiddenItems)
                       }
                     : null,
@@ -482,6 +414,7 @@ export class StateManager {
                 selectedProjectKey: state.selectedProjectKey,
                 selectedCycleKey: state.selectedCycleKey,
                 selectedTovKey: state.selectedTovKey,
+
                 metadata: state.metadata
             }
         };
@@ -526,7 +459,9 @@ export class StateManager {
             filtering: state.filtering
                 ? {
                       activeFilters: state.filtering.activeFilters || [],
-                      customFilters: state.filtering.customFilters || [],
+                      // Casting here for intermediate state.
+                      // Predicate function will be bound in the FilteringModule.
+                      customFilters: (state.filtering.customFilters as FilterDefinition[]) || [],
                       hiddenItems: new Set(state.filtering.hiddenItems || [])
                   }
                 : null,

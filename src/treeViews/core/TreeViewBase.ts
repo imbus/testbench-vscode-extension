@@ -137,9 +137,27 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         const enabledModules = ModuleRegistry.createEnabledModules(this.config.features);
         const modulePromises: Promise<void>[] = [];
 
-        // Register and initialize each module
-        for (const [moduleName, module] of enabledModules) {
+        for (const [, module] of enabledModules) {
             this.registerModule(module);
+        }
+
+        // Initialize persistence module first to ensure state is loaded
+        const persistenceModule = enabledModules.get("persistence");
+        if (persistenceModule) {
+            try {
+                await persistenceModule.initialize(this.context);
+                this.logger.debug("Module initialized: persistence");
+            } catch (error) {
+                this.logger.error("Failed to initialize module persistence:", error);
+            }
+        }
+
+        // Initialize all other modules in parallel
+        for (const [moduleName, module] of enabledModules) {
+            if (moduleName === "persistence") {
+                continue;
+            }
+
             modulePromises.push(
                 module
                     .initialize(this.context)
@@ -212,6 +230,11 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         const iconModule = this.getModule("icons") as IconModule | undefined;
         if (iconModule) {
             iconModule.setItemIcon(element);
+        }
+
+        const expansionModule = this.getModule("expansion");
+        if (expansionModule) {
+            expansionModule.applyExpansionState(element);
         }
 
         return element;

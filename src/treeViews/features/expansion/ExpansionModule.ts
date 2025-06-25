@@ -45,6 +45,7 @@ export class ExpansionModule implements TreeViewModule {
             this.expansionState.defaultExpanded = defaultExpanded;
         }
 
+        // Listen for state changes from other modules
         context.eventBus.on("state:changed", (event) => {
             const changes = event.data.changes;
             const expansionChange = changes.find((c: any) => c.field === "expansion");
@@ -54,6 +55,37 @@ export class ExpansionModule implements TreeViewModule {
                     collapsedItems: new Set(expansionChange.newValue.collapsedItems),
                     defaultExpanded: expansionChange.newValue.defaultExpanded ?? this.expansionState.defaultExpanded
                 };
+                this.context.logger.debug("Expansion state updated from state manager");
+
+                this.reapplyExpansionStateToAllItems();
+            }
+        });
+
+        // Listen for direct state manager updates to handle persistence loading
+        const currentState = context.stateManager.getState();
+        if (currentState.expansion) {
+            this.expansionState = {
+                expandedItems: new Set(currentState.expansion.expandedItems),
+                collapsedItems: new Set(currentState.expansion.collapsedItems),
+                defaultExpanded: currentState.expansion.defaultExpanded ?? defaultExpanded
+            };
+            this.context.logger.debug("Expansion state loaded from current state manager state");
+        }
+
+        // Listen for user expansion/collapse actions
+        context.eventBus.on("tree:itemExpanded", (event) => {
+            const item = event.data.item;
+            if (item && item.id) {
+                this.context.logger.debug(`Item expanded: ${item.label} (${item.id})`);
+                this.setExpanded(item.id, true);
+            }
+        });
+
+        context.eventBus.on("tree:itemCollapsed", (event) => {
+            const item = event.data.item;
+            if (item && item.id) {
+                this.context.logger.debug(`Item collapsed: ${item.label} (${item.id})`);
+                this.setExpanded(item.id, false);
             }
         });
 
@@ -66,6 +98,11 @@ export class ExpansionModule implements TreeViewModule {
      * @param expanded Whether the item should be expanded
      */
     public setExpanded(itemId: string, expanded: boolean): void {
+        const expansionConfig = this.context.config.modules.expansion;
+        if (!expansionConfig?.rememberExpansion) {
+            return;
+        }
+
         if (expanded) {
             this.expansionState.expandedItems.add(itemId);
             this.expansionState.collapsedItems.delete(itemId);
@@ -83,6 +120,11 @@ export class ExpansionModule implements TreeViewModule {
      * @return true if expanded, false otherwise
      */
     public isExpanded(itemId: string): boolean {
+        const expansionConfig = this.context.config.modules.expansion;
+        if (!expansionConfig?.rememberExpansion) {
+            return this.expansionState.defaultExpanded;
+        }
+
         if (this.expansionState.expandedItems.has(itemId)) {
             return true;
         }
@@ -101,6 +143,15 @@ export class ExpansionModule implements TreeViewModule {
         const itemId = item.id;
         if (!itemId) {
             return;
+        }
+
+        const state = this.context.stateManager.getState();
+        if (
+            state.expansion &&
+            (state.expansion.expandedItems.size !== this.expansionState.expandedItems.size ||
+                state.expansion.collapsedItems.size !== this.expansionState.collapsedItems.size)
+        ) {
+            this.reloadState();
         }
 
         const shouldExpand = this.isExpanded(itemId);
@@ -216,6 +267,26 @@ export class ExpansionModule implements TreeViewModule {
     }
 
     /**
+     * Reloads expansion state from the state manager
+     * This is useful when state is loaded after the module is initialized
+     */
+    public reloadState(): void {
+        const state = this.context.stateManager.getState();
+        if (state.expansion) {
+            const expansionConfig = this.context.config.modules.expansion;
+            const defaultExpanded = expansionConfig?.defaultExpanded ?? false;
+
+            this.expansionState = {
+                expandedItems: new Set(state.expansion.expandedItems),
+                collapsedItems: new Set(state.expansion.collapsedItems),
+                defaultExpanded: state.expansion.defaultExpanded ?? defaultExpanded
+            };
+
+            this.context.logger.debug("Expansion state reloaded from state manager");
+        }
+    }
+
+    /**
      * Handles configuration changes for the expansion module
      * @param config The new configuration object
      */
@@ -243,5 +314,15 @@ export class ExpansionModule implements TreeViewModule {
     public dispose(): void {
         // Save final state
         this.updateState();
+    }
+
+    /**
+     * Re-applies expansion state to all existing tree items
+     */
+    private reapplyExpansionStateToAllItems(): void {
+        const state = this.context.stateManager.getState();
+        state.items.forEach((item) => {
+            this.applyExpansionState(item);
+        });
     }
 }

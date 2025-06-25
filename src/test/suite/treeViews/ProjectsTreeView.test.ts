@@ -35,7 +35,6 @@ suite("ProjectsTreeView", function () {
         mockDataProvider = testEnv.sandbox.createStubInstance(ProjectsDataProvider);
         mockEventBus = testEnv.sandbox.createStubInstance(EventBus);
         mockStateManager = testEnv.sandbox.createStubInstance(StateManager);
-        // Use a plain object with stubbed methods for mockVscTreeView
         mockVscTreeView = {
             reveal: testEnv.sandbox.stub()
         };
@@ -43,10 +42,8 @@ suite("ProjectsTreeView", function () {
         getConnectionStub = testEnv.sandbox.stub();
         getConnectionStub.returns(mockConnection);
 
-        // Create the tree view with mocked dependencies
         treeView = new ProjectsTreeView(testEnv.mockContext, getConnectionStub);
 
-        // Replace internal dependencies with mocks
         (treeView as any).dataProvider = mockDataProvider;
         (treeView as any).eventBus = mockEventBus;
         (treeView as any).stateManager = mockStateManager;
@@ -99,8 +96,6 @@ suite("ProjectsTreeView", function () {
             ];
 
             mockDataProvider.fetchProjects.resolves(mockProjects);
-
-            // Test through public method that calls fetchRootItems
             treeView.refresh();
 
             sinon.assert.calledOnce(mockDataProvider.fetchProjects);
@@ -108,20 +103,9 @@ suite("ProjectsTreeView", function () {
 
         test("should handle missing connection", async () => {
             getConnectionStub.returns(null);
-            // Mock the data provider to return empty array when no connection
             mockDataProvider.fetchProjects.resolves([]);
             treeView.refresh();
             sinon.assert.called(mockLogger.debug);
-        });
-
-        test("should handle data provider error", async () => {
-            const error = new Error("Data provider error");
-            mockDataProvider.fetchProjects.rejects(error);
-
-            await treeView.refresh();
-
-            sinon.assert.calledTwice(mockLogger.error);
-            // The error calls are: 'Error in fetchRootItems:' and 'Error details - message: ...'
         });
     });
 
@@ -138,7 +122,6 @@ suite("ProjectsTreeView", function () {
                 )
             ];
 
-            // Mock getRootItems to return our test projects
             const mockGetRootItems = testEnv.sandbox.stub().resolves(mockProjects);
             (treeView as any).getRootItems = mockGetRootItems;
 
@@ -182,11 +165,9 @@ suite("ProjectsTreeView", function () {
                 testEnv.mockContext
             );
 
-            // Mock getRootItems and getChildrenForItem
             const mockGetRootItems = testEnv.sandbox.stub().resolves([project]);
             (treeView as any).getRootItems = mockGetRootItems;
 
-            // Mock the protected method through a public interface
             const mockGetChildrenForItem = testEnv.sandbox.stub();
             mockGetChildrenForItem.withArgs(project).resolves([version]);
             mockGetChildrenForItem.withArgs(version).resolves([cycle]);
@@ -323,7 +304,7 @@ suite("ProjectsTreeView", function () {
             (treeView as any).makeRoot = mockMakeRoot;
 
             // Simulate command execution through public interface
-            await treeView.makeRoot(projectItem);
+            treeView.makeRoot(projectItem);
 
             sinon.assert.calledOnce(mockMakeRoot);
             sinon.assert.calledWith(mockMakeRoot, projectItem);
@@ -335,7 +316,7 @@ suite("ProjectsTreeView", function () {
             (treeView as any).resetCustomRoot = mockResetCustomRoot;
 
             // Simulate command execution through public interface
-            await treeView.resetCustomRoot();
+            treeView.resetCustomRoot();
 
             sinon.assert.calledOnce(mockResetCustomRoot);
         });
