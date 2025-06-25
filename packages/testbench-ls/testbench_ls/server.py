@@ -202,7 +202,6 @@ def generate_test_suites(ls: LanguageServer, kwargs):
 @testbench_ls.feature(INITIALIZE)
 def initialize(params: InitializeParams) -> InitializeResult:
     server_capabilities = ServerCapabilities(text_document_sync=TextDocumentSyncKind.Full)
-    #TODO: DIAGNOSTICS
     return InitializeResult(capabilities=server_capabilities)
 
 
@@ -236,6 +235,14 @@ def update_project(ls: LanguageServer, args):
     ls.set_project(new_project)
     tb_connection = TestBenchResourceConnection.singleton()
     tb_connection.update_project(new_project)
+    for docum in testbench_ls.workspace.text_documents:
+        document = testbench_ls.workspace.get_text_document(docum)
+        diagnostics = get_context_diagnostics(testbench_ls, document)
+        testbench_ls.publish_diagnostics(
+            document.uri,
+            diagnostics=diagnostics,
+            version=document.version,
+        )
 
 
 @testbench_ls.command(COMMAND_UPDATE_TOV)
@@ -244,6 +251,14 @@ def update_tov(ls: LanguageServer, args):
     ls.set_tov(new_tov)
     tb_connection = TestBenchResourceConnection.singleton()
     tb_connection.update_tov(new_tov)
+    for docum in testbench_ls.workspace.text_documents:
+        document = testbench_ls.workspace.get_text_document(docum)
+        diagnostics = get_context_diagnostics(testbench_ls, document)
+        testbench_ls.publish_diagnostics(
+            document.uri,
+            diagnostics=diagnostics,
+            version=document.version,
+        )
 
 
 @testbench_ls.feature(TEXT_DOCUMENT_CODE_LENS)
@@ -663,6 +678,8 @@ def apply_selected_context(ls: LanguageServer, args):
 
 def get_context_diagnostics(ls: LanguageServer, document: TextDocument) -> list[Diagnostic]:
     resource = TestBenchResourceModel.from_file(document.source)
+    if not resource.tb_subdivision_uid:
+        return []
     if context_is_valid(ls, resource, silent=True):
         return []
     cont_start, cont_start_char, cont_end, cont_end_char = get_testbench_context_position(
