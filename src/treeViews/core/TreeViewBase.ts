@@ -109,6 +109,24 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             await this.initializeModules();
             // Don't load data during initialization, wait for connection event
             this._initialized = true;
+
+            // Set up event listeners for proper expansion tracking
+            if (this.vscTreeView) {
+                // Are already set up in TreeViewFactory, added for safety
+                this.eventBus.on("tree:itemExpanded", () => {
+                    const expansionModule = this.getModule("expansion");
+                    if (expansionModule && typeof expansionModule.forceSave === "function") {
+                        setTimeout(() => expansionModule.forceSave(), 50);
+                    }
+                });
+
+                this.eventBus.on("tree:itemCollapsed", () => {
+                    const expansionModule = this.getModule("expansion");
+                    if (expansionModule && typeof expansionModule.forceSave === "function") {
+                        setTimeout(() => expansionModule.forceSave(), 50);
+                    }
+                });
+            }
             this.logger.debug("Tree view initialized successfully");
         } catch (error) {
             this.errorHandler.handleVoid(
@@ -332,7 +350,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     private async expandTreeForFiltering(items: T[]): Promise<T[]> {
         const expandedItems: T[] = [];
         for (const item of items) {
-            // Load children for this item for filtering
             const children = await this.getChildrenForItem(item);
             item.children = children;
             expandedItems.push(item);
@@ -356,7 +373,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             return this.rootItems;
         }
 
-        // If we're already loading data, return current items to prevent loops
         if (this._isLoading) {
             this.logger.trace("Data load in progress, returning current items");
             return this.rootItems;
@@ -368,13 +384,11 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             return this.rootItems;
         }
 
-        // If the tree was intentionally cleared and we have no data, don't try to load
         if (this._intentionallyCleared && this.rootItems.length === 0) {
             this.logger.trace("Tree was intentionally cleared and is empty, not loading data");
             return this.rootItems;
         }
 
-        // Otherwise, load fresh data
         this.logger.trace("No valid cache, loading fresh data");
         await this.loadData();
         return this.rootItems;
@@ -385,12 +399,14 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * @return Promise resolving to array of root tree items
      */
     protected abstract fetchRootItems(): Promise<T[]>;
+
     /**
      * Retrieves children for a specific tree item
      * @param item The parent tree item
      * @return Promise resolving to array of child tree items
      */
     protected abstract getChildrenForItem(item: T): Promise<T[]>;
+
     /**
      * Creates a new tree item from data
      * @param data The data to create the tree item from
@@ -398,6 +414,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * @return The created tree item
      */
     protected abstract createTreeItem(data: any, parent?: T): T;
+
     /**
      * Refreshes the tree view with optional debouncing
      * @param item Optional specific item to refresh
@@ -478,14 +495,13 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         this.logger.debug("Updating tree view configuration");
         // Merge configs
         Object.assign(this.config, newConfig);
-        // Notify modules
+
         for (const module of this.modules.values()) {
             if (module.onConfigChange) {
                 await module.onConfigChange(this.config);
             }
         }
 
-        // Refresh if needed
         if (newConfig.features) {
             await this.initializeModules();
             this.refresh();
@@ -545,11 +561,9 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         timeoutMs?: number
     ): Promise<T> {
         if (timeoutMs === undefined) {
-            // No timeout configured, execute operation without timeout
             return await operation();
         }
 
-        // Apply timeout protection
         return Promise.race([operation(), this.createTimeoutPromise(timeoutMs, operationName)]);
     }
 
@@ -590,12 +604,17 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             if (options?.immediate) {
                 this._onDidChangeTreeData.fire(undefined);
             } else {
-                // Default debounced behavior
                 this._dataFetchDebounceTimeout = setTimeout(() => {
                     this._onDidChangeTreeData.fire(undefined);
                     this._dataFetchDebounceTimeout = undefined;
                 }, TreeViewTiming.UI_REFRESH_DEBOUNCE_MS);
             }
+
+            setTimeout(() => {
+                this.restoreExpansionState().catch((error) => {
+                    this.logger.error("Failed to restore expansion state:", error);
+                });
+            }, 100);
         } catch (error) {
             this.logger.error("Error during data load:", error);
             this.stateManager.setError(error as Error);
@@ -604,5 +623,81 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this._isLoading = false;
             this.logger.debug("Data load completed");
         }
+    }
+
+    /**
+     * Restores the expansion state for all items in the tree.
+     * This should be called after the tree is populated with data.
+     */
+    protected async restoreExpansionState(): Promise<void> {
+        const expansionModule = this.getModule("expansion");
+        if (!expansionModule || !this.vscTreeView) {
+            return;
+        }
+
+        const state = this.stateManager.getState();
+        if (!state.expansion || state.expansion.expandedItems.size === 0) {
+            return;
+        }
+
+        this.logger.debug(`Restoring expansion state for ${state.expansion.expandedItems.size} items`);
+
+        const itemsById = new Map<string, T>();
+
+        const collectItems = (items: T[]): void => {
+            for (const item of items) {
+                if (item.id) {
+                    itemsById.set(item.id, item);
+                }
+                if (item.children && item.children.length > 0) {
+                    collectItems(item.children as T[]);
+                }
+            }
+        };
+
+        collectItems(this.rootItems);
+
+        const itemsToExpand: T[] = [];
+        for (const itemId of state.expansion.expandedItems) {
+            const item = itemsById.get(itemId);
+            if (item) {
+                itemsToExpand.push(item);
+            }
+        }
+
+        itemsToExpand.sort((a, b) => {
+            const depthA = this.getItemDepth(a);
+            const depthB = this.getItemDepth(b);
+            return depthA - depthB;
+        });
+
+        for (const item of itemsToExpand) {
+            try {
+                await this.vscTreeView.reveal(item, {
+                    expand: true,
+                    focus: false,
+                    select: false
+                });
+            } catch (error) {
+                this.logger.trace(`Could not expand item ${item.id}: ${error}`);
+            }
+        }
+
+        this.logger.debug(`Expansion state restoration completed`);
+    }
+
+    /**
+     * Gets the depth of an item in the tree
+     * @param item The item to get the depth for
+     * @returns The depth of the item (0 for root items)
+     */
+    private getItemDepth(item: T): number {
+        let depth = 0;
+        let current = item.parent as T | undefined;
+        while (current) {
+            depth++;
+            current = current.parent as T | undefined;
+        }
+        return depth;
     }
 }

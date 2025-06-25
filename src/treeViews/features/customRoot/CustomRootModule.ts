@@ -163,7 +163,7 @@ export class CustomRootModule implements TreeViewModule {
 
         this.customRootState = newCustomRootState;
 
-        this.context.stateManager.addItem(item);
+        this.context.stateManager.updateItem(item.id!, item as any);
         // Update the state, which will notify other components.
         this.context.stateManager.setState({ customRoot: newCustomRootState });
         this.updateContextKey();

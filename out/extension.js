@@ -1269,10 +1269,13 @@ async function clearAllExtensionData(context, showConfirmation = false) {
 async function deactivate() {
     try {
         if (exports.connection) {
+            exports.logger.info("[Extension] Performing server logout on deactivation.");
             await exports.connection.logoutUserOnServer();
         }
         if (server_1.client) {
+            exports.logger.info("[Extension] Attempting to stop language server on deactivation.");
             await (0, server_1.stopLanguageClient)(true);
+            exports.logger.info("[Extension] Language server stopped on deactivation.");
         }
         if (treeViews) {
             exports.logger.info("[Extension] Disposing TreeViews on deactivation.");
