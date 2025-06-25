@@ -495,28 +495,25 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     /**
      * Disposes the tree view and all its resources
      */
-    public dispose(): void {
+    public async dispose(): Promise<void> {
         if (this._disposed) {
             return;
         }
 
         this._disposed = true;
         this.logger.debug("Disposing tree view");
-        // Dispose modules
         for (const module of this.modules.values()) {
             try {
-                module.dispose();
+                await module.dispose();
             } catch (error) {
                 this.logger.error(`Error disposing module ${module.id}:`, error);
             }
         }
 
-        // Dispose core components
         this._onDidChangeTreeData.dispose();
         this.eventBus.dispose();
         this.stateManager.dispose();
 
-        // Clear data
         this.rootItems = [];
         this.modules.clear();
     }

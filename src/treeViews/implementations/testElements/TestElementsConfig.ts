@@ -24,7 +24,6 @@ export const testElementsConfig: TreeViewConfig = {
         persistence: {
             strategy: "workspace",
             autoSave: true,
-            saveDebounce: TreeViewTiming.DEFAULT_SAVE_DEBOUNCE_MS,
             includeCustomRoot: false,
             includeExpansion: true,
             includeMarking: false

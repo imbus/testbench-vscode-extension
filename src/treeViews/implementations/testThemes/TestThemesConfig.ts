@@ -41,7 +41,6 @@ export const testThemesConfig: TreeViewConfig = {
         persistence: {
             strategy: "workspace",
             autoSave: true,
-            saveDebounce: TreeViewTiming.FAST_SAVE_DEBOUNCE_MS,
             includeCustomRoot: true,
             includeExpansion: true,
             includeMarking: true

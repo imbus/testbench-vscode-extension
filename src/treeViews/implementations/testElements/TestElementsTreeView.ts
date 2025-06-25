@@ -549,16 +549,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * @brief Disposes of all resources and cleans up the tree view.
-     * @returns void
+     * Disposes of all resources and cleans up the tree view.
      */
-    public dispose(): void {
-        // Dispose of all disposables
+    public async dispose(): Promise<void> {
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
         this.disposables = [];
-        super.dispose();
+        await super.dispose();
     }
 
     /**

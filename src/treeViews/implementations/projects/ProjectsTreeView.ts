@@ -272,11 +272,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         if (iconModule) {
             iconModule.setItemIcon(item);
         }
-
-        const expansionModule = this.getModule("expansion");
-        if (expansionModule) {
-            expansionModule.applyExpansionState(item);
-        }
     }
 
     /**
@@ -514,12 +509,12 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     /**
      * Disposes of all registered commands and event listeners
      */
-    public override dispose(): void {
+    public override async dispose(): Promise<void> {
         // Dispose all registered commands and event listeners
         this.disposables.forEach((d) => d.dispose());
         this.disposables = [];
 
-        super.dispose();
+        await super.dispose();
     }
 
     /**

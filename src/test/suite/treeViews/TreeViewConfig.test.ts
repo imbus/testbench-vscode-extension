@@ -49,7 +49,6 @@ suite("TreeViewConfig", () => {
                     persistence: {
                         strategy: "workspace",
                         autoSave: true,
-                        saveDebounce: 1000,
                         includeCustomRoot: true,
                         includeExpansion: true,
                         includeMarking: true
@@ -210,7 +209,6 @@ suite("TreeViewConfig", () => {
             const config: PersistenceConfig = {
                 strategy: "workspace",
                 autoSave: true,
-                saveDebounce: 2000,
                 includeCustomRoot: true,
                 includeExpansion: true,
                 includeMarking: true
@@ -218,7 +216,6 @@ suite("TreeViewConfig", () => {
 
             assert.strictEqual(config.strategy, "workspace");
             assert.strictEqual(config.autoSave, true);
-            assert.strictEqual(config.saveDebounce, 2000);
             assert.strictEqual(config.includeCustomRoot, true);
             assert.strictEqual(config.includeExpansion, true);
             assert.strictEqual(config.includeMarking, true);
@@ -228,7 +225,6 @@ suite("TreeViewConfig", () => {
             const config: PersistenceConfig = {
                 strategy: "global",
                 autoSave: false,
-                saveDebounce: 500,
                 includeCustomRoot: false,
                 includeExpansion: false,
                 includeMarking: false
@@ -236,7 +232,6 @@ suite("TreeViewConfig", () => {
 
             assert.strictEqual(config.strategy, "global");
             assert.strictEqual(config.autoSave, false);
-            assert.strictEqual(config.saveDebounce, 500);
             assert.strictEqual(config.includeCustomRoot, false);
             assert.strictEqual(config.includeExpansion, false);
             assert.strictEqual(config.includeMarking, false);
@@ -246,7 +241,6 @@ suite("TreeViewConfig", () => {
             const config: PersistenceConfig = {
                 strategy: "none",
                 autoSave: false,
-                saveDebounce: 0,
                 includeCustomRoot: false,
                 includeExpansion: false,
                 includeMarking: false
@@ -254,7 +248,6 @@ suite("TreeViewConfig", () => {
 
             assert.strictEqual(config.strategy, "none");
             assert.strictEqual(config.autoSave, false);
-            assert.strictEqual(config.saveDebounce, 0);
         });
     });
 
@@ -513,7 +506,6 @@ suite("TreeViewConfig", () => {
                 const config: PersistenceConfig = {
                     strategy: strategy,
                     autoSave: true,
-                    saveDebounce: 1000,
                     includeCustomRoot: true,
                     includeExpansion: true,
                     includeMarking: true

@@ -59,7 +59,7 @@ export class IconModule implements TreeViewModule {
     }
 
     /**
-     * @brief Returns default icon configuration
+     * Returns default icon configuration
      * @return Default icon configuration
      */
     private getDefaultConfig(): IconConfig {
@@ -71,7 +71,7 @@ export class IconModule implements TreeViewModule {
     }
 
     /**
-     * @brief Initializes all available icon themes
+     * Initializes all available icon themes
      */
     private initializeThemes(): void {
         // Default theme
@@ -170,7 +170,7 @@ export class IconModule implements TreeViewModule {
     }
 
     /**
-     * @brief Parses icon value string to ThemeIcon or returns as string
+     * Parses icon value string to ThemeIcon or returns as string
      * @param value The icon value string
      * @return Parsed icon value
      */

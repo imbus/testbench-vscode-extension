@@ -71,7 +71,6 @@ export interface MarkingConfig {
 export interface PersistenceConfig {
     strategy: "workspace" | "global" | "none";
     autoSave: boolean;
-    saveDebounce: number;
     includeCustomRoot: boolean;
     includeExpansion: boolean;
     includeMarking: boolean;

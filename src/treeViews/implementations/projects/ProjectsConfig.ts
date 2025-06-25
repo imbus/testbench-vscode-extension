@@ -32,7 +32,6 @@ export const projectsConfig: TreeViewConfig = {
         persistence: {
             strategy: "workspace",
             autoSave: true,
-            saveDebounce: TreeViewTiming.DEFAULT_SAVE_DEBOUNCE_MS,
             includeCustomRoot: true,
             includeExpansion: true,
             includeMarking: false

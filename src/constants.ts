@@ -159,10 +159,6 @@ export const TreeViewTiming = {
     UI_REFRESH_DEBOUNCE_MS: 500, // Default debounce for UI refresh operations
     EVENT_DEBOUNCE_MS: 500, // Default debounce for event handling
 
-    // Persistence and saving
-    DEFAULT_SAVE_DEBOUNCE_MS: 1000, // Default debounce for save operations
-    FAST_SAVE_DEBOUNCE_MS: 500, // Faster save debounce for responsive operations
-
     // Configuration defaults
     DEFAULT_DEBOUNCE_DELAY_MS: 300, // Default debounce delay for configs
 

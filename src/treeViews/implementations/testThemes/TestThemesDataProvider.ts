@@ -153,7 +153,7 @@ export class TestThemesDataProvider {
     }
 
     /**
-     * @brief Normalizes an existing test structure with proper format
+     * Normalizes an existing test structure with proper format
      * @param structure The test structure with root and nodes
      * @return Normalized TestStructure object
      */
@@ -178,7 +178,7 @@ export class TestThemesDataProvider {
     }
 
     /**
-     * @brief Normalizes a single node within the test structure
+     * Normalizes a single node within the test structure
      * @param node The raw node data
      * @return Normalized node object
      */
@@ -219,7 +219,7 @@ export class TestThemesDataProvider {
     }
 
     /**
-     * @brief Converts old format test structure to new normalized format
+     * Converts old format test structure to new normalized format
      * @param structure The old format test structure
      * @return Normalized TestStructure object
      */
@@ -249,7 +249,7 @@ export class TestThemesDataProvider {
     }
 
     /**
-     * @brief Flattens a hierarchical tree structure into a flat array of nodes
+     * Flattens a hierarchical tree structure into a flat array of nodes
      * @param item The current tree item to process
      * @param nodes The array to store flattened nodes
      * @param parentKey Optional parent key for the current item
@@ -298,7 +298,7 @@ export class TestThemesDataProvider {
     }
 
     /**
-     * @brief Determines the element type based on item properties
+     * Determines the element type based on item properties
      * @param item The item to determine type for
      * @return The determined element type string
      */

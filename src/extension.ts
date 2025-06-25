@@ -1449,9 +1449,9 @@ export async function deactivate(): Promise<void> {
         }
         if (treeViews) {
             logger.info("[Extension] Disposing TreeViews on deactivation.");
-            treeViews.projectsTree.dispose();
-            treeViews.testThemesTree.dispose();
-            treeViews.testElementsTree.dispose();
+            await treeViews.projectsTree.dispose();
+            await treeViews.testThemesTree.dispose();
+            await treeViews.testElementsTree.dispose();
             treeViews = null;
         }
         logger.info("Extension deactivated.");

@@ -6,7 +6,6 @@
 import { TreeViewModule } from "../../core/TreeViewModule";
 import { TreeViewContext } from "../../core/TreeViewContext";
 import { TreeViewState } from "../../state/StateTypes";
-import { TreeViewTiming } from "../../../constants";
 
 export class PersistenceModule implements TreeViewModule {
     readonly id = "persistence";
@@ -30,7 +29,7 @@ export class PersistenceModule implements TreeViewModule {
 
         // Listen for state changes
         context.eventBus.on("state:changed", () => {
-            this.scheduleSave();
+            this.save();
         });
 
         // Load initial state
@@ -50,26 +49,6 @@ export class PersistenceModule implements TreeViewModule {
         }
 
         context.logger.debug("PersistenceModule initialized");
-    }
-
-    /**
-     * Schedules a save operation with debouncing
-     */
-    private scheduleSave(): void {
-        const config = this.context.config.modules.persistence;
-        if (!config?.autoSave) {
-            return;
-        }
-
-        // Clear existing timeout
-        if (this.saveTimeout) {
-            clearTimeout(this.saveTimeout);
-        }
-
-        // Schedule new save
-        this.saveTimeout = setTimeout(() => {
-            this.save();
-        }, config.saveDebounce || TreeViewTiming.DEFAULT_SAVE_DEBOUNCE_MS);
     }
 
     /**
@@ -341,10 +320,11 @@ export class PersistenceModule implements TreeViewModule {
     /**
      * Disposes the persistence module and saves any pending data
      */
-    dispose(): void {
+    async dispose(): Promise<void> {
+        // Change to async and return Promise<void>
         if (this.saveTimeout) {
             clearTimeout(this.saveTimeout);
-            this.save();
+            await this.save(); // Await the final save operation
         }
     }
 }
