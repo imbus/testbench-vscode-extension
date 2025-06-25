@@ -789,6 +789,15 @@ async function handleTestBenchSessionChange(
                     const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
                     const savedContext = savedCycleContext || savedTovContext;
 
+                    logger.debug(
+                        `[Extension] Checking for saved view state: savedViewId=${savedViewId}, hasSavedContext=${!!savedContext}`
+                    );
+                    if (savedContext) {
+                        logger.debug(
+                            `[Extension] Saved context details: projectName=${savedContext.projectName}, tovName=${savedContext.tovName}, isCycle=${savedContext.isCycle}`
+                        );
+                    }
+
                     let areViewsRestored = false;
                     if (savedViewId && savedViewId !== "projects" && savedContext) {
                         // Validate that the saved context has the required fields
@@ -821,7 +830,7 @@ async function handleTestBenchSessionChange(
 
                     if (!areViewsRestored) {
                         // Fallback: Load default project view if no state or if restoration fails
-                        logger.info("Loading default projects view.");
+                        logger.info("Loading default projects view (no saved state to restore or restoration failed).");
                         treeViews.projectsTree.refresh();
                         await displayProjectManagementTreeView();
                         await hideTestThemeTreeView();
@@ -852,7 +861,7 @@ async function handleTestBenchSessionChange(
             await displayProjectManagementTreeView();
             await hideTestThemeTreeView();
             await hideTestElementsTreeView();
-            await clearViewState(context);
+            logger.debug("[Extension] View state preserved for potential restoration on next login.");
         }
     } else {
         logger.info("[Extension] No active session. Clearing connection.");
@@ -868,12 +877,13 @@ async function handleTestBenchSessionChange(
         await displayProjectManagementTreeView();
         await hideTestThemeTreeView();
         await hideTestElementsTreeView();
-        await clearViewState(context);
+        logger.debug("[Extension] View state preserved for potential restoration on next login.");
     }
 }
 
 /**
- * Clears all view state storage to ensure only projects view is shown after logout.
+ * Clears all view state storage. This function is used to clear invalid view state
+ * when restoration fails, not for logout scenarios where view state should be preserved.
  * @param context The extension context
  */
 async function clearViewState(context: vscode.ExtensionContext): Promise<void> {
