@@ -202,6 +202,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
 @testbench_ls.feature(INITIALIZE)
 def initialize(params: InitializeParams) -> InitializeResult:
     server_capabilities = ServerCapabilities(text_document_sync=TextDocumentSyncKind.Full)
+    #TODO: DIAGNOSTICS
     return InitializeResult(capabilities=server_capabilities)
 
 
