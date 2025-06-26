@@ -566,7 +566,7 @@ class PlayServerConnection {
             extension_1.logger.trace(`Test structure of cycle response for cycle key ${cycleKey}:`, testStructureOfCycleResponse.status);
             if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
-                extension_1.logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
+                // logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
                 return testStructureOfCycleResponse.data;
             }
             else {
@@ -632,7 +632,7 @@ class PlayServerConnection {
             extension_1.logger.trace(`Test structure of TOV response for TOV key ${tovKey}:`, testStructureOfTOVResponse.status);
             if (testStructureOfTOVResponse.data) {
                 // Note: The output is large
-                extension_1.logger.trace(`!!!! Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
+                // logger.trace(`Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
                 return testStructureOfTOVResponse.data;
             }
             else {

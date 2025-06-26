@@ -14,8 +14,8 @@ import { allExtensionCommands, ConfigKeys, ProjectItemTypes, TreeViewTiming } fr
 import { TreeNode } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
 import * as reportHandler from "../../../reportHandler";
-import { updateOrRestartLS } from "../../../extension";
 import { FilterService } from "../../utils/FilterService";
+import { updateOrRestartLS } from "../../../server";
 
 export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     private dataProvider: ProjectsDataProvider;

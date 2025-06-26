@@ -48,7 +48,6 @@ exports.getLoginWebViewProvider = getLoginWebViewProvider;
 exports.safeCommandHandler = safeCommandHandler;
 exports.initializeTreeViews = initializeTreeViews;
 exports.activate = activate;
-exports.updateOrRestartLS = updateOrRestartLS;
 exports.clearAllExtensionData = clearAllExtensionData;
 exports.deactivate = deactivate;
 // Before releasing the extension:
@@ -60,8 +59,6 @@ const vscode = __importStar(require("vscode"));
 const testBenchLogger = __importStar(require("./testBenchLogger"));
 const loginWebView = __importStar(require("./loginWebView"));
 const constants_1 = require("./constants");
-const server_1 = require("./server");
-const node_1 = require("vscode-languageclient/node");
 const testBenchAuthenticationProvider_1 = require("./testBenchAuthenticationProvider");
 const connectionManager = __importStar(require("./connectionManager"));
 const testBenchConnection_1 = require("./testBenchConnection");
@@ -71,6 +68,7 @@ const reportHandler = __importStar(require("./reportHandler"));
 const utils = __importStar(require("./utils"));
 const path_1 = __importDefault(require("path"));
 const FilterService_1 = require("./treeViews/utils/FilterService");
+const server_1 = require("./server");
 function setLogger(newLogger) {
     exports.logger = newLogger;
 }
@@ -244,8 +242,8 @@ async function performDeferredViewRestoration(context, savedViewId, savedContext
         return false;
     }
     try {
-        exports.logger.info(`Performing deferred view restoration for: ${savedViewId}`);
-        await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
+        exports.logger.debug(`Performing deferred view restoration for: ${savedViewId}`);
+        await (0, server_1.updateOrRestartLS)(savedContext.projectName, savedContext.tovName);
         if (savedContext.isCycle) {
             await treeViews.testThemesTree.loadCycle(savedContext.projectKey, savedContext.cycleKey, savedContext.cycleLabel);
         }
@@ -348,7 +346,7 @@ async function registerExtensionCommands(context) {
                     tovName,
                     cycleLabel: cycleItem.label?.toString()
                 });
-                await updateOrRestartLS(projectName, tovName);
+                await (0, server_1.updateOrRestartLS)(projectName, tovName);
                 if (treeViews?.testThemesTree) {
                     await treeViews.testThemesTree.loadCycle(projectKey, cycleKey, cycleItem.label?.toString());
                 }
@@ -375,7 +373,7 @@ async function registerExtensionCommands(context) {
         const tovName = versionItem.label?.toString();
         if (projectKey && tovKey && projectName && tovName) {
             exports.logger.debug(`Version item clicked: ${tovName} in project ${projectName}`);
-            await updateOrRestartLS(projectName, tovName);
+            await (0, server_1.updateOrRestartLS)(projectName, tovName);
         }
         else {
             const errorMessage = `Cannot update language server: invalid project or TOV information. Project: ${projectName}, TOV: ${tovName}`;
@@ -401,7 +399,7 @@ async function registerExtensionCommands(context) {
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
-            await updateOrRestartLS(projectName, tovName);
+            await (0, server_1.updateOrRestartLS)(projectName, tovName);
             await treeViews.testThemesTree.loadTov(projectKey, tovKey);
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString());
@@ -426,7 +424,7 @@ async function registerExtensionCommands(context) {
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
-            await updateOrRestartLS(projectName, tovName);
+            await (0, server_1.updateOrRestartLS)(projectName, tovName);
             await treeViews.testThemesTree.loadCycle(projectKey, cycleKey, cycleItem.label?.toString());
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString());
@@ -444,7 +442,7 @@ async function registerExtensionCommands(context) {
         }
         const projectName = cycleItem.parent?.parent?.label?.toString();
         const tovName = cycleItem.parent?.label?.toString();
-        await updateOrRestartLS(projectName, tovName);
+        await (0, server_1.updateOrRestartLS)(projectName, tovName);
         await reportHandler.startTestGenerationForCycle(context, cycleItem);
     };
     const clearInternalFolder = async () => {
@@ -614,7 +612,7 @@ async function registerExtensionCommands(context) {
         },
         {
             id: constants_1.allExtensionCommands.updateOrRestartLS,
-            handler: (projectName, tovName) => updateOrRestartLS(projectName, tovName)
+            handler: (projectName, tovName) => (0, server_1.updateOrRestartLS)(projectName, tovName)
         },
         {
             id: constants_1.allExtensionCommands.openOrCreateRobotResourceFile,
@@ -665,7 +663,7 @@ async function handleTestBenchSessionChange(context, existingSession) {
                 exports.connection.getUsername() === activeConnection.username &&
                 exports.connection.getServerName() === activeConnection.serverName &&
                 exports.connection.getServerPort() === activeConnection.portNumber.toString()) {
-                exports.logger.info(`[Extension] Connection for connection '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`);
+                exports.logger.info(`[Extension] Connection for '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`);
                 return;
             }
             exports.logger.info(`[Extension] TestBench session active for connection: ${activeConnection.label}. Initializing PlayServerConnection.`);
@@ -683,7 +681,7 @@ async function handleTestBenchSessionChange(context, existingSession) {
                 exports.logger.info("[Extension] Session token changed. Stopping language server to ensure it gets updated credentials.");
                 try {
                     await (0, server_1.stopLanguageClient)();
-                    exports.logger.info("[Extension] Language server stopped due to session token change.");
+                    exports.logger.debug("[Extension] Language server stopped due to session token change.");
                 }
                 catch (error) {
                     exports.logger.warn("[Extension] Error stopping language server during session change:", error);
@@ -692,7 +690,7 @@ async function handleTestBenchSessionChange(context, existingSession) {
             // Refresh tree providers as the session has changed.
             if (!wasPreviouslyConnected ||
                 (exports.connection && exports.connection.getSessionToken() !== newConnection.getSessionToken())) {
-                exports.logger.info("[Extension] New session established. Refreshing project data.");
+                exports.logger.debug("[Extension] New session established. Refreshing project data.");
                 try {
                     if (!treeViews) {
                         throw new Error("Tree views not initialized");
@@ -717,11 +715,10 @@ async function handleTestBenchSessionChange(context, existingSession) {
                             exports.logger.warn(`Cannot restore view state: invalid context data. ` +
                                 `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
                                 `Clearing invalid state and loading default view.`);
-                            // Clear the invalid state
                             await clearViewState(context);
                         }
                         else {
-                            exports.logger.info(`Attempting to restore previous view: ${savedViewId}`);
+                            exports.logger.debug(`Attempting to restore previous view: ${savedViewId}`);
                             try {
                                 areViewsRestored = await performDeferredViewRestoration(context, savedViewId, savedContext);
                             }
@@ -733,7 +730,7 @@ async function handleTestBenchSessionChange(context, existingSession) {
                     }
                     if (!areViewsRestored) {
                         // Fallback: Load default project view if no state or if restoration fails
-                        exports.logger.info("Loading default projects view (no saved state to restore or restoration failed).");
+                        exports.logger.debug("Loading default projects view (no saved state to restore or restoration failed).");
                         treeViews.projectsTree.refresh();
                         await displayProjectManagementTreeView();
                         await hideTestThemeTreeView();
@@ -897,11 +894,11 @@ async function activate(context) {
             silent: true
         });
         if (session) {
-            exports.logger.info("[Extension] Found existing VS Code AuthenticationSession for TestBench during initial check.");
+            exports.logger.debug("[Extension] Found existing VS Code AuthenticationSession for TestBench during initial check.");
             await handleTestBenchSessionChange(context, session);
         }
         else {
-            exports.logger.info("[Extension] No existing TestBench session found during initial check.");
+            exports.logger.debug("[Extension] No existing TestBench session found during initial check.");
             if (!(0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
@@ -912,9 +909,8 @@ async function activate(context) {
         exports.logger.warn("[Extension] Error trying to get initial session silently:", error);
         await vscode.commands.executeCommand("setContext", constants_1.ContextKeys.CONNECTION_ACTIVE, false);
     }
-    // Trigger Automatic Login Command if configured
     if ((0, configuration_1.getExtensionConfiguration)().get(constants_1.ConfigKeys.AUTO_LOGIN, false)) {
-        exports.logger.info("[Extension] Auto-login configured. Scheduling automatic login command.");
+        exports.logger.debug("[Extension] Auto-login configured. Scheduling automatic login command.");
         // Short delay to ensure webview is loaded
         setTimeout(async () => {
             try {
@@ -926,43 +922,9 @@ async function activate(context) {
         }, constants_1.TreeViewTiming.WEBVIEW_LOAD_DELAY_MS);
     }
     else {
-        exports.logger.info("[Extension] Auto-login is disabled. Skipping automatic login command.");
+        exports.logger.debug("[Extension] Auto-login is disabled. Skipping automatic login command.");
     }
     exports.logger.info("Extension activated successfully.");
-}
-/**
- * Updates or restarts the language server based on the current state.
- * @param projectName the name of the project to update or restart the language server for.
- * @param tovName the name of the TOV to update or restart the language server for.
- */
-async function updateOrRestartLS(projectName, tovName) {
-    if (!projectName || !tovName) {
-        exports.logger.error("[Cmd] updateOrRestartLS called with invalid project or TOV name.");
-        vscode.window.showErrorMessage("Invalid project or TOV name provided for language server update.");
-        return;
-    }
-    if (!exports.connection) {
-        exports.logger.warn("[Cmd] updateOrRestartLS called without active connection. Cannot update language server.");
-        vscode.window.showWarningMessage("No active connection available. Please log in first.");
-        return;
-    }
-    const existingClient = (0, server_1.getLanguageClientInstance)();
-    exports.logger.debug(`[Cmd] updateOrRestartLS called with projectName: ${projectName}, tovName: ${tovName}, existingClient state: ${existingClient ? existingClient.state : "none"}`);
-    if (!existingClient || existingClient.state === node_1.State.Stopped || existingClient.state === node_1.State.Starting) {
-        exports.logger.debug(`[Cmd] Restarting language client for project: ${projectName}, TOV: ${tovName}`);
-        await (0, server_1.restartLanguageClient)(projectName, tovName);
-    }
-    else {
-        exports.logger.debug(`[Cmd] Updating language client with project name: ${projectName}, TOV name: ${tovName}`);
-        try {
-            await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
-            await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
-        }
-        catch (error) {
-            exports.logger.warn(`[Cmd] Failed to update language client, restarting instead: ${error}`);
-            await (0, server_1.restartLanguageClient)(projectName, tovName);
-        }
-    }
 }
 /**
  * Utility function to clear all extension data.
@@ -983,11 +945,11 @@ async function clearAllExtensionData(context, showConfirmation = false) {
                 "• All persistent settings\n\n" +
                 "This action cannot be undone. Are you sure you want to continue?", { modal: true }, "Clear All Data");
             if (confirmation !== "Clear All Data") {
-                exports.logger.info("[clearAllExtensionData] User cancelled clear all extension data operation.");
+                exports.logger.debug("[clearAllExtensionData] User cancelled clear all extension data operation.");
                 return false;
             }
         }
-        exports.logger.info("[clearAllExtensionData] Starting comprehensive extension data cleanup...");
+        exports.logger.debug("[clearAllExtensionData] Starting comprehensive extension data cleanup...");
         if (exports.connection) {
             exports.logger.debug("[clearAllExtensionData] Logging out from server...");
             try {
@@ -1269,16 +1231,16 @@ async function clearAllExtensionData(context, showConfirmation = false) {
 async function deactivate() {
     try {
         if (exports.connection) {
-            exports.logger.info("[Extension] Performing server logout on deactivation.");
+            exports.logger.debug("[Extension] Performing server logout on deactivation.");
             await exports.connection.logoutUserOnServer();
         }
         if (server_1.client) {
-            exports.logger.info("[Extension] Attempting to stop language server on deactivation.");
+            exports.logger.debug("[Extension] Attempting to stop language server on deactivation.");
             await (0, server_1.stopLanguageClient)(true);
             exports.logger.info("[Extension] Language server stopped on deactivation.");
         }
         if (treeViews) {
-            exports.logger.info("[Extension] Disposing TreeViews on deactivation.");
+            exports.logger.debug("[Extension] Disposing TreeViews on deactivation.");
             await treeViews.projectsTree.dispose();
             await treeViews.testThemesTree.dispose();
             await treeViews.testElementsTree.dispose();

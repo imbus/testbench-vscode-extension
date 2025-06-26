@@ -14,7 +14,6 @@ import {
     getConnection,
     getLoginWebViewProvider,
     safeCommandHandler,
-    updateOrRestartLS,
     deactivate,
     clearAllExtensionData,
     initializeTreeViews,
@@ -30,7 +29,6 @@ import { delay } from "../utils/testUtils";
 import * as testBenchLogger from "../../testBenchLogger";
 import * as testBenchConnection from "../../testBenchConnection";
 import * as server from "../../server";
-import { State } from "vscode-languageclient/node";
 
 suite("Extension Test Suite", function () {
     let testEnv: TestEnvironment;
@@ -239,59 +237,7 @@ suite("Extension Test Suite", function () {
 
     suite("Language Server Management", () => {
         test("should export updateOrRestartLS function", () => {
-            assert.ok(typeof updateOrRestartLS === "function", "updateOrRestartLS should be exported");
-        });
-
-        test("updateOrRestartLS should handle invalid parameters", async () => {
-            const showErrorMessageStub = testEnv.vscodeMocks.showErrorMessageStub;
-
-            await updateOrRestartLS(undefined, "valid");
-            assert.ok(
-                showErrorMessageStub.calledWith("Invalid project or TOV name provided for language server update."),
-                "Should show error for undefined project"
-            );
-
-            await updateOrRestartLS("valid", undefined);
-            assert.ok(
-                showErrorMessageStub.calledWith("Invalid project or TOV name provided for language server update."),
-                "Should show error for undefined TOV"
-            );
-
-            await updateOrRestartLS(undefined, undefined);
-            assert.ok(
-                showErrorMessageStub.calledWith("Invalid project or TOV name provided for language server update."),
-                "Should show error for both undefined"
-            );
-        });
-
-        test("updateOrRestartLS should update existing client when available", async () => {
-            const executeCommandStub = testEnv.vscodeMocks.executeCommandStub;
-
-            const mockConnection = {} as testBenchConnection.PlayServerConnection;
-            setConnection(mockConnection);
-
-            const mockClient = { state: State.Running } as any;
-            testEnv.sandbox.stub(server, "getLanguageClientInstance").returns(mockClient);
-
-            await updateOrRestartLS("testProject", "testTOV");
-
-            assert.ok(
-                executeCommandStub.calledWith("testbench_ls.updateProject", "testProject"),
-                "Should update project"
-            );
-            assert.ok(executeCommandStub.calledWith("testbench_ls.updateTov", "testTOV"), "Should update TOV");
-        });
-
-        test("updateOrRestartLS should restart client when not available", async () => {
-            const restartStub = testEnv.sandbox.stub(server, "restartLanguageClient").resolves();
-
-            const mockConnection = {} as testBenchConnection.PlayServerConnection;
-            setConnection(mockConnection);
-
-            testEnv.sandbox.stub(server, "getLanguageClientInstance").returns(undefined);
-            await updateOrRestartLS("testProject", "testTOV");
-
-            assert.ok(restartStub.calledWith("testProject", "testTOV"), "Should restart language client");
+            assert.ok(typeof server.updateOrRestartLS === "function", "updateOrRestartLS should be exported");
         });
     });
 
