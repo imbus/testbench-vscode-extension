@@ -15,7 +15,6 @@ import { TreeNode } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
-import { updateOrRestartLS } from "../../../server";
 
 export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     private dataProvider: ProjectsDataProvider;
@@ -688,17 +687,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             const projectKey = item.getProjectKey();
             const tovKey = item.getVersionKey();
             const tovName = typeof item.label === "string" ? item.label : "Unknown TOV";
-            const projectName = item.parent?.label?.toString();
-
-            // Validate projectName and tovName before calling updateOrRestartLS
-            if (!projectName || !tovName) {
-                const errorMessage = `Cannot update language server: invalid project or TOV name. Project: ${projectName}, TOV: ${tovName}`;
-                vscode.window.showErrorMessage(errorMessage);
-                this.logger.error(errorMessage);
-                return;
-            }
-
-            await updateOrRestartLS(projectName, tovName);
 
             if (!projectKey || !tovKey) {
                 const errorMessage = "Could not determine project or TOV key for test generation.";

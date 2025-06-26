@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH, ContextKeys } from "./constants";
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions, State } from "vscode-languageclient/node";
 import { connection, logger } from "./extension";
@@ -629,7 +629,8 @@ async function startAndMonitorClient(
             return;
         }
 
-        // Set up notifications only if this is still the current global client
+        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, true);
+
         const currentGlobalClient = getLanguageClientInstance();
         if (currentGlobalClient === newClient) {
             setupClientNotifications(newClient, projectName, tovName, operationId);
@@ -913,6 +914,8 @@ export async function restartLanguageClient(projectName: string, tovName: string
  * @param tovName the name of the TOV to update or restart the language server for.
  */
 export async function updateOrRestartLS(projectName: string | undefined, tovName: string | undefined): Promise<void> {
+    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
+
     if (!projectName || !tovName) {
         logger.error("[Cmd] updateOrRestartLS called with invalid project or TOV name.");
         vscode.window.showErrorMessage("Invalid project or TOV name provided for language server update.");

@@ -322,6 +322,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await authProviderInstance.removeSession(session.id);
             logger.info(`[Cmd] Session ${session.id} removed by logout command.`);
         }
+
+        await stopLanguageClient();
+        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
+
         // Fallback to ensure UI is reset if a connection object still exists without a session.
         if (connection !== null) {
             await handleTestBenchSessionChange(context, undefined);
@@ -950,6 +954,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
     initializeConfigurationWatcher();
+
+    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
 
     // Register AuthenticationProvider
     authProviderInstance = new TestBenchAuthenticationProvider(context);
