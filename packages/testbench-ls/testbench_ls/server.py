@@ -97,7 +97,7 @@ from .testbench_resource.resource_utils import (
     get_variables_section_position,
     robot_model_to_string,
 )
-from .testbench_resource.testbench_resource_model import TestBenchResourceModel
+from .testbench_resource.testbench_resource_model import TestBenchResourceModel, get_kw_uid
 
 
 class TestBenchLanguageServer(LanguageServer):
@@ -290,7 +290,7 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     )
     code_lenses.append(push_resource_lens)
     for keyword in testbench_resource.keywords:
-        keyword_uid = testbench_resource.get_kw_uid(keyword)
+        keyword_uid = get_kw_uid(keyword)
         if keyword_uid:
             keyword_line = keyword.lineno - 1
             code_lenses.append(
@@ -327,7 +327,7 @@ def context_is_valid(
 ) -> bool:
     try:
         project, tov = existing_resource.tb_tov_context
-    except ValueError as e:
+    except ValueError:
         return False
     log(
         ls,
@@ -353,11 +353,11 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
-    if not context_is_valid(ls, existing_resource):
+    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
         return
     rd = ResourceDocumentation(document.path)
     for keyword in existing_resource.keyword_section.body:
-        keyword_uid = existing_resource.get_kw_uid(keyword)
+        keyword_uid = get_kw_uid(keyword)
         existing_keywords = existing_resource.get_keywords(keyword_uid)
         if len(existing_keywords) > 1:
             show_error(
@@ -391,7 +391,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
-    if not context_is_valid(ls, existing_resource):
+    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
         return
     new_resource = create_resource(
         uid=subdivision_uid,
@@ -408,18 +408,32 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     for new_keyword in new_resource.keyword_section.body:
-        keyword_uid = new_resource.get_kw_uid(new_keyword)
-        existing_keywords = existing_resource.get_keywords(keyword_uid)
-        if len(existing_keywords) > 1:
+        keyword_uid = get_kw_uid(new_keyword)
+        matching_uid_keywords = existing_resource.get_keywords(keyword_uid)
+        if len(matching_uid_keywords) > 1:
             show_error(
                 ls,
                 ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
             )
             return
-        if existing_keywords:
-            edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
+        if matching_uid_keywords:
+            edits.extend(
+                create_keyword_edits(matching_uid_keywords[0], new_keyword, change_identifier)
+            )
         else:
-            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+            matching_name_keywords = existing_resource.get_keywords_by_name(new_keyword.name)
+            if len(matching_name_keywords) > 1:
+                show_error(
+                    ls,
+                    "Multiple keywords with the same name found. ",
+                )
+                return
+            if matching_name_keywords:
+                edits.extend(
+                    create_keyword_edits(matching_name_keywords[0], new_keyword, change_identifier)
+                )
+            else:
+                edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
     if edits:
         edit = WorkspaceEdit(
             document_changes=[
@@ -430,7 +444,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
             ],
             change_annotations={
                 change_identifier: ChangeAnnotation(
-                    KEYWORD_INTERFACE_CHANGE_LABEL, needs_confirmation=False
+                    KEYWORD_INTERFACE_CHANGE_LABEL, needs_confirmation=True
                 )
             },
         )
@@ -508,20 +522,26 @@ def create_keyword_edits(
         edits.append(name_edit)
 
     existing_keyword_tags = get_keyword_tags(existing_keyword)
-    new_keyword_tags = get_keyword_tags(new_keyword)
-    if robot_model_to_string(new_keyword_tags) != robot_model_to_string(existing_keyword_tags):
+    new_keyword_uid = get_kw_uid(new_keyword)
+    if new_keyword_uid not in robot_model_to_string(
+        existing_keyword_tags
+    ) and "robot:private" not in robot_model_to_string(existing_keyword_tags):
         tags_start, tags_start_char, tags_end, tags_end_char = get_keyword_tags_position(
             existing_keyword
         )
+        new_txt = f"tb:uid:{new_keyword_uid}"
+        if tags_end_char == 0:
+            new_txt = f"    [Tags]    tb:uid:{new_keyword_uid}\n"
+
         tags_edit = AnnotatedTextEdit(
             change_identifier,
             range=Range(
-                start=Position(tags_start, tags_start_char),
+                start=Position(tags_end, tags_end_char),
                 end=Position(tags_end, tags_end_char),
             ),
-            new_text=robot_model_to_string(new_keyword_tags).rstrip(),
+            new_text=new_txt,
         )
-        # edits.append(tags_edit)
+        edits.append(tags_edit)
 
     existing_keyword_arguments = get_keyword_arguments(existing_keyword)
     new_keyword_arguments = get_keyword_arguments(new_keyword)
