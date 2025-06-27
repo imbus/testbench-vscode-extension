@@ -36,7 +36,7 @@ import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
 import path from "path";
 import { FilterService } from "./treeViews/utils/FilterService";
-import { updateOrRestartLS, stopLanguageClient, client } from "./server";
+import { updateOrRestartLS, stopLanguageClient, client, waitForLanguageServerReady } from "./server";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -279,6 +279,7 @@ async function performDeferredViewRestoration(
 
 /**
  * Registers all extension commands.
+ * Defines all commands handlers separately and associates them with the corresponding command IDs.
  *
  * @param {vscode.ExtensionContext} context The extension context.
  */
@@ -324,7 +325,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         await stopLanguageClient();
-        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
 
         // Fallback to ensure UI is reset if a connection object still exists without a session.
         if (connection !== null) {
@@ -473,15 +473,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
-    const handleGenerateForCycle = async (cycleItem: ProjectsTreeItem) => {
-        if (!connection) {
-            logger.warn("[Cmd] handleGenerateForCycle called without active connection.");
-            vscode.window.showWarningMessage("No active connection available. Please log in first.");
-            return;
-        }
-        await reportHandler.startTestGenerationForCycle(context, cycleItem);
-    };
-
     const clearInternalFolder = async () => {
         logger.debug(`Command Called: ${allExtensionCommands.clearInternalTestbenchFolder}`);
         const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
@@ -532,6 +523,302 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         await filterService.clearAllFilters();
     };
 
+    // Test Generation Handlers
+    const handleGenerateTestCasesForTOV = async (item: ProjectsTreeItem) => {
+        if (!item) {
+            logger.error("[Cmd] handleGenerateTestCasesForTOV called with undefined item");
+            vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined item");
+            return;
+        }
+
+        if (!treeViews?.projectsTree) {
+            logger.error("[Cmd] handleGenerateTestCasesForTOV called before tree views are initialized");
+            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            return;
+        }
+
+        try {
+            // Show progress bar while waiting for language server
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Waiting for Language Server",
+                    cancellable: false
+                },
+                async (progress) => {
+                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                    await waitForLanguageServerReady();
+                }
+            );
+
+            await treeViews.projectsTree.generateTestCasesForTOV(item);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[Cmd] Error in generateTestCasesForTOV: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+        }
+    };
+
+    const handleGenerateTestCasesForCycle = async (cycleItem: ProjectsTreeItem) => {
+        if (!cycleItem) {
+            logger.error("[Cmd] handleGenerateTestCasesForCycle called with undefined item");
+            vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined cycle item");
+            return;
+        }
+
+        if (!connection) {
+            logger.warn("[Cmd] handleGenerateForCycle called without active connection.");
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
+        }
+
+        try {
+            // Show progress bar while waiting for language server
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Waiting for Language Server",
+                    cancellable: false
+                },
+                async (progress) => {
+                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                    await waitForLanguageServerReady();
+                }
+            );
+
+            await reportHandler.startTestGenerationForCycle(context, cycleItem);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[Cmd] Error in generateTestCasesForCycle: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+        }
+    };
+
+    const handleGenerateTestCasesForTestThemeOrTestCaseSet = async (item: TestThemesTreeItem) => {
+        if (!item) {
+            logger.error("[Cmd] handleGenerateTestCasesForTestThemeOrTestCaseSet called with undefined item");
+            vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined test theme item");
+            return;
+        }
+
+        if (!treeViews?.testThemesTree) {
+            logger.error(
+                "[Cmd] handleGenerateTestCasesForTestThemeOrTestCaseSet called before tree views are initialized"
+            );
+            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            return;
+        }
+
+        try {
+            // Show progress bar while waiting for language server
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Waiting for Language Server",
+                    cancellable: false
+                },
+                async (progress) => {
+                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                    await waitForLanguageServerReady();
+                }
+            );
+
+            await treeViews.testThemesTree.generateTestCases(item);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[Cmd] Error in generateTestCasesForTestThemeOrTestCaseSet: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+        }
+    };
+
+    const handleGenerateTestsForTestThemeTreeItemFromTOV = async (item: TestThemesTreeItem) => {
+        if (!item) {
+            logger.error("[Cmd] handleGenerateTestsForTestThemeTreeItemFromTOV called with undefined item");
+            vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined test theme item");
+            return;
+        }
+
+        if (!treeViews?.testThemesTree) {
+            logger.error(
+                "[Cmd] handleGenerateTestsForTestThemeTreeItemFromTOV called before tree views are initialized"
+            );
+            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            return;
+        }
+
+        try {
+            // Show progress bar while waiting for language server
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Waiting for Language Server",
+                    cancellable: false
+                },
+                async (progress) => {
+                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                    await waitForLanguageServerReady();
+                }
+            );
+
+            await treeViews.testThemesTree.generateTestCases(item);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[Cmd] Error in generateTestsForTestThemeTreeItemFromTOV: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+        }
+    };
+
+    const handleReadAndImportTestResultsToTestbench = async (item: TestThemesTreeItem) => {
+        if (!item) {
+            logger.error("[Cmd] handleReadAndImportTestResultsToTestbench called with undefined item");
+            vscode.window.showErrorMessage("Invalid item: Cannot import test results for undefined test theme item");
+            return;
+        }
+
+        if (!treeViews?.testThemesTree) {
+            logger.error("[Cmd] handleReadAndImportTestResultsToTestbench called before tree views are initialized");
+            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            return;
+        }
+
+        try {
+            // Show progress bar while waiting for language server
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Waiting for Language Server",
+                    cancellable: false
+                },
+                async (progress) => {
+                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                    await waitForLanguageServerReady();
+                }
+            );
+
+            await treeViews.testThemesTree.importTestResultsForTestThemeTreeItem(item);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[Cmd] Error in readAndImportTestResultsToTestbench: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to import test results: ${errorMessage}`);
+        }
+    };
+
+    // Tree View Management Handlers
+    const handleDisplayAllProjects = async () => {
+        displayProjectManagementTreeView();
+        hideTestThemeTreeView();
+        hideTestElementsTreeView();
+        await saveUIContext(context, "projects");
+    };
+
+    const handleMakeRoot = (item: any) => {
+        if (treeViews?.projectsTree && item.data?.type === "project") {
+            treeViews?.projectsTree.makeRoot(item);
+        } else if (treeViews?.testThemesTree && item.data?.type?.includes("TestTheme")) {
+            treeViews?.testThemesTree.makeRoot(item);
+        }
+    };
+
+    const handleOpenOrCreateRobotResourceFile = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.openOrCreateRobotResourceFile(item);
+    };
+
+    const handleCreateInteractionUnderSubdivision = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.createInteraction(item);
+    };
+
+    const handleUpdateOrRestartLS = (projectName: string | undefined, tovName: string | undefined) => {
+        updateOrRestartLS(projectName, tovName);
+    };
+
+    const handleClearAllExtensionData = () => {
+        clearAllExtensionData(context, true);
+    };
+
+    const handleShowExtensionSettings = () => {
+        vscode.commands.executeCommand("workbench.action.openSettings", "@ext:imbus.testbench-extension");
+    };
+
+    const handleRefreshProjectTreeView = () => {
+        treeViews?.projectsTree.refresh();
+    };
+
+    const handleRefreshTestThemeTreeView = () => {
+        treeViews?.testThemesTree.refresh();
+    };
+
+    const handleRefreshTestElementsTree = () => {
+        treeViews?.testElementsTree.refresh();
+    };
+
+    const handleResetProjectTreeViewRoot = () => {
+        treeViews?.projectsTree.resetCustomRoot();
+    };
+
+    const handleResetTestThemeTreeViewRoot = () => {
+        treeViews?.testThemesTree.resetCustomRoot();
+    };
+
+    const handleSetTextFilterForProjects = () => {
+        setFilterForView(treeViews?.projectsTree);
+    };
+
+    const handleSetTextFilterForTestThemes = () => {
+        setFilterForView(treeViews?.testThemesTree);
+    };
+
+    const handleSetTextFilterForTestElements = () => {
+        setFilterForView(treeViews?.testElementsTree);
+    };
+
+    const handleClearTextFilterForProjects = () => {
+        clearFilterForView(treeViews?.projectsTree);
+    };
+
+    const handleClearTextFilterForTestThemes = () => {
+        clearFilterForView(treeViews?.testThemesTree);
+    };
+
+    const handleClearTextFilterForTestElements = () => {
+        clearFilterForView(treeViews?.testElementsTree);
+    };
+
+    const handleToggleFilterDiffModeForProjects = () => {
+        toggleDiffModeForView(treeViews?.projectsTree);
+    };
+
+    const handleToggleFilterDiffModeForProjectsEnabled = () => {
+        toggleDiffModeForView(treeViews?.projectsTree);
+    };
+
+    const handleToggleFilterDiffModeForTestThemes = () => {
+        toggleDiffModeForView(treeViews?.testThemesTree);
+    };
+
+    const handleToggleFilterDiffModeForTestThemesEnabled = () => {
+        toggleDiffModeForView(treeViews?.testThemesTree);
+    };
+
+    const handleToggleFilterDiffModeForTestElements = () => {
+        toggleDiffModeForView(treeViews?.testElementsTree);
+    };
+
+    const handleToggleFilterDiffModeForTestElementsEnabled = () => {
+        toggleDiffModeForView(treeViews?.testElementsTree);
+    };
+
+    const handleClearAllFiltersForProjects = () => {
+        clearAllFiltersForView(treeViews?.projectsTree);
+    };
+
+    const handleClearAllFiltersForTestThemes = () => {
+        clearAllFiltersForView(treeViews?.testThemesTree);
+    };
+
+    const handleClearAllFiltersForTestElements = () => {
+        clearAllFiltersForView(treeViews?.testElementsTree);
+    };
+
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
@@ -539,141 +826,131 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.login, handler: handleLogin },
         { id: allExtensionCommands.logout, handler: handleLogout },
 
-        // Tree Interaction & Navigation
+        // Tree Interaction and Navigation
         { id: allExtensionCommands.handleProjectCycleClick, handler: handleProjectCycleClick },
         { id: allExtensionCommands.handleProjectVersionClick, handler: handleProjectVersionClick },
         { id: allExtensionCommands.openTOVFromProjectsView, handler: handleOpenTOV },
         { id: allExtensionCommands.openCycleFromProjectsView, handler: handleOpenCycle },
         {
             id: allExtensionCommands.displayAllProjects,
-            handler: async () => {
-                displayProjectManagementTreeView();
-                hideTestThemeTreeView();
-                hideTestElementsTreeView();
-                await saveUIContext(context, "projects");
-            }
+            handler: handleDisplayAllProjects
         },
 
         // Test Generation
         {
             id: allExtensionCommands.generateTestCasesForTOV,
-            handler: (item: ProjectsTreeItem) => treeViews?.projectsTree.generateTestCasesForTOV(item)
+            handler: handleGenerateTestCasesForTOV
         },
-        { id: allExtensionCommands.generateTestCasesForCycle, handler: handleGenerateForCycle },
+        {
+            id: allExtensionCommands.generateTestCasesForCycle,
+            handler: handleGenerateTestCasesForCycle
+        },
         {
             id: allExtensionCommands.generateTestCasesForTestThemeOrTestCaseSet,
-            handler: (item: TestThemesTreeItem) => treeViews?.testThemesTree.generateTestCases(item)
+            handler: handleGenerateTestCasesForTestThemeOrTestCaseSet
         },
         {
             id: allExtensionCommands.generateTestsForTestThemeTreeItemFromTOV,
-            handler: (item: TestThemesTreeItem) => treeViews?.testThemesTree.generateTestCases(item)
+            handler: handleGenerateTestsForTestThemeTreeItemFromTOV
         },
 
-        // Read and Import Test Results for Test Theme Tree Item
+        // Read and Import Test Results
         {
             id: allExtensionCommands.readAndImportTestResultsToTestbench,
-            handler: (item: TestThemesTreeItem) => treeViews?.testThemesTree.importTestResultsForTestThemeTreeItem(item)
+            handler: handleReadAndImportTestResultsToTestbench
         },
 
         // Tree View Management
-        { id: allExtensionCommands.refreshProjectTreeView, handler: () => treeViews?.projectsTree.refresh() },
-        { id: allExtensionCommands.refreshTestThemeTreeView, handler: () => treeViews?.testThemesTree.refresh() },
-        { id: allExtensionCommands.refreshTestElementsTree, handler: () => treeViews?.testElementsTree.refresh() },
+        { id: allExtensionCommands.refreshProjectTreeView, handler: handleRefreshProjectTreeView },
+        { id: allExtensionCommands.refreshTestThemeTreeView, handler: handleRefreshTestThemeTreeView },
+        { id: allExtensionCommands.refreshTestElementsTree, handler: handleRefreshTestElementsTree },
         {
             id: allExtensionCommands.makeRoot,
-            handler: (item: any) => {
-                if (treeViews?.projectsTree && item.data?.type === "project") {
-                    treeViews?.projectsTree.makeRoot(item);
-                } else if (treeViews?.testThemesTree && item.data?.type?.includes("TestTheme")) {
-                    treeViews?.testThemesTree.makeRoot(item);
-                }
-            }
+            handler: handleMakeRoot
         },
-        { id: allExtensionCommands.resetProjectTreeViewRoot, handler: () => treeViews?.projectsTree.resetCustomRoot() },
+        { id: allExtensionCommands.resetProjectTreeViewRoot, handler: handleResetProjectTreeViewRoot },
         {
             id: allExtensionCommands.resetTestThemeTreeViewRoot,
-            handler: () => treeViews?.testThemesTree.resetCustomRoot()
+            handler: handleResetTestThemeTreeViewRoot
         },
 
         // Tree View Filtering Commands
-        { id: allExtensionCommands.setTextFilterForProjects, handler: () => setFilterForView(treeViews?.projectsTree) },
+        { id: allExtensionCommands.setTextFilterForProjects, handler: handleSetTextFilterForProjects },
         {
             id: allExtensionCommands.setTextFilterForTestThemes,
-            handler: () => setFilterForView(treeViews?.testThemesTree)
+            handler: handleSetTextFilterForTestThemes
         },
         {
             id: allExtensionCommands.setTextFilterForTestElements,
-            handler: () => setFilterForView(treeViews?.testElementsTree)
+            handler: handleSetTextFilterForTestElements
         },
         {
             id: allExtensionCommands.clearTextFilterForProjects,
-            handler: () => clearFilterForView(treeViews?.projectsTree)
+            handler: handleClearTextFilterForProjects
         },
         {
             id: allExtensionCommands.clearTextFilterForTestThemes,
-            handler: () => clearFilterForView(treeViews?.testThemesTree)
+            handler: handleClearTextFilterForTestThemes
         },
         {
             id: allExtensionCommands.clearTextFilterForTestElements,
-            handler: () => clearFilterForView(treeViews?.testElementsTree)
+            handler: handleClearTextFilterForTestElements
         },
         {
             id: allExtensionCommands.toggleFilterDiffModeForProjects,
-            handler: () => toggleDiffModeForView(treeViews?.projectsTree)
+            handler: handleToggleFilterDiffModeForProjects
         },
         {
             id: allExtensionCommands.toggleFilterDiffModeForProjectsEnabled,
-            handler: () => toggleDiffModeForView(treeViews?.projectsTree)
+            handler: handleToggleFilterDiffModeForProjectsEnabled
         },
         {
             id: allExtensionCommands.toggleFilterDiffModeForTestThemes,
-            handler: () => toggleDiffModeForView(treeViews?.testThemesTree)
+            handler: handleToggleFilterDiffModeForTestThemes
         },
         {
             id: allExtensionCommands.toggleFilterDiffModeForTestThemesEnabled,
-            handler: () => toggleDiffModeForView(treeViews?.testThemesTree)
+            handler: handleToggleFilterDiffModeForTestThemesEnabled
         },
         {
             id: allExtensionCommands.toggleFilterDiffModeForTestElements,
-            handler: () => toggleDiffModeForView(treeViews?.testElementsTree)
+            handler: handleToggleFilterDiffModeForTestElements
         },
         {
             id: allExtensionCommands.toggleFilterDiffModeForTestElementsEnabled,
-            handler: () => toggleDiffModeForView(treeViews?.testElementsTree)
+            handler: handleToggleFilterDiffModeForTestElementsEnabled
         },
         {
             id: allExtensionCommands.clearAllFiltersForProjects,
-            handler: () => clearAllFiltersForView(treeViews?.projectsTree)
+            handler: handleClearAllFiltersForProjects
         },
         {
             id: allExtensionCommands.clearAllFiltersForTestThemes,
-            handler: () => clearAllFiltersForView(treeViews?.testThemesTree)
+            handler: handleClearAllFiltersForTestThemes
         },
         {
             id: allExtensionCommands.clearAllFiltersForTestElements,
-            handler: () => clearAllFiltersForView(treeViews?.testElementsTree)
+            handler: handleClearAllFiltersForTestElements
         },
 
-        // Other commands
+        // Other extension commands
         { id: allExtensionCommands.clearInternalTestbenchFolder, handler: clearInternalFolder },
-        { id: allExtensionCommands.clearAllExtensionData, handler: () => clearAllExtensionData(context, true) },
+        { id: allExtensionCommands.clearAllExtensionData, handler: handleClearAllExtensionData },
         {
             id: allExtensionCommands.showExtensionSettings,
-            handler: () =>
-                vscode.commands.executeCommand("workbench.action.openSettings", "@ext:imbus.testbench-extension")
+            handler: handleShowExtensionSettings
         },
         {
             id: allExtensionCommands.updateOrRestartLS,
-            handler: (projectName: string | undefined, tovName: string | undefined) =>
-                updateOrRestartLS(projectName, tovName)
+            handler: handleUpdateOrRestartLS
         },
         {
             id: allExtensionCommands.openOrCreateRobotResourceFile,
-            handler: (item: TestElementsTreeItem) => treeViews?.testElementsTree.openOrCreateRobotResourceFile(item)
+            handler: handleOpenOrCreateRobotResourceFile
         },
         {
             id: allExtensionCommands.createInteractionUnderSubdivision,
-            handler: (item: TestElementsTreeItem) => treeViews?.testElementsTree.createInteraction(item)
+            handler: handleCreateInteractionUnderSubdivision
         }
     ];
 
@@ -838,7 +1115,6 @@ async function handleTestBenchSessionChange(
                     }
                 } catch (error) {
                     logger.warn("[Extension] Error managing trees during session change:", error);
-                    // Ensure we have a working state even after error
                     if (treeViews) {
                         treeViews.projectsTree.refresh();
                         await displayProjectManagementTreeView();
@@ -950,8 +1226,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger = new testBenchLogger.TestBenchLogger();
     logger.info("Extension activated.");
     initializeConfigurationWatcher();
-
-    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
 
     // Register AuthenticationProvider
     authProviderInstance = new TestBenchAuthenticationProvider(context);

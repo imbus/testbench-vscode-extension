@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH, ContextKeys } from "./constants";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions, State } from "vscode-languageclient/node";
 import { connection, logger } from "./extension";
@@ -165,7 +165,6 @@ async function validatePythonInterpreter(
         );
         if (isOperationCurrent(operationId)) {
             setLanguageClientInstance(undefined);
-            await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         }
         return null;
     }
@@ -194,7 +193,6 @@ async function validateTestBenchConnection(
         );
         if (isOperationCurrent(operationId)) {
             setLanguageClientInstance(undefined);
-            await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         }
         return null;
     }
@@ -406,7 +404,6 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
 
     if (!clientToStop) {
         logger.trace(`[stopLanguageClient - Op ${operationId}] No client instance to stop.`);
-        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         return;
     }
 
@@ -461,7 +458,6 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
             );
         }
     } finally {
-        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         logger.info(
             `[stopLanguageClient - Op ${operationId}] stopLanguageClient completed for client (State was ${clientToStop?.state}).`
         );
@@ -545,7 +541,6 @@ async function validateClientAfterStart(
             setLanguageClientInstance(undefined);
         }
 
-        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         return false;
     }
     return true;
@@ -598,8 +593,6 @@ async function handleClientStartFailure(
         await safeClientDispose(newClient, operationId, "failed start cleanup");
     }
 
-    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
-
     if (isOperationCurrent(operationId)) {
         throw error;
     }
@@ -636,8 +629,6 @@ async function startAndMonitorClient(
         if (!isStillCurrent) {
             return;
         }
-
-        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, true);
 
         const currentGlobalClient = getLanguageClientInstance();
         if (currentGlobalClient === newClient) {
@@ -882,8 +873,6 @@ async function executeRestart(projectName: string, tovName: string): Promise<voi
         const errorMessage = (error as Error).message;
         logger.error(`[LS Restart - Op ${thisOperationId}] Error during restart: ${errorMessage}`, error);
 
-        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
-
         if (isOperationCurrent(thisOperationId)) {
             vscode.window.showErrorMessage(`Failed to restart Language Server for ${tovName}: ${errorMessage}`);
         }
@@ -917,14 +906,13 @@ export async function restartLanguageClient(projectName: string, tovName: string
     // Debounce rapid successive calls
     scheduleDebouncedRestart(projectName, tovName);
 }
+
 /**
  * Updates or restarts the language server based on the current state.
  * @param projectName the name of the project to update or restart the language server for.
  * @param tovName the name of the TOV to update or restart the language server for.
  */
 export async function updateOrRestartLS(projectName: string | undefined, tovName: string | undefined): Promise<void> {
-    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
-
     if (!projectName || !tovName) {
         logger.error("[Cmd] updateOrRestartLS called with invalid project or TOV name.");
         vscode.window.showErrorMessage("Invalid project or TOV name provided for language server update.");
@@ -952,11 +940,47 @@ export async function updateOrRestartLS(projectName: string | undefined, tovName
             await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
             await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
             logger.debug(`[Cmd] Language client updated for project: ${projectName}, TOV: ${tovName}`);
-            await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, true);
         } catch (error) {
             logger.warn(`[Cmd] Failed to update language client, restarting instead: ${error}`);
-            await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
             await restartLanguageClient(projectName, tovName);
         }
     }
+}
+
+/**
+ * Checks if the language server is ready and available for use.
+ * The language server is considered ready when:
+ * - A client instance exists
+ * - The client state is Running
+ *
+ * @returns True if the language server is ready, false otherwise
+ */
+export function isLanguageServerReady(): boolean {
+    const clientInstance = getLanguageClientInstance();
+    return clientInstance !== undefined && clientInstance.state === State.Running;
+}
+
+/**
+ * Waits for the language server to be ready, with a timeout.
+ * This function can be used by command handlers to ensure the language server
+ * is available before proceeding with operations that require it.
+ *
+ * @param timeoutMs Maximum time to wait in milliseconds (default: 30000ms)
+ * @param checkIntervalMs Interval between readiness checks in milliseconds (default: 100ms)
+ * @returns Promise that resolves when the language server is ready or rejects on timeout
+ */
+export async function waitForLanguageServerReady(
+    timeoutMs: number = 30000,
+    checkIntervalMs: number = 100
+): Promise<void> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+        if (isLanguageServerReady()) {
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, checkIntervalMs));
+    }
+
+    throw new Error(`Language server did not become ready within ${timeoutMs}ms`);
 }
