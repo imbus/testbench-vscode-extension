@@ -202,9 +202,9 @@ suite("TreeViewBase", function () {
         treeView.setTreeView(mockVSCodeTreeView);
     });
 
-    this.afterEach(function () {
+    this.afterEach(async function () {
         testEnv.sandbox.restore();
-        treeView.dispose();
+        await treeView.dispose();
     });
 
     suite("Constructor and Initialization", () => {
@@ -335,7 +335,7 @@ suite("TreeViewBase", function () {
 
             assert.strictEqual(badTreeView.isInitialized(), true);
 
-            badTreeView.dispose();
+            await badTreeView.dispose();
         });
     });
 
@@ -691,10 +691,11 @@ suite("TreeViewBase", function () {
         test("should dispose correctly", async () => {
             await treeView.initialize();
 
+            // Create spies BEFORE calling dispose
             const disposeSpy = testEnv.sandbox.spy(treeView.eventBus, "dispose");
             const stateDisposeSpy = testEnv.sandbox.spy(treeView.getProtectedStateManager(), "dispose");
 
-            treeView.dispose();
+            await treeView.dispose();
 
             assert.ok(disposeSpy.called);
             assert.ok(stateDisposeSpy.called);
@@ -703,8 +704,8 @@ suite("TreeViewBase", function () {
         test("should not dispose twice", async () => {
             await treeView.initialize();
 
-            treeView.dispose();
-            treeView.dispose(); // Second call should be ignored
+            await treeView.dispose();
+            await treeView.dispose(); // Second call should be ignored
 
             assert.ok(true); // Should not throw
         });
@@ -724,8 +725,9 @@ suite("TreeViewBase", function () {
 
             assert.strictEqual(treeView.getRootItemsArray().length, 1);
 
-            treeView.dispose();
+            await treeView.dispose();
 
+            // The rootItems should be cleared in the dispose method
             assert.strictEqual(treeView.getRootItemsArray().length, 0);
         });
     });

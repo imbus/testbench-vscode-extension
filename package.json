@@ -746,7 +746,7 @@
             "view/item/context": [
                 {
                     "command": "testbenchExtension.generateTestCasesForCycle",
-                    "when": "view == testbench.projects && viewItem == Cycle",
+                    "when": "view == testbench.projects && viewItem == Cycle && testbenchExtension.languageServerReady",
                     "group": "inline@1"
                 },
                 {
@@ -756,7 +756,7 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTOV",
-                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version)",
+                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version) && testbenchExtension.languageServerReady",
                     "group": "inline@1"
                 },
                 {
@@ -766,17 +766,17 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == testbench.testThemes && testbenchExtension.isTestThemeOpenedFromCycle",
+                    "when": "view == testbench.testThemes && testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.languageServerReady",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
-                    "when": "view == testbench.testThemes && !testbenchExtension.isTestThemeOpenedFromCycle",
+                    "when": "view == testbench.testThemes && !testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.languageServerReady",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == testbench.testThemes && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode')",
+                    "when": "view == testbench.testThemes && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode') && testbenchExtension.languageServerReady",
                     "group": "inline@1",
                     "icon": {
                         "light": "resources/icons/upload-light.svg",

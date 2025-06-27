@@ -1,12 +1,12 @@
 /**
  * @file src/treeViews/features/persistence/PersistenceModule.ts
- * @description Module for managing persistence of tree view state.
+ * @description Enhanced module for managing persistence of tree view state with immediate saves
  */
 
 import { TreeViewModule } from "../../core/TreeViewModule";
 import { TreeViewContext } from "../../core/TreeViewContext";
 import { TreeViewState } from "../../state/StateTypes";
-import { TreeViewTiming } from "../../../constants";
+import * as vscode from "vscode";
 
 export class PersistenceModule implements TreeViewModule {
     readonly id = "persistence";
@@ -15,6 +15,8 @@ export class PersistenceModule implements TreeViewModule {
     private saveTimeout: NodeJS.Timeout | null = null;
     private readonly STORAGE_KEY_PREFIX = "treeView.state.";
     private readonly STORAGE_VERSION = 1;
+    private readonly SAVE_DEBOUNCE_MS = 100; // Save quickly but avoid excessive writes
+    private isSaving = false;
 
     /**
      * Initializes the persistence module
@@ -28,9 +30,9 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
-        // Listen for state changes
+        // Listen for state changes with immediate save
         context.eventBus.on("state:changed", () => {
-            this.scheduleSave();
+            this.debouncedSave();
         });
 
         // Load initial state
@@ -40,36 +42,37 @@ export class PersistenceModule implements TreeViewModule {
             context.stateManager.setState(loadedState);
             context.logger.debug("Persistence module set state in state manager");
 
-            // Trigger a refresh to ensure expansion state is applied to existing tree items
+            // Apply expansion state after a delay to ensure tree is ready
             setTimeout(() => {
-                context.logger.debug("Triggering refresh after persistence load to apply expansion state");
-                context.refresh();
-            }, 100); // Small delay to ensure state is fully set
+                context.logger.debug("Triggering expansion state restoration");
+                this.restoreExpansionState();
+            }, 200);
         } else {
             context.logger.debug("Persistence module: no saved state found");
         }
+
+        // Listen for VS Code workspace events to save before shutdown
+        context.extensionContext.subscriptions.push(
+            vscode.workspace.onDidChangeConfiguration(() => {
+                // Save state when configuration changes
+                this.save();
+            })
+        );
 
         context.logger.debug("PersistenceModule initialized");
     }
 
     /**
-     * Schedules a save operation with debouncing
+     * Saves state with debouncing to avoid excessive writes
      */
-    private scheduleSave(): void {
-        const config = this.context.config.modules.persistence;
-        if (!config?.autoSave) {
-            return;
-        }
-
-        // Clear existing timeout
+    private debouncedSave(): void {
         if (this.saveTimeout) {
             clearTimeout(this.saveTimeout);
         }
 
-        // Schedule new save
         this.saveTimeout = setTimeout(() => {
             this.save();
-        }, config.saveDebounce || TreeViewTiming.DEFAULT_SAVE_DEBOUNCE_MS);
+        }, this.SAVE_DEBOUNCE_MS);
     }
 
     /**
@@ -77,9 +80,11 @@ export class PersistenceModule implements TreeViewModule {
      */
     public async save(): Promise<void> {
         const config = this.context.config.modules.persistence;
-        if (!config || config.strategy === "none") {
+        if (!config || config.strategy === "none" || this.isSaving) {
             return;
         }
+
+        this.isSaving = true;
 
         try {
             const state = this.context.stateManager.getState();
@@ -93,7 +98,12 @@ export class PersistenceModule implements TreeViewModule {
 
             this.context.logger.debug("State saved successfully");
         } catch (error) {
-            this.context.errorHandler.handleVoid(error as Error, "Failed to save state");
+            // Only log error if it's not a cancellation
+            if (error instanceof Error && !error.message.includes("Canceled")) {
+                this.context.errorHandler.handleVoid(error, "Failed to save state");
+            }
+        } finally {
+            this.isSaving = false;
         }
     }
 
@@ -121,6 +131,28 @@ export class PersistenceModule implements TreeViewModule {
             this.context.errorHandler.handleVoid(error as Error, "Failed to load state");
             return null;
         }
+    }
+
+    /**
+     * Restores expansion state by triggering expansion of saved items
+     */
+    private async restoreExpansionState(): Promise<void> {
+        const state = this.context.stateManager.getState();
+        if (!state.expansion || state.expansion.expandedItems.size === 0) {
+            return;
+        }
+
+        this.context.logger.debug(`Restoring expansion for ${state.expansion.expandedItems.size} items`);
+
+        // Get the VS Code tree view if available
+        const treeView = (this.context as any).treeView?.vscTreeView;
+        if (!treeView) {
+            this.context.logger.debug("No VS Code tree view available for expansion restoration");
+            return;
+        }
+
+        // Refresh the tree to apply expansion states
+        this.context.refresh();
     }
 
     /**
@@ -259,8 +291,17 @@ export class PersistenceModule implements TreeViewModule {
      * @param data The data to save
      */
     private async saveToWorkspace(data: any): Promise<void> {
-        const storageKeyToUse = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
-        await this.context.extensionContext.workspaceState.update(storageKeyToUse, data);
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        await this.context.extensionContext.workspaceState.update(storageKey, data);
+    }
+
+    /**
+     * Loads data from workspace storage
+     * @returns The loaded data or undefined
+     */
+    private async loadFromWorkspace(): Promise<any> {
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        return this.context.extensionContext.workspaceState.get(storageKey);
     }
 
     /**
@@ -268,83 +309,53 @@ export class PersistenceModule implements TreeViewModule {
      * @param data The data to save
      */
     private async saveToGlobal(data: any): Promise<void> {
-        const storageKeyToUse = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
-        await this.context.extensionContext.globalState.update(storageKeyToUse, data);
-    }
-
-    /**
-     * Loads data from workspace storage
-     * @returns The loaded data
-     */
-    private async loadFromWorkspace(): Promise<any> {
-        const storageKeyToUse = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
-        return this.context.extensionContext.workspaceState.get(storageKeyToUse);
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        await this.context.extensionContext.globalState.update(storageKey, data);
     }
 
     /**
      * Loads data from global storage
-     * @returns The loaded data
+     * @returns The loaded data or undefined
      */
     private async loadFromGlobal(): Promise<any> {
-        const storageKeyToUse = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
-        return this.context.extensionContext.globalState.get(storageKeyToUse);
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        return this.context.extensionContext.globalState.get(storageKey);
     }
 
     /**
-     * Clears all persisted data
+     * Clears all persisted state
      */
     public async clear(): Promise<void> {
-        const persistenceConfig = this.context.config.modules.persistence;
-        if (!persistenceConfig) {
+        const config = this.context.config.modules.persistence;
+        if (!config) {
             return;
         }
 
-        const storageKeyToUse = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
 
-        try {
-            if (persistenceConfig.strategy === "workspace") {
-                await this.context.extensionContext.workspaceState.update(storageKeyToUse, undefined);
-            } else if (persistenceConfig.strategy === "global") {
-                await this.context.extensionContext.globalState.update(storageKeyToUse, undefined);
-            }
-
-            this.context.logger.debug("Persistence cleared");
-        } catch (error) {
-            this.context.errorHandler.handleVoid(error as Error, "Failed to clear persistence");
+        if (config.strategy === "workspace") {
+            await this.context.extensionContext.workspaceState.update(storageKey, undefined);
+        } else if (config.strategy === "global") {
+            await this.context.extensionContext.globalState.update(storageKey, undefined);
         }
     }
 
     /**
-     * Handles configuration changes
-     * @param config The new configuration
+     * Forces an immediate save of the current state
      */
-    async onConfigChange(config: any): Promise<void> {
-        const persistenceConfig = config.modules?.persistence;
-        if (persistenceConfig) {
-            // If auto-save was disabled, cancel any pending saves
-            if (!persistenceConfig.autoSave && this.saveTimeout) {
-                clearTimeout(this.saveTimeout);
-                this.saveTimeout = null;
-            }
-
-            // Strategy changed
-            const oldPersistenceConfig = this.context.config.modules.persistence;
-            if (oldPersistenceConfig && persistenceConfig.strategy !== oldPersistenceConfig.strategy) {
-                this.context.logger.info(
-                    `Persistence strategy changed from ${oldPersistenceConfig.strategy} to ${persistenceConfig.strategy}`
-                );
-                // Migration logic can be implemented here
-            }
-        }
-    }
-
-    /**
-     * Disposes the persistence module and saves any pending data
-     */
-    dispose(): void {
+    public async forceSave(): Promise<void> {
         if (this.saveTimeout) {
             clearTimeout(this.saveTimeout);
-            this.save();
+            this.saveTimeout = null;
         }
+        await this.save();
+    }
+
+    /**
+     * Disposes of the module
+     */
+    public async dispose(): Promise<void> {
+        // Force save any pending changes
+        await this.forceSave();
     }
 }

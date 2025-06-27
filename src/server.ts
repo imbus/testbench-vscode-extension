@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH, ContextKeys } from "./constants";
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions, State } from "vscode-languageclient/node";
 import { connection, logger } from "./extension";
@@ -125,13 +125,11 @@ async function validateLsPrerequisites(
 ): Promise<LsPrerequisites | null> {
     logger.trace(`[validateLsPrerequisites - Op ${operationId}] Validating prerequisites for ${project}/${tov}.`);
 
-    // Validate Python interpreter
     const pythonPath = await validatePythonInterpreter(operationId, project, tov);
     if (!pythonPath) {
         return null;
     }
 
-    // Validate TestBench connection
     const tbConnectionDetails = validateTestBenchConnection(operationId, project, tov);
     if (!tbConnectionDetails) {
         return null;
@@ -444,7 +442,6 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
             }
         }
 
-        // Determine if error should be re-thrown
         if (shouldRethrowError(errorMessage, isDeactivating, operationId)) {
             logger.error(
                 `[stopLanguageClient - Op ${operationId}] Re-throwing error as it occurred during an active, non-deactivating operation: ${errorMessage}`
@@ -474,7 +471,7 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
  * @param client - The language client to set up notifications for.
  * @param projectName - The name of the project associated with the client.
  * @param tovName - The name of the TOV (Test Object Version) associated with the client.
- * @param operationId - An identifier for the current operation, used for logging.
+ * @param operationId - An identifier for the current operation, used in logging.
  */
 function setupClientNotifications(
     client: LanguageClient,
@@ -595,7 +592,6 @@ async function handleClientStartFailure(
         await safeClientDispose(newClient, operationId, "failed start cleanup");
     }
 
-    // Only throw if this is still the current operation
     if (isOperationCurrent(operationId)) {
         throw error;
     }
@@ -622,20 +618,19 @@ async function startAndMonitorClient(
     logger.info(`[startAndMonitorClient - Op ${operationId}] Attempting to start LS for ${projectName}/${tovName}.`);
 
     try {
-        // Start client with timeout protection
         await withTimeout(() => newClient.start(), CLIENT_START_TIMEOUT_MS, "Language server start");
 
         logger.info(
             `[startAndMonitorClient - Op ${operationId}] LS for ${projectName}/${tovName} started successfully.`
         );
 
-        // Validate that the client is still current after successful start
         const isStillCurrent = await validateClientAfterStart(newClient, operationId, projectName, tovName);
         if (!isStillCurrent) {
             return;
         }
 
-        // Set up notifications only if this is still the current global client
+        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, true);
+
         const currentGlobalClient = getLanguageClientInstance();
         if (currentGlobalClient === newClient) {
             setupClientNotifications(newClient, projectName, tovName, operationId);
@@ -721,7 +716,6 @@ async function handleExistingClient(operationId: number, projectName: string, to
         }
     }
 
-    // Check if operation is still current after stopping existing client
     if (!isOperationCurrent(operationId)) {
         logger.warn(
             `[initializeLanguageServer - Op ${operationId}] Initialization for ${projectName}/${tovName} ` +
@@ -753,7 +747,6 @@ export async function initializeLanguageServer(project: string, tov: string, ope
             `Project: ${project}, TOV: ${tov}. Current global OpId: ${getCurrentLsOperationId()}`
     );
 
-    // Check if operation is current at the start
     if (!isOperationCurrent(operationId)) {
         logger.warn(
             `[initializeLanguageServer - Op ${operationId}] Initialization for ${project}/${tov} ` +
@@ -762,13 +755,11 @@ export async function initializeLanguageServer(project: string, tov: string, ope
         return;
     }
 
-    // Handle any existing client
     const shouldContinue = await handleExistingClient(operationId, project, tov);
     if (!shouldContinue) {
         return;
     }
 
-    // Validate prerequisites
     const prerequisites = await validateLsPrerequisites(operationId, project, tov);
     if (!prerequisites) {
         return;
@@ -776,7 +767,6 @@ export async function initializeLanguageServer(project: string, tov: string, ope
 
     const { pythonPath, tbConnectionDetails } = prerequisites;
 
-    // Create new client instance
     const newClientInstance = createLanguageClient(pythonPath, tbConnectionDetails, project, tov, operationId);
 
     // Check staleness before client assignment
@@ -791,7 +781,6 @@ export async function initializeLanguageServer(project: string, tov: string, ope
         return;
     }
 
-    // Assign the new client and start it
     logger.info(
         `[initializeLanguageServer - Op ${operationId}] Setting new client instance for ${project}/${tov} as the global client.`
     );
@@ -874,13 +863,11 @@ async function executeRestart(projectName: string, tovName: string): Promise<voi
             // Continue with initialization even if stop failed
         }
 
-        // Check if operation is still current after stopping
         if (!isOperationCurrent(thisOperationId)) {
             logger.warn(`[LS Restart - Op ${thisOperationId}] Operation superseded during stop phase`);
             return;
         }
 
-        // Initialize new client
         await initializeLanguageServer(projectName, tovName, thisOperationId);
         logger.info(`[LS Restart - Op ${thisOperationId}] Restart completed for ${projectName}/${tovName}`);
     } catch (error) {
@@ -920,4 +907,45 @@ export async function restartLanguageClient(projectName: string, tovName: string
 
     // Debounce rapid successive calls
     scheduleDebouncedRestart(projectName, tovName);
+}
+/**
+ * Updates or restarts the language server based on the current state.
+ * @param projectName the name of the project to update or restart the language server for.
+ * @param tovName the name of the TOV to update or restart the language server for.
+ */
+export async function updateOrRestartLS(projectName: string | undefined, tovName: string | undefined): Promise<void> {
+    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
+
+    if (!projectName || !tovName) {
+        logger.error("[Cmd] updateOrRestartLS called with invalid project or TOV name.");
+        vscode.window.showErrorMessage("Invalid project or TOV name provided for language server update.");
+        return;
+    }
+
+    if (!connection) {
+        logger.warn("[Cmd] updateOrRestartLS called without active connection. Cannot update language server.");
+        vscode.window.showWarningMessage("No active connection available. Please log in first.");
+        return;
+    }
+
+    const existingClient = getLanguageClientInstance();
+    logger.debug(
+        `[Cmd] updateOrRestartLS called with projectName: ${projectName}, tovName: ${tovName}, existingClient state: ${existingClient ? existingClient.state : "none"}`
+    );
+
+    if (!existingClient || existingClient.state === State.Stopped || existingClient.state === State.Starting) {
+        logger.debug(`[Cmd] Restarting language client for project: ${projectName}, TOV: ${tovName}`);
+        await restartLanguageClient(projectName, tovName);
+    } else {
+        logger.debug(`[Cmd] Updating language client with project name: ${projectName}, TOV name: ${tovName}`);
+
+        try {
+            await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
+            await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
+            logger.debug(`[Cmd] Language client updated for project: ${projectName}, TOV: ${tovName}`);
+        } catch (error) {
+            logger.warn(`[Cmd] Failed to update language client, restarting instead: ${error}`);
+            await restartLanguageClient(projectName, tovName);
+        }
+    }
 }

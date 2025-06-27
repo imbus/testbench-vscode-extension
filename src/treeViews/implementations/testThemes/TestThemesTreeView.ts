@@ -341,11 +341,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         try {
             this.logger.debug(`Loading cycle ${cycleKey} for project ${projectKey}`);
 
-            // Clear existing state
-            this.currentProjectKey = null;
-            this.currentCycleKey = null;
-            this.currentCycleLabel = null;
-            this.currentTovKey = null;
             this.dataProvider.clearCache();
 
             // Set new state
@@ -403,11 +398,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         try {
             this.logger.debug(`Loading TOV ${tovKey} for project ${projectKey}`);
 
-            // Clear existing state
-            this.currentProjectKey = null;
-            this.currentCycleKey = null;
-            this.currentCycleLabel = null;
-            this.currentTovKey = null;
             this.dataProvider.clearCache();
 
             // Set new state
@@ -833,18 +823,17 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     /**
      * Disposes of the tree view and all its resources
      */
-    public dispose(): void {
+    public async dispose(): Promise<void> {
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
         this.disposables = [];
-
         if (this.vscTreeView) {
             this.vscTreeView.dispose();
             this.vscTreeView = undefined;
         }
+        await super.dispose();
     }
-
     /**
      * Fetches the root items of the tree
      * @return Promise resolving to array of root tree items
@@ -857,7 +846,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Clears the tree view and resets all state variables
      */
     public clearTree(): void {
-        this.rootItems = [];
+        super.clearTree();
         this.currentProjectKey = null;
         this.currentCycleKey = null;
         this.currentCycleLabel = null;

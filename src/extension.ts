@@ -21,8 +21,6 @@ import {
     StorageKeys,
     TreeViewTiming
 } from "./constants";
-import { client, restartLanguageClient, stopLanguageClient, getLanguageClientInstance } from "./server";
-import { State } from "vscode-languageclient/node";
 import {
     TestBenchAuthenticationProvider,
     TESTBENCH_AUTH_PROVIDER_ID,
@@ -38,6 +36,7 @@ import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
 import path from "path";
 import { FilterService } from "./treeViews/utils/FilterService";
+import { updateOrRestartLS, stopLanguageClient, client } from "./server";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -250,7 +249,7 @@ async function performDeferredViewRestoration(
     }
 
     try {
-        logger.info(`Performing deferred view restoration for: ${savedViewId}`);
+        logger.debug(`Performing deferred view restoration for: ${savedViewId}`);
 
         await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
 
@@ -323,6 +322,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await authProviderInstance.removeSession(session.id);
             logger.info(`[Cmd] Session ${session.id} removed by logout command.`);
         }
+
+        await stopLanguageClient();
+        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
+
         // Fallback to ensure UI is reset if a connection object still exists without a session.
         if (connection !== null) {
             await handleTestBenchSessionChange(context, undefined);
@@ -726,7 +729,7 @@ async function handleTestBenchSessionChange(
                 connection.getServerPort() === activeConnection.portNumber.toString()
             ) {
                 logger.info(
-                    `[Extension] Connection for connection '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
+                    `[Extension] Connection for '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
                 );
                 return;
             }
@@ -761,7 +764,7 @@ async function handleTestBenchSessionChange(
                 );
                 try {
                     await stopLanguageClient();
-                    logger.info("[Extension] Language server stopped due to session token change.");
+                    logger.debug("[Extension] Language server stopped due to session token change.");
                 } catch (error) {
                     logger.warn("[Extension] Error stopping language server during session change:", error);
                 }
@@ -772,7 +775,7 @@ async function handleTestBenchSessionChange(
                 !wasPreviouslyConnected ||
                 (connection && connection.getSessionToken() !== newConnection.getSessionToken())
             ) {
-                logger.info("[Extension] New session established. Refreshing project data.");
+                logger.debug("[Extension] New session established. Refreshing project data.");
                 try {
                     if (!treeViews) {
                         throw new Error("Tree views not initialized");
@@ -811,10 +814,9 @@ async function handleTestBenchSessionChange(
                                     `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
                                     `Clearing invalid state and loading default view.`
                             );
-                            // Clear the invalid state
                             await clearViewState(context);
                         } else {
-                            logger.info(`Attempting to restore previous view: ${savedViewId}`);
+                            logger.debug(`Attempting to restore previous view: ${savedViewId}`);
                             try {
                                 areViewsRestored = await performDeferredViewRestoration(
                                     context,
@@ -830,7 +832,9 @@ async function handleTestBenchSessionChange(
 
                     if (!areViewsRestored) {
                         // Fallback: Load default project view if no state or if restoration fails
-                        logger.info("Loading default projects view (no saved state to restore or restoration failed).");
+                        logger.debug(
+                            "Loading default projects view (no saved state to restore or restoration failed)."
+                        );
                         treeViews.projectsTree.refresh();
                         await displayProjectManagementTreeView();
                         await hideTestThemeTreeView();
@@ -951,6 +955,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.info("Extension activated.");
     initializeConfigurationWatcher();
 
+    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
+
     // Register AuthenticationProvider
     authProviderInstance = new TestBenchAuthenticationProvider(context);
     context.subscriptions.push(
@@ -1035,10 +1041,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             silent: true
         });
         if (session) {
-            logger.info("[Extension] Found existing VS Code AuthenticationSession for TestBench during initial check.");
+            logger.debug(
+                "[Extension] Found existing VS Code AuthenticationSession for TestBench during initial check."
+            );
             await handleTestBenchSessionChange(context, session);
         } else {
-            logger.info("[Extension] No existing TestBench session found during initial check.");
+            logger.debug("[Extension] No existing TestBench session found during initial check.");
             if (!getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
@@ -1049,9 +1057,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
     }
 
-    // Trigger Automatic Login Command if configured
     if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-        logger.info("[Extension] Auto-login configured. Scheduling automatic login command.");
+        logger.debug("[Extension] Auto-login configured. Scheduling automatic login command.");
         // Short delay to ensure webview is loaded
         setTimeout(async () => {
             try {
@@ -1061,48 +1068,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         }, TreeViewTiming.WEBVIEW_LOAD_DELAY_MS);
     } else {
-        logger.info("[Extension] Auto-login is disabled. Skipping automatic login command.");
+        logger.debug("[Extension] Auto-login is disabled. Skipping automatic login command.");
     }
 
     logger.info("Extension activated successfully.");
-}
-
-/**
- * Updates or restarts the language server based on the current state.
- * @param projectName the name of the project to update or restart the language server for.
- * @param tovName the name of the TOV to update or restart the language server for.
- */
-export async function updateOrRestartLS(projectName: string | undefined, tovName: string | undefined): Promise<void> {
-    if (!projectName || !tovName) {
-        logger.error("[Cmd] updateOrRestartLS called with invalid project or TOV name.");
-        vscode.window.showErrorMessage("Invalid project or TOV name provided for language server update.");
-        return;
-    }
-
-    if (!connection) {
-        logger.warn("[Cmd] updateOrRestartLS called without active connection. Cannot update language server.");
-        vscode.window.showWarningMessage("No active connection available. Please log in first.");
-        return;
-    }
-
-    const existingClient = getLanguageClientInstance();
-    logger.debug(
-        `[Cmd] updateOrRestartLS called with projectName: ${projectName}, tovName: ${tovName}, existingClient state: ${existingClient ? existingClient.state : "none"}`
-    );
-
-    if (!existingClient || existingClient.state === State.Stopped || existingClient.state === State.Starting) {
-        logger.debug(`[Cmd] Restarting language client for project: ${projectName}, TOV: ${tovName}`);
-        await restartLanguageClient(projectName, tovName);
-    } else {
-        logger.debug(`[Cmd] Updating language client with project name: ${projectName}, TOV name: ${tovName}`);
-        try {
-            await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
-            await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
-        } catch (error) {
-            logger.warn(`[Cmd] Failed to update language client, restarting instead: ${error}`);
-            await restartLanguageClient(projectName, tovName);
-        }
-    }
 }
 
 /**
@@ -1128,17 +1097,16 @@ export async function clearAllExtensionData(
                     "• All persistent settings\n\n" +
                     "This action cannot be undone. Are you sure you want to continue?",
                 { modal: true },
-                "Clear All Data",
-                "Cancel"
+                "Clear All Data"
             );
 
             if (confirmation !== "Clear All Data") {
-                logger.info("[clearAllExtensionData] User cancelled clear all extension data operation.");
+                logger.debug("[clearAllExtensionData] User cancelled clear all extension data operation.");
                 return false;
             }
         }
 
-        logger.info("[clearAllExtensionData] Starting comprehensive extension data cleanup...");
+        logger.debug("[clearAllExtensionData] Starting comprehensive extension data cleanup...");
 
         if (connection) {
             logger.debug("[clearAllExtensionData] Logging out from server...");
@@ -1180,6 +1148,13 @@ export async function clearAllExtensionData(
             `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`
         ];
 
+        // View state storage keys (dynamic keys based on tree view IDs)
+        const treeViewIds = ["testbench.projects", "testbench.testThemes", "testbench.testElements"];
+        for (const treeViewId of treeViewIds) {
+            workspaceStateKeys.push(`treeState.${treeViewId}`);
+            workspaceStateKeys.push(`treeView.state.${treeViewId}`);
+        }
+
         for (const key of workspaceStateKeys) {
             try {
                 await context.workspaceState.update(key, undefined);
@@ -1189,7 +1164,11 @@ export async function clearAllExtensionData(
         }
 
         logger.debug("[clearAllExtensionData] Clearing global state storage...");
-        const globalStateKeys = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
+        const globalStateKeys: string[] = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
+
+        for (const treeViewId of treeViewIds) {
+            globalStateKeys.push(`treeView.state.${treeViewId}`);
+        }
 
         for (const key of globalStateKeys) {
             try {
@@ -1218,6 +1197,127 @@ export async function clearAllExtensionData(
             logger.debug("[clearAllExtensionData] Clearing tree data and state...");
             try {
                 treeViews.clear();
+
+                // Clear persistence modules directly to ensure all tree view state is cleared
+                if (treeViews.projectsTree) {
+                    const projectsPersistence = (treeViews.projectsTree as any).modules?.get("persistence");
+                    if (projectsPersistence?.clear) {
+                        await projectsPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const projectsExpansion = (treeViews.projectsTree as any).modules?.get("expansion");
+                    if (projectsExpansion?.reset) {
+                        projectsExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const projectsMarking = (treeViews.projectsTree as any).modules?.get("marking");
+                    if (projectsMarking?.clearAllMarkings) {
+                        projectsMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const projectsFiltering = (treeViews.projectsTree as any).modules?.get("filtering");
+                    if (projectsFiltering?.clearAllFilters) {
+                        projectsFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const projectsCustomRoot = (treeViews.projectsTree as any).modules?.get("customRoot");
+                    if (projectsCustomRoot?.reset) {
+                        projectsCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const projectsStateManager = (treeViews.projectsTree as any).stateManager;
+                    if (projectsStateManager?.setState) {
+                        projectsStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+                if (treeViews.testThemesTree) {
+                    const testThemesPersistence = (treeViews.testThemesTree as any).modules?.get("persistence");
+                    if (testThemesPersistence?.clear) {
+                        await testThemesPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const testThemesExpansion = (treeViews.testThemesTree as any).modules?.get("expansion");
+                    if (testThemesExpansion?.reset) {
+                        testThemesExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const testThemesMarking = (treeViews.testThemesTree as any).modules?.get("marking");
+                    if (testThemesMarking?.clearAllMarkings) {
+                        testThemesMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const testThemesFiltering = (treeViews.testThemesTree as any).modules?.get("filtering");
+                    if (testThemesFiltering?.clearAllFilters) {
+                        testThemesFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const testThemesCustomRoot = (treeViews.testThemesTree as any).modules?.get("customRoot");
+                    if (testThemesCustomRoot?.reset) {
+                        testThemesCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const testThemesStateManager = (treeViews.testThemesTree as any).stateManager;
+                    if (testThemesStateManager?.setState) {
+                        testThemesStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+                if (treeViews.testElementsTree) {
+                    const testElementsPersistence = (treeViews.testElementsTree as any).modules?.get("persistence");
+                    if (testElementsPersistence?.clear) {
+                        await testElementsPersistence.clear();
+                    }
+                    // Clear expansion module state
+                    const testElementsExpansion = (treeViews.testElementsTree as any).modules?.get("expansion");
+                    if (testElementsExpansion?.reset) {
+                        testElementsExpansion.reset();
+                    }
+                    // Clear marking module state
+                    const testElementsMarking = (treeViews.testElementsTree as any).modules?.get("marking");
+                    if (testElementsMarking?.clearAllMarkings) {
+                        testElementsMarking.clearAllMarkings(false); // Don't emit global event during clear all
+                    }
+                    // Clear filtering module state
+                    const testElementsFiltering = (treeViews.testElementsTree as any).modules?.get("filtering");
+                    if (testElementsFiltering?.clearAllFilters) {
+                        testElementsFiltering.clearAllFilters();
+                    }
+                    // Clear customRoot module state
+                    const testElementsCustomRoot = (treeViews.testElementsTree as any).modules?.get("customRoot");
+                    if (testElementsCustomRoot?.reset) {
+                        testElementsCustomRoot.reset();
+                    }
+                    // Clear state manager expansion state (normally preserved by clear())
+                    const testElementsStateManager = (treeViews.testElementsTree as any).stateManager;
+                    if (testElementsStateManager?.setState) {
+                        testElementsStateManager.setState({
+                            expansion: null,
+                            marking: null,
+                            customRoot: null,
+                            filtering: null
+                        });
+                    }
+                }
+
+                // Force refresh all tree views to ensure expansion states are cleared
+                if (treeViews.projectsTree) {
+                    treeViews.projectsTree.refresh();
+                }
+                if (treeViews.testThemesTree) {
+                    treeViews.testThemesTree.refresh();
+                }
+                if (treeViews.testElementsTree) {
+                    treeViews.testElementsTree.refresh();
+                }
             } catch (error) {
                 logger.warn("[clearAllExtensionData] Error clearing tree data:", error);
             }
@@ -1308,19 +1408,19 @@ export async function clearAllExtensionData(
 export async function deactivate(): Promise<void> {
     try {
         if (connection) {
-            logger.info("[Extension] Performing server logout on deactivation.");
+            logger.debug("[Extension] Performing server logout on deactivation.");
             await connection.logoutUserOnServer();
         }
         if (client) {
-            logger.info("[Extension] Attempting to stop language server on deactivation.");
+            logger.debug("[Extension] Attempting to stop language server on deactivation.");
             await stopLanguageClient(true);
             logger.info("[Extension] Language server stopped on deactivation.");
         }
         if (treeViews) {
-            logger.info("[Extension] Disposing TreeViews on deactivation.");
-            treeViews.projectsTree.dispose();
-            treeViews.testThemesTree.dispose();
-            treeViews.testElementsTree.dispose();
+            logger.debug("[Extension] Disposing TreeViews on deactivation.");
+            await treeViews.projectsTree.dispose();
+            await treeViews.testThemesTree.dispose();
+            await treeViews.testElementsTree.dispose();
             treeViews = null;
         }
         logger.info("Extension deactivated.");

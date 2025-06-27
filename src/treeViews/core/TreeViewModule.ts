@@ -9,7 +9,7 @@ export interface TreeViewModule {
     readonly id: string;
 
     initialize(context: TreeViewContext): Promise<void>;
-    dispose(): void;
+    dispose(): void | Promise<void>;
 
     // Optional lifecycle hooks
     onConfigChange?(config: any): Promise<void>;

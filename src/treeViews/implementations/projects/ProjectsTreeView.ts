@@ -14,7 +14,6 @@ import { allExtensionCommands, ConfigKeys, ProjectItemTypes, TreeViewTiming } fr
 import { TreeNode } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
 import * as reportHandler from "../../../reportHandler";
-import { updateOrRestartLS } from "../../../extension";
 import { FilterService } from "../../utils/FilterService";
 
 export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
@@ -272,11 +271,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         if (iconModule) {
             iconModule.setItemIcon(item);
         }
-
-        const expansionModule = this.getModule("expansion");
-        if (expansionModule) {
-            expansionModule.applyExpansionState(item);
-        }
     }
 
     /**
@@ -514,12 +508,12 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     /**
      * Disposes of all registered commands and event listeners
      */
-    public override dispose(): void {
+    public override async dispose(): Promise<void> {
         // Dispose all registered commands and event listeners
         this.disposables.forEach((d) => d.dispose());
         this.disposables = [];
 
-        super.dispose();
+        await super.dispose();
     }
 
     /**
@@ -693,17 +687,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             const projectKey = item.getProjectKey();
             const tovKey = item.getVersionKey();
             const tovName = typeof item.label === "string" ? item.label : "Unknown TOV";
-            const projectName = item.parent?.label?.toString();
-
-            // Validate projectName and tovName before calling updateOrRestartLS
-            if (!projectName || !tovName) {
-                const errorMessage = `Cannot update language server: invalid project or TOV name. Project: ${projectName}, TOV: ${tovName}`;
-                vscode.window.showErrorMessage(errorMessage);
-                this.logger.error(errorMessage);
-                return;
-            }
-
-            await updateOrRestartLS(projectName, tovName);
 
             if (!projectKey || !tovKey) {
                 const errorMessage = "Could not determine project or TOV key for test generation.";

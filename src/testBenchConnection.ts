@@ -603,7 +603,7 @@ export class PlayServerConnection {
             );
             if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
-                logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
+                // logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
                 return testStructureOfCycleResponse.data;
             } else {
                 logger.error(`Unexpected response code: ${testStructureOfCycleResponse.status}`);
@@ -678,7 +678,7 @@ export class PlayServerConnection {
             logger.trace(`Test structure of TOV response for TOV key ${tovKey}:`, testStructureOfTOVResponse.status);
             if (testStructureOfTOVResponse.data) {
                 // Note: The output is large
-                logger.trace(`!!!! Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
+                // logger.trace(`Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
                 return testStructureOfTOVResponse.data;
             } else {
                 logger.error(`Unexpected response code: ${testStructureOfTOVResponse.status}`);

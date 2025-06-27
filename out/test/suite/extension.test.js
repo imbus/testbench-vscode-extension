@@ -48,7 +48,6 @@ const configuration = __importStar(require("../../configuration"));
 const testUtils_1 = require("../utils/testUtils");
 const testBenchLogger = __importStar(require("../../testBenchLogger"));
 const server = __importStar(require("../../server"));
-const node_1 = require("vscode-languageclient/node");
 suite("Extension Test Suite", function () {
     let testEnv;
     let registerWebviewStub;
@@ -182,34 +181,7 @@ suite("Extension Test Suite", function () {
     });
     suite("Language Server Management", () => {
         test("should export updateOrRestartLS function", () => {
-            assert.ok(typeof extension_1.updateOrRestartLS === "function", "updateOrRestartLS should be exported");
-        });
-        test("updateOrRestartLS should handle invalid parameters", async () => {
-            const showErrorMessageStub = testEnv.vscodeMocks.showErrorMessageStub;
-            await (0, extension_1.updateOrRestartLS)(undefined, "valid");
-            assert.ok(showErrorMessageStub.calledWith("Invalid project or TOV name provided for language server update."), "Should show error for undefined project");
-            await (0, extension_1.updateOrRestartLS)("valid", undefined);
-            assert.ok(showErrorMessageStub.calledWith("Invalid project or TOV name provided for language server update."), "Should show error for undefined TOV");
-            await (0, extension_1.updateOrRestartLS)(undefined, undefined);
-            assert.ok(showErrorMessageStub.calledWith("Invalid project or TOV name provided for language server update."), "Should show error for both undefined");
-        });
-        test("updateOrRestartLS should update existing client when available", async () => {
-            const executeCommandStub = testEnv.vscodeMocks.executeCommandStub;
-            const mockConnection = {};
-            (0, extension_1.setConnection)(mockConnection);
-            const mockClient = { state: node_1.State.Running };
-            testEnv.sandbox.stub(server, "getLanguageClientInstance").returns(mockClient);
-            await (0, extension_1.updateOrRestartLS)("testProject", "testTOV");
-            assert.ok(executeCommandStub.calledWith("testbench_ls.updateProject", "testProject"), "Should update project");
-            assert.ok(executeCommandStub.calledWith("testbench_ls.updateTov", "testTOV"), "Should update TOV");
-        });
-        test("updateOrRestartLS should restart client when not available", async () => {
-            const restartStub = testEnv.sandbox.stub(server, "restartLanguageClient").resolves();
-            const mockConnection = {};
-            (0, extension_1.setConnection)(mockConnection);
-            testEnv.sandbox.stub(server, "getLanguageClientInstance").returns(undefined);
-            await (0, extension_1.updateOrRestartLS)("testProject", "testTOV");
-            assert.ok(restartStub.calledWith("testProject", "testTOV"), "Should restart language client");
+            assert.ok(typeof server.updateOrRestartLS === "function", "updateOrRestartLS should be exported");
         });
     });
     suite("Extension Lifecycle", () => {

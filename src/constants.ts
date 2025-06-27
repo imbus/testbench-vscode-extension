@@ -83,7 +83,9 @@ export const ContextKeys = {
     FILTER_DIFF_MODE_ENABLED: "testbenchExtension.filterDiffModeEnabled",
     FILTER_DIFF_MODE_ENABLED_PROJECTS: "testbenchExtension.filterDiffModeEnabledProjects",
     FILTER_DIFF_MODE_ENABLED_TEST_THEMES: "testbenchExtension.filterDiffModeEnabledTestThemes",
-    FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements"
+    FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements",
+
+    LANGUAGE_SERVER_READY: "testbenchExtension.languageServerReady"
 } as const;
 
 // --- Storage Keys ---
@@ -158,10 +160,6 @@ export const TreeViewTiming = {
     // UI refresh and debouncing
     UI_REFRESH_DEBOUNCE_MS: 500, // Default debounce for UI refresh operations
     EVENT_DEBOUNCE_MS: 500, // Default debounce for event handling
-
-    // Persistence and saving
-    DEFAULT_SAVE_DEBOUNCE_MS: 1000, // Default debounce for save operations
-    FAST_SAVE_DEBOUNCE_MS: 500, // Faster save debounce for responsive operations
 
     // Configuration defaults
     DEFAULT_DEBOUNCE_DELAY_MS: 300, // Default debounce delay for configs
