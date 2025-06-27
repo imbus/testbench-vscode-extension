@@ -130,7 +130,7 @@ async function validateLsPrerequisites(
         return null;
     }
 
-    const tbConnectionDetails = validateTestBenchConnection(operationId, project, tov);
+    const tbConnectionDetails = await validateTestBenchConnection(operationId, project, tov);
     if (!tbConnectionDetails) {
         return null;
     }
@@ -165,6 +165,7 @@ async function validatePythonInterpreter(
         );
         if (isOperationCurrent(operationId)) {
             setLanguageClientInstance(undefined);
+            await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         }
         return null;
     }
@@ -181,11 +182,11 @@ async function validatePythonInterpreter(
  * @param tovName - The name of the TOV.
  * @returns The TestBench connection details if a connection is active, otherwise null.
  */
-function validateTestBenchConnection(
+async function validateTestBenchConnection(
     operationId: number,
     projectName: string,
     tovName: string
-): TbConnectionDetails | null {
+): Promise<TbConnectionDetails | null> {
     if (!connection) {
         logger.warn(
             `[validateLsPrerequisites - Op ${operationId}] No active TestBench connection. ` +
@@ -193,6 +194,7 @@ function validateTestBenchConnection(
         );
         if (isOperationCurrent(operationId)) {
             setLanguageClientInstance(undefined);
+            await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         }
         return null;
     }
@@ -404,6 +406,7 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
 
     if (!clientToStop) {
         logger.trace(`[stopLanguageClient - Op ${operationId}] No client instance to stop.`);
+        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         return;
     }
 
@@ -458,6 +461,7 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
             );
         }
     } finally {
+        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         logger.info(
             `[stopLanguageClient - Op ${operationId}] stopLanguageClient completed for client (State was ${clientToStop?.state}).`
         );
@@ -540,6 +544,8 @@ async function validateClientAfterStart(
         if (getLanguageClientInstance() === newClient) {
             setLanguageClientInstance(undefined);
         }
+
+        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
         return false;
     }
     return true;
@@ -591,6 +597,8 @@ async function handleClientStartFailure(
     if (newClient.state !== State.Stopped) {
         await safeClientDispose(newClient, operationId, "failed start cleanup");
     }
+
+    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
 
     if (isOperationCurrent(operationId)) {
         throw error;
@@ -874,11 +882,12 @@ async function executeRestart(projectName: string, tovName: string): Promise<voi
         const errorMessage = (error as Error).message;
         logger.error(`[LS Restart - Op ${thisOperationId}] Error during restart: ${errorMessage}`, error);
 
+        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
+
         if (isOperationCurrent(thisOperationId)) {
             vscode.window.showErrorMessage(`Failed to restart Language Server for ${tovName}: ${errorMessage}`);
         }
     } finally {
-        // Always clear busy state and pending params when this operation completes
         if (isOperationCurrent(thisOperationId)) {
             isLanguageServerBusy = false;
             clearPendingRestart();
@@ -943,8 +952,10 @@ export async function updateOrRestartLS(projectName: string | undefined, tovName
             await vscode.commands.executeCommand("testbench_ls.updateProject", projectName);
             await vscode.commands.executeCommand("testbench_ls.updateTov", tovName);
             logger.debug(`[Cmd] Language client updated for project: ${projectName}, TOV: ${tovName}`);
+            await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, true);
         } catch (error) {
             logger.warn(`[Cmd] Failed to update language client, restarting instead: ${error}`);
+            await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
             await restartLanguageClient(projectName, tovName);
         }
     }

@@ -479,10 +479,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
-
-        const projectName = cycleItem.parent?.parent?.label?.toString();
-        const tovName = cycleItem.parent?.label?.toString();
-        await updateOrRestartLS(projectName, tovName);
         await reportHandler.startTestGenerationForCycle(context, cycleItem);
     };
 

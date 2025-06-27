@@ -30,12 +30,10 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
-        // Listen for state changes with immediate save
         context.eventBus.on("state:changed", () => {
             this.debouncedSave();
         });
 
-        // Load initial state
         const loadedState = await this.load();
         if (loadedState) {
             context.logger.debug("Persistence module loaded state from storage");
@@ -54,7 +52,6 @@ export class PersistenceModule implements TreeViewModule {
         // Listen for VS Code workspace events to save before shutdown
         context.extensionContext.subscriptions.push(
             vscode.workspace.onDidChangeConfiguration(() => {
-                // Save state when configuration changes
                 this.save();
             })
         );
@@ -151,7 +148,6 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
-        // Refresh the tree to apply expansion states
         this.context.refresh();
     }
 
@@ -196,13 +192,11 @@ export class PersistenceModule implements TreeViewModule {
             };
         }
 
-        // Save selection state
         dataToSave.selectedItemId = state.selectedItemId;
         dataToSave.selectedProjectKey = state.selectedProjectKey;
         dataToSave.selectedCycleKey = state.selectedCycleKey;
         dataToSave.selectedTovKey = state.selectedTovKey;
 
-        // Save metadata
         dataToSave.metadata = state.metadata;
 
         return dataToSave;
@@ -218,24 +212,20 @@ export class PersistenceModule implements TreeViewModule {
             return null;
         }
 
-        // Check version compatibility
         if (data.version && data.version !== this.STORAGE_VERSION) {
             this.context.logger.warn(`Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}`);
         }
 
         const state: Partial<TreeViewState> = {};
 
-        // Restore basic state
         if (data.lastRefresh) {
             state.lastRefresh = data.lastRefresh;
         }
 
-        // Restore custom root
         if (data.customRoot) {
             state.customRoot = data.customRoot;
         }
 
-        // Restore expansion state
         if (data.expansion) {
             const expansionConfig = this.context.config.modules.expansion;
             state.expansion = {
@@ -248,7 +238,6 @@ export class PersistenceModule implements TreeViewModule {
             );
         }
 
-        // Restore marking state
         if (data.marking) {
             state.marking = {
                 markedItems: new Map(data.marking.markedItems || []),
@@ -264,7 +253,6 @@ export class PersistenceModule implements TreeViewModule {
             };
         }
 
-        // Restore selection state
         if (data.selectedItemId !== undefined) {
             state.selectedItemId = data.selectedItemId;
         }
@@ -278,7 +266,6 @@ export class PersistenceModule implements TreeViewModule {
             state.selectedTovKey = data.selectedTovKey;
         }
 
-        // Restore metadata
         if (data.metadata) {
             state.metadata = data.metadata;
         }
@@ -355,7 +342,6 @@ export class PersistenceModule implements TreeViewModule {
      * Disposes of the module
      */
     public async dispose(): Promise<void> {
-        // Force save any pending changes
         await this.forceSave();
     }
 }
