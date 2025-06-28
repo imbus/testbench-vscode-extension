@@ -76,6 +76,9 @@ let authProviderInstance: TestBenchAuthenticationProvider | null = null;
 // Prevent multiple session change handling simultaneously
 let isHandlingSessionChange: boolean = false;
 
+// Prevent multiple test generation or import operations simultaneously
+let isTestOperationInProgress: boolean = false;
+
 // Determines if the icon of the tree item should be changed after generating tests for that item.
 export const ENABLE_ICON_MARKING_ON_TEST_GENERATION: boolean = true;
 // Determines if the import button of the tree item should still persist after importing test results for that item.
@@ -96,6 +99,32 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
             const errorMessage: string = error instanceof Error ? error.message : "An unknown error occurred";
             logger.error(`Error executing command: ${errorMessage}`, error);
             vscode.window.showErrorMessage(`An error occurred: ${errorMessage}`);
+        }
+    };
+}
+
+/**
+ * Wraps a (test generation or import) command handler to make sure only one test operation (generation/import) runs at a time.
+ * If another operation is in progress, shows a warning and does not execute the handler.
+ * @param handler The async function to execute
+ * @returns A new async function with single-operation protection
+ */
+function withSingleTestOperation<T extends any[]>(
+    handler: (...args: T) => Promise<void>
+): (...args: T) => Promise<void> {
+    return async (...args: T) => {
+        if (isTestOperationInProgress) {
+            logger?.warn("[TestOperation] Attempted to start a test operation while another is in progress");
+            vscode.window.showWarningMessage(
+                "Another test operation is already in progress. Please wait for it to complete."
+            );
+            return;
+        }
+        isTestOperationInProgress = true;
+        try {
+            await handler(...args);
+        } finally {
+            isTestOperationInProgress = false;
         }
     };
 }
@@ -524,7 +553,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     // Test Generation Handlers
-    const handleGenerateTestCasesForTOV = async (item: ProjectsTreeItem) => {
+    const _handleGenerateTestCasesForTOV = async (item: ProjectsTreeItem) => {
         if (!item) {
             logger.error("[Cmd] handleGenerateTestCasesForTOV called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined item");
@@ -538,7 +567,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            // Show progress bar while waiting for language server
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
@@ -558,8 +586,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
         }
     };
+    const handleGenerateTestCasesForTOV = withSingleTestOperation(_handleGenerateTestCasesForTOV);
 
-    const handleGenerateTestCasesForCycle = async (cycleItem: ProjectsTreeItem) => {
+    const _handleGenerateTestCasesForCycle = async (cycleItem: ProjectsTreeItem) => {
         if (!cycleItem) {
             logger.error("[Cmd] handleGenerateTestCasesForCycle called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined cycle item");
@@ -573,7 +602,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            // Show progress bar while waiting for language server
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
@@ -593,8 +621,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
         }
     };
+    const handleGenerateTestCasesForCycle = withSingleTestOperation(_handleGenerateTestCasesForCycle);
 
-    const handleGenerateTestCasesForTestThemeOrTestCaseSet = async (item: TestThemesTreeItem) => {
+    const _handleGenerateTestCasesForTestThemeOrTestCaseSet = async (item: TestThemesTreeItem) => {
         if (!item) {
             logger.error("[Cmd] handleGenerateTestCasesForTestThemeOrTestCaseSet called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined test theme item");
@@ -610,7 +639,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            // Show progress bar while waiting for language server
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
@@ -630,8 +658,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
         }
     };
+    const handleGenerateTestCasesForTestThemeOrTestCaseSet = withSingleTestOperation(
+        _handleGenerateTestCasesForTestThemeOrTestCaseSet
+    );
 
-    const handleGenerateTestsForTestThemeTreeItemFromTOV = async (item: TestThemesTreeItem) => {
+    const _handleGenerateTestsForTestThemeTreeItemFromTOV = async (item: TestThemesTreeItem) => {
         if (!item) {
             logger.error("[Cmd] handleGenerateTestsForTestThemeTreeItemFromTOV called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined test theme item");
@@ -647,7 +678,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            // Show progress bar while waiting for language server
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
@@ -667,8 +697,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
         }
     };
+    const handleGenerateTestsForTestThemeTreeItemFromTOV = withSingleTestOperation(
+        _handleGenerateTestsForTestThemeTreeItemFromTOV
+    );
 
-    const handleReadAndImportTestResultsToTestbench = async (item: TestThemesTreeItem) => {
+    const _handleReadAndImportTestResultsToTestbench = async (item: TestThemesTreeItem) => {
         if (!item) {
             logger.error("[Cmd] handleReadAndImportTestResultsToTestbench called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot import test results for undefined test theme item");
@@ -682,7 +715,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            // Show progress bar while waiting for language server
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
@@ -702,6 +734,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             vscode.window.showErrorMessage(`Failed to import test results: ${errorMessage}`);
         }
     };
+    const handleReadAndImportTestResultsToTestbench = withSingleTestOperation(
+        _handleReadAndImportTestResultsToTestbench
+    );
 
     // Tree View Management Handlers
     const handleDisplayAllProjects = async () => {
@@ -729,10 +764,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const handleUpdateOrRestartLS = (projectName: string | undefined, tovName: string | undefined) => {
         updateOrRestartLS(projectName, tovName);
-    };
-
-    const handleClearAllExtensionData = () => {
-        clearAllExtensionData(context, true);
     };
 
     const handleShowExtensionSettings = () => {
@@ -935,7 +966,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         // Other extension commands
         { id: allExtensionCommands.clearInternalTestbenchFolder, handler: clearInternalFolder },
-        { id: allExtensionCommands.clearAllExtensionData, handler: handleClearAllExtensionData },
+        { id: allExtensionCommands.clearAllExtensionData, handler: clearAllExtensionData },
         {
             id: allExtensionCommands.showExtensionSettings,
             handler: handleShowExtensionSettings
@@ -1344,17 +1375,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.info("Extension activated successfully.");
 }
 
-/**
- * Utility function to clear all extension data.
- *
- * @param {vscode.ExtensionContext} context The extension context.
- * @param {boolean} showConfirmation Whether to show a confirmation dialog (default: false for programmatic calls).
- * @returns {Promise<boolean>} True if data was cleared successfully, false if cancelled or failed.
- */
 export async function clearAllExtensionData(
     context: vscode.ExtensionContext,
     showConfirmation: boolean = false
 ): Promise<boolean> {
+    isTestOperationInProgress = false;
     try {
         if (showConfirmation) {
             const confirmation = await vscode.window.showWarningMessage(
@@ -1677,6 +1702,8 @@ export async function clearAllExtensionData(
  */
 export async function deactivate(): Promise<void> {
     try {
+        isTestOperationInProgress = false;
+
         if (connection) {
             logger.debug("[Extension] Performing server logout on deactivation.");
             await connection.logoutUserOnServer();
