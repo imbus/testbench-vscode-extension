@@ -967,15 +967,21 @@ export function isLanguageServerReady(): boolean {
  *
  * @param timeoutMs Maximum time to wait in milliseconds (default: 30000ms)
  * @param checkIntervalMs Interval between readiness checks in milliseconds (default: 100ms)
- * @returns Promise that resolves when the language server is ready or rejects on timeout
+ * @param cancellationToken Optional cancellation token to allow early termination
+ * @returns Promise that resolves when the language server is ready or rejects on timeout/cancellation
  */
 export async function waitForLanguageServerReady(
     timeoutMs: number = 30000,
-    checkIntervalMs: number = 100
+    checkIntervalMs: number = 100,
+    cancellationToken?: vscode.CancellationToken
 ): Promise<void> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeoutMs) {
+        if (cancellationToken?.isCancellationRequested) {
+            throw new Error("Language server wait operation was cancelled");
+        }
+
         if (isLanguageServerReady()) {
             return;
         }

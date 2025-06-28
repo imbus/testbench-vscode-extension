@@ -571,19 +571,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: "Waiting for Language Server",
-                    cancellable: false
+                    cancellable: true
                 },
-                async (progress) => {
+                async (progress, cancellationToken) => {
                     progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady();
+                    await waitForLanguageServerReady(30000, 100, cancellationToken);
                 }
             );
 
             await treeViews.projectsTree.generateTestCasesForTOV(item);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[Cmd] Error in generateTestCasesForTOV: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+            if (errorMessage.includes("cancelled")) {
+                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            } else {
+                logger.error(`[Cmd] Error in generateTestCasesForTOV: ${errorMessage}`, error);
+                vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+            }
         }
     };
     const handleGenerateTestCasesForTOV = withSingleTestOperation(_handleGenerateTestCasesForTOV);
@@ -606,19 +611,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: "Waiting for Language Server",
-                    cancellable: false
+                    cancellable: true
                 },
-                async (progress) => {
+                async (progress, cancellationToken) => {
                     progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady();
+                    await waitForLanguageServerReady(30000, 100, cancellationToken);
                 }
             );
 
             await reportHandler.startTestGenerationForCycle(context, cycleItem);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[Cmd] Error in generateTestCasesForCycle: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+            if (errorMessage.includes("cancelled")) {
+                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            } else {
+                logger.error(`[Cmd] Error in generateTestCasesForCycle: ${errorMessage}`, error);
+                vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+            }
         }
     };
     const handleGenerateTestCasesForCycle = withSingleTestOperation(_handleGenerateTestCasesForCycle);
@@ -643,19 +653,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: "Waiting for Language Server",
-                    cancellable: false
+                    cancellable: true
                 },
-                async (progress) => {
+                async (progress, cancellationToken) => {
                     progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady();
+                    await waitForLanguageServerReady(30000, 100, cancellationToken);
                 }
             );
 
             await treeViews.testThemesTree.generateTestCases(item);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[Cmd] Error in generateTestCasesForTestThemeOrTestCaseSet: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+            if (errorMessage.includes("cancelled")) {
+                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            } else {
+                logger.error(`[Cmd] Error in generateTestCasesForTestThemeOrTestCaseSet: ${errorMessage}`, error);
+                vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+            }
         }
     };
     const handleGenerateTestCasesForTestThemeOrTestCaseSet = withSingleTestOperation(
@@ -682,19 +697,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: "Waiting for Language Server",
-                    cancellable: false
+                    cancellable: true
                 },
-                async (progress) => {
+                async (progress, cancellationToken) => {
                     progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady();
+                    await waitForLanguageServerReady(30000, 100, cancellationToken);
                 }
             );
 
             await treeViews.testThemesTree.generateTestCases(item);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[Cmd] Error in generateTestsForTestThemeTreeItemFromTOV: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+            if (errorMessage.includes("cancelled")) {
+                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            } else {
+                logger.error(`[Cmd] Error in generateTestsForTestThemeTreeItemFromTOV: ${errorMessage}`, error);
+                vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
+            }
         }
     };
     const handleGenerateTestsForTestThemeTreeItemFromTOV = withSingleTestOperation(
@@ -719,19 +739,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 {
                     location: vscode.ProgressLocation.Notification,
                     title: "Waiting for Language Server",
-                    cancellable: false
+                    cancellable: true
                 },
-                async (progress) => {
+                async (progress, cancellationToken) => {
                     progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady();
+                    await waitForLanguageServerReady(30000, 100, cancellationToken);
                 }
             );
 
             await treeViews.testThemesTree.importTestResultsForTestThemeTreeItem(item);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[Cmd] Error in readAndImportTestResultsToTestbench: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to import test results: ${errorMessage}`);
+            if (errorMessage.includes("cancelled")) {
+                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
+            } else {
+                logger.error(`[Cmd] Error in readAndImportTestResultsToTestbench: ${errorMessage}`, error);
+                vscode.window.showErrorMessage(`Failed to import test results: ${errorMessage}`);
+            }
         }
     };
     const handleReadAndImportTestResultsToTestbench = withSingleTestOperation(
