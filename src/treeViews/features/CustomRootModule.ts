@@ -1,14 +1,14 @@
 /**
- * @file src/treeViews/features/customRoot/CustomRootModule.ts
- * @description Module for managing a custom root in the tree view, allowing users to set a specific item as the root of the tree.
+ * @file src/treeViews/features/CustomRootModule.ts
+ * @description Module for managing a custom root in the tree view
  */
 
 import * as vscode from "vscode";
-import { TreeViewModule } from "../../core/TreeViewModule";
-import { TreeViewContext } from "../../core/TreeViewContext";
-import { TreeItemBase } from "../../core/TreeItemBase";
-import { CustomRootState } from "../../state/StateTypes";
-import { TreeViewEventTypes } from "../../utils/EventBus";
+import { TreeViewModule } from "../core/TreeViewModule";
+import { TreeViewContext } from "../core/TreeViewContext";
+import { TreeItemBase } from "../core/TreeItemBase";
+import { CustomRootState } from "../state/StateTypes";
+import { TreeViewEventTypes } from "../utils/EventBus";
 
 export class CustomRootModule implements TreeViewModule {
     readonly id = "customRoot";

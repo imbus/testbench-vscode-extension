@@ -4,12 +4,12 @@
  */
 
 import { TreeViewModule } from "./TreeViewModule";
-import { CustomRootModule } from "../features/customRoot/CustomRootModule";
-import { MarkingModule } from "../features/marking/MarkingModule";
-import { PersistenceModule } from "../features/persistence/PersistenceModule";
-import { ExpansionModule } from "../features/expansion/ExpansionModule";
-import { IconModule } from "../features/icons/IconModule";
-import { FilteringModule } from "../features/filtering/FilteringModule";
+import { CustomRootModule } from "../features/CustomRootModule";
+import { MarkingModule } from "../features/MarkingModule";
+import { PersistenceModule } from "../features/PersistenceModule";
+import { ExpansionModule } from "../features/ExpansionModule";
+import { IconModule } from "../features/IconModule";
+import { FilteringModule } from "../features/FilteringModule";
 
 /**
  * Module factory function type

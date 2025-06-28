@@ -34,12 +34,12 @@ export { EventBus } from "./utils/EventBus";
 export type { TreeViewEvent, EventHandler } from "./utils/EventBus";
 
 // Feature module exports
-export { CustomRootModule } from "./features/customRoot/CustomRootModule";
-export { MarkingModule } from "./features/marking/MarkingModule";
-export { PersistenceModule } from "./features/persistence/PersistenceModule";
-export { ExpansionModule } from "./features/expansion/ExpansionModule";
-export { IconModule } from "./features/icons/IconModule";
-export { FilteringModule } from "./features/filtering/FilteringModule";
+export { CustomRootModule } from "./features/CustomRootModule";
+export { MarkingModule } from "./features/MarkingModule";
+export { PersistenceModule } from "./features/PersistenceModule";
+export { ExpansionModule } from "./features/ExpansionModule";
+export { IconModule } from "./features/IconModule";
+export { FilteringModule } from "./features/FilteringModule";
 
 // Factory exports
 export { TreeViewFactory } from "./TreeViewFactory";

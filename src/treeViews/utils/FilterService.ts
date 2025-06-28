@@ -4,7 +4,7 @@
  */
 
 import * as vscode from "vscode";
-import { TextFilterOptions } from "../features/filtering/FilteringModule";
+import { TextFilterOptions } from "../features/FilteringModule";
 import { TreeViewBase } from "../core/TreeViewBase";
 import { TreeItemBase } from "../core/TreeItemBase";
 

@@ -1,14 +1,14 @@
 /**
- * @file src/treeViews/features/filtering/FilteringModule.ts
- * @description Enhanced module for filtering tree items with text search and filter diff mode
+ * @file src/treeViews/features/FilteringModule.ts
+ * @description Module for filtering tree items with text search and filter diff mode
  */
 
-import { TreeViewModule } from "../../core/TreeViewModule";
-import { TreeViewContext } from "../../core/TreeViewContext";
-import { TreeItemBase } from "../../core/TreeItemBase";
-import { FilterState, FilterDefinition, SerializedFilterDefinition } from "../../state/StateTypes";
+import { TreeViewModule } from "../core/TreeViewModule";
+import { TreeViewContext } from "../core/TreeViewContext";
+import { TreeItemBase } from "../core/TreeItemBase";
+import { FilterState, FilterDefinition, SerializedFilterDefinition } from "../state/StateTypes";
 import * as vscode from "vscode";
-import { ContextKeys } from "../../../constants";
+import { ContextKeys } from "../../constants";
 
 export interface TextFilterOptions {
     searchText: string;

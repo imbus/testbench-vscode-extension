@@ -1,17 +1,17 @@
 /**
- * @file src/treeViews/features/icons/IconModule.ts
+ * @file src/treeViews/features/IconModule.ts
  * @description Module for managing tree item icons and themes.
  */
 
 import * as vscode from "vscode";
-import { TreeViewModule } from "../../core/TreeViewModule";
-import { TreeViewContext } from "../../core/TreeViewContext";
-import { TreeItemBase } from "../../core/TreeItemBase";
-import { IconConfig } from "../../core/TreeViewConfig";
-import { ProjectsTreeItem } from "../../implementations/projects/ProjectsTreeItem";
-import { TestThemesTreeItem } from "../../implementations/testThemes/TestThemesTreeItem";
-import { TestElementsTreeItem, TestElementType } from "../../implementations/testElements/TestElementsTreeItem";
-import { FilteringModule } from "../filtering/FilteringModule";
+import { TreeViewModule } from "../core/TreeViewModule";
+import { TreeViewContext } from "../core/TreeViewContext";
+import { TreeItemBase } from "../core/TreeItemBase";
+import { IconConfig } from "../core/TreeViewConfig";
+import { ProjectsTreeItem } from "../implementations/projects/ProjectsTreeItem";
+import { TestThemesTreeItem } from "../implementations/testThemes/TestThemesTreeItem";
+import { TestElementsTreeItem, TestElementType } from "../implementations/testElements/TestElementsTreeItem";
+import { FilteringModule } from "./FilteringModule";
 
 export type IconThemeName = "default" | "minimal" | "colorful" | "custom";
 export interface IconTheme {

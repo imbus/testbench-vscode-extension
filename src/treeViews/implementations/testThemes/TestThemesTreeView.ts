@@ -14,7 +14,7 @@ import { allExtensionCommands, ConfigKeys, ContextKeys, StorageKeys, TestThemeIt
 import { TestStructure } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
 import { ALLOW_PERSISTENT_IMPORT_BUTTON, ENABLE_ICON_MARKING_ON_TEST_GENERATION } from "../../../extension";
-import { MarkingModule } from "../../features/marking/MarkingModule";
+import { MarkingModule } from "../../features/MarkingModule";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
 import { TreeViewEventTypes } from "../../utils/EventBus";

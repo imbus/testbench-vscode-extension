@@ -1,11 +1,11 @@
 /**
- * @file src/treeViews/features/persistence/PersistenceModule.ts
- * @description Enhanced module for managing persistence of tree view state with immediate saves
+ * @file src/treeViews/features/PersistenceModule.ts
+ * @description Module for managing persistence of tree view state
  */
 
-import { TreeViewModule } from "../../core/TreeViewModule";
-import { TreeViewContext } from "../../core/TreeViewContext";
-import { TreeViewState } from "../../state/StateTypes";
+import { TreeViewModule } from "../core/TreeViewModule";
+import { TreeViewContext } from "../core/TreeViewContext";
+import { TreeViewState } from "../state/StateTypes";
 import * as vscode from "vscode";
 
 export class PersistenceModule implements TreeViewModule {
