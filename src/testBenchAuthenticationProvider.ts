@@ -459,3 +459,26 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         }
     }
 }
+
+/**
+ * Gets the session to process, either from the parameter or by fetching it.
+ * @param existingSession - An optional existing authentication session to process.
+ * @returns The session to process or undefined if no session is found.
+ */
+export async function getSessionToProcess(
+    existingSession?: vscode.AuthenticationSession
+): Promise<vscode.AuthenticationSession | undefined> {
+    if (existingSession) {
+        return existingSession;
+    }
+
+    try {
+        return await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+            createIfNone: false,
+            silent: true
+        });
+    } catch (error) {
+        logger.warn("[Extension] Error getting current session during handleTestBenchSessionChange:", error);
+        return undefined;
+    }
+}

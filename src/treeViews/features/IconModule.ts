@@ -186,7 +186,7 @@ export class IconModule implements TreeViewModule {
     }
 
     /**
-     * Gets the appropriate icon for a tree item, centralizing all icon logic.
+     * Gets the appropriate icon for a tree item.
      * @param item The tree item
      * @returns The resolved icon for the item (ThemeIcon, Uri, or light/dark pair)
      */

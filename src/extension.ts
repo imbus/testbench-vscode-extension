@@ -24,7 +24,8 @@ import {
 import {
     TestBenchAuthenticationProvider,
     TESTBENCH_AUTH_PROVIDER_ID,
-    TESTBENCH_AUTH_PROVIDER_LABEL
+    TESTBENCH_AUTH_PROVIDER_LABEL,
+    getSessionToProcess
 } from "./testBenchAuthenticationProvider";
 import * as connectionManager from "./connectionManager";
 import { PlayServerConnection } from "./testBenchConnection";
@@ -36,7 +37,13 @@ import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
 import path from "path";
 import { FilterService } from "./treeViews/utils/FilterService";
-import { updateOrRestartLS, stopLanguageClient, client, waitForLanguageServerReady } from "./server";
+import {
+    updateOrRestartLS,
+    stopLanguageClient,
+    client,
+    waitForLanguageServerReady,
+    handleLanguageServerRestartOnSessionChange
+} from "./server";
 import {
     hideProjectManagementTreeView,
     displayProjectManagementTreeView
@@ -941,7 +948,166 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 }
 
 /**
- * Handles changes in the TestBench authentication session with centralized tree management.
+ * Creates and initializes a new PlayServerConnection.
+ * @param activeConnection - The active connection to use.
+ * @param session - The session to use.
+ * @param currentConnection - The current connection to use.
+ * @returns The new connection.
+ */
+async function createNewConnection(
+    activeConnection: connectionManager.TestBenchConnection,
+    session: vscode.AuthenticationSession,
+    currentConnection: PlayServerConnection | null
+): Promise<PlayServerConnection> {
+    if (currentConnection) {
+        logger.warn(
+            "[Extension] A different connection was active. Logging out from previous server session before establishing new one."
+        );
+        await currentConnection.logoutUserOnServer();
+    }
+
+    const newConnection = new PlayServerConnection(
+        activeConnection.serverName,
+        activeConnection.portNumber,
+        activeConnection.username,
+        session.accessToken
+    );
+
+    setConnection(newConnection);
+    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
+    getLoginWebViewProvider()?.updateWebviewHTMLContent();
+
+    return newConnection;
+}
+
+/**
+ * Validates saved context data for view restoration.
+ * @param savedContext - The saved context to validate.
+ * @returns True if the saved context is valid, false otherwise.
+ */
+function isValidSavedContext(savedContext: any): boolean {
+    return !!(
+        savedContext &&
+        savedContext.projectName &&
+        typeof savedContext.projectName === "string" &&
+        savedContext.tovName &&
+        typeof savedContext.tovName === "string"
+    );
+}
+
+/**
+ * Loads the default tree views where only projects tree view is visible.
+ * @returns A promise that resolves when the default tree views are loaded.
+ */
+async function loadDefaultTreeViewsUI(): Promise<void> {
+    logger.debug("Loading default tree views.");
+    if (treeViews) {
+        treeViews.projectsTree.refresh();
+    }
+    await displayProjectManagementTreeView();
+    await hideTestThemeTreeView();
+    await hideTestElementsTreeView();
+}
+
+/**
+ * Refreshes tree views and attempts to restore previous view state.
+ * @param context - The extension context.
+ * @param isNewConnection - Whether the connection is new.
+ * @returns A promise that resolves when the tree views are refreshed and the previous view state is restored.
+ */
+async function restoreTreViewsState(context: vscode.ExtensionContext, isNewConnection: boolean): Promise<void> {
+    if (!isNewConnection) {
+        return;
+    }
+
+    logger.debug("[Extension] New session established. Refreshing project data.");
+
+    if (!treeViews) {
+        logger.error("Tree views not initialized");
+        return;
+    }
+
+    try {
+        treeViews.clear();
+        treeViews.projectsTree.refresh();
+
+        const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+        const savedCycleContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+        const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+        const savedContext = savedCycleContext || savedTovContext;
+
+        logger.debug(
+            `[Extension] Checking for saved view state: savedViewId=${savedViewId}, hasSavedContext=${!!savedContext}`
+        );
+
+        let viewRestored = false;
+        if (savedViewId && savedViewId !== "projects" && savedContext) {
+            if (!isValidSavedContext(savedContext)) {
+                logger.warn(
+                    `Cannot restore view state: invalid context data. ` +
+                        `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
+                        `Clearing invalid state and loading default view.`
+                );
+                await clearViewState(context);
+            } else {
+                logger.debug(`Attempting to restore previous view: ${savedViewId}`);
+                try {
+                    viewRestored = await performDeferredViewRestoration(context, savedViewId, savedContext);
+                } catch (error) {
+                    logger.error("Failed to restore view state:", error);
+                    viewRestored = false;
+                }
+            }
+        }
+
+        if (!viewRestored) {
+            logger.debug("Loading default projects view (no saved state to restore or restoration failed).");
+            await loadDefaultTreeViewsUI();
+        }
+    } catch (error) {
+        logger.warn("[Extension] Error managing trees during session change:", error);
+        await loadDefaultTreeViewsUI();
+    }
+}
+
+/**
+ * Handles the case when there's no active connection but a session exists. *
+ */
+async function handleNoActiveConnection(): Promise<void> {
+    logger.warn("[Extension] Session exists, but no active connection. Clearing connection.");
+
+    if (connection) {
+        await connection.logoutUserOnServer();
+    }
+
+    if (treeViews) {
+        treeViews.clear();
+    }
+
+    await loadDefaultTreeViewsUI();
+    logger.debug("[Extension] View state preserved for potential restoration on next login.");
+}
+
+/**
+ * Handles the case when there's no session (logout).
+ */
+async function handleNoSession(): Promise<void> {
+    logger.info("[Extension] No active session. Clearing connection.");
+
+    if (connection) {
+        await connection.logoutUserOnServer();
+    }
+
+    if (treeViews) {
+        treeViews.clear();
+    }
+
+    await loadDefaultTreeViewsUI();
+    logger.debug("[Extension] View state preserved for potential restoration on next login.");
+}
+
+/**
+ * Handles changes in the TestBench authentication session.
  *
  * @param {vscode.ExtensionContext} context - The VS Code extension context.
  * @param {vscode.AuthenticationSession} existingSession - An optional existing authentication session to process.
@@ -951,186 +1117,41 @@ async function handleTestBenchSessionChange(
     existingSession?: vscode.AuthenticationSession
 ): Promise<void> {
     logger.info(`[handleTestBenchSessionChange] Session changed. Processing... Has session: ${!!existingSession}`);
-    let sessionToProcess = existingSession;
-    if (!sessionToProcess) {
-        try {
-            sessionToProcess = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-                createIfNone: false,
-                silent: true
-            });
-        } catch (error) {
-            logger.warn("[Extension] Error getting current session during handleTestBenchSessionChange:", error);
-            sessionToProcess = undefined;
-        }
-    }
 
+    const sessionToProcess = await getSessionToProcess(existingSession);
     const wasPreviouslyConnected = !!connection;
     const previousSessionToken = connection?.getSessionToken();
 
-    if (sessionToProcess && sessionToProcess.accessToken) {
+    if (sessionToProcess?.accessToken) {
         const activeConnection = await connectionManager.getActiveConnection(context);
-        if (activeConnection) {
-            // Check if a connection for this session and connection already exists
-            if (
-                connection &&
-                connection.getSessionToken() === sessionToProcess.accessToken &&
-                connection.getUsername() === activeConnection.username &&
-                connection.getServerName() === activeConnection.serverName &&
-                connection.getServerPort() === activeConnection.portNumber.toString()
-            ) {
-                logger.info(
-                    `[Extension] Connection for '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
-                );
-                return;
-            }
 
+        if (!activeConnection) {
+            await handleNoActiveConnection();
+            return;
+        }
+
+        if (connectionManager.isConnectionAlreadyActive(connection, sessionToProcess, activeConnection)) {
             logger.info(
-                `[Extension] TestBench session active for connection: ${activeConnection.label}. Initializing PlayServerConnection.`
+                `[Extension] Connection for '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
             );
-
-            if (connection) {
-                logger.warn(
-                    "[Extension] A different connection was active. Logging out from previous server session before establishing new one."
-                );
-                await connection.logoutUserOnServer();
-            }
-
-            const newConnection = new PlayServerConnection(
-                activeConnection.serverName,
-                activeConnection.portNumber,
-                activeConnection.username,
-                sessionToProcess.accessToken
-            );
-            setConnection(newConnection);
-            await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
-            getLoginWebViewProvider()?.updateWebviewHTMLContent();
-
-            const newSessionToken = newConnection.getSessionToken();
-            const sessionTokenChanged = previousSessionToken !== newSessionToken;
-
-            if (sessionTokenChanged) {
-                logger.info(
-                    "[Extension] Session token changed. Stopping language server to ensure it gets updated credentials."
-                );
-                try {
-                    await stopLanguageClient();
-                    logger.debug("[Extension] Language server stopped due to session token change.");
-                } catch (error) {
-                    logger.warn("[Extension] Error stopping language server during session change:", error);
-                }
-            }
-
-            // Refresh tree providers as the session has changed.
-            if (
-                !wasPreviouslyConnected ||
-                (connection && connection.getSessionToken() !== newConnection.getSessionToken())
-            ) {
-                logger.debug("[Extension] New session established. Refreshing project data.");
-                try {
-                    if (!treeViews) {
-                        throw new Error("Tree views not initialized");
-                    }
-
-                    treeViews.clear();
-                    treeViews.projectsTree.refresh();
-
-                    // Check if we need to restore a view
-                    const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
-                    const savedCycleContext = context.workspaceState.get<any>(
-                        StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY
-                    );
-                    const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
-                    const savedContext = savedCycleContext || savedTovContext;
-
-                    logger.debug(
-                        `[Extension] Checking for saved view state: savedViewId=${savedViewId}, hasSavedContext=${!!savedContext}`
-                    );
-                    if (savedContext) {
-                        logger.debug(
-                            `[Extension] Saved context details: projectName=${savedContext.projectName}, tovName=${savedContext.tovName}, isCycle=${savedContext.isCycle}`
-                        );
-                    }
-
-                    let areViewsRestored = false;
-                    if (savedViewId && savedViewId !== "projects" && savedContext) {
-                        // Validate that the saved context has the required fields
-                        const hasValidProjectName =
-                            savedContext.projectName && typeof savedContext.projectName === "string";
-                        const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
-
-                        if (!hasValidProjectName || !hasValidTovName) {
-                            logger.warn(
-                                `Cannot restore view state: invalid context data. ` +
-                                    `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
-                                    `Clearing invalid state and loading default view.`
-                            );
-                            await clearViewState(context);
-                        } else {
-                            logger.debug(`Attempting to restore previous view: ${savedViewId}`);
-                            try {
-                                areViewsRestored = await performDeferredViewRestoration(
-                                    context,
-                                    savedViewId,
-                                    savedContext
-                                );
-                            } catch (error) {
-                                logger.error("Failed to restore view state:", error);
-                                areViewsRestored = false;
-                            }
-                        }
-                    }
-
-                    if (!areViewsRestored) {
-                        // Fallback: Load default project view if no state or if restoration fails
-                        logger.debug(
-                            "Loading default projects view (no saved state to restore or restoration failed)."
-                        );
-                        treeViews.projectsTree.refresh();
-                        await displayProjectManagementTreeView();
-                        await hideTestThemeTreeView();
-                        await hideTestElementsTreeView();
-                    }
-                } catch (error) {
-                    logger.warn("[Extension] Error managing trees during session change:", error);
-                    if (treeViews) {
-                        treeViews.projectsTree.refresh();
-                        await displayProjectManagementTreeView();
-                        await hideTestThemeTreeView();
-                        await hideTestElementsTreeView();
-                    }
-                }
-            }
-        } else {
-            logger.warn("[Extension] Session exists, but no active connection. Clearing connection.");
-            if (connection) {
-                await connection.logoutUserOnServer();
-            }
-
-            logger.debug("[Extension] No active connection. Clearing tree data.");
-            if (treeViews) {
-                treeViews.clear();
-            }
-
-            await displayProjectManagementTreeView();
-            await hideTestThemeTreeView();
-            await hideTestElementsTreeView();
-            logger.debug("[Extension] View state preserved for potential restoration on next login.");
+            return;
         }
+
+        logger.info(
+            `[Extension] TestBench session active for connection: ${activeConnection.label}. Initializing PlayServerConnection.`
+        );
+
+        const newConnection = await createNewConnection(activeConnection, sessionToProcess, connection);
+
+        await handleLanguageServerRestartOnSessionChange(previousSessionToken, newConnection.getSessionToken());
+
+        const isNewConnection =
+            !wasPreviouslyConnected ||
+            !!(connection && connection.getSessionToken() !== newConnection.getSessionToken());
+
+        await restoreTreViewsState(context, isNewConnection);
     } else {
-        logger.info("[Extension] No active session. Clearing connection.");
-        if (connection) {
-            await connection.logoutUserOnServer();
-        }
-
-        logger.debug("[Extension] No active connection. Clearing tree data.");
-        if (treeViews) {
-            treeViews.clear();
-        }
-
-        await displayProjectManagementTreeView();
-        await hideTestThemeTreeView();
-        await hideTestElementsTreeView();
-        logger.debug("[Extension] View state preserved for potential restoration on next login.");
+        await handleNoSession();
     }
 }
 

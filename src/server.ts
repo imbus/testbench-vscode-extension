@@ -948,16 +948,35 @@ export async function updateOrRestartLS(projectName: string | undefined, tovName
 }
 
 /**
- * Checks if the language server is ready and available for use.
- * The language server is considered ready when:
- * - A client instance exists
- * - The client state is Running
+ * Checks if the language server is running.
+ * The server is considered running when it exists and is in the Running state.
  *
- * @returns True if the language server is ready, false otherwise
+ * @returns True if the language server is running, false otherwise.
  */
-export function isLanguageServerReady(): boolean {
-    const clientInstance = getLanguageClientInstance();
-    return clientInstance !== undefined && clientInstance.state === State.Running;
+export function isLanguageServerRunning(): boolean {
+    return client !== undefined && client.state === State.Running;
+}
+
+/**
+ * Handles language server restart if session token changed.
+ * @param previousSessionToken - The previous session token.
+ * @param newSessionToken - The new session token.
+ */
+export async function handleLanguageServerRestartOnSessionChange(
+    previousSessionToken: string | undefined,
+    newSessionToken: string
+): Promise<void> {
+    if (previousSessionToken !== newSessionToken) {
+        logger.info(
+            "[Extension] Session token changed. Stopping language server to ensure it gets updated credentials."
+        );
+        try {
+            await stopLanguageClient();
+            logger.debug("[Extension] Language server stopped due to session token change.");
+        } catch (error) {
+            logger.warn("[Extension] Error stopping language server during session change:", error);
+        }
+    }
 }
 
 /**
@@ -982,7 +1001,7 @@ export async function waitForLanguageServerReady(
             throw new Error("Language server wait operation was cancelled");
         }
 
-        if (isLanguageServerReady()) {
+        if (isLanguageServerRunning()) {
             return;
         }
         await new Promise((resolve) => setTimeout(resolve, checkIntervalMs));
