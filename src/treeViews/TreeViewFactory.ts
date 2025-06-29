@@ -9,8 +9,10 @@ import { TestThemesTreeView } from "./implementations/testThemes/TestThemesTreeV
 import { TestElementsTreeView } from "./implementations/testElements/TestElementsTreeView";
 import { PlayServerConnection } from "../testBenchConnection";
 import { TreeViewConfig } from "./core/TreeViewConfig";
-import { allExtensionCommands } from "../constants";
+import { allExtensionCommands, ContextKeys, StorageKeys } from "../constants";
 import { TestBenchLogger } from "../testBenchLogger";
+import { createAllTreeViews } from ".";
+import { extensionContext, treeViews, getConnection, logger, setTreeViews, setExtensionContext } from "../extension";
 
 export interface TreeViews {
     projectsTree: ProjectsTreeView;
@@ -435,5 +437,59 @@ export class TreeViewFactory {
         }
 
         this.disposables = [];
+    }
+}
+
+/**
+ * Disposes the old treeViews variable and initializes all tree views fresh.
+ */
+export async function initializeTreeViews(context: vscode.ExtensionContext): Promise<void> {
+    setExtensionContext(context);
+
+    if (treeViews) {
+        treeViews.dispose();
+    }
+
+    try {
+        setTreeViews(createAllTreeViews(extensionContext, getConnection));
+
+        if (!treeViews) {
+            logger.error("Global tree views variable is null. Cannot initialize tree views.");
+            return;
+        }
+
+        await treeViews.initialize();
+
+        // Check for saved view state before setting default visibility
+        const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+        const savedCycleContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+        const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+        const savedContext = savedCycleContext || savedTovContext;
+
+        // Determine initial visibility based on saved state
+        let showProjects = true;
+        let showTestThemes = false;
+        let showTestElements = false;
+
+        if (savedViewId && savedViewId !== "projects" && savedContext) {
+            const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
+            const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
+
+            if (hasValidProjectName && hasValidTovName) {
+                showProjects = false;
+                showTestThemes = savedViewId === "testThemes" || savedViewId === "testElements";
+                showTestElements = savedViewId === "testElements";
+            }
+        }
+
+        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, showProjects);
+        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, showTestThemes);
+        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, showTestElements);
+
+        logger.info("Tree views initialized successfully");
+    } catch (error) {
+        logger.error("Failed to initialize tree views:", error);
+        vscode.window.showErrorMessage("Failed to initialize tree views. Please reload the window.");
+        throw error;
     }
 }

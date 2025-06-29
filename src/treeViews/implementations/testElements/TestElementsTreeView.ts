@@ -11,8 +11,9 @@ import { TestElementsDataProvider } from "./TestElementsDataProvider";
 import { testElementsConfig } from "./TestElementsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { ResourceFileService } from "./ResourceFileService";
-import { TestElementItemTypes } from "../../../constants";
+import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { FilterService } from "../../utils/FilterService";
+import { treeViews } from "../../../extension";
 
 export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private dataProvider: TestElementsDataProvider;
@@ -589,4 +590,20 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.clearTree();
         }
     }
+}
+
+export async function hideTestElementsTreeView(): Promise<void> {
+    if (!treeViews) {
+        return;
+    }
+    await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, false);
+}
+
+export async function displayTestElementsTreeView(): Promise<void> {
+    if (!treeViews) {
+        return;
+    }
+    vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, true);
+    const filterService = FilterService.getInstance();
+    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_ELEMENTS_TREE);
 }

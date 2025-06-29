@@ -30,13 +30,26 @@ import * as connectionManager from "./connectionManager";
 import { PlayServerConnection } from "./testBenchConnection";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
-import { createAllTreeViews, TestElementsTreeItem, TreeViewBase, TreeViews } from "./treeViews";
+import { TestElementsTreeItem, TreeViewBase, TreeViews } from "./treeViews";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
 import path from "path";
 import { FilterService } from "./treeViews/utils/FilterService";
 import { updateOrRestartLS, stopLanguageClient, client, waitForLanguageServerReady } from "./server";
+import {
+    hideProjectManagementTreeView,
+    displayProjectManagementTreeView
+} from "./treeViews/implementations/projects/ProjectsTreeView";
+import {
+    displayTestElementsTreeView,
+    hideTestElementsTreeView
+} from "./treeViews/implementations/testElements/TestElementsTreeView";
+import {
+    displayTestThemeTreeView,
+    hideTestThemeTreeView
+} from "./treeViews/implementations/testThemes/TestThemesTreeView";
+import { initializeTreeViews } from "./treeViews/TreeViewFactory";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -64,8 +77,15 @@ export function getLoginWebViewProvider(): loginWebView.LoginWebViewProvider | n
 }
 
 // Global tree views instance
-let treeViews: TreeViews | null = null;
-let extensionContext: vscode.ExtensionContext;
+export let treeViews: TreeViews | null = null;
+export function setTreeViews(newTreeViews: TreeViews | null): void {
+    treeViews = newTreeViews;
+}
+
+export let extensionContext: vscode.ExtensionContext;
+export function setExtensionContext(context: vscode.ExtensionContext): void {
+    extensionContext = context;
+}
 
 // Double-click handling
 let lastCycleClick = { id: "", timestamp: 0 };
@@ -157,105 +177,6 @@ function registerSafeCommand(
         }
     });
     context.subscriptions.push(disposable);
-}
-
-/**
- * Utility functions for tree view visibility management
- */
-async function hideProjectManagementTreeView(): Promise<void> {
-    if (!treeViews) {
-        return;
-    }
-    vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, false);
-}
-
-async function displayProjectManagementTreeView(): Promise<void> {
-    if (!treeViews) {
-        return;
-    }
-    await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, true);
-    const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_PROJECTS_TREE);
-}
-
-async function hideTestThemeTreeView(): Promise<void> {
-    if (!treeViews) {
-        return;
-    }
-    await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, false);
-}
-
-async function displayTestThemeTreeView(): Promise<void> {
-    if (!treeViews) {
-        return;
-    }
-    vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, true);
-    const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_THEMES_TREE);
-}
-
-async function hideTestElementsTreeView(): Promise<void> {
-    if (!treeViews) {
-        return;
-    }
-    await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, false);
-}
-
-async function displayTestElementsTreeView(): Promise<void> {
-    if (!treeViews) {
-        return;
-    }
-    vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, true);
-    const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_ELEMENTS_TREE);
-}
-
-/**
- * Initializes all tree views using the new tree framework.
- */
-export async function initializeTreeViews(context: vscode.ExtensionContext): Promise<void> {
-    extensionContext = context;
-
-    if (treeViews) {
-        treeViews.dispose();
-    }
-
-    try {
-        treeViews = createAllTreeViews(extensionContext, getConnection);
-        await treeViews.initialize();
-
-        // Check for saved view state before setting default visibility
-        const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
-        const savedCycleContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
-        const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
-        const savedContext = savedCycleContext || savedTovContext;
-
-        // Determine initial visibility based on saved state
-        let showProjects = true;
-        let showTestThemes = false;
-        let showTestElements = false;
-
-        if (savedViewId && savedViewId !== "projects" && savedContext) {
-            const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
-            const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
-
-            if (hasValidProjectName && hasValidTovName) {
-                showProjects = false;
-                showTestThemes = savedViewId === "testThemes" || savedViewId === "testElements";
-                showTestElements = savedViewId === "testElements";
-            }
-        }
-
-        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, showProjects);
-        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, showTestThemes);
-        await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, showTestElements);
-
-        logger.info("Tree views initialized successfully");
-    } catch (error) {
-        logger.error("Failed to initialize tree views:", error);
-        vscode.window.showErrorMessage("Failed to initialize tree views. Please reload the window.");
-        throw error;
-    }
 }
 
 /**
