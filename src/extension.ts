@@ -31,7 +31,7 @@ import * as connectionManager from "./connectionManager";
 import { PlayServerConnection } from "./testBenchConnection";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
-import { TestElementsTreeItem, TreeViewBase, TreeViews } from "./treeViews";
+import { MarkingModule, TestElementsTreeItem, TreeViewBase, TreeViews } from "./treeViews";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
@@ -556,6 +556,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
+            if (treeViews?.testThemesTree) {
+                const markingModule = treeViews.testThemesTree.getModule("marking") as MarkingModule | undefined;
+                if (markingModule) {
+                    markingModule.clearAllMarkings(false);
+                }
+            }
+
             await prepareLanguageServerForTreeItemOperation(tovItem, "generate test cases for TOV");
             await treeViews.projectsTree.generateTestCasesForTOV(tovItem);
         } catch (error) {
@@ -585,6 +592,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
+            if (treeViews?.testThemesTree) {
+                const markingModule = treeViews.testThemesTree.getModule("marking") as MarkingModule | undefined;
+                if (markingModule) {
+                    markingModule.clearAllMarkings(false);
+                }
+            }
+
             await prepareLanguageServerForTreeItemOperation(cycleItem, "generate test cases for cycle");
             await reportHandler.startTestGenerationForCycle(context, cycleItem);
         } catch (error) {
