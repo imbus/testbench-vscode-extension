@@ -13,8 +13,8 @@ import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, StorageKeys, TestThemeItemTypes } from "../../../constants";
 import { TestStructure } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
-import { ALLOW_PERSISTENT_IMPORT_BUTTON, ENABLE_ICON_MARKING_ON_TEST_GENERATION } from "../../../extension";
-import { MarkingModule } from "../../features/marking/MarkingModule";
+import { ALLOW_PERSISTENT_IMPORT_BUTTON, ENABLE_ICON_MARKING_ON_TEST_GENERATION, treeViews } from "../../../extension";
+import { MarkingModule } from "../../features/MarkingModule";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
 import { TreeViewEventTypes } from "../../utils/EventBus";
@@ -903,4 +903,20 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.clearTree();
         }
     }
+}
+
+export async function hideTestThemeTreeView(): Promise<void> {
+    if (!treeViews) {
+        return;
+    }
+    await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, false);
+}
+
+export async function displayTestThemeTreeView(): Promise<void> {
+    if (!treeViews) {
+        return;
+    }
+    vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, true);
+    const filterService = FilterService.getInstance();
+    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_THEMES_TREE);
 }

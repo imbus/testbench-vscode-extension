@@ -1,13 +1,13 @@
 /**
- * @file src/treeViews/features/marking/MarkingModule.ts
+ * @file src/treeViews/features/MarkingModule.ts
  * @description Module for managing marking state of tree items.
  */
 
-import { TreeViewModule } from "../../core/TreeViewModule";
-import { TreeViewContext } from "../../core/TreeViewContext";
-import { TreeItemBase } from "../../core/TreeItemBase";
-import { MarkingState, MarkingInfo, MarkingHierarchy } from "../../state/StateTypes";
-import { TreeViewEventTypes } from "../../utils/EventBus";
+import { TreeViewModule } from "../core/TreeViewModule";
+import { TreeViewContext } from "../core/TreeViewContext";
+import { TreeItemBase } from "../core/TreeItemBase";
+import { MarkingState, MarkingInfo, MarkingHierarchy } from "../state/StateTypes";
+import { TreeViewEventTypes } from "../utils/EventBus";
 
 export class MarkingModule implements TreeViewModule {
     readonly id = "marking";

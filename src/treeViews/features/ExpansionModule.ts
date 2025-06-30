@@ -1,12 +1,12 @@
 /**
- * @file src/treeViews/features/expansion/ExpansionModule.ts
+ * @file src/treeViews/features/ExpansionModule.ts
  * @description Module for managing expansion state.
  */
 
-import { TreeViewModule } from "../../core/TreeViewModule";
-import { TreeViewContext } from "../../core/TreeViewContext";
-import { TreeItemBase } from "../../core/TreeItemBase";
-import { ExpansionState } from "../../state/StateTypes";
+import { TreeViewModule } from "../core/TreeViewModule";
+import { TreeViewContext } from "../core/TreeViewContext";
+import { TreeItemBase } from "../core/TreeItemBase";
+import { ExpansionState } from "../state/StateTypes";
 import * as vscode from "vscode";
 
 export class ExpansionModule implements TreeViewModule {

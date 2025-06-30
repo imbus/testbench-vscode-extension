@@ -302,3 +302,29 @@ export async function findConnectionByLabel(
         return undefined;
     }
 }
+
+/**
+ * Checks if the current connection matches the session and active connection.
+ * @param currentConnection - The current connection to check.
+ * @param session - The session to check.
+ * @param activeConnection - The active connection to check.
+ * @returns True if the current connection matches the session and active connection, false otherwise.
+ */
+export function isConnectionAlreadyActive(
+    currentConnection: {
+        getSessionToken(): string;
+        getUsername(): string;
+        getServerName(): string;
+        getServerPort(): string;
+    } | null,
+    session: { accessToken: string },
+    activeConnection: TestBenchConnection
+): boolean {
+    return !!(
+        currentConnection &&
+        currentConnection.getSessionToken() === session.accessToken &&
+        currentConnection.getUsername() === activeConnection.username &&
+        currentConnection.getServerName() === activeConnection.serverName &&
+        currentConnection.getServerPort() === activeConnection.portNumber.toString()
+    );
+}

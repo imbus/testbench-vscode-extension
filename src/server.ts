@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH, ContextKeys } from "./constants";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions, State } from "vscode-languageclient/node";
 import { connection, logger } from "./extension";
@@ -130,7 +130,7 @@ async function validateLsPrerequisites(
         return null;
     }
 
-    const tbConnectionDetails = validateTestBenchConnection(operationId, project, tov);
+    const tbConnectionDetails = await validateTestBenchConnection(operationId, project, tov);
     if (!tbConnectionDetails) {
         return null;
     }
@@ -181,11 +181,11 @@ async function validatePythonInterpreter(
  * @param tovName - The name of the TOV.
  * @returns The TestBench connection details if a connection is active, otherwise null.
  */
-function validateTestBenchConnection(
+async function validateTestBenchConnection(
     operationId: number,
     projectName: string,
     tovName: string
-): TbConnectionDetails | null {
+): Promise<TbConnectionDetails | null> {
     if (!connection) {
         logger.warn(
             `[validateLsPrerequisites - Op ${operationId}] No active TestBench connection. ` +
@@ -540,6 +540,7 @@ async function validateClientAfterStart(
         if (getLanguageClientInstance() === newClient) {
             setLanguageClientInstance(undefined);
         }
+
         return false;
     }
     return true;
@@ -628,8 +629,6 @@ async function startAndMonitorClient(
         if (!isStillCurrent) {
             return;
         }
-
-        await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, true);
 
         const currentGlobalClient = getLanguageClientInstance();
         if (currentGlobalClient === newClient) {
@@ -878,7 +877,6 @@ async function executeRestart(projectName: string, tovName: string): Promise<voi
             vscode.window.showErrorMessage(`Failed to restart Language Server for ${tovName}: ${errorMessage}`);
         }
     } finally {
-        // Always clear busy state and pending params when this operation completes
         if (isOperationCurrent(thisOperationId)) {
             isLanguageServerBusy = false;
             clearPendingRestart();
@@ -908,14 +906,13 @@ export async function restartLanguageClient(projectName: string, tovName: string
     // Debounce rapid successive calls
     scheduleDebouncedRestart(projectName, tovName);
 }
+
 /**
  * Updates or restarts the language server based on the current state.
  * @param projectName the name of the project to update or restart the language server for.
  * @param tovName the name of the TOV to update or restart the language server for.
  */
 export async function updateOrRestartLS(projectName: string | undefined, tovName: string | undefined): Promise<void> {
-    await vscode.commands.executeCommand("setContext", ContextKeys.LANGUAGE_SERVER_READY, false);
-
     if (!projectName || !tovName) {
         logger.error("[Cmd] updateOrRestartLS called with invalid project or TOV name.");
         vscode.window.showErrorMessage("Invalid project or TOV name provided for language server update.");
@@ -948,4 +945,67 @@ export async function updateOrRestartLS(projectName: string | undefined, tovName
             await restartLanguageClient(projectName, tovName);
         }
     }
+}
+
+/**
+ * Checks if the language server is running.
+ * The server is considered running when it exists and is in the Running state.
+ *
+ * @returns True if the language server is running, false otherwise.
+ */
+export function isLanguageServerRunning(): boolean {
+    return client !== undefined && client.state === State.Running;
+}
+
+/**
+ * Handles language server restart if session token changed.
+ * @param previousSessionToken - The previous session token.
+ * @param newSessionToken - The new session token.
+ */
+export async function handleLanguageServerRestartOnSessionChange(
+    previousSessionToken: string | undefined,
+    newSessionToken: string
+): Promise<void> {
+    if (previousSessionToken !== newSessionToken) {
+        logger.info(
+            "[Extension] Session token changed. Stopping language server to ensure it gets updated credentials."
+        );
+        try {
+            await stopLanguageClient();
+            logger.debug("[Extension] Language server stopped due to session token change.");
+        } catch (error) {
+            logger.warn("[Extension] Error stopping language server during session change:", error);
+        }
+    }
+}
+
+/**
+ * Waits for the language server to be ready, with a timeout.
+ * This function can be used by command handlers to ensure the language server
+ * is available before proceeding with operations that require it.
+ *
+ * @param timeoutMs Maximum time to wait in milliseconds (default: 30000ms)
+ * @param checkIntervalMs Interval between readiness checks in milliseconds (default: 100ms)
+ * @param cancellationToken Optional cancellation token to allow early termination
+ * @returns Promise that resolves when the language server is ready or rejects on timeout/cancellation
+ */
+export async function waitForLanguageServerReady(
+    timeoutMs: number = 30000,
+    checkIntervalMs: number = 100,
+    cancellationToken?: vscode.CancellationToken
+): Promise<void> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+        if (cancellationToken?.isCancellationRequested) {
+            throw new Error("Language server wait operation was cancelled");
+        }
+
+        if (isLanguageServerRunning()) {
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, checkIntervalMs));
+    }
+
+    throw new Error(`Language server did not become ready within ${timeoutMs}ms`);
 }

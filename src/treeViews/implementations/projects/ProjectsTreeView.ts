@@ -10,11 +10,12 @@ import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { ProjectsDataProvider } from "./ProjectsDataProvider";
 import { projectsConfig } from "./ProjectsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
-import { allExtensionCommands, ConfigKeys, ProjectItemTypes, TreeViewTiming } from "../../../constants";
+import { allExtensionCommands, ConfigKeys, ContextKeys, ProjectItemTypes, TreeViewTiming } from "../../../constants";
 import { TreeNode } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
+import { treeViews } from "../../../extension";
 
 export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     private dataProvider: ProjectsDataProvider;
@@ -749,4 +750,20 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         super.refresh(undefined, options);
         this.logger.debug("Projects tree view refresh initiated - will fetch fresh data from server");
     }
+}
+
+export async function hideProjectManagementTreeView(): Promise<void> {
+    if (!treeViews) {
+        return;
+    }
+    vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, false);
+}
+
+export async function displayProjectManagementTreeView(): Promise<void> {
+    if (!treeViews) {
+        return;
+    }
+    await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, true);
+    const filterService = FilterService.getInstance();
+    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_PROJECTS_TREE);
 }

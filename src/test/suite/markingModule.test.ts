@@ -4,7 +4,7 @@
  */
 
 import * as assert from "assert";
-import { MarkingModule } from "../../treeViews/features/marking/MarkingModule";
+import { MarkingModule } from "../../treeViews/features/MarkingModule";
 import { TreeViewContext } from "../../treeViews/core/TreeViewContext";
 import { TreeItemBase } from "../../treeViews/core/TreeItemBase";
 

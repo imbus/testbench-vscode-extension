@@ -15,10 +15,10 @@ import { StateManager } from "../state/StateManager";
 import { EventBus } from "../utils/EventBus";
 import { ErrorHandler } from "../utils/ErrorHandler";
 import { TestBenchLogger } from "../../testBenchLogger";
-import { CustomRootModule } from "../features/customRoot/CustomRootModule";
-import { FilteringModule } from "../features/filtering/FilteringModule";
+import { CustomRootModule } from "../features/CustomRootModule";
+import { FilteringModule } from "../features/FilteringModule";
 import { TreeViewTiming } from "../../constants";
-import { IconModule } from "../features/icons/IconModule";
+import { IconModule } from "../features/IconModule";
 
 export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.TreeDataProvider<T> {
     protected readonly _onDidChangeTreeData = new vscode.EventEmitter<T | undefined | null | void>();

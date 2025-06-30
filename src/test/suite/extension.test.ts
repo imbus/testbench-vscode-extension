@@ -16,7 +16,6 @@ import {
     safeCommandHandler,
     deactivate,
     clearAllExtensionData,
-    initializeTreeViews,
     ENABLE_ICON_MARKING_ON_TEST_GENERATION,
     ALLOW_PERSISTENT_IMPORT_BUTTON
 } from "../../extension";
@@ -257,12 +256,6 @@ suite("Extension Test Suite", function () {
         test("clearAllExtensionData should clear global state", async () => {});
 
         test("clearAllExtensionData should update context keys", async () => {});
-    });
-
-    suite("Tree View Management", () => {
-        test("should export initializeTreeViews function", () => {
-            assert.ok(typeof initializeTreeViews === "function", "initializeTreeViews should be exported");
-        });
     });
 
     suite("Constants and Configuration", () => {

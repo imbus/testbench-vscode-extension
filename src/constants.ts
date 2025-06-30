@@ -83,9 +83,7 @@ export const ContextKeys = {
     FILTER_DIFF_MODE_ENABLED: "testbenchExtension.filterDiffModeEnabled",
     FILTER_DIFF_MODE_ENABLED_PROJECTS: "testbenchExtension.filterDiffModeEnabledProjects",
     FILTER_DIFF_MODE_ENABLED_TEST_THEMES: "testbenchExtension.filterDiffModeEnabledTestThemes",
-    FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements",
-
-    LANGUAGE_SERVER_READY: "testbenchExtension.languageServerReady"
+    FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements"
 } as const;
 
 // --- Storage Keys ---
