@@ -1012,18 +1012,13 @@ async function loadDefaultTreeViewsUI(): Promise<void> {
 /**
  * Refreshes tree views and attempts to restore previous view state.
  * @param context - The extension context.
- * @param isNewConnection - Whether the connection is new.
  * @returns A promise that resolves when the tree views are refreshed and the previous view state is restored.
  */
-async function restoreTreViewsState(context: vscode.ExtensionContext, isNewConnection: boolean): Promise<void> {
-    if (!isNewConnection) {
-        return;
-    }
-
-    logger.debug("[Extension] New session established. Refreshing project data.");
+async function restoreTreeViewsState(context: vscode.ExtensionContext): Promise<void> {
+    logger.debug("[Extension] Restoring tree views state");
 
     if (!treeViews) {
-        logger.error("Tree views not initialized");
+        logger.error("Tree views not initialized, cannot restore view state.");
         return;
     }
 
@@ -1149,7 +1144,10 @@ async function handleTestBenchSessionChange(
             !wasPreviouslyConnected ||
             !!(connection && connection.getSessionToken() !== newConnection.getSessionToken());
 
-        await restoreTreViewsState(context, isNewConnection);
+        if (isNewConnection) {
+            logger.info("[Extension] New connection established. Restoring tree views state.");
+            await restoreTreeViewsState(context);
+        }
     } else {
         await handleNoSession();
     }
@@ -1180,11 +1178,9 @@ async function saveUIContext(
     await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, viewId);
 
     if (viewId === "projects") {
-        // Clear context if the main project view is active
         await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
         await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
     } else if (contextData) {
-        // Validate contextData before saving
         const hasValidProjectName = contextData.projectName && typeof contextData.projectName === "string";
         const hasValidTovName = contextData.tovName && typeof contextData.tovName === "string";
 
@@ -1194,13 +1190,11 @@ async function saveUIContext(
                     `projectName: ${contextData.projectName}, tovName: ${contextData.tovName}. ` +
                     `Clearing context state.`
             );
-            // Clear context state instead of saving invalid data
             await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
             await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
             return;
         }
 
-        // Differentiate between cycle and TOV context
         if (contextData.isCycle) {
             await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, contextData);
             await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
@@ -1460,33 +1454,32 @@ export async function clearAllExtensionData(
             try {
                 treeViews.clear();
 
-                // Clear persistence modules directly to ensure all tree view state is cleared
                 if (treeViews.projectsTree) {
                     const projectsPersistence = (treeViews.projectsTree as any).modules?.get("persistence");
                     if (projectsPersistence?.clear) {
                         await projectsPersistence.clear();
                     }
-                    // Clear expansion module state
+
                     const projectsExpansion = (treeViews.projectsTree as any).modules?.get("expansion");
                     if (projectsExpansion?.reset) {
                         projectsExpansion.reset();
                     }
-                    // Clear marking module state
+
                     const projectsMarking = (treeViews.projectsTree as any).modules?.get("marking");
                     if (projectsMarking?.clearAllMarkings) {
                         projectsMarking.clearAllMarkings(false); // Don't emit global event during clear all
                     }
-                    // Clear filtering module state
+
                     const projectsFiltering = (treeViews.projectsTree as any).modules?.get("filtering");
                     if (projectsFiltering?.clearAllFilters) {
                         projectsFiltering.clearAllFilters();
                     }
-                    // Clear customRoot module state
+
                     const projectsCustomRoot = (treeViews.projectsTree as any).modules?.get("customRoot");
                     if (projectsCustomRoot?.reset) {
                         projectsCustomRoot.reset();
                     }
-                    // Clear state manager expansion state (normally preserved by clear())
+
                     const projectsStateManager = (treeViews.projectsTree as any).stateManager;
                     if (projectsStateManager?.setState) {
                         projectsStateManager.setState({
@@ -1502,27 +1495,27 @@ export async function clearAllExtensionData(
                     if (testThemesPersistence?.clear) {
                         await testThemesPersistence.clear();
                     }
-                    // Clear expansion module state
+
                     const testThemesExpansion = (treeViews.testThemesTree as any).modules?.get("expansion");
                     if (testThemesExpansion?.reset) {
                         testThemesExpansion.reset();
                     }
-                    // Clear marking module state
+
                     const testThemesMarking = (treeViews.testThemesTree as any).modules?.get("marking");
                     if (testThemesMarking?.clearAllMarkings) {
                         testThemesMarking.clearAllMarkings(false); // Don't emit global event during clear all
                     }
-                    // Clear filtering module state
+
                     const testThemesFiltering = (treeViews.testThemesTree as any).modules?.get("filtering");
                     if (testThemesFiltering?.clearAllFilters) {
                         testThemesFiltering.clearAllFilters();
                     }
-                    // Clear customRoot module state
+
                     const testThemesCustomRoot = (treeViews.testThemesTree as any).modules?.get("customRoot");
                     if (testThemesCustomRoot?.reset) {
                         testThemesCustomRoot.reset();
                     }
-                    // Clear state manager expansion state (normally preserved by clear())
+
                     const testThemesStateManager = (treeViews.testThemesTree as any).stateManager;
                     if (testThemesStateManager?.setState) {
                         testThemesStateManager.setState({
@@ -1538,27 +1531,27 @@ export async function clearAllExtensionData(
                     if (testElementsPersistence?.clear) {
                         await testElementsPersistence.clear();
                     }
-                    // Clear expansion module state
+
                     const testElementsExpansion = (treeViews.testElementsTree as any).modules?.get("expansion");
                     if (testElementsExpansion?.reset) {
                         testElementsExpansion.reset();
                     }
-                    // Clear marking module state
+
                     const testElementsMarking = (treeViews.testElementsTree as any).modules?.get("marking");
                     if (testElementsMarking?.clearAllMarkings) {
                         testElementsMarking.clearAllMarkings(false); // Don't emit global event during clear all
                     }
-                    // Clear filtering module state
+
                     const testElementsFiltering = (treeViews.testElementsTree as any).modules?.get("filtering");
                     if (testElementsFiltering?.clearAllFilters) {
                         testElementsFiltering.clearAllFilters();
                     }
-                    // Clear customRoot module state
+
                     const testElementsCustomRoot = (treeViews.testElementsTree as any).modules?.get("customRoot");
                     if (testElementsCustomRoot?.reset) {
                         testElementsCustomRoot.reset();
                     }
-                    // Clear state manager expansion state (normally preserved by clear())
+
                     const testElementsStateManager = (treeViews.testElementsTree as any).stateManager;
                     if (testElementsStateManager?.setState) {
                         testElementsStateManager.setState({
@@ -1570,7 +1563,6 @@ export async function clearAllExtensionData(
                     }
                 }
 
-                // Force refresh all tree views to ensure expansion states are cleared
                 if (treeViews.projectsTree) {
                     treeViews.projectsTree.refresh();
                 }
