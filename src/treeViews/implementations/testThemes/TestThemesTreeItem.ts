@@ -337,10 +337,4 @@ export class TestThemesTreeItem extends TreeItemBase {
         }
         return { projectName, tovName };
     }
-
-    public getLanguageServerParametersForTestThemesTreeItem(
-        treeItem: TestThemesTreeItem
-    ): { projectName: string; tovName: string } | undefined {
-        return treeItem.getLanguageServerParameters();
-    }
 }

@@ -254,10 +254,4 @@ export class ProjectsTreeItem extends TreeItemBase {
             return undefined;
         }
     }
-
-    public getLanguageServerParametersForProjectsTreeItem(
-        treeItem: ProjectsTreeItem
-    ): { projectName: string; tovName: string } | undefined {
-        return treeItem.getLanguageServerParameters();
-    }
 }

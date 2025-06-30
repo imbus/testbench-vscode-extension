@@ -525,4 +525,164 @@ suite("ProjectsTreeItem", function () {
             assert.strictEqual(clonedChild.data.key, child.data.key);
         });
     });
+
+    suite("Language Server Parameter Extraction", () => {
+        test("should return project name and empty TOV for project items", () => {
+            const projectData: ProjectData = {
+                key: "PROJ-001",
+                name: "Test Project",
+                type: "project"
+            };
+
+            const item = new ProjectsTreeItem(projectData, mockContext);
+            const params = item.getLanguageServerParameters();
+
+            assert.deepStrictEqual(params, {
+                projectName: "Test Project",
+                tovName: ""
+            });
+        });
+
+        test("should return project and TOV names for version items with proper hierarchy", () => {
+            const projectData: ProjectData = {
+                key: "PROJ-001",
+                name: "Test Project",
+                type: "project"
+            };
+            const versionData: ProjectData = {
+                key: "VERSION-001",
+                name: "Test Version",
+                type: "version",
+                parentKey: "PROJ-001"
+            };
+
+            const project = new ProjectsTreeItem(projectData, mockContext);
+            const version = new ProjectsTreeItem(versionData, mockContext, project);
+
+            const params = version.getLanguageServerParameters();
+
+            assert.deepStrictEqual(params, {
+                projectName: "Test Project",
+                tovName: "Test Version"
+            });
+        });
+
+        test("should return undefined for version items without parent", () => {
+            const versionData: ProjectData = {
+                key: "VERSION-001",
+                name: "Test Version",
+                type: "version"
+            };
+
+            const item = new ProjectsTreeItem(versionData, mockContext);
+            const params = item.getLanguageServerParameters();
+
+            assert.strictEqual(params, undefined);
+        });
+
+        test("should return project and TOV names for cycle items with proper hierarchy", () => {
+            const projectData: ProjectData = {
+                key: "PROJ-001",
+                name: "Test Project",
+                type: "project"
+            };
+            const versionData: ProjectData = {
+                key: "VERSION-001",
+                name: "Test Version",
+                type: "version",
+                parentKey: "PROJ-001"
+            };
+            const cycleData: ProjectData = {
+                key: "CYCLE-001",
+                name: "Test Cycle",
+                type: "cycle",
+                parentKey: "VERSION-001"
+            };
+
+            const project = new ProjectsTreeItem(projectData, mockContext);
+            const version = new ProjectsTreeItem(versionData, mockContext, project);
+            const cycle = new ProjectsTreeItem(cycleData, mockContext, version);
+
+            const params = cycle.getLanguageServerParameters();
+
+            assert.deepStrictEqual(params, {
+                projectName: "Test Project",
+                tovName: "Test Version"
+            });
+        });
+
+        test("should return undefined for cycle items without proper parent hierarchy", () => {
+            const cycleData: ProjectData = {
+                key: "CYCLE-001",
+                name: "Test Cycle",
+                type: "cycle"
+            };
+
+            const item = new ProjectsTreeItem(cycleData, mockContext);
+            const params = item.getLanguageServerParameters();
+
+            assert.strictEqual(params, undefined);
+        });
+
+        test("should return undefined for cycle items with only one parent level", () => {
+            const versionData: ProjectData = {
+                key: "VERSION-001",
+                name: "Test Version",
+                type: "version"
+            };
+            const cycleData: ProjectData = {
+                key: "CYCLE-001",
+                name: "Test Cycle",
+                type: "cycle",
+                parentKey: "VERSION-001"
+            };
+
+            const version = new ProjectsTreeItem(versionData, mockContext);
+            const cycle = new ProjectsTreeItem(cycleData, mockContext, version);
+
+            const params = cycle.getLanguageServerParameters();
+
+            assert.strictEqual(params, undefined);
+        });
+
+        test("should return undefined for unknown item types", () => {
+            const unknownData: ProjectData = {
+                key: "UNKNOWN-001",
+                name: "Unknown Item",
+                type: "project"
+            };
+
+            const item = new ProjectsTreeItem(unknownData, mockContext);
+            (item as any).data.type = "unknown";
+
+            const params = item.getLanguageServerParameters();
+
+            assert.strictEqual(params, undefined);
+        });
+
+        test("should handle missing labels gracefully", () => {
+            const projectData: ProjectData = {
+                key: "PROJ-001",
+                name: "Test Project",
+                type: "project"
+            };
+            const versionData: ProjectData = {
+                key: "VERSION-001",
+                name: "Test Version",
+                type: "version",
+                parentKey: "PROJ-001"
+            };
+
+            const project = new ProjectsTreeItem(projectData, mockContext);
+            const version = new ProjectsTreeItem(versionData, mockContext, project);
+
+            // Simulating missing labels
+            (project as any).label = undefined;
+            (version as any).label = undefined;
+
+            const params = version.getLanguageServerParameters();
+
+            assert.strictEqual(params, undefined);
+        });
+    });
 });
