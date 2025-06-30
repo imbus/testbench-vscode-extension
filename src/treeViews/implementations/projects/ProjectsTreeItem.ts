@@ -228,4 +228,36 @@ export class ProjectsTreeItem extends TreeItemBase {
 
         this.contextValue = contextValue;
     }
+
+    /**
+     * Gets the language server parameters (project and TOV names) for this tree item
+     * @returns The project and TOV names, or undefined if they cannot be determined
+     */
+    public getLanguageServerParameters(): { projectName: string; tovName: string } | undefined {
+        if (this.data.type === "project") {
+            return { projectName: this.data.name, tovName: "" };
+        } else if (this.data.type === "version") {
+            const projectName = this.parent?.label?.toString();
+            const tovName = this.label?.toString();
+            if (!projectName || !tovName) {
+                return undefined;
+            }
+            return { projectName, tovName };
+        } else if (this.data.type === "cycle") {
+            const projectName = this.parent?.parent?.label?.toString();
+            const tovName = this.parent?.label?.toString();
+            if (!projectName || !tovName) {
+                return undefined;
+            }
+            return { projectName, tovName };
+        } else {
+            return undefined;
+        }
+    }
+
+    public getLanguageServerParametersForProjectsTreeItem(
+        treeItem: ProjectsTreeItem
+    ): { projectName: string; tovName: string } | undefined {
+        return treeItem.getLanguageServerParameters();
+    }
 }

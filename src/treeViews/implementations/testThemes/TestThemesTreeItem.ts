@@ -324,4 +324,23 @@ export class TestThemesTreeItem extends TreeItemBase {
     protected async fetchRootItems(): Promise<TestThemesTreeItem[]> {
         return this.rootItems || [];
     }
+
+    /**
+     * Gets the language server parameters (project and TOV names) for this tree item
+     * @returns The project and TOV names, or undefined if they cannot be determined
+     */
+    public getLanguageServerParameters(): { projectName: string; tovName: string } | undefined {
+        const projectName = this.parent?.parent?.label?.toString();
+        const tovName = this.parent?.label?.toString();
+        if (!projectName || !tovName) {
+            return undefined;
+        }
+        return { projectName, tovName };
+    }
+
+    public getLanguageServerParametersForTestThemesTreeItem(
+        treeItem: TestThemesTreeItem
+    ): { projectName: string; tovName: string } | undefined {
+        return treeItem.getLanguageServerParameters();
+    }
 }

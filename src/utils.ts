@@ -208,44 +208,51 @@ export async function clearInternalTestbenchFolder(
             }
         }
 
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: `Clearing ${folderNameOfInternalTestbenchFolder}`,
-                cancellable: true
-            },
-            async (progress) => {
-                const files: string[] = await fsPromises.readdir(workspaceLocationToClear);
-                const totalFiles: number = files.length;
-                let processedFiles: number = 0;
+        const clearFolderOperation = async (progress?: vscode.Progress<{ increment?: number; message?: string }>) => {
+            const files: string[] = await fsPromises.readdir(workspaceLocationToClear);
+            const totalFiles: number = files.length;
+            let processedFiles: number = 0;
 
-                for (const file of files) {
-                    processedFiles++;
-                    const increment: number = (1 / totalFiles) * 100;
-                    progress.report({
-                        increment,
-                        message: `Processing ${file}... (${processedFiles}/${totalFiles})`
-                    });
+            for (const file of files) {
+                processedFiles++;
+                const increment: number = (1 / totalFiles) * 100;
+                progress?.report({
+                    increment,
+                    message: `Processing ${file}... (${processedFiles}/${totalFiles})`
+                });
 
-                    const filePath: string = path.join(workspaceLocationToClear, file);
+                const filePath: string = path.join(workspaceLocationToClear, file);
 
-                    if (excludedFoldersFromDeletion.includes(file)) {
-                        logger.trace(`Skipped deleting excluded item: "${file}"`);
-                        continue;
-                    }
+                if (excludedFoldersFromDeletion.includes(file)) {
+                    logger.trace(`Skipped deleting excluded item: "${file}"`);
+                    continue;
+                }
 
-                    const fileStats: fs.Stats = await fsPromises.stat(filePath);
-                    if (fileStats.isDirectory()) {
-                        await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
-                    } else {
-                        await fsPromises.unlink(filePath);
-                    }
+                const fileStats: fs.Stats = await fsPromises.stat(filePath);
+                if (fileStats.isDirectory()) {
+                    await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
+                } else {
+                    await fsPromises.unlink(filePath);
                 }
             }
-        );
+        };
+
+        const useProgressBarWhileClearing = false;
+        if (useProgressBarWhileClearing) {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Clearing ${folderNameOfInternalTestbenchFolder}`,
+                    cancellable: true
+                },
+                clearFolderOperation
+            );
+        } else {
+            await clearFolderOperation();
+        }
 
         logger.debug(`Internal testbench folder cleared successfully: "${workspaceLocationToClear}"`);
-        vscode.window.showInformationMessage(`${folderNameOfInternalTestbenchFolder} folder cleared successfully.`);
+        // vscode.window.showInformationMessage(`${folderNameOfInternalTestbenchFolder} folder cleared successfully.`);
     } catch (error: any) {
         const errorMsg: string = `An error occurred while clearing the workspace folder: ${error.message}`;
         vscode.window.showErrorMessage(errorMsg);
