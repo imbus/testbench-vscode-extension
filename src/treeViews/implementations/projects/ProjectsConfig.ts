@@ -87,7 +87,7 @@ export const projectsConfig: TreeViewConfig = {
     },
 
     ui: {
-        emptyMessage: "No projects available. Please connect to TestBench.",
+        emptyMessage: "No projects available.",
         loadingMessage: "Loading projects...",
         errorMessage: "Failed to load projects",
         showTooltips: true,

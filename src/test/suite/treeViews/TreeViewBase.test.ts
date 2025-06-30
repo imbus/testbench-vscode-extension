@@ -771,4 +771,130 @@ suite("TreeViewBase", function () {
             }
         });
     });
+
+    suite("TreeView Message Handling", () => {
+        test("should set loading message when loading", async () => {
+            await treeView.initialize();
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            treeView.setIsLoading(true);
+            treeView.getProtectedStateManager().setLoading(true);
+
+            (treeView as any).updateTreeViewMessage();
+
+            assert.strictEqual(mockVSCodeTreeView.message, config.ui.loadingMessage);
+        });
+
+        test("should set error message when error occurs", async () => {
+            await treeView.initialize();
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            treeView.getProtectedStateManager().setError(new Error("Test error"));
+
+            (treeView as any).updateTreeViewMessage();
+
+            assert.strictEqual(mockVSCodeTreeView.message, config.ui.errorMessage);
+        });
+
+        test("should set empty message when no items and not intentionally cleared", async () => {
+            await treeView.initialize();
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            treeView.setRootItems([]);
+            treeView.setIntentionallyCleared(false);
+
+            (treeView as any).updateTreeViewMessage();
+
+            assert.strictEqual(mockVSCodeTreeView.message, config.ui.emptyMessage);
+        });
+
+        test("should clear message when items are present", async () => {
+            await treeView.initialize();
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            const mockItem = new TestTreeItem(
+                "Test",
+                "Description",
+                "test",
+                vscode.TreeItemCollapsibleState.None,
+                mockContext
+            );
+            treeView.setRootItems([mockItem]);
+
+            (treeView as any).updateTreeViewMessage();
+
+            assert.strictEqual(mockVSCodeTreeView.message, undefined);
+        });
+
+        test("should not set empty message when intentionally cleared", async () => {
+            await treeView.initialize();
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            treeView.setRootItems([]);
+            treeView.setIntentionallyCleared(true);
+
+            (treeView as any).updateTreeViewMessage();
+
+            assert.strictEqual(mockVSCodeTreeView.message, undefined);
+        });
+
+        test("should update message when tree view is set", async () => {
+            await treeView.initialize();
+
+            treeView.setRootItems([]);
+            treeView.setIntentionallyCleared(false);
+
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            assert.strictEqual(mockVSCodeTreeView.message, config.ui.emptyMessage);
+        });
+
+        test("should update message when configuration changes", async () => {
+            await treeView.initialize();
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            treeView.setRootItems([]);
+            treeView.setIntentionallyCleared(false);
+
+            const newConfig = {
+                ui: {
+                    ...config.ui,
+                    emptyMessage: "New empty message",
+                    loadingMessage: "New loading message",
+                    errorMessage: "New error message"
+                }
+            };
+
+            await treeView.updateConfig(newConfig);
+
+            assert.strictEqual(mockVSCodeTreeView.message, "New empty message");
+        });
+
+        test("should prioritize loading over empty state", async () => {
+            await treeView.initialize();
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            treeView.setIsLoading(true);
+            treeView.getProtectedStateManager().setLoading(true);
+            treeView.setRootItems([]);
+            treeView.setIntentionallyCleared(false);
+
+            (treeView as any).updateTreeViewMessage();
+
+            assert.strictEqual(mockVSCodeTreeView.message, config.ui.loadingMessage);
+        });
+
+        test("should prioritize error over loading state", async () => {
+            await treeView.initialize();
+            treeView.setTreeView(mockVSCodeTreeView);
+
+            treeView.getProtectedStateManager().setError(new Error("Test error"));
+            treeView.setIsLoading(true);
+            treeView.getProtectedStateManager().setLoading(true);
+
+            (treeView as any).updateTreeViewMessage();
+
+            assert.strictEqual(mockVSCodeTreeView.message, config.ui.errorMessage);
+        });
+    });
 });
