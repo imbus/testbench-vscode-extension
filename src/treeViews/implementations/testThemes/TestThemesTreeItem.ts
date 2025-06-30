@@ -5,7 +5,7 @@
 
 import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
-import { logger } from "../../../extension";
+import { logger, treeViews } from "../../../extension";
 import { TestThemeItemTypes } from "../../../constants";
 import { MarkingInfo } from "../../state/StateTypes";
 
@@ -330,11 +330,79 @@ export class TestThemesTreeItem extends TreeItemBase {
      * @returns The project and TOV names, or undefined if they cannot be determined
      */
     public getLanguageServerParameters(): { projectName: string; tovName: string } | undefined {
-        const projectName = this.parent?.parent?.label?.toString();
-        const tovName = this.parent?.label?.toString();
-        if (!projectName || !tovName) {
+        // Try to get project and TOV names from parent hierarchy first
+        const projectName = this.getProjectNameFromHierarchy();
+        const tovName = this.getTovNameFromHierarchy();
+
+        if (projectName && tovName) {
+            return { projectName, tovName };
+        }
+
+        if (!treeViews) {
+            this.logger.error("Tree views are not initialized, cannot get language server parameters.");
             return undefined;
         }
-        return { projectName, tovName };
+
+        const globalProjectName = treeViews.testThemesTree.getCurrentProjectName();
+        const globalTovName = treeViews.testThemesTree.getCurrentTovName();
+        if (!globalProjectName || !globalTovName) {
+            return undefined;
+        }
+        return { projectName: globalProjectName, tovName: globalTovName };
+    }
+
+    /**
+     * Gets the project name by traversing up the parent hierarchy
+     * @returns The project name or undefined if not found
+     */
+    private getProjectNameFromHierarchy(): string | undefined {
+        let currentParent = this.parent;
+
+        while (currentParent) {
+            if (currentParent instanceof TestThemesTreeItem) {
+                const parentData = currentParent.data;
+                if (parentData.elementType === "ProjectNode") {
+                    return parentData.base.name || this.getLabelAsString(currentParent.label);
+                }
+            }
+            currentParent = currentParent.parent;
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Gets the TOV name by traversing up the parent hierarchy
+     * @returns The TOV name or undefined if not found
+     */
+    private getTovNameFromHierarchy(): string | undefined {
+        let currentParent = this.parent;
+
+        while (currentParent) {
+            if (currentParent instanceof TestThemesTreeItem) {
+                const parentData = currentParent.data;
+                if (parentData.elementType === "TOVNode") {
+                    return parentData.base.name || this.getLabelAsString(currentParent.label);
+                }
+            }
+            currentParent = currentParent.parent;
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Converts a TreeItemLabel to a string
+     * @param label The label to convert
+     * @returns The string representation of the label
+     */
+    private getLabelAsString(label: string | vscode.TreeItemLabel | undefined): string | undefined {
+        if (typeof label === "string") {
+            return label;
+        }
+        if (label && typeof label === "object" && "label" in label) {
+            return label.label;
+        }
+        return undefined;
     }
 }

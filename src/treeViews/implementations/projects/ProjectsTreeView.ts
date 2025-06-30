@@ -284,17 +284,14 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             const tovLabel = item.label as string;
 
             if (tovKey) {
-                // Get project and version names for language server
                 const projectName = item.parent?.label?.toString();
                 const tovName = item.label?.toString();
 
-                // Validate projectName and tovName before calling updateOrRestartLS
                 if (!projectName || !tovName) {
                     const errorMessage = `Cannot update language server: invalid project or TOV name. Project: ${projectName}, TOV: ${tovName}`;
                     vscode.window.showErrorMessage(errorMessage);
                     this.logger.error(errorMessage);
                 } else {
-                    // Update or restart language server
                     await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
                 }
 
@@ -312,23 +309,19 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                 });
             }
         } else if (item.data.type === "cycle") {
-            // Handle cycle selection
             const cycleKey = item.getCycleKey();
             const projectKey = item.getProjectKey();
             const cycleLabel = item.label as string;
 
             if (cycleKey && projectKey) {
-                // Get project and version names for language server
                 const projectName = item.parent?.parent?.label?.toString();
                 const tovName = item.parent?.label?.toString();
 
-                // Validate projectName and tovName before calling updateOrRestartLS
                 if (!projectName || !tovName) {
                     const errorMessage = `Cannot update language server: invalid project or TOV name. Project: ${projectName}, TOV: ${tovName}`;
                     vscode.window.showErrorMessage(errorMessage);
                     this.logger.error(errorMessage);
                 } else {
-                    // Update or restart language server
                     await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
                 }
 
@@ -338,7 +331,9 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                     data: {
                         projectKey,
                         cycleKey,
-                        cycleLabel
+                        cycleLabel,
+                        projectName,
+                        tovName
                     },
                     timestamp: Date.now()
                 });

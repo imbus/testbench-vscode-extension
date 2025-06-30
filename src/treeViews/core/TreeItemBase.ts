@@ -371,7 +371,7 @@ export abstract class TreeItemBase extends vscode.TreeItem implements LanguageSe
      * @returns The project and TOV names, or undefined if they cannot be determined
      */
     getLanguageServerParameters?(): { projectName: string; tovName: string } | undefined {
-        // Implementation of getLanguageServerParameters method
+        // Will be overriden by subclasses if applicable
         return undefined;
     }
 }

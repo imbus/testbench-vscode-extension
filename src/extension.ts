@@ -256,10 +256,17 @@ async function performDeferredViewRestoration(
             await treeViews.testThemesTree.loadCycle(
                 savedContext.projectKey,
                 savedContext.cycleKey,
+                savedContext.projectName,
+                savedContext.tovName,
                 savedContext.cycleLabel
             );
         } else {
-            await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
+            await treeViews.testThemesTree.loadTov(
+                savedContext.projectKey,
+                savedContext.tovKey,
+                savedContext.projectName,
+                savedContext.tovName
+            );
         }
 
         await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
@@ -375,7 +382,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 });
                 await updateOrRestartLS(projectName, tovName);
                 if (treeViews?.testThemesTree) {
-                    await treeViews.testThemesTree.loadCycle(projectKey, cycleKey, cycleItem.label?.toString());
+                    await treeViews.testThemesTree.loadCycle(
+                        projectKey,
+                        cycleKey,
+                        projectName,
+                        tovName,
+                        cycleItem.label?.toString()
+                    );
                 }
                 if (treeViews?.testElementsTree) {
                     logger.debug(`Loading test elements for TOV ${versionKey} (from cycle ${cycleKey})`);
@@ -434,7 +447,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
             await updateOrRestartLS(projectName, tovName);
-            await treeViews.testThemesTree.loadTov(projectKey, tovKey);
+            await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString());
             }
@@ -463,7 +476,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
             await updateOrRestartLS(projectName, tovName);
-            await treeViews.testThemesTree.loadCycle(projectKey, cycleKey, cycleItem.label?.toString());
+            await treeViews.testThemesTree.loadCycle(
+                projectKey,
+                cycleKey,
+                projectName,
+                tovName,
+                cycleItem.label?.toString()
+            );
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString());
             }

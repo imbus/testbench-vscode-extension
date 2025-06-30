@@ -278,13 +278,17 @@ export class TreeViewFactory {
         if (treeType === "projects") {
             // Handle project tree selections
             if (item.data?.type === "cycle") {
+                const projectName = item.parent?.parent?.label?.toString();
+                const tovName = item.parent?.label?.toString();
                 treeView.eventBus.emit({
                     type: "cycle:selected",
                     source: treeView.config.id,
                     data: {
                         projectKey: item.getProjectKey(),
                         cycleKey: item.data.key,
-                        cycleLabel: item.label
+                        cycleLabel: item.label,
+                        projectName: projectName,
+                        tovName: tovName
                     },
                     timestamp: Date.now()
                 });
@@ -330,10 +334,14 @@ export class TreeViewFactory {
 
         // Projects to Test Themes: When cycle is selected
         const cycleSelectionDisposable = projectsTree.eventBus.on("cycle:selected", async (event) => {
-            const { projectKey, cycleKey, cycleLabel } = event.data;
+            const { projectKey, cycleKey, cycleLabel, projectName, tovName } = event.data;
             this.logger.debug(`Cycle selected: ${cycleLabel} (${cycleKey})`);
 
-            await testThemesTree.loadCycle(projectKey, cycleKey, cycleLabel);
+            if (projectName && tovName) {
+                await testThemesTree.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
+            } else {
+                this.logger.error("Missing project or TOV name for cycle selection event.");
+            }
         });
 
         // Projects to Test Elements: When version is selected

@@ -25,10 +25,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private filterService: FilterService;
 
     private currentProjectKey: string | null = null;
+    private currentProjectName: string | null = null;
+    private currentTovKey: string | null = null;
+    private currentTovName: string | null = null;
+    private isOpenedFromCycle = false;
     private currentCycleKey: string | null = null;
     private currentCycleLabel: string | null = null;
-    private currentTovKey: string | null = null;
-    private isOpenedFromCycle = false;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -79,13 +81,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     private registerEventHandlers(): void {
         this.eventBus.on("cycle:selected", async (event) => {
-            const { projectKey, cycleKey, cycleLabel } = event.data;
-            await this.loadCycle(projectKey, cycleKey, cycleLabel);
+            const { projectKey, cycleKey, projectName, tovName, cycleLabel } = event.data;
+            await this.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
         });
-
-        this.eventBus.on("tov:selected", async (event) => {
-            const { projectKey, tovKey } = event.data;
-            await this.loadTov(projectKey, tovKey);
+        this.eventBus.on("version:selected", async (event) => {
+            const { projectKey, tovKey, projectName, tovName } = event.data;
+            await this.loadTov(projectKey, tovKey, projectName, tovName);
         });
 
         this.eventBus.on("connection:changed", async (event) => {
@@ -312,6 +313,22 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
+     * Gets the current project name
+     * @return The current project name or null if not set
+     */
+    public getCurrentProjectName(): string | null {
+        return this.currentProjectName;
+    }
+
+    /**
+     * Gets the current TOV name
+     * @return The current TOV name or null if not set
+     */
+    public getCurrentTovName(): string | null {
+        return this.currentTovName;
+    }
+
+    /**
      * Updates the marking module configuration based on the opening context
      * Import button should only be visible when opened from a cycle, not from a TOV
      * @param isOpenedFromCycle Whether the tree view was opened from a cycle
@@ -334,10 +351,18 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Loads a cycle and builds the test themes tree
      * @param projectKey The project key
      * @param cycleKey The cycle key
+     * @param projectName The project name
+     * @param tovName The TOV name
      * @param cycleLabel Optional cycle label for display
      * @return Promise that resolves when loading is complete
      */
-    public async loadCycle(projectKey: string, cycleKey: string, cycleLabel?: string): Promise<void> {
+    public async loadCycle(
+        projectKey: string,
+        cycleKey: string,
+        projectName: string,
+        tovName: string,
+        cycleLabel?: string
+    ): Promise<void> {
         try {
             this.logger.debug(`Loading cycle ${cycleKey} for project ${projectKey}`);
 
@@ -347,6 +372,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.currentProjectKey = projectKey;
             this.currentCycleKey = cycleKey;
             this.currentCycleLabel = cycleLabel || null;
+
+            this.currentProjectName = projectName;
+            this.currentTovName = tovName;
             this.isOpenedFromCycle = true;
 
             // Update marking module configuration to enable import button
@@ -394,7 +422,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
     }
 
-    public async loadTov(projectKey: string, tovKey: string): Promise<void> {
+    public async loadTov(projectKey: string, tovKey: string, projectName: string, tovName: string): Promise<void> {
         try {
             this.logger.debug(`Loading TOV ${tovKey} for project ${projectKey}`);
 
@@ -403,24 +431,24 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // Set new state
             this.currentProjectKey = projectKey;
             this.currentTovKey = tovKey;
+            this.currentProjectName = projectName;
+            this.currentTovName = tovName;
             this.isOpenedFromCycle = false;
 
-            // Update marking module configuration to disable import button
             this.updateMarkingModuleConfiguration(false);
 
-            // Get TOV name from the data provider or use TOV key as fallback
-            let tovName = `TOV: ${tovKey}`;
+            let testThemesViewTitleWithTovName = `TOV: ${tovKey}`;
             try {
                 const connection = this.getConnection();
                 if (connection) {
-                    tovName = `TOV: ${tovKey}`;
+                    testThemesViewTitleWithTovName = `TOV: ${tovKey}`;
                 }
             } catch {
                 this.logger.warn(`Could not get TOV name for ${tovKey}, using key as fallback`);
             }
 
             // Update title to include TOV name
-            this.updateTitle(`${this.config.title} (${tovName})`);
+            this.updateTitle(`${this.config.title} (${testThemesViewTitleWithTovName})`);
 
             await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
 
@@ -871,16 +899,21 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     public override refresh(item?: TestThemesTreeItem, options?: { immediate?: boolean }): void {
         this.logger.debug(`Refreshing test themes tree view${item ? ` for item: ${item.label}` : ""}`);
-
         if (item) {
             super.refresh(item, options);
             return;
         }
 
-        if (this.currentProjectKey) {
+        if (this.currentProjectKey && this.currentProjectName && this.currentTovName) {
             if (this.currentCycleKey && this.isOpenedFromCycle) {
                 this.dataProvider.invalidateCache(this.currentProjectKey, this.currentCycleKey, false);
-                this.loadCycle(this.currentProjectKey, this.currentCycleKey, this.currentCycleLabel || undefined)
+                this.loadCycle(
+                    this.currentProjectKey,
+                    this.currentCycleKey,
+                    this.currentProjectName,
+                    this.currentTovName,
+                    this.currentCycleLabel || undefined
+                )
                     .then(() => {
                         this.logger.debug("Successfully refreshed test themes tree from cycle context");
                     })
@@ -889,7 +922,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     });
             } else if (this.currentTovKey) {
                 this.dataProvider.invalidateCache(this.currentProjectKey, this.currentTovKey, true);
-                this.loadTov(this.currentProjectKey, this.currentTovKey)
+                this.loadTov(this.currentProjectKey, this.currentTovKey, this.currentProjectName, this.currentTovName)
                     .then(() => {
                         this.logger.debug("Successfully refreshed test themes tree from TOV context");
                     })
