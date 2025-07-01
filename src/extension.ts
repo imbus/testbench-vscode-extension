@@ -249,9 +249,6 @@ async function performDeferredViewRestoration(
 
     try {
         logger.debug(`Performing deferred view restoration for: ${savedViewId}`);
-
-        await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
-
         if (savedContext.isCycle) {
             await treeViews.testThemesTree.loadCycle(
                 savedContext.projectKey,
@@ -1073,6 +1070,14 @@ async function restoreTreeViewsState(context: vscode.ExtensionContext): Promise<
         );
 
         let viewRestored = false;
+
+        if (savedContext && isValidSavedContext(savedContext)) {
+            logger.info(
+                `Found last-active context for ${savedContext.projectName}/${savedContext.tovName}. Initializing language server.`
+            );
+            await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
+        }
+
         if (savedViewId && savedViewId !== "projects" && savedContext) {
             if (!isValidSavedContext(savedContext)) {
                 logger.warn(
@@ -1214,10 +1219,7 @@ async function saveUIContext(
 ) {
     await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, viewId);
 
-    if (viewId === "projects") {
-        await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-        await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
-    } else if (contextData) {
+    if (contextData) {
         const hasValidProjectName = contextData.projectName && typeof contextData.projectName === "string";
         const hasValidTovName = contextData.tovName && typeof contextData.tovName === "string";
 
