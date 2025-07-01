@@ -530,18 +530,31 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
 
         this._disposed = true;
         this.logger.debug("Disposing tree view");
-        for (const module of this.modules.values()) {
+
+        // Dispose other modules first
+        for (const [id, module] of this.modules.entries()) {
+            if (id !== "persistence") {
+                try {
+                    await module.dispose();
+                } catch (error) {
+                    this.logger.error(`Error disposing module ${id}:`, error);
+                }
+            }
+        }
+
+        // Dispose persistence module last
+        const persistenceModule = this.modules.get("persistence");
+        if (persistenceModule) {
             try {
-                await module.dispose();
+                await persistenceModule.dispose();
             } catch (error) {
-                this.logger.error(`Error disposing module ${module.id}:`, error);
+                this.logger.error(`Error disposing module persistence:`, error);
             }
         }
 
         this._onDidChangeTreeData.dispose();
         this.eventBus.dispose();
         this.stateManager.dispose();
-
         this.rootItems = [];
         this.modules.clear();
     }

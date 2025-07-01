@@ -18,6 +18,7 @@ import { MarkingModule } from "../../features/MarkingModule";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
 import { TreeViewEventTypes } from "../../utils/EventBus";
+import { PersistenceModule } from "../../features/PersistenceModule";
 
 export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
@@ -585,13 +586,18 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                         `Clearing all previous markings before marking item ${item.label} and its descendants for import.`
                     );
 
-                    // Clear all previous markings
                     markingModule.clearAllMarkings();
 
                     // Mark the item and its descendants for import
                     // The marking module handles refreshing
                     const contextKey = cycleKey || tovKey || "";
                     markingModule.markItemWithDescendants(item, projectKey, contextKey, "import");
+
+                    const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
+                    if (persistenceModule) {
+                        this.logger.debug("Forcing immediate state persistence after marking for import.");
+                        await persistenceModule.forceSave();
+                    }
                 } else {
                     this.logger.warn(
                         `Could not mark item ${item.label}: Marking module not available or item has no ID.`
@@ -611,6 +617,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
                     markingModule.clearAllMarkings();
                     markingModule.markItemWithDescendants(item, projectKey, tovKey, "generation");
+
+                    // Force an immediate save of the state to disk to prevent data loss on reload.
+                    const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
+                    if (persistenceModule) {
+                        this.logger.debug("Forcing immediate state persistence after marking for generation.");
+                        await persistenceModule.forceSave();
+                    }
                 } else {
                     this.logger.warn(
                         `Could not mark item ${item.label}: Marking module not available or item has no ID.`
