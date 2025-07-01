@@ -74,6 +74,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             const { projectKey } = event.data;
             await this.handleProjectSelection(projectKey);
         });
+
         // Listen for data updates with debounce
         let refreshTimeout: NodeJS.Timeout | undefined;
         this.eventBus.on("data:projectsUpdated", async () => {
@@ -83,7 +84,24 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             refreshTimeout = setTimeout(async () => {
                 this.refresh();
                 refreshTimeout = undefined;
-            }, TreeViewTiming.EVENT_DEBOUNCE_MS); // 500ms debounce
+            }, TreeViewTiming.EVENT_DEBOUNCE_MS);
+        });
+
+        // Listen for expand/collapse events to trigger LS initialization for TOVs
+        this.eventBus.on("tree:itemExpanded", async (event) => {
+            const item = event.data.item;
+            if (item instanceof ProjectsTreeItem && item.data.type === "version") {
+                this.logger.debug(`TOV item expanded, initializing LS for: ${item.label}`);
+                await vscode.commands.executeCommand(allExtensionCommands.handleProjectVersionClick, item);
+            }
+        });
+
+        this.eventBus.on("tree:itemCollapsed", async (event) => {
+            const item = event.data.item;
+            if (item instanceof ProjectsTreeItem && item.data.type === "version") {
+                this.logger.debug(`TOV item collapsed, initializing LS for: ${item.label}`);
+                await vscode.commands.executeCommand(allExtensionCommands.handleProjectVersionClick, item);
+            }
         });
     }
 
