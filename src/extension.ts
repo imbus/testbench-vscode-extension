@@ -352,6 +352,23 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             lastCycleClick.id === cycleItem.id &&
             now - lastCycleClick.timestamp < TreeViewTiming.DOUBLE_CLICK_THRESHOLD_MS;
 
+        const projectKey = cycleItem.getProjectKey();
+        const cycleKey = cycleItem.getCycleKey();
+        const versionKey = cycleItem.getVersionKey();
+        const projectName = cycleItem.parent?.parent?.label?.toString();
+        const tovName = cycleItem.parent?.label?.toString();
+        if (projectKey && cycleKey && versionKey && projectName && tovName) {
+            await saveUIContext(context, "testThemes", {
+                isCycle: true,
+                projectKey,
+                cycleKey,
+                tovKey: versionKey,
+                projectName,
+                tovName,
+                cycleLabel: cycleItem.label?.toString()
+            });
+        }
+
         if (isDoubleClick) {
             logger.debug(`Cycle item double-clicked: ${cycleItem.label}`);
             await displayTestThemeTreeView();
@@ -364,22 +381,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             }
             logger.debug(`Cycle item single-clicked: ${cycleItem.label}`);
 
-            const projectKey = cycleItem.getProjectKey();
-            const cycleKey = cycleItem.getCycleKey();
-            const versionKey = cycleItem.getVersionKey();
-            const projectName = cycleItem.parent?.parent?.label?.toString();
-            const tovName = cycleItem.parent?.label?.toString();
-
             if (projectKey && cycleKey && versionKey && projectName && tovName) {
-                await saveUIContext(context, "testThemes", {
-                    isCycle: true,
-                    projectKey,
-                    cycleKey,
-                    tovKey: versionKey,
-                    projectName,
-                    tovName,
-                    cycleLabel: cycleItem.label?.toString()
-                });
                 await updateOrRestartLS(projectName, tovName);
                 if (treeViews?.testThemesTree) {
                     await treeViews.testThemesTree.loadCycle(
@@ -472,6 +474,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const tovName = cycleItem.parent?.label?.toString();
 
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
+            await saveUIContext(context, "testThemes", {
+                isCycle: true,
+                projectKey,
+                cycleKey,
+                tovKey: versionKey,
+                projectName,
+                tovName,
+                cycleLabel: cycleItem.label?.toString()
+            });
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
