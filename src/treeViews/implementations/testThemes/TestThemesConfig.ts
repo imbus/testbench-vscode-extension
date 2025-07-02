@@ -108,7 +108,7 @@ export const testThemesConfig: TreeViewConfig = {
     },
 
     ui: {
-        emptyMessage: "Select a cycle from the Projects view to see test themes.",
+        emptyMessage: "No test themes to display.",
         loadingMessage: "Loading test themes...",
         errorMessage: "Failed to load test themes",
         showTooltips: true,

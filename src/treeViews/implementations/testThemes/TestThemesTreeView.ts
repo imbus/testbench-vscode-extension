@@ -415,10 +415,19 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // Set the last data fetch timestamp to prevent infinite loading
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
-
+            (this as any)._intentionallyCleared = false;
             this._onDidChangeTreeData.fire(undefined);
+
+            (this as any).updateTreeViewMessage();
         } catch (error) {
             this.logger.error("Error loading cycle:", error);
+
+            this.rootItems = [];
+            (this as any)._lastDataFetch = Date.now();
+            (this as any)._intentionallyCleared = false;
+            this._onDidChangeTreeData.fire(undefined);
+            (this as any).updateTreeViewMessage();
+
             throw error;
         }
     }
@@ -478,10 +487,19 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // Set the last data fetch timestamp to prevent infinite loading
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
-
+            (this as any)._intentionallyCleared = false;
             this._onDidChangeTreeData.fire(undefined);
+
+            (this as any).updateTreeViewMessage();
         } catch (error) {
             this.logger.error("Error loading TOV:", error);
+
+            this.rootItems = [];
+            (this as any)._lastDataFetch = Date.now();
+            (this as any)._intentionallyCleared = false;
+            this._onDidChangeTreeData.fire(undefined);
+            (this as any).updateTreeViewMessage();
+
             throw error;
         }
     }

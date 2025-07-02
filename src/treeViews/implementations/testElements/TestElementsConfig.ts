@@ -91,7 +91,7 @@ export const testElementsConfig: TreeViewConfig = {
     },
 
     ui: {
-        emptyMessage: "Select a TOV from the Projects view to see test elements.",
+        emptyMessage: "No test elements to display.",
         loadingMessage: "Loading test elements...",
         errorMessage: "Failed to load test elements",
         showTooltips: true,
