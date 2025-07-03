@@ -182,12 +182,16 @@ def generate_test_suites(ls: LanguageServer, kwargs):
     }
     report_path = pathlib.Path(kwargs.get("testbench_report"))
     if kwargs.get("use_config_file"):
+        if not settings.get("output_directory"):
+            show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
+            return False
         testbench2robotframework(report_path, toml_settings)
     else:
-        if kwargs.get("output_directory") == "":
+        if not kwargs.get("output_directory"):
             show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
-            return
+            return False
         testbench2robotframework(report_path, settings)
+    return True
 
 
 @testbench_ls.command(COMMAND_FETCH_RESULTS)
