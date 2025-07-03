@@ -102,7 +102,10 @@ def get_keyword_tags(keyword: Keyword) -> Tags:
 def get_keyword_tags_position(keyword: Keyword) -> tuple[int]:
     tags = get_keyword_tags(keyword)
     if not tags:
-        return (keyword.lineno, 0, keyword.lineno, 0)
+        documentation = get_keyword_documentation(keyword)
+        if not documentation:
+            return (keyword.lineno, 0, keyword.lineno, 0)
+        return (documentation.end_lineno, 0, documentation.end_lineno, 0)
     return (tags.lineno - 1, tags.col_offset, tags.end_lineno - 1, tags.end_col_offset)
 
 

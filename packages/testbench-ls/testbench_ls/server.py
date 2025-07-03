@@ -41,6 +41,7 @@ from testbench2robotframework.testbench2robotframework import testbench2robotfra
 from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
+from .file_edits import get_kw_tags_edit
 from .ls_logging import LogLevel, log, show_error
 from .messages import (
     COMMAND_FETCH_RESULTS,
@@ -89,8 +90,6 @@ from .testbench_resource.resource_utils import (
     get_keyword_documentation_position,
     get_keyword_section,
     get_keyword_section_position,
-    get_keyword_tags,
-    get_keyword_tags_position,
     get_setting_section_position,
     get_testbench_context_position,
     get_variables_section,
@@ -438,23 +437,14 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
                 )
             else:
                 edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
-    if edits:
-        edit = WorkspaceEdit(
-            document_changes=[
-                TextDocumentEdit(
-                    text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
-                    edits=edits,
-                )
-            ],
-            change_annotations={
-                change_identifier: ChangeAnnotation(
-                    KEYWORD_INTERFACE_CHANGE_LABEL, needs_confirmation=True
-                )
-            },
-        )
-        ls.lsp.send_request(
-            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
-        )
+    if not edits:
+        return
+    edit = create_workspace_edit(
+        document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
+    )
+    ls.lsp.send_request(
+        WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
+    )
 
 
 def new_keyword_edit(new_keyword, kw_section_start_row, change_identifier):
@@ -525,26 +515,8 @@ def create_keyword_edits(
         )
         edits.append(name_edit)
 
-    existing_keyword_tags = get_keyword_tags(existing_keyword)
-    new_keyword_uid = get_kw_uid(new_keyword)
-    if new_keyword_uid not in robot_model_to_string(
-        existing_keyword_tags
-    ) and "robot:private" not in robot_model_to_string(existing_keyword_tags):
-        tags_start, tags_start_char, tags_end, tags_end_char = get_keyword_tags_position(
-            existing_keyword
-        )
-        new_txt = f"tb:uid:{new_keyword_uid}"
-        if tags_end_char == 0:
-            new_txt = f"    [Tags]    tb:uid:{new_keyword_uid}\n"
-
-        tags_edit = AnnotatedTextEdit(
-            change_identifier,
-            range=Range(
-                start=Position(tags_end, tags_end_char),
-                end=Position(tags_end, tags_end_char),
-            ),
-            new_text=new_txt,
-        )
+    tags_edit = get_kw_tags_edit(existing_keyword, new_keyword, change_identifier)
+    if tags_edit:
         edits.append(tags_edit)
 
     existing_keyword_arguments = get_keyword_arguments(existing_keyword)
@@ -578,7 +550,6 @@ def pull_testbench_keyword(ls: LanguageServer, args):
     resource = TestBenchResourceModel.from_file(document.source)
     if not context_is_valid(ls, resource):
         return
-    edits = []
     change_identifier = ChangeAnnotationIdentifier()
     existing_keywords = resource.get_keywords(keyword_uid)
     new_keyword = create_keyword(
@@ -590,24 +561,34 @@ def pull_testbench_keyword(ls: LanguageServer, args):
             ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
         )
         return
-    edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
-    if edits:
-        edit = WorkspaceEdit(
-            document_changes=[
-                TextDocumentEdit(
-                    text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
-                    edits=edits,
-                )
-            ],
-            change_annotations={
-                change_identifier: ChangeAnnotation(
-                    KEYWORD_INTERFACE_CHANGE_LABEL, needs_confirmation=True
-                )
-            },
-        )
-        ls.lsp.send_request(
-            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
-        )
+    edits = create_keyword_edits(existing_keywords[0], new_keyword, change_identifier)
+    if not edits:
+        return
+    edit = create_workspace_edit(
+        document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
+    )
+    ls.lsp.send_request(
+        WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
+    )
+
+
+def create_workspace_edit(
+    document_uri: str,
+    edits: list[AnnotatedTextEdit],
+    change_identifier: ChangeAnnotationIdentifier,
+    change_label: str,
+) -> WorkspaceEdit:
+    return WorkspaceEdit(
+        document_changes=[
+            TextDocumentEdit(
+                text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
+                edits=edits,
+            )
+        ],
+        change_annotations={
+            change_identifier: ChangeAnnotation(change_label, needs_confirmation=True)
+        },
+    )
 
 
 @testbench_ls.command(COMMAND_PUSH_KEYWORD)
@@ -695,17 +676,7 @@ def apply_selected_context(ls: LanguageServer, args):
             new_text=updated_context,
         )
     ]
-    edit = WorkspaceEdit(
-        document_changes=[
-            TextDocumentEdit(
-                text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
-                edits=edits,
-            )
-        ],
-        change_annotations={
-            change_identifier: ChangeAnnotation(CONTEXT_CHANGE_LABEL, needs_confirmation=False)
-        },
-    )
+    edit = create_workspace_edit(document_uri, edits, change_identifier, CONTEXT_CHANGE_LABEL)
     ls.lsp.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
