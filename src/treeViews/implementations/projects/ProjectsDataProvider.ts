@@ -31,7 +31,6 @@ export class ProjectsDataProvider {
             this.logger.debug("Fetching projects from server");
             this.logger.trace(`Using connection: ${connection.getServerName()}:${connection.getServerPort()}`);
 
-            // Get the list of projects
             const projectsFetchedFromServer = await connection.getProjectsList();
 
             if (!projectsFetchedFromServer || !Array.isArray(projectsFetchedFromServer)) {
@@ -41,7 +40,6 @@ export class ProjectsDataProvider {
 
             this.logger.trace(`Processing ${projectsFetchedFromServer.length} projects`);
 
-            // Transform to ProjectData format with validation
             const transformedProjects: ProjectData[] = [];
             for (const project of projectsFetchedFromServer) {
                 try {

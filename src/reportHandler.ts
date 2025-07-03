@@ -750,9 +750,10 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     }
 
     if (testGenerationSuccessful) {
-        vscode.window.showInformationMessage("Robot Framework test generation successful.");
-        logger.info("Test generation successful.");
-        await vscode.commands.executeCommand("workbench.view.extension.test"); // Assuming this command is still relevant
+        await vscode.commands.executeCommand("workbench.view.extension.test");
+        const successfulTestGenerationMessage: string = `Robot Framework tests generated successfully for: ${itemLabel}`;
+        vscode.window.showInformationMessage(successfulTestGenerationMessage);
+        logger.info(successfulTestGenerationMessage);
         return true;
     }
     return false;

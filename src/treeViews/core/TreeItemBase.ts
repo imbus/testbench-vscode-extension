@@ -6,10 +6,21 @@
 import * as vscode from "vscode";
 
 /**
+ * Interface for tree items that can provide language server parameters
+ */
+export interface LanguageServerParameterProvider {
+    /**
+     * Gets the language server parameters (project and TOV names) for this tree item
+     * @returns The project and TOV names, or undefined if they cannot be determined
+     */
+    getLanguageServerParameters?(): { projectName: string; tovName: string } | undefined;
+}
+
+/**
  * Base class for all tree items.
  * Provides the base functionality for all tree items.
  */
-export abstract class TreeItemBase extends vscode.TreeItem {
+export abstract class TreeItemBase extends vscode.TreeItem implements LanguageServerParameterProvider {
     protected _children: TreeItemBase[] = [];
     protected _parent: TreeItemBase | null = null;
     protected _metadata: Map<string, any> = new Map();
@@ -353,5 +364,14 @@ export abstract class TreeItemBase extends vscode.TreeItem {
         }
 
         return instance;
+    }
+
+    /**
+     * Gets the language server parameters (project and TOV names) for this tree item
+     * @returns The project and TOV names, or undefined if they cannot be determined
+     */
+    getLanguageServerParameters?(): { projectName: string; tovName: string } | undefined {
+        // Will be overriden by subclasses if applicable
+        return undefined;
     }
 }

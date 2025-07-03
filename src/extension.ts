@@ -31,7 +31,7 @@ import * as connectionManager from "./connectionManager";
 import { PlayServerConnection } from "./testBenchConnection";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
-import { TestElementsTreeItem, TreeViewBase, TreeViews } from "./treeViews";
+import { MarkingModule, TestElementsTreeItem, TreeViewBase, TreeViews } from "./treeViews";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
@@ -44,6 +44,7 @@ import {
     waitForLanguageServerReady,
     handleLanguageServerRestartOnSessionChange
 } from "./server";
+import { TreeItemBase } from "./treeViews/core/TreeItemBase";
 import {
     hideProjectManagementTreeView,
     displayProjectManagementTreeView
@@ -110,6 +111,47 @@ let isTestOperationInProgress: boolean = false;
 export const ENABLE_ICON_MARKING_ON_TEST_GENERATION: boolean = true;
 // Determines if the import button of the tree item should still persist after importing test results for that item.
 export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = true;
+
+/**
+ * Extracts project and TOV names from different tree item types (projects or test theme tree items),
+ * retrieves language server parameters and initializes or updates the language server.
+ *
+ * @param item The tree item that extends TreeItemBase and implements LanguageServerParameterProvider
+ * @param operationName Human readable name of the operation for error messages
+ * @returns Promise that resolves to the extracted project and TOV names, or throws an error
+ */
+async function prepareLanguageServerForTreeItemOperation(
+    item: TreeItemBase,
+    operationName: string
+): Promise<{ projectName: string; tovName: string }> {
+    const timeOutMs = 30000;
+    const checkIntervallMs = 100;
+    const languageServerParams = item.getLanguageServerParameters?.();
+
+    if (!languageServerParams) {
+        const errorMessage = `Cannot ${operationName}: invalid tree item. Missing project or TOV information.`;
+        logger.error(`[Cmd] ${errorMessage}`);
+        vscode.window.showErrorMessage(`Invalid tree item: ${errorMessage}`);
+        throw new Error(errorMessage);
+    }
+
+    const { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem } = languageServerParams;
+    await updateOrRestartLS(projectNameOfTreeItem, tovNameOfTreeItem);
+
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: "Waiting for Language Server",
+            cancellable: true
+        },
+        async (progress, cancellationToken) => {
+            progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+            await waitForLanguageServerReady(timeOutMs, checkIntervallMs, cancellationToken);
+        }
+    );
+
+    return { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem };
+}
 
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
@@ -207,17 +249,21 @@ async function performDeferredViewRestoration(
 
     try {
         logger.debug(`Performing deferred view restoration for: ${savedViewId}`);
-
-        await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
-
         if (savedContext.isCycle) {
             await treeViews.testThemesTree.loadCycle(
                 savedContext.projectKey,
                 savedContext.cycleKey,
+                savedContext.projectName,
+                savedContext.tovName,
                 savedContext.cycleLabel
             );
         } else {
-            await treeViews.testThemesTree.loadTov(savedContext.projectKey, savedContext.tovKey);
+            await treeViews.testThemesTree.loadTov(
+                savedContext.projectKey,
+                savedContext.tovKey,
+                savedContext.projectName,
+                savedContext.tovName
+            );
         }
 
         await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
@@ -303,6 +349,23 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             lastCycleClick.id === cycleItem.id &&
             now - lastCycleClick.timestamp < TreeViewTiming.DOUBLE_CLICK_THRESHOLD_MS;
 
+        const projectKey = cycleItem.getProjectKey();
+        const cycleKey = cycleItem.getCycleKey();
+        const versionKey = cycleItem.getVersionKey();
+        const projectName = cycleItem.parent?.parent?.label?.toString();
+        const tovName = cycleItem.parent?.label?.toString();
+        if (projectKey && cycleKey && versionKey && projectName && tovName) {
+            await saveUIContext(context, "testThemes", {
+                isCycle: true,
+                projectKey,
+                cycleKey,
+                tovKey: versionKey,
+                projectName,
+                tovName,
+                cycleLabel: cycleItem.label?.toString()
+            });
+        }
+
         if (isDoubleClick) {
             logger.debug(`Cycle item double-clicked: ${cycleItem.label}`);
             await displayTestThemeTreeView();
@@ -315,25 +378,16 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             }
             logger.debug(`Cycle item single-clicked: ${cycleItem.label}`);
 
-            const projectKey = cycleItem.getProjectKey();
-            const cycleKey = cycleItem.getCycleKey();
-            const versionKey = cycleItem.getVersionKey();
-            const projectName = cycleItem.parent?.parent?.label?.toString();
-            const tovName = cycleItem.parent?.label?.toString();
-
             if (projectKey && cycleKey && versionKey && projectName && tovName) {
-                await saveUIContext(context, "testThemes", {
-                    isCycle: true,
-                    projectKey,
-                    cycleKey,
-                    tovKey: versionKey,
-                    projectName,
-                    tovName,
-                    cycleLabel: cycleItem.label?.toString()
-                });
                 await updateOrRestartLS(projectName, tovName);
                 if (treeViews?.testThemesTree) {
-                    await treeViews.testThemesTree.loadCycle(projectKey, cycleKey, cycleItem.label?.toString());
+                    await treeViews.testThemesTree.loadCycle(
+                        projectKey,
+                        cycleKey,
+                        projectName,
+                        tovName,
+                        cycleItem.label?.toString()
+                    );
                 }
                 if (treeViews?.testElementsTree) {
                     logger.debug(`Loading test elements for TOV ${versionKey} (from cycle ${cycleKey})`);
@@ -392,7 +446,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
             await updateOrRestartLS(projectName, tovName);
-            await treeViews.testThemesTree.loadTov(projectKey, tovKey);
+            await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString());
             }
@@ -417,11 +471,26 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const tovName = cycleItem.parent?.label?.toString();
 
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
+            await saveUIContext(context, "testThemes", {
+                isCycle: true,
+                projectKey,
+                cycleKey,
+                tovKey: versionKey,
+                projectName,
+                tovName,
+                cycleLabel: cycleItem.label?.toString()
+            });
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
             await updateOrRestartLS(projectName, tovName);
-            await treeViews.testThemesTree.loadCycle(projectKey, cycleKey, cycleItem.label?.toString());
+            await treeViews.testThemesTree.loadCycle(
+                projectKey,
+                cycleKey,
+                projectName,
+                tovName,
+                cycleItem.label?.toString()
+            );
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString());
             }
@@ -481,8 +550,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     // Test Generation Handlers
-    const _handleGenerateTestCasesForTOV = async (item: ProjectsTreeItem) => {
-        if (!item) {
+    const _handleGenerateTestCasesForTOV = async (tovItem: ProjectsTreeItem) => {
+        if (!tovItem) {
             logger.error("[Cmd] handleGenerateTestCasesForTOV called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined item");
             return;
@@ -495,19 +564,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "Waiting for Language Server",
-                    cancellable: true
-                },
-                async (progress, cancellationToken) => {
-                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady(30000, 100, cancellationToken);
+            if (treeViews?.testThemesTree) {
+                const markingModule = treeViews.testThemesTree.getModule("marking") as MarkingModule | undefined;
+                if (markingModule) {
+                    markingModule.clearAllMarkings(false);
                 }
-            );
+            }
 
-            await treeViews.projectsTree.generateTestCasesForTOV(item);
+            await prepareLanguageServerForTreeItemOperation(tovItem, "generate test cases for TOV");
+            await treeViews.projectsTree.generateTestCasesForTOV(tovItem);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
@@ -535,18 +600,14 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "Waiting for Language Server",
-                    cancellable: true
-                },
-                async (progress, cancellationToken) => {
-                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady(30000, 100, cancellationToken);
+            if (treeViews?.testThemesTree) {
+                const markingModule = treeViews.testThemesTree.getModule("marking") as MarkingModule | undefined;
+                if (markingModule) {
+                    markingModule.clearAllMarkings(false);
                 }
-            );
+            }
 
+            await prepareLanguageServerForTreeItemOperation(cycleItem, "generate test cases for cycle");
             await reportHandler.startTestGenerationForCycle(context, cycleItem);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -561,8 +622,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
     const handleGenerateTestCasesForCycle = withSingleTestOperation(_handleGenerateTestCasesForCycle);
 
-    const _handleGenerateTestCasesForTestThemeOrTestCaseSet = async (item: TestThemesTreeItem) => {
-        if (!item) {
+    const _handleGenerateTestCasesForTestThemeOrTestCaseSet = async (testThemeTreeItem: TestThemesTreeItem) => {
+        if (!testThemeTreeItem) {
             logger.error("[Cmd] handleGenerateTestCasesForTestThemeOrTestCaseSet called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined test theme item");
             return;
@@ -577,19 +638,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "Waiting for Language Server",
-                    cancellable: true
-                },
-                async (progress, cancellationToken) => {
-                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady(30000, 100, cancellationToken);
-                }
+            await prepareLanguageServerForTreeItemOperation(
+                testThemeTreeItem,
+                "generate test cases for test theme or test case set"
             );
-
-            await treeViews.testThemesTree.generateTestCases(item);
+            await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
@@ -605,8 +658,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         _handleGenerateTestCasesForTestThemeOrTestCaseSet
     );
 
-    const _handleGenerateTestsForTestThemeTreeItemFromTOV = async (item: TestThemesTreeItem) => {
-        if (!item) {
+    const _handleGenerateTestsForTestThemeTreeItemFromTOV = async (testThemeTreeItem: TestThemesTreeItem) => {
+        if (!testThemeTreeItem) {
             logger.error("[Cmd] handleGenerateTestsForTestThemeTreeItemFromTOV called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined test theme item");
             return;
@@ -621,19 +674,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "Waiting for Language Server",
-                    cancellable: true
-                },
-                async (progress, cancellationToken) => {
-                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady(30000, 100, cancellationToken);
-                }
+            await prepareLanguageServerForTreeItemOperation(
+                testThemeTreeItem,
+                "generate test cases for test theme tree item"
             );
-
-            await treeViews.testThemesTree.generateTestCases(item);
+            await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
@@ -649,8 +694,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         _handleGenerateTestsForTestThemeTreeItemFromTOV
     );
 
-    const _handleReadAndImportTestResultsToTestbench = async (item: TestThemesTreeItem) => {
-        if (!item) {
+    const _handleReadAndImportTestResultsToTestbench = async (testThemeTreeItem: TestThemesTreeItem) => {
+        if (!testThemeTreeItem) {
             logger.error("[Cmd] handleReadAndImportTestResultsToTestbench called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot import test results for undefined test theme item");
             return;
@@ -663,19 +708,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: "Waiting for Language Server",
-                    cancellable: true
-                },
-                async (progress, cancellationToken) => {
-                    progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-                    await waitForLanguageServerReady(30000, 100, cancellationToken);
-                }
-            );
-
-            await treeViews.testThemesTree.importTestResultsForTestThemeTreeItem(item);
+            await prepareLanguageServerForTreeItemOperation(testThemeTreeItem, "import test results");
+            await treeViews.testThemesTree.importTestResultsForTestThemeTreeItem(testThemeTreeItem);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
@@ -1036,6 +1070,14 @@ async function restoreTreeViewsState(context: vscode.ExtensionContext): Promise<
         );
 
         let viewRestored = false;
+
+        if (savedContext && isValidSavedContext(savedContext)) {
+            logger.info(
+                `Found last-active context for ${savedContext.projectName}/${savedContext.tovName}. Initializing language server.`
+            );
+            await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
+        }
+
         if (savedViewId && savedViewId !== "projects" && savedContext) {
             if (!isValidSavedContext(savedContext)) {
                 logger.warn(
@@ -1177,10 +1219,7 @@ async function saveUIContext(
 ) {
     await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, viewId);
 
-    if (viewId === "projects") {
-        await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-        await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
-    } else if (contextData) {
+    if (contextData) {
         const hasValidProjectName = contextData.projectName && typeof contextData.projectName === "string";
         const hasValidTovName = contextData.tovName && typeof contextData.tovName === "string";
 

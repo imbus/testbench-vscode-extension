@@ -39,6 +39,24 @@ suite("ProjectsTreeView", function () {
             reveal: testEnv.sandbox.stub()
         };
 
+        mockStateManager.getState.returns({
+            loading: false,
+            error: null,
+            initialized: false,
+            lastRefresh: Date.now(),
+            items: new Map(),
+            rootItems: [],
+            customRoot: null,
+            marking: null,
+            expansion: null,
+            filtering: null,
+            selectedItemId: null,
+            selectedProjectKey: null,
+            selectedCycleKey: null,
+            selectedTovKey: null,
+            metadata: {}
+        });
+
         getConnectionStub = testEnv.sandbox.stub();
         getConnectionStub.returns(mockConnection);
 

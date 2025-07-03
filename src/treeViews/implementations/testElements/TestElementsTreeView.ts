@@ -146,8 +146,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             // Set the last data fetch timestamp to prevent infinite loading
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
-
+            (this as any)._intentionallyCleared = false;
             this._onDidChangeTreeData.fire(undefined);
+            (this as any).updateTreeViewMessage();
 
             this.eventBus.emit({
                 type: "tov:loaded",
@@ -161,6 +162,13 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.logger.info(`Successfully loaded test elements for TOV ${tovKey}`);
         } catch (error) {
             this.logger.error("Error loading TOV:", error);
+
+            this.rootItems = [];
+            (this as any)._lastDataFetch = Date.now();
+            (this as any)._intentionallyCleared = false;
+            this._onDidChangeTreeData.fire(undefined);
+            (this as any).updateTreeViewMessage();
+
             this.errorHandler.handleVoid(error as Error, "Failed to load test elements");
             throw error;
         }

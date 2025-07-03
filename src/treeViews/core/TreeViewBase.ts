@@ -65,6 +65,10 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
                 this.clearTree();
             }
         });
+
+        this.eventBus.on("state:changed", () => {
+            this.handleStateChange();
+        });
     }
 
     /**
@@ -73,6 +77,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      */
     public setTreeView(treeView: vscode.TreeView<T>): void {
         this.vscTreeView = treeView;
+        this.updateTreeViewMessage();
     }
 
     /**
@@ -110,9 +115,11 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             // Don't load data during initialization, wait for connection event
             this._initialized = true;
 
+            this.updateTreeViewMessage();
+
             // Set up event listeners for proper expansion tracking
             if (this.vscTreeView) {
-                // Are already set up in TreeViewFactory, added for safety
+                // Are already set up in TreeViewFactory
                 this.eventBus.on("tree:itemExpanded", () => {
                     const expansionModule = this.getModule("expansion");
                     if (expansionModule && typeof expansionModule.forceSave === "function") {
@@ -446,6 +453,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
                 }, TreeViewTiming.UI_REFRESH_DEBOUNCE_MS);
             }
         }
+
+        this.updateTreeViewMessage();
     }
 
     /**
@@ -483,8 +492,9 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         this.rootItems = [];
         this.stateManager.clear();
         this._lastDataFetch = 0;
-        this._onDidChangeTreeData.fire(undefined);
         this._intentionallyCleared = true;
+        this._onDidChangeTreeData.fire(undefined);
+        this.updateTreeViewMessage();
     }
 
     /**
@@ -502,6 +512,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
         }
 
+        this.updateTreeViewMessage();
+
         if (newConfig.features) {
             await this.initializeModules();
             this.refresh();
@@ -518,18 +530,31 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
 
         this._disposed = true;
         this.logger.debug("Disposing tree view");
-        for (const module of this.modules.values()) {
+
+        // Dispose other modules first
+        for (const [id, module] of this.modules.entries()) {
+            if (id !== "persistence") {
+                try {
+                    await module.dispose();
+                } catch (error) {
+                    this.logger.error(`Error disposing module ${id}:`, error);
+                }
+            }
+        }
+
+        // Dispose persistence module last
+        const persistenceModule = this.modules.get("persistence");
+        if (persistenceModule) {
             try {
-                await module.dispose();
+                await persistenceModule.dispose();
             } catch (error) {
-                this.logger.error(`Error disposing module ${module.id}:`, error);
+                this.logger.error(`Error disposing module persistence:`, error);
             }
         }
 
         this._onDidChangeTreeData.dispose();
         this.eventBus.dispose();
         this.stateManager.dispose();
-
         this.rootItems = [];
         this.modules.clear();
     }
@@ -568,6 +593,39 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
+     * Updates the TreeView message based on the current state
+     */
+    private updateTreeViewMessage(): void {
+        if (!this.vscTreeView) {
+            return;
+        }
+
+        try {
+            const state = this.stateManager?.getState();
+
+            if (!state) {
+                this.vscTreeView.message = undefined;
+                return;
+            }
+
+            if (state.error) {
+                this.vscTreeView.message = this.config.ui.errorMessage;
+            } else if (state.loading) {
+                this.vscTreeView.message = this.config.ui.loadingMessage;
+            } else if (this.rootItems.length === 0 && !this._intentionallyCleared) {
+                this.vscTreeView.message = this.config.ui.emptyMessage;
+            } else {
+                this.vscTreeView.message = undefined;
+            }
+        } catch (error) {
+            if (this.vscTreeView) {
+                this.vscTreeView.message = undefined;
+            }
+            this.logger.debug("Error updating tree view message:", error);
+        }
+    }
+
+    /**
      * Loads data for the tree view with optional immediate refresh
      * @param options Optional parameters for data loading behavior
      */
@@ -581,6 +639,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this.logger.debug("Starting data load");
             this._isLoading = true;
             this.stateManager.setLoading(true);
+            this.updateTreeViewMessage();
 
             const hasNoData = this.rootItems.length === 0;
             const isDataStale = Date.now() - this._lastDataFetch >= TreeViewTiming.DATA_STALE_THRESHOLD_MS;
@@ -594,6 +653,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
 
             this.stateManager.setLoading(false);
+            this.updateTreeViewMessage();
+
             // Trigger a UI refresh after a loadData call, respecting the immediate flag.
             // The decision to fetch data should not prevent a requested UI update.
             if (this._dataFetchDebounceTimeout) {
@@ -618,6 +679,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         } catch (error) {
             this.logger.error("Error during data load:", error);
             this.stateManager.setError(error as Error);
+            this.updateTreeViewMessage();
             throw error;
         } finally {
             this._isLoading = false;
@@ -699,5 +761,12 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             current = current.parent as T | undefined;
         }
         return depth;
+    }
+
+    /**
+     * Handles state changes from the StateManager
+     */
+    private handleStateChange(): void {
+        this.updateTreeViewMessage();
     }
 }

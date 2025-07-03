@@ -368,7 +368,9 @@ export class MarkingModule implements TreeViewModule {
      * Does not emit global event for disposal.
      */
     dispose(): void {
-        if (!this.context.config.modules.marking?.persistMarks) {
+        if (this.context.config.modules.marking?.persistMarks) {
+            this.context.stateManager.setState({ marking: this.markingState });
+        } else {
             this.clearAllMarkings(false);
         }
     }
