@@ -503,6 +503,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(resourcePath));
             }
 
+            // Only update the icons of the resource item and its parents
             await this.updateSingleItemIcon(resourceItem);
             let parent = resourceItem.parent as TestElementsTreeItem | null;
             while (parent) {
@@ -511,17 +512,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 }
                 parent = parent.parent as TestElementsTreeItem | null;
             }
-
-            // Invalidate the cache and trigger a full refresh
-            if (this.currentTovKey) {
-                this.dataProvider.clearCache(this.currentTovKey);
-            }
-
-            // Force immediate data fetch by resetting the last fetch timestamp
-            (this as any)._lastDataFetch = 0;
-
-            // Refresh will refetch and update all icons
-            this.refresh(undefined, { immediate: true });
         } catch (error) {
             this.errorHandler.handleVoid(error as Error, "Failed to open or create Robot resource file.");
             vscode.window.showErrorMessage(

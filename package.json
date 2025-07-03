@@ -428,7 +428,11 @@
             },
             {
                 "command": "testbenchExtension.openOrCreateRobotResourceFile",
-                "title": "Go to Robot Resource"
+                "title": "Open",
+                "icon": {
+                    "light": "resources/icons/open-light.svg",
+                    "dark": "resources/icons/open-dark.svg"
+                }
             },
             {
                 "command": "testbenchExtension.createInteractionUnderSubdivision",
@@ -791,8 +795,7 @@
                 {
                     "command": "testbenchExtension.openOrCreateRobotResourceFile",
                     "when": "view == testbench.testElements && (viewItem == testElement.subdivision || viewItem == testElement.interaction)",
-                    "group": "navigation@1",
-                    "title": "Go To Robot Resource"
+                    "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.createInteractionUnderSubdivision",
