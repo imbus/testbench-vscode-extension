@@ -19,6 +19,8 @@ from robot.api.parsing import (
 )
 from robot.parsing.model import Block, Statement
 
+from ..testbench_api.model import InteractionCallType
+
 
 class TestBenchResourceModel:
     def __init__(self, path: Path, load_existing=False):
@@ -36,6 +38,9 @@ class TestBenchResourceModel:
                 ],
                 source=path,
             )
+
+    def save(self):
+        self.file.save()
 
     def get_resource_file_end_position(self):
         return (self.file.sections[-1].end_lineno, self.file.sections[-1].end_col_offset)
@@ -265,5 +270,9 @@ def get_kw_uid(kw: Keyword) -> str:
             return uid_match.group("tb_uid")
     return ""
 
-    def save(self):
-        self.file.save()
+
+def get_interaction_call_type(keyword: Keyword) -> str:
+    tags = get_kw_tags(keyword)
+    if "tb:check" in tags:
+        return InteractionCallType.Check
+    return InteractionCallType.Flow

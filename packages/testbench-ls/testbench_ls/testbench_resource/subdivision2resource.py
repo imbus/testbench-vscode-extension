@@ -7,6 +7,7 @@ from robot.api.parsing import (
     Tags,
 )
 
+from ..ls_exceptions import TestBenchKeywordNotFound
 from ..testbench_api.legacy_model import (
     get_interaction_key,
     get_interaction_parent_key,
@@ -15,6 +16,7 @@ from ..testbench_api.legacy_model import (
     is_interaction,
 )
 from ..testbench_api.model import (
+    InteractionCallType,
     InteractionDetails,
     ParameterEvaluationType,
 )
@@ -51,10 +53,13 @@ def create_resource_from_subdivision(
             for param in interaction_details.parameters
             if param.evaluationType == ParameterEvaluationType.CallByValue
         ]
+        keyword_tags = [f"tb:uid:{interaction_details.uniqueID}"]
+        if interaction_details.defaultCallType == InteractionCallType.Check:
+            keyword_tags.append("tb:check")
         resource.add_keyword(
             interaction_details.name,
             keyword_arguments,
-            [f"tb:uid:{interaction_details.uniqueID}"],
+            keyword_tags,
             html_2_robot(interaction_details.description),
         )
     return resource
@@ -65,6 +70,8 @@ def get_interaction_details(
 ) -> InteractionDetails:
     tb_connection = TestBenchResourceConnection.singleton()
     test_element = get_test_element(tb_connection, interaction_uid)
+    if isinstance(test_element, dict):
+        raise TestBenchKeywordNotFound(interaction_uid)
     interaction_key = get_interaction_key(test_element)
     if interaction_key:
         return get_interaction(tb_connection, tb_connection.project_key, interaction_key)
@@ -83,6 +90,8 @@ def create_keyword_from_interaction(
     ]
     keyword_documentation = html_2_robot(interaction_details.description)
     keyword_tags = [f"tb:uid:{interaction_details.uniqueID}"]
+    if interaction_details.defaultCallType == InteractionCallType.Check:
+        keyword_tags.append("tb:check")
     kw = Keyword(
         header=KeywordName.from_params(keyword_name),
         body=[
