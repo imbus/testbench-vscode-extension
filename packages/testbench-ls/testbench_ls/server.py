@@ -77,10 +77,6 @@ from .messages import (
     WORKSPACE_APPLY_EDIT_LABEL,
 )
 from .testbench_api.testbench_patch import patch_interaction_details
-from .testbench_resource.subdivision2resource import (
-    create_keyword,
-    create_resource,
-)
 from .testbench_resource.resource_documentation import ResourceDocumentation
 from .testbench_resource.resource_utils import (
     get_comment_section_end_position,
@@ -90,11 +86,16 @@ from .testbench_resource.resource_utils import (
     get_keyword_documentation_position,
     get_keyword_section,
     get_keyword_section_position,
+    get_keyword_tags,
     get_setting_section_position,
     get_testbench_context_position,
     get_variables_section,
     get_variables_section_position,
     robot_model_to_string,
+)
+from .testbench_resource.subdivision2resource import (
+    create_keyword_from_interaction,
+    create_resource_from_subdivision,
 )
 from .testbench_resource.testbench_resource_model import TestBenchResourceModel, get_kw_uid
 
@@ -360,6 +361,8 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         return
     rd = ResourceDocumentation(document.path)
     for keyword in existing_resource.keyword_section.body:
+        if "robot:private" in robot_model_to_string(get_keyword_tags(keyword)):
+            continue
         keyword_uid = get_kw_uid(keyword)
         existing_keywords = existing_resource.get_keywords(keyword_uid)
         if len(existing_keywords) > 1:
@@ -396,7 +399,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     existing_resource = TestBenchResourceModel.from_file(document.source)
     if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
         return
-    new_resource = create_resource(
+    new_resource = create_resource_from_subdivision(
         uid=subdivision_uid,
     )
     change_identifier = ChangeAnnotationIdentifier()
@@ -420,6 +423,8 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
             )
             return
         if matching_uid_keywords:
+            if "robot:private" in robot_model_to_string(get_keyword_tags(matching_uid_keywords[0])):
+                continue
             edits.extend(
                 create_keyword_edits(matching_uid_keywords[0], new_keyword, change_identifier)
             )
@@ -552,7 +557,7 @@ def pull_testbench_keyword(ls: LanguageServer, args):
         return
     change_identifier = ChangeAnnotationIdentifier()
     existing_keywords = resource.get_keywords(keyword_uid)
-    new_keyword = create_keyword(
+    new_keyword = create_keyword_from_interaction(
         keyword_uid,
     )
     if len(existing_keywords) > 1:

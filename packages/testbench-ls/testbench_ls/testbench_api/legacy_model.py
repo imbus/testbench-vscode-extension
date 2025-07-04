@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from .model_utils import from_dict
-
 
 class Status(str, Enum):
     ONE = "1"
@@ -116,7 +114,7 @@ def get_test_element_uid(test_elements: list[TestElement], test_element_key: str
             ),
             test_elements,
         ),
-        from_dict(TestElement, {}),
+        TestElement(name="", uniqueID="", hasVersion=False, lockerKey=UserKey()),
     )
     return element.uniqueID
 

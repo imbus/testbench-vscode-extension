@@ -15,7 +15,7 @@ from ..testbench_api.legacy_model import (
     is_interaction,
 )
 from ..testbench_api.model import (
-    InteractionSummary,
+    InteractionDetails,
     ParameterEvaluationType,
 )
 from ..testbench_api.testbench_get import get_interaction, get_test_element, get_test_elements
@@ -62,13 +62,13 @@ def create_resource_from_subdivision(
 
 def get_interaction_details(
     interaction_uid: str,
-) -> InteractionSummary:
+) -> InteractionDetails:
     tb_connection = TestBenchResourceConnection.singleton()
     test_element = get_test_element(tb_connection, interaction_uid)
     interaction_key = get_interaction_key(test_element)
     if interaction_key:
         return get_interaction(tb_connection, tb_connection.project_key, interaction_key)
-    return InteractionSummary
+    return InteractionDetails
 
 
 def create_keyword_from_interaction(
