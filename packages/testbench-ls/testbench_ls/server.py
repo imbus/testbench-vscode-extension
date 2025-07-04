@@ -1,6 +1,6 @@
 import pathlib
 import re
-from .constants import MISSING_CONTEXT_CODE, CONTEXT_MISMATCH_CODE
+
 import requests  # type: ignore
 from lsprotocol.types import (
     INITIALIZE,
@@ -41,6 +41,7 @@ from testbench2robotframework.testbench2robotframework import testbench2robotfra
 from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
+from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
 from .file_edits import get_kw_tags_edit
 from .ls_logging import LogLevel, log, show_error
 from .messages import (
@@ -97,7 +98,11 @@ from .testbench_resource.subdivision2resource import (
     create_keyword_from_interaction,
     create_resource_from_subdivision,
 )
-from .testbench_resource.testbench_resource_model import TestBenchResourceModel, get_kw_uid
+from .testbench_resource.testbench_resource_model import (
+    TestBenchResourceModel,
+    get_interaction_call_type,
+    get_kw_uid,
+)
 
 
 class TestBenchLanguageServer(LanguageServer):
@@ -353,7 +358,7 @@ def context_is_valid(
 
 
 @testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
-def pull_testbench_subdivision(ls: LanguageServer, args):
+def push_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
@@ -377,6 +382,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
             .replace("<hr>", "<br/>")
         )
         html_description = f"<html><body>{new_docu}</body></html>"
+        call_type = get_interaction_call_type(keyword)
         try:
             tb_connection = TestBenchResourceConnection.singleton()
             response = patch_interaction_details(
@@ -384,6 +390,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
                 keyword_uid,
                 keyword.name,
                 html_description,
+                call_type.value,
             )
         except requests.exceptions.HTTPError as http_error:
             if http_error.response.status_code == 409:
@@ -615,6 +622,8 @@ def push_testbench_keyword(ls: LanguageServer, args):
         rd.get_keyword_documentation(keyword_uid).replace("<br>", "<br/>").replace("<hr>", "<br/>")
     )
     html_description = f"<html><body>{new_docu}</body></html>"
+    call_type = get_interaction_call_type(robot_keywords[0])
+
     try:
         tb_connection = TestBenchResourceConnection.singleton()
         response = patch_interaction_details(
@@ -622,6 +631,7 @@ def push_testbench_keyword(ls: LanguageServer, args):
             keyword_uid,
             robot_keywords[0].name,
             html_description,
+            call_type.value,
         )
     except requests.exceptions.HTTPError as http_error:
         if http_error.response.status_code == 409:

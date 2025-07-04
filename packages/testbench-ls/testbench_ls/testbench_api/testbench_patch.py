@@ -10,6 +10,7 @@ def patch_interaction_details(
     interaction_uid: str,
     new_name: str,
     new_html_description: str,
+    new_call_type: str,
 ) -> dict:
     tb_connection = TestBenchResourceConnection.singleton()
     test_element = get_test_element(tb_connection, interaction_uid)
@@ -21,6 +22,7 @@ def patch_interaction_details(
             interaction_key,
             new_name,
             new_html_description,
+            new_call_type,
         )
 
 
@@ -42,6 +44,7 @@ def patch_interaction(
     interaction_key: str,
     name: str,
     html_description: str,
+    call_type: str,
 ) -> dict[Any]:
     data = {
         "name": name,
@@ -49,5 +52,6 @@ def patch_interaction(
             "html": html_description,
             "images": [],
         },
+        "callType": call_type,
     }
     return _patch_interaction(tb_connection, project_key, interaction_key, data)
