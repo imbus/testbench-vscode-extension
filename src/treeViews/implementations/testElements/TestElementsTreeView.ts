@@ -114,17 +114,92 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Loads test elements data with improved progress handling and error recovery.
+     * This method provides better user feedback during refresh operations.
+     *
+     * @param tovKey - The unique identifier for the TOV to load.
+     * @param tovLabel - Optional label for the TOV to display in the title.
+     * @param preserveExistingData - Whether to preserve existing data during loading.
+     * @returns Promise that resolves when the TOV data is loaded.
+     */
+    private async loadTovWithProgress(
+        tovKey: string,
+        tovLabel?: string,
+        preserveExistingData: boolean = false
+    ): Promise<void> {
+        const startTime = Date.now();
+        this.logger.debug(`Loading TOV ${tovKey} with progress tracking`);
+
+        try {
+            if (!preserveExistingData) {
+                this.stateManager.setLoading(true);
+            }
+
+            const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);
+            const newRootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
+
+            this.rootItems = newRootItems;
+            this.currentTovKey = tovKey;
+            this.currentTovLabel = tovLabel || null;
+            this.resourceFiles.clear();
+
+            if (tovLabel) {
+                this.updateTitle(`${this.config.title} (${tovLabel})`);
+            } else {
+                this.updateTitle(`${this.config.title} (TOV: ${tovKey})`);
+            }
+
+            (this as any)._lastDataFetch = Date.now();
+            (this as any)._intentionallyCleared = false;
+            this.stateManager.setLoading(false);
+
+            this._onDidChangeTreeData.fire(undefined);
+
+            this.updateSubdivisionIcons(newRootItems).catch((error) => {
+                this.logger.error("Error updating subdivision icons:", error);
+            });
+
+            const loadTime = Date.now() - startTime;
+            this.logger.info(
+                `Successfully loaded ${newRootItems.length} test elements for TOV ${tovKey} in ${loadTime}ms`
+            );
+
+            this.eventBus.emit({
+                type: "tov:loaded",
+                source: this.config.id,
+                data: {
+                    tovKey,
+                    tovLabel: this.currentTovLabel,
+                    loadTime
+                },
+                timestamp: Date.now()
+            });
+        } catch (error) {
+            this.logger.error("Error loading TOV with progress:", error);
+            this.stateManager.setLoading(false);
+            this.stateManager.setError(error as Error);
+            throw error;
+        }
+    }
+
+    /**
      * Loads test elements for a specific TOV (Test Object Version).
      *
      * @param tovKey - The unique identifier for the TOV to load.
      * @param tovLabel - Optional label for the TOV to display in the title.
+     * @param clearFirst - Whether to clear the tree before loading new data. Defaults to true for backward compatibility.
      * @returns Promise that resolves when the TOV is loaded.
      */
-    public async loadTov(tovKey: string, tovLabel?: string): Promise<void> {
+    public async loadTov(tovKey: string, tovLabel?: string, clearFirst: boolean = true): Promise<void> {
         try {
-            this.logger.debug(`Loading TOV ${tovKey}`);
+            this.logger.debug(
+                `Loading TOV ${tovKey}${clearFirst ? " (clearing first)" : " (preserving existing data)"}`
+            );
 
-            this.clearTree();
+            if (clearFirst || this.currentTovKey !== tovKey) {
+                this.clearTree();
+            }
+
             this.dataProvider.clearCache(tovKey); // Only clear cache for this specific TOV
 
             this.currentTovKey = tovKey;
@@ -214,7 +289,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         if (this.rootItems.length > 0) {
-            const dataIsFresh = Date.now() - (this as any)._lastDataFetch < 30000;
+            const dataIsFresh = Date.now() - (this as any)._lastDataFetch < 60000;
             if (dataIsFresh) {
                 this.logger.debug(`Using cached root items for TOV: ${this.currentTovKey}`);
                 return this.rootItems;
@@ -226,9 +301,22 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const hierarchicalTestElementsData = await this.dataProvider.fetchTestElements(this.currentTovKey);
             const rootTestElementItems = hierarchicalTestElementsData.map((data) => this._buildTreeItems(data));
 
-            // Await the icon updates directly to ensure they complete before the UI is drawn.
-            await this.updateSubdivisionIcons(rootTestElementItems);
-            this.logger.info(`Built tree and updated icons for ${rootTestElementItems.length} root test elements.`);
+            this.rootItems = rootTestElementItems;
+            (this as any)._lastDataFetch = Date.now();
+
+            this._onDidChangeTreeData.fire(undefined);
+
+            // Async icon updates to avoid blocking UI
+            this.updateSubdivisionIcons(rootTestElementItems)
+                .then(() => {
+                    this.logger.debug(`Icon updates completed for ${rootTestElementItems.length} root test elements.`);
+                    this._onDidChangeTreeData.fire(undefined);
+                })
+                .catch((error) => {
+                    this.logger.error("Error updating subdivision icons:", error);
+                });
+
+            this.logger.info(`Built tree for ${rootTestElementItems.length} root test elements.`);
             return rootTestElementItems;
         } catch (error) {
             this.logger.error("Failed to fetch and build test elements tree:", error);
@@ -559,7 +647,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Override the base refresh method to fetch data from the server
+     * Override the base refresh method to fetch data from the server with improved progress handling
      *
      * @param item Optional specific item to refresh
      * @param options Optional refresh options
@@ -575,13 +663,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         if (this.currentTovKey) {
             this.dataProvider.clearCache(this.currentTovKey);
 
-            this.loadTov(this.currentTovKey, this.currentTovLabel || undefined)
+            this.loadTovWithProgress(this.currentTovKey, this.currentTovLabel || undefined, true)
                 .then(() => {
                     this.logger.debug("Successfully refreshed test elements tree from TOV context");
                 })
                 .catch((error) => {
                     this.logger.error("Error refreshing test elements tree from TOV context:", error);
-                    // Don't clear the tree on error, keep existing data
                 });
         } else {
             this.logger.debug("No TOV key available, clearing tree");
