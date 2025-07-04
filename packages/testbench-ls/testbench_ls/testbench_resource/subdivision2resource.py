@@ -15,6 +15,7 @@ from ..testbench_api.legacy_model import (
     is_interaction,
 )
 from ..testbench_api.model import (
+    InteractionCallType,
     InteractionDetails,
     ParameterEvaluationType,
 )
@@ -51,10 +52,13 @@ def create_resource_from_subdivision(
             for param in interaction_details.parameters
             if param.evaluationType == ParameterEvaluationType.CallByValue
         ]
+        keyword_tags = [f"tb:uid:{interaction_details.uniqueID}"]
+        if interaction_details.defaultCallType == InteractionCallType.Check:
+            keyword_tags.append("tb:check")
         resource.add_keyword(
             interaction_details.name,
             keyword_arguments,
-            [f"tb:uid:{interaction_details.uniqueID}"],
+            keyword_tags,
             html_2_robot(interaction_details.description),
         )
     return resource
@@ -83,6 +87,8 @@ def create_keyword_from_interaction(
     ]
     keyword_documentation = html_2_robot(interaction_details.description)
     keyword_tags = [f"tb:uid:{interaction_details.uniqueID}"]
+    if interaction_details.defaultCallType == InteractionCallType.Check:
+        keyword_tags.append("tb:check")
     kw = Keyword(
         header=KeywordName.from_params(keyword_name),
         body=[
