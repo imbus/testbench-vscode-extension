@@ -1,5 +1,5 @@
 from .legacy_model import TestElement
-from .model import InteractionSummary
+from .model import InteractionDetails
 from .model_utils import from_dict
 from .testbench_resource_connection import TestBenchResourceConnection
 
@@ -26,9 +26,9 @@ def get_test_element(tb_connection: TestBenchResourceConnection, uid: str) -> di
 
 def get_interaction(
     tb_connection: TestBenchResourceConnection, project_key: str, interaction_key: str
-) -> InteractionSummary:
+) -> InteractionDetails:
     return from_dict(
-        InteractionSummary,
+        InteractionDetails,
         tb_connection.connection.session.get(
             f"{tb_connection.connection.server_url}projects/{project_key}/interactions/{interaction_key}/v1",
             params={"projectKey": project_key, "interactionKey": interaction_key},

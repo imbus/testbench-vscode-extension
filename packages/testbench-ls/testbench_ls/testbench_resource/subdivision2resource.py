@@ -15,7 +15,7 @@ from ..testbench_api.legacy_model import (
     is_interaction,
 )
 from ..testbench_api.model import (
-    InteractionSummary,
+    InteractionDetails,
     ParameterEvaluationType,
 )
 from ..testbench_api.testbench_get import get_interaction, get_test_element, get_test_elements
@@ -24,7 +24,7 @@ from .resource_utils import html_2_robot
 from .testbench_resource_model import TestBenchResourceModel
 
 
-def create_resource(
+def create_resource_from_subdivision(
     uid: str,
 ):
     resource = None
@@ -47,7 +47,7 @@ def create_resource(
             tb_connection, tb_connection.project_key, interaction_key
         )
         keyword_arguments = [
-            f"{get_argument_type(param.name)}{{{param.name.strip('*').strip()}}}{'=' * bool(param.defaultValue)}{param.defaultValue.name if bool(param.defaultValue) else ''}"
+            f"{_get_argument_type(param.name)}{{{param.name.strip('*').strip()}}}{'=' * bool(param.defaultValue)}{param.defaultValue.name if bool(param.defaultValue) else ''}"
             for param in interaction_details.parameters
             if param.evaluationType == ParameterEvaluationType.CallByValue
         ]
@@ -62,22 +62,22 @@ def create_resource(
 
 def get_interaction_details(
     interaction_uid: str,
-) -> InteractionSummary:
+) -> InteractionDetails:
     tb_connection = TestBenchResourceConnection.singleton()
     test_element = get_test_element(tb_connection, interaction_uid)
     interaction_key = get_interaction_key(test_element)
     if interaction_key:
         return get_interaction(tb_connection, tb_connection.project_key, interaction_key)
-    return InteractionSummary
+    return InteractionDetails
 
 
-def create_keyword(
+def create_keyword_from_interaction(
     interaction_uid: str,
 ) -> Keyword:
     interaction_details = get_interaction_details(interaction_uid)
     keyword_name = interaction_details.name
     keyword_arguments = [
-        f"{get_argument_type(param.name)}{{{param.name.strip('*').strip()}}}{'=' * bool(param.defaultValue)}{param.defaultValue.name if bool(param.defaultValue) else ''}"
+        f"{_get_argument_type(param.name)}{{{param.name.strip('*').strip()}}}{'=' * bool(param.defaultValue)}{param.defaultValue.name if bool(param.defaultValue) else ''}"
         for param in interaction_details.parameters
         if param.evaluationType == ParameterEvaluationType.CallByValue
     ]
@@ -109,7 +109,7 @@ def create_keyword(
     return kw
 
 
-def get_argument_type(argument: str) -> str:
+def _get_argument_type(argument: str) -> str:
     if argument.startswith("**"):
         return "&"
     if argument.startswith("*"):

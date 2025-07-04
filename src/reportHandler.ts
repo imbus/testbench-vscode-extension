@@ -810,9 +810,6 @@ async function runRobotFrameworkTestGenerationProcess(
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
     await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipPath);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
-        const testGenerationFailedMessage: string = "[runRobotFrameworkTestGenerationProcess] Test generation failed.";
-        logger.error(testGenerationFailedMessage);
-        vscode.window.showErrorMessage(testGenerationFailedMessage);
         return false;
     }
 
@@ -1850,10 +1847,6 @@ export async function startTestGenerationUsingTOV(
 
                 await cleanUpReportFileIfConfiguredInSettings(downloadedTovReportPath);
                 if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
-                    const testGenerationFailedMessage: string =
-                        "[runRobotFrameworkTestGenerationProcess] Test generation failed.";
-                    logger.error(testGenerationFailedMessage);
-                    vscode.window.showErrorMessage(testGenerationFailedMessage);
                     return false;
                 }
 

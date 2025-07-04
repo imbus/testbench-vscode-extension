@@ -22,55 +22,43 @@ export class tb2robotLib {
      */
     public static async startTb2robotframeworkTestGeneration(reportPath: string): Promise<boolean> {
         let isGenerateTestsCommandSuccessful: boolean = false;
-        try {
-            const use_config_file: boolean | undefined = getExtensionSetting<boolean>(
-                ConfigKeys.USE_CONFIG_FILE_SETTING
-            );
-            const clean: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_CLEAN);
-            const compound_interaction_logging: string | undefined = getExtensionSetting<string>(
-                ConfigKeys.TB2ROBOT_COMPOUND_LOGGING
-            );
-            const fully_qualified: boolean | undefined = getExtensionSetting<boolean>(
-                ConfigKeys.TB2ROBOT_FULLY_QUALIFIED
-            );
-            const libraryMapping: string[] | undefined = getExtensionSetting<string[]>(
-                ConfigKeys.TB2ROBOT_LIBRARY_MAPPING
-            );
-            const libraryMarker: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_LIBRARY_MARKER);
-            const libraryRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_LIBRARY_ROOT);
-            const logSuiteNumbering: boolean | undefined = getExtensionSetting<boolean>(
-                ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING
-            );
-            const outputDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
-            const resourceDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
-            const resourceMapping: string[] | undefined = getExtensionSetting<string[]>(
-                ConfigKeys.TB2ROBOT_RESOURCE_MAPPING
-            );
-            const resourceMarker: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
-            const resourceRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_ROOT);
-            await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
-                use_config_file: use_config_file,
-                clean: clean,
-                compound_interaction_logging: compound_interaction_logging,
-                config: use_config_file,
-                fully_qualified: fully_qualified,
-                library_marker: libraryMarker,
-                library_root: libraryRoot,
-                log_suite_numbering: logSuiteNumbering,
-                output_directory: outputDirectory,
-                resource_directory: resourceDirectory,
-                resource_marker: resourceMarker,
-                resource_root: resourceRoot,
-                library_mapping: libraryMapping,
-                resource_mapping: resourceMapping,
-                testbench_report: reportPath
-            });
-            isGenerateTestsCommandSuccessful = true;
-        } catch (error) {
-            isGenerateTestsCommandSuccessful = false;
-            const errorMessage: string = error instanceof Error ? error.message : String(error);
-            logger.error(`Language Server command 'generateTestSuites' failed: ${errorMessage}`, error);
-        }
+        const use_config_file: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.USE_CONFIG_FILE_SETTING);
+        const clean: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_CLEAN);
+        const compound_interaction_logging: string | undefined = getExtensionSetting<string>(
+            ConfigKeys.TB2ROBOT_COMPOUND_LOGGING
+        );
+        const fully_qualified: boolean | undefined = getExtensionSetting<boolean>(ConfigKeys.TB2ROBOT_FULLY_QUALIFIED);
+        const libraryMapping: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_LIBRARY_MAPPING);
+        const libraryMarker: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_LIBRARY_MARKER);
+        const libraryRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_LIBRARY_ROOT);
+        const logSuiteNumbering: boolean | undefined = getExtensionSetting<boolean>(
+            ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING
+        );
+        const outputDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+        const resourceDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
+        const resourceMapping: string[] | undefined = getExtensionSetting<string[]>(
+            ConfigKeys.TB2ROBOT_RESOURCE_MAPPING
+        );
+        const resourceMarker: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+        const resourceRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_ROOT);
+        isGenerateTestsCommandSuccessful = await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
+            use_config_file: use_config_file,
+            clean: clean,
+            compound_interaction_logging: compound_interaction_logging,
+            config: use_config_file,
+            fully_qualified: fully_qualified,
+            library_marker: libraryMarker,
+            library_root: libraryRoot,
+            log_suite_numbering: logSuiteNumbering,
+            output_directory: outputDirectory,
+            resource_directory: resourceDirectory,
+            resource_marker: resourceMarker,
+            resource_root: resourceRoot,
+            library_mapping: libraryMapping,
+            resource_mapping: resourceMapping,
+            testbench_report: reportPath
+        });
+
         return isGenerateTestsCommandSuccessful;
     }
 
@@ -99,10 +87,7 @@ export class tb2robotLib {
             isFetchResultsCommandSuccessful = true;
         } catch (error) {
             isFetchResultsCommandSuccessful = false;
-            const errorMessage: string = error instanceof Error ? error.message : String(error);
-            logger.error(`Language Server command 'fetchResults' failed: ${errorMessage}`, error);
         }
-        logger.debug(`startTb2robotFetchResults success: ${isFetchResultsCommandSuccessful}`);
         return isFetchResultsCommandSuccessful;
     }
 }
