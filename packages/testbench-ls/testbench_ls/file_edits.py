@@ -1,4 +1,3 @@
-
 from lsprotocol.types import (
     AnnotatedTextEdit,
     Position,

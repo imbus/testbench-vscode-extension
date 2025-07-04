@@ -10,8 +10,15 @@ ERROR_SUBDIVISON_MAPPING_FORMAT = (
 )
 ERROR_EMPTY_OUTPUT_DIRECTORY = "Output Directory of TestBench2RobotFramework cannot be empty."
 ERROR_DUPLICATE_KEYWORD_UID = (
-    "Multiplee keywords with uid '{uid}' found. Please resolve the conflict manually."
+    "Multiple keywords with uid '{uid}' found. Please resolve the conflict manually."
 )
+ERROR_DUPLICATE_KEYWORD_NAME = (
+    "Multiple keywords with name '{name}' found. Please resolve the conflict manually."
+)
+ERROR_FINDING_TESTBENCH_KEYWORD = (
+    "Failed to find TestBench keyword by uid '{uid}' or name '{name}'."
+)
+ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID = "Failed to find TestBench keyword by uid '{uid}'."
 
 # Warning messages
 WARNING_CONTEXT_MISMATCH = "TestBench context mismatch: Selected context '{selected_context}' does not match the resource context '{resource_context}'. "

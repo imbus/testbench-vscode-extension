@@ -3,7 +3,7 @@ from typing import Any
 from .legacy_model import get_interaction_key
 from .testbench_get import get_test_element
 from .testbench_resource_connection import TestBenchResourceConnection
-
+from ..ls_exceptions import TestBenchKeywordNotFound
 
 def patch_interaction_details(
     tb_connection: TestBenchResourceConnection,
@@ -14,6 +14,8 @@ def patch_interaction_details(
 ) -> dict:
     tb_connection = TestBenchResourceConnection.singleton()
     test_element = get_test_element(tb_connection, interaction_uid)
+    if isinstance(test_element, dict):
+        raise TestBenchKeywordNotFound(interaction_uid)
     interaction_key = get_interaction_key(test_element)
     if interaction_key:
         patch_interaction(

@@ -7,6 +7,7 @@ from robot.api.parsing import (
     Tags,
 )
 
+from ..ls_exceptions import TestBenchKeywordNotFound
 from ..testbench_api.legacy_model import (
     get_interaction_key,
     get_interaction_parent_key,
@@ -69,6 +70,8 @@ def get_interaction_details(
 ) -> InteractionDetails:
     tb_connection = TestBenchResourceConnection.singleton()
     test_element = get_test_element(tb_connection, interaction_uid)
+    if isinstance(test_element, dict):
+        raise TestBenchKeywordNotFound(interaction_uid)
     interaction_key = get_interaction_key(test_element)
     if interaction_key:
         return get_interaction(tb_connection, tb_connection.project_key, interaction_key)

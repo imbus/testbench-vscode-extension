@@ -34,7 +34,7 @@ from lsprotocol.types import (
 )
 from pygls.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
-from robot.api.parsing import KeywordSection, SectionHeader, Token
+from robot.api.parsing import Keyword, KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
@@ -43,6 +43,11 @@ from testbench_ls.testbench_api.testbench_resource_connection import TestBenchRe
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
 from .file_edits import get_kw_tags_edit
+from .ls_exceptions import (
+    MultipleKeywordsWithName,
+    MultipleKeywordsWithUid,
+    TestBenchKeywordNotFound,
+)
 from .ls_logging import LogLevel, log, show_error
 from .messages import (
     COMMAND_FETCH_RESULTS,
@@ -62,8 +67,10 @@ from .messages import (
     DEBUG_CHECK_CONTEXT,
     ERROR_CONTEXT_MISMATCH,
     ERROR_CONTEXT_NOT_SET,
+    ERROR_DUPLICATE_KEYWORD_NAME,
     ERROR_DUPLICATE_KEYWORD_UID,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
+    ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
     ERROR_SUBDIVISON_MAPPING_FORMAT,
@@ -397,6 +404,8 @@ def push_testbench_subdivision(ls: LanguageServer, args):
                 show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
             else:
                 show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+        except TestBenchKeywordNotFound as not_found_error:
+            show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
 
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
@@ -421,34 +430,26 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     for new_keyword in new_resource.keyword_section.body:
-        keyword_uid = get_kw_uid(new_keyword)
-        matching_uid_keywords = existing_resource.get_keywords(keyword_uid)
-        if len(matching_uid_keywords) > 1:
+        try:
+            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+        except MultipleKeywordsWithUid as e:
             show_error(
                 ls,
-                ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
             )
-            return
-        if matching_uid_keywords:
-            if "robot:private" in robot_model_to_string(get_keyword_tags(matching_uid_keywords[0])):
-                continue
-            edits.extend(
-                create_keyword_edits(matching_uid_keywords[0], new_keyword, change_identifier)
+            continue
+        except MultipleKeywordsWithName as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
             )
+            continue
+        if not keyword_match:
+            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
         else:
-            matching_name_keywords = existing_resource.get_keywords_by_name(new_keyword.name)
-            if len(matching_name_keywords) > 1:
-                show_error(
-                    ls,
-                    "Multiple keywords with the same name found. ",
-                )
-                return
-            if matching_name_keywords:
-                edits.extend(
-                    create_keyword_edits(matching_name_keywords[0], new_keyword, change_identifier)
-                )
-            else:
-                edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+                continue
+            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
     if not edits:
         return
     edit = create_workspace_edit(
@@ -457,6 +458,22 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     ls.lsp.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
+
+
+def get_matching_testbench_keyword(
+    rf_keyword: Keyword, testbench_resource: TestBenchResourceModel
+) -> Keyword | None:
+    keyword_uid = get_kw_uid(rf_keyword)
+    keywords_with_matching_uid = testbench_resource.get_keywords(keyword_uid)
+    if len(keywords_with_matching_uid) == 1:
+        return keywords_with_matching_uid[0]
+    if len(keywords_with_matching_uid) > 1:
+        raise MultipleKeywordsWithUid(keyword_uid)
+    keywords_with_matching_name = testbench_resource.get_keywords_by_name(rf_keyword.name)
+    if len(keywords_with_matching_name) == 1:
+        return keywords_with_matching_name[0]
+    if len(keywords_with_matching_uid) > 1:
+        raise MultipleKeywordsWithName(rf_keyword.name)
 
 
 def new_keyword_edit(new_keyword, kw_section_start_row, change_identifier):
@@ -564,9 +581,13 @@ def pull_testbench_keyword(ls: LanguageServer, args):
         return
     change_identifier = ChangeAnnotationIdentifier()
     existing_keywords = resource.get_keywords(keyword_uid)
-    new_keyword = create_keyword_from_interaction(
-        keyword_uid,
-    )
+    try:
+        new_keyword = create_keyword_from_interaction(
+            keyword_uid,
+        )
+    except TestBenchKeywordNotFound as e:
+        show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=e.uid))
+        return
     if len(existing_keywords) > 1:
         show_error(
             ls,
@@ -638,6 +659,8 @@ def push_testbench_keyword(ls: LanguageServer, args):
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+    except TestBenchKeywordNotFound as not_found_error:
+            show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
 
 
 @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
