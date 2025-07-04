@@ -77,7 +77,7 @@ from .messages import (
     WORKSPACE_APPLY_EDIT_LABEL,
 )
 from .testbench_api.testbench_patch import patch_interaction_details
-from .testbench_resource.resource_creation import (
+from .testbench_resource.subdivision2resource import (
     create_keyword,
     create_resource,
 )

@@ -24,7 +24,7 @@ from .resource_utils import html_2_robot
 from .testbench_resource_model import TestBenchResourceModel
 
 
-def create_resource(
+def create_resource_from_subdivision(
     uid: str,
 ):
     resource = None
@@ -47,7 +47,7 @@ def create_resource(
             tb_connection, tb_connection.project_key, interaction_key
         )
         keyword_arguments = [
-            f"{get_argument_type(param.name)}{{{param.name.strip('*').strip()}}}{'=' * bool(param.defaultValue)}{param.defaultValue.name if bool(param.defaultValue) else ''}"
+            f"{_get_argument_type(param.name)}{{{param.name.strip('*').strip()}}}{'=' * bool(param.defaultValue)}{param.defaultValue.name if bool(param.defaultValue) else ''}"
             for param in interaction_details.parameters
             if param.evaluationType == ParameterEvaluationType.CallByValue
         ]
@@ -71,13 +71,13 @@ def get_interaction_details(
     return InteractionSummary
 
 
-def create_keyword(
+def create_keyword_from_interaction(
     interaction_uid: str,
 ) -> Keyword:
     interaction_details = get_interaction_details(interaction_uid)
     keyword_name = interaction_details.name
     keyword_arguments = [
-        f"{get_argument_type(param.name)}{{{param.name.strip('*').strip()}}}{'=' * bool(param.defaultValue)}{param.defaultValue.name if bool(param.defaultValue) else ''}"
+        f"{_get_argument_type(param.name)}{{{param.name.strip('*').strip()}}}{'=' * bool(param.defaultValue)}{param.defaultValue.name if bool(param.defaultValue) else ''}"
         for param in interaction_details.parameters
         if param.evaluationType == ParameterEvaluationType.CallByValue
     ]
@@ -109,7 +109,7 @@ def create_keyword(
     return kw
 
 
-def get_argument_type(argument: str) -> str:
+def _get_argument_type(argument: str) -> str:
     if argument.startswith("**"):
         return "&"
     if argument.startswith("*"):
