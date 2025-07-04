@@ -1,6 +1,6 @@
 import pathlib
 import re
-
+from .constants import MISSING_CONTEXT_CODE, CONTEXT_MISMATCH_CODE
 import requests  # type: ignore
 from lsprotocol.types import (
     INITIALIZE,
@@ -636,7 +636,12 @@ def code_actions(ls: LanguageServer, params: CodeActionParams):
     document = ls.workspace.get_text_document(params.text_document.uri)
     resource = TestBenchResourceModel.from_file(document.source)
     diagnostics = params.context.diagnostics
-    if not diagnostics:
+    context_diagnostics = [
+        diagnostic
+        for diagnostic in diagnostics
+        if diagnostic.code in (MISSING_CONTEXT_CODE, CONTEXT_MISMATCH_CODE)
+    ]
+    if not context_diagnostics:
         return []
     return [
         CodeAction(
@@ -647,7 +652,7 @@ def code_actions(ls: LanguageServer, params: CodeActionParams):
                 command="testbench_ls.applyTestBenchContext",
                 arguments=[document_uri, params.range.start.line],
             ),
-            diagnostics=diagnostics,
+            diagnostics=context_diagnostics,
         )
     ]
 
@@ -702,6 +707,7 @@ def get_context_diagnostics(ls: LanguageServer, document: TextDocument) -> list[
         )
         return [
             Diagnostic(
+                code=MISSING_CONTEXT_CODE,
                 range=Range(
                     start=Position(comment_start, comment_start_char),
                     end=Position(comment_end, comment_end_char),
@@ -713,6 +719,7 @@ def get_context_diagnostics(ls: LanguageServer, document: TextDocument) -> list[
     project, tov = resource.tb_tov_context
     return [
         Diagnostic(
+            code=CONTEXT_MISMATCH_CODE,
             range=Range(
                 start=Position(cont_start, cont_start_char),
                 end=Position(cont_end, cont_end_char),
