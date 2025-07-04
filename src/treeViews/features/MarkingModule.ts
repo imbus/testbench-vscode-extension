@@ -33,10 +33,8 @@ export class MarkingModule implements TreeViewModule {
         }
 
         context.eventBus.on("state:changed", (event) => {
-            const changes = event.data.changes;
-            const markingChange = changes.find((c: any) => c.field === "marking");
-            if (markingChange) {
-                this.markingState = markingChange.newValue || this.createEmptyState();
+            if (event.data?.marking) {
+                this.markingState = event.data.marking || this.createEmptyState();
             }
         });
 

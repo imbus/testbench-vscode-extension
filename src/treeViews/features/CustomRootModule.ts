@@ -29,11 +29,9 @@ export class CustomRootModule implements TreeViewModule {
 
         // Listen for state changes
         context.eventBus.on("state:changed", (event) => {
-            const changes = event.data.changes;
-            const customRootChange = changes.find((c: any) => c.field === "customRoot");
-            if (customRootChange) {
-                if (this.customRootState !== customRootChange.newValue) {
-                    this.customRootState = customRootChange.newValue;
+            if (event.data?.customRoot !== undefined) {
+                if (this.customRootState !== event.data.customRoot) {
+                    this.customRootState = event.data.customRoot;
                     this.updateContextKey();
                 }
             }
