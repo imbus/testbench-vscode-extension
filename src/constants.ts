@@ -206,8 +206,6 @@ export const allExtensionCommands = {
     automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
     openCycleFromProjectsView: `${baseKeyOfExtension}.openCycleFromProjectsView`,
-    openOrCreateRobotResourceFile: `${baseKeyOfExtension}.openOrCreateRobotResourceFile`,
-    createInteractionUnderSubdivision: `${baseKeyOfExtension}.createInteractionUnderSubdivision`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
     modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
     handleProjectCycleClick: `${baseKeyOfExtension}.handleProjectCycleClick`,
@@ -241,5 +239,11 @@ export const allExtensionCommands = {
     toggleFilterDiffModeForTestElementsEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForTestElementsEnabled`,
     clearAllFiltersForProjects: `${baseKeyOfExtension}.clearAllFiltersForProjects`,
     clearAllFiltersForTestThemes: `${baseKeyOfExtension}.clearAllFiltersForTestThemes`,
-    clearAllFiltersForTestElements: `${baseKeyOfExtension}.clearAllFiltersForTestElements`
+    clearAllFiltersForTestElements: `${baseKeyOfExtension}.clearAllFiltersForTestElements`,
+
+    // Test elements tree item commands
+    openAvailableSubdivisionInTestElementsView: `${baseKeyOfExtension}.openAvailableSubdivisionInTestElementsView`,
+    openMissingSubdivisionInTestElementsView: `${baseKeyOfExtension}.openMissingSubdivisionInTestElementsView`,
+    openSubdivisionFolderInExplorer: `${baseKeyOfExtension}.openSubdivisionFolderInExplorer`,
+    openInteractionInTestElementsView: `${baseKeyOfExtension}.openInteractionInTestElementsView`
 };

@@ -741,12 +741,20 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
-    const handleOpenOrCreateRobotResourceFile = (item: TestElementsTreeItem) => {
-        treeViews?.testElementsTree.openOrCreateRobotResourceFile(item);
+    const handleOpenAvailableResource = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.openAvailableResource(item);
     };
 
-    const handleCreateInteractionUnderSubdivision = (item: TestElementsTreeItem) => {
-        treeViews?.testElementsTree.createInteraction(item);
+    const handleCreateMissingResource = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.createMissingResource(item);
+    };
+
+    const handleOpenFolderInExplorer = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.openFolderInExplorer(item);
+    };
+
+    const handleGoToInteraction = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.goToInteractionResource(item);
     };
 
     const handleUpdateOrRestartLS = (projectName: string | undefined, tovName: string | undefined) => {
@@ -963,12 +971,20 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             handler: handleUpdateOrRestartLS
         },
         {
-            id: allExtensionCommands.openOrCreateRobotResourceFile,
-            handler: handleOpenOrCreateRobotResourceFile
+            id: allExtensionCommands.openAvailableSubdivisionInTestElementsView,
+            handler: handleOpenAvailableResource
         },
         {
-            id: allExtensionCommands.createInteractionUnderSubdivision,
-            handler: handleCreateInteractionUnderSubdivision
+            id: allExtensionCommands.openMissingSubdivisionInTestElementsView,
+            handler: handleCreateMissingResource
+        },
+        {
+            id: allExtensionCommands.openSubdivisionFolderInExplorer,
+            handler: handleOpenFolderInExplorer
+        },
+        {
+            id: allExtensionCommands.openInteractionInTestElementsView,
+            handler: handleGoToInteraction
         }
     ];
 

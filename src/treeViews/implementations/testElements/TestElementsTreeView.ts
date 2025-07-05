@@ -10,7 +10,7 @@ import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { TestElementsDataProvider } from "./TestElementsDataProvider";
 import { testElementsConfig } from "./TestElementsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
-import { ResourceFileService } from "./ResourceFileService";
+import { ResourceFileService, ResourceOperationConfig } from "./ResourceFileService";
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { FilterService } from "../../utils/FilterService";
 import { treeViews } from "../../../extension";
@@ -22,8 +22,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private currentTovLabel: string | null = null;
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
-    private isUpdating: boolean = false;
-    private updateQueue: Promise<void> = Promise.resolve();
     private filterService: FilterService;
 
     constructor(
@@ -83,13 +81,24 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         });
 
         this.eventBus.on("testElement:updated", (event) => {
-            const { id } = event.data;
-            const item = this.findItemById(this.rootItems, id);
+            const { item } = event.data;
             if (item) {
-                // Refresh only the specific item that changed
-                this._onDidChangeTreeData.fire(item);
+                this.refreshItemWithParents(item);
             }
         });
+    }
+
+    /**
+     * Refreshes a specific tree item and all of its parent items.
+     * @param item The item to start the refresh from.
+     */
+    private refreshItemWithParents(item: TestElementsTreeItem): void {
+        this._onDidChangeTreeData.fire(item);
+        let parent = item.parent as TestElementsTreeItem | null;
+        while (parent) {
+            this._onDidChangeTreeData.fire(parent);
+            parent = parent.parent as TestElementsTreeItem | null;
+        }
     }
 
     /**
@@ -359,7 +368,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                                 resourcePath += ".resource";
                             }
                             const exists = await this.resourceFileService.pathExists(resourcePath);
-                            item.updateLocalAvailability(exists);
+                            item.updateLocalAvailability(exists, resourcePath);
                         }
                     }
                 } catch (error) {
@@ -370,58 +379,31 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Updates the icon for a single tree item by checking its local availability
-     * @param item The tree item to update
-     * @returns Promise that resolves when the icon update is complete
+     * Updates the icons of parent items in the tree hierarchy.
+     * This is called when a resource file is created or opened to update parent tree item icons
+     * to reflect their availability in tree view.
+     * @param item The tree item whose parents should be updated
+     * @returns Promise that resolves when all parent icon updates are complete
      */
-    private async updateSingleItemIcon(item: TestElementsTreeItem): Promise<void> {
+    private async updateParentIcons(item: TestElementsTreeItem): Promise<void> {
         try {
-            if (item.data.testElementType === TestElementType.Subdivision) {
-                const hierarchicalName = item.data.hierarchicalName;
-                if (hierarchicalName) {
-                    const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
-
-                    if (isResourceFile) {
-                        const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
-                        const lastSlash = cleanName.lastIndexOf("/");
-                        let parentPath = "";
-                        let baseName = cleanName;
-                        if (lastSlash !== -1) {
-                            parentPath = cleanName.substring(0, lastSlash);
-                            baseName = cleanName.substring(lastSlash + 1);
-                        }
-                        const resourceFileRelative = parentPath
-                            ? `${parentPath}/${baseName}.resource`
-                            : `${baseName}.resource`;
-                        const resourceFilePath =
-                            await this.resourceFileService.constructAbsolutePath(resourceFileRelative);
-                        let exists = false;
-                        if (resourceFilePath) {
-                            exists = await this.resourceFileService.fileExists(resourceFilePath);
-                        }
-                        // Fallback: check if file exists without .resource extension
-                        if (!exists) {
-                            const fallbackRelative = parentPath ? `${parentPath}/${baseName}` : baseName;
-                            const fallbackPath = await this.resourceFileService.constructAbsolutePath(fallbackRelative);
-                            if (fallbackPath) {
-                                exists = await this.resourceFileService.fileExists(fallbackPath);
-                            }
-                        }
-                        item.updateLocalAvailability(exists);
-                        this._onDidChangeTreeData.fire(item);
-                    } else {
-                        // For non-resource subdivisions, check if the folder exists locally
+            let parent = item.parent as TestElementsTreeItem | null;
+            while (parent) {
+                if (parent.data.testElementType === TestElementType.Subdivision) {
+                    const hierarchicalName = parent.data.hierarchicalName;
+                    // If a subdivision does not contain "[Robot-Resource]" in its name it represents a folder
+                    if (hierarchicalName && !hierarchicalName.includes("[Robot-Resource]")) {
                         const absolutePath = await this.resourceFileService.constructAbsolutePath(hierarchicalName);
                         if (absolutePath) {
                             const exists = await this.resourceFileService.directoryExists(absolutePath);
-                            item.updateLocalAvailability(exists);
-                            this._onDidChangeTreeData.fire(item);
+                            parent.updateLocalAvailability(exists, absolutePath);
                         }
                     }
                 }
+                parent = parent.parent as TestElementsTreeItem | null;
             }
         } catch (error) {
-            this.logger.error(`Error updating icon for item ${item.label}:`, error);
+            this.logger.error(`Error updating parent icons for item ${item.label}:`, error);
         }
     }
 
@@ -528,7 +510,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Gets the test elements provider.
+     * Returns the test elements provider.
      * @returns The tree data provider for test elements
      */
     public getTestElementsProvider(): vscode.TreeDataProvider<TestElementsTreeItem> {
@@ -536,103 +518,310 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Opens or creates a Robot resource file for the given test element item.
-     *
-     * @param item The test element tree item to open or create resource file for
-     * @returns Promise that resolves when the operation is complete
+     * Validates and constructs the robot resource file path to be created and returns it.
+     * @param hierarchicalName The hierarchical name from the item
+     * @param errorMessages Error messages for validation failures
+     * @returns Promise resolving to the cleaned name and constructed path
      */
-    public async openOrCreateRobotResourceFile(item: TestElementsTreeItem): Promise<void> {
-        const itemType = item.data.testElementType;
-
-        if (itemType !== TestElementType.Subdivision && itemType !== TestElementType.Interaction) {
-            vscode.window.showErrorMessage("This command can only be used on a Subdivision or an Interaction.");
-            return;
-        }
-
-        const resourceItem = (itemType === TestElementType.Interaction ? item.parent : item) as
-            | TestElementsTreeItem
-            | undefined;
-
-        if (!resourceItem || resourceItem.data.testElementType !== TestElementType.Subdivision) {
-            vscode.window.showErrorMessage("Could not find the parent resource for this item.");
-            return;
-        }
-
-        const hierarchicalName = resourceItem.data.hierarchicalName;
+    private async validateAndConstructPath(
+        hierarchicalName: string | undefined,
+        errorMessages: { noHierarchicalName: string; noPath: string }
+    ): Promise<{ cleanName: string; resourcePath: string } | null> {
         if (!hierarchicalName) {
-            vscode.window.showErrorMessage("Cannot determine resource path: item has no hierarchical name.");
-            return;
+            vscode.window.showErrorMessage(errorMessages.noHierarchicalName);
+            return null;
+        }
+
+        const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
+        let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+
+        if (!resourcePath) {
+            vscode.window.showErrorMessage(errorMessages.noPath);
+            return null;
+        }
+
+        if (!resourcePath.endsWith(".resource")) {
+            resourcePath += ".resource";
+        }
+
+        return { cleanName, resourcePath };
+    }
+
+    /**
+     * Creates a missing robot resource file in the given resource path and updates the tree item with its parents.
+     * @param config The resource operation configuration
+     * @param resourcePath The path where the file should be created
+     * @param targetItem The item to update after creation
+     * @returns Promise resolving to whether the file was created successfully
+     */
+    private async createMissingResourceFile(
+        config: ResourceOperationConfig,
+        resourcePath: string,
+        targetItem: TestElementsTreeItem
+    ): Promise<boolean> {
+        if (!config.createMissing) {
+            const cleanName = targetItem.data.hierarchicalName?.replace(/\[Robot-Resource\]/g, "").trim();
+            vscode.window.showErrorMessage(
+                config.errorMessages.fileNotFound.replace("{path}", `${cleanName}.resource`)
+            );
+            return false;
         }
 
         try {
-            const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
-            const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
-            let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
-
-            if (!resourcePath) {
-                return;
+            const uid = targetItem.data.uniqueID;
+            if (!uid) {
+                const label = typeof targetItem.label === "string" ? targetItem.label : "Unknown";
+                throw new Error(config.errorMessages.noUid.replace("{label}", label));
             }
 
-            if (isResourceFile) {
-                if (!resourcePath.endsWith(".resource")) {
-                    resourcePath += ".resource";
-                }
-                const uid = resourceItem.data.uniqueID;
-                if (!uid) {
-                    throw new Error(`Subdivision ${resourceItem.label} has no UID.`);
-                }
+            const initialFileContent = `tb:uid:${uid}\n\n`;
+            await this.resourceFileService.ensureFileExists(resourcePath, initialFileContent);
 
-                const initialResourceFileContent = `tb:uid:${uid}\n\n`;
-                await this.resourceFileService.ensureFileExists(resourcePath, initialResourceFileContent);
-                const doc = await vscode.workspace.openTextDocument(resourcePath);
-                await vscode.window.showTextDocument(doc);
-            } else {
-                await this.resourceFileService.ensureFolderPathExists(resourcePath);
-                await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(resourcePath));
+            this.logger.debug(`[TestElementsTreeView] Created missing resource file: ${resourcePath}`);
+
+            targetItem.updateLocalAvailability(true, resourcePath);
+            await this.updateParentIcons(targetItem);
+            this.refreshItemWithParents(targetItem);
+
+            if (config.successMessages?.created) {
+                vscode.window.showInformationMessage(config.successMessages.created);
             }
 
-            // Only update the icons of the resource item and its parents
-            await this.updateSingleItemIcon(resourceItem);
-            let parent = resourceItem.parent as TestElementsTreeItem | null;
-            while (parent) {
-                if (parent.data.testElementType === TestElementType.Subdivision) {
-                    await this.updateSingleItemIcon(parent);
-                }
-                parent = parent.parent as TestElementsTreeItem | null;
-            }
+            return true;
         } catch (error) {
-            this.errorHandler.handleVoid(error as Error, "Failed to open or create Robot resource file.");
+            this.logger.error(`[TestElementsTreeView] Error creating resource file ${resourcePath}:`, error);
             vscode.window.showErrorMessage(
-                `Error handling resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Failed to create resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Creates a folder in the specified path if it does not exist and updates visuals of the tree item with its parents.
+     * @param config The resource operation configuration
+     * @param folderPath The path where the folder should be created
+     * @param targetItem The item to update after creation
+     * @returns Promise resolving to whether the folder was created successfully
+     */
+    private async createMissingFolder(
+        config: ResourceOperationConfig,
+        folderPath: string,
+        targetItem: TestElementsTreeItem
+    ): Promise<boolean> {
+        if (!config.createMissing) {
+            const cleanName = targetItem.data.hierarchicalName?.replace(/\[Robot-Resource\]/g, "").trim();
+            vscode.window.showErrorMessage(config.errorMessages.folderNotFound.replace("{path}", cleanName || ""));
+            return false;
+        }
+
+        try {
+            await this.resourceFileService.ensureFolderPathExists(folderPath);
+            this.logger.info(`[TestElementsTreeView] Created missing folder: ${folderPath}`);
+
+            targetItem.updateLocalAvailability(true, folderPath);
+            await this.updateParentIcons(targetItem);
+            this.refreshItemWithParents(targetItem);
+
+            return true;
+        } catch (error) {
+            this.logger.error(`[TestElementsTreeView] Error creating folder ${folderPath}:`, error);
+            vscode.window.showErrorMessage(
+                `Failed to create folder: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Opens a file in VS Code editor.
+     * @param filePath The path of the file to open
+     * @param operationType The type of operation for error context
+     */
+    private async openFileInVSCodeEditor(filePath: string, operationType: string): Promise<void> {
+        try {
+            const document = await vscode.workspace.openTextDocument(filePath);
+            await vscode.window.showTextDocument(document);
+        } catch (error) {
+            this.logger.error(`[TestElementsTreeView] Error opening ${operationType} file in editor:`, error);
+            vscode.window.showErrorMessage(
+                `Error opening ${operationType} file: ${error instanceof Error ? error.message : "Unknown error"}`
             );
         }
     }
 
-    // TODO: Implement this feature after the backend API is implemented.
     /**
-     * Handles the "Create Interaction" command for creating new interactions under subdivisions.
-     * @param item The TestElementsTreeItem representing the subdivision where the interaction will be created.
-     * @returns Promise<void> A promise that resolves when the operation completes.
-     * @throws May throw errors related to user input validation or file operations.
+     * Opens a resource file in VS Code's editor.
+     * If the file doesn't exist, it will create the file first.
+     * @param item The tree item representing a resource.
      */
-    public async createInteraction(item: TestElementsTreeItem): Promise<void> {
-        if (item.data.testElementType !== TestElementType.Subdivision) {
-            vscode.window.showErrorMessage("This command can only be used on a Subdivision.");
-            return;
-        }
-
-        const interactionName = await vscode.window.showInputBox({
-            prompt: "Enter the name for the new Interaction (Keyword)",
-            placeHolder: "e.g., Log In To System",
-            validateInput: (text) => {
-                return text.trim().length > 0 ? null : "Interaction name cannot be empty.";
+    public async openAvailableResource(item: TestElementsTreeItem): Promise<void> {
+        const config: ResourceOperationConfig = {
+            operationType: "open",
+            createMissing: true,
+            targetItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine resource path: item has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "",
+                noUid: "Subdivision {label} has no UID.",
+                fileNotFound: "Resource file does not exist: {path}.",
+                folderNotFound: ""
             }
-        });
+        };
 
-        if (!interactionName) {
-            this.logger.debug("User cancelled 'Create Interaction' command.");
+        const pathResult = await this.validateAndConstructPath(item.data.hierarchicalName, config.errorMessages);
+        if (!pathResult) {
             return;
         }
+
+        const { resourcePath } = pathResult;
+
+        try {
+            const fileExists = await this.resourceFileService.fileExists(resourcePath);
+
+            if (!fileExists) {
+                const created = await this.createMissingResourceFile(config, resourcePath, item);
+                if (!created) {
+                    return;
+                }
+            }
+
+            await this.openFileInVSCodeEditor(resourcePath, "resource");
+        } catch (error) {
+            this.logger.error(`Error checking file existence for ${resourcePath}:`, error);
+            vscode.window.showErrorMessage(
+                `Error checking resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
+    }
+
+    /**
+     * Creates a new, missing resource file and opens it.
+     * @param item The tree item representing a missing resource.
+     */
+    public async createMissingResource(item: TestElementsTreeItem): Promise<void> {
+        const config: ResourceOperationConfig = {
+            operationType: "create",
+            createMissing: true,
+            targetItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine resource path: item has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "",
+                noUid: "Subdivision {label} has no UID.",
+                fileNotFound: "",
+                folderNotFound: ""
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(item.data.hierarchicalName, config.errorMessages);
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+
+        try {
+            const created = await this.createMissingResourceFile(config, resourcePath, item);
+            if (!created) {
+                return;
+            }
+
+            await this.openFileInVSCodeEditor(resourcePath, "resource");
+        } catch (error) {
+            this.logger.error(`Error creating missing resource file ${resourcePath}:`, error);
+            vscode.window.showErrorMessage(
+                `Error creating resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
+    }
+
+    /**
+     * Reveals a subdivision folder in VS Code's file explorer.
+     * If the folder doesn't exist, it will create the folder first.
+     * @param item The tree item representing a folder.
+     */
+    public async openFolderInExplorer(item: TestElementsTreeItem): Promise<void> {
+        const config: ResourceOperationConfig = {
+            operationType: "folder",
+            createMissing: true,
+            targetItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine folder path: item has no hierarchical name.",
+                noPath: "Cannot construct folder path: workspace location not found.",
+                noParent: "",
+                noUid: "",
+                fileNotFound: "",
+                folderNotFound: "Folder does not exist: {path}"
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(item.data.hierarchicalName, config.errorMessages);
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+        const folderPath = resourcePath.replace(/\.resource$/, "");
+        const folderExists = await this.resourceFileService.directoryExists(folderPath);
+
+        if (!folderExists) {
+            const created = await this.createMissingFolder(config, folderPath, item);
+            if (!created) {
+                return;
+            }
+        }
+
+        await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(folderPath));
+    }
+
+    /**
+     * Finds and opens the robot resource of an interaction.
+     * If the parent resource file doesn't exist, it will create the file first.
+     * @param item The tree item representing an interaction.
+     */
+    public async goToInteractionResource(item: TestElementsTreeItem): Promise<void> {
+        const parentResource = item.parent as TestElementsTreeItem;
+        if (!parentResource) {
+            vscode.window.showErrorMessage("Could not find the parent resource for this interaction.");
+            return;
+        }
+
+        const config: ResourceOperationConfig = {
+            operationType: "interaction",
+            createMissing: true,
+            targetItem: parentResource,
+            parentItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine parent resource path: parent has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "Could not find the parent resource for this interaction.",
+                noUid: "Parent resource {label} has no UID.",
+                fileNotFound: "Parent resource file does not exist: {path}.",
+                folderNotFound: ""
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(
+            parentResource.data.hierarchicalName,
+            config.errorMessages
+        );
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+        const fileExists = await this.resourceFileService.fileExists(resourcePath);
+
+        if (!fileExists) {
+            const created = await this.createMissingResourceFile(config, resourcePath, parentResource);
+            if (!created) {
+                return;
+            }
+        }
+
+        await this.openFileInVSCodeEditor(resourcePath, "interaction resource");
     }
 
     /**

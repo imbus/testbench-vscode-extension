@@ -7,6 +7,28 @@ import * as fs from "fs";
 import * as path from "path";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { validateAndReturnWorkspaceLocation } from "../../../utils";
+import { TestElementsTreeItem } from "./TestElementsTreeItem";
+
+/**
+ * Configuration for resource operations
+ */
+export interface ResourceOperationConfig {
+    operationType: "open" | "create" | "folder" | "interaction";
+    createMissing: boolean;
+    targetItem: TestElementsTreeItem;
+    parentItem?: TestElementsTreeItem;
+    errorMessages: {
+        noHierarchicalName: string;
+        noPath: string;
+        noParent: string;
+        noUid: string;
+        fileNotFound: string;
+        folderNotFound: string;
+    };
+    successMessages?: {
+        created?: string;
+    };
+}
 
 export class ResourceFileService {
     constructor(private readonly logger: TestBenchLogger) {}

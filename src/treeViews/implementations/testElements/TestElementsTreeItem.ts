@@ -53,22 +53,40 @@ export class TestElementsTreeItem extends TreeItemBase {
         const label = TestElementsTreeItem.extractLabel(data.hierarchicalName || data.name);
         const description = TestElementsTreeItem.buildDescription(data);
         const collapsibleState = TestElementsTreeItem.getInitialCollapsibleState(data);
-        const contextValue = TestElementsTreeItem.getContextValue(data.testElementType);
+        const initialContextValue = TestElementsTreeItem.getInitialContextValue(data);
 
-        super(label, description, contextValue, collapsibleState, extensionContext, parent);
+        super(label, description, initialContextValue, collapsibleState, extensionContext, parent);
+
         this.data = data;
-        this._isLocallyAvailable = data.isLocallyAvailable || false;
         this.eventBus = eventBus || new EventBus();
-
         this.id = this.generateUniqueId();
-        this.updateResourceStatus();
         this.tooltip = this.generateTooltip();
         this.registerEventHandlers();
 
-        // Set resource URI for theme integration
         if (this.data.hierarchicalName) {
             this.resourceUri = vscode.Uri.parse(`testElement:${this.data.hierarchicalName}`);
         }
+    }
+
+    /**
+     * Determines the initial context value for a tree item based on its data.
+     * @param data The test element data.
+     * @returns The context value string.
+     */
+    private static getInitialContextValue(data: TestElementItemData): string {
+        const elementType = data.testElementType;
+
+        if (elementType === TestElementType.Subdivision) {
+            const isResource = data.name.includes("[Robot-Resource]");
+            if (isResource) {
+                return data.isLocallyAvailable
+                    ? "testElement.subdivision.resource.available"
+                    : "testElement.subdivision.resource.missing";
+            } else {
+                return "testElement.subdivision.folder";
+            }
+        }
+        return `testElement.${elementType.toLowerCase()}`;
     }
 
     /**
@@ -177,15 +195,6 @@ export class TestElementsTreeItem extends TreeItemBase {
     }
 
     /**
-     * Creates a context value string for the given element type.
-     * @param elementType The type of test element.
-     * @returns A context value string for commands and when clauses.
-     */
-    private static getContextValue(elementType: TestElementType): string {
-        return `testElement.${elementType.toLowerCase()}`;
-    }
-
-    /**
      * Generates a tooltip string containing detailed information about the tree item.
      * @returns A formatted tooltip string with type, name, and additional details.
      */
@@ -242,14 +251,21 @@ export class TestElementsTreeItem extends TreeItemBase {
 
         // Update visual indicators
         this.updateResourceStatus();
+        this.updateContextValue();
         this.tooltip = this.generateTooltip();
-        // Notify tree view of the change
         this.eventBus.emit({
             type: "testElement:updated",
             source: "testElement",
             data: { id: this.id },
             timestamp: Date.now()
         });
+    }
+
+    /**
+     * Updates the context value when the item's state changes dynamically.
+     */
+    public updateContextValue(): void {
+        this.contextValue = TestElementsTreeItem.getInitialContextValue(this.data);
     }
 
     /**
@@ -261,7 +277,6 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.updateResourceStatus();
         this.tooltip = this.generateTooltip();
 
-        // Notify tree view of the change
         this.eventBus.emit({
             type: "testElement:updated",
             source: "testElement",
@@ -440,34 +455,22 @@ export class TestElementsTreeItem extends TreeItemBase {
     }
 
     /**
-     * Updates the local availability status of this test element.
+     * Updates the local availability status of this test element tree item.
      * @param {boolean} isAvailable - Whether the element is locally available.
+     * @param {string} [localPath] - The absolute local file path.
      */
-    public updateLocalAvailability(isAvailable: boolean): void {
+    public updateLocalAvailability(isAvailable: boolean, localPath?: string): void {
         this._isLocallyAvailable = isAvailable;
         this.data.isLocallyAvailable = isAvailable;
-
+        this.data.localPath = localPath;
+        this.updateContextValue();
         this.tooltip = this.generateTooltip();
-        // Notify tree view of the change
+
         this.eventBus.emit({
             type: "testElement:updated",
             source: "testElement",
-            data: { id: this.id },
+            data: { item: this },
             timestamp: Date.now()
         });
-    }
-
-    /**
-     * Updates the collapsible state based on the number of children.
-     * For subdivisions, sets to collapsed if there are children, none otherwise.
-     */
-    private updateCollapsibleState(): void {
-        if (this.data.testElementType === TestElementType.Subdivision) {
-            if (this._children.length > 0) {
-                this.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-            } else {
-                this.collapsibleState = vscode.TreeItemCollapsibleState.None;
-            }
-        }
     }
 }
