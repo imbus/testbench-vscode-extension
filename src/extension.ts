@@ -266,7 +266,12 @@ async function performDeferredViewRestoration(
             );
         }
 
-        await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
+        await treeViews.testElementsTree.loadTov(
+            savedContext.tovKey,
+            savedContext.tovName,
+            savedContext.projectName,
+            savedContext.tovName
+        );
 
         await displayTestThemeTreeView();
         await displayTestElementsTreeView();
@@ -391,7 +396,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 }
                 if (treeViews?.testElementsTree) {
                     logger.debug(`Loading test elements for TOV ${versionKey} (from cycle ${cycleKey})`);
-                    await treeViews.testElementsTree.loadTov(versionKey, tovName);
+                    await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
                 }
             } else {
                 throw new Error("Invalid cycle item: missing project, cycle, or version key");
@@ -448,7 +453,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await updateOrRestartLS(projectName, tovName);
             await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
             if (treeViews.testElementsTree) {
-                await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString());
+                await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString(), projectName, tovName);
             }
         }
     };
@@ -492,7 +497,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 cycleItem.label?.toString()
             );
             if (treeViews.testElementsTree) {
-                await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString());
+                await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString(), projectName, tovName);
             }
         } else {
             throw new Error("Invalid cycle item: missing project, cycle, or version key");

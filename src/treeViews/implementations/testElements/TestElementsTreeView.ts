@@ -20,6 +20,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private disposables: vscode.Disposable[] = [];
     private currentTovKey: string | null = null;
     private currentTovLabel: string | null = null;
+    private currentProjectName: string | null = null;
+    private currentTovName: string | null = null;
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
     private filterService: FilterService;
@@ -67,7 +69,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const { tovKey, tovLabel } = event.data;
             if (tovKey && tovKey !== this.currentTovKey) {
                 this.logger.debug(`Loading test elements for TOV ${tovKey} from test themes event`);
-                await this.loadTov(tovKey, tovLabel);
+                await this.loadTov(
+                    tovKey,
+                    tovLabel,
+                    this.currentProjectName || undefined,
+                    this.currentTovName || undefined
+                );
             }
         });
 
@@ -128,12 +135,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      *
      * @param tovKey - The unique identifier for the TOV to load.
      * @param tovLabel - Optional label for the TOV to display in the title.
+     * @param projectName - The name of the project containing the TOV.
+     * @param tovName - The name of the TOV.
      * @param preserveExistingData - Whether to preserve existing data during loading.
      * @returns Promise that resolves when the TOV data is loaded.
      */
     private async loadTovWithProgress(
         tovKey: string,
         tovLabel?: string,
+        projectName?: string,
+        tovName?: string,
         preserveExistingData: boolean = false
     ): Promise<void> {
         const startTime = Date.now();
@@ -150,6 +161,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.rootItems = newRootItems;
             this.currentTovKey = tovKey;
             this.currentTovLabel = tovLabel || null;
+            this.currentProjectName = projectName || null;
+            this.currentTovName = tovName || null;
             this.resourceFiles.clear();
 
             if (tovLabel) {
@@ -196,10 +209,18 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      *
      * @param tovKey - The unique identifier for the TOV to load.
      * @param tovLabel - Optional label for the TOV to display in the title.
+     * @param projectName - The name of the project containing the TOV.
+     * @param tovName - The name of the TOV.
      * @param clearFirst - Whether to clear the tree before loading new data. Defaults to true for backward compatibility.
      * @returns Promise that resolves when the TOV is loaded.
      */
-    public async loadTov(tovKey: string, tovLabel?: string, clearFirst: boolean = true): Promise<void> {
+    public async loadTov(
+        tovKey: string,
+        tovLabel?: string,
+        projectName?: string,
+        tovName?: string,
+        clearFirst: boolean = true
+    ): Promise<void> {
         try {
             this.logger.debug(
                 `Loading TOV ${tovKey}${clearFirst ? " (clearing first)" : " (preserving existing data)"}`
@@ -213,6 +234,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             this.currentTovKey = tovKey;
             this.currentTovLabel = tovLabel || null;
+            this.currentProjectName = projectName || null;
+            this.currentTovName = tovName || null;
             this.resourceFiles.clear();
 
             if (tovLabel) {
@@ -265,6 +288,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         super.clearTree();
         this.currentTovKey = null;
         this.currentTovLabel = null;
+        this.currentProjectName = null;
+        this.currentTovName = null;
         this.resourceFiles.clear();
         this.resetTitle();
     }
@@ -510,6 +535,22 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Gets the current project name.
+     * @returns The current project name or null if not set
+     */
+    public getCurrentProjectName(): string | null {
+        return this.currentProjectName;
+    }
+
+    /**
+     * Gets the current TOV name.
+     * @returns The current TOV name or null if not set
+     */
+    public getCurrentTovName(): string | null {
+        return this.currentTovName;
+    }
+
+    /**
      * Returns the test elements provider.
      * @returns The tree data provider for test elements
      */
@@ -574,7 +615,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 throw new Error(config.errorMessages.noUid.replace("{label}", label));
             }
 
-            const initialFileContent = `tb:uid:${uid}\n\n`;
+            let contextWithProjectAndTovName = "";
+            if (this.currentProjectName && this.currentTovName) {
+                contextWithProjectAndTovName = `tb:context:${this.currentProjectName}/${this.currentTovName}\n`;
+            }
+
+            const initialFileContent = `tb:uid:${uid}\n${contextWithProjectAndTovName}\n`;
             await this.resourceFileService.ensureFileExists(resourcePath, initialFileContent);
 
             this.logger.debug(`[TestElementsTreeView] Created missing resource file: ${resourcePath}`);
@@ -852,7 +898,13 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         if (this.currentTovKey) {
             this.dataProvider.clearCache(this.currentTovKey);
 
-            this.loadTovWithProgress(this.currentTovKey, this.currentTovLabel || undefined, true)
+            this.loadTovWithProgress(
+                this.currentTovKey,
+                this.currentTovLabel || undefined,
+                this.currentProjectName || undefined,
+                this.currentTovName || undefined,
+                true
+            )
                 .then(() => {
                     this.logger.debug("Successfully refreshed test elements tree from TOV context");
                 })

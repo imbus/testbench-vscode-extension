@@ -293,6 +293,7 @@ export class TreeViewFactory {
                     timestamp: Date.now()
                 });
             } else if (item.data?.type === "version") {
+                const projectName = item.parent?.label?.toString();
                 treeView.eventBus.emit({
                     type: "version:selected",
                     source: treeView.config.id,
@@ -301,7 +302,9 @@ export class TreeViewFactory {
                         versionKey: item.data.key,
                         versionLabel: item.label,
                         tovKey: item.data.key,
-                        tovLabel: item.label
+                        tovLabel: item.label,
+                        projectName: projectName,
+                        tovName: item.label?.toString()
                     },
                     timestamp: Date.now()
                 });
@@ -346,10 +349,10 @@ export class TreeViewFactory {
 
         // Projects to Test Elements: When version is selected
         const versionSelectionDisposable = projectsTree.eventBus.on("version:selected", async (event) => {
-            const { tovKey, tovLabel } = event.data;
+            const { tovKey, tovLabel, projectName, tovName } = event.data;
             this.logger.debug(`Version selected: ${tovLabel} (${tovKey})`);
 
-            await testElementsTree.loadTov(tovKey, tovLabel);
+            await testElementsTree.loadTov(tovKey, tovLabel, projectName, tovName);
         });
 
         // Test Themes to Projects: When test generation completes
