@@ -439,10 +439,7 @@
                 "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
                 "title": "Create Resource",
                 "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.missing'",
-                "icon": {
-                    "light": "resources/icons/open-light.svg",
-                    "dark": "resources/icons/open-dark.svg"
-                }
+                "icon": "$(new-file)"
             },
             {
                 "command": "testbenchExtension.openSubdivisionFolderInExplorer",
