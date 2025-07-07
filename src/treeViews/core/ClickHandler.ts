@@ -18,7 +18,7 @@ export interface ClickEventData {
  */
 export interface ClickHandlerConfig {
     /**
-     * Double-click threshold in milliseconds.
+     * Double click threshold in milliseconds.
      * Defaults to TreeViewTiming.DOUBLE_CLICK_THRESHOLD_MS if not specified.
      */
     doubleClickThresholdMs?: number;
@@ -65,7 +65,7 @@ export class ClickHandler<T> {
 
         if (isDoubleClick) {
             if (this.config.enableLogging && logger) {
-                logger.debug(`Double-click detected for item: ${itemId}`);
+                logger.debug(`Double click detected for item: ${itemId}`);
             }
 
             this.clickHistory.delete(itemId);
@@ -75,7 +75,7 @@ export class ClickHandler<T> {
                     await this.handlers.onDoubleClick(item);
                 } catch (error) {
                     if (logger) {
-                        logger.error(`Error in double-click handler: ${error}`);
+                        logger.error(`Error in double click handler: ${error}`);
                     }
                     throw error;
                 }
@@ -84,7 +84,7 @@ export class ClickHandler<T> {
             this.clickHistory.set(itemId, { id: itemId, timestamp: now });
 
             if (this.config.enableLogging && logger) {
-                logger.debug(`Single-click detected for item: ${itemId}`);
+                logger.debug(`Single click detected for item: ${itemId}`);
             }
 
             if (this.handlers.onSingleClick) {
@@ -92,7 +92,7 @@ export class ClickHandler<T> {
                     await this.handlers.onSingleClick(item);
                 } catch (error) {
                     if (logger) {
-                        logger.error(`Error in single-click handler: ${error}`);
+                        logger.error(`Error in single click handler: ${error}`);
                     }
                     throw error;
                 }

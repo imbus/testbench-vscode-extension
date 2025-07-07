@@ -152,34 +152,30 @@ export const folderNameOfInternalTestbenchFolder: string = ".testbench";
 // --- Tree View Timing Constants ---
 export const TreeViewTiming = {
     // Data freshness and caching
-    DATA_FRESHNESS_THRESHOLD_MS: 5000, // How long data is considered fresh
-    DATA_STALE_THRESHOLD_MS: 5000, // When data is considered stale and needs refresh
+    DATA_FRESHNESS_THRESHOLD_MS: 5000,
+    DATA_STALE_THRESHOLD_MS: 5000,
 
     // UI refresh and debouncing
-    UI_REFRESH_DEBOUNCE_MS: 500, // Default debounce for UI refresh operations
-    EVENT_DEBOUNCE_MS: 500, // Default debounce for event handling
+    UI_REFRESH_DEBOUNCE_MS: 500,
+    EVENT_DEBOUNCE_MS: 500,
 
     // Configuration defaults
-    DEFAULT_DEBOUNCE_DELAY_MS: 300, // Default debounce delay for configs
+    DEFAULT_DEBOUNCE_DELAY_MS: 300,
 
-    // User interaction
-    DOUBLE_CLICK_THRESHOLD_MS: 800, // Threshold for double-click detection
+    DOUBLE_CLICK_THRESHOLD_MS: 800,
 
     // Loading and initialization
-    WEBVIEW_LOAD_DELAY_MS: 1000, // Delay to ensure webview is loaded
+    WEBVIEW_LOAD_DELAY_MS: 1000,
 
     // Event handling
-    EVENT_HISTORY_MAX_SIZE: 100, // Maximum number of events to keep in history
-    ERROR_HISTORY_MAX_SIZE: 100, // Maximum number of errors to keep in history
+    EVENT_HISTORY_MAX_SIZE: 100,
+    ERROR_HISTORY_MAX_SIZE: 100,
 
     // State management
-    STATE_SAVE_DELAY_MS: 1000, // Delay for state save operations
+    STATE_SAVE_DELAY_MS: 1000,
 
     // Framework cache
-    DEFAULT_CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes default TTL
-
-    // Test elements specific
-    TEST_ELEMENTS_DEBOUNCE_MS: 100 // Specific debounce for test elements operations
+    DEFAULT_CACHE_TTL_MS: 5 * 60 * 1000
 } as const;
 
 /**

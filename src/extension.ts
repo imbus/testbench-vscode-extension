@@ -176,7 +176,7 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
  * Wraps a (test generation or import) command handler to make sure only one test operation (generation/import) runs at a time.
  * If another operation is in progress, shows a warning and does not execute the handler.
  * @param handler The async function to execute
- * @returns A new async function with single-operation protection
+ * @returns A new async function with single operation protection
  */
 function withSingleTestOperation<T extends any[]>(
     handler: (...args: T) => Promise<void>

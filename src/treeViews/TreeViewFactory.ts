@@ -319,6 +319,17 @@ export class TreeViewFactory {
                     timestamp: Date.now()
                 });
             }
+        } else if (treeType === "testElements") {
+            // Handle test elements tree selections
+            /*
+            if (item.data?.testElementType === "Interaction") {
+                treeView.eventBus.emit({
+                    type: "interaction:selected",
+                    source: treeView.config.id,
+                    data: { item },
+                    timestamp: Date.now()
+                });
+            }*/
         }
     }
 

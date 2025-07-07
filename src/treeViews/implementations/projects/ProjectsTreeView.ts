@@ -405,8 +405,8 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     }
 
     /**
-     * Handles cycle single-click events.
-     * @param item The cycle tree item that was single-clicked
+     * Handles cycle single click events.
+     * @param item The cycle tree item that was single clicked
      */
     private async handleCycleSingleClick(item: ProjectsTreeItem): Promise<void> {
         if (item.originalContextValue !== "cycle") {
@@ -420,7 +420,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const tovName = item.parent?.label?.toString();
 
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
-            this.logger.debug(`Cycle item single-clicked: ${item.label}`);
+            this.logger.debug(`Cycle item single clicked: ${item.label}`);
 
             await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
 
@@ -443,8 +443,8 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     }
 
     /**
-     * Handles cycle double-click events.
-     * @param item The cycle tree item that was double-clicked
+     * Handles cycle double click events.
+     * @param item The cycle tree item that was double clicked
      */
     private async handleCycleDoubleClick(item: ProjectsTreeItem): Promise<void> {
         if (item.originalContextValue !== "cycle") {

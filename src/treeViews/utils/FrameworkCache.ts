@@ -15,9 +15,7 @@ export class FrameworkCache<T> {
         }
     >();
 
-    constructor(
-        private defaultTTL: number = TreeViewTiming.DEFAULT_CACHE_TTL_MS // 5 minutes default
-    ) {}
+    constructor(private defaultTTL: number = TreeViewTiming.DEFAULT_CACHE_TTL_MS) {}
 
     /**
      * Get cached data for a given key.

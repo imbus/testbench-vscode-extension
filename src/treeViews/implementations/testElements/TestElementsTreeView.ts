@@ -14,6 +14,7 @@ import { ResourceFileService, ResourceOperationConfig } from "./ResourceFileServ
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { FilterService } from "../../utils/FilterService";
 import { treeViews } from "../../../extension";
+import { ClickHandler } from "../../core/ClickHandler";
 
 export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private dataProvider: TestElementsDataProvider;
@@ -25,6 +26,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
     private filterService: FilterService;
+    private interactionClickHandler: ClickHandler<TestElementsTreeItem>;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -37,8 +39,28 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.dataProvider = new TestElementsDataProvider(this.logger, this.errorHandler, getConnection, this.eventBus);
         this.resourceFileService = new ResourceFileService(this.logger);
         this.filterService = FilterService.getInstance();
+        this.interactionClickHandler = new ClickHandler<TestElementsTreeItem>();
 
         this.registerEventHandlers();
+        this.setupInteractionClickHandlers();
+    }
+
+    /**
+     * Sets up click handlers for interaction items using the generalized click handler
+     */
+    private setupInteractionClickHandlers(): void {
+        this.interactionClickHandler.updateHandlers({
+            onSingleClick: async (item: TestElementsTreeItem) => {
+                if (item.data.testElementType === TestElementType.Interaction) {
+                    // Single click on test elements do nothing
+                }
+            },
+            onDoubleClick: async (item: TestElementsTreeItem) => {
+                if (item.data.testElementType === TestElementType.Interaction) {
+                    await this.handleInteractionDoubleClick(item);
+                }
+            }
+        });
     }
 
     /**
@@ -93,6 +115,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.refreshItemWithParents(item);
             }
         });
+
+        /*
+        // Listen for interaction selection events and handle double click detection
+        this.eventBus.on("interaction:selected", async (event) => {
+            const { item } = event.data;
+            if (item && item.data.testElementType === TestElementType.Interaction) {
+                await this.handleInteractionClick(item);
+            }
+        });
+        */
     }
 
     /**
@@ -868,6 +900,27 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         await this.openFileInVSCodeEditor(resourcePath, "interaction resource");
+    }
+
+    /**
+     * Handles interaction double click events.
+     * @param item The interaction tree item that was double clicked
+     */
+    private async handleInteractionDoubleClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(`Interaction item double clicked: ${item.label}`);
+        await this.goToInteractionResource(item);
+    }
+
+    /**
+     * Handles interaction clicks from external commands
+     * @param item The interaction item that was clicked
+     */
+    public async handleInteractionClick(item: TestElementsTreeItem): Promise<void> {
+        if (!item.id) {
+            return;
+        }
+
+        await this.interactionClickHandler.handleClick(item, item.id, this.logger);
     }
 
     /**
