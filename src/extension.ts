@@ -731,6 +731,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testElementsTree.goToInteractionResource(item);
     };
 
+    const handleCreateMissingParentResourceForInteraction = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.createMissingParentResourceForInteraction(item);
+    };
+
     const handleUpdateOrRestartLS = (projectName: string | undefined, tovName: string | undefined) => {
         updateOrRestartLS(projectName, tovName);
     };
@@ -963,6 +967,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         {
             id: allExtensionCommands.openInteractionInTestElementsView,
             handler: handleGoToInteraction
+        },
+        {
+            id: allExtensionCommands.createMissingParentResourceForInteraction,
+            handler: handleCreateMissingParentResourceForInteraction
         },
         {
             id: allExtensionCommands.handleInteractionClick,

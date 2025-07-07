@@ -95,7 +95,24 @@ export class TestElementsTreeItem extends TreeItemBase {
                 return "testElement.subdivision.folder";
             }
         }
+
+        if (elementType === TestElementType.Interaction) {
+            const parentResource = this.getParentResourceAvailability(data);
+            return parentResource
+                ? "testElement.interaction.resource.available"
+                : "testElement.interaction.resource.missing";
+        }
+
         return `testElement.${elementType.toLowerCase()}`;
+    }
+
+    /**
+     * Determines if the parent resource for an interaction is locally available.
+     * @param data The test element data
+     * @returns True if parent resource is locally available, false otherwise
+     */
+    private static getParentResourceAvailability(data: TestElementItemData): boolean {
+        return data.isLocallyAvailable || false;
     }
 
     /**
@@ -268,13 +285,48 @@ export class TestElementsTreeItem extends TreeItemBase {
             data: { id: this.id },
             timestamp: Date.now()
         });
+
+        if (this.data.testElementType === TestElementType.Subdivision && this.data.name.includes("[Robot-Resource]")) {
+            this.updateChildInteractions(isAvailable);
+        }
+    }
+
+    /**
+     * Updates child interactions when parent resource availability changes.
+     * @param {boolean} parentAvailable - Whether the parent resource is available.
+     */
+    private updateChildInteractions(parentAvailable: boolean): void {
+        if (this.children) {
+            for (const child of this.children) {
+                const childItem = child as TestElementsTreeItem;
+                if (childItem.data.testElementType === TestElementType.Interaction) {
+                    childItem.data.isLocallyAvailable = parentAvailable;
+                    childItem.updateContextValue();
+                    childItem.tooltip = childItem.generateTooltip();
+                    childItem.eventBus.emit({
+                        type: "testElement:updated",
+                        source: "testElement",
+                        data: { id: childItem.id },
+                        timestamp: Date.now()
+                    });
+                }
+            }
+        }
     }
 
     /**
      * Updates the context value when the item's state changes dynamically.
      */
     public updateContextValue(): void {
-        this.contextValue = TestElementsTreeItem.getInitialContextValue(this.data);
+        if (this.data.testElementType === TestElementType.Interaction) {
+            const parent = this.parent as TestElementsTreeItem | null;
+            const parentAvailable = parent?.data.isLocallyAvailable || false;
+            this.contextValue = parentAvailable
+                ? "testElement.interaction.resource.available"
+                : "testElement.interaction.resource.missing";
+        } else {
+            this.contextValue = TestElementsTreeItem.getInitialContextValue(this.data);
+        }
     }
 
     /**
@@ -474,6 +526,10 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.data.localPath = localPath;
         this.updateContextValue();
         this.tooltip = this.generateTooltip();
+
+        if (this.data.testElementType === TestElementType.Subdivision && this.data.name.includes("[Robot-Resource]")) {
+            this.updateChildInteractions(isAvailable);
+        }
 
         this.eventBus.emit({
             type: "testElement:updated",
