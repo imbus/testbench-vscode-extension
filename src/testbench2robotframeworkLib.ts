@@ -41,23 +41,50 @@ export class tb2robotLib {
         );
         const resourceMarker: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
         const resourceRoot: string[] | undefined = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_ROOT);
-        isGenerateTestsCommandSuccessful = await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
-            use_config_file: use_config_file,
-            clean: clean,
-            compound_interaction_logging: compound_interaction_logging,
-            config: use_config_file,
-            fully_qualified: fully_qualified,
-            library_marker: libraryMarker,
-            library_root: libraryRoot,
-            log_suite_numbering: logSuiteNumbering,
-            output_directory: outputDirectory,
-            resource_directory: resourceDirectory,
-            resource_marker: resourceMarker,
-            resource_root: resourceRoot,
-            library_mapping: libraryMapping,
-            resource_mapping: resourceMapping,
-            testbench_report: reportPath
-        });
+
+        try {
+            logger.debug(
+                `Test generation command parameters: output_directory=${outputDirectory}, resource_directory=${resourceDirectory}, use_config_file=${use_config_file}, clean=${clean}, report path: ${reportPath}`
+            );
+
+            const result = await vscode.commands.executeCommand("testbench_ls.generateTestSuites", {
+                use_config_file: use_config_file,
+                clean: clean,
+                compound_interaction_logging: compound_interaction_logging,
+                config: use_config_file,
+                fully_qualified: fully_qualified,
+                library_marker: libraryMarker,
+                library_root: libraryRoot,
+                log_suite_numbering: logSuiteNumbering,
+                output_directory: outputDirectory,
+                resource_directory: resourceDirectory,
+                resource_marker: resourceMarker,
+                resource_root: resourceRoot,
+                library_mapping: libraryMapping,
+                resource_mapping: resourceMapping,
+                testbench_report: reportPath
+            });
+
+            if (result === true) {
+                isGenerateTestsCommandSuccessful = true;
+            } else if (result === false) {
+                isGenerateTestsCommandSuccessful = false;
+            } else if (result === null || result === undefined) {
+                // Command executed successfully but returned no value
+                isGenerateTestsCommandSuccessful = true;
+            } else {
+                // Handle any other value as success
+                logger.debug(`Unexpected command result: ${result}, treating as success`);
+                isGenerateTestsCommandSuccessful = true;
+            }
+        } catch (error) {
+            logger.error("Error executing testbench2robotframework test generation command:", error);
+            logger.error(`Error details: ${error instanceof Error ? error.message : String(error)}`);
+            if (error instanceof Error && error.stack) {
+                logger.error(`Error stack: ${error.stack}`);
+            }
+            isGenerateTestsCommandSuccessful = false;
+        }
 
         return isGenerateTestsCommandSuccessful;
     }
@@ -85,7 +112,7 @@ export class tb2robotLib {
                 testbench_report: reportPath
             });
             isFetchResultsCommandSuccessful = true;
-        } catch (error) {
+        } catch {
             isFetchResultsCommandSuccessful = false;
         }
         return isFetchResultsCommandSuccessful;

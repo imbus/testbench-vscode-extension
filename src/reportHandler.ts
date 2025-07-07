@@ -727,6 +727,9 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
                     progress,
                     cancellationToken
                 );
+                logger.debug(
+                    `[generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary] Test generation result: ${testGenerationResult}`
+                );
                 if (testGenerationResult) {
                     testGenerationSuccessful = true;
                 }
@@ -756,6 +759,9 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
         logger.info(successfulTestGenerationMessage);
         return true;
     }
+
+    const testGenerationFailedMessage: string = `Failed to generate Robot Framework tests for: ${itemLabel}`;
+    logger.error(testGenerationFailedMessage);
     return false;
 }
 
@@ -782,6 +788,7 @@ async function runRobotFrameworkTestGenerationProcess(
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     cancellationToken: vscode.CancellationToken
 ): Promise<boolean> {
+    logger.debug(`Starting test generation process for cycle ${cycleKey} with tree item UID ${treeItemUID}.`);
     progress.report({ increment: 30, message: "Fetching JSON Report from the server." });
     const downloadedReportZipPath: string | null = await fetchReportZipOfCycleFromServer(
         projectKey,
@@ -796,6 +803,7 @@ async function runRobotFrameworkTestGenerationProcess(
         return false;
     }
 
+    logger.debug(`Downloaded report zip path: ${downloadedReportZipPath}`);
     progress.report({ increment: 30, message: "Generating tests via testbench2robotframework." });
     const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
     if (!workspaceLocation) {
@@ -808,6 +816,9 @@ async function runRobotFrameworkTestGenerationProcess(
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
+    logger.debug(
+        `isTb2RobotframeworkGenerateTestsCommandSuccessful: ${isTb2RobotframeworkGenerateTestsCommandSuccessful}`
+    );
     await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipPath);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         return false;
@@ -1847,6 +1858,10 @@ export async function startTestGenerationUsingTOV(
 
                 await cleanUpReportFileIfConfiguredInSettings(downloadedTovReportPath);
                 if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
+                    const tovTestGenerationFailedMessage = generateTestForSpecificTestThemeTreeItem
+                        ? `Test generation failed for specific item: ${treeItem.label}`
+                        : `Test generation failed for TOV: ${treeItem.label}`;
+                    logger.error(`[ReportHandler] ${tovTestGenerationFailedMessage}`);
                     return false;
                 }
 
@@ -1856,9 +1871,7 @@ export async function startTestGenerationUsingTOV(
                     : `Test generation completed for entire TOV: ${treeItem.label}`;
                 logger.info(`[ReportHandler] ${tovTestGenerationSuccessMessage}`);
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
-
                 await vscode.commands.executeCommand("workbench.view.extension.test");
-
                 return true;
             }
         );
