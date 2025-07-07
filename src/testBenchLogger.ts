@@ -6,16 +6,17 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as utils from "./utils";
-import { getConfig, folderNameOfTestbenchWorkingDirectory } from "./extension";
+import { getExtensionConfiguration } from "./configuration";
+import { ConfigKeys, folderNameOfInternalTestbenchFolder } from "./constants";
 
 // Use the native promises API for filesystem operations.
 const fsp = fs.promises;
 
-// Name of the logs folder (inside the working directory)
-export const folderNameOfLogs = "logs";
+const MAX_LOG_FILE_SIZE_IN_BYTES: number = 5 * 1024 * 1024;
+const MAX_LOG_FILES: number = 3;
 
-const MAX_LOG_FILE_SIZE: number = 5 * 1024 * 1024; // Maximum log file size (in bytes) 5 MB
-const MAX_LOG_FILES: number = 3; // Maximum number of backup log files.
+const fileNameOfActiveLogFile: string = "testBenchExtension.log";
+export const folderNameOfLogs: string = "logs";
 
 /**
  * A logger for the TestBench extension.
@@ -61,31 +62,45 @@ export class TestBenchLogger {
     }
 
     /**
-     * Creates an instance of the TestBenchLogger.
-     *
-     * @param outputToTerminal Optional flag to output log messages to the terminal.
-     *
-     * The constructor sets default log paths (using the extension’s directory) and then asynchronously
-     * attempts to update them based on the configured workspace location. It also caches the log level from the configuration.
+     * Gets the current log level as a string.
+     * @returns {string} The current log level (e.g., "Trace", "Debug", "Info", etc.)
      */
-    constructor(outputToTerminal?: boolean) {
-        // Initially set default values relative to the extension's directory.
-        this.logFolderPath = path.join(__dirname, "logs");
-        this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
-        this.outputLogToTerminal = outputToTerminal === true;
-        // Cache the current log level configuration.
-        this.cachedLogLevel = getConfig().get("testBenchLogger", "No logging");
-        // Begin asynchronous initialization.
-        this.initPromise = this.initialize();
+    public get level(): string {
+        return this.cachedLogLevel;
     }
 
     /**
-     * Awaits the completion of asynchronous initialization.
-     *
-     * Used to ensure the logger has been initialized (i.e. updated log paths) before logging.
+     * Gets the numeric value of the current log level.
+     * @returns {number} The numeric log level (0-5)
      */
-    public async awaitInit(): Promise<void> {
-        await this.initPromise;
+    public getLevelNumber(): number {
+        return this.levels[this.cachedLogLevel] || 0;
+    }
+
+    /**
+     * Checks if the logger is configured to log at the specified level.
+     * @param {string} logLevel - The log level to check
+     * @returns {boolean} True if the specified level would be logged
+     */
+    public isLevelEnabled(logLevel: string): boolean {
+        return this.cachedLogLevel !== "No logging" && this.levels[logLevel] >= this.levels[this.cachedLogLevel];
+    }
+
+    /**
+     * Creates an instance of the TestBenchLogger.
+     *
+     * @param {boolean | undefined} outputToTerminal Optional flag to output log messages to the terminal.
+     *
+     * The constructor sets default log paths (using the extension's directory) and then asynchronously
+     * attempts to update them based on the configured workspace location. It also caches the log level from the configuration.
+     */
+    constructor(outputToTerminal?: boolean) {
+        this.logFolderPath = path.join(__dirname, folderNameOfLogs);
+        this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
+        this.outputLogToTerminal = outputToTerminal === true;
+        this.cachedLogLevel = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
+        // Begin asynchronous initialization
+        this.initPromise = this.initialize();
     }
 
     /**
@@ -96,19 +111,18 @@ export class TestBenchLogger {
      */
     private async initialize(): Promise<void> {
         try {
-            const workspaceLocation = await utils.validateAndReturnWorkspaceLocation(false);
+            const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation(false);
             if (workspaceLocation) {
-                // Example: workspaceFolder/.testbench/logs/testBenchExtension.log
+                // Example logFolderPath: workspaceFolder/.testbench/logs/testBenchExtension.log
                 this.logFolderPath = path.join(
                     workspaceLocation,
-                    folderNameOfTestbenchWorkingDirectory,
+                    folderNameOfInternalTestbenchFolder,
                     folderNameOfLogs
                 );
-                this.logFilePath = path.join(this.logFolderPath, "testBenchExtension.log");
+                this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
             } else {
                 console.log("Workspace location is not set in the extension settings. Using default log folder.");
             }
-            // Ensure that the log folder exists using asynchronous mkdir.
             await fsp.mkdir(this.logFolderPath, { recursive: true });
         } catch (error) {
             console.error("Error during logger initialization:", error);
@@ -116,11 +130,19 @@ export class TestBenchLogger {
     }
 
     /**
-     * Updates the cached log level configuration.
+     * Updates the cached log level configuration if it has changed.
      * Should be called whenever the extension configuration is updated.
+     * @returns {boolean} True if the log level was updated, false otherwise.
      */
-    public updateCachedLogLevel(): void {
-        this.cachedLogLevel = getConfig().get("testBenchLogger", "No logging");
+    public updateCachedLogLevel(): boolean {
+        const newLogLevel: string = getExtensionConfiguration().get("testBenchLogger", "No logging");
+        if (this.cachedLogLevel !== newLogLevel) {
+            const oldLogLevel: string = this.cachedLogLevel;
+            this.cachedLogLevel = newLogLevel;
+            console.log(`Logger level changed from "${oldLogLevel}" to "${this.cachedLogLevel}"`);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -145,49 +167,44 @@ export class TestBenchLogger {
         }
         this.isRotating = true;
         try {
-            // Check if the current log file exists and obtain its size.
-            let stats;
+            let currentLogFileStats;
             try {
-                stats = await fsp.stat(this.logFilePath);
+                // Check if the current log file exists and obtain its size.
+                currentLogFileStats = await fsp.stat(this.logFilePath);
             } catch (error) {
-                // Log file does not exist; nothing to rotate.
                 console.error(`Log file ${this.logFilePath} does not exist.`, error);
                 return;
             }
-            // If the log file is below the maximum size, no rotation is needed.
-            if (stats.size < MAX_LOG_FILE_SIZE) {
+
+            if (currentLogFileStats.size < MAX_LOG_FILE_SIZE_IN_BYTES) {
                 return;
             }
 
-            // Shift existing backup files using a naming scheme.
+            // Shift existing backup files using a naming scheme of testBenchExtension.log.1, testBenchExtension.log.2, etc.
             for (let i = MAX_LOG_FILES; i >= 2; i--) {
-                const olderFile = `${this.logFilePath}.${i - 1}`;
-                const newFile = `${this.logFilePath}.${i}`;
+                const olderFileName: string = `${this.logFilePath}.${i - 1}`;
+                const newFileName: string = `${this.logFilePath}.${i}`;
                 try {
-                    await fsp.access(olderFile);
-                    await fsp.rename(olderFile, newFile);
+                    await fsp.access(olderFileName);
+                    await fsp.rename(olderFileName, newFileName);
                 } catch (error) {
-                    // If the backup file doesn't exist, continue.
-                    console.error(`Failed to rotate log file ${olderFile} to ${newFile}:`, error);
+                    console.error(`Failed to rotate log file ${olderFileName} to ${newFileName}:`, error);
                 }
             }
-            // Rename the current log file to the first backup.
             try {
                 await fsp.rename(this.logFilePath, `${this.logFilePath}.1`);
             } catch (error) {
-                console.error(`Failed to rename current log file to ${this.logFilePath}_0 after rotation:`, error);
+                console.error(`Failed to rename current log file ${this.logFilePath} after rotation:`, error);
             }
         } catch (error) {
             console.error(`Log rotation error: ${error}`);
         } finally {
-            // Reset the mutex flag.
             this.isRotating = false;
         }
     }
 
     /**
      * Formats additional details into a string.
-     *
      * If an object cannot be stringified with JSON due to circular references, the "flatted" library is used.
      *
      * @param details An object or array of objects to be stringified.
@@ -212,24 +229,21 @@ export class TestBenchLogger {
         const formatSingleDetail = (detail: any): string => {
             try {
                 // Attempt to stringify the detail using JSON.stringify.
-                // This works for most objects and arrays, but will fail for circular references.
+                // Will fail for circular references.
                 return typeof detail === "object" ? JSON.stringify(detail, null, 2) : detail;
             } catch (error) {
-                // If JSON.stringify fails due to a circular reference, use the "flatted" library to safely stringify the object.
+                // If JSON.stringify fails due to a circular reference, safely stringify the object.
                 if (error instanceof TypeError && error.message.includes("Converting circular structure to JSON")) {
                     return typeof detail === "object" ? stringify(detail) : detail;
                 }
-                // If the error is not related to circular references, return a placeholder error message.
                 return "[Error formatting details]";
             }
         };
 
         // If the details parameter is an array, format each item individually and join them with newlines.
         if (Array.isArray(details)) {
-            // Format each detail item, then join them with newlines.
             return details.map((detail) => `\n${formatSingleDetail(detail)}`).join("");
         } else {
-            // If the details parameter is a single item, format it and prepend a newline.
             return `\n${formatSingleDetail(details)}`;
         }
     }
@@ -240,27 +254,30 @@ export class TestBenchLogger {
      * The method respects the log level set in the extension configuration. It rotates log files if necessary,
      * writes the log message to the log file, and optionally outputs the message to the terminal.
      *
-     * @param {string} level The log level (e.g. "Trace", "Debug", "Info", "Warn", "Error").
-     * @param {string} message The log message.
+     * @param {string} logLevel The log level (e.g. "Trace", "Debug", "Info", "Warn", "Error").
+     * @param {string} logMessage The log message.
      * @param details Optional additional details to include.
-     * @param {boolean} outputToTerminal Optional flag to force terminal output (overrides instance setting).
+     * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output (overrides instance setting).
      */
-    public async log(level: string, message: string, details?: any | any[], outputToTerminal?: boolean): Promise<void> {
-        // Skip logging if disabled or log level is below the configured level.
-        if (this.cachedLogLevel === "No logging" || this.levels[level] < this.levels[this.cachedLogLevel]) {
+    public async log(
+        logLevel: string,
+        logMessage: string,
+        details?: any | any[],
+        shouldOutputToTerminal?: boolean
+    ): Promise<void> {
+        if (this.cachedLogLevel === "No logging" || this.levels[logLevel] < this.levels[this.cachedLogLevel]) {
             return;
         }
 
-        const timestamp = new Date().toISOString();
-        const baseLogMessage = `${timestamp} [${level.toUpperCase()}]: ${message}`;
-        const detailsMessage = await this.formatDetails(details);
-        const fullLogMessage = `${baseLogMessage}${detailsMessage}`;
+        const timestamp: string = new Date().toISOString();
+        const baseLogMessage: string = `${timestamp} [${logLevel.toUpperCase()}]: ${logMessage}`;
+        const detailsMessage: string = await this.formatDetails(details);
+        const completeLogMessage: string = `${baseLogMessage}${detailsMessage}`;
 
-        // Write to log file
         try {
             await this.rotateLogs();
 
-            // Ensure the log file exists; if not, create an empty file asynchronously.
+            // Check if log file exists, if not, create an empty file
             try {
                 await fsp.access(this.logFilePath, fs.constants.F_OK);
             } catch (error) {
@@ -268,20 +285,19 @@ export class TestBenchLogger {
                 await fsp.writeFile(this.logFilePath, "");
             }
 
-            await fsp.appendFile(this.logFilePath, `${fullLogMessage}\n`);
+            await fsp.appendFile(this.logFilePath, `${completeLogMessage}\n`);
         } catch (error) {
             console.error(`Logging error: ${error}`);
         }
 
-        // Output to terminal if enabled.
-        if (outputToTerminal || this.outputLogToTerminal) {
+        if (shouldOutputToTerminal || this.outputLogToTerminal) {
             if (Array.isArray(details)) {
                 console.log(baseLogMessage);
-                details.forEach((detail) => console.log(detail)); // Logs each object individually for easy inspection
+                details.forEach((detail) => console.log(detail));
             } else if (details) {
                 console.log(baseLogMessage, details);
             } else {
-                console.log(fullLogMessage);
+                console.log(completeLogMessage);
             }
         }
     }
@@ -289,45 +305,45 @@ export class TestBenchLogger {
     /**
      * Logs a trace message.
      *
-     * @param message The trace message.
+     * @param {string} message The trace message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output.
+     * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public trace(message: string, details?: any | any[], outputToTerminal?: boolean): void {
-        this.log("Trace", message, details, outputToTerminal);
+    public trace(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
+        this.log("Trace", message, details, shouldOutputToTerminal);
     }
 
     /**
      * Logs a debug message.
      *
-     * @param message The debug message.
+     * @param {string} message The debug message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output.
+     * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public debug(message: string, details?: any | any[], outputToTerminal?: boolean): void {
-        this.log("Debug", message, details, outputToTerminal);
+    public debug(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
+        this.log("Debug", message, details, shouldOutputToTerminal);
     }
 
     /**
      * Logs an informational message.
      *
-     * @param message The info message.
+     * @param {string} message The info message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output.
+     * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public info(message: string, details?: any | any[], outputToTerminal?: boolean): void {
-        this.log("Info", message, details, outputToTerminal);
+    public info(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
+        this.log("Info", message, details, shouldOutputToTerminal);
     }
 
     /**
      * Logs a warning message.
      *
-     * @param message The warning message.
+     * @param {string} message The warning message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output.
+     * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public warn(message: string, details?: any | any[], outputToTerminal?: boolean): void {
-        this.log("Warn", message, details, outputToTerminal);
+    public warn(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
+        this.log("Warn", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -335,11 +351,11 @@ export class TestBenchLogger {
      *
      * Error messages are always sent to the terminal by default.
      *
-     * @param message The error message.
+     * @param {string} message The error message.
      * @param details Optional details.
-     * @param outputToTerminal Optional flag to force terminal output (defaults to true).
+     * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output (defaults to true).
      */
-    public error(message: string, details?: any | any[], outputToTerminal: boolean = true): void {
-        this.log("Error", message, details, outputToTerminal);
+    public error(message: string, details?: any | any[], shouldOutputToTerminal: boolean = true): void {
+        this.log("Error", message, details, shouldOutputToTerminal);
     }
 }

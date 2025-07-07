@@ -1,5 +1,5 @@
 /**
- * @file testBenchConnection.ts
+ * @file src/testBenchConnection.ts
  * @description Handles connection and communication with the TestBench server.
  */
 
@@ -8,55 +8,53 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
-import * as loginWebView from "./loginWebView";
-import * as base64 from "base-64"; // npm i --save-dev @types/base-64
+import * as base64 from "base-64";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
-import * as projectManagementTreeView from "./projectManagementTreeView";
-import {
-    getConfig,
-    setConnection,
-    allExtensionCommands,
-    folderNameOfTestbenchWorkingDirectory,
-    setProjectManagementTreeDataProvider,
-    logger,
-    loginWebViewProvider
-} from "./extension";
+import { getLoginWebViewProvider, logger, setConnection } from "./extension";
 import * as utils from "./utils";
+import { ContextKeys, JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
+import { ExecutionMode } from "./testBenchTypes";
 
 // TODO: Temporarily ignore SSL certificate validation (remove in production)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+export interface TestBenchLoginResult {
+    sessionToken: string;
+    userKey: string; // From LoginResponse
+    loginName: string;
+}
 
 /**
  * Represents a connection to the TestBench Play server.
  * Handles communication with the server, including login, logout, and API requests.
  */
 export class PlayServerConnection {
-    private context: vscode.ExtensionContext;
-    private serverName: string;
-    private portNumber: number;
-    private sessionToken: string;
     private baseURL: string;
     private apiClient: AxiosInstance;
+    private readonly keepAliveIntervalInSeconds: number = 4 * 60 * 1000; // 4 minutes
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
     /**
      * Creates a new PlayServerConnection.
      *
-     * @param context - The VS Code extension context.
-     * @param serverName - The server name or IP address.
-     * @param portNumber - The server port number.
-     * @param sessionToken - The session token for authentication.
+     * @param {string} serverName - The name of the server.
+     * @param {number} portNumber - The port number of the server.
+     * @param {string} username - The username for authentication.
+     * @param {string} sessionToken - The session token for authentication.
      */
-    constructor(context: vscode.ExtensionContext, serverName: string, portNumber: number, sessionToken: string) {
-        this.context = context;
-        this.serverName = serverName;
-        this.portNumber = portNumber;
-        this.sessionToken = sessionToken;
+    constructor(
+        public serverName: string,
+        public portNumber: number,
+        public username: string,
+        private sessionToken: string
+    ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
+        logger.trace(
+            `[PlayServerConnection] Initializing for server: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
+        );
 
-        // Create Axios instance for API calls to the server using the session token
         this.apiClient = axios.create({
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
@@ -65,13 +63,27 @@ export class PlayServerConnection {
             })
         });
 
-        // Start the keep-alive process immediately to prevent session timeout after 5 minutes
-        this.startKeepAlive();
+        if (this.sessionToken) {
+            // Start the keep-alive process immediately to prevent session timeout after 5 minutes
+            this.startKeepAlive();
+        } else {
+            logger.warn("[PlayServerConnection] Initialized without a session token. Keep-alive not started.");
+        }
     }
 
-    /** Returns the current session token. */
-    public getSessionToken(): string {
-        return this.sessionToken;
+    /** Returns the server name. */
+    public getServerName(): string {
+        return this.serverName;
+    }
+
+    /** Returns the server port. */
+    public getServerPort(): string {
+        return this.portNumber.toString();
+    }
+
+    /** Returns the username. */
+    public getUsername(): string {
+        return this.username;
     }
 
     /** Returns the base URL of the server. */
@@ -84,58 +96,63 @@ export class PlayServerConnection {
         return this.apiClient;
     }
 
-    /**
-     * Retrieves the session token from VS Code's secret storage.
-     *
-     * @param context - The extension context.
-     * @returns The session token or undefined if not found.
-     */
-    async getSessionTokenFromSecretStorage(context: vscode.ExtensionContext): Promise<string | undefined> {
-        const token: string | undefined = await context.secrets.get("sessionToken");
-        if (!token) {
-            logger.error("Session token not found.");
-        }
-        return token;
-    }
-
-    /** Clears session data and resets API client and keep-alive timer. */
-    clearSessionData(): void {
-        this.baseURL = "";
-        this.serverName = "";
-        this.portNumber = 0;
-        this.sessionToken = "";
-        this.apiClient = axios.create();
-        this.keepAliveIntervalId = null;
+    /** Returns the current session token. */
+    public getSessionToken(): string {
+        return this.sessionToken;
     }
 
     /**
-     * Displays a quick pick list for selecting a project key.
-     *
-     * @param projectsData - The list of projects fetched from the server.
-     * @returns {Promise<string | null>} The selected project key or null if none selected.
+     * Logs out the user from the TestBench server by invalidating the current session token.
+     * This method now focuses on the server-side logout. UI and global state changes
+     * should be handled by the AuthenticationProvider or session change listeners.
+     * @returns {Promise<boolean>} True if server logout was successful or no action needed, false on API error.
      */
-    async getProjectKeyFromProjectListQuickPickSelection(
-        projectsData: testBenchTypes.Project[]
-    ): Promise<string | null> {
-        // Extract project names from the projects data and display them in a quick pick list
-        const projectNames: string[] = projectsData.map((project) => project.name);
-        const selectedProjectName: string | undefined = await vscode.window.showQuickPick(projectNames, {
-            placeHolder: "Select a project"
-        });
-
-        if (!selectedProjectName) {
-            logger.warn("Selected project name not found.");
-            return null;
+    async logoutUserOnServer(): Promise<boolean> {
+        logger.debug(
+            `[PlayServerConnection] Attempting to log out user ${this.username} from server ${this.serverName}.`
+        );
+        if (!this.sessionToken) {
+            logger.warn("[PlayServerConnection] No session token available. Cannot perform server-side logout.");
+            this.stopKeepAlive();
+            return true;
         }
 
-        logger.debug("Selected project name:", selectedProjectName);
-        const selectedProject = projectsData.find((project) => project.name === selectedProjectName);
-        if (!selectedProject) {
-            logger.error("Selected project not found.");
-            return null;
-        }
+        try {
+            const logoutResponse: AxiosResponse = await withRetry(
+                () =>
+                    this.apiClient.delete(`/login/session/v1`, {
+                        headers: { accept: "application/vnd.testbench+json" }
+                    }),
+                3,
+                2000
+            );
 
-        return selectedProject.key;
+            if (logoutResponse.status === 204) {
+                logger.debug("[PlayServerConnection] Server logout successful (204).");
+                setConnection(null);
+                await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
+                this.sessionToken = "";
+                getLoginWebViewProvider()?.updateWebviewHTMLContent();
+
+                return true;
+            } else {
+                logger.error(
+                    `[PlayServerConnection] Server logout failed. Unexpected response status: ${logoutResponse.status}`
+                );
+                return false;
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                logger.error(
+                    `[PlayServerConnection] Error during server logout: ${error.response?.status} - ${error.response?.statusText}.`
+                );
+            } else {
+                logger.error(`[PlayServerConnection] Unexpected error during server logout: ${error}`);
+            }
+            return false;
+        } finally {
+            this.stopKeepAlive();
+        }
     }
 
     /**
@@ -144,21 +161,20 @@ export class PlayServerConnection {
      * @returns {Promise<testBenchTypes.Project[] | null>} The list of projects or null if an error occurs.
      */
     async getProjectsList(): Promise<testBenchTypes.Project[] | null> {
-        if (!this.sessionToken) {
-            logger.warn("Session token is null. Cannot fetch projects list.");
+        if (!this.sessionToken || !this.apiClient) {
+            logger.error("Session token is null. Cannot fetch projects list.");
             return null;
         }
         try {
             logger.debug("Fetching projects list.");
-            const projectsURL = `/projects/v1`;
-            // Wrap the project list get request in the withRetry helper.
+            const projectsURL: string = `/projects/v1`;
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
                     this.apiClient.get(projectsURL, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                3, // Try 3 additional times
+                2000 // delayMs
             );
 
             // Save the response from server to a file for analyzing the structure
@@ -183,7 +199,7 @@ export class PlayServerConnection {
                 logger.trace("Fetched project list:", projectsResponse.data);
                 return projectsResponse.data;
             } else {
-                logger.warn("Project list data is null or undefined.");
+                logger.error("Project list data is null or undefined.");
                 return null;
             }
         } catch (error) {
@@ -196,28 +212,28 @@ export class PlayServerConnection {
     /**
      * Fetches the project tree for a specific project from the TestBench server.
      *
-     * @param projectKey - The project key as a string.
+     * @param {string | null} projectKey - The project key as a string.
      * @returns {Promise<testBenchTypes.TreeNode | null>} The project tree fetched from the server or null if an error occurs.
      */
     async getProjectTreeOfProject(projectKey: string | null): Promise<testBenchTypes.TreeNode | null> {
         logger.trace("Fetching project tree for project key:", projectKey);
         if (!this.sessionToken) {
-            logger.warn("Session token is null. Cannot fetch project tree for project key:", projectKey);
+            logger.error("Session token is null. Cannot fetch project tree for project key:", projectKey);
             return null;
         }
         if (!projectKey) {
-            logger.warn("Project key is null or undefined. Cannot fetch project tree.");
+            logger.error("Project key is null or undefined. Cannot fetch project tree.");
             return null;
         }
         try {
-            const projectTreeURL = `/projects/${projectKey}/tree/v1`;
+            const projectTreeURL: string = `/projects/${projectKey}/tree/v1`;
             const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await withRetry(
                 () =>
                     this.apiClient.get(projectTreeURL, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                3, // maxRetries
+                2000 // delayMs
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -242,7 +258,7 @@ export class PlayServerConnection {
                 logger.trace("Fetched project tree:", projectTreeResponse.data);
                 return projectTreeResponse.data;
             } else {
-                logger.warn("Project tree data is null or undefined.");
+                logger.error("Project tree data is null or undefined.");
                 return null;
             }
         } catch (error) {
@@ -251,43 +267,43 @@ export class PlayServerConnection {
         }
     }
 
+    // TODO: If this API call is implemented in the new play server, replace this method with the new API.
     /**
      * Fetches test elements using the Test Object Version (TOV) key from the old play server.
      *
-     * @param tovKey - The TOV key as a string.
-     * @returns The test elements data fetched from the server or null if an error occurs.
+     * @param {string | null} tovKey - The TOV key as a string.
+     * @returns {Promise<any | null>} The test elements data fetched from the server or null if an error occurs.
      */
-    async getTestElementsWithTovKeyOldPlayServer(tovKey: string | null): Promise<any | null> {
+    async getTestElementsWithTovKeyUsingOldPlayServer(tovKey: string | null): Promise<any | null> {
         logger.debug("Fetching test elements with TOV key:", tovKey);
         if (!this.sessionToken) {
-            logger.warn("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
+            logger.error("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
             return null;
         }
         if (!tovKey) {
-            logger.warn("TOV key is null or undefined. Cannot fetch test elements.");
+            logger.error("TOV key is null or undefined. Cannot fetch test elements.");
             return null;
         }
 
         try {
-            const oldPlayServerBaseUrl = `https://${this.serverName}:9443/api/1`;
-            const getTestElementsURL = `/tovs/${tovKey}/testElements`;
+            const oldPlayServerPortNumber: number = 9443;
+            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
+            const getTestElementsURL: string = `tovs/${tovKey}/testElements`;
 
-            logger.trace("Creating session for old play server.");
+            logger.trace("Creating session for old play server with URL:", oldPlayServerBaseUrl);
 
-            // Create session for API calls to the old play server
-            const oldPlayServerSession = axios.create({
+            const userNameFromConfig: string = this.username;
+            const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
+            const oldPlayServerSession: axios.AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
                 // Old play server, which runs on port 9443, uses BasicAuth.
                 // Use loginName as username, and use sessionToken as the password
                 auth: {
-                    username: getConfig().get<string>("username")!,
+                    username: this.username,
                     password: this.sessionToken
                 },
                 headers: {
-                    // Manually encode the credentials to Base64
-                    Authorization: `Basic ${base64.encode(
-                        `${getConfig().get<string>("username")}:${this.sessionToken}`
-                    )}`,
+                    Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
                 // Ignore self-signed certificates
@@ -296,15 +312,22 @@ export class PlayServerConnection {
                 })
             });
 
+            if (!oldPlayServerSession) {
+                logger.error("Failed to create session for old play server.");
+                return null;
+            } else {
+                logger.trace(`Old play server session created successfully.`);
+            }
+
             logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
             const testElementsResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getTestElementsURL),
-                3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
-                        // Do not retry if the error is due to authentication or if the resource is not found.
-                        const nonRetryableStatusCodes = [401, 404];
+                        // Retry predicates
+                        const nonRetryableStatusCodes: number[] = [401, 404];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
                             return false;
                         }
@@ -333,10 +356,11 @@ export class PlayServerConnection {
 
             logger.trace("Response status of get test elements request:", testElementsResponse.status);
             if (testElementsResponse.data) {
-                logger.trace("Fetched test elements data:", testElementsResponse.data);
+                // Note: The output of testElementsResponse is large
+                // logger.trace("Fetched test elements data:", testElementsResponse.data);
                 return testElementsResponse.data;
             } else {
-                logger.warn("Test elements data is null or undefined.");
+                logger.error("Test elements data is null or undefined.");
                 return null;
             }
         } catch (error) {
@@ -346,20 +370,187 @@ export class PlayServerConnection {
         }
     }
 
+    // TODO: If this API call is implemented in the new play server, replace this method with the new API.
     /**
-     * Fetches the cycle structure of a specific cycle within a project from the TestBench server.
-     *
-     * @param projectKey - The project key as a string.
-     * @param cycleKey - The cycle key as a string.
-     * @returns {Promise<testBenchTypes.CycleStructure | null>} The cycle structure or null if an error occurs.
+     * Returns all filters that can be accessed by the connected user.
      */
-    async fetchCycleStructureOfCycleInProject(
+    async getFiltersFromOldPlayServer(): Promise<any | null> {
+        logger.debug("Fetching filters");
+        if (!this.sessionToken) {
+            logger.error("Session token is null. Cannot fetch filters");
+            return null;
+        }
+
+        try {
+            const oldPlayServerPortNumber: number = 9443;
+            const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
+            const getFiltersURL: string = `${oldPlayServerBaseUrl}/filters`;
+
+            logger.trace("Creating session for old play server with URL:", oldPlayServerBaseUrl);
+
+            const userNameFromConfig: string = this.username;
+            const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
+            const oldPlayServerSession: axios.AxiosInstance = axios.create({
+                baseURL: oldPlayServerBaseUrl,
+                // Old play server, which runs on port 9443, uses BasicAuth.
+                // Use loginName as username, and use sessionToken as the password
+                auth: {
+                    username: this.username,
+                    password: this.sessionToken
+                },
+                headers: {
+                    Authorization: `Basic ${encoded}`,
+                    "Content-Type": "application/vnd.testbench+json; charset=utf-8"
+                },
+                // Ignore self-signed certificates
+                httpsAgent: new https.Agent({
+                    rejectUnauthorized: false //TODO: This should only be used in a development environment
+                })
+            });
+
+            if (!oldPlayServerSession) {
+                logger.error("Failed to create session for old play server.");
+                return null;
+            } else {
+                logger.trace(`Old play server session created successfully.`);
+            }
+
+            logger.trace(`Sending GET request to ${getFiltersURL}`);
+            const getFiltersResponse: AxiosResponse = await withRetry(
+                () => oldPlayServerSession.get(getFiltersURL),
+                3, // maxRetries
+                2000, // delayMs
+                (error) => {
+                    if (axios.isAxiosError(error) && error.response) {
+                        // Retry predicates
+                        const nonRetryableStatusCodes: number[] = [401, 404];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            );
+
+            // Save the JSON to a file for analyzing the structure
+            /*
+            const savePath = await vscode.window.showSaveDialog({
+                saveLabel: "Save Test Elements JSON Response From Server",
+                filters: {
+                    "JSON Files": ["json"],
+                    "All Files": ["*"],
+                },
+            });
+            if (savePath) {
+                const filePath = savePath.fsPath;
+                utils.saveJsonDataToFile(filePath, getFiltersResponse.data);
+                vscode.window.showInformationMessage(`Response saved to ${filePath}`);
+            } else {
+                vscode.window.showErrorMessage("No file path selected.");
+            }
+            */
+
+            logger.trace("Response status of get filters request:", getFiltersResponse.status);
+            if (getFiltersResponse.data) {
+                logger.trace("Fetched filters data:", getFiltersResponse.data);
+                return getFiltersResponse.data;
+            } else {
+                logger.error("Filters data is null or undefined.");
+                return null;
+            }
+        } catch (error) {
+            logger.error("Error fetching filters:", error);
+            vscode.window.showErrorMessage("Error fetching filters. Please check the logs for details.");
+            return null;
+        }
+    }
+
+    /**
+     * Sends a request to the TestBench server to package the Test Object Version (TOV) into a zip file.
+     *
+     * @param {string} projectKey - The project key as a string.
+     * @param {string} tovKey - The Test Object Version key as a string.
+     * @param {testBenchTypes.TovStructureOptions} tovStructureOptions - The TOV structure options.
+     * @returns {Promise<string | null>} The job ID of the requested job.
+     */
+    async requestToPackageTovsInServerAndGetJobID(
+        projectKey: string,
+        tovKey: string,
+        tovStructureOptions: testBenchTypes.TovStructureOptions
+    ): Promise<string | null> {
+        const tovReportUrl: string = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
+
+        try {
+            const tovReportJobResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
+                () =>
+                    this.apiClient.post(tovReportUrl, tovStructureOptions, {
+                        headers: {
+                            accept: "application/json",
+                            "Content-Type": "application/json"
+                        }
+                    }),
+                3, // maxRetries
+                2000, // delayMs
+                (error) => {
+                    if (axios.isAxiosError(error) && error.response) {
+                        // Retry predicates - don't retry on client errors
+                        const nonRetryableStatusCodes = [404, 422];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            );
+
+            logger.trace(`TOV report job ID response for TOV key ${tovKey}:`, tovReportJobResponse.status);
+            if (tovReportJobResponse.data.jobID) {
+                logger.trace(`Received TOV report Job ID for TOV key ${tovKey}:`, tovReportJobResponse.data);
+                return tovReportJobResponse.data.jobID;
+            } else {
+                logger.error(`Unexpected response code: ${tovReportJobResponse.status}`);
+                return null;
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response) {
+                switch (error.response.status) {
+                    case 404:
+                        logger.error(
+                            `TOV report job ID fetch failed: Project (${projectKey}) or TOV (${tovKey}) not found.`
+                        );
+                        break;
+                    case 422:
+                        logger.error(
+                            `TOV report job ID fetch failed: Invalid tree root UID, filter, or test theme UID.`
+                        );
+                        break;
+                    default:
+                        logger.error(
+                            `TOV report job ID fetch failed with status ${error.response.status}:`,
+                            error.message
+                        );
+                }
+            } else {
+                logger.error("Error fetching TOV report job ID:", error);
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Fetches the tests structure of a specific cycle within a project from the TestBench server.
+     *
+     * @param {string} projectKey - The project key as a string.
+     * @param {string} cycleKey - The cycle key as a string.
+     * @returns {Promise<testBenchTypes.TestStructure | null>} The test structure or null if an error occurs.
+     */
+    async fetchTestStructureOfCycleFromServer(
         projectKey: string,
         cycleKey: string
-    ): Promise<testBenchTypes.CycleStructure | null> {
-        const cycleStructureUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
+    ): Promise<testBenchTypes.TestStructure | null> {
+        const testStructureOfCycleUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
-            basedOnExecution: true,
+            executionMode: ExecutionMode.Execute,
             suppressFilteredData: false,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
@@ -367,19 +558,19 @@ export class PlayServerConnection {
         };
 
         try {
-            const cycleStructureResponse: AxiosResponse<testBenchTypes.CycleStructure> = await withRetry(
+            const testStructureOfCycleResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
                 () =>
-                    this.apiClient.post(cycleStructureUrl, requestBody, {
+                    this.apiClient.post(testStructureOfCycleUrl, requestBody, {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
                         }
                     }),
-                3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
-                        // Do not retry if the error is due to a bad request, missing resource, or unprocessable data.
+                        // Retry predicates
                         const nonRetryableStatusCodes = [400, 404, 422];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
                             return false;
@@ -389,7 +580,7 @@ export class PlayServerConnection {
                 }
             );
 
-            // User selects a file path for saving the JSON
+            // Save the JSON to a file for analyzing the structure
             /*
             const savePath: vscode.Uri | undefined = await vscode.window.showSaveDialog({
                 saveLabel: "Save Cycle Structure",
@@ -399,111 +590,126 @@ export class PlayServerConnection {
                 },
             });
             if (savePath) {
-                const filePath = savePath.fsPath;
-                utils.saveJsonDataToFile(filePath, response.data);
+                const filePath: string = savePath.fsPath;
+                utils.saveJsonDataToFile(filePath, cycleStructureResponse.data);
             } else {
                 vscode.window.showErrorMessage("No file path selected.");
             }
             */
 
-            logger.trace(`Cycle structure response for cycle key ${cycleKey}:`, cycleStructureResponse.status);
-            if (cycleStructureResponse.data) {
-                logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, cycleStructureResponse.data);
-                return cycleStructureResponse.data;
+            logger.trace(
+                `Test structure of cycle response for cycle key ${cycleKey}:`,
+                testStructureOfCycleResponse.status
+            );
+            if (testStructureOfCycleResponse.data) {
+                // Note: The output of cycleStructureResponse is large
+                // logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
+                return testStructureOfCycleResponse.data;
             } else {
-                logger.error(`Unexpected response code: ${cycleStructureResponse.status}`);
+                logger.error(`Unexpected response code: ${testStructureOfCycleResponse.status}`);
                 return null;
             }
         } catch (error) {
-            logger.error("Error fetching cycle structure:", error);
+            logger.error("Error fetching test structure for cycle:", error);
             return null;
         }
     }
 
     /**
-     * Logs out the user from the TestBench server.
-     * Clears session data, stops the keep-alive process, clears the tree data provider which empties the tree view.
+     * Fetches the test structure of a specific TOV within a project from the TestBench server.
      *
-     * @param projectTreeDataProvider - The project management tree data provider.
-     * @returns {Promise<void | null>} A promise that resolves when logout is complete, or null if an error occurs.
+     * @param {string} projectKey - The project key as a string.
+     * @param {string} tovKey - The TOV key as a string.
+     * @returns {Promise<testBenchTypes.TestStructure | null>} The cycle structure or null if an error occurs.
      */
-    async logoutUser(
-        projectTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider
-    ): Promise<void | null> {
-        logger.debug("Logging out user.");
+    async fetchTestStructureOfTOVFromServer(
+        projectKey: string,
+        tovKey: string
+    ): Promise<testBenchTypes.TestStructure | null> {
+        const testStructureOfTOVUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+        const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
+            executionMode: ExecutionMode.Execute,
+            suppressFilteredData: false,
+            suppressNotExecutable: false,
+            suppressEmptyTestThemes: false,
+            filters: []
+        };
+
         try {
-            const logoutResponse: AxiosResponse = await withRetry(
+            const testStructureOfTOVResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
                 () =>
-                    this.apiClient.delete(`/login/session/v1`, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                    this.apiClient.post(testStructureOfTOVUrl, requestBody, {
+                        headers: {
+                            accept: "application/json",
+                            "Content-Type": "application/json"
+                        }
                     }),
-                3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
+                (error) => {
+                    if (axios.isAxiosError(error) && error.response) {
+                        // Retry predicates
+                        const nonRetryableStatusCodes = [400, 404, 422];
+                        if (nonRetryableStatusCodes.includes(error.response.status)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
             );
 
-            if (logoutResponse.status === 204) {
-                if (projectTreeDataProvider) {
-                    projectTreeDataProvider.clearTree();
-                } else {
-                    // Note: When deactivating the extension or closing VS Code, the tree data provider may be null and this warning is expected.
-                    logger.warn("Tree data provider is not defined. Cannot clear the tree.");
-                }
-
-                const logoutSuccessfulMessage = "Logout successful.";
-                logger.debug(logoutSuccessfulMessage);
-                vscode.window.showInformationMessage(logoutSuccessfulMessage);
+            // Save the JSON to a file for analyzing the structure
+            /*
+            const savePath: vscode.Uri | undefined = await vscode.window.showSaveDialog({
+                saveLabel: "Save Cycle Structure",
+                filters: {
+                    "JSON Files": ["json"],
+                    "All Files": ["*"],
+                },
+            });
+            if (savePath) {
+                const filePath: string = savePath.fsPath;
+                utils.saveJsonDataToFile(filePath, cycleStructureResponse.data);
             } else {
-                const logoutFailedMessage = `Logout failed. Unexpected response status: ${logoutResponse.status}`;
-                logger.error(logoutFailedMessage);
-                vscode.window.showWarningMessage(logoutFailedMessage);
+                vscode.window.showErrorMessage("No file path selected.");
+            }
+            */
+
+            logger.trace(`Test structure of TOV response for TOV key ${tovKey}:`, testStructureOfTOVResponse.status);
+            if (testStructureOfTOVResponse.data) {
+                // Note: The output is large
+                // logger.trace(`Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
+                return testStructureOfTOVResponse.data;
+            } else {
+                logger.error(`Unexpected response code: ${testStructureOfTOVResponse.status}`);
                 return null;
             }
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const logoutErrorMessage = `Error during logout: ${error.response?.status} - ${error.response?.statusText}. If the issue persists, please log in again.`;
-                logger.error(logoutErrorMessage);
-                vscode.window.showWarningMessage(logoutErrorMessage);
-                return null;
-            } else {
-                logger.error(`Unexpected error during logout: ${error}`);
-                return null;
-            }
-        } finally {
-            // Regardless of the outcome of logout operation, stop the keep-alive process
-            this.stopKeepAlive();
-            this.clearSessionData(); // Clear the session data after stopping keep-alive because it also resets keepAliveIntervalId
-            await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", false);
-            setProjectManagementTreeDataProvider(null); // Clear the connection from the tree data provider
-            setConnection(null);
-            // Notify login webview about the logout success to change its HTML content
-            if (loginWebViewProvider) {
-                loginWebViewProvider.updateWebviewContent();
-            } else {
-                logger.warn("loginWebViewProvider is null. Cannot update webview content.");
-            }
+            logger.error("Error fetching test structure for TOV:", error);
+            return null;
         }
     }
 
     /**
-     * Uploads a zip archive containing JSON-based test execution results to the TestBench server.
+     * Imports a zip archive containing JSON-based test execution results to the TestBench server.
      *
      * @param {number} projectKey - The project key.
      * @param {string} zipFilePath - The file path to the zip archive.
      * @returns {Promise<string>} The file name returned by the server.
-     * @throws An error if the upload fails.
+     * @throws An error if the import fails.
      */
-    public async uploadExecutionResultsAndReturnUploadedFileName(
+    public async importExecutionResultsAndReturnImportedFileName(
         projectKey: number,
         zipFilePath: string
     ): Promise<string> {
-        const uploadResultZipURL = `/projects/${projectKey}/executionResults/v1`;
+        const importResultZipURL: string = `/projects/${projectKey}/executionResults/v1`;
 
         try {
             const zipFileData: Buffer = fs.readFileSync(zipFilePath);
-            logger.debug(`Uploading zip file "${zipFilePath}" to ${uploadResultZipURL}`);
-            const uploadZipResponse: AxiosResponse = await withRetry(
+            logger.debug(`Importing zip file "${zipFilePath}" to ${importResultZipURL}`);
+            const importZipResponse: AxiosResponse = await withRetry(
                 () =>
-                    this.apiClient.post(uploadResultZipURL, zipFileData, {
+                    this.apiClient.post(importResultZipURL, zipFileData, {
                         headers: {
                             "Content-Type": "application/zip",
                             accept: "application/json"
@@ -511,10 +717,10 @@ export class PlayServerConnection {
                         // Handle all status codes manually
                         validateStatus: () => true
                     }),
-                3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
                 (error) => {
-                    // Do not retry if the error is due to a non-transient condition
+                    // Retry predicates
                     if (axios.isAxiosError(error) && error.response) {
                         const nonRetryableStatusCodes = [403, 404, 422];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
@@ -525,48 +731,49 @@ export class PlayServerConnection {
                 }
             );
 
-            switch (uploadZipResponse.status) {
+            switch (importZipResponse.status) {
                 case 201: {
-                    logger.debug("Report uploaded successfully.");
-                    // Extract the fileName from the response and return it
-                    const fileName: string | undefined = uploadZipResponse.data?.fileName;
+                    logger.debug("Report imported successfully.");
+                    const fileName: string | undefined = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
                     } else {
-                        const fileNameNotFoundMessage = "File name not found in server response.";
+                        const fileNameNotFoundMessage: string = "File name not found in server response.";
                         logger.error(fileNameNotFoundMessage);
                         throw new Error(fileNameNotFoundMessage);
                     }
                 }
                 case 403: {
-                    const uploadForbiddenMessage = "Forbidden: You do not have permission to upload execution results.";
-                    logger.error(uploadForbiddenMessage);
-                    throw new Error(uploadForbiddenMessage);
+                    const importForbiddenMessage: string =
+                        "Forbidden: You do not have permission to import execution results.";
+                    logger.error(importForbiddenMessage);
+                    throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const uploadNotFoundMessage = "Not Found: The requested project was not found.";
-                    logger.error(uploadNotFoundMessage);
-                    throw new Error(uploadNotFoundMessage);
+                    const importNotFoundMessage: string = "Not Found: The requested project was not found.";
+                    logger.error(importNotFoundMessage);
+                    throw new Error(importNotFoundMessage);
                 }
                 case 422: {
-                    const uploadUnprocessableEntityMessage = "Unprocessable Entity: The uploaded file is invalid.";
-                    logger.error(uploadUnprocessableEntityMessage);
-                    throw new Error(uploadUnprocessableEntityMessage);
+                    const importUnprocessableEntityMessage: string =
+                        "Unprocessable Entity: The imported file is invalid.";
+                    logger.error(importUnprocessableEntityMessage);
+                    throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const uploadUnexpectedErrorMessage = `Unexpected status code ${uploadZipResponse.status} received.`;
-                    logger.error(uploadUnexpectedErrorMessage);
-                    throw new Error(uploadUnexpectedErrorMessage);
+                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importZipResponse.status} received.`;
+                    logger.error(importUnexpectedErrorMessage);
+                    throw new Error(importUnexpectedErrorMessage);
                 }
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                logger.error("An Axios error occurred while uploading the file:", error.message);
+                logger.error("An Axios error occurred while importing the file:", error.message);
                 if (error.response) {
                     logger.error("Error response data:", error.response.data);
                 }
             } else {
-                logger.error("An unexpected error occurred while uploading the file:", error);
+                logger.error("An unexpected error occurred while importing the file:", error);
             }
             throw error;
         }
@@ -586,7 +793,7 @@ export class PlayServerConnection {
         cycleKey: number,
         importData: testBenchTypes.ImportData
     ): Promise<string> {
-        const getJobIDOfImportUrl = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+        const getJobIDOfImportUrl: string = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
 
         try {
             const importJobIDResponse: AxiosResponse = await withRetry(
@@ -598,10 +805,10 @@ export class PlayServerConnection {
                         },
                         validateStatus: () => true
                     }),
-                3, // maxRetries: try 3 additional times
-                1000, // delayMs: wait 1000ms between attempts
+                3, // maxRetries
+                2000, // delayMs
                 (error) => {
-                    // Do not retry if the error has a non-transient status code.
+                    // Retry predicates
                     if (axios.isAxiosError(error) && error.response) {
                         const nonRetryableStatusCodes = [400, 403, 404, 422];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
@@ -619,35 +826,36 @@ export class PlayServerConnection {
                         logger.debug(`Import initiated successfully. Job ID: ${jobID}`);
                         return jobID;
                     } else {
-                        const importJobIDNotFoundMessage =
+                        const importJobIDNotFoundMessage: string =
                             "Success response received but no jobID found in the response.";
                         logger.error(importJobIDNotFoundMessage);
                         throw new Error(importJobIDNotFoundMessage);
                     }
                 }
                 case 400: {
-                    const importBadRequestMessage = "Bad Request: The request body is invalid.";
+                    const importBadRequestMessage: string = "Bad Request: The request body is invalid.";
                     logger.error(importBadRequestMessage);
                     throw new Error(importBadRequestMessage);
                 }
                 case 403: {
-                    const importForbiddenMessage = "Forbidden: You do not have permission to import execution results.";
+                    const importForbiddenMessage: string =
+                        "Forbidden: You do not have permission to import execution results.";
                     logger.error(importForbiddenMessage);
                     throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const importNotFoundMessage = "Not Found: Project or test cycle not found.";
+                    const importNotFoundMessage: string = "Not Found: Project or test cycle not found.";
                     logger.error(importNotFoundMessage);
                     throw new Error(importNotFoundMessage);
                 }
                 case 422: {
-                    const importUnprocessableEntityMessage =
+                    const importUnprocessableEntityMessage: string =
                         "Unprocessable Entity: The server cannot process the request.";
                     logger.error(importUnprocessableEntityMessage);
                     throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const importUnexpectedErrorMessage = `Unexpected status code ${importJobIDResponse.status} received.`;
+                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importJobIDResponse.status} received.`;
                     logger.error(importUnexpectedErrorMessage);
                     throw new Error(importUnexpectedErrorMessage);
                 }
@@ -672,15 +880,11 @@ export class PlayServerConnection {
      * If the session token is null, the keep-alive process is not started.
      * If the keep-alive process is already running and it is triggered again, the previous one is stopped before starting a new one.
      */
-    private startKeepAlive(): void {
-        this.stopKeepAlive(); // Prevent multiple intervals if previously started.
-        this.keepAliveIntervalId = setInterval(
-            () => {
-                this.sendKeepAliveRequest();
-            },
-            4 * 60 * 1000 // Every 4 minutes
-        );
-        // Send an immediate keep-alive request.
+    public startKeepAlive(): void {
+        this.stopKeepAlive();
+        this.keepAliveIntervalId = setInterval(() => {
+            this.sendKeepAliveRequest();
+        }, this.keepAliveIntervalInSeconds);
         this.sendKeepAliveRequest();
         logger.trace("Keep-alive started.");
     }
@@ -701,8 +905,9 @@ export class PlayServerConnection {
      * If the keep alive request fails, the user is logged out automatically, since the session will be timed out later anyway.
      */
     private async sendKeepAliveRequest(): Promise<void> {
-        if (!this.sessionToken) {
-            logger.warn("Session token is null. Cannot send keep-alive request.");
+        if (!this.sessionToken || !this.apiClient) {
+            logger.error("[PlayServerConnection] Session token or apiClient is null. Cannot send keep-alive request.");
+            this.stopKeepAlive();
             return;
         }
 
@@ -712,14 +917,14 @@ export class PlayServerConnection {
                     this.apiClient.get(`/login/session/v1`, {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
-                3, // maxRetries: try 3 additional times
-                1000 // delayMs: wait 1000ms between attempts
+                5, // maxRetries
+                2000 // delayMs
             );
             logger.trace("Keep-alive request sent.");
         } catch (error) {
             logger.error("Keep-alive request failed after retries:", error);
             logger.warn("Logging out the user after keep-alive failure.");
-            await vscode.commands.executeCommand(`${allExtensionCommands.logout.command}`);
+            await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
         }
     }
 }
@@ -730,40 +935,36 @@ export class PlayServerConnection {
  *
  * @template T - The type returned by the asynchronous function.
  * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
- * @param {number} maxRetries - Maximum number of retry attempts (default is 3).
+ * @param {number} maxAllowedRetryCount - Maximum number of retry attempts (default is 3).
  * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
  * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
  * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is false).
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
-async function withRetry<T>(
+export async function withRetry<T>(
     asyncFunction: () => Promise<T>,
-    maxRetries: number = 3,
-    delayMs: number = 1000,
+    maxAllowedRetryCount: number = 3,
+    delayMs: number = 2000,
     shouldRetry?: (error: any) => boolean,
     showProgressBar: boolean = true
 ): Promise<T> {
-    let attempt: number = 0;
+    let retryCount: number = 0;
 
     while (true) {
         try {
-            // Attempt to execute the function.
             return await asyncFunction();
         } catch (error) {
-            // Log the retry attempt and delay before retrying.
-            logger.warn(`Attempt ${attempt} failed. Retrying in ${delayMs}ms...`);
+            logger.warn(`Attempt ${retryCount} failed. Retrying in ${delayMs}ms...`);
 
-            // Check if we should not retry based on the error type/condition.
             if (shouldRetry && !shouldRetry(error)) {
                 logger.warn(`Error is not retryable. Aborting further retry attempts.`);
                 throw error;
             }
 
-            attempt++;
-            if (attempt > maxRetries) {
-                // If we've exceeded maxRetries, rethrow the error.
-                logger.error(`Attempt ${attempt} failed. Maximum retries reached, aborting further retries.`);
+            retryCount++;
+            if (retryCount > maxAllowedRetryCount) {
+                logger.error(`Attempt ${retryCount} failed. Maximum retries reached, aborting further retries.`);
                 throw error;
             }
 
@@ -772,426 +973,18 @@ async function withRetry<T>(
                 await vscode.window.withProgress(
                     {
                         location: vscode.ProgressLocation.Notification,
-                        title: "Retrying request...",
+                        title: "Retrying request",
                         cancellable: false
                     },
                     async (progress) => {
-                        progress.report({ message: `Attempt ${attempt} of ${maxRetries}` });
+                        progress.report({ message: `Attempt ${retryCount} of ${maxAllowedRetryCount}` });
                         await new Promise((resolve) => setTimeout(resolve, delayMs));
                     }
                 );
             } else {
-                // If progress bar is disabled, just wait for the delay.
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
             }
         }
-    }
-}
-
-/**
- * Prompts the user for general input with live validation.
- * Loops until valid input is provided, "quit" is typed, or the user cancels.
- *
- * @param promptMessage - The prompt message.
- * @param inputCanBeEmpty - Whether the input may be empty.
- * @param maskSensitiveInputData - Whether to mask the input (e.g. for passwords).
- * @param validateInputFunction - Optional validation function; should return an error message if invalid.
- * @returns {Promise<string | null>} The user input as a string, or null if aborted.
- */
-async function promptForInputAndValidate(
-    promptMessage: string,
-    inputCanBeEmpty: boolean = false,
-    maskSensitiveInputData: boolean = false,
-    validateInputFunction?: (value: string) => string | null
-): Promise<string | null> {
-    while (true) {
-        const input = await vscode.window.showInputBox({
-            prompt: promptMessage,
-            password: maskSensitiveInputData,
-            ignoreFocusOut: true,
-            validateInput: (value) => {
-                if (!inputCanBeEmpty && value === "") {
-                    return "Value cannot be empty";
-                }
-                if (validateInputFunction) {
-                    return validateInputFunction(value);
-                }
-                return null;
-            }
-        });
-
-        if (input === undefined || input.toLowerCase() === "quit") {
-            vscode.window.showInformationMessage("Login process aborted");
-            return null;
-        }
-
-        if (!validateInputFunction || validateInputFunction(input) === null) {
-            return input;
-        }
-
-        vscode.window.showErrorMessage(validateInputFunction(input) || "Invalid input, please try again.");
-    }
-}
-
-/**
- * Performs the login process to the TestBench server by prompting the user for the server name, port number, username, and password.
- * Loops until login is successful or the user cancels.
- *
- * @param context - The extension context.
- * @param baseKey - The base key for configuration.
- * @param promptForNewCredentials - Whether to prompt for new credentials.
- * @param performAutoLoginWithStoredCredentialsWithoutPrompting - Whether to auto-login without prompting.
- * @returns {Promise<PlayServerConnection | null>} A PlayServerConnection if login is successful; otherwise, null.
- */
-export async function performLogin(
-    context: vscode.ExtensionContext,
-    promptForNewCredentials: boolean = false,
-    performAutoLoginWithStoredCredentialsWithoutPrompting?: boolean
-): Promise<PlayServerConnection | null> {
-    // Loop until the user successfully logs in or cancels the login process
-    while (true) {
-        // Retrieve the stored credentials if they exist
-        const storePasswordAfterSuccessfulLogin: boolean = getConfig().get<boolean>("storePasswordAfterLogin", false);
-        let password: string | undefined;
-
-        // Only retrieve the password if the user has choosen to store it after successful login
-        if (storePasswordAfterSuccessfulLogin) {
-            password = await context.secrets.get("password");
-        }
-        const userHasStoredCredentials = !!(
-            getConfig().get<string>("serverName") &&
-            getConfig().get<string>("username") &&
-            password &&
-            storePasswordAfterSuccessfulLogin
-        );
-
-        let useStoredCredentials = false;
-        // If the user has stored credentials and can auto-login,
-        // and the user has not chosen to prompt for new credentials,
-        // and the user has not chosen to auto-login without prompting, then auto-login
-        if (
-            userHasStoredCredentials &&
-            !promptForNewCredentials &&
-            !performAutoLoginWithStoredCredentialsWithoutPrompting
-        ) {
-            const choice = await vscode.window.showInformationMessage(
-                "Do you want to login using your previous credentials?",
-                // Modal dialog is used so that the input box wont disappear, which forces the user to choose an option. Without it, login may be locked.
-                { modal: true },
-                "Yes",
-                "No"
-            );
-            if (choice === "Yes") {
-                useStoredCredentials = true;
-            }
-            // User selected Cancel, which sets choice to undefined
-            else if (!choice) {
-                logger.debug("Login process aborted.");
-                return null;
-            }
-            // Continue the function in case of "No"
-        } else {
-            // Convert undefined value to false with !! if the optional parameter is not provided
-            useStoredCredentials = !!performAutoLoginWithStoredCredentialsWithoutPrompting;
-        }
-
-        let serverName: string | undefined;
-        let portNumber: number | undefined;
-        let username: string | undefined;
-
-        // If the user has stored credentials and wants to use them, retrieve them from the configuration, else prompt the user for new credentials
-        if (useStoredCredentials) {
-            serverName = getConfig().get<string>("serverName")!;
-            portNumber = getConfig().get<number>("portNumber")!;
-            username = getConfig().get<string>("username")!;
-        } else {
-            const credentials = await promptForLoginCredentials();
-            if (!credentials) {
-                vscode.window.showInformationMessage("Login process aborted.");
-                logger.debug("Login process aborted.");
-                return null;
-            }
-            ({ serverName, portNumber, username, password } = credentials);
-        }
-
-        // Attempt to login
-        const newConnection: PlayServerConnection | null = await loginToNewPlayServerAndInitSessionToken(
-            context,
-            serverName!,
-            portNumber!,
-            username!,
-            password!
-        );
-
-        if (newConnection) {
-            return newConnection;
-        } else {
-            // Login may fail due to a server problem or incorrect credentials.
-            const retry = await vscode.window.showInformationMessage(
-                "Login failed! Do you want to retry?",
-                "Retry",
-                "Cancel"
-            );
-            if (retry !== "Retry") {
-                vscode.window.showInformationMessage("Login process aborted.");
-                logger.debug("Login process aborted.");
-                return null;
-            }
-            // Continue the loop to retry
-        }
-    }
-}
-
-/**
- * Prompts the user for login credentials.
- *
- * @returns {Promise<{ serverName: string; portNumber: number; username: string; password: string } | null>}
- * An object containing serverName, portNumber, username, and password or null if aborted.
- */
-async function promptForLoginCredentials(): Promise<{
-    serverName: string;
-    portNumber: number;
-    username: string;
-    password: string;
-} | null> {
-    const serverNameInConfig: string = getConfig().get<string>("serverName", "testbench");
-    // Prompt user for server name, showing the default value only if it exists
-    const serverNameInput: string | null = await promptForInputAndValidate(
-        `Enter the server name${serverNameInConfig ? ` (Default: ${serverNameInConfig})` : ""}`,
-        true
-    );
-
-    // If user cancels the input prompt, return null to cancel the login process
-    if ((!serverNameInput && !serverNameInConfig) || serverNameInput === undefined) {
-        logger.trace("Login process aborted while entering server name.");
-        return null;
-    }
-
-    // Use user input if provided, otherwise fallback to configuration value
-    const serverName: string = serverNameInput || serverNameInConfig;
-    // Get port number from configuration (default: 9445)
-    const portInConfig: number = getConfig().get<number>("portNumber", 9445);
-    // Prompt user for port number, only showing the default if it's configured
-    const portInputAsString = await promptForInputAndValidate(
-        `Enter the port number${portInConfig ? ` (Default: ${portInConfig})` : ""}`,
-        true,
-        false,
-        (value) => (!/^\d+$/.test(value) ? "Port number must be a number" : null)
-    );
-    if ((!portInputAsString && !portInConfig) || portInputAsString === undefined) {
-        logger.trace("Login process aborted while entering port number.");
-        return null;
-    }
-    const portNumber: number = portInputAsString ? parseInt(portInputAsString, 10) : portInConfig;
-
-    const serverVersionsResponse: testBenchTypes.ServerVersionsResponse | null = await fetchServerVersions(
-        serverName,
-        portNumber
-    );
-    if (!serverVersionsResponse) {
-        const serverVersionsErrorMessage = "Server not accessible with the provided server name and port.";
-        logger.error(serverVersionsErrorMessage);
-        vscode.window.showErrorMessage(serverVersionsErrorMessage);
-        return null;
-    }
-
-    const usernameInput: string | null = await promptForInputAndValidate(
-        `Enter your login name (Default: ${getConfig().get<string>("username", "undefined")})`,
-        true
-    );
-    if (!usernameInput) {
-        logger.trace("Login process aborted while entering username.");
-        return null;
-    }
-    const username: string = usernameInput || getConfig().get<string>("username", "undefined");
-
-    const password: string | null = await promptForInputAndValidate("Enter your password", false, true);
-    if (!password) {
-        logger.trace("Login process aborted while entering password.");
-        return null;
-    }
-
-    return { serverName, portNumber, username, password };
-}
-
-/**
- * Logs in to the TestBench server and initializes a session token.
- *
- * @param {vscode.ExtensionContext} context - The extension context.
- * @param {string} serverName - The server name.
- * @param {number} portNumber - The port number.
- * @param {string} username - The username.
- * @param {string} password - The password.
- * @returns {Promise<PlayServerConnection | null>} A PlayServerConnection if login is successful; otherwise, null.
- */
-export async function loginToNewPlayServerAndInitSessionToken(
-    context: vscode.ExtensionContext,
-    serverName: string,
-    portNumber: number,
-    username: string,
-    password: string
-): Promise<PlayServerConnection | null> {
-    const requestBody: testBenchTypes.LoginRequestBody = {
-        login: username,
-        password: password,
-        force: true
-    };
-    try {
-        const connection = await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: "Logging in",
-                cancellable: true
-            },
-            async (progress) => {
-                const baseURL = `https://${serverName}:${portNumber}/api`;
-                const loginURL = `${baseURL}/login/session/v1`;
-
-                logger.trace("Sending login request to:", loginURL);
-                progress.report({ message: "Sending login request..." });
-
-                const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await withRetry(
-                    () =>
-                        axios.post(loginURL, requestBody, {
-                            headers: {
-                                accept: "application/vnd.testbench+json",
-                                "Content-Type": "application/vnd.testbench+json"
-                            },
-                            httpsAgent: new https.Agent({ rejectUnauthorized: false })
-                        }),
-                    3, // maxRetries
-                    1000, // delayMs
-                    (error) => {
-                        // Do not retry if the error is due to invalid credentials (HTTP 401)
-                        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-                            return false;
-                        }
-                        return true;
-                    }
-                );
-
-                // An exception is thrown automatically if the status code is not 2xx
-                if (loginResponse.status === 201) {
-                    // Store password in secret storage after succesfull login if the user chooses to
-                    if (getConfig().get<boolean>("storePasswordAfterLogin", false)) {
-                        await context.secrets.store("password", password);
-                        logger.trace("Password stored securely.");
-                    } else {
-                        logger.trace("User chose not to store password.");
-                    }
-                    // Starts keep alive in the constructor of PlayServerConnection
-                    const newConnection = new PlayServerConnection(
-                        context,
-                        serverName,
-                        portNumber,
-                        loginResponse.data.sessionToken
-                    );
-                    // Set the global connection object, it can be null in case the login fails
-                    setConnection(newConnection);
-                    // Set the connectionActive context value for changing the login icon to logout icon based on this value
-                    await vscode.commands.executeCommand("setContext", "testbenchExtension.connectionActive", true);
-                    const loginSuccessfulMessage = "Login successful.";
-                    logger.debug(loginSuccessfulMessage);
-                    vscode.window.showInformationMessage(loginSuccessfulMessage);
-                    // Upon successful login, update the login webview content and hide it.
-                    if (loginWebViewProvider) {
-                        loginWebViewProvider.updateWebviewContent();
-                        loginWebView.hideWebView();
-                    } else {
-                        logger.warn("loginWebViewProvider is null. Cannot update webview content.");
-                    }
-                    return newConnection;
-                } else {
-                    const loginFailedMessage = "Login failed. Unexpected status code: " + loginResponse.status;
-                    logger.error(loginFailedMessage);
-                    vscode.window.showInformationMessage(loginFailedMessage);
-                    return null;
-                }
-            }
-        );
-        return connection;
-    } catch {
-        // Note: error contains sensitive information, do not catch and log the error object.
-        logger.error("Error during login");
-        vscode.window.showInformationMessage("Error during login.");
-        return null;
-    }
-}
-
-/**
- * Clears stored user credentials from secret storage.
- *
- * @param context - The extension context.
- */
-export async function clearStoredCredentials(context: vscode.ExtensionContext): Promise<void> {
-    try {
-        await context.secrets.delete("password");
-        logger.debug("Credentials deleted from secret storage.");
-    } catch (error) {
-        logger.error("Failed to clear credentials:", error);
-    }
-}
-
-/**
- * Fetches the server versions from the TestBench server.
- * Used to verify the availability of server after receiving the server URL and port number in the login process.
- *
- * @param {string} serverName - The server name.
- * @param {number} portNumber - The port number.
- * @returns {Promise<testBenchTypes.ServerVersionsResponse | null>} The server versions data or null if an error occurs.
- */
-async function fetchServerVersions(
-    serverName: string,
-    portNumber: number
-): Promise<testBenchTypes.ServerVersionsResponse | null> {
-    try {
-        const baseURL = `https://${serverName}:${portNumber}`;
-        const serverVersionsURL = `${baseURL}/api/serverVersions/v1`;
-
-        logger.debug("Fetching server versions from URL:", serverVersionsURL);
-        const serverVersionsResponse: AxiosResponse<testBenchTypes.ServerVersionsResponse> = await withRetry(
-            () =>
-                axios.get(serverVersionsURL, {
-                    headers: { Accept: "application/vnd.testbench+json" },
-                    httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: set to true in production
-                }),
-            3, // maxRetries: try 3 additional times
-            1000, // delayMs: wait 1000ms between attempts
-            // Retry only if the error is due to a non-transient condition
-            (error) => {
-                if (axios.isAxiosError(error) && error.response) {
-                    // Do not retry if a 404 is received
-                    const nonRetryableStatusCodes = [404];
-                    if (nonRetryableStatusCodes.includes(error.response.status)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-        );
-
-        logger.debug(
-            `TestBench Release Version: ${serverVersionsResponse.data.releaseVersion}, ` +
-                `Database Version: ${serverVersionsResponse.data.databaseVersion}, ` +
-                `Revision: ${serverVersionsResponse.data.revision}`
-        );
-        return serverVersionsResponse.data;
-    } catch (error) {
-        if (axios.isAxiosError(error)) {
-            if (error.response) {
-                logger.error(`Error: Received status code ${error.response.status}`, error.response.data);
-                if (error.response.status === 404) {
-                    logger.error(`TestBench version cannot be found at https://${serverName}:${portNumber}`);
-                }
-            } else if (error.request) {
-                logger.error("Error: No response received from server.", error.request);
-            } else {
-                logger.error("Error:", error.message);
-            }
-        } else {
-            logger.error("Unexpected error:", error);
-        }
-        return null;
     }
 }
 
@@ -1202,14 +995,15 @@ async function fetchServerVersions(
  */
 async function promptForReportZipFileWithResults(): Promise<string | null> {
     try {
-        const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
+        const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
-            vscode.window.showErrorMessage("Workspace location is not set in the configuration.");
-            logger.warn("Workspace location is not set in the configuration.");
+            const workspaceLocationErrorMessage: string = "Workspace location could not be determined.";
+            vscode.window.showErrorMessage(workspaceLocationErrorMessage);
+            logger.warn(workspaceLocationErrorMessage);
             return null;
         }
 
-        const workingDirectoryPath = path.join(workspaceLocation, folderNameOfTestbenchWorkingDirectory);
+        const workingDirectoryPath: string = path.join(workspaceLocation, folderNameOfInternalTestbenchFolder);
         const options: vscode.OpenDialogOptions = {
             defaultUri: vscode.Uri.file(workingDirectoryPath),
             openLabel: "Select Zip File with Test Results",
@@ -1219,14 +1013,15 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
             filters: { "Zip Files": ["zip"] }
         };
 
-        const fileUri = await vscode.window.showOpenDialog(options);
+        const fileUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog(options);
         if (!fileUri || !fileUri[0]) {
-            vscode.window.showErrorMessage("No file selected. Please select a valid .zip file.");
-            logger.debug("No zip file selected.");
+            const noZipFileSelectedMessage: string = "No zip file selected. Please select a valid .zip file.";
+            vscode.window.showErrorMessage(noZipFileSelectedMessage);
+            logger.debug(noZipFileSelectedMessage);
             return null;
         }
 
-        const selectedFilePath = fileUri[0].fsPath;
+        const selectedFilePath: string = fileUri[0].fsPath;
         if (!selectedFilePath.endsWith(".zip")) {
             vscode.window.showErrorMessage("Selected file is not a .zip file. Please select a valid .zip file.");
             logger.debug("Selected file is not a .zip file.");
@@ -1234,7 +1029,7 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
         }
         return selectedFilePath;
     } catch (error: any) {
-        const zipSelectionErrorMessage = `An error occurred while selecting the report zip file: ${error.message}`;
+        const zipSelectionErrorMessage: string = `An error occurred while selecting the report zip file: ${error.message}`;
         vscode.window.showErrorMessage(zipSelectionErrorMessage);
         logger.error(zipSelectionErrorMessage);
         return null;
@@ -1242,105 +1037,66 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
 }
 
 /**
- * Recursively searches for a cycle key matching the given cycle name.
- *
- * @param treeElements - The array of tree elements.
- * @param cycleName - The cycle name to search for.
- * @returns {string | null} The cycle key if found, otherwise null.
- */
-function findCycleKeyFromCycleNameRecursively(treeElements: any[], cycleName: string): string | null {
-    for (const element of treeElements) {
-        if (
-            (element.item?.nodeType === "Cycle" && element.item?.name === cycleName) ||
-            (element.nodeType === "Cycle" && element.name === cycleName)
-        ) {
-            return element.key;
-        }
-        // Recursively search in children elements
-        const children: any[] = element.item?.children || element.children;
-        if (children && children.length > 0) {
-            const foundCycleKey = findCycleKeyFromCycleNameRecursively(children, cycleName);
-            if (foundCycleKey) {
-                return foundCycleKey;
-            }
-        }
-    }
-    return null;
-}
-
-// TODO: remove projectManagementTreeDataProvider when we replace local search with server project tree fetching and then searching
-/**
  * Imports a report (zip file with test results) to the TestBench server.
  *
- * @param connection - The PlayServerConnection.
- * @param projectManagementTreeDataProvider - The tree data provider.
- * @param resultZipFilePath - The file path of the zip file.
+ * @param {PlayServerConnection} connection - The PlayServerConnection.
+ * @param {string} projectKeyString - The project key string.
+ * @param {string} cycleKeyString - The cycle key string.
+ * @param {string} reportWithResultsZipFilePath - The file path of the zip file containing the test results to import.
  * @returns {Promise<void | null>} A promise that resolves when the import is complete, or null if an error occurs.
  */
 export async function importReportWithResultsToTestbench(
     connection: PlayServerConnection,
-    projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider,
-    resultZipFilePath: string
+    projectKeyString: string,
+    cycleKeyString: string,
+    reportWithResultsZipFilePath: string
 ): Promise<void | null> {
     try {
         logger.debug("Importing report with results to TestBench server.");
-        const { uniqueID, projectKey, cycleNameOfProject } = await extractDataFromReport(resultZipFilePath);
-        if (!uniqueID || !projectKey || !cycleNameOfProject) {
-            const msg = "Error extracting project key, cycle name, and unique ID from the zip file.";
-            vscode.window.showErrorMessage(msg);
-            logger.error(msg);
+        const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
+        if (!uniqueID) {
+            const extractionErrorMsg: string = "Error extracting unique ID from the zip file.";
+            vscode.window.showErrorMessage(extractionErrorMsg);
+            logger.error(extractionErrorMsg);
             return null;
         }
 
         // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
         // Later, we should fetch the project tree from the server and search for the cycle key there.
 
-        const allTreeElementsInTreeView = await projectManagementTreeDataProvider.getChildren(undefined);
-        if (!allTreeElementsInTreeView) {
-            const loadProjectTreeErrorMessage =
-                "Failed to load project management tree elements for importing results.";
-            logger.error(loadProjectTreeErrorMessage);
-            vscode.window.showErrorMessage("Failed to load project management tree elements.");
-            return null;
-        }
-
         /*
-        // For debugging, save the tree elements to a file called allTreeElements.json
+        // For debugging, save the tree items to a file called allTreeElements.json
         const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
         utils.saveJsonDataToFile(allTreeElementsPath, allTreeElementsInTreeView);
         console.log(`allTreeElements saved to ${allTreeElementsPath}`);
         */
 
-        const cycleKeyOfImportedReport = findCycleKeyFromCycleNameRecursively(
-            allTreeElementsInTreeView,
-            cycleNameOfProject
-        );
-        if (!cycleKeyOfImportedReport) {
-            const cycleNotFoundErrorMessage = "Cycle not found in the project tree.";
-            logger.error(cycleNotFoundErrorMessage);
-            vscode.window.showErrorMessage(cycleNotFoundErrorMessage);
+        const projectKey: number = Number(projectKeyString);
+        const cycleKey: number = Number(cycleKeyString);
+
+        if (isNaN(projectKey) || isNaN(cycleKey)) {
+            logger.error(
+                `Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`
+            );
+            vscode.window.showErrorMessage("Internal error: Invalid project or cycle identifier for import.");
             return null;
         }
 
-        const zipFilenameFromServer = await connection.uploadExecutionResultsAndReturnUploadedFileName(
-            Number(projectKey),
-            resultZipFilePath
+        const zipFilenameFromServer: string = await connection.importExecutionResultsAndReturnImportedFileName(
+            projectKey,
+            reportWithResultsZipFilePath
         );
         if (!zipFilenameFromServer) {
-            const uploadErrorMessage = "Error uploading the result file to the server.";
-            logger.error(uploadErrorMessage);
-            vscode.window.showErrorMessage(uploadErrorMessage);
+            const importErrorMessage: string = "Error importing the result file to the server.";
+            logger.error(importErrorMessage);
+            vscode.window.showErrorMessage(importErrorMessage);
             return null;
         }
 
-        // TODO: Check the new data of the new branch
-        // Import the results to TestBench server
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
             reportRootUID: uniqueID,
             useExistingDefect: true,
-            ignoreNonExecutedTestCases: true,
-            checkPaths: true,
             discardTesterInformation: false,
             // defaultTester: "tester",
             filters: [
@@ -1355,28 +1111,33 @@ export async function importReportWithResultsToTestbench(
         };
 
         try {
-            // Start the import job
             logger.debug("Starting import execution results.");
-            const importJobID = await connection.getJobIDOfImportJob(
-                Number(projectKey),
-                Number(cycleKeyOfImportedReport),
-                importData
+            const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
+
+            const importJobStatus: testBenchTypes.JobStatusResponse | null = await reportHandler.pollJobStatus(
+                projectKeyString,
+                importJobID,
+                JobTypes.IMPORT
             );
 
-            // Poll the job status until it is completed
-            const importJobStatus = await reportHandler.pollJobStatus(projectKey.toString(), importJobID, "import");
-
-            // Check if the job is completed successfully
             if (!importJobStatus || reportHandler.isImportJobFailed(importJobStatus)) {
-                const importJobFailedMessage = "Import job not completed or failed.";
+                const importJobFailedMessage: string = "Import job could not be completed.";
                 logger.warn(importJobFailedMessage);
                 vscode.window.showErrorMessage(importJobFailedMessage);
                 return null;
+            } else if (reportHandler.isImportJobCompletedSuccessfully(importJobStatus)) {
+                const isImportJobCompletedSuccessfullyMessage: string = `Import job completed successfully for Project ${projectKeyString}, Cycle ${cycleKeyString}.`;
+                logger.info(isImportJobCompletedSuccessfullyMessage);
+                // vscode.window.showInformationMessage("Import job completed successfully.");
             } else {
-                vscode.window.showInformationMessage("Import completed successfully.");
+                logger.warn("Import job finished polling but status is unknown.", importJobStatus);
+                vscode.window.showWarningMessage("Import job status unknown after polling.");
             }
         } catch (error: any) {
-            logger.error("Error during import job:", error.message);
+            logger.error(
+                `Error during import job initiation or polling for Project ${projectKey}, Cycle ${cycleKey}:`,
+                error.message
+            );
             return null;
         }
     } catch (error: any) {
@@ -1390,12 +1151,10 @@ export async function importReportWithResultsToTestbench(
  * Prompts the user to select a report zip file and imports it to the TestBench server.
  *
  * @param {PlayServerConnection} connection - The PlayServerConnection.
- * @param {projectManagementTreeView.ProjectManagementTreeDataProvider} projectManagementTreeDataProvider - The tree data provider.
  * @returns {Promise<void | null>} A promise that resolves when the import is complete, or null if an error occurs.
  */
 export async function selectReportWithResultsAndImportToTestbench(
-    connection: PlayServerConnection,
-    projectManagementTreeDataProvider: projectManagementTreeView.ProjectManagementTreeDataProvider
+    connection: PlayServerConnection
 ): Promise<void | null> {
     await vscode.window.withProgress(
         {
@@ -1405,13 +1164,25 @@ export async function selectReportWithResultsAndImportToTestbench(
         },
         async (progress) => {
             progress.report({ message: "Selecting report file with results.", increment: 30 });
-            const resultZipFilePath = await promptForReportZipFileWithResults();
+            const resultZipFilePath: string | null = await promptForReportZipFileWithResults();
             if (!resultZipFilePath) {
-                logger.error("No location selected for the report zip file with results.");
                 return null;
             }
+
+            progress.report({ message: "Extracting report context...", increment: 10 });
+            const { projectKey, cycleKey } = await extractDataFromReport(resultZipFilePath);
+
+            if (!projectKey || !cycleKey) {
+                const missingDataContextMsg: string =
+                    "Could not extract necessary project or cycle key from the selected report file.";
+                logger.error(missingDataContextMsg);
+                vscode.window.showErrorMessage(missingDataContextMsg);
+                await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
+                return null;
+            }
+
             progress.report({ message: "Importing report file.", increment: 30 });
-            await importReportWithResultsToTestbench(connection, projectManagementTreeDataProvider, resultZipFilePath);
+            await importReportWithResultsToTestbench(connection, projectKey, cycleKey, resultZipFilePath);
             progress.report({ message: "Cleaning up.", increment: 30 });
             await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
         }
@@ -1424,37 +1195,106 @@ export async function selectReportWithResultsAndImportToTestbench(
  * @param {string} zipFilePath - The file path of the zip file.
  * @returns {Promise<ExtractedData>} An object containing uniqueID, projectKey, and cycleNameOfProject.
  */
-async function extractDataFromReport(zipFilePath: string): Promise<{
+export async function extractDataFromReport(zipFilePath: string): Promise<{
     uniqueID: string | null;
     projectKey: string | null;
     cycleNameOfProject: string | null;
+    cycleKey: string | null;
 }> {
     try {
-        // Read zip file from disk
         const zipData: Buffer = await fs.promises.readFile(path.resolve(zipFilePath));
         const zip: JSZip = new JSZip();
-        // Load zip data
         const zipContents: JSZip = await zip.loadAsync(zipData);
 
-        // Define file names
         const cycleStructureFileName: string = "cycle_structure.json";
         const projectFileName: string = "project.json";
 
-        // Extract JSON content
         const cycleStructureJson = await utils.extractAndParseJsonContent(zipContents, cycleStructureFileName);
         const projectJson = await utils.extractAndParseJsonContent(zipContents, projectFileName);
 
-        // Parse JSON and extract required fields
         const uniqueID: string | null = cycleStructureJson?.root?.base?.uniqueID || null;
         const projectKey: string | null = projectJson?.key || null;
         const cycleNameOfProject: string | null = projectJson?.projectContext?.cycleName || null;
+        const cycleKey: string | null = projectJson?.projectContext?.cycleKey || null;
 
         logger.debug(
-            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}`
+            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`
         );
-        return { uniqueID, projectKey, cycleNameOfProject };
+        return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
     } catch (error) {
         logger.error("Error extracting JSON data from zip file:", error);
-        return { uniqueID: null, projectKey: null, cycleNameOfProject: null };
+        return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
+    }
+}
+
+/**
+ * Logs in to the TestBench server with the provided credentials and returns session details.
+ * This function focuses on the API interaction and does not handle UI or global state.
+ *
+ * @param {string} serverName The server hostname or IP.
+ * @param {number} portNumber The server port.
+ * @param {string} username The TestBench username.
+ * @param {string} password The TestBench password.
+ * @returns {Promise<TestBenchLoginResult | null>} A promise resolving to TestBenchLoginResult if successful, otherwise null.
+ */
+export async function loginToServerAndGetSessionDetails(
+    serverName: string,
+    portNumber: number,
+    username: string,
+    password: string
+): Promise<TestBenchLoginResult | null> {
+    const requestBody: testBenchTypes.LoginRequestBody = {
+        login: username,
+        password: password,
+        force: true
+    };
+
+    const baseURL: string = `https://${serverName}:${portNumber}/api`;
+    const loginURL: string = `${baseURL}/login/session/v1`;
+
+    logger.trace(`[Connection] Sending login request to: ${loginURL} for user ${username}`);
+
+    try {
+        const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await withRetry(
+            () =>
+                axios.post(loginURL, requestBody, {
+                    headers: {
+                        accept: "application/vnd.testbench+json",
+                        "Content-Type": "application/vnd.testbench+json"
+                    },
+                    httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: Review for production
+                }),
+            3, // maxRetries
+            2000, // delayMs
+            (error) => {
+                // shouldRetry predicate
+                if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+                    logger.warn("[Connection] Login attempt failed with 401 (Invalid Credentials). Not retrying.");
+                    return false;
+                }
+                return true;
+            }
+        );
+
+        if (loginResponse.status === 201 && loginResponse.data && loginResponse.data.sessionToken) {
+            logger.info(`[Connection] Login successful for user ${username} on ${serverName}.`);
+            return {
+                sessionToken: loginResponse.data.sessionToken,
+                userKey: loginResponse.data.userKey,
+                loginName: loginResponse.data.login
+            };
+        } else {
+            logger.error(
+                `[Connection] Login failed for ${username}. Unexpected status code: ${loginResponse.status}, Data: ${JSON.stringify(loginResponse.data)}`
+            );
+            return null;
+        }
+    } catch (error: any) {
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+            logger.error(`[Connection] Login failed for ${username} to ${serverName}: Invalid credentials.`);
+        } else {
+            logger.error(`[Connection] Error during login for ${username} to ${serverName}:`, error.message);
+        }
+        return null;
     }
 }

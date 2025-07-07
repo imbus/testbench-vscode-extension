@@ -3,9 +3,10 @@ name: Release
 
 # Trigger the workflow when there's a push to the 'main' branch
 on:
-    push:
-        branches:
-            - main
+    # push:
+    #     branches:
+    #         - main
+    workflow_dispatch:
 
 jobs:
     release:

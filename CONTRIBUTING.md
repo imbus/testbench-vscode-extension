@@ -48,7 +48,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/). Use one 
 
 **Examples:**
 
-- `feat: add test result upload support`
+- `feat: add test result import support`
 - `fix: resolve issue with automatic login`
 - `chore: update dependencies`
 

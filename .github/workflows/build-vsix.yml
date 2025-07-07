@@ -1,52 +1,174 @@
-name: Build VSIX Package
+name: Build and Test
 
 on:
     push:
         branches:
-            - main # Name of the branch to trigger the workflow
+            - "**" # Trigger on all branches
+    pull_request:
+        branches:
+            - "**"
 
 jobs:
-    build:
-        runs-on: ubuntu-latest # Use the latest version of Ubuntu as the runner
+    test:
+        name: Test
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest] # Test on multiple OS with [ubuntu-latest, windows-latest, macos-latest]
+                node-version: [20.x] # Test on multiple Node versions with [20.x, 18.x, 16.x]
 
         steps:
             # Checkout the repository
             - name: Checkout Code
               uses: actions/checkout@v4
 
-            # Cache Node Modules to speed up the workflow
-            - name: Cache Node Modules
-              uses: actions/cache@v4
+            # Set up Node.js
+            - name: Set up Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v4
               with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+                  node-version: ${{ matrix.node-version }}
+                  cache: "npm"
+
+            # Install Node.js dependencies
+            - name: Install Dependencies
+              run: npm ci
+
+            # Run linting
+            - name: Lint Code
+              run: npm run lint
+              continue-on-error: true # Don't fail the build on lint errors
+
+            # Compile TypeScript
+            - name: Compile TypeScript
+              run: npm run compile
+
+            # Compile test files
+            - name: Compile Tests
+              run: npm run compile-tests
+
+            # Clean test environment
+            - name: Clean Test Environment
+              run: |
+                  # Disable .vscode-test.mjs if it exists to prevent conflicts
+                  if [ -f ".vscode-test.mjs" ]; then
+                    mv .vscode-test.mjs .vscode-test.mjs.disabled || true
+                  fi
+                  # Remove test cache to ensure clean state
+                  rm -rf .vscode-test || true
+              shell: bash
+
+            # Cache VS Code test instance to speed up tests
+            - name: Cache VS Code Test Instance
+              uses: actions/cache@v3
+              with:
+                  path: .vscode-test
+                  key: vscode-test-${{ runner.os }}-${{ hashFiles('package.json') }}
                   restore-keys: |
-                      ${{ runner.os }}-node-
+                      vscode-test-${{ runner.os }}-
+
+            # Run unit tests directly with Mocha
+            - name: Run Tests (Linux)
+              if: runner.os == 'Linux'
+              run: xvfb-run -a npm test
+
+            - name: Run Tests (Windows/macOS)
+              if: runner.os != 'Linux'
+              run: npm test
+
+            # Upload logs on failure
+            - name: Upload Logs on Failure
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: failure-logs-${{ matrix.os }}-node${{ matrix.node-version }}
+                  path: |
+                      .vscode-test/logs/
+                      *.log
+                  if-no-files-found: ignore
+
+    build:
+        name: Build VSIX
+        runs-on: ubuntu-latest
+        needs: test # Only build if tests pass
+
+        steps:
+            # Checkout the repository
+            - name: Checkout Code
+              uses: actions/checkout@v4
 
             # Set up Node.js
             - name: Set up Node.js
               uses: actions/setup-node@v4
               with:
-                  # Use the latest LTS Node.js version
                   node-version: "lts/*"
                   check-latest: true
+                  cache: "npm"
 
-            # Install dependencies
-            - name: Install Dependencies
+            # Install Node.js dependencies
+            - name: Install Node.js Dependencies
               run: npm ci
+
+            # Set up Python
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.10"
+                  cache: "pip"
+
+            # Install Python build tools
+            - name: Install Python Build Tools
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install pip-tools nox
+
+            # Prepare Python dependencies
+            - name: Clean previous bundled Python libs
+              run: |
+                  rm -rf bundled/libs
+                  mkdir -p bundled/libs
+
+            - name: Generate requirements.txt for Python
+              id: pip-compile
+              run: pip-compile --resolver=backtracking --output-file=requirements.txt pyproject.toml
+              continue-on-error: true
+
+            - name: Bundle Python Dependencies using Nox
+              id: nox-bundle
+              run: python -m nox --session bundle_dependencies
+              continue-on-error: true
+
+            # Compile the extension before packaging
+            - name: Compile Extension
+              run: npm run package
 
             # Package the extension
             - name: Build VSIX Package
-              run: npm run vsix-package # vsix-package command should be defined in the package.json
+              run: npm run vsix-package
 
-            # List all files for debugging
-            # - name: List All Files For Debugging
-            #   run: ls -alR | grep -v '^node_modules' # Lists all files and directories in the current directory
+            # Verify the VSIX file was created
+            - name: Verify VSIX was created
+              id: verify_vsix
+              run: |
+                  VSIX_FILES=(*.vsix)
+                  if [ ${#VSIX_FILES[@]} -eq 0 ]; then
+                    echo "No .vsix file found!"
+                    exit 1
+                  elif [ ${#VSIX_FILES[@]} -gt 1 ]; then
+                    echo "Multiple .vsix files found: ${VSIX_FILES[*]}"
+                    # Clean up old VSIX files
+                    rm -f *.vsix
+                    npm run vsix-package
+                    VSIX_FILES=(*.vsix)
+                  fi
+                  echo "VSIX_PATH=${VSIX_FILES[0]}" >> $GITHUB_OUTPUT
+                  ls -l *.vsix
 
             # Upload the VSIX as an artifact
             - name: Upload VSIX Artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: testbench-visual-studio-code-extension # Name of the artifact
-                  path: "*.vsix" # Adjust if the file is stored in a specific folder
-                  overwrite: true # Overwrite the artifact if it already exists
+                  name: testbench-extension-${{ github.sha }}
+                  path: ${{ steps.verify_vsix.outputs.VSIX_PATH }}
+                  if-no-files-found: error
+                  overwrite: true
