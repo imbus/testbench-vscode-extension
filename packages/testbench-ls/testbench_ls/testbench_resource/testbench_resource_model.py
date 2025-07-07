@@ -19,6 +19,8 @@ from robot.api.parsing import (
 )
 from robot.parsing.model import Block, Statement
 
+from ..testbench_api.model import InteractionCallType
+
 
 class TestBenchResourceModel:
     def __init__(self, path: Path, load_existing=False):
@@ -36,6 +38,9 @@ class TestBenchResourceModel:
                 ],
                 source=path,
             )
+
+    def save(self):
+        self.file.save()
 
     def get_resource_file_end_position(self):
         return (self.file.sections[-1].end_lineno, self.file.sections[-1].end_col_offset)
@@ -73,7 +78,7 @@ class TestBenchResourceModel:
             )
             objects_are_equal = False
         for kw in other.keywords:
-            kw_uid = other.get_kw_uid(kw)
+            kw_uid = get_kw_uid(kw)
             kws_with_same_uid = self.get_keywords(kw_uid)
             if not kws_with_same_uid:
                 print(f"Keyword '{kw.header[0]}' has been deleted.")
@@ -236,25 +241,38 @@ class TestBenchResourceModel:
     def get_keywords(self, uid: str) -> list[Keyword]:
         keywords = []
         for kw in self.keywords:
-            tags = self.get_kw_tags(kw)
+            tags = get_kw_tags(kw)
             if f"tb:uid:{uid}" in tags:
                 keywords.append(kw)
         return keywords
 
-    def get_kw_tags(self, kw: Keyword) -> list[str]:
-        tags = []
-        for item in kw.body:
-            if isinstance(item, Tags):
-                tags = list(item.values)
-        return tags
+    def get_keywords_by_name(self, name: str) -> list[Keyword]:
+        keywords = []
+        for kw in self.keywords:
+            if kw.name == name:
+                keywords.append(kw)
+        return keywords
 
-    def get_kw_uid(self, kw: Keyword) -> str:
-        tags = self.get_kw_tags(kw)
-        for tag in tags:
-            uid_match = re.match(r".*tb:uid:(?P<tb_uid>.*$)", tag)
-            if uid_match:
-                return uid_match.group("tb_uid")
-        return ""
 
-    def save(self):
-        self.file.save()
+def get_kw_tags(kw: Keyword) -> list[str]:
+    tags = []
+    for item in kw.body:
+        if isinstance(item, Tags):
+            tags = list(item.values)
+    return tags
+
+
+def get_kw_uid(kw: Keyword) -> str:
+    tags = get_kw_tags(kw)
+    for tag in tags:
+        uid_match = re.match(r".*tb:uid:(?P<tb_uid>.*$)", tag)
+        if uid_match:
+            return uid_match.group("tb_uid")
+    return ""
+
+
+def get_interaction_call_type(keyword: Keyword) -> str:
+    tags = get_kw_tags(keyword)
+    if "tb:check" in tags:
+        return InteractionCallType.Check
+    return InteractionCallType.Flow

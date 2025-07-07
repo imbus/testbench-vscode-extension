@@ -4,15 +4,24 @@ import re
 import requests  # type: ignore
 from lsprotocol.types import (
     INITIALIZE,
+    TEXT_DOCUMENT_CODE_ACTION,
     TEXT_DOCUMENT_CODE_LENS,
+    TEXT_DOCUMENT_DID_CHANGE,
+    TEXT_DOCUMENT_DID_OPEN,
     WORKSPACE_APPLY_EDIT,
     AnnotatedTextEdit,
     ApplyWorkspaceEditParams,
     ChangeAnnotation,
     ChangeAnnotationIdentifier,
+    CodeAction,
+    CodeActionKind,
+    CodeActionParams,
     CodeLens,
     CodeLensParams,
     Command,
+    Diagnostic,
+    DiagnosticSeverity,
+    DidOpenTextDocumentParams,
     InitializeParams,
     InitializeResult,
     OptionalVersionedTextDocumentIdentifier,
@@ -24,13 +33,21 @@ from lsprotocol.types import (
     WorkspaceEdit,
 )
 from pygls.server import LanguageServer
-from robot.api.parsing import KeywordSection, SectionHeader, Token
+from pygls.workspace.text_document import TextDocument
+from robot.api.parsing import Keyword, KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
 from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
+from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
+from .file_edits import get_kw_tags_edit
+from .ls_exceptions import (
+    MultipleKeywordsWithName,
+    MultipleKeywordsWithUid,
+    TestBenchKeywordNotFound,
+)
 from .ls_logging import LogLevel, log, show_error
 from .messages import (
     COMMAND_FETCH_RESULTS,
@@ -45,11 +62,15 @@ from .messages import (
     COMMAND_UPDATE_SERVER_PORT,
     COMMAND_UPDATE_SESSION_TOKEN,
     COMMAND_UPDATE_TOV,
+    CONTEXT_CHANGE_LABEL,
+    CONTEXT_STRING,
     DEBUG_CHECK_CONTEXT,
     ERROR_CONTEXT_MISMATCH,
     ERROR_CONTEXT_NOT_SET,
+    ERROR_DUPLICATE_KEYWORD_NAME,
     ERROR_DUPLICATE_KEYWORD_UID,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
+    ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
     ERROR_SUBDIVISON_MAPPING_FORMAT,
@@ -59,15 +80,14 @@ from .messages import (
     PUSH_KEYWORD_TITLE,
     PUSH_SUBDIVISON_TITLE,
     TESTBENCH_LS_CLASS_NAME,
+    WARNING_CONTEXT_MISMATCH,
+    WARNING_MISSING_CONTEXT,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
 from .testbench_api.testbench_patch import patch_interaction_details
-from .testbench_resource.resource_creation import (
-    create_keyword,
-    create_resource,
-)
 from .testbench_resource.resource_documentation import ResourceDocumentation
 from .testbench_resource.resource_utils import (
+    get_comment_section_end_position,
     get_keyword_arguments,
     get_keyword_arguments_position,
     get_keyword_documentation,
@@ -75,13 +95,21 @@ from .testbench_resource.resource_utils import (
     get_keyword_section,
     get_keyword_section_position,
     get_keyword_tags,
-    get_keyword_tags_position,
     get_setting_section_position,
+    get_testbench_context_position,
     get_variables_section,
     get_variables_section_position,
     robot_model_to_string,
 )
-from .testbench_resource.testbench_resource_model import TestBenchResourceModel
+from .testbench_resource.subdivision2resource import (
+    create_keyword_from_interaction,
+    create_resource_from_subdivision,
+)
+from .testbench_resource.testbench_resource_model import (
+    TestBenchResourceModel,
+    get_interaction_call_type,
+    get_kw_uid,
+)
 
 
 class TestBenchLanguageServer(LanguageServer):
@@ -166,12 +194,16 @@ def generate_test_suites(ls: LanguageServer, kwargs):
     }
     report_path = pathlib.Path(kwargs.get("testbench_report"))
     if kwargs.get("use_config_file"):
+        if not settings.get("output_directory"):
+            show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
+            return False
         testbench2robotframework(report_path, toml_settings)
     else:
-        if kwargs.get("output_directory") == "":
+        if not kwargs.get("output_directory"):
             show_error(ls, ERROR_EMPTY_OUTPUT_DIRECTORY)
-            return
+            return False
         testbench2robotframework(report_path, settings)
+    return True
 
 
 @testbench_ls.command(COMMAND_FETCH_RESULTS)
@@ -221,6 +253,14 @@ def update_project(ls: LanguageServer, args):
     ls.set_project(new_project)
     tb_connection = TestBenchResourceConnection.singleton()
     tb_connection.update_project(new_project)
+    for docum in testbench_ls.workspace.text_documents:
+        document = testbench_ls.workspace.get_text_document(docum)
+        diagnostics = get_context_diagnostics(testbench_ls, document)
+        testbench_ls.publish_diagnostics(
+            document.uri,
+            diagnostics=diagnostics,
+            version=document.version,
+        )
 
 
 @testbench_ls.command(COMMAND_UPDATE_TOV)
@@ -229,6 +269,14 @@ def update_tov(ls: LanguageServer, args):
     ls.set_tov(new_tov)
     tb_connection = TestBenchResourceConnection.singleton()
     tb_connection.update_tov(new_tov)
+    for docum in testbench_ls.workspace.text_documents:
+        document = testbench_ls.workspace.get_text_document(docum)
+        diagnostics = get_context_diagnostics(testbench_ls, document)
+        testbench_ls.publish_diagnostics(
+            document.uri,
+            diagnostics=diagnostics,
+            version=document.version,
+        )
 
 
 @testbench_ls.feature(TEXT_DOCUMENT_CODE_LENS)
@@ -258,7 +306,7 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     )
     code_lenses.append(push_resource_lens)
     for keyword in testbench_resource.keywords:
-        keyword_uid = testbench_resource.get_kw_uid(keyword)
+        keyword_uid = get_kw_uid(keyword)
         if keyword_uid:
             keyword_line = keyword.lineno - 1
             code_lenses.append(
@@ -290,8 +338,13 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     return code_lenses
 
 
-def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceModel) -> bool:
-    project, tov = existing_resource.tb_tov_context
+def context_is_valid(
+    ls: LanguageServer, existing_resource: TestBenchResourceModel, silent=False
+) -> bool:
+    try:
+        project, tov = existing_resource.tb_tov_context
+    except ValueError:
+        return False
     log(
         ls,
         DEBUG_CHECK_CONTEXT.format(
@@ -301,24 +354,28 @@ def context_is_valid(ls: LanguageServer, existing_resource: TestBenchResourceMod
         LogLevel.DEBUG,
     )
     if not project or not tov:
-        show_error(ls, ERROR_CONTEXT_NOT_SET)
+        if not silent:
+            show_error(ls, ERROR_CONTEXT_NOT_SET)
         return False
     if project != ls.project or tov != ls.tov:
-        show_error(ls, ERROR_CONTEXT_MISMATCH)
+        if not silent:
+            show_error(ls, ERROR_CONTEXT_MISMATCH)
         return False
     return True
 
 
 @testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
-def pull_testbench_subdivision(ls: LanguageServer, args):
+def push_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
-    if not context_is_valid(ls, existing_resource):
+    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
         return
     rd = ResourceDocumentation(document.path)
     for keyword in existing_resource.keyword_section.body:
-        keyword_uid = existing_resource.get_kw_uid(keyword)
+        if "robot:private" in robot_model_to_string(get_keyword_tags(keyword)):
+            continue
+        keyword_uid = get_kw_uid(keyword)
         existing_keywords = existing_resource.get_keywords(keyword_uid)
         if len(existing_keywords) > 1:
             show_error(
@@ -332,6 +389,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
             .replace("<hr>", "<br/>")
         )
         html_description = f"<html><body>{new_docu}</body></html>"
+        call_type = get_interaction_call_type(keyword)
         try:
             tb_connection = TestBenchResourceConnection.singleton()
             response = patch_interaction_details(
@@ -339,12 +397,15 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
                 keyword_uid,
                 keyword.name,
                 html_description,
+                call_type.value,
             )
         except requests.exceptions.HTTPError as http_error:
             if http_error.response.status_code == 409:
                 show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
             else:
                 show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+        except TestBenchKeywordNotFound as not_found_error:
+            show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
 
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
@@ -352,9 +413,9 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
-    if not context_is_valid(ls, existing_resource):
+    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
         return
-    new_resource = create_resource(
+    new_resource = create_resource_from_subdivision(
         uid=subdivision_uid,
     )
     change_identifier = ChangeAnnotationIdentifier()
@@ -369,35 +430,50 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     for new_keyword in new_resource.keyword_section.body:
-        keyword_uid = new_resource.get_kw_uid(new_keyword)
-        existing_keywords = existing_resource.get_keywords(keyword_uid)
-        if len(existing_keywords) > 1:
+        try:
+            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+        except MultipleKeywordsWithUid as e:
             show_error(
                 ls,
-                ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
             )
-            return
-        if existing_keywords:
-            edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
-        else:
+            continue
+        except MultipleKeywordsWithName as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+            )
+            continue
+        if not keyword_match:
             edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
-    if edits:
-        edit = WorkspaceEdit(
-            document_changes=[
-                TextDocumentEdit(
-                    text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
-                    edits=edits,
-                )
-            ],
-            change_annotations={
-                change_identifier: ChangeAnnotation(
-                    KEYWORD_INTERFACE_CHANGE_LABEL, needs_confirmation=False
-                )
-            },
-        )
-        ls.lsp.send_request(
-            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
-        )
+        else:
+            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+                continue
+            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+    if not edits:
+        return
+    edit = create_workspace_edit(
+        document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
+    )
+    ls.lsp.send_request(
+        WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
+    )
+
+
+def get_matching_testbench_keyword(
+    rf_keyword: Keyword, testbench_resource: TestBenchResourceModel
+) -> Keyword | None:
+    keyword_uid = get_kw_uid(rf_keyword)
+    keywords_with_matching_uid = testbench_resource.get_keywords(keyword_uid)
+    if len(keywords_with_matching_uid) == 1:
+        return keywords_with_matching_uid[0]
+    if len(keywords_with_matching_uid) > 1:
+        raise MultipleKeywordsWithUid(keyword_uid)
+    keywords_with_matching_name = testbench_resource.get_keywords_by_name(rf_keyword.name)
+    if len(keywords_with_matching_name) == 1:
+        return keywords_with_matching_name[0]
+    if len(keywords_with_matching_uid) > 1:
+        raise MultipleKeywordsWithName(rf_keyword.name)
 
 
 def new_keyword_edit(new_keyword, kw_section_start_row, change_identifier):
@@ -468,21 +544,9 @@ def create_keyword_edits(
         )
         edits.append(name_edit)
 
-    existing_keyword_tags = get_keyword_tags(existing_keyword)
-    new_keyword_tags = get_keyword_tags(new_keyword)
-    if robot_model_to_string(new_keyword_tags) != robot_model_to_string(existing_keyword_tags):
-        tags_start, tags_start_char, tags_end, tags_end_char = get_keyword_tags_position(
-            existing_keyword
-        )
-        tags_edit = AnnotatedTextEdit(
-            change_identifier,
-            range=Range(
-                start=Position(tags_start, tags_start_char),
-                end=Position(tags_end, tags_end_char),
-            ),
-            new_text=robot_model_to_string(new_keyword_tags).rstrip(),
-        )
-        # edits.append(tags_edit)
+    tags_edit = get_kw_tags_edit(existing_keyword, new_keyword, change_identifier)
+    if tags_edit:
+        edits.append(tags_edit)
 
     existing_keyword_arguments = get_keyword_arguments(existing_keyword)
     new_keyword_arguments = get_keyword_arguments(new_keyword)
@@ -515,36 +579,49 @@ def pull_testbench_keyword(ls: LanguageServer, args):
     resource = TestBenchResourceModel.from_file(document.source)
     if not context_is_valid(ls, resource):
         return
-    edits = []
     change_identifier = ChangeAnnotationIdentifier()
     existing_keywords = resource.get_keywords(keyword_uid)
-    new_keyword = create_keyword(
-        keyword_uid,
-    )
+    try:
+        new_keyword = create_keyword_from_interaction(
+            keyword_uid,
+        )
+    except TestBenchKeywordNotFound as e:
+        show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=e.uid))
+        return
     if len(existing_keywords) > 1:
         show_error(
             ls,
             ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
         )
         return
-    edits.extend(create_keyword_edits(existing_keywords[0], new_keyword, change_identifier))
-    if edits:
-        edit = WorkspaceEdit(
-            document_changes=[
-                TextDocumentEdit(
-                    text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
-                    edits=edits,
-                )
-            ],
-            change_annotations={
-                change_identifier: ChangeAnnotation(
-                    KEYWORD_INTERFACE_CHANGE_LABEL, needs_confirmation=True
-                )
-            },
-        )
-        ls.lsp.send_request(
-            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
-        )
+    edits = create_keyword_edits(existing_keywords[0], new_keyword, change_identifier)
+    if not edits:
+        return
+    edit = create_workspace_edit(
+        document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
+    )
+    ls.lsp.send_request(
+        WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
+    )
+
+
+def create_workspace_edit(
+    document_uri: str,
+    edits: list[AnnotatedTextEdit],
+    change_identifier: ChangeAnnotationIdentifier,
+    change_label: str,
+) -> WorkspaceEdit:
+    return WorkspaceEdit(
+        document_changes=[
+            TextDocumentEdit(
+                text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
+                edits=edits,
+            )
+        ],
+        change_annotations={
+            change_identifier: ChangeAnnotation(change_label, needs_confirmation=True)
+        },
+    )
 
 
 @testbench_ls.command(COMMAND_PUSH_KEYWORD)
@@ -566,6 +643,8 @@ def push_testbench_keyword(ls: LanguageServer, args):
         rd.get_keyword_documentation(keyword_uid).replace("<br>", "<br/>").replace("<hr>", "<br/>")
     )
     html_description = f"<html><body>{new_docu}</body></html>"
+    call_type = get_interaction_call_type(robot_keywords[0])
+
     try:
         tb_connection = TestBenchResourceConnection.singleton()
         response = patch_interaction_details(
@@ -573,12 +652,140 @@ def push_testbench_keyword(ls: LanguageServer, args):
             keyword_uid,
             robot_keywords[0].name,
             html_description,
+            call_type.value,
         )
     except requests.exceptions.HTTPError as http_error:
         if http_error.response.status_code == 409:
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+    except TestBenchKeywordNotFound as not_found_error:
+            show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
+
+
+@testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
+def code_actions(ls: LanguageServer, params: CodeActionParams):
+    document_uri = params.text_document.uri
+    document = ls.workspace.get_text_document(params.text_document.uri)
+    resource = TestBenchResourceModel.from_file(document.source)
+    diagnostics = params.context.diagnostics
+    context_diagnostics = [
+        diagnostic
+        for diagnostic in diagnostics
+        if diagnostic.code in (MISSING_CONTEXT_CODE, CONTEXT_MISMATCH_CODE)
+    ]
+    if not context_diagnostics:
+        return []
+    return [
+        CodeAction(
+            "Apply selected TestBench context",
+            CodeActionKind.QuickFix,
+            command=Command(
+                title="apply_testbench_context",
+                command="testbench_ls.applyTestBenchContext",
+                arguments=[document_uri, params.range.start.line],
+            ),
+            diagnostics=context_diagnostics,
+        )
+    ]
+
+
+@testbench_ls.command(
+    "testbench_ls.applyTestBenchContext",
+)
+def apply_selected_context(ls: LanguageServer, args):
+    document_uri, start_line, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    change_identifier = ChangeAnnotationIdentifier()
+    resource = TestBenchResourceModel.from_file(document.source)
+    if context_is_valid(ls, resource, silent=True):
+        return []
+    cont_start, cont_start_char, cont_end, cont_end_char = get_testbench_context_position(
+        resource.file
+    )
+    updated_context = CONTEXT_STRING.format(project=ls.project, tov=ls.tov)
+    if all(v == 0 for v in (cont_start, cont_start_char, cont_end, cont_end_char)):
+        _, _, cont_end, cont_end_char = get_comment_section_end_position(resource.file)
+        cont_start = cont_end
+        cont_start_char = cont_end_char
+        updated_context = f"\n{updated_context}"
+    edits = [
+        AnnotatedTextEdit(
+            change_identifier,
+            range=Range(
+                start=Position(cont_start, cont_start_char),
+                end=Position(cont_end, cont_end_char),
+            ),
+            new_text=updated_context,
+        )
+    ]
+    edit = create_workspace_edit(document_uri, edits, change_identifier, CONTEXT_CHANGE_LABEL)
+    ls.lsp.send_request(
+        WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
+    )
+
+
+def get_context_diagnostics(ls: LanguageServer, document: TextDocument) -> list[Diagnostic]:
+    resource = TestBenchResourceModel.from_file(document.source)
+    if not resource.tb_subdivision_uid:
+        return []
+    if context_is_valid(ls, resource, silent=True):
+        return []
+    cont_start, cont_start_char, cont_end, cont_end_char = get_testbench_context_position(
+        resource.file
+    )
+    if all(v == 0 for v in (cont_start, cont_start_char, cont_end, cont_end_char)):
+        comment_start, comment_start_char, comment_end, comment_end_char = (
+            get_comment_section_end_position(resource.file)
+        )
+        return [
+            Diagnostic(
+                code=MISSING_CONTEXT_CODE,
+                range=Range(
+                    start=Position(comment_start, comment_start_char),
+                    end=Position(comment_end, comment_end_char),
+                ),
+                message=WARNING_MISSING_CONTEXT,
+                severity=DiagnosticSeverity.Warning,
+            )
+        ]
+    project, tov = resource.tb_tov_context
+    return [
+        Diagnostic(
+            code=CONTEXT_MISMATCH_CODE,
+            range=Range(
+                start=Position(cont_start, cont_start_char),
+                end=Position(cont_end, cont_end_char),
+            ),
+            message=WARNING_CONTEXT_MISMATCH.format(
+                selected_context=f"{ls.project}/{ls.tov}",
+                resource_context=f"{project}/{tov}",
+            ),
+            severity=DiagnosticSeverity.Warning,
+        )
+    ]
+
+
+@testbench_ls.feature(TEXT_DOCUMENT_DID_OPEN)
+def did_open(ls: LanguageServer, params: DidOpenTextDocumentParams):
+    document = ls.workspace.get_text_document(params.text_document.uri)
+    diagnostics = get_context_diagnostics(ls, document)
+    ls.publish_diagnostics(
+        document.uri,
+        diagnostics=diagnostics,
+        version=document.version,
+    )
+
+
+@testbench_ls.feature(TEXT_DOCUMENT_DID_CHANGE)
+def did_change(ls: LanguageServer, params: DidOpenTextDocumentParams):
+    document = ls.workspace.get_text_document(params.text_document.uri)
+    diagnostics = get_context_diagnostics(ls, document)
+    ls.publish_diagnostics(
+        document.uri,
+        diagnostics=diagnostics,
+        version=document.version,
+    )
 
 
 # @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)

@@ -3,6 +3,7 @@ import re
 from markdownify import MarkdownConverter
 from robot.api.parsing import (
     Arguments,
+    CommentSection,
     Documentation,
     File,
     Keyword,
@@ -101,7 +102,10 @@ def get_keyword_tags(keyword: Keyword) -> Tags:
 def get_keyword_tags_position(keyword: Keyword) -> tuple[int]:
     tags = get_keyword_tags(keyword)
     if not tags:
-        return (keyword.lineno, 0, keyword.lineno, 0)
+        documentation = get_keyword_documentation(keyword)
+        if not documentation:
+            return (keyword.lineno, 0, keyword.lineno, 0)
+        return (documentation.end_lineno, 0, documentation.end_lineno, 0)
     return (tags.lineno - 1, tags.col_offset, tags.end_lineno - 1, tags.end_col_offset)
 
 
@@ -188,3 +192,42 @@ class RobotDocumentationConverter(MarkdownConverter):
 
 def html_2_robot(html: str, **options) -> str:
     return RobotDocumentationConverter(heading_style="ATX_CLOSED", **options).convert(html).strip()
+
+
+def get_testbench_context_position(file: File) -> tuple[int]:
+    comment_section = get_comments_section(file)
+    if not comment_section:
+        return (0, 0, 0, 0)
+    for comment in comment_section.body:
+        context_match = re.search(
+            r".*tb:context:(?P<tb_context>.*$)", robot_model_to_string(comment), re.MULTILINE
+        )
+        if context_match:
+            return (
+                comment.lineno - 1,
+                comment.col_offset,
+                comment.end_lineno - 1,
+                comment.end_col_offset,
+            )
+    return (0, 0, 0, 0)
+
+
+def get_comment_section_end_position(file: File) -> tuple[int]:
+    comment_section = get_comments_section(file)
+    position = (0, 0, 0, 0)
+    if not comment_section:
+        return position
+    for comment in comment_section.body:
+        empty_line_match = re.search(r"^\n", robot_model_to_string(comment), re.MULTILINE)
+        if not empty_line_match:
+            position = (
+                comment.lineno - 1,
+                comment.col_offset,
+                comment.end_lineno - 1,
+                comment.end_col_offset,
+            )
+    return position
+
+
+def get_comments_section(file: File):
+    return next(filter(lambda item: isinstance(item, CommentSection), file.sections), None)
