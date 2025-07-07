@@ -819,6 +819,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         clearAllFiltersForView(treeViews?.testElementsTree);
     };
 
+    const handleInteractionClick = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.handleInteractionClick(item);
+    };
+
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
@@ -959,6 +963,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         {
             id: allExtensionCommands.openInteractionInTestElementsView,
             handler: handleGoToInteraction
+        },
+        {
+            id: allExtensionCommands.handleInteractionClick,
+            handler: handleInteractionClick
         }
     ];
 

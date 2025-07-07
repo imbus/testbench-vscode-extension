@@ -6,6 +6,7 @@
 import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { EventBus } from "../../utils/EventBus";
+import { allExtensionCommands } from "../../../constants";
 
 export enum TestElementType {
     Subdivision = "Subdivision",
@@ -62,6 +63,14 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.id = this.generateUniqueId();
         this.tooltip = this.generateTooltip();
         this.registerEventHandlers();
+
+        if (this.data.testElementType === TestElementType.Interaction) {
+            this.command = {
+                command: allExtensionCommands.handleInteractionClick,
+                title: "Open Resource",
+                arguments: [this]
+            };
+        }
 
         if (this.data.hierarchicalName) {
             this.resourceUri = vscode.Uri.parse(`testElement:${this.data.hierarchicalName}`);

@@ -446,7 +446,7 @@
             },
             {
                 "command": "testbenchExtension.openSubdivisionFolderInExplorer",
-                "title": "Open in File Explorer",
+                "title": "Open in Explorer View",
                 "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.folder'",
                 "icon": {
                     "light": "resources/icons/open-light.svg",
@@ -455,7 +455,7 @@
             },
             {
                 "command": "testbenchExtension.openInteractionInTestElementsView",
-                "title": "Go to Resource",
+                "title": "Open Resource",
                 "when": "view == testbench.testElements && viewItem == 'testElement.interaction'",
                 "icon": {
                     "light": "resources/icons/open-light.svg",

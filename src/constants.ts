@@ -241,5 +241,6 @@ export const allExtensionCommands = {
     openAvailableSubdivisionInTestElementsView: `${baseKeyOfExtension}.openAvailableSubdivisionInTestElementsView`,
     openMissingSubdivisionInTestElementsView: `${baseKeyOfExtension}.openMissingSubdivisionInTestElementsView`,
     openSubdivisionFolderInExplorer: `${baseKeyOfExtension}.openSubdivisionFolderInExplorer`,
-    openInteractionInTestElementsView: `${baseKeyOfExtension}.openInteractionInTestElementsView`
+    openInteractionInTestElementsView: `${baseKeyOfExtension}.openInteractionInTestElementsView`,
+    handleInteractionClick: `${baseKeyOfExtension}.handleInteractionClick`
 };
