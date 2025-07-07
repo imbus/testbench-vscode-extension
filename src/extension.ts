@@ -31,7 +31,10 @@ import * as connectionManager from "./connectionManager";
 import { PlayServerConnection } from "./testBenchConnection";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
-import { MarkingModule, TestElementsTreeItem, TreeViewBase, TreeViews } from "./treeViews";
+import { MarkingModule } from "./treeViews/features/MarkingModule";
+import { TestElementsTreeItem } from "./treeViews/implementations/testElements/TestElementsTreeItem";
+import { TreeViewBase } from "./treeViews/core/TreeViewBase";
+import { TreeViews } from "./treeViews/TreeViewFactory";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
@@ -94,9 +97,6 @@ export let extensionContext: vscode.ExtensionContext;
 export function setExtensionContext(context: vscode.ExtensionContext): void {
     extensionContext = context;
 }
-
-// Double-click handling
-let lastCycleClick = { id: "", timestamp: 0 };
 
 // Global variable to store the authentication provider instance
 let authProviderInstance: TestBenchAuthenticationProvider | null = null;
@@ -349,16 +349,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
-        const now = Date.now();
-        const isDoubleClick =
-            lastCycleClick.id === cycleItem.id &&
-            now - lastCycleClick.timestamp < TreeViewTiming.DOUBLE_CLICK_THRESHOLD_MS;
-
+        // Save UI context for restoration
         const projectKey = cycleItem.getProjectKey();
         const cycleKey = cycleItem.getCycleKey();
         const versionKey = cycleItem.getVersionKey();
         const projectName = cycleItem.parent?.parent?.label?.toString();
         const tovName = cycleItem.parent?.label?.toString();
+
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
             await saveUIContext(context, "testThemes", {
                 isCycle: true,
@@ -371,36 +368,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             });
         }
 
-        if (isDoubleClick) {
-            logger.debug(`Cycle item double-clicked: ${cycleItem.label}`);
-            await displayTestThemeTreeView();
-            await displayTestElementsTreeView();
-            await hideProjectManagementTreeView();
-            lastCycleClick = { id: "", timestamp: 0 };
-        } else {
-            if (cycleItem.id) {
-                lastCycleClick = { id: cycleItem.id, timestamp: now };
-            }
-            logger.debug(`Cycle item single-clicked: ${cycleItem.label}`);
-
-            if (projectKey && cycleKey && versionKey && projectName && tovName) {
-                await updateOrRestartLS(projectName, tovName);
-                if (treeViews?.testThemesTree) {
-                    await treeViews.testThemesTree.loadCycle(
-                        projectKey,
-                        cycleKey,
-                        projectName,
-                        tovName,
-                        cycleItem.label?.toString()
-                    );
-                }
-                if (treeViews?.testElementsTree) {
-                    logger.debug(`Loading test elements for TOV ${versionKey} (from cycle ${cycleKey})`);
-                    await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
-                }
-            } else {
-                throw new Error("Invalid cycle item: missing project, cycle, or version key");
-            }
+        if (treeViews?.projectsTree && cycleItem.id) {
+            await treeViews.projectsTree.handleCycleClick(cycleItem);
         }
     };
 
