@@ -501,6 +501,8 @@ def keyword_section_edit(keyword_section_line, change_identifier):
         )
     ]
 
+def _normalize_whitespace(text):
+    return re.sub(r' {5,}', '    ', text)
 
 def create_keyword_edits(
     existing_keyword, new_keyword, change_identifier
@@ -512,6 +514,7 @@ def create_keyword_edits(
         new_docu = robot_model_to_string(new_keyword_documentation).rstrip()
     else:
         new_docu = robot_model_to_string(new_keyword_documentation)
+    new_docu = _normalize_whitespace(new_docu)
     if re.sub(
         r"\s|\n|\.\.\.", r"", robot_model_to_string(new_keyword_documentation), flags=re.MULTILINE
     ) != re.sub(
