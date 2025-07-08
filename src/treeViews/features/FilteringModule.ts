@@ -84,10 +84,8 @@ export class FilteringModule implements TreeViewModule {
 
         // Listen for state changes
         context.eventBus.on("state:changed", (event) => {
-            const changes = event.data.changes;
-            const filterChange = changes.find((c: any) => c.field === "filtering");
-            if (filterChange && filterChange.newValue) {
-                this.applyLoadedFilterState(filterChange.newValue);
+            if (event.data?.filtering) {
+                this.applyLoadedFilterState(event.data.filtering);
             }
         });
 

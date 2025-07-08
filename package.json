@@ -428,12 +428,43 @@
                 }
             },
             {
-                "command": "testbenchExtension.openOrCreateRobotResourceFile",
-                "title": "Go to Robot Resource"
+                "command": "testbenchExtension.openAvailableSubdivisionInTestElementsView",
+                "title": "Open Resource",
+                "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.available'",
+                "icon": {
+                    "light": "resources/icons/open-light.svg",
+                    "dark": "resources/icons/open-dark.svg"
+                }
             },
             {
-                "command": "testbenchExtension.createInteractionUnderSubdivision",
-                "title": "Create Interaction"
+                "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
+                "title": "Create Resource",
+                "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.missing'",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "testbenchExtension.openSubdivisionFolderInExplorer",
+                "title": "Open in Explorer View",
+                "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.folder'",
+                "icon": {
+                    "light": "resources/icons/open-light.svg",
+                    "dark": "resources/icons/open-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.openInteractionInTestElementsView",
+                "title": "Open Resource",
+                "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.available'",
+                "icon": {
+                    "light": "resources/icons/open-light.svg",
+                    "dark": "resources/icons/open-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.createMissingParentResourceForInteraction",
+                "title": "Create Resource",
+                "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.missing'",
+                "icon": "$(new-file)"
             },
             {
                 "command": "testbenchExtension.openIssueReporter",
@@ -790,18 +821,6 @@
                     "group": "navigation"
                 },
                 {
-                    "command": "testbenchExtension.openOrCreateRobotResourceFile",
-                    "when": "view == testbench.testElements && (viewItem == testElement.subdivision || viewItem == testElement.interaction)",
-                    "group": "navigation@1",
-                    "title": "Go To Robot Resource"
-                },
-                {
-                    "command": "testbenchExtension.createInteractionUnderSubdivision",
-                    "when": "view == testbench.testElements && viewItem == testElement.subdivision",
-                    "group": "1_modification",
-                    "title": "Create Interaction"
-                },
-                {
                     "command": "testbenchExtension.resetProjectTreeViewRoot",
                     "when": "view == testbench.projects && (viewItem == customRoot.Project || viewItem == customRoot.Version || viewItem == customRoot.Cycle)",
                     "group": "navigation@1",
@@ -812,6 +831,31 @@
                     "when": "view == testbench.testThemes && (viewItem == 'customRoot.TestThemeNode' || viewItem == 'customRoot.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'MarkedForGeneration.customRoot.TestThemeNode' || viewItem == 'MarkedForGeneration.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForGeneration.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForGeneration.customRoot.TestCaseSetNode')",
                     "group": "navigation@1",
                     "title": "Reset Custom Root"
+                },
+                {
+                    "command": "testbenchExtension.openAvailableSubdivisionInTestElementsView",
+                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.available'",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
+                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.missing'",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.openSubdivisionFolderInExplorer",
+                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.folder'",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.openInteractionInTestElementsView",
+                    "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.available'",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.createMissingParentResourceForInteraction",
+                    "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.missing'",
+                    "group": "inline@1"
                 }
             ]
         },

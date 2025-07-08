@@ -31,7 +31,10 @@ import * as connectionManager from "./connectionManager";
 import { PlayServerConnection } from "./testBenchConnection";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
-import { MarkingModule, TestElementsTreeItem, TreeViewBase, TreeViews } from "./treeViews";
+import { MarkingModule } from "./treeViews/features/MarkingModule";
+import { TestElementsTreeItem } from "./treeViews/implementations/testElements/TestElementsTreeItem";
+import { TreeViewBase } from "./treeViews/core/TreeViewBase";
+import { TreeViews } from "./treeViews/TreeViewFactory";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
@@ -94,9 +97,6 @@ export let extensionContext: vscode.ExtensionContext;
 export function setExtensionContext(context: vscode.ExtensionContext): void {
     extensionContext = context;
 }
-
-// Double-click handling
-let lastCycleClick = { id: "", timestamp: 0 };
 
 // Global variable to store the authentication provider instance
 let authProviderInstance: TestBenchAuthenticationProvider | null = null;
@@ -176,7 +176,7 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
  * Wraps a (test generation or import) command handler to make sure only one test operation (generation/import) runs at a time.
  * If another operation is in progress, shows a warning and does not execute the handler.
  * @param handler The async function to execute
- * @returns A new async function with single-operation protection
+ * @returns A new async function with single operation protection
  */
 function withSingleTestOperation<T extends any[]>(
     handler: (...args: T) => Promise<void>
@@ -266,7 +266,12 @@ async function performDeferredViewRestoration(
             );
         }
 
-        await treeViews.testElementsTree.loadTov(savedContext.tovKey, savedContext.tovName);
+        await treeViews.testElementsTree.loadTov(
+            savedContext.tovKey,
+            savedContext.tovName,
+            savedContext.projectName,
+            savedContext.tovName
+        );
 
         await displayTestThemeTreeView();
         await displayTestElementsTreeView();
@@ -344,16 +349,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
-        const now = Date.now();
-        const isDoubleClick =
-            lastCycleClick.id === cycleItem.id &&
-            now - lastCycleClick.timestamp < TreeViewTiming.DOUBLE_CLICK_THRESHOLD_MS;
-
+        // Save UI context for restoration
         const projectKey = cycleItem.getProjectKey();
         const cycleKey = cycleItem.getCycleKey();
         const versionKey = cycleItem.getVersionKey();
         const projectName = cycleItem.parent?.parent?.label?.toString();
         const tovName = cycleItem.parent?.label?.toString();
+
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
             await saveUIContext(context, "testThemes", {
                 isCycle: true,
@@ -366,36 +368,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             });
         }
 
-        if (isDoubleClick) {
-            logger.debug(`Cycle item double-clicked: ${cycleItem.label}`);
-            await displayTestThemeTreeView();
-            await displayTestElementsTreeView();
-            await hideProjectManagementTreeView();
-            lastCycleClick = { id: "", timestamp: 0 };
-        } else {
-            if (cycleItem.id) {
-                lastCycleClick = { id: cycleItem.id, timestamp: now };
-            }
-            logger.debug(`Cycle item single-clicked: ${cycleItem.label}`);
-
-            if (projectKey && cycleKey && versionKey && projectName && tovName) {
-                await updateOrRestartLS(projectName, tovName);
-                if (treeViews?.testThemesTree) {
-                    await treeViews.testThemesTree.loadCycle(
-                        projectKey,
-                        cycleKey,
-                        projectName,
-                        tovName,
-                        cycleItem.label?.toString()
-                    );
-                }
-                if (treeViews?.testElementsTree) {
-                    logger.debug(`Loading test elements for TOV ${versionKey} (from cycle ${cycleKey})`);
-                    await treeViews.testElementsTree.loadTov(versionKey, tovName);
-                }
-            } else {
-                throw new Error("Invalid cycle item: missing project, cycle, or version key");
-            }
+        if (treeViews?.projectsTree && cycleItem.id) {
+            await treeViews.projectsTree.handleCycleClick(cycleItem);
         }
     };
 
@@ -448,7 +422,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await updateOrRestartLS(projectName, tovName);
             await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
             if (treeViews.testElementsTree) {
-                await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString());
+                await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString(), projectName, tovName);
             }
         }
     };
@@ -492,7 +466,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 cycleItem.label?.toString()
             );
             if (treeViews.testElementsTree) {
-                await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString());
+                await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString(), projectName, tovName);
             }
         } else {
             throw new Error("Invalid cycle item: missing project, cycle, or version key");
@@ -741,12 +715,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
-    const handleOpenOrCreateRobotResourceFile = (item: TestElementsTreeItem) => {
-        treeViews?.testElementsTree.openOrCreateRobotResourceFile(item);
+    const handleOpenAvailableResource = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.openAvailableResource(item);
     };
 
-    const handleCreateInteractionUnderSubdivision = (item: TestElementsTreeItem) => {
-        treeViews?.testElementsTree.createInteraction(item);
+    const handleCreateMissingResource = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.createMissingResource(item);
+    };
+
+    const handleOpenFolderInExplorer = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.openFolderInExplorer(item);
+    };
+
+    const handleGoToInteraction = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.goToInteractionResource(item);
+    };
+
+    const handleCreateMissingParentResourceForInteraction = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.createMissingParentResourceForInteraction(item);
     };
 
     const handleUpdateOrRestartLS = (projectName: string | undefined, tovName: string | undefined) => {
@@ -835,6 +821,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const handleClearAllFiltersForTestElements = () => {
         clearAllFiltersForView(treeViews?.testElementsTree);
+    };
+
+    const handleInteractionClick = (item: TestElementsTreeItem) => {
+        treeViews?.testElementsTree.handleInteractionClick(item);
     };
 
     // --- Command Registry ---
@@ -963,12 +953,28 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             handler: handleUpdateOrRestartLS
         },
         {
-            id: allExtensionCommands.openOrCreateRobotResourceFile,
-            handler: handleOpenOrCreateRobotResourceFile
+            id: allExtensionCommands.openAvailableSubdivisionInTestElementsView,
+            handler: handleOpenAvailableResource
         },
         {
-            id: allExtensionCommands.createInteractionUnderSubdivision,
-            handler: handleCreateInteractionUnderSubdivision
+            id: allExtensionCommands.openMissingSubdivisionInTestElementsView,
+            handler: handleCreateMissingResource
+        },
+        {
+            id: allExtensionCommands.openSubdivisionFolderInExplorer,
+            handler: handleOpenFolderInExplorer
+        },
+        {
+            id: allExtensionCommands.openInteractionInTestElementsView,
+            handler: handleGoToInteraction
+        },
+        {
+            id: allExtensionCommands.createMissingParentResourceForInteraction,
+            handler: handleCreateMissingParentResourceForInteraction
+        },
+        {
+            id: allExtensionCommands.handleInteractionClick,
+            handler: handleInteractionClick
         }
     ];
 

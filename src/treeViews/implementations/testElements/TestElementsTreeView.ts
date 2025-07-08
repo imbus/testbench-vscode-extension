@@ -10,21 +10,23 @@ import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { TestElementsDataProvider } from "./TestElementsDataProvider";
 import { testElementsConfig } from "./TestElementsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
-import { ResourceFileService } from "./ResourceFileService";
+import { ResourceFileService, ResourceOperationConfig } from "./ResourceFileService";
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { FilterService } from "../../utils/FilterService";
 import { treeViews } from "../../../extension";
+import { ClickHandler } from "../../core/ClickHandler";
 
 export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private dataProvider: TestElementsDataProvider;
     private disposables: vscode.Disposable[] = [];
     private currentTovKey: string | null = null;
     private currentTovLabel: string | null = null;
+    private currentProjectName: string | null = null;
+    private currentTovName: string | null = null;
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
-    private isUpdating: boolean = false;
-    private updateQueue: Promise<void> = Promise.resolve();
     private filterService: FilterService;
+    private interactionClickHandler: ClickHandler<TestElementsTreeItem>;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -37,8 +39,28 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.dataProvider = new TestElementsDataProvider(this.logger, this.errorHandler, getConnection, this.eventBus);
         this.resourceFileService = new ResourceFileService(this.logger);
         this.filterService = FilterService.getInstance();
+        this.interactionClickHandler = new ClickHandler<TestElementsTreeItem>();
 
         this.registerEventHandlers();
+        this.setupInteractionClickHandlers();
+    }
+
+    /**
+     * Sets up click handlers for interaction items using the generalized click handler
+     */
+    private setupInteractionClickHandlers(): void {
+        this.interactionClickHandler.updateHandlers({
+            onSingleClick: async (item: TestElementsTreeItem) => {
+                if (item.data.testElementType === TestElementType.Interaction) {
+                    // Single click on test elements do nothing
+                }
+            },
+            onDoubleClick: async (item: TestElementsTreeItem) => {
+                if (item.data.testElementType === TestElementType.Interaction) {
+                    await this.handleInteractionDoubleClick(item);
+                }
+            }
+        });
     }
 
     /**
@@ -69,7 +91,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const { tovKey, tovLabel } = event.data;
             if (tovKey && tovKey !== this.currentTovKey) {
                 this.logger.debug(`Loading test elements for TOV ${tovKey} from test themes event`);
-                await this.loadTov(tovKey, tovLabel);
+                await this.loadTov(
+                    tovKey,
+                    tovLabel,
+                    this.currentProjectName || undefined,
+                    this.currentTovName || undefined
+                );
             }
         });
 
@@ -83,13 +110,34 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         });
 
         this.eventBus.on("testElement:updated", (event) => {
-            const { id } = event.data;
-            const item = this.findItemById(this.rootItems, id);
+            const { item } = event.data;
             if (item) {
-                // Refresh only the specific item that changed
-                this._onDidChangeTreeData.fire(item);
+                this.refreshItemWithParents(item);
             }
         });
+
+        /*
+        // Listen for interaction selection events and handle double click detection
+        this.eventBus.on("interaction:selected", async (event) => {
+            const { item } = event.data;
+            if (item && item.data.testElementType === TestElementType.Interaction) {
+                await this.handleInteractionClick(item);
+            }
+        });
+        */
+    }
+
+    /**
+     * Refreshes a specific tree item and all of its parent items.
+     * @param item The item to start the refresh from.
+     */
+    private refreshItemWithParents(item: TestElementsTreeItem): void {
+        this._onDidChangeTreeData.fire(item);
+        let parent = item.parent as TestElementsTreeItem | null;
+        while (parent) {
+            this._onDidChangeTreeData.fire(parent);
+            parent = parent.parent as TestElementsTreeItem | null;
+        }
     }
 
     /**
@@ -114,21 +162,111 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
+     * Loads test elements data.
+     *
+     * @param tovKey - The unique identifier for the TOV to load.
+     * @param tovLabel - Optional label for the TOV to display in the title.
+     * @param projectName - The name of the project containing the TOV.
+     * @param tovName - The name of the TOV.
+     * @param preserveExistingData - Whether to preserve existing data during loading.
+     * @returns Promise that resolves when the TOV data is loaded.
+     */
+    private async loadTovWithProgress(
+        tovKey: string,
+        tovLabel?: string,
+        projectName?: string,
+        tovName?: string,
+        preserveExistingData: boolean = false
+    ): Promise<void> {
+        const startTime = Date.now();
+        this.logger.debug(`Loading TOV ${tovKey} with progress tracking`);
+
+        try {
+            if (!preserveExistingData) {
+                this.stateManager.setLoading(true);
+            }
+
+            const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);
+            const newRootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
+
+            this.rootItems = newRootItems;
+            this.currentTovKey = tovKey;
+            this.currentTovLabel = tovLabel || null;
+            this.currentProjectName = projectName || null;
+            this.currentTovName = tovName || null;
+            this.resourceFiles.clear();
+
+            if (tovLabel) {
+                this.updateTitle(`${this.config.title} (${tovLabel})`);
+            } else {
+                this.updateTitle(`${this.config.title} (TOV: ${tovKey})`);
+            }
+
+            (this as any)._lastDataFetch = Date.now();
+            (this as any)._intentionallyCleared = false;
+            this.stateManager.setLoading(false);
+
+            this._onDidChangeTreeData.fire(undefined);
+
+            this.updateSubdivisionIcons(newRootItems).catch((error) => {
+                this.logger.error("Error updating subdivision icons:", error);
+            });
+
+            const loadTime = Date.now() - startTime;
+            this.logger.info(
+                `Successfully loaded ${newRootItems.length} test elements for TOV ${tovKey} in ${loadTime}ms`
+            );
+
+            this.eventBus.emit({
+                type: "tov:loaded",
+                source: this.config.id,
+                data: {
+                    tovKey,
+                    tovLabel: this.currentTovLabel,
+                    loadTime
+                },
+                timestamp: Date.now()
+            });
+        } catch (error) {
+            this.logger.error("Error loading TOV with progress:", error);
+            this.stateManager.setLoading(false);
+            this.stateManager.setError(error as Error);
+            throw error;
+        }
+    }
+
+    /**
      * Loads test elements for a specific TOV (Test Object Version).
      *
      * @param tovKey - The unique identifier for the TOV to load.
      * @param tovLabel - Optional label for the TOV to display in the title.
+     * @param projectName - The name of the project containing the TOV.
+     * @param tovName - The name of the TOV.
+     * @param clearFirst - Whether to clear the tree before loading new data. Defaults to true.
      * @returns Promise that resolves when the TOV is loaded.
      */
-    public async loadTov(tovKey: string, tovLabel?: string): Promise<void> {
+    public async loadTov(
+        tovKey: string,
+        tovLabel?: string,
+        projectName?: string,
+        tovName?: string,
+        clearFirst: boolean = true
+    ): Promise<void> {
         try {
-            this.logger.debug(`Loading TOV ${tovKey}`);
+            this.logger.debug(
+                `Loading TOV ${tovKey}${clearFirst ? " (clearing first)" : " (preserving existing data)"}`
+            );
 
-            this.clearTree();
+            if (clearFirst || this.currentTovKey !== tovKey) {
+                this.clearTree();
+            }
+
             this.dataProvider.clearCache(tovKey); // Only clear cache for this specific TOV
 
             this.currentTovKey = tovKey;
             this.currentTovLabel = tovLabel || null;
+            this.currentProjectName = projectName || null;
+            this.currentTovName = tovName || null;
             this.resourceFiles.clear();
 
             if (tovLabel) {
@@ -181,6 +319,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         super.clearTree();
         this.currentTovKey = null;
         this.currentTovLabel = null;
+        this.currentProjectName = null;
+        this.currentTovName = null;
         this.resourceFiles.clear();
         this.resetTitle();
     }
@@ -214,7 +354,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         if (this.rootItems.length > 0) {
-            const dataIsFresh = Date.now() - (this as any)._lastDataFetch < 30000;
+            const dataIsFresh = Date.now() - (this as any)._lastDataFetch < 60000;
             if (dataIsFresh) {
                 this.logger.debug(`Using cached root items for TOV: ${this.currentTovKey}`);
                 return this.rootItems;
@@ -226,9 +366,22 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const hierarchicalTestElementsData = await this.dataProvider.fetchTestElements(this.currentTovKey);
             const rootTestElementItems = hierarchicalTestElementsData.map((data) => this._buildTreeItems(data));
 
-            // Await the icon updates directly to ensure they complete before the UI is drawn.
-            await this.updateSubdivisionIcons(rootTestElementItems);
-            this.logger.info(`Built tree and updated icons for ${rootTestElementItems.length} root test elements.`);
+            this.rootItems = rootTestElementItems;
+            (this as any)._lastDataFetch = Date.now();
+
+            this._onDidChangeTreeData.fire(undefined);
+
+            // Async icon updates to avoid blocking UI
+            this.updateSubdivisionIcons(rootTestElementItems)
+                .then(() => {
+                    this.logger.debug(`Icon updates completed for ${rootTestElementItems.length} root test elements.`);
+                    this._onDidChangeTreeData.fire(undefined);
+                })
+                .catch((error) => {
+                    this.logger.error("Error updating subdivision icons:", error);
+                });
+
+            this.logger.info(`Built tree for ${rootTestElementItems.length} root test elements.`);
             return rootTestElementItems;
         } catch (error) {
             this.logger.error("Failed to fetch and build test elements tree:", error);
@@ -271,7 +424,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                                 resourcePath += ".resource";
                             }
                             const exists = await this.resourceFileService.pathExists(resourcePath);
-                            item.updateLocalAvailability(exists);
+                            item.updateLocalAvailability(exists, resourcePath);
                         }
                     }
                 } catch (error) {
@@ -282,58 +435,48 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Updates the icon for a single tree item by checking its local availability
-     * @param item The tree item to update
-     * @returns Promise that resolves when the icon update is complete
+     * Updates the icons of parent items in the tree hierarchy.
+     * This is called when a resource file is created or opened to update parent tree item icons
+     * to reflect their availability in tree view.
+     * @param item The tree item whose parents should be updated
+     * @returns Promise that resolves when all parent icon updates are complete
      */
-    private async updateSingleItemIcon(item: TestElementsTreeItem): Promise<void> {
+    private async updateParentIcons(item: TestElementsTreeItem): Promise<boolean> {
         try {
-            if (item.data.testElementType === TestElementType.Subdivision) {
-                const hierarchicalName = item.data.hierarchicalName;
-                if (hierarchicalName) {
-                    const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
-
-                    if (isResourceFile) {
+            let parent = item.parent as TestElementsTreeItem | null;
+            let updated = false;
+            while (parent) {
+                if (parent.data.testElementType === TestElementType.Subdivision) {
+                    const hierarchicalName = parent.data.hierarchicalName;
+                    const isResourceFile = hierarchicalName && hierarchicalName.includes("[Robot-Resource]");
+                    if (hierarchicalName && isResourceFile) {
                         const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
-                        const lastSlash = cleanName.lastIndexOf("/");
-                        let parentPath = "";
-                        let baseName = cleanName;
-                        if (lastSlash !== -1) {
-                            parentPath = cleanName.substring(0, lastSlash);
-                            baseName = cleanName.substring(lastSlash + 1);
-                        }
-                        const resourceFileRelative = parentPath
-                            ? `${parentPath}/${baseName}.resource`
-                            : `${baseName}.resource`;
-                        const resourceFilePath =
-                            await this.resourceFileService.constructAbsolutePath(resourceFileRelative);
-                        let exists = false;
-                        if (resourceFilePath) {
-                            exists = await this.resourceFileService.fileExists(resourceFilePath);
-                        }
-                        // Fallback: check if file exists without .resource extension
-                        if (!exists) {
-                            const fallbackRelative = parentPath ? `${parentPath}/${baseName}` : baseName;
-                            const fallbackPath = await this.resourceFileService.constructAbsolutePath(fallbackRelative);
-                            if (fallbackPath) {
-                                exists = await this.resourceFileService.fileExists(fallbackPath);
+                        let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+                        if (resourcePath) {
+                            if (!resourcePath.endsWith(".resource")) {
+                                resourcePath += ".resource";
                             }
+                            const exists = await this.resourceFileService.pathExists(resourcePath);
+                            parent.updateLocalAvailability(exists, resourcePath);
+                            updated = true;
                         }
-                        item.updateLocalAvailability(exists);
-                        this._onDidChangeTreeData.fire(item);
                     } else {
-                        // For non-resource subdivisions, check if the folder exists locally
-                        const absolutePath = await this.resourceFileService.constructAbsolutePath(hierarchicalName);
-                        if (absolutePath) {
-                            const exists = await this.resourceFileService.directoryExists(absolutePath);
-                            item.updateLocalAvailability(exists);
-                            this._onDidChangeTreeData.fire(item);
+                        const cleanName = parent.data.name;
+                        const folderPath = await this.resourceFileService.constructAbsolutePath(cleanName);
+                        if (folderPath) {
+                            const exists = await this.resourceFileService.directoryExists(folderPath);
+                            parent.updateLocalAvailability(exists, folderPath);
+                            updated = true;
                         }
                     }
                 }
+                parent = parent.parent as TestElementsTreeItem | null;
             }
+            this._onDidChangeTreeData.fire(undefined);
+            return updated;
         } catch (error) {
-            this.logger.error(`Error updating icon for item ${item.label}:`, error);
+            this.logger.error(`Error updating parent icons for item ${item.label}:`, error);
+            return false;
         }
     }
 
@@ -367,6 +510,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             isLocallyAvailable: false,
             localPath: undefined
         };
+
+        // Check if parent resource is locally available for interactions
+        if (testElementType === TestElementType.Interaction && parent) {
+            itemData.isLocallyAvailable = parent.data.isLocallyAvailable || false;
+        }
+
         const item = new TestElementsTreeItem(itemData, this.extensionContext, parent, this.eventBus);
         item.updateId();
         this.applyModulesToTestElementsItem(item);
@@ -440,7 +589,23 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Gets the test elements provider.
+     * Gets the current project name.
+     * @returns The current project name or null if not set
+     */
+    public getCurrentProjectName(): string | null {
+        return this.currentProjectName;
+    }
+
+    /**
+     * Gets the current TOV name.
+     * @returns The current TOV name or null if not set
+     */
+    public getCurrentTovName(): string | null {
+        return this.currentTovName;
+    }
+
+    /**
+     * Returns the test elements provider.
      * @returns The tree data provider for test elements
      */
     public getTestElementsProvider(): vscode.TreeDataProvider<TestElementsTreeItem> {
@@ -448,113 +613,383 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Opens or creates a Robot resource file for the given test element item.
-     *
-     * @param item The test element tree item to open or create resource file for
-     * @returns Promise that resolves when the operation is complete
+     * Validates and constructs the robot resource file path to be created and returns it.
+     * @param hierarchicalName The hierarchical name from the item
+     * @param errorMessages Error messages for validation failures
+     * @returns Promise resolving to the cleaned name and constructed path
      */
-    public async openOrCreateRobotResourceFile(item: TestElementsTreeItem): Promise<void> {
-        const itemType = item.data.testElementType;
-
-        if (itemType !== TestElementType.Subdivision && itemType !== TestElementType.Interaction) {
-            vscode.window.showErrorMessage("This command can only be used on a Subdivision or an Interaction.");
-            return;
-        }
-
-        const resourceItem = (itemType === TestElementType.Interaction ? item.parent : item) as
-            | TestElementsTreeItem
-            | undefined;
-
-        if (!resourceItem || resourceItem.data.testElementType !== TestElementType.Subdivision) {
-            vscode.window.showErrorMessage("Could not find the parent resource for this item.");
-            return;
-        }
-
-        const hierarchicalName = resourceItem.data.hierarchicalName;
+    private async validateAndConstructPath(
+        hierarchicalName: string | undefined,
+        errorMessages: { noHierarchicalName: string; noPath: string }
+    ): Promise<{ cleanName: string; resourcePath: string } | null> {
         if (!hierarchicalName) {
-            vscode.window.showErrorMessage("Cannot determine resource path: item has no hierarchical name.");
-            return;
+            vscode.window.showErrorMessage(errorMessages.noHierarchicalName);
+            return null;
+        }
+
+        const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
+        let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
+
+        if (!resourcePath) {
+            vscode.window.showErrorMessage(errorMessages.noPath);
+            return null;
+        }
+
+        if (!resourcePath.endsWith(".resource")) {
+            resourcePath += ".resource";
+        }
+
+        return { cleanName, resourcePath };
+    }
+
+    /**
+     * Creates a missing robot resource file in the given resource path and updates the tree item with its parents.
+     * @param config The resource operation configuration
+     * @param resourcePath The path where the file should be created
+     * @param targetItem The item to update after creation
+     * @returns Promise resolving to whether the file was created successfully
+     */
+    private async createMissingResourceFile(
+        config: ResourceOperationConfig,
+        resourcePath: string,
+        targetItem: TestElementsTreeItem
+    ): Promise<boolean> {
+        if (!config.createMissing) {
+            const cleanName = targetItem.data.hierarchicalName?.replace(/\[Robot-Resource\]/g, "").trim();
+            vscode.window.showErrorMessage(
+                config.errorMessages.fileNotFound.replace("{path}", `${cleanName}.resource`)
+            );
+            return false;
         }
 
         try {
-            const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
-            const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
-            let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
-
-            if (!resourcePath) {
-                return;
+            const uid = targetItem.data.uniqueID;
+            if (!uid) {
+                const label = typeof targetItem.label === "string" ? targetItem.label : "Unknown";
+                throw new Error(config.errorMessages.noUid.replace("{label}", label));
             }
 
-            if (isResourceFile) {
-                if (!resourcePath.endsWith(".resource")) {
-                    resourcePath += ".resource";
-                }
-                const uid = resourceItem.data.uniqueID;
-                if (!uid) {
-                    throw new Error(`Subdivision ${resourceItem.label} has no UID.`);
-                }
-
-                const initialResourceFileContent = `tb:uid:${uid}\n\n`;
-                await this.resourceFileService.ensureFileExists(resourcePath, initialResourceFileContent);
-                const doc = await vscode.workspace.openTextDocument(resourcePath);
-                await vscode.window.showTextDocument(doc);
-            } else {
-                await this.resourceFileService.ensureFolderPathExists(resourcePath);
-                await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(resourcePath));
+            let contextWithProjectAndTovName = "";
+            if (this.currentProjectName && this.currentTovName) {
+                contextWithProjectAndTovName = `tb:context:${this.currentProjectName}/${this.currentTovName}\n`;
             }
 
-            await this.updateSingleItemIcon(resourceItem);
-            let parent = resourceItem.parent as TestElementsTreeItem | null;
-            while (parent) {
-                if (parent.data.testElementType === TestElementType.Subdivision) {
-                    await this.updateSingleItemIcon(parent);
-                }
-                parent = parent.parent as TestElementsTreeItem | null;
+            const initialFileContent = `tb:uid:${uid}\n${contextWithProjectAndTovName}\n`;
+            await this.resourceFileService.ensureFileExists(resourcePath, initialFileContent);
+
+            this.logger.debug(`[TestElementsTreeView] Created missing resource file: ${resourcePath}`);
+
+            targetItem.updateLocalAvailability(true, resourcePath);
+            await this.updateParentIcons(targetItem);
+            this.refreshItemWithParents(targetItem);
+
+            if (config.successMessages?.created) {
+                vscode.window.showInformationMessage(config.successMessages.created);
             }
 
-            // Invalidate the cache and trigger a full refresh
-            if (this.currentTovKey) {
-                this.dataProvider.clearCache(this.currentTovKey);
-            }
-
-            // Force immediate data fetch by resetting the last fetch timestamp
-            (this as any)._lastDataFetch = 0;
-
-            // Refresh will refetch and update all icons
-            this.refresh(undefined, { immediate: true });
+            return true;
         } catch (error) {
-            this.errorHandler.handleVoid(error as Error, "Failed to open or create Robot resource file.");
+            this.logger.error(`[TestElementsTreeView] Error creating resource file ${resourcePath}:`, error);
             vscode.window.showErrorMessage(
-                `Error handling resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Failed to create resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Creates a folder in the specified path if it does not exist and updates visuals of the tree item with its parents.
+     * @param config The resource operation configuration
+     * @param folderPath The path where the folder should be created
+     * @param targetItem The item to update after creation
+     * @returns Promise resolving to whether the folder was created successfully
+     */
+    private async createMissingFolder(
+        config: ResourceOperationConfig,
+        folderPath: string,
+        targetItem: TestElementsTreeItem
+    ): Promise<boolean> {
+        if (!config.createMissing) {
+            const cleanName = targetItem.data.hierarchicalName?.replace(/\[Robot-Resource\]/g, "").trim();
+            vscode.window.showErrorMessage(config.errorMessages.folderNotFound.replace("{path}", cleanName || ""));
+            return false;
+        }
+
+        try {
+            await this.resourceFileService.ensureFolderPathExists(folderPath);
+            this.logger.info(`[TestElementsTreeView] Created missing folder: ${folderPath}`);
+
+            targetItem.updateLocalAvailability(true, folderPath);
+            await this.updateParentIcons(targetItem);
+            this.refreshItemWithParents(targetItem);
+
+            return true;
+        } catch (error) {
+            this.logger.error(`[TestElementsTreeView] Error creating folder ${folderPath}:`, error);
+            vscode.window.showErrorMessage(
+                `Failed to create folder: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Opens a file in VS Code editor.
+     * @param filePath The path of the file to open
+     * @param operationType The type of operation for error context
+     */
+    private async openFileInVSCodeEditor(filePath: string, operationType: string): Promise<void> {
+        try {
+            const document = await vscode.workspace.openTextDocument(filePath);
+            await vscode.window.showTextDocument(document);
+        } catch (error) {
+            this.logger.error(`[TestElementsTreeView] Error opening ${operationType} file in editor:`, error);
+            vscode.window.showErrorMessage(
+                `Error opening ${operationType} file: ${error instanceof Error ? error.message : "Unknown error"}`
             );
         }
     }
 
-    // TODO: Implement this feature after the backend API is implemented.
     /**
-     * Handles the "Create Interaction" command for creating new interactions under subdivisions.
-     * @param item The TestElementsTreeItem representing the subdivision where the interaction will be created.
-     * @returns Promise<void> A promise that resolves when the operation completes.
-     * @throws May throw errors related to user input validation or file operations.
+     * Opens a resource file in VS Code's editor.
+     * If the file doesn't exist, it will create the file first.
+     * @param item The tree item representing a resource.
      */
-    public async createInteraction(item: TestElementsTreeItem): Promise<void> {
-        if (item.data.testElementType !== TestElementType.Subdivision) {
-            vscode.window.showErrorMessage("This command can only be used on a Subdivision.");
-            return;
-        }
-
-        const interactionName = await vscode.window.showInputBox({
-            prompt: "Enter the name for the new Interaction (Keyword)",
-            placeHolder: "e.g., Log In To System",
-            validateInput: (text) => {
-                return text.trim().length > 0 ? null : "Interaction name cannot be empty.";
+    public async openAvailableResource(item: TestElementsTreeItem): Promise<void> {
+        const config: ResourceOperationConfig = {
+            operationType: "open",
+            createMissing: true,
+            targetItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine resource path: item has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "",
+                noUid: "Subdivision {label} has no UID.",
+                fileNotFound: "Resource file does not exist: {path}.",
+                folderNotFound: ""
             }
-        });
+        };
 
-        if (!interactionName) {
-            this.logger.debug("User cancelled 'Create Interaction' command.");
+        const pathResult = await this.validateAndConstructPath(item.data.hierarchicalName, config.errorMessages);
+        if (!pathResult) {
             return;
         }
+
+        const { resourcePath } = pathResult;
+
+        try {
+            const fileExists = await this.resourceFileService.fileExists(resourcePath);
+
+            if (!fileExists) {
+                const created = await this.createMissingResourceFile(config, resourcePath, item);
+                if (!created) {
+                    return;
+                }
+            }
+
+            await this.openFileInVSCodeEditor(resourcePath, "resource");
+        } catch (error) {
+            this.logger.error(`Error checking file existence for ${resourcePath}:`, error);
+            vscode.window.showErrorMessage(
+                `Error checking resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
+    }
+
+    /**
+     * Creates a new, missing resource file and opens it.
+     * @param item The tree item representing a missing resource.
+     */
+    public async createMissingResource(item: TestElementsTreeItem): Promise<void> {
+        const config: ResourceOperationConfig = {
+            operationType: "create",
+            createMissing: true,
+            targetItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine resource path: item has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "",
+                noUid: "Subdivision {label} has no UID.",
+                fileNotFound: "",
+                folderNotFound: ""
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(item.data.hierarchicalName, config.errorMessages);
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+
+        try {
+            const created = await this.createMissingResourceFile(config, resourcePath, item);
+            if (!created) {
+                return;
+            }
+
+            await this.openFileInVSCodeEditor(resourcePath, "resource");
+        } catch (error) {
+            this.logger.error(`Error creating missing resource file ${resourcePath}:`, error);
+            vscode.window.showErrorMessage(
+                `Error creating resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
+    }
+
+    /**
+     * Reveals a subdivision folder in VS Code's file explorer.
+     * If the folder doesn't exist, it will create the folder first.
+     * @param item The tree item representing a folder.
+     */
+    public async openFolderInExplorer(item: TestElementsTreeItem): Promise<void> {
+        const config: ResourceOperationConfig = {
+            operationType: "folder",
+            createMissing: true,
+            targetItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine folder path: item has no hierarchical name.",
+                noPath: "Cannot construct folder path: workspace location not found.",
+                noParent: "",
+                noUid: "",
+                fileNotFound: "",
+                folderNotFound: "Folder does not exist: {path}"
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(item.data.hierarchicalName, config.errorMessages);
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+        const folderPath = resourcePath.replace(/\.resource$/, "");
+        const folderExists = await this.resourceFileService.directoryExists(folderPath);
+
+        if (!folderExists) {
+            const created = await this.createMissingFolder(config, folderPath, item);
+            if (!created) {
+                return;
+            }
+        }
+
+        await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(folderPath));
+    }
+
+    /**
+     * Finds and opens the robot resource of an interaction.
+     * If the parent resource file doesn't exist, it will create the file first.
+     * @param item The tree item representing an interaction.
+     */
+    public async goToInteractionResource(item: TestElementsTreeItem): Promise<void> {
+        const parentResource = item.parent as TestElementsTreeItem;
+        if (!parentResource) {
+            vscode.window.showErrorMessage("Could not find the parent resource for this interaction.");
+            return;
+        }
+
+        const config: ResourceOperationConfig = {
+            operationType: "interaction",
+            createMissing: true,
+            targetItem: parentResource,
+            parentItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine parent resource path: parent has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "Could not find the parent resource for this interaction.",
+                noUid: "Parent resource {label} has no UID.",
+                fileNotFound: "Parent resource file does not exist: {path}.",
+                folderNotFound: ""
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(
+            parentResource.data.hierarchicalName,
+            config.errorMessages
+        );
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+        const fileExists = await this.resourceFileService.fileExists(resourcePath);
+
+        if (!fileExists) {
+            const created = await this.createMissingResourceFile(config, resourcePath, parentResource);
+            if (!created) {
+                return;
+            }
+        }
+
+        await this.openFileInVSCodeEditor(resourcePath, "interaction resource");
+    }
+
+    /**
+     * Creates a missing parent resource for an interaction and opens it.
+     * @param item The interaction tree item
+     */
+    public async createMissingParentResourceForInteraction(item: TestElementsTreeItem): Promise<void> {
+        const parentResource = item.parent as TestElementsTreeItem;
+        if (!parentResource) {
+            vscode.window.showErrorMessage("Could not find the parent resource for this interaction.");
+            return;
+        }
+
+        const config: ResourceOperationConfig = {
+            operationType: "interaction",
+            createMissing: true,
+            targetItem: parentResource,
+            parentItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine parent resource path: parent has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "Could not find the parent resource for this interaction.",
+                noUid: "Parent resource {label} has no UID.",
+                fileNotFound: "Parent resource file does not exist: {path}.",
+                folderNotFound: ""
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(
+            parentResource.data.hierarchicalName,
+            config.errorMessages
+        );
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+        const fileExists = await this.resourceFileService.fileExists(resourcePath);
+
+        if (!fileExists) {
+            const created = await this.createMissingResourceFile(config, resourcePath, parentResource);
+            if (!created) {
+                return;
+            }
+        }
+
+        await this.openFileInVSCodeEditor(resourcePath, "interaction parent resource");
+    }
+
+    /**
+     * Handles interaction double click events.
+     * @param item The interaction tree item that was double clicked
+     */
+    private async handleInteractionDoubleClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(`Interaction item double clicked: ${item.label}`);
+        await this.goToInteractionResource(item);
+    }
+
+    /**
+     * Handles interaction clicks from external commands
+     * @param item The interaction item that was clicked
+     */
+    public async handleInteractionClick(item: TestElementsTreeItem): Promise<void> {
+        if (!item.id) {
+            return;
+        }
+
+        await this.interactionClickHandler.handleClick(item, item.id, this.logger);
     }
 
     /**
@@ -569,7 +1004,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Override the base refresh method to fetch data from the server
+     * Override the base refresh method to fetch data from the server with improved progress handling
      *
      * @param item Optional specific item to refresh
      * @param options Optional refresh options
@@ -585,13 +1020,18 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         if (this.currentTovKey) {
             this.dataProvider.clearCache(this.currentTovKey);
 
-            this.loadTov(this.currentTovKey, this.currentTovLabel || undefined)
+            this.loadTovWithProgress(
+                this.currentTovKey,
+                this.currentTovLabel || undefined,
+                this.currentProjectName || undefined,
+                this.currentTovName || undefined,
+                true
+            )
                 .then(() => {
                     this.logger.debug("Successfully refreshed test elements tree from TOV context");
                 })
                 .catch((error) => {
                     this.logger.error("Error refreshing test elements tree from TOV context:", error);
-                    // Don't clear the tree on error, keep existing data
                 });
         } else {
             this.logger.debug("No TOV key available, clearing tree");
