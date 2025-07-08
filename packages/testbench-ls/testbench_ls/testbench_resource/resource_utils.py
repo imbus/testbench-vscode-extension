@@ -95,7 +95,7 @@ def get_keyword_arguments_position(keyword: Keyword) -> tuple[int]:
     )
 
 
-def get_keyword_tags(keyword: Keyword) -> Tags:
+def get_keyword_tags(keyword: Keyword) -> Tags | None:
     return next(filter(lambda item: isinstance(item, Tags), keyword.body), None)
 
 

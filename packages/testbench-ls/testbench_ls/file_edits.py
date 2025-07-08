@@ -13,6 +13,8 @@ from .testbench_resource.resource_utils import (
 
 
 def get_tags_values(tags: Tags) -> list[str]:
+    if not tags:
+        return []
     return [tag.value for tag in tags if tag.type not in [Token.TAGS, Token.SEPARATOR, Token.EOL]]
 
 
@@ -39,6 +41,6 @@ def get_kw_tags_edit(
             start=Position(tags_start, tags_start_char),
             end=Position(tags_end, tags_end_char),
         ),
-        new_text=new_tags_txt,
+        new_text=f"{new_tags_txt}{'' if existing_keyword_tags else '\n'}",
     )
     return tags_edit
