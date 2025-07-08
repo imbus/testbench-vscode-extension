@@ -441,32 +441,42 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The tree item whose parents should be updated
      * @returns Promise that resolves when all parent icon updates are complete
      */
-    private async updateParentIcons(item: TestElementsTreeItem): Promise<void> {
+    private async updateParentIcons(item: TestElementsTreeItem): Promise<boolean> {
         try {
             let parent = item.parent as TestElementsTreeItem | null;
+            let updated = false;
             while (parent) {
                 if (parent.data.testElementType === TestElementType.Subdivision) {
                     const hierarchicalName = parent.data.hierarchicalName;
-                    if (hierarchicalName) {
-                        const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
+                    const isResourceFile = hierarchicalName && hierarchicalName.includes("[Robot-Resource]");
+                    if (hierarchicalName && isResourceFile) {
                         const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
                         let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
-
                         if (resourcePath) {
-                            if (isResourceFile && !resourcePath.endsWith(".resource")) {
+                            if (!resourcePath.endsWith(".resource")) {
                                 resourcePath += ".resource";
                             }
                             const exists = await this.resourceFileService.pathExists(resourcePath);
                             parent.updateLocalAvailability(exists, resourcePath);
+                            updated = true;
+                        }
+                    } else {
+                        const cleanName = parent.data.name;
+                        const folderPath = await this.resourceFileService.constructAbsolutePath(cleanName);
+                        if (folderPath) {
+                            const exists = await this.resourceFileService.directoryExists(folderPath);
+                            parent.updateLocalAvailability(exists, folderPath);
+                            updated = true;
                         }
                     }
                 }
                 parent = parent.parent as TestElementsTreeItem | null;
             }
-
             this._onDidChangeTreeData.fire(undefined);
+            return updated;
         } catch (error) {
             this.logger.error(`Error updating parent icons for item ${item.label}:`, error);
+            return false;
         }
     }
 

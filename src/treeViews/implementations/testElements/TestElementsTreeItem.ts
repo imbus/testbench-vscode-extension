@@ -64,6 +64,10 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.tooltip = this.generateTooltip();
         this.registerEventHandlers();
 
+        if (parent) {
+            parent.addChild(this);
+        }
+
         if (this.data.testElementType === TestElementType.Interaction) {
             this.command = {
                 command: allExtensionCommands.handleInteractionClick,
