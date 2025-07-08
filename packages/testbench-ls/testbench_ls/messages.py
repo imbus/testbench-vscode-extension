@@ -20,6 +20,10 @@ ERROR_FINDING_TESTBENCH_KEYWORD = (
 )
 ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID = "Failed to find TestBench keyword by uid '{uid}'."
 
+# Info messages
+INFO_ALREADY_UP_TO_DATE = "Already up to date."
+INFO_CHANGES_PUSHED = "Keyword changes pushed to TestBench."
+
 # Warning messages
 WARNING_CONTEXT_MISMATCH = "TestBench context mismatch: Selected context '{selected_context}' does not match the resource context '{resource_context}'. "
 WARNING_MISSING_CONTEXT = "Missing TestBench context."
