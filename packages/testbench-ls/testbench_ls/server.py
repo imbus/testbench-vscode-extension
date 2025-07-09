@@ -48,7 +48,7 @@ from .ls_exceptions import (
     MultipleKeywordsWithUid,
     TestBenchKeywordNotFound,
 )
-from .ls_logging import LogLevel, log, show_error
+from .ls_logging import LogLevel, log, show_error, show_info
 from .messages import (
     COMMAND_FETCH_RESULTS,
     COMMAND_GENERATE_TEST_SUITES,
@@ -74,6 +74,8 @@ from .messages import (
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
     ERROR_SUBDIVISON_MAPPING_FORMAT,
+    INFO_ALREADY_UP_TO_DATE,
+    INFO_CHANGES_PUSHED,
     KEYWORD_INTERFACE_CHANGE_LABEL,
     PULL_KEYWORD_TITLE,
     PULL_SUBDIVISON_TITLE,
@@ -372,6 +374,7 @@ def push_testbench_subdivision(ls: LanguageServer, args):
     if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
         return
     rd = ResourceDocumentation(document.path)
+    push_success = True
     for keyword in existing_resource.keyword_section.body:
         if "robot:private" in robot_model_to_string(get_keyword_tags(keyword)):
             continue
@@ -382,6 +385,7 @@ def push_testbench_subdivision(ls: LanguageServer, args):
                 ls,
                 ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
             )
+            push_success = False
             continue
         new_docu = (
             rd.get_keyword_documentation(keyword_uid)
@@ -402,10 +406,15 @@ def push_testbench_subdivision(ls: LanguageServer, args):
         except requests.exceptions.HTTPError as http_error:
             if http_error.response.status_code == 409:
                 show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
+                push_success = False
             else:
                 show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+                push_success = False
         except TestBenchKeywordNotFound as not_found_error:
             show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
+            push_success = False
+    if push_success:
+        show_info(ls, INFO_CHANGES_PUSHED)
 
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
@@ -451,6 +460,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
                 continue
             edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
     if not edits:
+        show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
     edit = create_workspace_edit(
         document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
@@ -501,8 +511,10 @@ def keyword_section_edit(keyword_section_line, change_identifier):
         )
     ]
 
+
 def _normalize_whitespace(text):
-    return re.sub(r' {5,}', '    ', text)
+    return re.sub(r" {5,}", "    ", text)
+
 
 def create_keyword_edits(
     existing_keyword, new_keyword, change_identifier
@@ -599,6 +611,7 @@ def pull_testbench_keyword(ls: LanguageServer, args):
         return
     edits = create_keyword_edits(existing_keywords[0], new_keyword, change_identifier)
     if not edits:
+        show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
     edit = create_workspace_edit(
         document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
@@ -657,13 +670,14 @@ def push_testbench_keyword(ls: LanguageServer, args):
             html_description,
             call_type.value,
         )
+        show_info(ls, INFO_CHANGES_PUSHED)
     except requests.exceptions.HTTPError as http_error:
         if http_error.response.status_code == 409:
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
     except TestBenchKeywordNotFound as not_found_error:
-            show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
+        show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
 
 
 @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)

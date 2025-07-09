@@ -1,9 +1,10 @@
 from typing import Any
 
+from ..ls_exceptions import TestBenchKeywordNotFound
 from .legacy_model import get_interaction_key
 from .testbench_get import get_test_element
 from .testbench_resource_connection import TestBenchResourceConnection
-from ..ls_exceptions import TestBenchKeywordNotFound
+
 
 def patch_interaction_details(
     tb_connection: TestBenchResourceConnection,
