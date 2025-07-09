@@ -196,10 +196,19 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.currentTovName = tovName || null;
             this.resourceFiles.clear();
 
-            if (tovLabel) {
-                this.updateTitle(`${this.config.title} (${tovLabel})`);
+            // Update title with format: Test Elements (Project Name, TOV Name)
+            const titleParts = ["Test Elements"];
+            if (projectName) {
+                titleParts.push(projectName);
+            }
+            if (tovName) {
+                titleParts.push(tovName);
+            }
+
+            if (titleParts.length > 1) {
+                this.updateTitle(`${titleParts[0]} (${titleParts.slice(1).join(", ")})`);
             } else {
-                this.updateTitle(`${this.config.title} (TOV: ${tovKey})`);
+                this.updateTitle(titleParts[0]);
             }
 
             (this as any)._lastDataFetch = Date.now();
@@ -269,10 +278,19 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.currentTovName = tovName || null;
             this.resourceFiles.clear();
 
-            if (tovLabel) {
-                this.updateTitle(`${this.config.title} (${tovLabel})`);
+            // Update title with format: Test Elements (Project Name, TOV Name)
+            const titleParts = ["Test Elements"];
+            if (projectName) {
+                titleParts.push(projectName);
+            }
+            if (tovName) {
+                titleParts.push(tovName);
+            }
+
+            if (titleParts.length > 1) {
+                this.updateTitle(`${titleParts[0]} (${titleParts.slice(1).join(", ")})`);
             } else {
-                this.updateTitle(`${this.config.title} (TOV: ${tovKey})`);
+                this.updateTitle(titleParts[0]);
             }
 
             const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);

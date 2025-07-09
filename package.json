@@ -367,14 +367,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.readRFTestResultsAndCreateReportWithResults",
-                "title": "Read Test Results & Create Report With Results",
-                "icon": {
-                    "light": "resources/icons/read-light.svg",
-                    "dark": "resources/icons/read-dark.svg"
-                }
-            },
-            {
                 "command": "testbenchExtension.refreshProjectTreeView",
                 "title": "Refresh Project Tree View",
                 "when": "view == projectManagementTree",
@@ -440,7 +432,10 @@
                 "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
                 "title": "Create Resource",
                 "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.missing'",
-                "icon": "$(new-file)"
+                "icon": {
+                    "light": "resources/icons/new-file-light.svg",
+                    "dark": "resources/icons/new-file-dark.svg"
+                }
             },
             {
                 "command": "testbenchExtension.openSubdivisionFolderInExplorer",

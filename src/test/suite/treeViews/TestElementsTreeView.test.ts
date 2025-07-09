@@ -18,6 +18,7 @@ import { EventBus } from "../../../treeViews/utils/EventBus";
 import { StateManager } from "../../../treeViews/state/StateManager";
 import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { ResourceFileService } from "../../../treeViews/implementations/testElements/ResourceFileService";
+import { testElementsConfig } from "../../../treeViews/implementations/testElements/TestElementsConfig";
 
 suite("TestElementsTreeView", function () {
     let testEnv: TestEnvironment;
@@ -29,6 +30,7 @@ suite("TestElementsTreeView", function () {
     let mockStateManager: sinon.SinonStubbedInstance<StateManager>;
     let mockResourceFileService: sinon.SinonStubbedInstance<ResourceFileService>;
     let getConnectionStub: sinon.SinonStub;
+    let mockVSCodeTreeView: vscode.TreeView<any>;
 
     const createMockTestElementData = (overrides: Partial<any> = {}) => ({
         id: "test-item-1",
@@ -80,6 +82,19 @@ suite("TestElementsTreeView", function () {
         getConnectionStub = testEnv.sandbox.stub().returns(mockConnection);
 
         treeView = new TestElementsTreeView(testEnv.mockContext, getConnectionStub);
+
+        mockVSCodeTreeView = {
+            title: testElementsConfig.title,
+            visible: true,
+            onDidChangeVisibility: new vscode.EventEmitter<vscode.TreeViewVisibilityChangeEvent>().event,
+            onDidChangeSelection: new vscode.EventEmitter<vscode.TreeViewSelectionChangeEvent<any>>().event,
+            onDidExpandElement: new vscode.EventEmitter<vscode.TreeViewExpansionEvent<any>>().event,
+            onDidCollapseElement: new vscode.EventEmitter<vscode.TreeViewExpansionEvent<any>>().event,
+            reveal: testEnv.sandbox.stub().resolves(),
+            dispose: testEnv.sandbox.stub()
+        } as any;
+
+        treeView.setTreeView(mockVSCodeTreeView);
 
         // Mocked dependencies
         (treeView as any).eventBus = mockEventBus;
@@ -601,6 +616,163 @@ suite("TestElementsTreeView", function () {
             await treeView.openAvailableResource(mockItem);
 
             assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message on failure");
+        });
+    });
+
+    suite("Title Update Functionality", function () {
+        test("should update title correctly opening test elements view from TOV", async function () {
+            const tovKey = "tov-456";
+            const tovLabel = "Test TOV Label";
+            const projectName = "Test Project";
+            const tovName = "Test TOV";
+
+            const mockDataProvider = {
+                clearCache: testEnv.sandbox.stub(),
+                fetchTestElements: testEnv.sandbox.stub().resolves([])
+            };
+            (treeView as any).dataProvider = mockDataProvider;
+
+            const mockFire = testEnv.sandbox.stub();
+            (treeView as any)._onDidChangeTreeData = { fire: mockFire };
+            (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
+
+            await treeView.loadTov(tovKey, tovLabel, projectName, tovName);
+
+            assert.strictEqual(
+                mockVSCodeTreeView.title,
+                "Test Elements (Test Project, Test TOV)",
+                "Title should be formatted correctly with all parameters"
+            );
+        });
+
+        test("should update title correctly when opening test elements view from TOV with missing project name", async function () {
+            const tovKey = "tov-456";
+            const tovLabel = "Test TOV Label";
+            const projectName = "";
+            const tovName = "Test TOV";
+
+            const mockDataProvider = {
+                clearCache: testEnv.sandbox.stub(),
+                fetchTestElements: testEnv.sandbox.stub().resolves([])
+            };
+            (treeView as any).dataProvider = mockDataProvider;
+
+            const mockFire = testEnv.sandbox.stub();
+            (treeView as any)._onDidChangeTreeData = { fire: mockFire };
+            (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
+
+            await treeView.loadTov(tovKey, tovLabel, projectName, tovName);
+
+            assert.strictEqual(
+                mockVSCodeTreeView.title,
+                "Test Elements (Test TOV)",
+                "Title should be formatted correctly with only TOV name"
+            );
+        });
+
+        test("should update title correctly when opening test elements view from TOV with missing TOV name", async function () {
+            const tovKey = "tov-456";
+            const tovLabel = "Test TOV Label";
+            const projectName = "Test Project";
+            const tovName = "";
+
+            const mockDataProvider = {
+                clearCache: testEnv.sandbox.stub(),
+                fetchTestElements: testEnv.sandbox.stub().resolves([])
+            };
+            (treeView as any).dataProvider = mockDataProvider;
+
+            const mockFire = testEnv.sandbox.stub();
+            (treeView as any)._onDidChangeTreeData = { fire: mockFire };
+            (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
+
+            await treeView.loadTov(tovKey, tovLabel, projectName, tovName);
+
+            assert.strictEqual(
+                mockVSCodeTreeView.title,
+                "Test Elements (Test Project)",
+                "Title should be formatted correctly with only project name"
+            );
+        });
+
+        test("should update title correctly when opening test elements view from TOV with null as parameters", async function () {
+            const tovKey = "tov-456";
+            const tovLabel = "Test TOV Label";
+            const projectName = null as any;
+            const tovName = null as any;
+
+            const mockDataProvider = {
+                clearCache: testEnv.sandbox.stub(),
+                fetchTestElements: testEnv.sandbox.stub().resolves([])
+            };
+            (treeView as any).dataProvider = mockDataProvider;
+
+            const mockFire = testEnv.sandbox.stub();
+            (treeView as any)._onDidChangeTreeData = { fire: mockFire };
+            (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
+
+            await treeView.loadTov(tovKey, tovLabel, projectName, tovName);
+
+            assert.strictEqual(
+                mockVSCodeTreeView.title,
+                "Test Elements",
+                "Title should fall back to base title when parameters are null"
+            );
+        });
+
+        test("should reset title to default when clearing tree", function () {
+            treeView.updateTitle("Custom Title");
+            assert.strictEqual(mockVSCodeTreeView.title, "Custom Title");
+
+            treeView.clearTree();
+
+            assert.strictEqual(
+                mockVSCodeTreeView.title,
+                testElementsConfig.title,
+                "Title should be reset to default when clearing tree"
+            );
+        });
+    });
+
+    suite("State Management", function () {
+        test("should set correct state when loading TOV", async function () {
+            const tovKey = "tov-456";
+            const tovLabel = "Test TOV Label";
+            const projectName = "Test Project";
+            const tovName = "Test TOV";
+
+            const mockDataProvider = {
+                clearCache: testEnv.sandbox.stub(),
+                fetchTestElements: testEnv.sandbox.stub().resolves([])
+            };
+            (treeView as any).dataProvider = mockDataProvider;
+
+            const mockFire = testEnv.sandbox.stub();
+            (treeView as any)._onDidChangeTreeData = { fire: mockFire };
+            (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
+
+            await treeView.loadTov(tovKey, tovLabel, projectName, tovName);
+
+            assert.strictEqual(treeView.getCurrentTovKey(), tovKey);
+            assert.strictEqual((treeView as any).currentTovLabel, tovLabel);
+            assert.strictEqual((treeView as any).currentProjectName, projectName);
+            assert.strictEqual((treeView as any).currentTovName, tovName);
+        });
+
+        test("should clear state when clearing tree", function () {
+            (treeView as any).currentTovKey = "test-tov";
+            (treeView as any).currentTovLabel = "Test TOV";
+            (treeView as any).currentProjectName = "Test Project";
+            (treeView as any).currentTovName = "Test TOV";
+            (treeView as any).resourceFiles.set("test", []);
+
+            treeView.clearTree();
+
+            assert.strictEqual((treeView as any).currentTovKey, null);
+            assert.strictEqual((treeView as any).currentTovLabel, null);
+            assert.strictEqual((treeView as any).currentProjectName, null);
+            assert.strictEqual((treeView as any).currentTovName, null);
+            assert.strictEqual((treeView as any).resourceFiles.size, 0);
         });
     });
 });

@@ -189,7 +189,6 @@ export const allExtensionCommands = {
     generateTestCasesForTestThemeOrTestCaseSet: `${baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`,
     generateTestsForTestThemeTreeItemFromTOV: `${baseKeyOfExtension}.generateTestsForTestThemeTreeItemFromTOV`,
     generateTestCasesForTOV: `${baseKeyOfExtension}.generateTestCasesForTOV`,
-    readRFTestResultsAndCreateReportWithResults: `${baseKeyOfExtension}.readRFTestResultsAndCreateReportWithResults`,
     makeRoot: `${baseKeyOfExtension}.makeRoot`,
     showExtensionSettings: `${baseKeyOfExtension}.showExtensionSettings`,
     displayAllProjects: `${baseKeyOfExtension}.displayAllProjects`,

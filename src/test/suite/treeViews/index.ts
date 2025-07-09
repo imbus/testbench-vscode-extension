@@ -15,6 +15,8 @@ import "./ProjectsConfig.test";
 import "./ProjectsTreeItem.test";
 import "./ProjectsDataProvider.test";
 import "./ProjectsTreeView.test";
+import "./TestThemesTreeItem.test";
+import "./TestThemesTreeView.test";
 
 // Export test suite names for reference
 export const treeViewsTestSuites = [
@@ -28,7 +30,9 @@ export const treeViewsTestSuites = [
     "ProjectsConfig",
     "ProjectsTreeItem",
     "ProjectsDataProvider",
-    "ProjectsTreeView"
+    "ProjectsTreeView",
+    "TestThemesTreeItem",
+    "TestThemesTreeView"
 ];
 
 // Export test descriptions
@@ -45,5 +49,9 @@ export const treeViewsTestDescriptions = {
         "Tests for the projects tree item class including data management, tree navigation, and serialization",
     ProjectsDataProvider:
         "Tests for the projects data provider including data fetching, transformation, and validation",
-    ProjectsTreeView: "Tests for the projects tree view including data loading, tree navigation, and command handling"
+    ProjectsTreeView: "Tests for the projects tree view including data loading, tree navigation, and command handling",
+    TestThemesTreeItem:
+        "Tests for the test themes tree item class including context-aware ID generation and language server parameter extraction",
+    TestThemesTreeView:
+        "Tests for the test themes tree view including title update functionality for cycle and TOV contexts and state management"
 };

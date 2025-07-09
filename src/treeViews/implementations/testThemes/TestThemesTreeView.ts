@@ -368,8 +368,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.logger.debug(`Loading cycle ${cycleKey} for project ${projectKey}`);
 
             this.dataProvider.clearCache();
-
-            // Set new state
             this.currentProjectKey = projectKey;
             this.currentCycleKey = cycleKey;
             this.currentCycleLabel = cycleLabel || null;
@@ -378,17 +376,29 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.currentTovName = tovName;
             this.isOpenedFromCycle = true;
 
-            // Update marking module configuration to enable import button
+            // Enable import button
             this.updateMarkingModuleConfiguration(true);
 
-            // Update title to include cycle label
+            // Update title with format: Test Themes (Project Name, TOV Name, Cycle Name)
+            const titleParts = ["Test Themes"];
+            if (projectName) {
+                titleParts.push(projectName);
+            }
+            if (tovName) {
+                titleParts.push(tovName);
+            }
             if (cycleLabel) {
-                this.updateTitle(`${this.config.title} (${cycleLabel})`);
+                titleParts.push(cycleLabel);
+            }
+
+            if (titleParts.length > 1) {
+                this.updateTitle(`${titleParts[0]} (${titleParts.slice(1).join(", ")})`);
+            } else {
+                this.updateTitle(titleParts[0]);
             }
 
             await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
 
-            // Fetch and build the tree
             const fetchedTestStructure = await this.dataProvider.fetchCycleStructure(projectKey, cycleKey);
             if (!fetchedTestStructure) {
                 throw new Error("Failed to fetch test structure");
@@ -437,8 +447,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.logger.debug(`Loading TOV ${tovKey} for project ${projectKey}`);
 
             this.dataProvider.clearCache();
-
-            // Set new state
             this.currentProjectKey = projectKey;
             this.currentTovKey = tovKey;
             this.currentProjectName = projectName;
@@ -447,18 +455,20 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             this.updateMarkingModuleConfiguration(false);
 
-            let testThemesViewTitleWithTovName = `TOV: ${tovKey}`;
-            try {
-                const connection = this.getConnection();
-                if (connection) {
-                    testThemesViewTitleWithTovName = `TOV: ${tovKey}`;
-                }
-            } catch {
-                this.logger.warn(`Could not get TOV name for ${tovKey}, using key as fallback`);
+            // Update title with format: Test Themes (Project Name, TOV Name)
+            const titleParts = ["Test Themes"];
+            if (projectName) {
+                titleParts.push(projectName);
+            }
+            if (tovName) {
+                titleParts.push(tovName);
             }
 
-            // Update title to include TOV name
-            this.updateTitle(`${this.config.title} (${testThemesViewTitleWithTovName})`);
+            if (titleParts.length > 1) {
+                this.updateTitle(`${titleParts[0]} (${titleParts.slice(1).join(", ")})`);
+            } else {
+                this.updateTitle(titleParts[0]);
+            }
 
             await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
 
