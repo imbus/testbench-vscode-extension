@@ -291,6 +291,14 @@
                 }
             },
             {
+                "command": "testbenchExtension.openGeneratedRobotFile",
+                "title": "Open Generated Robot File",
+                "icon": {
+                    "light": "resources/icons/open-light.svg",
+                    "dark": "resources/icons/open-dark.svg"
+                }
+            },
+            {
                 "command": "testbenchExtension.generateTestCasesForTOV",
                 "title": "Generate Tests For TOV",
                 "icon": {
@@ -802,8 +810,13 @@
                     "group": "inline@2"
                 },
                 {
+                    "command": "testbenchExtension.openGeneratedRobotFile",
+                    "when": "view == testbench.testThemes && (viewItem == 'TestThemeNode.hasRobotFile' || viewItem == 'TestCaseSetNode.hasRobotFile' || viewItem == 'customRoot.TestThemeNode.hasRobotFile' || viewItem == 'customRoot.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForGeneration.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForGeneration.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForGeneration.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForGeneration.TestCaseSetNode.hasRobotFile')",
+                    "group": "inline@3"
+                },
+                {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == testbench.testThemes && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode')",
+                    "when": "view == testbench.testThemes && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForImport.customRoot.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode.hasRobotFile')",
                     "group": "inline@1",
                     "icon": {
                         "light": "resources/icons/upload-light.svg",

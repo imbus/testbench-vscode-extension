@@ -827,6 +827,22 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testElementsTree.handleInteractionClick(item);
     };
 
+    const handleOpenGeneratedRobotFile = async (item: TestThemesTreeItem) => {
+        if (!item) {
+            logger.error("[Cmd] handleOpenGeneratedRobotFile called with undefined item");
+            vscode.window.showErrorMessage("Invalid item: Cannot open robot file for undefined item");
+            return;
+        }
+
+        try {
+            // await item.openGeneratedRobotFile();  // TODO: Implement in test theme tree item
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[Cmd] Error in handleOpenGeneratedRobotFile: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
+        }
+    };
+
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
@@ -975,6 +991,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         {
             id: allExtensionCommands.handleInteractionClick,
             handler: handleInteractionClick
+        },
+        {
+            id: allExtensionCommands.openGeneratedRobotFile,
+            handler: handleOpenGeneratedRobotFile
         }
     ];
 
