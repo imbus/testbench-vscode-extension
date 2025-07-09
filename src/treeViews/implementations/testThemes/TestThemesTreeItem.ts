@@ -8,6 +8,7 @@ import { TreeItemBase } from "../../core/TreeItemBase";
 import { logger, treeViews } from "../../../extension";
 import { TestThemeItemTypes } from "../../../constants";
 import { MarkingInfo } from "../../state/StateTypes";
+import { RobotFileService } from "./RobotFileService";
 
 export type TestThemeType =
     | "TestThemeNode"
@@ -65,6 +66,9 @@ export class TestThemesTreeItem extends TreeItemBase {
     protected logger = logger;
     protected rootItems?: TestThemesTreeItem[];
     protected dataProvider: any;
+    private robotFileService: RobotFileService;
+    private robotFileExists: boolean = false;
+    private robotFilePath?: string;
 
     constructor(data: TestThemeData, extensionContext: vscode.ExtensionContext, parent?: TestThemesTreeItem) {
         super(
@@ -77,7 +81,7 @@ export class TestThemesTreeItem extends TreeItemBase {
         );
 
         this.data = data;
-
+        this.robotFileService = new RobotFileService(this.logger);
         this.tooltip = this.generateTooltip();
         this.description = data.base.uniqueID;
         this.updateContextValue();
@@ -170,6 +174,14 @@ export class TestThemesTreeItem extends TreeItemBase {
             contextValue = `openedFromCycle.${contextValue}`;
         }
 
+        if (this.robotFileExists && this.data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+            contextValue = `${contextValue}.hasRobotFile`;
+        }
+
+        this.logger.debug(
+            `[TestThemesTreeItem] getContextValue for ${this.data.base.name}: originalContextValue=${this.originalContextValue}, robotFileExists=${this.robotFileExists}, final=${contextValue}`
+        );
+
         return contextValue;
     }
 
@@ -219,7 +231,88 @@ export class TestThemesTreeItem extends TreeItemBase {
      * Updates the context value of the tree item by recalculating it from its current state.
      */
     public updateContextValue(): void {
+        const oldContextValue = this.contextValue;
         this.contextValue = this.getContextValue();
+        this.logger.debug(
+            `[TestThemesTreeItem] updateContextValue called for ${this.data.base.name}: old=${oldContextValue}, new=${this.contextValue}`
+        );
+    }
+
+    /**
+     * Checks if a robot file exists locally for this test case set tree item.
+     * @returns Promise that resolves to true if the robot file exists
+     */
+    public async checkRobotFileExists(): Promise<boolean> {
+        if (!this.canHaveRobotFile()) {
+            this.logger.debug(
+                `[TestThemesTreeItem] Cannot have robot file for ${this.data.base.name} (type: ${this.data.elementType})`
+            );
+            return false;
+        }
+
+        try {
+            const fileInfo = await this.robotFileService.checkRobotFileExists(this);
+            this.robotFileExists = fileInfo.exists;
+            this.robotFilePath = fileInfo.filePath;
+
+            this.logger.debug(
+                `[TestThemesTreeItem] Robot file check for ${this.data.base.name}: ${fileInfo.exists ? "exists" : "not found"}`
+            );
+            if (fileInfo.exists) {
+                this.logger.debug(`[TestThemesTreeItem] Robot file path: ${fileInfo.filePath}`);
+            }
+
+            return fileInfo.exists;
+        } catch (error) {
+            this.logger.error(
+                `[TestThemesTreeItem] Error checking robot file existence for ${this.data.base.name}:`,
+                error
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Gets the robot file path if it exists
+     * @returns The robot file path or undefined if it doesn't exist
+     */
+    public getRobotFilePath(): string | undefined {
+        return this.robotFilePath;
+    }
+
+    /**
+     * Checks if this item has a generated robot file
+     * @returns True if the robot file exists locally
+     */
+    public hasGeneratedRobotFile(): boolean {
+        return this.robotFileExists;
+    }
+
+    /**
+     * Opens the generated robot file in VS Code editor
+     * @returns Promise that resolves when the file is opened
+     */
+    public async openGeneratedRobotFile(): Promise<void> {
+        if (!this.canHaveRobotFile()) {
+            throw new Error("This item type cannot have a robot file");
+        }
+
+        if (!this.robotFilePath) {
+            throw new Error("No robot file path available");
+        }
+
+        const fileInfo = await this.robotFileService.checkRobotFileExists(this);
+        if (fileInfo.duplicateFiles && fileInfo.duplicateFiles.length > 0) {
+            const selectedFilePath = await this.robotFileService.showDuplicateFileWarning(
+                fileInfo.duplicateFiles,
+                this.robotFilePath
+            );
+            if (selectedFilePath) {
+                await this.robotFileService.openRobotFile(selectedFilePath);
+            }
+        } else {
+            await this.robotFileService.openRobotFile(this.robotFilePath);
+        }
     }
 
     /**
@@ -267,6 +360,15 @@ export class TestThemesTreeItem extends TreeItemBase {
             this.data.elementType === TestThemeItemTypes.TEST_THEME ||
             this.data.elementType === TestThemeItemTypes.TEST_CASE_SET
         );
+    }
+
+    /**
+     * Checks if the item can have a robot file.
+     * Test case sets can have robot files, test themes represent folders.
+     * @return True if the item type can have a robot file
+     */
+    public canHaveRobotFile(): boolean {
+        return this.data.elementType === TestThemeItemTypes.TEST_CASE_SET;
     }
 
     /**

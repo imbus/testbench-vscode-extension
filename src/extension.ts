@@ -835,7 +835,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            // await item.openGeneratedRobotFile();  // TODO: Implement in test theme tree item
+            await item.openGeneratedRobotFile();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             logger.error(`[Cmd] Error in handleOpenGeneratedRobotFile: ${errorMessage}`, error);

@@ -426,7 +426,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+
             this._onDidChangeTreeData.fire(undefined);
+            try {
+                await this.updateRobotFileExistenceForAllItems();
+                this.logger.debug("[TestThemesTreeView] Robot file existence check completed, refreshing tree");
+                this._onDidChangeTreeData.fire(undefined);
+            } catch (error) {
+                this.logger.error("[TestThemesTreeView] Error updating robot file existence:", error);
+            }
 
             (this as any).updateTreeViewMessage();
         } catch (error) {
@@ -498,7 +506,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+
             this._onDidChangeTreeData.fire(undefined);
+            try {
+                await this.updateRobotFileExistenceForAllItems();
+                this.logger.debug("[TestThemesTreeView] Robot file existence check completed, refreshing tree");
+                this._onDidChangeTreeData.fire(undefined);
+            } catch (error) {
+                this.logger.error("[TestThemesTreeView] Error updating robot file existence:", error);
+            }
 
             (this as any).updateTreeViewMessage();
         } catch (error) {
@@ -659,6 +675,21 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 }
             } else if (testGenerationSuccessful && !ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
                 this.logger.debug(`Test generation successful but icon marking is disabled`);
+            }
+
+            if (testGenerationSuccessful) {
+                try {
+                    await this.updateRobotFileExistenceForAllItems();
+                    this.logger.debug(
+                        "[TestThemesTreeView] Robot file existence updated after test generation, refreshing tree"
+                    );
+                    this._onDidChangeTreeData.fire(undefined);
+                } catch (error) {
+                    this.logger.error(
+                        "[TestThemesTreeView] Error updating robot file existence after test generation:",
+                        error
+                    );
+                }
             }
         } catch (error) {
             this.logger.error("Error generating test cases:", error);
@@ -976,6 +1007,76 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         } else {
             this.clearTree();
         }
+    }
+
+    /**
+     * Updates robot file existence for all tree items that can generate tests
+     * and updates the context to show/hide the "Open Generated Robot File" button
+     */
+    private async updateRobotFileExistenceForAllItems(): Promise<void> {
+        try {
+            this.logger.debug("[TestThemesTreeView] Starting robot file existence check for all items");
+            const allTestThemeTreeItems = this.getAllTestThemeTreeItems();
+            let hasAnyRobotFile = false;
+            let updatedItemsCount = 0;
+
+            const robotFileChecks = allTestThemeTreeItems
+                .filter((item) => item.canGenerateTests())
+                .map(async (item) => {
+                    try {
+                        const hasRobotFile = await item.checkRobotFileExists();
+                        if (hasRobotFile) {
+                            hasAnyRobotFile = true;
+                            this.logger.debug(`[TestThemesTreeView] Robot file found for: ${item.data.base.name}`);
+                        }
+
+                        item.updateContextValue();
+                        updatedItemsCount++;
+
+                        this.logger.debug(
+                            `[TestThemesTreeView] Updated context for ${item.data.base.name}: ${item.contextValue}`
+                        );
+                    } catch (error) {
+                        this.logger.error(
+                            `[TestThemesTreeView] Error checking robot file for ${item.data.base.name}:`,
+                            error
+                        );
+                    }
+                });
+
+            await Promise.all(robotFileChecks);
+            await vscode.commands.executeCommand("setContext", ContextKeys.HAS_GENERATED_ROBOT_FILE, hasAnyRobotFile);
+
+            this.logger.debug(
+                `[TestThemesTreeView] Robot file existence check completed. Updated ${updatedItemsCount} items, has any robot file: ${hasAnyRobotFile}`
+            );
+        } catch (error) {
+            this.logger.error("[TestThemesTreeView] Error updating robot file existence for all items:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * Gets all test theme tree items in the tree view recursively beginning from root items.
+     * @returns Array of all tree items
+     */
+    public getAllTestThemeTreeItems(): TestThemesTreeItem[] {
+        const items: TestThemesTreeItem[] = [];
+
+        const collectTreeItems = (currentItems: TestThemesTreeItem[]) => {
+            for (const item of currentItems) {
+                items.push(item);
+                if (item.children && item.children.length > 0) {
+                    collectTreeItems(item.children as TestThemesTreeItem[]);
+                }
+            }
+        };
+
+        if (this.rootItems) {
+            collectTreeItems(this.rootItems);
+        }
+
+        return items;
     }
 }
 
