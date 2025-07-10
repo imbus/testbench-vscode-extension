@@ -112,20 +112,24 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             }, TreeViewTiming.EVENT_DEBOUNCE_MS);
         });
 
-        // Listen for expand/collapse events to trigger LS initialization for TOVs
+        // Listen for expand/collapse events
         this.eventBus.on("tree:itemExpanded", async (event) => {
             const item = event.data.item;
+            this.logger.debug(`Item expanded: ${item.label}`);
+
             if (item instanceof ProjectsTreeItem && item.data.type === "version") {
                 this.logger.debug(`TOV item expanded, initializing LS for: ${item.label}`);
-                await vscode.commands.executeCommand(allExtensionCommands.handleProjectVersionClick, item);
+                await vscode.commands.executeCommand(allExtensionCommands.handleTOVClick, item);
             }
         });
 
         this.eventBus.on("tree:itemCollapsed", async (event) => {
             const item = event.data.item;
+            this.logger.debug(`Item collapsed: ${item.label}`);
+
             if (item instanceof ProjectsTreeItem && item.data.type === "version") {
                 this.logger.debug(`TOV item collapsed, initializing LS for: ${item.label}`);
-                await vscode.commands.executeCommand(allExtensionCommands.handleProjectVersionClick, item);
+                await vscode.commands.executeCommand(allExtensionCommands.handleTOVClick, item);
             }
         });
     }

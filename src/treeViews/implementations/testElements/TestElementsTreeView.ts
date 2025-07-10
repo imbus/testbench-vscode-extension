@@ -83,8 +83,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         });
 
         this.eventBus.on("cycle:selected", async () => {
-            this.logger.debug(`Cycle selected, need to find associated TOV`);
-            // handled in extension.ts handleProjectCycleClick
+            this.logger.debug(`Cycle selected.`);
+            // handled in extension.ts handleCycleClick
         });
 
         this.eventBus.on("tov:loaded", async (event) => {

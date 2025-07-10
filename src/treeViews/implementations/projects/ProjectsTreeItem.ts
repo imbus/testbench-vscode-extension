@@ -42,18 +42,14 @@ export class ProjectsTreeItem extends TreeItemBase {
             case "project":
                 this.contextValue = "Project";
                 break;
+
             case "version":
                 this.contextValue = "Version";
-                this.command = {
-                    command: allExtensionCommands.handleProjectVersionClick,
-                    title: "Select Version",
-                    arguments: [this]
-                };
                 break;
             case "cycle":
                 this.contextValue = "Cycle";
                 this.command = {
-                    command: allExtensionCommands.handleProjectCycleClick,
+                    command: allExtensionCommands.handleCycleClick,
                     title: "Select Cycle",
                     arguments: [this]
                 };

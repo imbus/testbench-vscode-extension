@@ -77,7 +77,7 @@ suite("ProjectsTreeItem", function () {
             assert.strictEqual(item.contextValue, "Cycle");
             assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.None);
             assert.deepStrictEqual(item.command, {
-                command: allExtensionCommands.handleProjectCycleClick,
+                command: allExtensionCommands.handleCycleClick,
                 title: "Select Cycle",
                 arguments: [item]
             });
