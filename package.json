@@ -291,7 +291,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.openGeneratedRobotFile",
+                "command": "testbenchExtension.openAndRevealGeneratedRobotFile",
                 "title": "Open Generated Robot File",
                 "icon": {
                     "light": "resources/icons/open-light.svg",
@@ -810,7 +810,7 @@
                     "group": "inline@2"
                 },
                 {
-                    "command": "testbenchExtension.openGeneratedRobotFile",
+                    "command": "testbenchExtension.openAndRevealGeneratedRobotFile",
                     "when": "view == testbench.testThemes && (viewItem == 'TestThemeNode.hasRobotFile' || viewItem == 'TestCaseSetNode.hasRobotFile' || viewItem == 'customRoot.TestThemeNode.hasRobotFile' || viewItem == 'customRoot.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForGeneration.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForGeneration.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForGeneration.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForGeneration.TestCaseSetNode.hasRobotFile')",
                     "group": "inline@3"
                 },

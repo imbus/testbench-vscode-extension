@@ -191,7 +191,7 @@ export const allExtensionCommands = {
     generateTestCasesForTestThemeOrTestCaseSet: `${baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`,
     generateTestsForTestThemeTreeItemFromTOV: `${baseKeyOfExtension}.generateTestsForTestThemeTreeItemFromTOV`,
     generateTestCasesForTOV: `${baseKeyOfExtension}.generateTestCasesForTOV`,
-    openGeneratedRobotFile: `${baseKeyOfExtension}.openGeneratedRobotFile`,
+    openAndRevealGeneratedRobotFile: `${baseKeyOfExtension}.openAndRevealGeneratedRobotFile`,
     makeRoot: `${baseKeyOfExtension}.makeRoot`,
     showExtensionSettings: `${baseKeyOfExtension}.showExtensionSettings`,
     displayAllProjects: `${baseKeyOfExtension}.displayAllProjects`,

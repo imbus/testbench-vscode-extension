@@ -1141,6 +1141,28 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     private async handleTestCaseSetDoubleClick(item: TestThemesTreeItem): Promise<void> {
         this.logger.debug(`Test case set item double clicked: ${item.label}`);
+
+        if (!item.hasGeneratedRobotFile()) {
+            vscode.window.showWarningMessage(
+                `No robot file found for "${item.label}". Please generate test cases first.`
+            );
+            return;
+        }
+
+        try {
+            await item.openGeneratedRobotFile();
+
+            const robotFilePath = item.getRobotFilePath();
+            if (robotFilePath) {
+                const uri = vscode.Uri.file(robotFilePath);
+                await vscode.commands.executeCommand("revealInExplorer", uri);
+                this.logger.debug(`Revealed robot file in explorer: ${robotFilePath}`);
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            this.logger.error(`Error opening robot file for ${item.label}: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
+        }
     }
 }
 

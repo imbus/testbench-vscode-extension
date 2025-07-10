@@ -827,18 +827,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testElementsTree.handleInteractionClick(item);
     };
 
-    const handleOpenGeneratedRobotFile = async (item: TestThemesTreeItem) => {
+    const handleOpenAndRevealGeneratedRobotFile = async (item: TestThemesTreeItem) => {
         if (!item) {
-            logger.error("[Cmd] handleOpenGeneratedRobotFile called with undefined item");
+            logger.error("[Cmd] handleOpenAndRevealGeneratedRobotFile called with undefined item");
             vscode.window.showErrorMessage("Invalid item: Cannot open robot file for undefined item");
             return;
         }
 
         try {
             await item.openGeneratedRobotFile();
+            const robotFilePath = item.getRobotFilePath();
+            if (robotFilePath) {
+                const uri = vscode.Uri.file(robotFilePath);
+                await vscode.commands.executeCommand("revealInExplorer", uri);
+                logger.debug(`Revealed robot file in explorer: ${robotFilePath}`);
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[Cmd] Error in handleOpenGeneratedRobotFile: ${errorMessage}`, error);
+            logger.error(`[Cmd] Error in handleOpenAndRevealGeneratedRobotFile: ${errorMessage}`, error);
             vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
         }
     };
@@ -999,8 +1005,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             handler: handleInteractionClick
         },
         {
-            id: allExtensionCommands.openGeneratedRobotFile,
-            handler: handleOpenGeneratedRobotFile
+            id: allExtensionCommands.openAndRevealGeneratedRobotFile,
+            handler: handleOpenAndRevealGeneratedRobotFile
         },
         {
             id: allExtensionCommands.checkForTestCaseSetDoubleClick,
