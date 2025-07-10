@@ -52,7 +52,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.interactionClickHandler.updateHandlers({
             onSingleClick: async (item: TestElementsTreeItem) => {
                 if (item.data.testElementType === TestElementType.Interaction) {
-                    // Single click on test elements do nothing
+                    await this.handleInteractionSingleClick(item);
                 }
             },
             onDoubleClick: async (item: TestElementsTreeItem) => {
@@ -1015,6 +1015,64 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         await this.openAndRevealResourceFile(resourcePath, "interaction parent resource");
+    }
+
+    /**
+     * Handles interaction single click events.
+     * Opens the .resource file in the editor.
+     * @param item The interaction tree item that was single clicked
+     */
+    private async handleInteractionSingleClick(item: TestElementsTreeItem): Promise<void> {
+        this.logger.debug(`Interaction item single clicked: ${item.label}`);
+        await this.openInteractionResource(item);
+    }
+
+    /**
+     * Opens the robot resource of an interaction in the editor without revealing it in the explorer.
+     * If the parent resource file doesn't exist, it will create the file first.
+     * @param item The tree item representing an interaction.
+     */
+    public async openInteractionResource(item: TestElementsTreeItem): Promise<void> {
+        const parentResource = item.parent as TestElementsTreeItem;
+        if (!parentResource) {
+            vscode.window.showErrorMessage("Could not find the parent resource for this interaction.");
+            return;
+        }
+
+        const config: ResourceOperationConfig = {
+            operationType: "interaction",
+            createMissing: true,
+            targetItem: parentResource,
+            parentItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine parent resource path: parent has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "Could not find the parent resource for this interaction.",
+                noUid: "Parent resource {label} has no UID.",
+                fileNotFound: "Parent resource file does not exist: {path}.",
+                folderNotFound: ""
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(
+            parentResource.data.hierarchicalName,
+            config.errorMessages
+        );
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+        const fileExists = await this.resourceFileService.fileExists(resourcePath);
+
+        if (!fileExists) {
+            const created = await this.createMissingResourceFile(config, resourcePath, parentResource);
+            if (!created) {
+                return;
+            }
+        }
+
+        await this.openFileInVSCodeEditor(resourcePath, "interaction resource");
     }
 
     /**
