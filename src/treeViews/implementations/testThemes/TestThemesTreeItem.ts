@@ -6,7 +6,7 @@
 import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { logger, treeViews } from "../../../extension";
-import { TestThemeItemTypes } from "../../../constants";
+import { TestThemeItemTypes, allExtensionCommands } from "../../../constants";
 import { MarkingInfo } from "../../state/StateTypes";
 import { RobotFileService } from "./RobotFileService";
 
@@ -85,6 +85,14 @@ export class TestThemesTreeItem extends TreeItemBase {
         this.tooltip = this.generateTooltip();
         this.description = data.base.uniqueID;
         this.updateContextValue();
+
+        if (data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+            this.command = {
+                command: allExtensionCommands.checkForTestCaseSetDoubleClick,
+                title: "Open Robot File",
+                arguments: [this]
+            };
+        }
 
         (this as any).id = this.generateUniqueId();
     }

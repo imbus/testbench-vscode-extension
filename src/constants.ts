@@ -214,6 +214,7 @@ export const allExtensionCommands = {
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
     clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`,
     checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`,
+    checkForTestCaseSetDoubleClick: `${baseKeyOfExtension}.checkForTestCaseSetDoubleClick`,
     updateOrRestartLS: `${baseKeyOfExtension}.updateOrRestartLS`,
     markTestThemeForImport: "testbench.markTestThemeForImport",
     generateTestCasesForTestTheme: "testbench.generateTestCasesForTestTheme",

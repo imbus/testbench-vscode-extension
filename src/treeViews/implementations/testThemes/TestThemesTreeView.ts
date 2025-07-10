@@ -19,11 +19,13 @@ import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
 import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
+import { ClickHandler } from "../../core/ClickHandler";
 
 export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
     private disposables: vscode.Disposable[] = [];
     private filterService: FilterService;
+    public testCaseSetClickHandler: ClickHandler<TestThemesTreeItem>;
 
     private currentProjectKey: string | null = null;
     private currentProjectName: string | null = null;
@@ -41,10 +43,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         super(extensionContext, { ...testThemesConfig, ...config });
         this.dataProvider = new TestThemesDataProvider(this.logger, this.errorHandler, getConnection, this.eventBus);
         this.filterService = FilterService.getInstance();
+        this.testCaseSetClickHandler = new ClickHandler<TestThemesTreeItem>();
 
         this.registerEventHandlers();
         this.registerCommands();
         this.initializeMarkingState();
+        this.setupTestCaseSetClickHandlers();
     }
 
     /**
@@ -62,6 +66,17 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         );
 
         this.disposables.push(vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refresh()));
+
+        this.disposables.push(
+            vscode.commands.registerCommand(
+                allExtensionCommands.checkForTestCaseSetDoubleClick,
+                async (item: TestThemesTreeItem) => {
+                    if (item.id) {
+                        await this.testCaseSetClickHandler.handleClick(item, item.id, this.logger);
+                    }
+                }
+            )
+        );
 
         this.disposables.push(
             vscode.commands.registerCommand(allExtensionCommands.markTestThemeForImport, (item: TestThemesTreeItem) =>
@@ -1077,6 +1092,55 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         }
 
         return items;
+    }
+
+    /**
+     * Sets up click handlers for test case set items using the generalized click handler
+     */
+    private setupTestCaseSetClickHandlers(): void {
+        this.testCaseSetClickHandler.updateHandlers({
+            onSingleClick: async (item: TestThemesTreeItem) => {
+                if (item.data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+                    await this.handleTestCaseSetSingleClick(item);
+                }
+            },
+            onDoubleClick: async (item: TestThemesTreeItem) => {
+                if (item.data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+                    await this.handleTestCaseSetDoubleClick(item);
+                }
+            }
+        });
+    }
+
+    /**
+     * Handles test case set single click events.
+     * @param item The test case set tree item that was single clicked
+     */
+    private async handleTestCaseSetSingleClick(item: TestThemesTreeItem): Promise<void> {
+        this.logger.debug(`Test case set item single clicked: ${item.label}`);
+
+        if (!item.hasGeneratedRobotFile()) {
+            vscode.window.showWarningMessage(
+                `No robot file found for "${item.label}". Please generate test cases first.`
+            );
+            return;
+        }
+
+        try {
+            await item.openGeneratedRobotFile();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            this.logger.error(`Error opening robot file for ${item.label}: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handles test case set double click events.
+     * @param item The test case set tree item that was double clicked
+     */
+    private async handleTestCaseSetDoubleClick(item: TestThemesTreeItem): Promise<void> {
+        this.logger.debug(`Test case set item double clicked: ${item.label}`);
     }
 }
 

@@ -843,6 +843,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
+    const handleCheckForTestCaseSetDoubleClick = async (item: TestThemesTreeItem) => {
+        if (treeViews?.testThemesTree && item.id) {
+            await treeViews.testThemesTree.testCaseSetClickHandler.handleClick(item, item.id, logger);
+        }
+    };
+
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
@@ -995,6 +1001,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         {
             id: allExtensionCommands.openGeneratedRobotFile,
             handler: handleOpenGeneratedRobotFile
+        },
+        {
+            id: allExtensionCommands.checkForTestCaseSetDoubleClick,
+            handler: handleCheckForTestCaseSetDoubleClick
         }
     ];
 
