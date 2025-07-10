@@ -769,7 +769,34 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Opens a resource file in VS Code's editor.
+     * Reveals a file in VS Code's file explorer.
+     * @param filePath The path of the file to reveal
+     * @param operationType The type of operation for logging context
+     */
+    private async revealFileInExplorer(filePath: string, operationType: string): Promise<void> {
+        try {
+            const uri = vscode.Uri.file(filePath);
+            await vscode.commands.executeCommand("revealInExplorer", uri);
+            this.logger.debug(`Revealed ${operationType} file in explorer: ${filePath}`);
+        } catch (error) {
+            this.logger.warn(
+                `Failed to reveal ${operationType} file in explorer: ${error instanceof Error ? error.message : "Unknown error"}`
+            );
+        }
+    }
+
+    /**
+     * Opens and reveals a resource file in VS Code.
+     * @param resourcePath The path of the resource file
+     * @param operationType The type of operation for logging context
+     */
+    private async openAndRevealResourceFile(resourcePath: string, operationType: string): Promise<void> {
+        await this.openFileInVSCodeEditor(resourcePath, operationType);
+        await this.revealFileInExplorer(resourcePath, operationType);
+    }
+
+    /**
+     * Opens a resource file in VS Code's editor and reveals the opened file in the VS Code explorer view.
      * If the file doesn't exist, it will create the file first.
      * @param item The tree item representing a resource.
      */
@@ -805,7 +832,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 }
             }
 
-            await this.openFileInVSCodeEditor(resourcePath, "resource");
+            await this.openAndRevealResourceFile(resourcePath, "resource");
         } catch (error) {
             this.logger.error(`Error checking file existence for ${resourcePath}:`, error);
             vscode.window.showErrorMessage(
@@ -815,7 +842,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Creates a new, missing resource file and opens it.
+     * Creates a missing resource file, opens it in VS Code editor and reveals it in the VS Code explorer view.
      * @param item The tree item representing a missing resource.
      */
     public async createMissingResource(item: TestElementsTreeItem): Promise<void> {
@@ -846,7 +873,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 return;
             }
 
-            await this.openFileInVSCodeEditor(resourcePath, "resource");
+            await this.openAndRevealResourceFile(resourcePath, "resource");
         } catch (error) {
             this.logger.error(`Error creating missing resource file ${resourcePath}:`, error);
             vscode.window.showErrorMessage(
@@ -895,8 +922,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Finds and opens the robot resource of an interaction.
-     * If the parent resource file doesn't exist, it will create the file first.
+     * Finds and opens the robot resource of an interaction and reveals the opened file in the VS Code explorer view.
+     * If the parent resource file doesn't exist, it will create the file first..
      * @param item The tree item representing an interaction.
      */
     public async goToInteractionResource(item: TestElementsTreeItem): Promise<void> {
@@ -939,11 +966,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         }
 
-        await this.openFileInVSCodeEditor(resourcePath, "interaction resource");
+        await this.openAndRevealResourceFile(resourcePath, "interaction resource");
     }
 
     /**
-     * Creates a missing parent resource for an interaction and opens it.
+     * Creates a missing parent resource for an interaction, opens it and
+     * reveals the opened file in the VS Code explorer view.
      * @param item The interaction tree item
      */
     public async createMissingParentResourceForInteraction(item: TestElementsTreeItem): Promise<void> {
@@ -986,7 +1014,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         }
 
-        await this.openFileInVSCodeEditor(resourcePath, "interaction parent resource");
+        await this.openAndRevealResourceFile(resourcePath, "interaction parent resource");
     }
 
     /**

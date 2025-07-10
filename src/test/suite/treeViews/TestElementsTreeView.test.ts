@@ -179,6 +179,14 @@ suite("TestElementsTreeView", function () {
 
             assert.ok(mockResourceFileService.fileExists.called, "Should check if file exists");
             assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file");
+            assert.ok(
+                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                "Should call revealInExplorer command"
+            );
+            assert.ok(
+                mockLogger.debug.calledWith("Revealed resource file in explorer: /test/path/ExistingResource.resource"),
+                "Should log reveal action"
+            );
         });
 
         test("openAvailableResource should handle missing hierarchical name", async function () {
@@ -222,6 +230,14 @@ suite("TestElementsTreeView", function () {
             assert.strictEqual(mockItem.data.localPath, "/test/path/CreateResource.resource");
             assert.ok(mockResourceFileService.ensureFileExists.called, "Should create file");
             assert.ok(updateParentIconsStub.called, "Should update parent icons");
+            assert.ok(
+                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                "Should call revealInExplorer command"
+            );
+            assert.ok(
+                mockLogger.debug.calledWith("Revealed resource file in explorer: /test/path/CreateResource.resource"),
+                "Should log reveal action"
+            );
         });
 
         test("createMissingResource should handle file creation failure", async function () {
@@ -377,6 +393,45 @@ suite("TestElementsTreeView", function () {
             await treeView.goToInteractionResource(mockInteraction);
 
             assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message for missing parent");
+        });
+
+        test("goToInteractionResource should reveal file in explorer after opening", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
+
+            await treeView.goToInteractionResource(mockInteraction);
+
+            assert.ok(
+                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                "Should call revealInExplorer command"
+            );
+            assert.ok(
+                mockLogger.debug.calledWith(
+                    "Revealed interaction resource file in explorer: /test/path/ParentResource.resource"
+                ),
+                "Should log reveal action"
+            );
         });
     });
 

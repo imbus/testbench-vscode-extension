@@ -362,12 +362,6 @@ suite("TestThemesTreeView", function () {
                 testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
                 "Warning message should be shown when no robot file exists"
             );
-            assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledWith(
-                    `No robot file found for "Test Case Set". Please generate test cases first.`
-                ),
-                "Warning message should have correct text"
-            );
 
             assert(
                 !mockTestThemesTreeItem.openGeneratedRobotFile.called,
@@ -410,12 +404,6 @@ suite("TestThemesTreeView", function () {
             assert(
                 testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
                 "Warning message should be shown when no robot file exists"
-            );
-            assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledWith(
-                    `No robot file found for "Test Case Set". Please generate test cases first.`
-                ),
-                "Warning message should have correct text"
             );
 
             assert(

@@ -1120,9 +1120,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.logger.debug(`Test case set item single clicked: ${item.label}`);
 
         if (!item.hasGeneratedRobotFile()) {
-            vscode.window.showWarningMessage(
-                `No robot file found for "${item.label}". Please generate test cases first.`
-            );
+            // vscode.window.showWarningMessage(`No robot file found for "${item.label}". Please generate test cases first.`);
             return;
         }
 
@@ -1143,9 +1141,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.logger.debug(`Test case set item double clicked: ${item.label}`);
 
         if (!item.hasGeneratedRobotFile()) {
-            vscode.window.showWarningMessage(
-                `No robot file found for "${item.label}". Please generate test cases first.`
-            );
+            // vscode.window.showWarningMessage(`No robot file found for "${item.label}". Please generate test cases first.`);
             return;
         }
 
