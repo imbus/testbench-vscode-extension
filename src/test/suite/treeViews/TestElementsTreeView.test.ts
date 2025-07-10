@@ -433,6 +433,201 @@ suite("TestElementsTreeView", function () {
                 "Should log reveal action"
             );
         });
+
+        test("openInteractionResource should open parent resource", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
+
+            await treeView.openInteractionResource(mockInteraction);
+
+            assert.ok(mockResourceFileService.fileExists.called, "Should check if parent resource exists");
+        });
+
+        test("openInteractionResource should create parent resource when missing", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            mockResourceFileService.fileExists.resolves(false);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+            mockResourceFileService.ensureFileExists.resolves();
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
+
+            const updateParentIconsStub = testEnv.sandbox.stub(treeView as any, "updateParentIcons").resolves();
+
+            await treeView.openInteractionResource(mockInteraction);
+
+            assert.strictEqual(mockParent.data.isLocallyAvailable, true);
+            assert.strictEqual(mockParent.data.localPath, "/test/path/ParentResource.resource");
+            assert.ok(mockResourceFileService.ensureFileExists.called, "Should create parent resource");
+            assert.ok(updateParentIconsStub.called, "Should update parent icons");
+        });
+
+        test("openInteractionResource should handle missing parent", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            await treeView.openInteractionResource(mockInteraction);
+
+            assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message for missing parent");
+        });
+
+        test("openInteractionResource should handle file opening errors", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").rejects(new Error("File not found"));
+
+            await treeView.openInteractionResource(mockInteraction);
+
+            assert.ok(
+                testEnv.vscodeMocks.showErrorMessageStub.called,
+                "Should show error message for file opening failure"
+            );
+        });
+    });
+
+    suite("Interaction Click Handlers", function () {
+        test("handleInteractionSingleClick should call openInteractionResource", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            const openInteractionResourceStub = testEnv.sandbox
+                .stub(treeView as any, "openInteractionResource")
+                .resolves();
+
+            await (treeView as any).handleInteractionSingleClick(mockInteraction);
+
+            assert.ok(openInteractionResourceStub.calledWith(mockInteraction), "Should call openInteractionResource");
+            assert.ok(
+                mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
+                "Should log single click"
+            );
+        });
+
+        test("handleInteractionDoubleClick should call goToInteractionResource", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            const goToInteractionResourceStub = testEnv.sandbox
+                .stub(treeView as any, "goToInteractionResource")
+                .resolves();
+
+            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
+
+            assert.ok(goToInteractionResourceStub.calledWith(mockInteraction), "Should call goToInteractionResource");
+            assert.ok(
+                mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
+                "Should log double click"
+            );
+        });
+
+        test("handleInteractionClick should handle interaction clicks via click handler", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            const handleClickStub = testEnv.sandbox
+                .stub((treeView as any).interactionClickHandler, "handleClick")
+                .resolves();
+
+            await treeView.handleInteractionClick(mockInteraction);
+
+            assert.ok(
+                handleClickStub.calledWith(mockInteraction, mockInteraction.id, mockLogger),
+                "Should call click handler"
+            );
+        });
+
+        test("handleInteractionClick should handle items without ID", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            (mockInteraction as any).id = undefined;
+
+            const handleClickStub = testEnv.sandbox
+                .stub((treeView as any).interactionClickHandler, "handleClick")
+                .resolves();
+
+            await treeView.handleInteractionClick(mockInteraction);
+            assert.ok(!handleClickStub.called, "Should not call click handler when item has no ID");
+        });
     });
 
     suite("Parent Icon Updates", function () {
