@@ -3,8 +3,9 @@
  * @description Tests for the TestThemesTreeView class
  */
 
-import * as assert from "assert";
+import assert from "assert";
 import * as vscode from "vscode";
+import * as sinon from "sinon";
 import { TestThemesTreeView } from "../../../treeViews/implementations/testThemes/TestThemesTreeView";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
@@ -328,6 +329,151 @@ suite("TestThemesTreeView", function () {
             assert.strictEqual(treeView.getCurrentCycleLabel(), null);
             assert.strictEqual((treeView as any).currentTovKey, null);
             assert.strictEqual((treeView as any).isOpenedFromCycle, false);
+        });
+    });
+
+    suite("Click Handler Functionality", function () {
+        let mockTestThemesTreeItem: any;
+
+        this.beforeEach(function () {
+            mockTestThemesTreeItem = {
+                id: "test-item-id",
+                label: "Test Case Set",
+                data: {
+                    elementType: "TestCaseSetNode",
+                    base: {
+                        key: "test-case-set-123",
+                        name: "Test Case Set",
+                        uniqueID: "uid-123"
+                    }
+                },
+                hasGeneratedRobotFile: testEnv.sandbox.stub().returns(true),
+                getRobotFilePath: testEnv.sandbox.stub().returns("/path/to/test.robot"),
+                openGeneratedRobotFile: testEnv.sandbox.stub().resolves()
+            };
+        });
+
+        test("should handle single click on test case set item", async function () {
+            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(false);
+
+            await (treeView as any).handleTestCaseSetSingleClick(mockTestThemesTreeItem);
+            assert(
+                !mockTestThemesTreeItem.openGeneratedRobotFile.called,
+                "Robot file should not be opened when it doesn't exist"
+            );
+        });
+
+        test("should open robot file on single click when file exists", async function () {
+            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(true);
+
+            await (treeView as any).handleTestCaseSetSingleClick(mockTestThemesTreeItem);
+
+            assert(
+                mockTestThemesTreeItem.openGeneratedRobotFile.calledOnce,
+                "Robot file should be opened when it exists"
+            );
+        });
+
+        test("should handle error when opening robot file on single click", async function () {
+            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(true);
+            mockTestThemesTreeItem.openGeneratedRobotFile.rejects(new Error("File not found"));
+
+            await (treeView as any).handleTestCaseSetSingleClick(mockTestThemesTreeItem);
+
+            assert(
+                testEnv.vscodeMocks.showErrorMessageStub.calledOnce,
+                "Error message should be shown when opening fails"
+            );
+            assert(
+                testEnv.vscodeMocks.showErrorMessageStub.calledWith("Failed to open robot file: File not found"),
+                "Error message should have correct text"
+            );
+        });
+
+        test("should handle double click on test case set item", async function () {
+            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(false);
+
+            await (treeView as any).handleTestCaseSetDoubleClick(mockTestThemesTreeItem);
+
+            assert(
+                !testEnv.vscodeMocks.showWarningMessageStub.called,
+                "No warning message should be shown when no robot file exists (implementation is silent)"
+            );
+
+            assert(
+                !mockTestThemesTreeItem.openGeneratedRobotFile.called,
+                "Robot file should not be opened when it doesn't exist"
+            );
+        });
+
+        test("should handle error when opening robot file on double click", async function () {
+            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(true);
+            mockTestThemesTreeItem.openGeneratedRobotFile.rejects(new Error("File not found"));
+
+            await (treeView as any).handleTestCaseSetDoubleClick(mockTestThemesTreeItem);
+
+            assert(
+                testEnv.vscodeMocks.showErrorMessageStub.calledOnce,
+                "Error message should be shown when opening fails"
+            );
+            assert(
+                testEnv.vscodeMocks.showErrorMessageStub.calledWith("Failed to open robot file: File not found"),
+                "Error message should have correct text"
+            );
+
+            assert(
+                !testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                "revealInExplorer should not be called when there's an error"
+            );
+        });
+
+        test("should not reveal in explorer when robot file path is undefined", async function () {
+            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(true);
+            mockTestThemesTreeItem.getRobotFilePath.returns(undefined);
+
+            await (treeView as any).handleTestCaseSetDoubleClick(mockTestThemesTreeItem);
+
+            assert(
+                mockTestThemesTreeItem.openGeneratedRobotFile.calledOnce,
+                "Robot file should be opened when it exists"
+            );
+            assert(
+                !testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                "revealInExplorer should not be called when path is undefined"
+            );
+        });
+
+        test("should set up click handlers correctly", function () {
+            assert(treeView.testCaseSetClickHandler, "Click handler should be initialized");
+
+            const handlers = (treeView.testCaseSetClickHandler as any).handlers;
+            assert(handlers.onSingleClick, "Single click handler should be set");
+            assert(handlers.onDoubleClick, "Double click handler should be set");
+        });
+
+        test("should handle click events through the click handler", async function () {
+            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(true);
+
+            const mockHandleSingleClick = testEnv.sandbox
+                .stub(treeView as any, "handleTestCaseSetSingleClick")
+                .resolves();
+
+            await treeView.testCaseSetClickHandler.handleClick(mockTestThemesTreeItem, "test-item-id", testEnv.logger);
+
+            assert(mockHandleSingleClick.calledOnce, "Single click handler should be called for single click");
+        });
+
+        test("should handle double click events through the click handler", async function () {
+            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(true);
+
+            const mockHandleDoubleClick = testEnv.sandbox
+                .stub(treeView as any, "handleTestCaseSetDoubleClick")
+                .resolves();
+
+            await treeView.testCaseSetClickHandler.handleClick(mockTestThemesTreeItem, "test-item-id", testEnv.logger);
+            await treeView.testCaseSetClickHandler.handleClick(mockTestThemesTreeItem, "test-item-id", testEnv.logger);
+
+            assert(mockHandleDoubleClick.calledOnce, "Double click handler should be called for double click");
         });
     });
 });

@@ -19,11 +19,13 @@ import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
 import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
+import { ClickHandler } from "../../core/ClickHandler";
 
 export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
     private disposables: vscode.Disposable[] = [];
     private filterService: FilterService;
+    public testCaseSetClickHandler: ClickHandler<TestThemesTreeItem>;
 
     private currentProjectKey: string | null = null;
     private currentProjectName: string | null = null;
@@ -41,10 +43,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         super(extensionContext, { ...testThemesConfig, ...config });
         this.dataProvider = new TestThemesDataProvider(this.logger, this.errorHandler, getConnection, this.eventBus);
         this.filterService = FilterService.getInstance();
+        this.testCaseSetClickHandler = new ClickHandler<TestThemesTreeItem>();
 
         this.registerEventHandlers();
         this.registerCommands();
         this.initializeMarkingState();
+        this.setupTestCaseSetClickHandlers();
     }
 
     /**
@@ -62,6 +66,17 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         );
 
         this.disposables.push(vscode.commands.registerCommand(`${this.config.id}.refresh`, () => this.refresh()));
+
+        this.disposables.push(
+            vscode.commands.registerCommand(
+                allExtensionCommands.checkForTestCaseSetDoubleClick,
+                async (item: TestThemesTreeItem) => {
+                    if (item.id) {
+                        await this.testCaseSetClickHandler.handleClick(item, item.id, this.logger);
+                    }
+                }
+            )
+        );
 
         this.disposables.push(
             vscode.commands.registerCommand(allExtensionCommands.markTestThemeForImport, (item: TestThemesTreeItem) =>
@@ -426,7 +441,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+
             this._onDidChangeTreeData.fire(undefined);
+            try {
+                await this.updateRobotFileExistenceForAllItems();
+                this.logger.debug("[TestThemesTreeView] Robot file existence check completed, refreshing tree");
+                this._onDidChangeTreeData.fire(undefined);
+            } catch (error) {
+                this.logger.error("[TestThemesTreeView] Error updating robot file existence:", error);
+            }
 
             (this as any).updateTreeViewMessage();
         } catch (error) {
@@ -498,7 +521,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+
             this._onDidChangeTreeData.fire(undefined);
+            try {
+                await this.updateRobotFileExistenceForAllItems();
+                this.logger.debug("[TestThemesTreeView] Robot file existence check completed, refreshing tree");
+                this._onDidChangeTreeData.fire(undefined);
+            } catch (error) {
+                this.logger.error("[TestThemesTreeView] Error updating robot file existence:", error);
+            }
 
             (this as any).updateTreeViewMessage();
         } catch (error) {
@@ -659,6 +690,21 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 }
             } else if (testGenerationSuccessful && !ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
                 this.logger.debug(`Test generation successful but icon marking is disabled`);
+            }
+
+            if (testGenerationSuccessful) {
+                try {
+                    await this.updateRobotFileExistenceForAllItems();
+                    this.logger.debug(
+                        "[TestThemesTreeView] Robot file existence updated after test generation, refreshing tree"
+                    );
+                    this._onDidChangeTreeData.fire(undefined);
+                } catch (error) {
+                    this.logger.error(
+                        "[TestThemesTreeView] Error updating robot file existence after test generation:",
+                        error
+                    );
+                }
             }
         } catch (error) {
             this.logger.error("Error generating test cases:", error);
@@ -975,6 +1021,143 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             }
         } else {
             this.clearTree();
+        }
+    }
+
+    /**
+     * Updates robot file existence for all tree items that can generate tests
+     * and updates the context to show/hide the "Open Generated Robot File" button
+     */
+    private async updateRobotFileExistenceForAllItems(): Promise<void> {
+        try {
+            this.logger.debug("[TestThemesTreeView] Starting robot file existence check for all items");
+            const allTestThemeTreeItems = this.getAllTestThemeTreeItems();
+            let hasAnyRobotFile = false;
+            let updatedItemsCount = 0;
+
+            const robotFileChecks = allTestThemeTreeItems
+                .filter((item) => item.canGenerateTests())
+                .map(async (item) => {
+                    try {
+                        const hasRobotFile = await item.checkRobotFileExists();
+                        if (hasRobotFile) {
+                            hasAnyRobotFile = true;
+                            this.logger.debug(`[TestThemesTreeView] Robot file found for: ${item.data.base.name}`);
+                        }
+
+                        item.updateContextValue();
+                        updatedItemsCount++;
+
+                        this.logger.debug(
+                            `[TestThemesTreeView] Updated context for ${item.data.base.name}: ${item.contextValue}`
+                        );
+                    } catch (error) {
+                        this.logger.error(
+                            `[TestThemesTreeView] Error checking robot file for ${item.data.base.name}:`,
+                            error
+                        );
+                    }
+                });
+
+            await Promise.all(robotFileChecks);
+            await vscode.commands.executeCommand("setContext", ContextKeys.HAS_GENERATED_ROBOT_FILE, hasAnyRobotFile);
+
+            this.logger.debug(
+                `[TestThemesTreeView] Robot file existence check completed. Updated ${updatedItemsCount} items, has any robot file: ${hasAnyRobotFile}`
+            );
+        } catch (error) {
+            this.logger.error("[TestThemesTreeView] Error updating robot file existence for all items:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * Gets all test theme tree items in the tree view recursively beginning from root items.
+     * @returns Array of all tree items
+     */
+    public getAllTestThemeTreeItems(): TestThemesTreeItem[] {
+        const items: TestThemesTreeItem[] = [];
+
+        const collectTreeItems = (currentItems: TestThemesTreeItem[]) => {
+            for (const item of currentItems) {
+                items.push(item);
+                if (item.children && item.children.length > 0) {
+                    collectTreeItems(item.children as TestThemesTreeItem[]);
+                }
+            }
+        };
+
+        if (this.rootItems) {
+            collectTreeItems(this.rootItems);
+        }
+
+        return items;
+    }
+
+    /**
+     * Sets up click handlers for test case set items using the generalized click handler
+     */
+    private setupTestCaseSetClickHandlers(): void {
+        this.testCaseSetClickHandler.updateHandlers({
+            onSingleClick: async (item: TestThemesTreeItem) => {
+                if (item.data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+                    await this.handleTestCaseSetSingleClick(item);
+                }
+            },
+            onDoubleClick: async (item: TestThemesTreeItem) => {
+                if (item.data.elementType === TestThemeItemTypes.TEST_CASE_SET) {
+                    await this.handleTestCaseSetDoubleClick(item);
+                }
+            }
+        });
+    }
+
+    /**
+     * Handles test case set single click events.
+     * @param item The test case set tree item that was single clicked
+     */
+    private async handleTestCaseSetSingleClick(item: TestThemesTreeItem): Promise<void> {
+        this.logger.debug(`Test case set item single clicked: ${item.label}`);
+
+        if (!item.hasGeneratedRobotFile()) {
+            // vscode.window.showWarningMessage(`No robot file found for "${item.label}". Please generate test cases first.`);
+            return;
+        }
+
+        try {
+            await item.openGeneratedRobotFile();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            this.logger.error(`Error opening robot file for ${item.label}: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handles test case set double click events.
+     * @param item The test case set tree item that was double clicked
+     */
+    private async handleTestCaseSetDoubleClick(item: TestThemesTreeItem): Promise<void> {
+        this.logger.debug(`Test case set item double clicked: ${item.label}`);
+
+        if (!item.hasGeneratedRobotFile()) {
+            // vscode.window.showWarningMessage(`No robot file found for "${item.label}". Please generate test cases first.`);
+            return;
+        }
+
+        try {
+            await item.openGeneratedRobotFile();
+
+            const robotFilePath = item.getRobotFilePath();
+            if (robotFilePath) {
+                const uri = vscode.Uri.file(robotFilePath);
+                await vscode.commands.executeCommand("revealInExplorer", uri);
+                this.logger.debug(`Revealed robot file in explorer: ${robotFilePath}`);
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            this.logger.error(`Error opening robot file for ${item.label}: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
         }
     }
 }

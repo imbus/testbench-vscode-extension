@@ -83,7 +83,9 @@ export const ContextKeys = {
     FILTER_DIFF_MODE_ENABLED: "testbenchExtension.filterDiffModeEnabled",
     FILTER_DIFF_MODE_ENABLED_PROJECTS: "testbenchExtension.filterDiffModeEnabledProjects",
     FILTER_DIFF_MODE_ENABLED_TEST_THEMES: "testbenchExtension.filterDiffModeEnabledTestThemes",
-    FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements"
+    FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements",
+    // Test theme tree item context for opening a robot file
+    HAS_GENERATED_ROBOT_FILE: "testbenchExtension.hasGeneratedRobotFile"
 } as const;
 
 // --- Storage Keys ---
@@ -189,6 +191,7 @@ export const allExtensionCommands = {
     generateTestCasesForTestThemeOrTestCaseSet: `${baseKeyOfExtension}.generateTestCasesForTestThemeOrTestCaseSet`,
     generateTestsForTestThemeTreeItemFromTOV: `${baseKeyOfExtension}.generateTestsForTestThemeTreeItemFromTOV`,
     generateTestCasesForTOV: `${baseKeyOfExtension}.generateTestCasesForTOV`,
+    openAndRevealGeneratedRobotFile: `${baseKeyOfExtension}.openAndRevealGeneratedRobotFile`,
     makeRoot: `${baseKeyOfExtension}.makeRoot`,
     showExtensionSettings: `${baseKeyOfExtension}.showExtensionSettings`,
     displayAllProjects: `${baseKeyOfExtension}.displayAllProjects`,
@@ -211,6 +214,7 @@ export const allExtensionCommands = {
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
     clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`,
     checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`,
+    checkForTestCaseSetDoubleClick: `${baseKeyOfExtension}.checkForTestCaseSetDoubleClick`,
     updateOrRestartLS: `${baseKeyOfExtension}.updateOrRestartLS`,
     markTestThemeForImport: "testbench.markTestThemeForImport",
     generateTestCasesForTestTheme: "testbench.generateTestCasesForTestTheme",

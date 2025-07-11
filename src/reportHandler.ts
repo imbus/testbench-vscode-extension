@@ -12,7 +12,6 @@ import * as os from "os";
 import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
-import JSZip from "jszip";
 import axios, { AxiosResponse } from "axios";
 import { connection, logger, ALLOW_PERSISTENT_IMPORT_BUTTON } from "./extension";
 import {
@@ -260,7 +259,7 @@ export async function getJobIdOfCycleReport(
             (error: { response: { status: number } }) => {
                 // shouldRetry predicate
                 if (axios.isAxiosError(error) && error.response) {
-                    const nonRetryableStatusCodes = [400, 401, 403, 404, 422]; // Common non-retryable client errors
+                    const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
                     if (nonRetryableStatusCodes.includes(error.response.status)) {
                         logger.warn(
                             `[ReportHandler] Non-retryable error ${error.response.status} for getJobId. Not retrying.`
@@ -268,7 +267,7 @@ export async function getJobIdOfCycleReport(
                         return false;
                     }
                 }
-                return true; // Retry on other errors (e.g., network issues, 5xx server errors)
+                return true;
             }
         );
 
@@ -603,64 +602,6 @@ async function setLastImportedItem(context: vscode.ExtensionContext, reportRootU
 }
 
 /**
- * Generates Robot Framework test cases for a selected TestThemeNode or TestCaseSetNode.
- *
- * @param {vscode.ExtensionContext} context The VS Code extension context.
- * @param {TestThemeTreeItem} selectedTreeItem The selected tree item (using new type).
- * @returns {Promise<void | null>} Resolves when test generation is complete, or null if errors occur.
- */
-export async function generateRobotFrameworkTestsForTestThemeOrTestCaseSet(
-    context: vscode.ExtensionContext,
-    selectedTreeItem: TestThemesTreeItem,
-    providedCycleKey?: string
-): Promise<void | null> {
-    logger.debug("Generating tests for non-cycle tree item:", selectedTreeItem.label);
-    const treeItemUID = selectedTreeItem.data.elementKey;
-    const cycleKey: string | null = providedCycleKey || null;
-    let projectKey: string | null = null;
-
-    if (!cycleKey) {
-        logger.warn(`CycleKey not provided for ${selectedTreeItem.label}, attempting to find via parent traversal.`);
-        return null;
-    }
-
-    if (!providedCycleKey) {
-        logger.error(`CycleKey not provided and cannot be reliably determined for ${selectedTreeItem.label}.`);
-        vscode.window.showErrorMessage(`Cannot determine Cycle Key for ${selectedTreeItem.label}.`);
-        return null;
-    }
-
-    const currentTdpProjectKey = (globalThis as any).testThemeTreeDataProvider?.getCurrentProjectKey();
-    if (currentTdpProjectKey && (globalThis as any).testThemeTreeDataProvider?.getCurrentCycleKey() === cycleKey) {
-        projectKey = currentTdpProjectKey;
-    } else {
-        logger.warn(
-            `ProjectKey not directly available for cycle ${cycleKey}. This might require caller to provide it.`
-        );
-    }
-
-    if (!projectKey) {
-        logger.error(`Project key not found for cycle ${cycleKey}.`);
-        vscode.window.showErrorMessage(`Error: Project key could not be determined for the current cycle.`);
-        return null;
-    }
-
-    if (!treeItemUID) {
-        logger.error(`Cannot generate RF Tests. Missing UID for item ${selectedTreeItem.label}.`);
-        return null;
-    }
-
-    await generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary(
-        context,
-        selectedTreeItem,
-        typeof selectedTreeItem.label === "string" ? selectedTreeItem.label : selectedTreeItem.data.base.name,
-        projectKey,
-        cycleKey,
-        treeItemUID
-    );
-}
-
-/**
  * Generates Robot Framework tests using testbench2robotframework library.
  *
  * @param {vscode.ExtensionContext} context The VS Code extension context.
@@ -878,43 +819,6 @@ export async function removeReportZipFile(
 }
 
 /**
- * Recursively searches for a file within a directory.
- *
- * @param {string} directoryToSearchInside The directory to search.
- * @param {string} fileNameToSearch The file name to search for.
- * @returns {string | null} The full path of the file if found, otherwise null.
- */
-export async function findFileRecursivelyInDirectory(
-    directoryToSearchInside: string,
-    fileNameToSearch: string
-): Promise<string | null> {
-    try {
-        logger.debug(`Searching for "${fileNameToSearch}" in "${directoryToSearchInside}" recursively.`);
-        const allFileNamesInsideDirectory: string[] = await fsPromise.readdir(directoryToSearchInside);
-        for (const currentFileName of allFileNamesInsideDirectory) {
-            const pathOfCurrentFile: string = path.join(directoryToSearchInside, currentFileName);
-            const stat = await fsPromise.stat(pathOfCurrentFile);
-            if (stat.isDirectory()) {
-                const foundSearchResult: string | null = await findFileRecursivelyInDirectory(
-                    pathOfCurrentFile,
-                    fileNameToSearch
-                );
-                if (foundSearchResult) {
-                    return foundSearchResult;
-                }
-            } else if (stat.isFile() && currentFileName === fileNameToSearch) {
-                logger.debug(`File found: ${pathOfCurrentFile}`);
-                return pathOfCurrentFile;
-            }
-        }
-    } catch (error) {
-        logger.error(`Error searching for file: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    logger.warn(`File "${fileNameToSearch}" not found in "${directoryToSearchInside}"`);
-    return null;
-}
-
-/**
  * Prompts the user to select the Robot Framework output XML file if not set in settings.
  * The default URI for the file selection dialog is determined in the following order of precedence:
  * the first workspace folder (if available), the path specified in the extension settings (if valid),
@@ -1033,11 +937,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             logger.debug(`Generated report zip file will be named ${timestampedResultsZipName}`);
             reportProgress("Fetching base report structure.", reportIncrement);
-
-            // TODO: Currently we are using the last generated report parameters to create the report with results,
-            // these are used to fetch the report without results from the server.
-            // Later we can make this process independent of the last generated report parameters.
-            // Retrieve parameters from workspace state instead of global variable
             const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
                 getLastGeneratedReportParams(context);
             if (!retrievedParams) {
@@ -1224,7 +1123,6 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
                 return null;
             } else if (isImportJobCompletedSuccessfully(importJobStatus)) {
                 logger.debug(`Import job for specific tree item UID "${reportRootUID}" completed successfully.`);
-                // Do not display success message to user, only display the end result
             } else {
                 logger.warn("Import job finished polling but status is unknown.", importJobStatus);
                 vscode.window.showWarningMessage("Import job status unknown after polling.");
@@ -1316,7 +1214,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     resolvedTargetProjectKey,
                     resolvedTargetCycleKey,
                     createdReportPath,
-                    resolvedReportRootUID // Use the resolved UID
+                    resolvedReportRootUID
                 );
 
                 if (cancellationToken.isCancellationRequested) {
@@ -1412,321 +1310,6 @@ export async function startTestGenerationForCycle(
         logger.error("Error in startTestGenerationForCycle:", (error as Error).message);
         vscode.window.showErrorMessage((error as Error).message);
     }
-}
-
-/**
- * Displays a Quick Pick menu with multi-select options including control items "Select All" and "Clear All".
- * All regular items are pre-selected by default.
- *
- * @param {string[]} regularItemLabels - An array of strings representing the labels for the regular items.
- * @param {string} placeholder - (Optional) The placeholder text for the quick pick menu.
- * @returns {Promise<string[]>} A promise that resolves with an array of selected regular item labels, or an empty array if cancelled or an error occurs.
- */
-export async function showMultiSelectQuickPick(
-    regularItemLabels: string[],
-    placeholder: string = "Select items (use Select All/Clear All)"
-): Promise<string[]> {
-    return new Promise<string[]>((resolve) => {
-        let quickPick: vscode.QuickPick<vscode.QuickPickItem> | undefined;
-        let isResolutionComplete: boolean = false;
-
-        try {
-            quickPick = vscode.window.createQuickPick();
-            quickPick.canSelectMany = true;
-            quickPick.placeholder = placeholder;
-            quickPick.ignoreFocusOut = true;
-
-            const selectAllButtonLabel: string = "$(check-all) Select All";
-            const clearAllButtonLabel: string = "$(clear-all) Clear All";
-
-            const regularItems: vscode.QuickPickItem[] = regularItemLabels.map((label) => ({ label }));
-
-            const selectAllControlItem: vscode.QuickPickItem = { label: selectAllButtonLabel, alwaysShow: true };
-            const clearAllControlItem: vscode.QuickPickItem = { label: clearAllButtonLabel, alwaysShow: true };
-
-            const separator: vscode.QuickPickItem = {
-                label: "Actions",
-                kind: vscode.QuickPickItemKind.Separator
-            };
-
-            quickPick.items = [selectAllControlItem, clearAllControlItem, separator, ...regularItems];
-
-            // Pre-select all regular items initially
-            if (quickPick) {
-                quickPick.selectedItems = [...regularItems];
-            }
-
-            // --- Event Listeners ---
-            let ignoreSelectionChange: boolean = false;
-            quickPick.onDidChangeSelection((selection) => {
-                if (ignoreSelectionChange || isResolutionComplete) {
-                    return;
-                } // Prevent updates if flagged or after resolution
-
-                const selectedLabels: string[] = selection.map((item) => item.label);
-                const isSelectAllTriggered: boolean = selectedLabels.includes(selectAllButtonLabel);
-                const isClearAllTriggered: boolean = selectedLabels.includes(clearAllButtonLabel);
-
-                if (isSelectAllTriggered || isClearAllTriggered) {
-                    ignoreSelectionChange = true;
-                    if (isSelectAllTriggered) {
-                        if (quickPick) {
-                            quickPick.selectedItems = [...regularItems];
-                        }
-                    } else {
-                        if (quickPick) {
-                            quickPick.selectedItems = [];
-                        }
-                    }
-                    // Re-enable the listener after 10ms to allow for quick pick updates
-                    setTimeout(() => {
-                        ignoreSelectionChange = false;
-                    }, 10);
-                }
-            });
-
-            quickPick.onDidAccept(() => {
-                if (isResolutionComplete || !quickPick) {
-                    return;
-                }
-                isResolutionComplete = true;
-                try {
-                    const selectedRegularLabels: string[] = quickPick.selectedItems
-                        .filter(
-                            (item) =>
-                                item.label !== selectAllButtonLabel &&
-                                item.label !== clearAllButtonLabel &&
-                                item.kind !== vscode.QuickPickItemKind.Separator
-                        )
-                        .map((item) => item.label);
-                    resolve(selectedRegularLabels);
-                } catch (err) {
-                    logger.error("Error processing Quick Pick acceptance:", err);
-                    resolve([]);
-                } finally {
-                    quickPick.dispose();
-                }
-            });
-
-            quickPick.onDidHide(() => {
-                if (isResolutionComplete || !quickPick) {
-                    return;
-                }
-                isResolutionComplete = true;
-                resolve([]);
-                quickPick.dispose();
-            });
-
-            quickPick.show();
-        } catch (error) {
-            logger.error("Error creating or displaying Quick Pick:", error);
-            if (quickPick && !isResolutionComplete) {
-                quickPick.dispose();
-            }
-            isResolutionComplete = true;
-            resolve([]);
-        }
-    });
-}
-
-/**
- * Reads a zip file and extracts unique quick pick items based on the file names.
- *
- * 1. Reads the zip file from disk.
- * 2. Loads the zip file using JSZip.
- * 3. Iterates over all file entries and checks for files with names starting with "iTB-TC-" or "iTB-TT-" and ending with ".json".
- * 4. Uses a regular expression to capture the common prefix (e.g. "iTB-TC-325") from each file.
- * 5. If groupByPrefix is true, it attempts to read the corresponding "{prefix}.json" file to extract a 'name' property
- * and formats the quick pick item label as "{prefix} (name)" or "{prefix}" if the name is not available.
- * 6. Adds the common identifier (or full filename if not grouping) to a set to ensure uniqueness.
- *
- * @param {string} zipFilePath - The path to the zip file.
- * @param {boolean} groupByPrefix - (Optional) When true, related JSON files sharing the same prefix (e.g., "iTB-TC-325")
- * are combined into a single quick pick item, potentially including a name from the JSON.
- * When false, every file is returned as an individual item label.
- * Default is true.
- * @returns {Promise<string[]>} A promise that resolves with an array of unique quick pick item labels.
- */
-export async function getQuickPickItemsFromReportZipWithResults(
-    zipFilePath: string,
-    groupByPrefix: boolean = true
-): Promise<string[]> {
-    logger.trace(`Reading JSON's from zip file: ${zipFilePath}, groupByPrefix: ${groupByPrefix}`);
-    try {
-        const binaryDataOfZip: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
-        const zip = await JSZip.loadAsync(binaryDataOfZip);
-        const filesNamesInZip: string[] = Object.keys(zip.files);
-
-        if (groupByPrefix) {
-            logger.trace("Grouping JSON files by prefix and fetching names.");
-            const uniquePrefixes: Set<string> = new Set<string>();
-
-            for (const fileName of filesNamesInZip) {
-                if (isCandidateJsonFile(fileName)) {
-                    const prefix: string | null = extractPrefix(fileName);
-                    if (prefix) {
-                        uniquePrefixes.add(prefix);
-                    }
-                }
-            }
-
-            const quickPickItemLabels: string[] = [];
-            for (const prefix of uniquePrefixes) {
-                let nameProperty: string | null = null;
-                // Attempt to find and read the specific file "{prefix}.json" (case-insensitive)
-                const specificJsonFileNameToFind: string = `${prefix}.json`.toLowerCase();
-                const actualFileNameInZip: string | undefined = filesNamesInZip.find(
-                    (fileName) => fileName.toLowerCase() === specificJsonFileNameToFind
-                );
-
-                if (actualFileNameInZip) {
-                    const jsonFile: JSZip.JSZipObject | null = zip.file(actualFileNameInZip);
-                    if (jsonFile) {
-                        try {
-                            const jsonString: string = await jsonFile.async("string");
-                            const jsonData = JSON.parse(jsonString);
-                            nameProperty = jsonData?.name || null;
-                        } catch (error) {
-                            logger.warn(
-                                `Could not read or parse JSON for ${actualFileNameInZip} to get name property for prefix ${prefix}:`,
-                                error
-                            );
-                        }
-                    }
-                }
-
-                const displayLabel: string = nameProperty ? `${prefix} (${nameProperty})` : prefix;
-                quickPickItemLabels.push(displayLabel);
-            }
-
-            logger.trace(`Unique item labels for quick pick (grouped by prefix): ${quickPickItemLabels}`);
-            return quickPickItemLabels.sort();
-        } else {
-            logger.trace("Listing all candidate JSON files with their names if available.");
-            const quickPickItemLabelsIndividual: string[] = [];
-
-            for (const fileName of filesNamesInZip) {
-                if (isCandidateJsonFile(fileName)) {
-                    let nameProperty: string | null = null;
-                    const jsonFile: JSZip.JSZipObject | null = zip.file(fileName);
-                    if (jsonFile) {
-                        try {
-                            const jsonString: string = await jsonFile.async("string");
-                            const jsonData = JSON.parse(jsonString);
-                            nameProperty = jsonData?.name || null;
-                        } catch (e) {
-                            logger.warn(`Could not read or parse JSON for ${fileName} to get name property:`, e);
-                        }
-                    }
-                    const displayLabel: string = nameProperty ? `${fileName} (${nameProperty})` : fileName;
-                    quickPickItemLabelsIndividual.push(displayLabel);
-                }
-            }
-            logger.trace(`Item labels for quick pick (individual files): ${quickPickItemLabelsIndividual}`);
-            return quickPickItemLabelsIndividual.sort();
-        }
-    } catch (error) {
-        logger.error("Error processing the zip file:", error);
-        return [];
-    }
-}
-
-/**
- * Updates the zip file by removing the unselected JSON files.
- *
- * Only candidate JSON files (those starting with the specified prefixes and ending with ".json") are considered.
- * When grouping is enabled, each file is removed if its extracted prefix is not among the selected items.
- * When grouping is disabled, only files whose full names do not appear in the selected list are removed.
- *
- * @param {string} zipFilePath - The path to the zip file.
- * @param {string[]} selectedItems - The array of labels representing the selected items from the quick pick.
- *                        For grouped mode these are prefixes (e.g., "iTB-TC-325") and for non-grouped mode
- *                        these are full file names.
- * @param {boolean} groupByPrefix - (Optinal) Flag indicating the grouping behavior; should be the same used for the quick pick.
- *                        Default is true.
- */
-export async function createNewReportWithSelectedItems(
-    zipFilePath: string,
-    selectedItems: string[],
-    groupByPrefix: boolean = true
-): Promise<void> {
-    logger.trace(`Updating zip file: ${zipFilePath} with selected items: ${selectedItems}`);
-    try {
-        const binaryZipData: Buffer<ArrayBufferLike> = fs.readFileSync(zipFilePath);
-        const zip: JSZip = await JSZip.loadAsync(binaryZipData);
-
-        Object.keys(zip.files).forEach((fileName) => {
-            if (isCandidateJsonFile(fileName)) {
-                if (groupByPrefix) {
-                    // Extract the actual prefixes from the selected display labels
-                    const selectedPrefixes: Set<string> = new Set(
-                        selectedItems.map((label) => {
-                            // Regex to extract prefix from "prefix (name)" or "prefix"
-                            const regexMatchArray: RegExpMatchArray | null = label.match(/^(itb-(?:tc|tt)-\d+)/i);
-                            return regexMatchArray ? regexMatchArray[1] : label;
-                        })
-                    );
-
-                    const prefixFromFile: string | null = extractPrefix(fileName);
-                    if (prefixFromFile && !selectedPrefixes.has(prefixFromFile)) {
-                        logger.trace(
-                            `Removing ${fileName} as its prefix ${prefixFromFile} was not selected (selected were: ${Array.from(selectedPrefixes).join(", ")})`
-                        );
-                        zip.remove(fileName);
-                    }
-                } else {
-                    if (!selectedItems.includes(fileName)) {
-                        zip.remove(fileName);
-                    }
-                }
-            }
-        });
-
-        const filePathWithoutZipExtension: string = zipFilePath.substring(0, zipFilePath.lastIndexOf("."));
-        const zipFileExtension: string = path.extname(zipFilePath);
-        const newZipFilePath: string = `${filePathWithoutZipExtension}-MODIFIED${zipFileExtension}`;
-        const newZipData: Buffer<ArrayBufferLike> = await zip.generateAsync({ type: "nodebuffer" });
-        fs.writeFileSync(newZipFilePath, newZipData);
-
-        const zipUpdateSuccessMessage: string = `Modified report file created at: ${newZipFilePath}`;
-        logger.debug(zipUpdateSuccessMessage);
-        vscode.window.showInformationMessage(zipUpdateSuccessMessage);
-    } catch (error) {
-        logger.error("Error updating zip file:", error);
-    }
-}
-
-/**
- * Helper function to determine if a file is a candidate JSON file based on its name.
- *
- * It checks (in a case-insensitive way) if the file name starts with either "itb-tc-" or "itb-tt-"
- * and ends with ".json".
- *
- * @param {string} fileName - The name of the file.
- * @returns {boolean} True if the file matches the criteria; otherwise, false.
- */
-function isCandidateJsonFile(fileName: string): boolean {
-    const lowerFileName: string = fileName.toLowerCase();
-    return (
-        (lowerFileName.startsWith("itb-tc-") || lowerFileName.startsWith("itb-tt-")) && lowerFileName.endsWith(".json")
-    );
-}
-
-/**
- * Helper function to extract the grouping prefix from a filename.
- *
- * It uses a regular expression to capture the prefix such as "itb-tc-325" or "itb-tt-325"
- * in a case-insensitive way.
- *
- * @param {string} fileName - The name of the file.
- * @returns {string | null} The extracted prefix if found; otherwise, null.
- */
-function extractPrefix(fileName: string): string | null {
-    // This regex matches a string that starts with "itb-" followed by either "tc" or "tt",
-    // then a hyphen and one or more digits.
-    const prefixRegex: RegExp = /^(itb-(tc|tt)-\d+)/i;
-    const match: RegExpMatchArray | null = fileName.match(prefixRegex);
-    return match ? match[1] : null;
 }
 
 /**
@@ -1839,7 +1422,6 @@ export async function startTestGenerationUsingTOV(
                 logger.debug(`Report downloaded successfully to: ${downloadedTovReportPath}`);
                 progress.report({ increment: 20, message: "Generating tests for TOV..." });
 
-                // Call to language server for testbench2robotframework library test generation
                 const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
                     await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
                         downloadedTovReportPath

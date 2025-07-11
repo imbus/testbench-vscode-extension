@@ -3,7 +3,7 @@
  * @description Tests for the TestThemesTreeItem class
  */
 
-import * as assert from "assert";
+import assert from "assert";
 import * as vscode from "vscode";
 import { TestThemesTreeItem, TestThemeData } from "../../../treeViews/implementations/testThemes/TestThemesTreeItem";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
@@ -394,6 +394,65 @@ suite("TestThemesTreeItem", function () {
                 projectName: "Test Project",
                 tovName: "Test TOV"
             });
+        });
+    });
+
+    suite("Command Functionality", function () {
+        test("should set command property for test case set items", function () {
+            const testCaseSetData: TestThemeData = {
+                type: "TestCaseSetNode",
+                base: {
+                    key: "test-case-set-123",
+                    name: "Test Case Set",
+                    numbering: "1.1",
+                    parentKey: "",
+                    uniqueID: "uid-123",
+                    matchesFilter: false
+                },
+                spec: { key: "", locker: null, status: "None" },
+                aut: { key: "", locker: null, status: "None" },
+                filters: [],
+                elementType: "TestCaseSetNode",
+                hasChildren: false,
+                projectKey: "project-1",
+                cycleKey: "cycle-1"
+            };
+
+            const item = new TestThemesTreeItem(testCaseSetData, mockContext);
+
+            assert(item.command, "Test case set item should have a command property");
+            assert.strictEqual(
+                item.command?.command,
+                "testbenchExtension.checkForTestCaseSetDoubleClick",
+                "Command should be set to checkForTestCaseSetDoubleClick"
+            );
+            assert.strictEqual(item.command?.title, "Open Robot File", "Command title should be 'Open Robot File'");
+            assert.deepStrictEqual(item.command?.arguments, [item], "Command arguments should include the item itself");
+        });
+
+        test("should not set command property for non-test case set items", function () {
+            const testThemeData: TestThemeData = {
+                type: "TestThemeNode",
+                base: {
+                    key: "test-theme-123",
+                    name: "Test Theme",
+                    numbering: "1.1",
+                    parentKey: "",
+                    uniqueID: "uid-123",
+                    matchesFilter: false
+                },
+                spec: { key: "", locker: null, status: "None" },
+                aut: { key: "", locker: null, status: "None" },
+                filters: [],
+                elementType: "TestThemeNode",
+                hasChildren: false,
+                projectKey: "project-1",
+                cycleKey: "cycle-1"
+            };
+
+            const item = new TestThemesTreeItem(testThemeData, mockContext);
+
+            assert(!item.command, "Non-test case set items should not have a command property");
         });
     });
 });
