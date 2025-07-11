@@ -54,25 +54,6 @@
                 }
             },
             {
-                "title": "Working Directory",
-                "properties": {
-                    "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
-                        "type": "boolean",
-                        "default": false,
-                        "description": "Delete all files excluding the log files inside the working directory called .testbench before generating tests.",
-                        "order": 7,
-                        "scope": "resource"
-                    },
-                    "testbenchExtension.clearReportAfterProcessing": {
-                        "type": "boolean",
-                        "default": true,
-                        "description": "Remove the report file automatically after processing it.",
-                        "order": 8,
-                        "scope": "resource"
-                    }
-                }
-            },
-            {
                 "title": "Logger",
                 "properties": {
                     "testbenchExtension.testBenchLogger": {
@@ -237,6 +218,32 @@
                         "default": "results/output.xml",
                         "order": 23,
                         "scope": "window"
+                    }
+                }
+            },
+            {
+                "title": "Test Generation",
+                "properties": {
+                    "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Delete all files excluding the log files inside the working directory called .testbench before generating tests.",
+                        "order": 1,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.openTestExplorerAfterGeneration": {
+                        "type": "boolean",
+                        "description": "If enabled, the test explorer will be opened automatically after test generation is completed.",
+                        "default": false,
+                        "order": 1,
+                        "scope": "window"
+                    },
+                    "testbenchExtension.clearReportAfterProcessing": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Remove the report file automatically after processing it.",
+                        "order": 3,
+                        "scope": "resource"
                     }
                 }
             }
