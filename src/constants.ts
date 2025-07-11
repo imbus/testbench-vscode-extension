@@ -68,7 +68,7 @@ export const ConfigKeys = {
     TB2ROBOT_LIBRARY_MAPPING: "libraryMapping",
     TB2ROBOT_RESOURCE_MAPPING: "resourceMapping",
     TB2ROBOT_OUTPUT_XML_PATH: "outputXmlFilePath",
-    OPEN_TEST_EXPLORER_AFTER_GENERATION: "openTestExplorerAfterGeneration"
+    OPEN_TESTING_VIEW_AFTER_GENERATION: "openTestingViewAfterGeneration"
 } as const;
 
 // --- Context Keys ---
