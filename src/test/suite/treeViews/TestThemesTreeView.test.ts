@@ -357,18 +357,6 @@ suite("TestThemesTreeView", function () {
             mockTestThemesTreeItem.hasGeneratedRobotFile.returns(false);
 
             await (treeView as any).handleTestCaseSetSingleClick(mockTestThemesTreeItem);
-
-            assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
-                "Warning message should be shown when no robot file exists"
-            );
-            assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledWith(
-                    `No robot file found for "Test Case Set". Please generate test cases first.`
-                ),
-                "Warning message should have correct text"
-            );
-
             assert(
                 !mockTestThemesTreeItem.openGeneratedRobotFile.called,
                 "Robot file should not be opened when it doesn't exist"
@@ -408,14 +396,8 @@ suite("TestThemesTreeView", function () {
             await (treeView as any).handleTestCaseSetDoubleClick(mockTestThemesTreeItem);
 
             assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledOnce,
-                "Warning message should be shown when no robot file exists"
-            );
-            assert(
-                testEnv.vscodeMocks.showWarningMessageStub.calledWith(
-                    `No robot file found for "Test Case Set". Please generate test cases first.`
-                ),
-                "Warning message should have correct text"
+                !testEnv.vscodeMocks.showWarningMessageStub.called,
+                "No warning message should be shown when no robot file exists (implementation is silent)"
             );
 
             assert(

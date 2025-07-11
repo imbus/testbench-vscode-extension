@@ -54,25 +54,6 @@
                 }
             },
             {
-                "title": "Working Directory",
-                "properties": {
-                    "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
-                        "type": "boolean",
-                        "default": false,
-                        "description": "Delete all files excluding the log files inside the working directory called .testbench before generating tests.",
-                        "order": 7,
-                        "scope": "resource"
-                    },
-                    "testbenchExtension.clearReportAfterProcessing": {
-                        "type": "boolean",
-                        "default": true,
-                        "description": "Remove the report file automatically after processing it.",
-                        "order": 8,
-                        "scope": "resource"
-                    }
-                }
-            },
-            {
                 "title": "Logger",
                 "properties": {
                     "testbenchExtension.testBenchLogger": {
@@ -237,6 +218,32 @@
                         "default": "results/output.xml",
                         "order": 23,
                         "scope": "window"
+                    }
+                }
+            },
+            {
+                "title": "Test Generation",
+                "properties": {
+                    "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Delete all files excluding the log files inside the working directory called .testbench before generating tests.",
+                        "order": 1,
+                        "scope": "resource"
+                    },
+                    "testbenchExtension.openTestingViewAfterGeneration": {
+                        "type": "boolean",
+                        "description": "If enabled, the testing view will be opened automatically after test generation is completed.",
+                        "default": false,
+                        "order": 1,
+                        "scope": "window"
+                    },
+                    "testbenchExtension.clearReportAfterProcessing": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Remove the report file automatically after processing it.",
+                        "order": 3,
+                        "scope": "resource"
                     }
                 }
             }
@@ -802,7 +809,7 @@
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
                     "when": "view == testbench.testThemes && testbenchExtension.isTestThemeOpenedFromCycle",
-                    "group": "inline@2"
+                    "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
@@ -817,7 +824,7 @@
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
                     "when": "view == testbench.testThemes && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForImport.customRoot.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode.hasRobotFile')",
-                    "group": "inline@1",
+                    "group": "inline@2",
                     "icon": {
                         "light": "resources/icons/upload-light.svg",
                         "dark": "resources/icons/upload-dark.svg"

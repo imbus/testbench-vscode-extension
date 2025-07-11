@@ -30,7 +30,7 @@ export class TestBenchLogger {
     private logFilePath: string;
     private outputLogToTerminal: boolean;
     private initPromise: Promise<void>;
-    private isRotating: boolean = false;
+    private rotationPromise: Promise<void> | null = null;
     private flattedPromise: Promise<{ stringify: (obj: any) => string }> | null = null;
     private cachedLogLevel: string;
 
@@ -124,8 +124,15 @@ export class TestBenchLogger {
                 console.log("Workspace location is not set in the extension settings. Using default log folder.");
             }
             await fsp.mkdir(this.logFolderPath, { recursive: true });
-        } catch (error) {
-            console.error("Error during logger initialization:", error);
+        } catch (error: any) {
+            if (error.code === "EPERM" || error.code === "EACCES") {
+                console.error(
+                    `Logger Fatal Error: Permission denied to create log directory at '${this.logFolderPath}'. Please check folder permissions. Logging to file will be disabled.`
+                );
+                this.cachedLogLevel = "No logging";
+            } else {
+                console.error("Error during logger initialization:", error);
+            }
         }
     }
 
@@ -135,7 +142,7 @@ export class TestBenchLogger {
      * @returns {boolean} True if the log level was updated, false otherwise.
      */
     public updateCachedLogLevel(): boolean {
-        const newLogLevel: string = getExtensionConfiguration().get("testBenchLogger", "No logging");
+        const newLogLevel: string = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
         if (this.cachedLogLevel !== newLogLevel) {
             const oldLogLevel: string = this.cachedLogLevel;
             this.cachedLogLevel = newLogLevel;
@@ -146,60 +153,59 @@ export class TestBenchLogger {
     }
 
     /**
-     * Retrieves the "flatted" module, caching it after the first dynamic import.
-     */
-    private async getFlatted() {
-        if (!this.flattedPromise) {
-            this.flattedPromise = import("flatted");
-        }
-        return this.flattedPromise;
-    }
-
-    /**
      * Rotates log files if the current log file exceeds MAX_LOG_FILE_SIZE.
-     *
-     * The current log file is renamed (with a _0 suffix such as testBenchExtension.log_0) and older backups are shifted.
-     * A simple mutex ensures only one rotation occurs at a time.
+     * Reads all existing log files, sorts them, and renames them,
+     * removes the oldest log file and shifts the index of the rest.
      */
     private async rotateLogs(): Promise<void> {
-        if (this.isRotating) {
+        try {
+            const stats = await fsp.stat(this.logFilePath);
+            if (stats.size < MAX_LOG_FILE_SIZE_IN_BYTES) {
+                return;
+            }
+        } catch (error: any) {
+            if (error.code === "ENOENT") {
+                // Main log file doesn't exist. It will be created on the next write.
+                return;
+            }
+            console.error(
+                `Logger Error: Could not get stats for log file '${this.logFilePath}'. Rotation skipped.`,
+                error
+            );
             return;
         }
-        this.isRotating = true;
+
         try {
-            let currentLogFileStats;
-            try {
-                // Check if the current log file exists and obtain its size.
-                currentLogFileStats = await fsp.stat(this.logFilePath);
-            } catch (error) {
-                console.error(`Log file ${this.logFilePath} does not exist.`, error);
-                return;
-            }
+            const filesInLogFolderPath: string[] = await fsp.readdir(this.logFolderPath);
+            const logFiles: string[] = filesInLogFolderPath
+                .filter((f) => f.startsWith(fileNameOfActiveLogFile))
+                .sort()
+                .reverse();
 
-            if (currentLogFileStats.size < MAX_LOG_FILE_SIZE_IN_BYTES) {
-                return;
-            }
+            for (const logFile of logFiles) {
+                const filePath: string = path.join(this.logFolderPath, logFile);
+                const logFileNameParts: string[] = logFile.split(".");
+                // Example rotation: testBenchExtension.log.1 -> .2, testBenchExtension.log -> .1
+                const index: number =
+                    logFileNameParts.length > 2 ? parseInt(logFileNameParts[logFileNameParts.length - 1], 10) : 0;
 
-            // Shift existing backup files using a naming scheme of testBenchExtension.log.1, testBenchExtension.log.2, etc.
-            for (let i = MAX_LOG_FILES; i >= 2; i--) {
-                const olderFileName: string = `${this.logFilePath}.${i - 1}`;
-                const newFileName: string = `${this.logFilePath}.${i}`;
-                try {
-                    await fsp.access(olderFileName);
-                    await fsp.rename(olderFileName, newFileName);
-                } catch (error) {
-                    console.error(`Failed to rotate log file ${olderFileName} to ${newFileName}:`, error);
+                if (index >= MAX_LOG_FILES) {
+                    // Delete oldest log file
+                    await fsp.unlink(filePath);
+                } else {
+                    // Rename to the next index
+                    const newFilePath = `${this.logFilePath}.${index + 1}`;
+                    await fsp.rename(filePath, newFilePath);
                 }
             }
-            try {
-                await fsp.rename(this.logFilePath, `${this.logFilePath}.1`);
-            } catch (error) {
-                console.error(`Failed to rename current log file ${this.logFilePath} after rotation:`, error);
+        } catch (error: any) {
+            if (error.code === "EPERM" || error.code === "EACCES") {
+                console.error(
+                    `Logger Error: Permission denied during log rotation in '${this.logFolderPath}'. Please check file and folder permissions.`
+                );
+            } else {
+                console.error(`Logger Error: An unexpected error occurred during log rotation: ${error.message}`);
             }
-        } catch (error) {
-            console.error(`Log rotation error: ${error}`);
-        } finally {
-            this.isRotating = false;
         }
     }
 
@@ -216,7 +222,6 @@ export class TestBenchLogger {
         }
 
         // Dynamically import the "flatted" library to handle circular references.
-        // This library is only imported if needed, reducing the initial load time.
         const { stringify } = await this.getFlatted();
 
         /**
@@ -230,11 +235,10 @@ export class TestBenchLogger {
             try {
                 // Attempt to stringify the detail using JSON.stringify.
                 // Will fail for circular references.
-                return typeof detail === "object" ? JSON.stringify(detail, null, 2) : detail;
-            } catch (error) {
-                // If JSON.stringify fails due to a circular reference, safely stringify the object.
+                return typeof detail === "object" ? JSON.stringify(detail, null, 2) : String(detail);
+            } catch (error: any) {
                 if (error instanceof TypeError && error.message.includes("Converting circular structure to JSON")) {
-                    return typeof detail === "object" ? stringify(detail) : detail;
+                    return typeof detail === "object" ? stringify(detail) : String(detail);
                 }
                 return "[Error formatting details]";
             }
@@ -246,6 +250,39 @@ export class TestBenchLogger {
         } else {
             return `\n${formatSingleDetail(details)}`;
         }
+    }
+
+    /**
+     * Retrieves the "flatted" module, caching it after the first dynamic import.
+     */
+    private getFlatted() {
+        if (!this.flattedPromise) {
+            this.flattedPromise = import("flatted");
+        }
+        return this.flattedPromise;
+    }
+
+    /**
+     * Ensures exclusive access to log file operations like rotation to prevent race conditions.
+     * @param op The async operation (e.g., writing a log) to execute exclusively.
+     */
+    private async performExclusive<T>(op: () => Promise<T>): Promise<T> {
+        // Wait for any ongoing rotation to complete.
+        while (this.rotationPromise) {
+            await this.rotationPromise.catch((err) => {
+                console.error("Logger Warning: Waited for a rotation that resulted in an error.", err);
+            });
+        }
+
+        try {
+            // Set the promise to indicate that a rotation is in progress.
+            this.rotationPromise = this.rotateLogs();
+            await this.rotationPromise;
+        } finally {
+            this.rotationPromise = null;
+        }
+
+        return op();
     }
 
     /**
@@ -268,36 +305,35 @@ export class TestBenchLogger {
         if (this.cachedLogLevel === "No logging" || this.levels[logLevel] < this.levels[this.cachedLogLevel]) {
             return;
         }
+        await this.initPromise;
 
         const timestamp: string = new Date().toISOString();
         const baseLogMessage: string = `${timestamp} [${logLevel.toUpperCase()}]: ${logMessage}`;
         const detailsMessage: string = await this.formatDetails(details);
-        const completeLogMessage: string = `${baseLogMessage}${detailsMessage}`;
-
-        try {
-            await this.rotateLogs();
-
-            // Check if log file exists, if not, create an empty file
-            try {
-                await fsp.access(this.logFilePath, fs.constants.F_OK);
-            } catch (error) {
-                console.error("Log file access failed, creating new file:", error);
-                await fsp.writeFile(this.logFilePath, "");
-            }
-
-            await fsp.appendFile(this.logFilePath, `${completeLogMessage}\n`);
-        } catch (error) {
-            console.error(`Logging error: ${error}`);
-        }
+        const completeLogMessage: string = `${baseLogMessage}${detailsMessage}\n`;
 
         if (shouldOutputToTerminal || this.outputLogToTerminal) {
-            if (Array.isArray(details)) {
-                console.log(baseLogMessage);
-                details.forEach((detail) => console.log(detail));
+            if (Array.isArray(details) && details.length > 0) {
+                console.log(baseLogMessage, ...details);
             } else if (details) {
                 console.log(baseLogMessage, details);
             } else {
-                console.log(completeLogMessage);
+                console.log(baseLogMessage);
+            }
+        }
+
+        // Perform file writing exclusively to prevent race conditions with rotation.
+        try {
+            await this.performExclusive(() =>
+                fsp.appendFile(this.logFilePath, completeLogMessage, { encoding: "utf8" })
+            );
+        } catch (error: any) {
+            if (error.code === "EPERM" || error.code === "EACCES") {
+                console.error(
+                    `Logger Fatal Error: Permission denied to write to log file '${this.logFilePath}'. Please check file permissions. Further file logging may fail.`
+                );
+            } else {
+                console.error(`Logger Error: Failed to write to log file.`, error);
             }
         }
     }
