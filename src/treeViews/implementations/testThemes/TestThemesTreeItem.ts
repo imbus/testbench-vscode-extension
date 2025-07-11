@@ -309,18 +309,7 @@ export class TestThemesTreeItem extends TreeItemBase {
             throw new Error("No robot file path available");
         }
 
-        const fileInfo = await this.robotFileService.checkRobotFileExists(this);
-        if (fileInfo.duplicateFiles && fileInfo.duplicateFiles.length > 0) {
-            const selectedFilePath = await this.robotFileService.showDuplicateFileWarning(
-                fileInfo.duplicateFiles,
-                this.robotFilePath
-            );
-            if (selectedFilePath) {
-                await this.robotFileService.openRobotFile(selectedFilePath);
-            }
-        } else {
-            await this.robotFileService.openRobotFile(this.robotFilePath);
-        }
+        await this.robotFileService.openRobotFile(this.robotFilePath);
     }
 
     /**
