@@ -802,7 +802,7 @@
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
                     "when": "view == testbench.testThemes && testbenchExtension.isTestThemeOpenedFromCycle",
-                    "group": "inline@2"
+                    "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
@@ -817,7 +817,7 @@
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
                     "when": "view == testbench.testThemes && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForImport.customRoot.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode.hasRobotFile')",
-                    "group": "inline@1",
+                    "group": "inline@2",
                     "icon": {
                         "light": "resources/icons/upload-light.svg",
                         "dark": "resources/icons/upload-dark.svg"
