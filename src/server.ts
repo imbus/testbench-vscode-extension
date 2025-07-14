@@ -526,9 +526,37 @@ function setupClientNotifications(
                         document_uri: path
                     });
                 } else if (selection === "View Diff") {
-                    vscode.commands.executeCommand("testbench_ls.showTestbenchDiff", {
+                    vscode.commands.executeCommand("testbench_ls.showTestbenchSubdivisionDiff", {
                         document_uri: path,
                         subdivision_uid: subdivisionUid
+                    });
+                }
+            });
+    });
+
+    client.onNotification("testbench-language-server/attempt-push-keyword", (params) => {
+        const path = params.path;
+        const keywordUid = params.keyword_uid;
+        vscode.window
+            .showWarningMessage(
+                "Are you sure you want to push your changes to TestBench?",
+                {
+                    modal: true,
+                    detail: "Interactions in TestBench will change which might also affect Test Structure Elements that use those interactions."
+                },
+                "Accept",
+                "View Diff"
+            )
+            .then(async (selection) => {
+                if (selection === "Accept") {
+                    vscode.commands.executeCommand("testbench_ls.pushKeyword", {
+                        document_uri: path,
+                        keyword_uid: keywordUid
+                    });
+                } else if (selection === "View Diff") {
+                    vscode.commands.executeCommand("testbench_ls.showTestbenchKeywordDiff", {
+                        document_uri: path,
+                        keyword_uid: keywordUid
                     });
                 }
             });

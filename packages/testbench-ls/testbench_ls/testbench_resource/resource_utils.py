@@ -86,7 +86,7 @@ def get_variables_section_position(file: File) -> tuple[int]:
 def get_keyword_arguments_position(keyword: Keyword) -> tuple[int]:
     arguments = get_keyword_arguments(keyword)
     if not arguments:
-        return (keyword.lineno, 0, keyword.lineno, 0)
+        return get_keyword_tags_position(keyword)
     return (
         arguments.lineno - 1,
         arguments.col_offset,
