@@ -26,6 +26,15 @@ interface PendingOperation {
 export let client: LanguageClient | undefined;
 export let latestLsContextRequestId: number = 0;
 export let currentLsOperationId: number = 0;
+let virtualDocumentContent = "";
+const virtualDocumentScheme = "virtualdiff";
+const onVirtualDocumentChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
+const virtualDocumentProvider: vscode.TextDocumentContentProvider = {
+    onDidChange: onVirtualDocumentChangeEmitter.event,
+    provideTextDocumentContent(uri: vscode.Uri): string {
+        return virtualDocumentContent;
+    }
+};
 
 // State management for race condition prevention
 let isLanguageServerBusy: boolean = false;
@@ -562,18 +571,14 @@ function setupClientNotifications(
             });
     });
 
+    vscode.workspace.registerTextDocumentContentProvider(virtualDocumentScheme, virtualDocumentProvider);
     client.onNotification("testbench-language-server/display-diff", (params) => {
         const realPath = params.path;
         const realUri = vscode.Uri.parse(realPath);
         const realFileName = realUri.path.split("/").pop() || "unknown";
-        const virtualContent = params.virtualContent;
-        const virtualUri = vscode.Uri.parse(`virtualdiff:${realPath}`);
-        const provider: vscode.TextDocumentContentProvider = {
-            provideTextDocumentContent(uri: vscode.Uri): string {
-                return virtualContent;
-            }
-        };
-        vscode.workspace.registerTextDocumentContentProvider("virtualdiff", provider);
+        const virtualUri = vscode.Uri.parse(`${virtualDocumentScheme}:${realPath}`);
+        virtualDocumentContent = params.virtualContent;
+        onVirtualDocumentChangeEmitter.fire(virtualUri);
         vscode.commands.executeCommand("vscode.diff", virtualUri, realUri, `${realFileName} (TestBench Changes)`);
     });
 
