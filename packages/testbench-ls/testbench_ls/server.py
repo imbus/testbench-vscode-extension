@@ -50,12 +50,14 @@ from .ls_exceptions import (
 )
 from .ls_logging import LogLevel, log, show_error, show_info
 from .messages import (
+    COMMAND_ATTEMPT_PUSH_SUBDIVISION,
     COMMAND_FETCH_RESULTS,
     COMMAND_GENERATE_TEST_SUITES,
     COMMAND_PULL_KEYWORD,
     COMMAND_PULL_SUBDIVISION,
     COMMAND_PUSH_KEYWORD,
     COMMAND_PUSH_SUBDIVISION,
+    COMMAND_SHOW_TESTBENCH_DIFF,
     COMMAND_UPDATE_LOGIN_NAME,
     COMMAND_UPDATE_PROJECT,
     COMMAND_UPDATE_SERVER_NAME,
@@ -302,7 +304,7 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
         range=Range(start=Position(line=0, character=0), end=Position(line=0, character=0)),
         command=Command(
             title=PUSH_SUBDIVISON_TITLE,
-            command=COMMAND_PUSH_SUBDIVISION,
+            command=COMMAND_ATTEMPT_PUSH_SUBDIVISION,
             arguments=[document_uri, testbench_resource.tb_subdivision_uid],
         ),
     )
@@ -366,9 +368,133 @@ def context_is_valid(
     return True
 
 
-@testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
-def push_testbench_subdivision(ls: LanguageServer, args):
+@testbench_ls.command(COMMAND_SHOW_TESTBENCH_DIFF)
+def show_testbench_diff(ls: LanguageServer, kwargs):
+    kwargs, *_ = kwargs
+    document_uri = kwargs.get("document_uri")
+    subdivision_uid = kwargs.get("subdivision_uid")
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    existing_resource = TestBenchResourceModel.from_file(document.source)
+    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
+        return
+    new_resource = create_resource_from_subdivision(
+        uid=subdivision_uid,
+    )
+    change_identifier = ChangeAnnotationIdentifier()
+    edits = []
+    create_kw_section = not bool(get_keyword_section(existing_resource.file))
+    if create_kw_section:
+        if get_variables_section(existing_resource.file):
+            _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
+        else:
+            _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
+        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
+    else:
+        _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
+    for new_keyword in new_resource.keyword_section.body:
+        try:
+            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+        except MultipleKeywordsWithUid as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
+            )
+            continue
+        except MultipleKeywordsWithName as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+            )
+            continue
+        if not keyword_match:
+            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+        else:
+            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+                continue
+            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+    if not edits:
+        show_info(ls, INFO_ALREADY_UP_TO_DATE)
+        return
+
+    lines = robot_model_to_string(existing_resource.file).splitlines()
+
+    for edit in edits:
+        start, end = edit.range.start, edit.range.end
+        # Handle multiline edit
+        if start.line == end.line:
+            lines[start.line] = (
+                lines[start.line][: start.character]
+                + edit.new_text
+                + lines[end.line][end.character :]
+            )
+        else:
+            before = lines[start.line][: start.character]
+            after = lines[end.line][end.character :]
+            middle = edit.new_text.splitlines()
+            lines[start.line : end.line + 1] = [before + middle[0]] + middle[1:] + [after]
+
+    # create_virtual_resource(ls, new_resource)
+    ls.send_notification(
+        "testbench-language-server/display-diff",
+        {"path": document_uri, "virtualContent": "\n".join(lines)},
+    )
+
+
+@testbench_ls.command(COMMAND_ATTEMPT_PUSH_SUBDIVISION)
+def attempt_push_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    existing_resource = TestBenchResourceModel.from_file(document.source)
+    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
+        return
+    new_resource = create_resource_from_subdivision(
+        uid=subdivision_uid,
+    )
+    change_identifier = ChangeAnnotationIdentifier()
+    edits = []
+    create_kw_section = not bool(get_keyword_section(existing_resource.file))
+    if create_kw_section:
+        if get_variables_section(existing_resource.file):
+            _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
+        else:
+            _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
+        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
+    else:
+        _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
+    for new_keyword in new_resource.keyword_section.body:
+        try:
+            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+        except MultipleKeywordsWithUid as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
+            )
+            continue
+        except MultipleKeywordsWithName as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+            )
+            continue
+        if not keyword_match:
+            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+        else:
+            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+                continue
+            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+    if not edits:
+        show_info(ls, INFO_ALREADY_UP_TO_DATE)
+        return
+    ls.send_notification(
+        "testbench-language-server/attempt-push-subdivision",
+        {"path": document_uri, "subdivisionUid": subdivision_uid},
+    )
+
+
+@testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
+def push_testbench_subdivision(ls: LanguageServer, kwargs):
+    kwargs, *_ = kwargs
+    document_uri = kwargs.get("document_uri")
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
     if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):

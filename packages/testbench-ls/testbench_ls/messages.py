@@ -46,6 +46,8 @@ COMMAND_PULL_SUBDIVISION = "testbench_ls.pullSubdivision"
 COMMAND_PUSH_SUBDIVISION = "testbench_ls.pushSubdivision"
 COMMAND_PULL_KEYWORD = "testbench_ls.pullKeyword"
 COMMAND_PUSH_KEYWORD = "testbench_ls.pushKeyword"
+COMMAND_SHOW_TESTBENCH_DIFF = "testbench_ls.showTestbenchDiff"
+COMMAND_ATTEMPT_PUSH_SUBDIVISION = "testbench_ls.attemptPushSubdivision"
 
 # constants
 TESTBENCH_LS_CLASS_NAME = "testbench-language-server"
