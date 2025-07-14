@@ -12,7 +12,7 @@ from robot.api.parsing import (
     Tags,
     VariableSection,
 )
-from robot.parsing.model import Block, Statement
+from robot.parsing.model import Block, NestedBlock, Statement
 
 
 def get_keyword_documentation(keyword: Keyword) -> Documentation:
@@ -114,13 +114,18 @@ def robot_model_to_string(model_item: Block | Statement) -> str:
 
 
 def _robot_item_to_string(item):
-    if isinstance(item, Block):
+    if isinstance(item, File):
+        for section in item.sections:
+            yield from _robot_item_to_string(section)
+    elif isinstance(item, Block):
         if hasattr(item, "header"):
             for body_item in [item.header, *item.body]:
                 yield from _robot_item_to_string(body_item)
         else:
             for body_item in item.body:
                 yield from _robot_item_to_string(body_item)
+        if isinstance(item, NestedBlock):
+            yield "".join(token.value for token in item.end)
     elif isinstance(item, Statement):
         yield "".join(token.value for token in item.tokens)
 
