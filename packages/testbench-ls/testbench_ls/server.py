@@ -415,29 +415,29 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
-
-    lines = robot_model_to_string(existing_resource.file).splitlines()
-
-    for edit in edits:
-        start, end = edit.range.start, edit.range.end
-        # Handle multiline edit
-        if start.line == end.line:
-            lines[start.line] = (
-                lines[start.line][: start.character]
-                + edit.new_text
-                + lines[end.line][end.character :]
-            )
-        else:
-            before = lines[start.line][: start.character]
-            after = lines[end.line][end.character :]
-            middle = edit.new_text.splitlines()
-            lines[start.line : end.line + 1] = [before + middle[0]] + middle[1:] + [after]
-
-    # create_virtual_resource(ls, new_resource)
+    testbench_content = apply_text_edits(robot_model_to_string(existing_resource.file), edits)
     ls.send_notification(
         "testbench-language-server/display-diff",
-        {"path": document_uri, "virtualContent": "\n".join(lines)},
+        {"path": document_uri, "virtualContent": testbench_content},
     )
+
+
+def apply_text_edits(content: str, text_edits: list[AnnotatedTextEdit]) -> str:
+    lines = content.splitlines(keepends=True)
+
+    def edit_position_offset(pos):
+        return sum(len(l) for l in lines[: pos.line]) + pos.character
+
+    for edit in sorted(
+        text_edits, key=lambda e: (e.range.start.line, e.range.start.character), reverse=True
+    ):
+        start = edit.range.start
+        end = edit.range.end
+        start_offset = edit_position_offset(start)
+        end_offset = edit_position_offset(end)
+        content = content[:start_offset] + edit.new_text + content[end_offset:]
+        lines = content.splitlines(keepends=True)
+    return content
 
 
 @testbench_ls.command(COMMAND_ATTEMPT_PUSH_SUBDIVISION)
@@ -591,6 +591,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     edit = create_workspace_edit(
         document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
     )
+
     ls.lsp.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
