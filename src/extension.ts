@@ -340,11 +340,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
-    const handleProjectCycleClick = async (cycleItem: ProjectsTreeItem) => {
-        logger.debug(`[Cmd] Called: ${allExtensionCommands.handleProjectCycleClick} for item ${cycleItem.label}`);
+    const handleCycleClick = async (cycleItem: ProjectsTreeItem) => {
+        logger.debug(`[Cmd] Called: ${allExtensionCommands.handleCycleClick} for item ${cycleItem.label}`);
 
         if (!connection) {
-            logger.warn("[Cmd] handleProjectCycleClick called without active connection.");
+            logger.warn("[Cmd] handleCycleClick called without active connection.");
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
@@ -373,11 +373,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
-    const handleProjectVersionClick = async (versionItem: ProjectsTreeItem) => {
-        logger.debug(`[Cmd] Called: ${allExtensionCommands.handleProjectVersionClick} for item ${versionItem.label}`);
+    const handleTOVClick = async (versionItem: ProjectsTreeItem) => {
+        logger.debug(`[Cmd] Called: ${allExtensionCommands.handleTOVClick} for item ${versionItem.label}`);
 
         if (!connection) {
-            logger.warn("[Cmd] handleProjectVersionClick called without active connection.");
+            logger.warn("[Cmd] handleTOVClick called without active connection.");
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
@@ -863,8 +863,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.logout, handler: handleLogout },
 
         // Tree Interaction and Navigation
-        { id: allExtensionCommands.handleProjectCycleClick, handler: handleProjectCycleClick },
-        { id: allExtensionCommands.handleProjectVersionClick, handler: handleProjectVersionClick },
+        { id: allExtensionCommands.handleCycleClick, handler: handleCycleClick },
+        { id: allExtensionCommands.handleTOVClick, handler: handleTOVClick },
         { id: allExtensionCommands.openTOVFromProjectsView, handler: handleOpenTOV },
         { id: allExtensionCommands.openCycleFromProjectsView, handler: handleOpenCycle },
         {
