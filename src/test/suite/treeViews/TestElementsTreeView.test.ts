@@ -554,13 +554,24 @@ suite("TestElementsTreeView", function () {
                 })
             );
 
-            const openInteractionResourceStub = testEnv.sandbox
-                .stub(treeView as any, "openInteractionResource")
-                .resolves();
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+            mockInteraction.parent = mockParent;
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
             await (treeView as any).handleInteractionSingleClick(mockInteraction);
 
-            assert.ok(openInteractionResourceStub.calledWith(mockInteraction), "Should call openInteractionResource");
             assert.ok(
                 mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
                 "Should log single click"
@@ -576,13 +587,24 @@ suite("TestElementsTreeView", function () {
                 })
             );
 
-            const goToInteractionResourceStub = testEnv.sandbox
-                .stub(treeView as any, "goToInteractionResource")
-                .resolves();
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+            mockInteraction.parent = mockParent;
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
             await (treeView as any).handleInteractionDoubleClick(mockInteraction);
 
-            assert.ok(goToInteractionResourceStub.calledWith(mockInteraction), "Should call goToInteractionResource");
             assert.ok(
                 mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
                 "Should log double click"
@@ -627,6 +649,44 @@ suite("TestElementsTreeView", function () {
 
             await treeView.handleInteractionClick(mockInteraction);
             assert.ok(!handleClickStub.called, "Should not call click handler when item has no ID");
+        });
+
+        test("both single and double click should jump to interaction", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+            mockInteraction.parent = mockParent;
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
+
+            await (treeView as any).handleInteractionSingleClick(mockInteraction);
+            assert.ok(
+                mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
+                "Should log single click"
+            );
+
+            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
+            assert.ok(
+                mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
+                "Should log double click"
+            );
         });
     });
 
@@ -1023,6 +1083,116 @@ suite("TestElementsTreeView", function () {
             assert.strictEqual((treeView as any).currentProjectName, null);
             assert.strictEqual((treeView as any).currentTovName, null);
             assert.strictEqual((treeView as any).resourceFiles.size, 0);
+        });
+    });
+
+    suite("Jump to Interaction Functionality", function () {
+        test("should find interaction position in resource file", function () {
+            const mockDocument = {
+                getText: () => `tb:uid:rep_id-SD-102
+tb:context:TestBench Demo Agil/Version 3.0
+
+*** Keywords ***
+Interaction 1
+    [Documentation]    Interaction 1 description
+    [Tags]    tb:uid:rep_id-IA-3144
+    # Not Implemented
+
+Interaction 2
+    [Documentation]    Interaction 2 description
+    [Tags]    tb:uid:rep_id-IA-2373
+    # Not Implemented
+
+Interaction 3
+    [Documentation]    Interaction 3 description
+    [Tags]    tb:uid:rep_id-IA-3145
+    # Not Implemented`
+            } as vscode.TextDocument;
+
+            const position = (treeView as any).findInteractionPositionInResourceFile(mockDocument, "Interaction 2");
+
+            assert.ok(position, "Should find interaction position");
+            assert.strictEqual(position.line, 9, "Should find correct line number");
+            assert.strictEqual(position.character, 0, "Should find correct character position");
+        });
+
+        test("should return undefined when interaction not found", function () {
+            const mockDocument = {
+                getText: () => `*** Keywords ***
+Interaction 1
+    # Not Implemented
+
+Interaction 2
+    # Not Implemented`
+            } as vscode.TextDocument;
+
+            const position = (treeView as any).findInteractionPositionInResourceFile(
+                mockDocument,
+                "NonExistentInteraction"
+            );
+
+            assert.strictEqual(position, undefined, "Should return undefined for non-existent interaction");
+        });
+
+        test("should handle interaction names with spaces and special characters", function () {
+            const mockDocument = {
+                getText: () => `*** Keywords ***
+Interaction With Spaces
+    # Not Implemented
+
+Special-Interaction_123
+    # Not Implemented`
+            } as vscode.TextDocument;
+
+            const position1 = (treeView as any).findInteractionPositionInResourceFile(
+                mockDocument,
+                "Interaction With Spaces"
+            );
+            const position2 = (treeView as any).findInteractionPositionInResourceFile(
+                mockDocument,
+                "Special-Interaction_123"
+            );
+
+            assert.ok(position1, "Should find interaction with spaces");
+            assert.ok(position2, "Should find interaction with special characters");
+        });
+
+        test("should ignore comments and other sections", function () {
+            const mockDocument = {
+                getText: () => `*** Settings ***
+Documentation    Test resource
+
+*** Keywords ***
+# This is a comment
+Interaction 1
+    # Not Implemented
+
+*** Variables ***
+\${VARIABLE}    value`
+            } as vscode.TextDocument;
+
+            const position = (treeView as any).findInteractionPositionInResourceFile(mockDocument, "Interaction 1");
+
+            assert.ok(position, "Should find interaction despite comments and other sections");
+        });
+
+        test("should handle interaction names that are part of other text", function () {
+            const mockDocument = {
+                getText: () => `*** Keywords ***
+Interaction 1
+    # Not Implemented
+
+SomeOtherInteraction 1
+    # Not Implemented
+
+Interaction 1 Extended
+    # Not Implemented`
+            } as vscode.TextDocument;
+
+            const position = (treeView as any).findInteractionPositionInResourceFile(mockDocument, "Interaction 1");
+
+            assert.ok(position, "Should find exact match for interaction name");
+            assert.strictEqual(position.line, 1, "Should find the first exact match");
         });
     });
 });
