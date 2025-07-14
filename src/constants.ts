@@ -247,5 +247,6 @@ export const allExtensionCommands = {
     openSubdivisionFolderInExplorer: `${baseKeyOfExtension}.openSubdivisionFolderInExplorer`,
     openInteractionInTestElementsView: `${baseKeyOfExtension}.openInteractionInTestElementsView`,
     createMissingParentResourceForInteraction: `${baseKeyOfExtension}.createMissingParentResourceForInteraction`,
-    handleInteractionClick: `${baseKeyOfExtension}.handleInteractionClick`
+    handleInteractionClick: `${baseKeyOfExtension}.handleInteractionClick`,
+    findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`
 };

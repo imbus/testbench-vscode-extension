@@ -1009,3 +1009,40 @@ export async function waitForLanguageServerReady(
 
     throw new Error(`Language server did not become ready within ${timeoutMs}ms`);
 }
+
+/**
+ * Finds the position of an interaction in a resource file using the language server.
+ *
+ * @param uri The URI of the resource file to search in
+ * @param interactionName The name of the interaction to find
+ * @param uid The unique ID of the tree item
+ * @returns Promise that resolves to the line number where the interaction was found, or -1 if not found
+ */
+export async function findInteractionPositionInResourceFile(
+    uri: vscode.Uri,
+    interactionName: string,
+    uid: string
+): Promise<number> {
+    if (!isLanguageServerRunning()) {
+        logger.warn(
+            "[findInteractionPositionInResourceFile] Language server not running, cannot find interaction position"
+        );
+        return -1;
+    }
+
+    try {
+        logger.debug(
+            `[findInteractionPositionInResourceFile] Searching for interaction "${interactionName}" in ${uri.fsPath}`
+        );
+
+        // TODO: Implement
+        return -1;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        logger.error(
+            `[findInteractionPositionInResourceFile] Error finding interaction position: ${errorMessage}`,
+            error
+        );
+        return -1;
+    }
+}

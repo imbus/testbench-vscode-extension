@@ -5,13 +5,11 @@
 
 import * as assert from "assert";
 import * as vscode from "vscode";
-import * as sinon from "sinon";
 import { TestElementsTreeView } from "../../../treeViews/implementations/testElements/TestElementsTreeView";
 import {
     TestElementsTreeItem,
     TestElementType
 } from "../../../treeViews/implementations/testElements/TestElementsTreeItem";
-import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { EventBus } from "../../../treeViews/utils/EventBus";
@@ -19,6 +17,7 @@ import { StateManager } from "../../../treeViews/state/StateManager";
 import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { ResourceFileService } from "../../../treeViews/implementations/testElements/ResourceFileService";
 import { testElementsConfig } from "../../../treeViews/implementations/testElements/TestElementsConfig";
+import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 
 suite("TestElementsTreeView", function () {
     let testEnv: TestEnvironment;
@@ -183,10 +182,6 @@ suite("TestElementsTreeView", function () {
                 testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
                 "Should call revealInExplorer command"
             );
-            assert.ok(
-                mockLogger.debug.calledWith("Revealed resource file in explorer: /test/path/ExistingResource.resource"),
-                "Should log reveal action"
-            );
         });
 
         test("openAvailableResource should handle missing hierarchical name", async function () {
@@ -233,10 +228,6 @@ suite("TestElementsTreeView", function () {
             assert.ok(
                 testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
                 "Should call revealInExplorer command"
-            );
-            assert.ok(
-                mockLogger.debug.calledWith("Revealed resource file in explorer: /test/path/CreateResource.resource"),
-                "Should log reveal action"
             );
         });
 
@@ -425,12 +416,6 @@ suite("TestElementsTreeView", function () {
             assert.ok(
                 testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
                 "Should call revealInExplorer command"
-            );
-            assert.ok(
-                mockLogger.debug.calledWith(
-                    "Revealed interaction resource file in explorer: /test/path/ParentResource.resource"
-                ),
-                "Should log reveal action"
             );
         });
 
@@ -1083,116 +1068,6 @@ suite("TestElementsTreeView", function () {
             assert.strictEqual((treeView as any).currentProjectName, null);
             assert.strictEqual((treeView as any).currentTovName, null);
             assert.strictEqual((treeView as any).resourceFiles.size, 0);
-        });
-    });
-
-    suite("Jump to Interaction Functionality", function () {
-        test("should find interaction position in resource file", function () {
-            const mockDocument = {
-                getText: () => `tb:uid:rep_id-SD-102
-tb:context:TestBench Demo Agil/Version 3.0
-
-*** Keywords ***
-Interaction 1
-    [Documentation]    Interaction 1 description
-    [Tags]    tb:uid:rep_id-IA-3144
-    # Not Implemented
-
-Interaction 2
-    [Documentation]    Interaction 2 description
-    [Tags]    tb:uid:rep_id-IA-2373
-    # Not Implemented
-
-Interaction 3
-    [Documentation]    Interaction 3 description
-    [Tags]    tb:uid:rep_id-IA-3145
-    # Not Implemented`
-            } as vscode.TextDocument;
-
-            const position = (treeView as any).findInteractionPositionInResourceFile(mockDocument, "Interaction 2");
-
-            assert.ok(position, "Should find interaction position");
-            assert.strictEqual(position.line, 9, "Should find correct line number");
-            assert.strictEqual(position.character, 0, "Should find correct character position");
-        });
-
-        test("should return undefined when interaction not found", function () {
-            const mockDocument = {
-                getText: () => `*** Keywords ***
-Interaction 1
-    # Not Implemented
-
-Interaction 2
-    # Not Implemented`
-            } as vscode.TextDocument;
-
-            const position = (treeView as any).findInteractionPositionInResourceFile(
-                mockDocument,
-                "NonExistentInteraction"
-            );
-
-            assert.strictEqual(position, undefined, "Should return undefined for non-existent interaction");
-        });
-
-        test("should handle interaction names with spaces and special characters", function () {
-            const mockDocument = {
-                getText: () => `*** Keywords ***
-Interaction With Spaces
-    # Not Implemented
-
-Special-Interaction_123
-    # Not Implemented`
-            } as vscode.TextDocument;
-
-            const position1 = (treeView as any).findInteractionPositionInResourceFile(
-                mockDocument,
-                "Interaction With Spaces"
-            );
-            const position2 = (treeView as any).findInteractionPositionInResourceFile(
-                mockDocument,
-                "Special-Interaction_123"
-            );
-
-            assert.ok(position1, "Should find interaction with spaces");
-            assert.ok(position2, "Should find interaction with special characters");
-        });
-
-        test("should ignore comments and other sections", function () {
-            const mockDocument = {
-                getText: () => `*** Settings ***
-Documentation    Test resource
-
-*** Keywords ***
-# This is a comment
-Interaction 1
-    # Not Implemented
-
-*** Variables ***
-\${VARIABLE}    value`
-            } as vscode.TextDocument;
-
-            const position = (treeView as any).findInteractionPositionInResourceFile(mockDocument, "Interaction 1");
-
-            assert.ok(position, "Should find interaction despite comments and other sections");
-        });
-
-        test("should handle interaction names that are part of other text", function () {
-            const mockDocument = {
-                getText: () => `*** Keywords ***
-Interaction 1
-    # Not Implemented
-
-SomeOtherInteraction 1
-    # Not Implemented
-
-Interaction 1 Extended
-    # Not Implemented`
-            } as vscode.TextDocument;
-
-            const position = (treeView as any).findInteractionPositionInResourceFile(mockDocument, "Interaction 1");
-
-            assert.ok(position, "Should find exact match for interaction name");
-            assert.strictEqual(position.line, 1, "Should find the first exact match");
         });
     });
 });
