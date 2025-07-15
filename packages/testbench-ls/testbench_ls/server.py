@@ -51,6 +51,7 @@ from .ls_exceptions import (
 from .ls_logging import LogLevel, log, show_error, show_info
 from .messages import (
     COMMAND_FETCH_RESULTS,
+    COMMAND_FIND_INTERACTION_POSITION,
     COMMAND_GENERATE_TEST_SUITES,
     COMMAND_PULL_KEYWORD,
     COMMAND_PULL_SUBDIVISION,
@@ -803,6 +804,25 @@ def did_change(ls: LanguageServer, params: DidOpenTextDocumentParams):
         diagnostics=diagnostics,
         version=document.version,
     )
+
+
+@testbench_ls.command(COMMAND_FIND_INTERACTION_POSITION)
+def find_interaction_position(ls: LanguageServer, args):
+    document_uri, interaction_name, uid, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    resource = TestBenchResourceModel.from_file(document.source)
+    
+    keywords_by_name = resource.get_keywords_by_name(interaction_name)
+    
+    if keywords_by_name:
+        return keywords_by_name[0].lineno - 1
+    
+    if uid:
+        keywords_by_uid = resource.get_keywords(uid)
+        if keywords_by_uid:
+            return keywords_by_uid[0].lineno - 1
+    
+    return -1
 
 
 # @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
