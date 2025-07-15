@@ -64,14 +64,14 @@ def get_kw_tags_edit(
         existing_keyword
     )
     new_tags_txt = robot_model_to_string(all_tags)
-
+    newline = "" if existing_keyword_tags else "\n"
     tags_edit = AnnotatedTextEdit(
         change_identifier,
         range=Range(
             start=Position(tags_start, tags_start_char),
             end=Position(tags_end, tags_end_char),
         ),
-        new_text=f"{new_tags_txt}{'' if existing_keyword_tags else '\n'}",
+        new_text=f"{new_tags_txt}{newline}",
     )
     return tags_edit
 
@@ -87,13 +87,14 @@ def get_kw_arguments_edit(
         existing_keyword
     )
     new_args_txt = robot_model_to_string(get_keyword_arguments(new_keyword))
+    newline = "" if existing_arguments else "\n"
     return AnnotatedTextEdit(
         change_identifier,
         range=Range(
             start=Position(arg_start, arg_start_char),
             end=Position(arg_end, arg_end_char),
         ),
-        new_text=f"{new_args_txt}{'' if existing_arguments else '\n'}",
+        new_text=f"{new_args_txt}{newline}",
     )
 
 
@@ -112,16 +113,16 @@ def get_kw_documentation_edit(
         return None
     new_docu_txt = robot_model_to_string(get_keyword_documentation(new_keyword))
     new_docu_txt = _normalize_whitespace(new_docu_txt)
-    # if existing_documentation:
     new_docu_txt = new_docu_txt.rstrip("\n")
     doc_start, doc_start_char, doc_end, doc_end_char = get_keyword_documentation_position(
         existing_keyword
     )
+    newline = "" if existing_documentation else "\n"
     return AnnotatedTextEdit(
         change_identifier,
         range=Range(
             start=Position(doc_start, doc_start_char),
             end=Position(doc_end, doc_end_char),
         ),
-        new_text=f"{new_docu_txt}{'' if existing_documentation else '\n'}",
+        new_text=f"{new_docu_txt}{newline}",
     )
