@@ -798,17 +798,26 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param resourcePath The path of the resource file
      * @param interactionName The name of the interaction to find and position cursor at
      * @param uid The unique identifier of the tree item
-     * @param operationType The type of operation for logging context
      */
     private async openFileAndJumpToInteraction(
         resourcePath: string,
         interactionName: string,
         uid: string
     ): Promise<void> {
-        try {
-            const textDocument = await vscode.workspace.openTextDocument(resourcePath);
-            const textEditor = await vscode.window.showTextDocument(textDocument);
+        let textDocument: vscode.TextDocument;
+        let textEditor: vscode.TextEditor;
 
+        try {
+            textDocument = await vscode.workspace.openTextDocument(resourcePath);
+            textEditor = await vscode.window.showTextDocument(textDocument);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            this.logger.error(`[TestElementsTreeView] Failed to open file ${resourcePath}: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to open resource file: ${errorMessage}`);
+            return;
+        }
+
+        try {
             const interactionLineNumber = await findInteractionPositionInResourceFile(
                 textDocument.uri,
                 interactionName,
@@ -819,14 +828,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 const position = new vscode.Position(interactionLineNumber, 0);
                 textEditor.selection = new vscode.Selection(position, position);
                 textEditor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
-                this.logger.debug(`Positioned cursor at line ${interactionLineNumber}`);
             } else {
                 this.logger.warn(`Interaction '${interactionName}' not found in resource file`);
             }
-        } catch (error) {
-            this.logger.error(`[TestElementsTreeView] Error opening file and jumping to interaction:`, error);
-            vscode.window.showErrorMessage(
-                `Error opening file and jumping to interaction: ${error instanceof Error ? error.message : "Unknown error"}`
+        } catch (positioningError) {
+            const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";
+            this.logger.warn(
+                `[TestElementsTreeView] Failed to position cursor for interaction '${interactionName}': ${errorMessage}`,
+                positioningError
             );
         }
     }

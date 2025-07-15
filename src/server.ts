@@ -1119,7 +1119,7 @@ export async function findInteractionPositionInResourceFile(
             return lineNumber;
         } else {
             logger.warn(
-                `[findInteractionPositionInResourceFile] Language server returned invalid line number: ${lineNumber}`
+                `[findInteractionPositionInResourceFile] Interaction '${interactionName}' (UID: ${interactionUid}) not found in ${uri.fsPath}`
             );
             return undefined;
         }
