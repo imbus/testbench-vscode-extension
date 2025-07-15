@@ -42,7 +42,7 @@ from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
-from .file_edits import get_kw_arguments_edit, get_kw_tags_edit
+from .file_edits import get_kw_arguments_edit, get_kw_documentation_edit, get_kw_tags_edit
 from .ls_exceptions import (
     MultipleKeywordsWithName,
     MultipleKeywordsWithUid,
@@ -94,8 +94,6 @@ from .testbench_api.testbench_patch import patch_interaction_details
 from .testbench_resource.resource_documentation import ResourceDocumentation
 from .testbench_resource.resource_utils import (
     get_comment_section_end_position,
-    get_keyword_documentation,
-    get_keyword_documentation_position,
     get_keyword_section,
     get_keyword_section_position,
     get_keyword_tags,
@@ -437,7 +435,7 @@ def apply_text_edits(content: str, text_edits: list[AnnotatedTextEdit]) -> str:
         end = edit.range.end
         start_offset = edit_position_offset(start)
         end_offset = edit_position_offset(end)
-        content = content[:start_offset] + edit.new_text + content[end_offset:]
+        content = content[:start_offset] + edit.new_text + content[end_offset - 1 :]
         lines = content.splitlines(keepends=True)
     return content
 
@@ -673,40 +671,12 @@ def keyword_section_edit(keyword_section_line, change_identifier):
     ]
 
 
-def _normalize_whitespace(text):
-    return re.sub(r" {5,}", "    ", text)
-
-
 def create_keyword_edits(
     existing_keyword, new_keyword, change_identifier
 ) -> list[AnnotatedTextEdit]:
     edits = []
-    existing_keyword_documentation = get_keyword_documentation(existing_keyword)
-    new_keyword_documentation = get_keyword_documentation(new_keyword)
-    if existing_keyword_documentation:
-        new_docu = robot_model_to_string(new_keyword_documentation).rstrip()
-    else:
-        new_docu = robot_model_to_string(new_keyword_documentation)
-    new_docu = _normalize_whitespace(new_docu)
-    if re.sub(
-        r"\s|\n|\.\.\.", r"", robot_model_to_string(new_keyword_documentation), flags=re.MULTILINE
-    ) != re.sub(
-        r"\s|\n|\.\.\.",
-        r"",
-        robot_model_to_string(existing_keyword_documentation),
-        flags=re.MULTILINE,
-    ):
-        doc_start, doc_start_char, doc_end, doc_end_char = get_keyword_documentation_position(
-            existing_keyword
-        )
-        documentation_edit = AnnotatedTextEdit(
-            change_identifier,
-            range=Range(
-                start=Position(doc_start, doc_start_char),
-                end=Position(doc_end, doc_end_char),
-            ),
-            new_text=new_docu,
-        )
+    documentation_edit = get_kw_documentation_edit(existing_keyword, new_keyword, change_identifier)
+    if documentation_edit:
         edits.append(documentation_edit)
 
     if existing_keyword.name != new_keyword.name:
