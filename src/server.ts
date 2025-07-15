@@ -1090,13 +1090,13 @@ export async function waitForLanguageServerReady(
  *
  * @param uri The URI of the resource file to search in
  * @param interactionName The name of the interaction to find
- * @param uid The unique ID of the tree item
+ * @param interactionUid The unique ID of the tree item
  * @returns Promise that resolves to the line number where the interaction was found, or -1 if not found
  */
 export async function findInteractionPositionInResourceFile(
     uri: vscode.Uri,
     interactionName: string,
-    uid: string
+    interactionUid: string
 ): Promise<number> {
     if (!isLanguageServerRunning()) {
         logger.warn(
@@ -1111,10 +1111,10 @@ export async function findInteractionPositionInResourceFile(
         );
 
         const lineNumber = await vscode.commands.executeCommand(
-            "testbench_ls.findInteractionPosition",
+            "testbench_ls.getInteractionPosition",
             uri.toString(),
             interactionName,
-            uid
+            interactionUid
         );
 
         if (typeof lineNumber === "number") {

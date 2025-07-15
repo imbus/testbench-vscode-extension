@@ -75,6 +75,7 @@ from .messages import (
     ERROR_DUPLICATE_KEYWORD_NAME,
     ERROR_DUPLICATE_KEYWORD_UID,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
+    ERROR_FINDING_TESTBENCH_KEYWORD,
     ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
@@ -956,108 +957,34 @@ def did_change(ls: LanguageServer, params: DidOpenTextDocumentParams):
 
 
 @testbench_ls.command(COMMAND_FIND_INTERACTION_POSITION)
-def find_interaction_position(ls: LanguageServer, args):
-    document_uri, interaction_name, uid, *_ = args
+def find_interaction_position(ls: LanguageServer, args) -> int | None:
+    document_uri, interaction_name, interaction_uid, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
-    
+    keywords_by_uid = resource.get_keywords(interaction_uid)
+    if len(keywords_by_uid) > 1:
+        show_error(
+            ls,
+            ERROR_DUPLICATE_KEYWORD_UID.format(uid=interaction_uid),
+        )
+        log(
+            ls,
+        )
+        return
+    if len(keywords_by_uid) == 1:
+        return keywords_by_uid[0].lineno - 1
     keywords_by_name = resource.get_keywords_by_name(interaction_name)
-    
-    if keywords_by_name:
+    if len(keywords_by_name) > 1:
+        show_error(
+            ls,
+            ERROR_DUPLICATE_KEYWORD_NAME.format(name=interaction_name),
+        )
+        return
+    if len(keywords_by_uid) == 1:
         return keywords_by_name[0].lineno - 1
-    
-    if uid:
-        keywords_by_uid = resource.get_keywords(uid)
-        if keywords_by_uid:
-            return keywords_by_uid[0].lineno - 1
-    
-    return -1
-
-
-# @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
-# def code_actions(ls: LanguageServer, params: CodeActionParams):
-#     document_uri = params.text_document.uri
-#     code_actions = []
-#     document = testbench_ls.workspace.get_text_document(document_uri)
-#     resource = RobotResourceFile.from_file(document.source)
-#     for keyword in resource.keywords:
-#         if (
-#             params.range.start.line >= keyword.lineno - 1
-#             and params.range.start.line <= keyword.end_lineno - 1
-#         ):
-#             code_action = CodeAction(
-#                 "Create AI Documentation",
-#                 CodeActionKind.QuickFix,
-#                 command=Command(
-#                     title="create_ai_documentation",
-#                     command="testbench_ls.createKeywordDocumentation",
-#                     arguments=[document_uri, params.range.start.line],
-#                 ),
-#             )
-#             code_actions.append(code_action)
-#             return code_actions
-#     return code_actions
-
-
-# @testbench_ls.command("testbench_ls.createKeywordDocumentation")
-# def create_keyword_documentation(ls: LanguageServer, args):
-#     if not ls.ai_server_address:
-#         ls.send_notification(
-#             "custom/notification",
-#             {"message": "Extension setting 'testbenchExtension.ai_server_address' not set."},
-#         )
-#         return
-#     document_uri, start_line, *_ = args
-#     document = testbench_ls.workspace.get_text_document(document_uri)
-#     resource = RobotResourceFile.from_file(document.source)
-#     edits = []
-#     change_identifier = ChangeAnnotationIdentifier()
-#     existing_keyword = next(
-#         filter(
-#             lambda keyword: start_line >= keyword.lineno - 1
-#             and start_line <= keyword.end_lineno - 1,
-#             list(resource.keywords),
-#         )
-#     )
-#     existing_keyword_documentation = get_keyword_documentation(existing_keyword)
-#     doc_start, doc_start_char, doc_end, doc_end_char = get_keyword_documentation_position(
-#         existing_keyword
-#     )
-#     new_keyword_documentation = ls.generate_ai_documentation(existing_keyword)
-#     new_keyword_documentation = Documentation.from_params(
-#         new_keyword_documentation, settings_section=False
-#     )
-
-#     if existing_keyword_documentation:
-#         new_docu = robot_model_to_string(new_keyword_documentation).rstrip()
-#     else:
-#         new_docu = robot_model_to_string(new_keyword_documentation)
-#     documentation_edit = AnnotatedTextEdit(
-#         change_identifier,
-#         range=Range(
-#             start=Position(doc_start, doc_start_char),
-#             end=Position(doc_end, doc_end_char),
-#         ),
-#         new_text=new_docu,
-#     )
-#     edits.append(documentation_edit)
-#     if edits:
-#         edit = WorkspaceEdit(
-#             document_changes=[
-#                 TextDocumentEdit(
-#                     text_document=OptionalVersionedTextDocumentIdentifier(document_uri),
-#                     edits=edits,
-#                 )
-#             ],
-#             change_annotations={
-#                 change_identifier: ChangeAnnotation(
-#                     "Keyword interface changes", needs_confirmation=False
-#                 )
-#             },
-#         )
-#         ls.lsp.send_request(
-#             WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, "Refactoring Preview")
-#         )
+    show_error(
+        ls, ERROR_FINDING_TESTBENCH_KEYWORD.format(uid=interaction_name, name=interaction_uid)
+    )
 
 
 def start_language_server(
