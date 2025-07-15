@@ -32,6 +32,8 @@ const onVirtualDocumentChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
 const virtualDocumentProvider: vscode.TextDocumentContentProvider = {
     onDidChange: onVirtualDocumentChangeEmitter.event,
     provideTextDocumentContent(uri: vscode.Uri): string {
+        // uri parameter is required by VS Code API but not used in this implementation
+        void uri;
         return virtualDocumentContent;
     }
 };
@@ -1091,18 +1093,18 @@ export async function waitForLanguageServerReady(
  * @param uri The URI of the resource file to search in
  * @param interactionName The name of the interaction to find
  * @param interactionUid The unique ID of the tree item
- * @returns Promise that resolves to the line number where the interaction was found, or -1 if not found
+ * @returns Promise that resolves to the line number where the interaction was found, or undefined if not found
  */
 export async function findInteractionPositionInResourceFile(
     uri: vscode.Uri,
     interactionName: string,
     interactionUid: string
-): Promise<number> {
+): Promise<number | undefined> {
     if (!isLanguageServerRunning()) {
         logger.warn(
             "[findInteractionPositionInResourceFile] Language server not running, cannot find interaction position"
         );
-        return -1;
+        return undefined;
     }
 
     try {
@@ -1126,7 +1128,7 @@ export async function findInteractionPositionInResourceFile(
             logger.warn(
                 `[findInteractionPositionInResourceFile] Language server returned invalid line number: ${lineNumber}`
             );
-            return -1;
+            return undefined;
         }
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -1134,6 +1136,6 @@ export async function findInteractionPositionInResourceFile(
             `[findInteractionPositionInResourceFile] Error finding interaction position: ${errorMessage}`,
             error
         );
-        return -1;
+        return undefined;
     }
 }

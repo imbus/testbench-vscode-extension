@@ -815,7 +815,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 uid
             );
 
-            if (interactionLineNumber >= 0) {
+            if (interactionLineNumber !== undefined) {
                 const position = new vscode.Position(interactionLineNumber, 0);
                 textEditor.selection = new vscode.Selection(position, position);
                 textEditor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
