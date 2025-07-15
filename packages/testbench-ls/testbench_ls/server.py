@@ -42,7 +42,7 @@ from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
-from .file_edits import get_kw_tags_edit
+from .file_edits import get_kw_arguments_edit, get_kw_documentation_edit, get_kw_tags_edit
 from .ls_exceptions import (
     MultipleKeywordsWithName,
     MultipleKeywordsWithUid,
@@ -50,6 +50,8 @@ from .ls_exceptions import (
 )
 from .ls_logging import LogLevel, log, show_error, show_info
 from .messages import (
+    COMMAND_ATTEMPT_PUSH_KEYWORD,
+    COMMAND_ATTEMPT_PUSH_SUBDIVISION,
     COMMAND_FETCH_RESULTS,
     COMMAND_FIND_INTERACTION_POSITION,
     COMMAND_GENERATE_TEST_SUITES,
@@ -57,6 +59,8 @@ from .messages import (
     COMMAND_PULL_SUBDIVISION,
     COMMAND_PUSH_KEYWORD,
     COMMAND_PUSH_SUBDIVISION,
+    COMMAND_SHOW_TESTBENCH_KEYWORD_DIFF,
+    COMMAND_SHOW_TESTBENCH_SUBDIVISON_DIFF,
     COMMAND_UPDATE_LOGIN_NAME,
     COMMAND_UPDATE_PROJECT,
     COMMAND_UPDATE_SERVER_NAME,
@@ -91,10 +95,6 @@ from .testbench_api.testbench_patch import patch_interaction_details
 from .testbench_resource.resource_documentation import ResourceDocumentation
 from .testbench_resource.resource_utils import (
     get_comment_section_end_position,
-    get_keyword_arguments,
-    get_keyword_arguments_position,
-    get_keyword_documentation,
-    get_keyword_documentation_position,
     get_keyword_section,
     get_keyword_section_position,
     get_keyword_tags,
@@ -303,7 +303,7 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
         range=Range(start=Position(line=0, character=0), end=Position(line=0, character=0)),
         command=Command(
             title=PUSH_SUBDIVISON_TITLE,
-            command=COMMAND_PUSH_SUBDIVISION,
+            command=COMMAND_ATTEMPT_PUSH_SUBDIVISION,
             arguments=[document_uri, testbench_resource.tb_subdivision_uid],
         ),
     )
@@ -333,7 +333,7 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
                     ),
                     command=Command(
                         title=PUSH_KEYWORD_TITLE,
-                        command=COMMAND_PUSH_KEYWORD,
+                        command=COMMAND_ATTEMPT_PUSH_KEYWORD,
                         arguments=[document_uri, keyword_uid],
                     ),
                 )
@@ -367,9 +367,167 @@ def context_is_valid(
     return True
 
 
-@testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
-def push_testbench_subdivision(ls: LanguageServer, args):
+@testbench_ls.command(COMMAND_SHOW_TESTBENCH_SUBDIVISON_DIFF)
+def show_testbench_diff(ls: LanguageServer, kwargs):
+    kwargs, *_ = kwargs
+    document_uri = kwargs.get("document_uri")
+    subdivision_uid = kwargs.get("subdivision_uid")
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    existing_resource = TestBenchResourceModel.from_file(document.source)
+    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
+        return
+    new_resource = create_resource_from_subdivision(
+        uid=subdivision_uid,
+    )
+    change_identifier = ChangeAnnotationIdentifier()
+    edits = []
+    create_kw_section = not bool(get_keyword_section(existing_resource.file))
+    if create_kw_section:
+        if get_variables_section(existing_resource.file):
+            _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
+        else:
+            _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
+        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
+    else:
+        _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
+    for new_keyword in new_resource.keyword_section.body:
+        try:
+            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+        except MultipleKeywordsWithUid as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
+            )
+            continue
+        except MultipleKeywordsWithName as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+            )
+            continue
+        if not keyword_match:
+            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+        else:
+            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+                continue
+            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+    if not edits:
+        show_info(ls, INFO_ALREADY_UP_TO_DATE)
+        return
+    testbench_content = apply_text_edits(robot_model_to_string(existing_resource.file), edits)
+    ls.send_notification(
+        "testbench-language-server/display-diff",
+        {"path": document_uri, "virtualContent": testbench_content},
+    )
+
+
+def apply_text_edits(content: str, text_edits: list[AnnotatedTextEdit]) -> str:
+    if not text_edits:
+        return content
+    lines = content.splitlines(keepends=True)
+
+    def edit_position_offset(pos):
+        return sum(len(l) for l in lines[: pos.line]) + pos.character
+
+    for edit in sorted(
+        text_edits, key=lambda e: (e.range.start.line, e.range.start.character), reverse=True
+    ):
+        start = edit.range.start
+        end = edit.range.end
+        start_offset = edit_position_offset(start)
+        end_offset = edit_position_offset(end)
+        content = content[:start_offset] + edit.new_text + content[end_offset - 1 :]
+        lines = content.splitlines(keepends=True)
+    return content
+
+
+@testbench_ls.command(COMMAND_ATTEMPT_PUSH_SUBDIVISION)
+def attempt_push_subdivision(ls: LanguageServer, args):
     document_uri, subdivision_uid, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    existing_resource = TestBenchResourceModel.from_file(document.source)
+    if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
+        return
+    new_resource = create_resource_from_subdivision(
+        uid=subdivision_uid,
+    )
+    change_identifier = ChangeAnnotationIdentifier()
+    edits = []
+    create_kw_section = not bool(get_keyword_section(existing_resource.file))
+    if create_kw_section:
+        if get_variables_section(existing_resource.file):
+            _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
+        else:
+            _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
+        edits.extend(keyword_section_edit(kw_section_start, change_identifier))
+    else:
+        _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
+    for new_keyword in new_resource.keyword_section.body:
+        try:
+            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+        except MultipleKeywordsWithUid as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
+            )
+            continue
+        except MultipleKeywordsWithName as e:
+            show_error(
+                ls,
+                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+            )
+            continue
+        if not keyword_match:
+            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+        else:
+            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+                continue
+            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+    if not edits:
+        show_info(ls, INFO_ALREADY_UP_TO_DATE)
+        return
+    ls.send_notification(
+        "testbench-language-server/attempt-push-subdivision",
+        {"path": document_uri, "subdivisionUid": subdivision_uid},
+    )
+
+
+@testbench_ls.command(COMMAND_ATTEMPT_PUSH_KEYWORD)
+def attempt_push_keyword(ls: LanguageServer, args):
+    document_uri, keyword_uid, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, resource):
+        return
+    change_identifier = ChangeAnnotationIdentifier()
+    existing_keywords = resource.get_keywords(keyword_uid)
+    try:
+        new_keyword = create_keyword_from_interaction(
+            keyword_uid,
+        )
+    except TestBenchKeywordNotFound as e:
+        show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=e.uid))
+        return
+    if len(existing_keywords) > 1:
+        show_error(
+            ls,
+            ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+        )
+        return
+    edits = create_keyword_edits(existing_keywords[0], new_keyword, change_identifier)
+    if not edits:
+        show_info(ls, INFO_ALREADY_UP_TO_DATE)
+        return
+    ls.send_notification(
+        "testbench-language-server/attempt-push-keyword",
+        {"path": document_uri, "keyword_uid": keyword_uid},
+    )
+
+
+@testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
+def push_testbench_subdivision(ls: LanguageServer, kwargs):
+    kwargs, *_ = kwargs
+    document_uri = kwargs.get("document_uri")
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
     if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
@@ -466,6 +624,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     edit = create_workspace_edit(
         document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
     )
+
     ls.lsp.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
@@ -513,40 +672,12 @@ def keyword_section_edit(keyword_section_line, change_identifier):
     ]
 
 
-def _normalize_whitespace(text):
-    return re.sub(r" {5,}", "    ", text)
-
-
 def create_keyword_edits(
     existing_keyword, new_keyword, change_identifier
 ) -> list[AnnotatedTextEdit]:
     edits = []
-    existing_keyword_documentation = get_keyword_documentation(existing_keyword)
-    new_keyword_documentation = get_keyword_documentation(new_keyword)
-    if existing_keyword_documentation:
-        new_docu = robot_model_to_string(new_keyword_documentation).rstrip()
-    else:
-        new_docu = robot_model_to_string(new_keyword_documentation)
-    new_docu = _normalize_whitespace(new_docu)
-    if re.sub(
-        r"\s|\n|\.\.\.", r"", robot_model_to_string(new_keyword_documentation), flags=re.MULTILINE
-    ) != re.sub(
-        r"\s|\n|\.\.\.",
-        r"",
-        robot_model_to_string(existing_keyword_documentation),
-        flags=re.MULTILINE,
-    ):
-        doc_start, doc_start_char, doc_end, doc_end_char = get_keyword_documentation_position(
-            existing_keyword
-        )
-        documentation_edit = AnnotatedTextEdit(
-            change_identifier,
-            range=Range(
-                start=Position(doc_start, doc_start_char),
-                end=Position(doc_end, doc_end_char),
-            ),
-            new_text=new_docu,
-        )
+    documentation_edit = get_kw_documentation_edit(existing_keyword, new_keyword, change_identifier)
+    if documentation_edit:
         edits.append(documentation_edit)
 
     if existing_keyword.name != new_keyword.name:
@@ -563,29 +694,45 @@ def create_keyword_edits(
     tags_edit = get_kw_tags_edit(existing_keyword, new_keyword, change_identifier)
     if tags_edit:
         edits.append(tags_edit)
-
-    existing_keyword_arguments = get_keyword_arguments(existing_keyword)
-    new_keyword_arguments = get_keyword_arguments(new_keyword)
-    if existing_keyword_arguments:
-        new_args = robot_model_to_string(new_keyword_arguments).rstrip()
-    else:
-        new_args = robot_model_to_string(new_keyword_arguments)
-    if robot_model_to_string(new_keyword_arguments) != robot_model_to_string(
-        existing_keyword_arguments
-    ):
-        arg_start, arg_start_char, arg_end, arg_end_char = get_keyword_arguments_position(
-            existing_keyword
-        )
-        arguments_edit = AnnotatedTextEdit(
-            change_identifier,
-            range=Range(
-                start=Position(arg_start, arg_start_char),
-                end=Position(arg_end, arg_end_char),
-            ),
-            new_text=new_args,
-        )
+    arguments_edit = get_kw_arguments_edit(existing_keyword, new_keyword, change_identifier)
+    if arguments_edit:
         edits.append(arguments_edit)
     return edits
+
+
+@testbench_ls.command(COMMAND_SHOW_TESTBENCH_KEYWORD_DIFF)
+def show_testbench_keyword_diff(ls: LanguageServer, kwargs):
+    kwargs, *_ = kwargs
+    document_uri = kwargs.get("document_uri")
+    keyword_uid = kwargs.get("keyword_uid")
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, resource):
+        return
+    change_identifier = ChangeAnnotationIdentifier()
+    existing_keywords = resource.get_keywords(keyword_uid)
+    try:
+        new_keyword = create_keyword_from_interaction(
+            keyword_uid,
+        )
+    except TestBenchKeywordNotFound as e:
+        show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=e.uid))
+        return
+    if len(existing_keywords) > 1:
+        show_error(
+            ls,
+            ERROR_DUPLICATE_KEYWORD_UID.format(uid=keyword_uid),
+        )
+        return
+    edits = create_keyword_edits(existing_keywords[0], new_keyword, change_identifier)
+    if not edits:
+        show_info(ls, INFO_ALREADY_UP_TO_DATE)
+        return
+    testbench_content = apply_text_edits(robot_model_to_string(resource.file), edits)
+    ls.send_notification(
+        "testbench-language-server/display-diff",
+        {"path": document_uri, "virtualContent": testbench_content},
+    )
 
 
 @testbench_ls.command(COMMAND_PULL_KEYWORD)
@@ -642,8 +789,10 @@ def create_workspace_edit(
 
 
 @testbench_ls.command(COMMAND_PUSH_KEYWORD)
-def push_testbench_keyword(ls: LanguageServer, args):
-    document_uri, keyword_uid, *_ = args
+def push_testbench_keyword(ls: LanguageServer, kwargs):
+    kwargs, *_ = kwargs
+    document_uri = kwargs.get("document_uri")
+    keyword_uid = kwargs.get("keyword_uid")
     document = testbench_ls.workspace.get_text_document(document_uri)
     resource = TestBenchResourceModel.from_file(document.source)
     if not context_is_valid(ls, resource):
