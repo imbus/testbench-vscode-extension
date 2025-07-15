@@ -15,7 +15,7 @@ from robot.api.parsing import (
     SettingSection,
     Tags,
     Token,
-    get_model,
+    get_resource_model,
 )
 from robot.parsing.model import Block, Statement
 
@@ -28,7 +28,7 @@ class TestBenchResourceModel:
         self._comment_section = None
         self._keyword_section = None
         if load_existing:
-            self.file = get_model(path)
+            self.file = get_resource_model(path, lang=("de",))
         else:
             self.file: File = File(
                 [
@@ -37,6 +37,7 @@ class TestBenchResourceModel:
                     KeywordSection(header=SectionHeader.from_params(Token.KEYWORD_HEADER)),
                 ],
                 source=path,
+                languages=("de",),
             )
 
     def save(self):

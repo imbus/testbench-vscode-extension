@@ -26,6 +26,15 @@ interface PendingOperation {
 export let client: LanguageClient | undefined;
 export let latestLsContextRequestId: number = 0;
 export let currentLsOperationId: number = 0;
+let virtualDocumentContent = "";
+const virtualDocumentScheme = "virtualdiff";
+const onVirtualDocumentChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
+const virtualDocumentProvider: vscode.TextDocumentContentProvider = {
+    onDidChange: onVirtualDocumentChangeEmitter.event,
+    provideTextDocumentContent(uri: vscode.Uri): string {
+        return virtualDocumentContent;
+    }
+};
 
 // State management for race condition prevention
 let isLanguageServerBusy: boolean = false;
@@ -505,6 +514,72 @@ function setupClientNotifications(
 
     client.onNotification("testbench-language-server/log-warn", (params) => {
         logger.warn(`[Language server] - ${params.message}`);
+    });
+
+    client.onNotification("testbench-language-server/attempt-push-subdivision", (params) => {
+        const path = params.path;
+        const subdivisionUid = params.subdivisionUid;
+        vscode.window
+            .showWarningMessage(
+                "Are you sure you want to push your changes to TestBench?",
+                {
+                    modal: true,
+                    detail: "Interactions in TestBench will change which might also affect Test Structure Elements that use those interactions."
+                },
+                "Accept",
+                "View Diff"
+            )
+            .then(async (selection) => {
+                if (selection === "Accept") {
+                    vscode.commands.executeCommand("testbench_ls.pushSubdivision", {
+                        document_uri: path
+                    });
+                } else if (selection === "View Diff") {
+                    vscode.commands.executeCommand("testbench_ls.showTestbenchSubdivisionDiff", {
+                        document_uri: path,
+                        subdivision_uid: subdivisionUid
+                    });
+                }
+            });
+    });
+
+    client.onNotification("testbench-language-server/attempt-push-keyword", (params) => {
+        const path = params.path;
+        const keywordUid = params.keyword_uid;
+        vscode.window
+            .showWarningMessage(
+                "Are you sure you want to push your changes to TestBench?",
+                {
+                    modal: true,
+                    detail: "Interactions in TestBench will change which might also affect Test Structure Elements that use those interactions."
+                },
+                "Accept",
+                "View Diff"
+            )
+            .then(async (selection) => {
+                if (selection === "Accept") {
+                    vscode.commands.executeCommand("testbench_ls.pushKeyword", {
+                        document_uri: path,
+                        keyword_uid: keywordUid
+                    });
+                } else if (selection === "View Diff") {
+                    vscode.commands.executeCommand("testbench_ls.showTestbenchKeywordDiff", {
+                        document_uri: path,
+                        keyword_uid: keywordUid
+                    });
+                }
+            });
+    });
+
+    vscode.workspace.registerTextDocumentContentProvider(virtualDocumentScheme, virtualDocumentProvider);
+    client.onNotification("testbench-language-server/display-diff", (params) => {
+        const realPath = params.path;
+        const realUri = vscode.Uri.parse(realPath);
+        const realFileName = realUri.path.split("/").pop() || "unknown";
+        const virtualUri = vscode.Uri.parse(`${virtualDocumentScheme}:${realPath}`);
+        virtualDocumentContent = params.virtualContent;
+        onVirtualDocumentChangeEmitter.fire(virtualUri);
+        vscode.commands.executeCommand("vscode.diff", virtualUri, realUri, `${realFileName} (TestBench Changes)`);
     });
 
     logger.info(
