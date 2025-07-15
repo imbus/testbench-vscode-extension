@@ -1108,10 +1108,6 @@ export async function findInteractionPositionInResourceFile(
     }
 
     try {
-        logger.debug(
-            `[findInteractionPositionInResourceFile] Searching for interaction "${interactionName}" in ${uri.fsPath}`
-        );
-
         const lineNumber = await vscode.commands.executeCommand(
             "testbench_ls.getInteractionPosition",
             uri.toString(),
@@ -1120,9 +1116,6 @@ export async function findInteractionPositionInResourceFile(
         );
 
         if (typeof lineNumber === "number") {
-            logger.debug(
-                `[findInteractionPositionInResourceFile] Found interaction "${interactionName}" at line ${lineNumber}`
-            );
             return lineNumber;
         } else {
             logger.warn(
