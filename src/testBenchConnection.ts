@@ -557,6 +557,11 @@ export class PlayServerConnection {
             filters: []
         };
 
+        logger.debug(
+            `[testBenchConnection] Fetching cycle structure using ${testStructureOfCycleUrl} and request body:`,
+            requestBody
+        );
+
         try {
             const testStructureOfCycleResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
                 () =>
@@ -597,20 +602,28 @@ export class PlayServerConnection {
             }
             */
 
-            logger.trace(
-                `Test structure of cycle response for cycle key ${cycleKey}:`,
+            logger.debug(
+                `[testBenchConnection] Response status code for test structure of cycle ${testStructureOfCycleUrl}:`,
                 testStructureOfCycleResponse.status
             );
             if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
-                // logger.trace(`Received cycle structure for cycle key ${cycleKey}:`, testStructureOfCycleResponse.data);
+                logger.trace(
+                    `[testBenchConnection] Received cycle structure for cycle key ${cycleKey}:`,
+                    testStructureOfCycleResponse.data
+                );
                 return testStructureOfCycleResponse.data;
             } else {
-                logger.error(`Unexpected response code: ${testStructureOfCycleResponse.status}`);
+                logger.error(
+                    `[testBenchConnection] Unexpected response code when fetching cycle structure for ${testStructureOfCycleUrl}: ${testStructureOfCycleResponse.status}`
+                );
                 return null;
             }
         } catch (error) {
-            logger.error("Error fetching test structure for cycle:", error);
+            logger.error(
+                `[testBenchConnection] Error fetching test structure for cycle using ${testStructureOfCycleUrl}:`,
+                error
+            );
             return null;
         }
     }
@@ -634,6 +647,11 @@ export class PlayServerConnection {
             suppressEmptyTestThemes: false,
             filters: []
         };
+
+        logger.debug(
+            `[testBenchConnection] Fetching test structure of TOV using ${testStructureOfTOVUrl} and request body:`,
+            requestBody
+        );
 
         try {
             const testStructureOfTOVResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
@@ -675,17 +693,28 @@ export class PlayServerConnection {
             }
             */
 
-            logger.trace(`Test structure of TOV response for TOV key ${tovKey}:`, testStructureOfTOVResponse.status);
+            logger.debug(
+                `[testBenchConnection] Test structure of TOV response for TOV key ${tovKey}:`,
+                testStructureOfTOVResponse.status
+            );
             if (testStructureOfTOVResponse.data) {
                 // Note: The output is large
-                // logger.trace(`Received test structure for TOV key ${tovKey}:`, testStructureOfTOVResponse.data);
+                logger.trace(
+                    `[testBenchConnection] Received test structure for TOV key ${tovKey}:`,
+                    testStructureOfTOVResponse.data
+                );
                 return testStructureOfTOVResponse.data;
             } else {
-                logger.error(`Unexpected response code: ${testStructureOfTOVResponse.status}`);
+                logger.error(
+                    `[testBenchConnection] Unexpected response code when fetching test structure for TOV using ${testStructureOfTOVUrl}: ${testStructureOfTOVResponse.status}`
+                );
                 return null;
             }
         } catch (error) {
-            logger.error("Error fetching test structure for TOV:", error);
+            logger.error(
+                `[testBenchConnection] Error fetching test structure for TOV using ${testStructureOfTOVUrl}:`,
+                error
+            );
             return null;
         }
     }

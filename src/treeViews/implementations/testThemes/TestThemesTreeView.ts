@@ -41,7 +41,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         config?: Partial<TreeViewConfig>
     ) {
         super(extensionContext, { ...testThemesConfig, ...config });
-        this.dataProvider = new TestThemesDataProvider(this.logger, this.errorHandler, getConnection, this.eventBus);
+        this.dataProvider = new TestThemesDataProvider(this.logger, getConnection);
         this.filterService = FilterService.getInstance();
         this.testCaseSetClickHandler = new ClickHandler<TestThemesTreeItem>();
 
