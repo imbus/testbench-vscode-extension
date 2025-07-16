@@ -21,7 +21,7 @@ ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID = "Failed to find TestBench keyword by 
 INFO_ALREADY_UP_TO_DATE = "Already up to date."
 INFO_CHANGES_PUSHED = "Keyword changes pushed to TestBench."
 INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST = (
-    "TestBench keyword with UID '{uid}' or name '{name}' does not exist."
+    "TestBench keyword with UID '{uid}' or name '{name}' does not exist in selected resource file."
 )
 
 # Warning messages
