@@ -12,9 +12,11 @@ ERROR_EMPTY_OUTPUT_DIRECTORY = "Output Directory of TestBench2RobotFramework can
 ERROR_DUPLICATE_KEYWORD_UID = (
     "Multiple keywords with uid '{uid}' found. Please resolve the conflict manually."
 )
+ERROR_DUPLICATE_KEYWORD_UID_IN_FILE = "Multiple keywords with uid '{uid}' found in file '{uri}'. Please resolve the conflict manually."
 ERROR_DUPLICATE_KEYWORD_NAME = (
     "Multiple keywords with name '{name}' found. Please resolve the conflict manually."
 )
+ERROR_DUPLICATE_KEYWORD_NAME_IN_FILE = "Multiple keywords with name '{name}' found in file '{uri}'. Please resolve the conflict manually."
 ERROR_FINDING_TESTBENCH_KEYWORD = (
     "Failed to find TestBench keyword by uid '{uid}' or name '{name}'."
 )
@@ -23,6 +25,10 @@ ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID = "Failed to find TestBench keyword by 
 # Info messages
 INFO_ALREADY_UP_TO_DATE = "Already up to date."
 INFO_CHANGES_PUSHED = "Keyword changes pushed to TestBench."
+INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST = (
+    "TestBench keyword with name '{name}' does not exist in the selected resource file."
+)
+INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST_IN_FILE = "TestBench keyword with name '{name}' and uid '{uid}' does not exist in the selected resource file '{uri}'."
 
 # Warning messages
 WARNING_CONTEXT_MISMATCH = "TestBench context mismatch: Selected context '{selected_context}' does not match the resource context '{resource_context}'. "
@@ -36,6 +42,7 @@ DEBUG_CHECK_CONTEXT = "Checking testbench context. Selected context: {selected_c
 # COMMANDS
 COMMAND_GENERATE_TEST_SUITES = "testbench_ls.generateTestSuites"
 COMMAND_FETCH_RESULTS = "testbench_ls.fetchResults"
+COMMAND_FIND_INTERACTION_POSITION = "testbench_ls.getInteractionPosition"
 COMMAND_UPDATE_SERVER_NAME = "testbench_ls.updateServerName"
 COMMAND_UPDATE_SERVER_PORT = "testbench_ls.updateServerPort"
 COMMAND_UPDATE_LOGIN_NAME = "testbench_ls.updateLoginName"

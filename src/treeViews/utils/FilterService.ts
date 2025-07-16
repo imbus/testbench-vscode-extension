@@ -61,8 +61,6 @@ export class FilterService {
         if (this.treeViewFocusHistory.length > 5) {
             this.treeViewFocusHistory = this.treeViewFocusHistory.slice(0, 5);
         }
-
-        console.log(`[FilterService] Focus history updated: ${this.getTreeViewName(treeView)}`);
     }
 
     /**
@@ -78,7 +76,6 @@ export class FilterService {
         // First, check the focus history for tree views with data
         for (const treeView of this.treeViewFocusHistory) {
             if (treeView.getCurrentRootItems().length > 0) {
-                console.log(`[FilterService] Using most recent tree view with data: ${this.getTreeViewName(treeView)}`);
                 return treeView;
             }
         }
@@ -122,26 +119,17 @@ export class FilterService {
         // Check if test themes tree has data (highest priority)
         if (allTreeViews.testThemesTree.getCurrentRootItems().length > 0) {
             this.activeTreeView = allTreeViews.testThemesTree;
-            console.log(
-                `[FilterService] Auto-detected active tree view: Test Themes (${allTreeViews.testThemesTree.getCurrentRootItems().length} items)`
-            );
             return allTreeViews.testThemesTree;
         }
 
         // Check if test elements tree has data (second priority)
         if (allTreeViews.testElementsTree.getCurrentRootItems().length > 0) {
             this.activeTreeView = allTreeViews.testElementsTree;
-            console.log(
-                `[FilterService] Auto-detected active tree view: Test Elements (${allTreeViews.testElementsTree.getCurrentRootItems().length} items)`
-            );
             return allTreeViews.testElementsTree;
         }
 
         // Default to projects tree (lowest priority)
         this.activeTreeView = allTreeViews.projectsTree;
-        console.log(
-            `[FilterService] Auto-detected active tree view: Projects (${allTreeViews.projectsTree.getCurrentRootItems().length} items)`
-        );
         return allTreeViews.projectsTree;
     }
 
@@ -159,28 +147,20 @@ export class FilterService {
         },
         contextKey: string
     ): void {
-        let treeViewName = "Unknown";
-
         switch (contextKey) {
             case "testbenchExtension.showProjectsTree":
                 this.activeTreeView = allTreeViews.projectsTree;
-                treeViewName = "Projects";
                 break;
             case "testbenchExtension.showTestThemesTree":
                 this.activeTreeView = allTreeViews.testThemesTree;
-                treeViewName = "Test Themes";
                 break;
             case "testbenchExtension.showTestElementsTree":
                 this.activeTreeView = allTreeViews.testElementsTree;
-                treeViewName = "Test Elements";
                 break;
             default:
                 // Fall back to auto-detection
                 this.autoDetectActiveTreeView(allTreeViews);
-                treeViewName = this.activeTreeView ? this.getTreeViewName(this.activeTreeView) : "Unknown";
         }
-
-        console.log(`[FilterService] Active tree view set to: ${treeViewName} (context: ${contextKey})`);
     }
 
     /**
@@ -192,8 +172,6 @@ export class FilterService {
             vscode.window.showErrorMessage("No active tree view for filtering. Please ensure a tree view is loaded.");
             return;
         }
-
-        console.log(`[FilterService] Applying filter to tree view: ${this.getTreeViewName(this.activeTreeView)}`);
 
         try {
             // Get current filter options

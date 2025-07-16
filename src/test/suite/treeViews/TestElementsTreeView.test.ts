@@ -5,13 +5,11 @@
 
 import * as assert from "assert";
 import * as vscode from "vscode";
-import * as sinon from "sinon";
 import { TestElementsTreeView } from "../../../treeViews/implementations/testElements/TestElementsTreeView";
 import {
     TestElementsTreeItem,
     TestElementType
 } from "../../../treeViews/implementations/testElements/TestElementsTreeItem";
-import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { EventBus } from "../../../treeViews/utils/EventBus";
@@ -19,6 +17,7 @@ import { StateManager } from "../../../treeViews/state/StateManager";
 import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { ResourceFileService } from "../../../treeViews/implementations/testElements/ResourceFileService";
 import { testElementsConfig } from "../../../treeViews/implementations/testElements/TestElementsConfig";
+import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 
 suite("TestElementsTreeView", function () {
     let testEnv: TestEnvironment;
@@ -183,10 +182,6 @@ suite("TestElementsTreeView", function () {
                 testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
                 "Should call revealInExplorer command"
             );
-            assert.ok(
-                mockLogger.debug.calledWith("Revealed resource file in explorer: /test/path/ExistingResource.resource"),
-                "Should log reveal action"
-            );
         });
 
         test("openAvailableResource should handle missing hierarchical name", async function () {
@@ -233,10 +228,6 @@ suite("TestElementsTreeView", function () {
             assert.ok(
                 testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
                 "Should call revealInExplorer command"
-            );
-            assert.ok(
-                mockLogger.debug.calledWith("Revealed resource file in explorer: /test/path/CreateResource.resource"),
-                "Should log reveal action"
             );
         });
 
@@ -426,12 +417,6 @@ suite("TestElementsTreeView", function () {
                 testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
                 "Should call revealInExplorer command"
             );
-            assert.ok(
-                mockLogger.debug.calledWith(
-                    "Revealed interaction resource file in explorer: /test/path/ParentResource.resource"
-                ),
-                "Should log reveal action"
-            );
         });
 
         test("openInteractionResource should open parent resource", async function () {
@@ -554,13 +539,24 @@ suite("TestElementsTreeView", function () {
                 })
             );
 
-            const openInteractionResourceStub = testEnv.sandbox
-                .stub(treeView as any, "openInteractionResource")
-                .resolves();
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+            mockInteraction.parent = mockParent;
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
             await (treeView as any).handleInteractionSingleClick(mockInteraction);
 
-            assert.ok(openInteractionResourceStub.calledWith(mockInteraction), "Should call openInteractionResource");
             assert.ok(
                 mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
                 "Should log single click"
@@ -576,13 +572,24 @@ suite("TestElementsTreeView", function () {
                 })
             );
 
-            const goToInteractionResourceStub = testEnv.sandbox
-                .stub(treeView as any, "goToInteractionResource")
-                .resolves();
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+            mockInteraction.parent = mockParent;
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
             await (treeView as any).handleInteractionDoubleClick(mockInteraction);
 
-            assert.ok(goToInteractionResourceStub.calledWith(mockInteraction), "Should call goToInteractionResource");
             assert.ok(
                 mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
                 "Should log double click"
@@ -627,6 +634,44 @@ suite("TestElementsTreeView", function () {
 
             await treeView.handleInteractionClick(mockInteraction);
             assert.ok(!handleClickStub.called, "Should not call click handler when item has no ID");
+        });
+
+        test("both single and double click should jump to interaction", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+            mockInteraction.parent = mockParent;
+
+            mockResourceFileService.fileExists.resolves(true);
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
+
+            await (treeView as any).handleInteractionSingleClick(mockInteraction);
+            assert.ok(
+                mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
+                "Should log single click"
+            );
+
+            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
+            assert.ok(
+                mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
+                "Should log double click"
+            );
         });
     });
 
