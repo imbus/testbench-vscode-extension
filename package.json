@@ -330,30 +330,6 @@
                 }
             },
             {
-                "command": "projectManagementTree.removeView",
-                "title": "Hide Project Management Tree"
-            },
-            {
-                "command": "projectManagementTree.focus",
-                "title": "Focus Project Management Tree"
-            },
-            {
-                "command": "testThemeTree.removeView",
-                "title": "Hide Test Theme Tree"
-            },
-            {
-                "command": "testThemeTree.focus",
-                "title": "Focus Test Theme Tree"
-            },
-            {
-                "command": "testElementsTree.removeView",
-                "title": "Hide Test Theme Tree"
-            },
-            {
-                "command": "testElementsTree.focus",
-                "title": "Focus Test Theme Tree"
-            },
-            {
                 "command": "testbenchExtension.makeRoot",
                 "title": "Make root"
             },
@@ -479,10 +455,6 @@
             {
                 "command": "testbenchExtension.openIssueReporter",
                 "title": "TestBench: Open Issue Reporter"
-            },
-            {
-                "command": "testbenchExtension.modifyReportWithResultsZip",
-                "title": "TestBench: Modify Report File"
             },
             {
                 "command": "testbenchExtension.setWorkspace",
@@ -712,6 +684,152 @@
             ]
         },
         "menus": {
+            "commandPalette": [
+                {
+                    "command": "testbenchExtension.makeRoot",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.resetProjectTreeViewRoot",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.resetTestThemeTreeViewRoot",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.getFilters",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.fetchTovStructure",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.displayAllProjects",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.refreshProjectTreeView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.refreshTestThemeTreeView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.showExtensionSettings",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.readAndImportTestResultsToTestbench",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.importTestResultsToTestbench",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.refreshTestElementsTree",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.openAvailableSubdivisionInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.openSubdivisionFolderInExplorer",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.openInteractionInTestElementsView",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.createMissingParentResourceForInteraction",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.checkForCycleDoubleClick",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.setTextFilter",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.setTextFilterForProjects",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.setTextFilterForTestThemes",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.setTextFilterForTestElements",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.clearTextFilter",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.clearTextFilterForProjects",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.clearTextFilterForTestThemes",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.clearTextFilterForTestElements",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.toggleFilterDiffModeForProjects",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.toggleFilterDiffModeForProjectsEnabled",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.toggleFilterDiffModeForTestThemes",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.toggleFilterDiffModeForTestThemesEnabled",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.toggleFilterDiffModeForTestElements",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.toggleFilterDiffModeForTestElementsEnabled",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.clearAllFilters",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.clearAllFiltersForProjects",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.clearAllFiltersForTestThemes",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.clearAllFiltersForTestElements",
+                    "when": "false"
+                }
+            ],
             "view/title": [
                 {
                     "command": "testbenchExtension.login",

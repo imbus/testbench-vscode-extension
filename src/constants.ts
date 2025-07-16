@@ -206,7 +206,6 @@ export const allExtensionCommands = {
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
     openCycleFromProjectsView: `${baseKeyOfExtension}.openCycleFromProjectsView`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
-    modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
     handleCycleClick: `${baseKeyOfExtension}.handleCycleClick`,
     handleTOVClick: `${baseKeyOfExtension}.handleTOVClick`,
     resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
