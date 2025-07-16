@@ -75,13 +75,13 @@ from .messages import (
     ERROR_DUPLICATE_KEYWORD_NAME,
     ERROR_DUPLICATE_KEYWORD_UID,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
-    ERROR_FINDING_TESTBENCH_KEYWORD,
     ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
     ERROR_SUBDIVISON_MAPPING_FORMAT,
     INFO_ALREADY_UP_TO_DATE,
     INFO_CHANGES_PUSHED,
+    INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST,
     KEYWORD_INTERFACE_CHANGE_LABEL,
     PULL_KEYWORD_TITLE,
     PULL_SUBDIVISON_TITLE,
@@ -995,11 +995,11 @@ def find_interaction_position(ls: LanguageServer, args) -> int | None:
     if len(keywords_by_uid) == 1:
         return keywords_by_name[0].lineno - 1
     show_info(
-        ls, ERROR_FINDING_TESTBENCH_KEYWORD.format(uid=interaction_uid, name=interaction_name)
+        ls, INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST.format(uid=interaction_uid, name=interaction_name)
     )
     log(
         ls,
-        ERROR_FINDING_TESTBENCH_KEYWORD.format(uid=interaction_uid, name=interaction_name),
+        INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST.format(uid=interaction_uid, name=interaction_name),
         LogLevel.INFO,
     )
     return
