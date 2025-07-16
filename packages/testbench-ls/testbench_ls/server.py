@@ -969,7 +969,9 @@ def find_interaction_position(ls: LanguageServer, args) -> int | None:
         )
         log(
             ls,
-            f"Multiple keywords found with UID '{interaction_uid}' in document: {document_uri}",
+            ERROR_DUPLICATE_KEYWORD_UID.format(
+                interaction_uid=interaction_uid, document_uri=document_uri
+            ),
             LogLevel.ERROR,
         )
         return
@@ -984,19 +986,21 @@ def find_interaction_position(ls: LanguageServer, args) -> int | None:
         )
         log(
             ls,
-            f"Multiple keywords found with name '{interaction_name}' in document: {document_uri}",
+            ERROR_DUPLICATE_KEYWORD_NAME.format(
+                interaction_name=interaction_name, document_uri=document_uri
+            ),
             LogLevel.ERROR,
         )
         return
     if len(keywords_by_uid) == 1:
         return keywords_by_name[0].lineno - 1
-    show_error(
+    show_info(
         ls, ERROR_FINDING_TESTBENCH_KEYWORD.format(uid=interaction_uid, name=interaction_name)
     )
     log(
         ls,
-        f"Interaction '{interaction_name}' with UID '{interaction_uid}' not found in document: {document_uri}",
-        LogLevel.WARN,
+        ERROR_FINDING_TESTBENCH_KEYWORD.format(uid=interaction_uid, name=interaction_name),
+        LogLevel.INFO,
     )
     return
 
