@@ -124,7 +124,6 @@ suite("TestElementsTreeView", function () {
         const expectedEventTypes = [
             "testElements:fetched",
             "testElements:error",
-            "cycle:selected",
             "tov:loaded",
             "connection:changed",
             "testElement:updated"
@@ -530,72 +529,6 @@ suite("TestElementsTreeView", function () {
     });
 
     suite("Interaction Click Handlers", function () {
-        test("handleInteractionSingleClick should call openInteractionResource", async function () {
-            const mockInteraction = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
-                })
-            );
-
-            const mockParent = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
-                })
-            );
-            mockInteraction.parent = mockParent;
-
-            mockResourceFileService.fileExists.resolves(true);
-            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
-
-            const mockDocument = {} as vscode.TextDocument;
-            const mockEditor = {} as vscode.TextEditor;
-            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
-            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
-
-            await (treeView as any).handleInteractionSingleClick(mockInteraction);
-
-            assert.ok(
-                mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
-                "Should log single click"
-            );
-        });
-
-        test("handleInteractionDoubleClick should call goToInteractionResource", async function () {
-            const mockInteraction = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
-                })
-            );
-
-            const mockParent = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
-                })
-            );
-            mockInteraction.parent = mockParent;
-
-            mockResourceFileService.fileExists.resolves(true);
-            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
-
-            const mockDocument = {} as vscode.TextDocument;
-            const mockEditor = {} as vscode.TextEditor;
-            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
-            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
-
-            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
-
-            assert.ok(
-                mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
-                "Should log double click"
-            );
-        });
-
         test("handleInteractionClick should handle interaction clicks via click handler", async function () {
             const mockInteraction = createMockTestElementItem(
                 createMockTestElementData({
@@ -634,44 +567,6 @@ suite("TestElementsTreeView", function () {
 
             await treeView.handleInteractionClick(mockInteraction);
             assert.ok(!handleClickStub.called, "Should not call click handler when item has no ID");
-        });
-
-        test("both single and double click should jump to interaction", async function () {
-            const mockInteraction = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
-                })
-            );
-
-            const mockParent = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
-                })
-            );
-            mockInteraction.parent = mockParent;
-
-            mockResourceFileService.fileExists.resolves(true);
-            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
-
-            const mockDocument = {} as vscode.TextDocument;
-            const mockEditor = {} as vscode.TextEditor;
-            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
-            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
-
-            await (treeView as any).handleInteractionSingleClick(mockInteraction);
-            assert.ok(
-                mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
-                "Should log single click"
-            );
-
-            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
-            assert.ok(
-                mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
-                "Should log double click"
-            );
         });
     });
 

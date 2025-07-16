@@ -71,27 +71,26 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.eventBus.on("testElements:fetched", (event) => {
             const { tovKey, count } = event.data;
             if (tovKey === this.currentTovKey) {
-                this.logger.debug(`Received test elements fetched event for TOV ${tovKey} with ${count} elements`);
+                this.logger.debug(
+                    `[TestElementsTreeView] Received test elements fetched event for TOV ${tovKey} with ${count} elements`
+                );
             }
         });
 
         this.eventBus.on("testElements:error", (event) => {
             const { tovKey, error } = event.data;
             if (tovKey === this.currentTovKey) {
-                this.logger.error(`Error fetching test elements for TOV ${tovKey}: ${error}`);
+                this.logger.error(
+                    `[TestElementsTreeView] Received test elements error event for TOV ${tovKey}: ${error}`
+                );
                 this.errorHandler.handleVoid(new Error(error), "testElements:error");
             }
-        });
-
-        this.eventBus.on("cycle:selected", async () => {
-            this.logger.debug(`Cycle selected.`);
-            // handled in extension.ts handleCycleClick
         });
 
         this.eventBus.on("tov:loaded", async (event) => {
             const { tovKey, tovLabel } = event.data;
             if (tovKey && tovKey !== this.currentTovKey) {
-                this.logger.debug(`Loading test elements for TOV ${tovKey} from test themes event`);
+                this.logger.debug(`[TestElementsTreeView] Received TOV loaded event for TOV ${tovKey}`);
                 await this.loadTov(
                     tovKey,
                     tovLabel,
@@ -142,27 +141,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Finds a tree item recursively by its unique ID.
-     * @param items The list of items to search through.
-     * @param id The ID of the item to find.
-     * @returns The found TestElementsTreeItem or undefined.
-     */
-    private findItemById(items: TestElementsTreeItem[], id: string): TestElementsTreeItem | undefined {
-        for (const item of items) {
-            if (item.id === id) {
-                return item;
-            }
-            if (item.children && item.children.length > 0) {
-                const found = this.findItemById(item.children as TestElementsTreeItem[], id);
-                if (found) {
-                    return found;
-                }
-            }
-        }
-        return undefined;
-    }
-
-    /**
      * Loads test elements data.
      *
      * @param tovKey - The unique identifier for the TOV to load.
@@ -180,7 +158,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         preserveExistingData: boolean = false
     ): Promise<void> {
         const startTime = Date.now();
-        this.logger.debug(`Loading TOV ${tovKey} with progress tracking`);
+        this.logger.debug(`[TestElementsTreeView] Loading TOV with key ${tovKey}`);
 
         try {
             if (!preserveExistingData) {
@@ -217,14 +195,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.stateManager.setLoading(false);
 
             this._onDidChangeTreeData.fire(undefined);
-
-            this.updateSubdivisionIcons(newRootItems).catch((error) => {
-                this.logger.error("Error updating subdivision icons:", error);
-            });
+            this.updateSubdivisionIcons(newRootItems);
 
             const loadTime = Date.now() - startTime;
-            this.logger.info(
-                `Successfully loaded ${newRootItems.length} test elements for TOV ${tovKey} in ${loadTime}ms`
+            this.logger.debug(
+                `[TestElementsTreeView] Successfully loaded ${newRootItems.length} test elements for TOV with key ${tovKey} in ${loadTime}ms`
             );
 
             this.eventBus.emit({
@@ -238,7 +213,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 timestamp: Date.now()
             });
         } catch (error) {
-            this.logger.error("Error loading TOV with progress:", error);
+            this.logger.error(`[TestElementsTreeView] Error loading TOV with key ${tovKey}:`, error);
             this.stateManager.setLoading(false);
             this.stateManager.setError(error as Error);
             throw error;
@@ -264,7 +239,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     ): Promise<void> {
         try {
             this.logger.debug(
-                `Loading TOV ${tovKey}${clearFirst ? " (clearing first)" : " (preserving existing data)"}`
+                `[TestElementsTreeView] Loading TOV with key ${tovKey}${clearFirst ? " (clearing first)" : " (preserving existing data)"}`
             );
 
             if (clearFirst || this.currentTovKey !== tovKey) {
@@ -316,9 +291,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 },
                 timestamp: Date.now()
             });
-            this.logger.info(`Successfully loaded test elements for TOV ${tovKey}`);
+            this.logger.info(`[TestElementsTreeView] Successfully loaded test elements for TOV ${tovKey}`);
         } catch (error) {
-            this.logger.error("Error loading TOV:", error);
+            this.logger.error(`[TestElementsTreeView] Error loading TOV:`, error);
 
             this.rootItems = [];
             (this as any)._lastDataFetch = Date.now();
@@ -368,42 +343,35 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      */
     protected async fetchRootItems(): Promise<TestElementsTreeItem[]> {
         if (!this.currentTovKey) {
-            this.logger.debug("No TOV selected, returning empty array");
+            this.logger.debug("[TestElementsTreeView] TOV key not set, cannot fetch root items");
             return [];
         }
 
         if (this.rootItems.length > 0) {
             const dataIsFresh = Date.now() - (this as any)._lastDataFetch < 60000;
             if (dataIsFresh) {
-                this.logger.debug(`Using cached root items for TOV: ${this.currentTovKey}`);
+                this.logger.debug(
+                    `[TestElementsTreeView] Returning cached root items for TOV with key ${this.currentTovKey}`
+                );
                 return this.rootItems;
             }
         }
 
         try {
-            this.logger.debug(`Fetching root items for TOV: ${this.currentTovKey}`);
             const hierarchicalTestElementsData = await this.dataProvider.fetchTestElements(this.currentTovKey);
             const rootTestElementItems = hierarchicalTestElementsData.map((data) => this._buildTreeItems(data));
 
             this.rootItems = rootTestElementItems;
             (this as any)._lastDataFetch = Date.now();
 
-            this._onDidChangeTreeData.fire(undefined);
-
             // Async icon updates to avoid blocking UI
-            this.updateSubdivisionIcons(rootTestElementItems)
-                .then(() => {
-                    this.logger.debug(`Icon updates completed for ${rootTestElementItems.length} root test elements.`);
-                    this._onDidChangeTreeData.fire(undefined);
-                })
-                .catch((error) => {
-                    this.logger.error("Error updating subdivision icons:", error);
-                });
+            this.updateSubdivisionIcons(rootTestElementItems).then(() => {
+                this._onDidChangeTreeData.fire(undefined);
+            });
 
-            this.logger.info(`Built tree for ${rootTestElementItems.length} root test elements.`);
             return rootTestElementItems;
         } catch (error) {
-            this.logger.error("Failed to fetch and build test elements tree:", error);
+            this.logger.error(`[TestElementsTreeView] Failed to fetch root tree items and build tree items:`, error);
             this.errorHandler.handleVoid(error as Error, "Could not load Test Elements.");
             return [];
         }
@@ -447,7 +415,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                         }
                     }
                 } catch (error) {
-                    this.logger.error(`Error updating icon for item ${item.label}:`, error);
+                    this.logger.error(
+                        `[TestElementsTreeView] Error updating subdivision icon for tree item ${item.label}:`,
+                        error
+                    );
                 }
             })
         );
@@ -494,7 +465,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this._onDidChangeTreeData.fire(undefined);
             return updated;
         } catch (error) {
-            this.logger.error(`Error updating parent icons for item ${item.label}:`, error);
+            this.logger.error(`[TestElementsTreeView] Error updating parent icons for item ${item.label}:`, error);
             return false;
         }
     }
@@ -560,26 +531,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             case TestElementItemTypes.OTHER:
             default:
                 return TestElementType.Other;
-        }
-    }
-
-    /**
-     * Gets the context value for a given test element type.
-     * @param testElementType The test element type to get context value for
-     * @returns The context value string for the element type
-     */
-    private getContextValueForElementType(testElementType: TestElementType): string {
-        switch (testElementType) {
-            case TestElementItemTypes.SUBDIVISION:
-                return "testElement.subdivision";
-            case TestElementItemTypes.INTERACTION:
-                return "testElement.interaction";
-            case TestElementItemTypes.DATA_TYPE:
-                return "testElement.dataType";
-            case TestElementItemTypes.CONDITION:
-                return "testElement.condition";
-            default:
-                return "testElement.other";
         }
     }
 
@@ -696,7 +647,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const initialFileContent = `tb:uid:${uid}\n${contextWithProjectAndTovName}\n`;
             await this.resourceFileService.ensureFileExists(resourcePath, initialFileContent);
 
-            this.logger.debug(`[TestElementsTreeView] Created missing resource file: ${resourcePath}`);
+            this.logger.info(`[TestElementsTreeView] Created missing resource file at path: ${resourcePath}`);
 
             targetItem.updateLocalAvailability(true, resourcePath);
             await this.updateParentIcons(targetItem);
@@ -736,7 +687,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         try {
             await this.resourceFileService.ensureFolderPathExists(folderPath);
-            this.logger.info(`[TestElementsTreeView] Created missing folder: ${folderPath}`);
+            this.logger.info(`[TestElementsTreeView] Created missing folder at path: ${folderPath}`);
 
             targetItem.updateLocalAvailability(true, folderPath);
             await this.updateParentIcons(targetItem);
@@ -744,9 +695,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             return true;
         } catch (error) {
-            this.logger.error(`[TestElementsTreeView] Error creating folder ${folderPath}:`, error);
+            this.logger.error(`[TestElementsTreeView] Error creating folder at path ${folderPath}:`, error);
             vscode.window.showErrorMessage(
-                `Failed to create folder: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Failed to create folder ${folderPath}: ${error instanceof Error ? error.message : "Unknown error"}`
             );
             return false;
         }
@@ -761,7 +712,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const document = await vscode.workspace.openTextDocument(filePath);
             await vscode.window.showTextDocument(document);
         } catch (error) {
-            this.logger.error(`[TestElementsTreeView] Error opening file in editor:`, error);
+            this.logger.error(`[TestElementsTreeView] Error opening file in VS Code editor:`, error);
             vscode.window.showErrorMessage(
                 `Error opening file: ${error instanceof Error ? error.message : "Unknown error"}`
             );
@@ -776,10 +727,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         try {
             const uri = vscode.Uri.file(filePath);
             await vscode.commands.executeCommand("revealInExplorer", uri);
-            this.logger.debug(`Revealed file in explorer: ${filePath}`);
+            this.logger.debug(`[TestElementsTreeView] Revealed file in VS Code explorer: ${filePath}`);
         } catch (error) {
             this.logger.warn(
-                `Failed to reveal file in explorer: ${error instanceof Error ? error.message : "Unknown error"}`
+                `[TestElementsTreeView] Failed to reveal file in VS Code explorer: ${error instanceof Error ? error.message : "Unknown error"}`
             );
         }
     }
@@ -812,8 +763,11 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             textEditor = await vscode.window.showTextDocument(textDocument);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            this.logger.error(`[TestElementsTreeView] Failed to open file ${resourcePath}: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to open resource file: ${errorMessage}`);
+            this.logger.error(
+                `[TestElementsTreeView] Failed to open resource file at path ${resourcePath}: ${errorMessage}`,
+                error
+            );
+            vscode.window.showErrorMessage(`Failed to open resource file at path ${resourcePath}: ${errorMessage}`);
             return;
         }
         try {
@@ -830,7 +784,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         } catch (positioningError) {
             const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";
             this.logger.warn(
-                `[TestElementsTreeView] Failed to position cursor for interaction '${interactionName}': ${errorMessage}`,
+                `[TestElementsTreeView] Failed to position cursor for interaction '${interactionName}' in resource file at path ${resourcePath}: ${errorMessage}`,
                 positioningError
             );
         }
@@ -875,7 +829,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             await this.openAndRevealResourceFile(resourcePath);
         } catch (error) {
-            this.logger.error(`Error checking file existence for ${resourcePath}:`, error);
+            this.logger.error(`[TestElementsTreeView] Error checking file existence for ${resourcePath}:`, error);
             vscode.window.showErrorMessage(
                 `Error checking resource file: ${error instanceof Error ? error.message : "Unknown error"}`
             );
@@ -916,9 +870,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             await this.openAndRevealResourceFile(resourcePath);
         } catch (error) {
-            this.logger.error(`Error creating missing resource file ${resourcePath}:`, error);
+            this.logger.error(`[TestElementsTreeView] Error creating resource file at path ${resourcePath}:`, error);
             vscode.window.showErrorMessage(
-                `Error creating resource file: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Error creating resource file at path ${resourcePath}: ${error instanceof Error ? error.message : "Unknown error"}`
             );
         }
     }
@@ -971,7 +925,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     public async goToInteractionResource(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
-            vscode.window.showErrorMessage("Could not find the parent resource for this interaction.");
+            vscode.window.showErrorMessage(`Could not find the parent resource for interaction ${item.label}`);
             return;
         }
 
@@ -1021,7 +975,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     public async createMissingParentResourceForInteraction(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
-            vscode.window.showErrorMessage("Could not find the parent resource for this interaction.");
+            vscode.window.showErrorMessage(`Could not find the parent resource for interaction ${item.label}`);
             return;
         }
 
@@ -1067,7 +1021,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The interaction tree item that was single clicked
      */
     private async handleInteractionSingleClick(item: TestElementsTreeItem): Promise<void> {
-        this.logger.debug(`Interaction item single clicked: ${item.label}`);
+        this.logger.debug(`[TestElementsTreeView] Interaction tree item single clicked: ${item.label}`);
         await this.openInteractionResource(item);
     }
 
@@ -1080,7 +1034,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     public async openInteractionResource(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
-            vscode.window.showErrorMessage("Could not find the parent resource for this interaction.");
+            vscode.window.showErrorMessage(`Could not find the parent resource for interaction ${item.label}`);
             return;
         }
 
@@ -1127,7 +1081,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The interaction tree item that was double clicked
      */
     private async handleInteractionDoubleClick(item: TestElementsTreeItem): Promise<void> {
-        this.logger.debug(`Interaction item double clicked: ${item.label}`);
+        this.logger.debug(`[TestElementsTreeView] Interaction tree item double clicked: ${item.label}`);
         await this.openInteractionResource(item);
 
         const parentResource = item.parent as TestElementsTreeItem;
@@ -1187,7 +1141,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param options Optional refresh options
      */
     public override refresh(item?: TestElementsTreeItem, options?: { immediate?: boolean }): void {
-        this.logger.debug(`Refreshing test elements tree view${item ? ` for item: ${item.label}` : ""}`);
+        this.logger.debug(
+            `[TestElementsTreeView] Refreshing test elements tree view${item ? ` for tree item: ${item.label}` : ""}`
+        );
 
         if (item) {
             super.refresh(item, options);
@@ -1203,15 +1159,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.currentProjectName || undefined,
                 this.currentTovName || undefined,
                 true
-            )
-                .then(() => {
-                    this.logger.debug("Successfully refreshed test elements tree from TOV context");
-                })
-                .catch((error) => {
-                    this.logger.error("Error refreshing test elements tree from TOV context:", error);
-                });
+            );
         } else {
-            this.logger.debug("No TOV key available, clearing tree");
+            this.logger.debug("[TestElementsTreeView] No TOV key available while refreshing, clearing tree");
             this.clearTree();
         }
     }
