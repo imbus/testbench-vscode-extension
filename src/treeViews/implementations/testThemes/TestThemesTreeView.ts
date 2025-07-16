@@ -129,7 +129,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // Only clear markings if this event came from another test themes tree view instance
             // and was triggered by test generation
             if (event.source !== this.config.id && event.data?.reason === "testGeneration") {
-                this.logger.debug("Received global marking cleared event from another test themes tree view instance");
+                this.logger.debug(
+                    "[TestThemesTreeView] Received global marking cleared event from another test themes tree view instance"
+                );
                 const markingModule = this.getModule("marking") as MarkingModule;
                 if (markingModule) {
                     markingModule.clearAllMarkings(false);
@@ -145,16 +147,19 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     public async importTestResultsForTestThemeTreeItem(item: TestThemesTreeItem): Promise<void> {
         // Prevent import functionality when opened from a TOV
         if (!this.isOpenedFromCycle) {
-            const errorMessage =
-                "Import functionality is not available when viewing test themes from a TOV. Please open from a cycle to use import features.";
-            vscode.window.showErrorMessage(errorMessage);
-            this.logger.warn(errorMessage);
+            const importFromTovNotPossibleWarningMessage =
+                "[TestThemesTreeView] Invalid operation: Import functionality is not available when viewing test themes from a TOV.";
+            this.logger.warn(importFromTovNotPossibleWarningMessage);
             return;
         }
 
         const connection = this.getConnection();
         if (!connection) {
-            vscode.window.showErrorMessage("No connection available. Please log in first.");
+            const noConnectionAvailableWarningMessage =
+                "[TestThemesTreeView] No connection available. Please log in first.";
+            this.logger.error(noConnectionAvailableWarningMessage);
+            const noConnectionAvailableWarningMessageForUser = "No connection available. Please log in first.";
+            vscode.window.showErrorMessage(noConnectionAvailableWarningMessageForUser);
             return;
         }
 
@@ -164,10 +169,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const tovKey = this.currentTovKey;
 
             if (!projectKey || (!cycleKey && !tovKey)) {
-                const errorMessage =
-                    "Error: Could not determine the active Project, Cycle, or TOV context for test import.";
-                vscode.window.showErrorMessage(errorMessage);
-                this.logger.error(errorMessage);
+                const importContextMissingErrorMessageForUser =
+                    "Could not determine the active Project, Cycle, or TOV key for import.";
+                vscode.window.showErrorMessage(importContextMissingErrorMessageForUser);
+                const importContextMissingErrorMessage =
+                    "[TestThemesTreeView] " + importContextMissingErrorMessageForUser;
+                this.logger.error(importContextMissingErrorMessage);
                 return;
             }
 
@@ -175,9 +182,10 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const itemUID = item.data.base.uniqueID;
 
             if (!itemUID) {
-                const errorMessage = `Cannot import test results: Item ${itemLabel} has no unique ID.`;
-                vscode.window.showErrorMessage(errorMessage);
-                this.logger.error(errorMessage);
+                const itemHasNoUniqueIDErrorMessageForUser = `Cannot import test results: Item ${itemLabel} has no unique ID.`;
+                vscode.window.showErrorMessage(itemHasNoUniqueIDErrorMessageForUser);
+                const itemHasNoUniqueIDErrorMessage = "[TestThemesTreeView] " + itemHasNoUniqueIDErrorMessageForUser;
+                this.logger.error(itemHasNoUniqueIDErrorMessage);
                 return;
             }
 
@@ -193,12 +201,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 );
 
                 if (result !== "Yes, Import Again") {
-                    this.logger.info(`User cancelled re-import of item: ${itemLabel}`);
+                    this.logger.debug(
+                        `[TestThemesTreeView] Re-import operation cancelled by user for tree item: ${itemLabel}`
+                    );
                     return;
                 }
             }
-
-            this.logger.info(`Starting test result import for item: ${itemLabel} (UID: ${itemUID})`);
 
             const markingModule = this.getModule("marking") as MarkingModule;
             if (!markingModule) {
@@ -208,9 +216,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // Verify the item is marked for import
             const markingInfo = markingModule.getMarkingInfo(item.id!);
             if (!markingInfo || markingInfo.type !== "import") {
-                const errorMessage = `Item ${itemLabel} is not marked for import. Only items that have been generated can be imported.`;
-                vscode.window.showErrorMessage(errorMessage);
-                this.logger.error(errorMessage);
+                const itemNotMarkedForImportErrorMessageForUser = `Item ${itemLabel} is not marked for import. Only items that have been generated can be imported.`;
+                vscode.window.showErrorMessage(itemNotMarkedForImportErrorMessageForUser);
+                const itemNotMarkedForImportErrorMessage =
+                    "[TestThemesTreeView] " + itemNotMarkedForImportErrorMessageForUser;
+                this.logger.error(itemNotMarkedForImportErrorMessage);
                 return;
             }
 
@@ -224,12 +234,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 const rootMarkingInfo = markingModule.getMarkingInfo(rootId);
                 if (rootMarkingInfo && rootMarkingInfo.metadata?.uniqueID) {
                     reportRootUID = rootMarkingInfo.metadata.uniqueID;
-                    this.logger.debug(`Using root UID ${reportRootUID} for import (item ${itemUID} is a descendant)`);
-                }
-            } else {
-                const hierarchy = markingModule.getHierarchy(item.id!);
-                if (hierarchy) {
-                    this.logger.debug(`Item ${itemUID} is a root with ${hierarchy.descendantIds.size} descendants`);
                 }
             }
 
@@ -242,9 +246,10 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             );
 
             if (importSuccessful) {
-                const importSuccessfulMessage = `Successfully imported test results for: ${itemLabel} (UID: ${reportRootUID})`;
+                const importSuccessfulMessageForUser = `Successfully imported test results for ${itemLabel}`;
+                const importSuccessfulMessage = `[TestThemesTreeView] Successfully imported test results for ${itemLabel} with UID ${reportRootUID}`;
                 this.logger.info(importSuccessfulMessage);
-                vscode.window.showInformationMessage(importSuccessfulMessage);
+                vscode.window.showInformationMessage(importSuccessfulMessageForUser);
 
                 this.extensionContext.workspaceState.update(
                     `${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_last`,
@@ -252,10 +257,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 );
 
                 if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
-                    this.logger.debug(
-                        `Clearing marked state for item: ${itemLabel} as ALLOW_PERSISTENT_IMPORT_BUTTON is false.`
-                    );
-
                     // If this was a root item with descendants, unmark the entire hierarchy
                     const hierarchy = markingModule.getHierarchy(item.id!);
                     if (hierarchy) {
@@ -265,26 +266,20 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     } else {
                         markingModule.unmarkItemByID(item.id!);
                     }
-                } else {
-                    this.logger.debug(
-                        `ALLOW_PERSISTENT_IMPORT_BUTTON is true. Import button will persist for item: ${itemLabel}`
-                    );
                 }
 
                 this.refresh();
             } else {
-                this.logger.warn(
-                    `Import process for item ${itemLabel} (UID: ${reportRootUID}) did not complete successfully or was cancelled.`
-                );
-                vscode.window.showWarningMessage(
-                    `Import was cancelled or did not complete successfully for: ${itemLabel}`
-                );
+                const importFailedMessageForUser = `Import was cancelled or did not complete successfully for ${itemLabel}`;
+                const importFailedMessage = `[TestThemesTreeView] Import process for item ${itemLabel} (UID: ${reportRootUID}) did not complete successfully or was cancelled.`;
+                this.logger.warn(importFailedMessage);
+                vscode.window.showWarningMessage(importFailedMessageForUser);
             }
         } catch (error) {
-            this.logger.error("Error importing test results:", error);
-            vscode.window.showErrorMessage(
-                `Error importing test results: ${error instanceof Error ? error.message : "Unknown error"}`
-            );
+            const importErrorMessageForUser = `Error importing test results: ${error instanceof Error ? error.message : "Unknown error"}`;
+            const importErrorMessage = `[TestThemesTreeView] Error importing test results: ${error instanceof Error ? error.message : "Unknown error"}`;
+            this.logger.error(importErrorMessage);
+            vscode.window.showErrorMessage(importErrorMessageForUser);
         }
     }
 
@@ -352,14 +347,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private updateMarkingModuleConfiguration(isOpenedFromCycle: boolean): void {
         const markingModule = this.getModule("marking") as MarkingModule;
         if (!markingModule) {
-            this.logger.warn("Marking module not available for configuration update");
+            this.logger.warn("[TestThemesTreeView] Marking module not available for configuration update");
             return;
         }
 
         const markingConfig = this.config.modules.marking;
         if (markingConfig) {
             markingConfig.showImportButton = isOpenedFromCycle;
-            this.logger.debug(`Updated marking module configuration: showImportButton = ${isOpenedFromCycle}`);
         }
     }
 
@@ -380,7 +374,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         cycleLabel?: string
     ): Promise<void> {
         try {
-            this.logger.debug(`Loading cycle ${cycleKey} for project ${projectKey}`);
+            this.logger.debug(`[TestThemesTreeView] Loading cycle ${cycleKey} for project ${projectKey}`);
 
             this.dataProvider.clearCache();
             this.currentProjectKey = projectKey;
@@ -443,17 +437,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             (this as any)._intentionallyCleared = false;
 
             this._onDidChangeTreeData.fire(undefined);
-            try {
-                await this.updateRobotFileExistenceForAllItems();
-                this.logger.debug("[TestThemesTreeView] Robot file existence check completed, refreshing tree");
-                this._onDidChangeTreeData.fire(undefined);
-            } catch (error) {
-                this.logger.error("[TestThemesTreeView] Error updating robot file existence:", error);
-            }
-
+            await this.updateRobotFileAvailabilityForAllTreeItems();
+            this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
         } catch (error) {
-            this.logger.error("Error loading cycle:", error);
+            this.logger.error("[TestThemesTreeView] Error loading cycle:", error);
 
             this.rootItems = [];
             (this as any)._lastDataFetch = Date.now();
@@ -467,7 +455,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
     public async loadTov(projectKey: string, tovKey: string, projectName: string, tovName: string): Promise<void> {
         try {
-            this.logger.debug(`Loading TOV ${tovKey} for project ${projectKey}`);
+            this.logger.debug(`[TestThemesTreeView] Loading TOV ${tovKey} for project ${projectKey}`);
 
             this.dataProvider.clearCache();
             this.currentProjectKey = projectKey;
@@ -523,17 +511,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             (this as any)._intentionallyCleared = false;
 
             this._onDidChangeTreeData.fire(undefined);
-            try {
-                await this.updateRobotFileExistenceForAllItems();
-                this.logger.debug("[TestThemesTreeView] Robot file existence check completed, refreshing tree");
-                this._onDidChangeTreeData.fire(undefined);
-            } catch (error) {
-                this.logger.error("[TestThemesTreeView] Error updating robot file existence:", error);
-            }
-
+            await this.updateRobotFileAvailabilityForAllTreeItems();
+            this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
         } catch (error) {
-            this.logger.error("Error loading TOV:", error);
+            this.logger.error("[TestThemesTreeView] Error loading TOV:", error);
 
             this.rootItems = [];
             (this as any)._lastDataFetch = Date.now();
@@ -605,10 +587,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const tovKey = this.currentTovKey;
 
             if (!projectKey || (!cycleKey && !tovKey)) {
-                const errorMessage =
-                    "Error: Could not determine the active Project, Cycle, or TOV context for test generation.";
-                vscode.window.showErrorMessage(errorMessage);
-                this.logger.error(errorMessage);
+                const testGenerationContextMissingErrorMessage =
+                    "[TestThemesTreeView] Could not determine the active Project, Cycle, or TOV context for test generation.";
+                const testGenerationContextMissingErrorMessageForUser =
+                    "Could not determine the active Project, Cycle, or TOV context for test generation.";
+                vscode.window.showErrorMessage(testGenerationContextMissingErrorMessageForUser);
+                this.logger.error(testGenerationContextMissingErrorMessage);
                 return;
             }
 
@@ -641,10 +625,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             if (testGenerationSuccessful && ENABLE_ICON_MARKING_ON_TEST_GENERATION && this.isOpenedFromCycle) {
                 const markingModule = this.getModule("marking") as MarkingModule;
                 if (markingModule && item.id) {
-                    this.logger.debug(
-                        `Clearing all previous markings before marking item ${item.label} and its descendants for import.`
-                    );
-
                     markingModule.clearAllMarkings();
 
                     // Mark the item and its descendants for import
@@ -654,12 +634,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
                     const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
                     if (persistenceModule) {
-                        this.logger.debug("Forcing immediate state persistence after marking for import.");
                         await persistenceModule.forceSave();
                     }
                 } else {
                     this.logger.warn(
-                        `Could not mark item ${item.label}: Marking module not available or item has no ID.`
+                        `[TestThemesTreeView] Could not mark item ${item.label}: Marking module not available or item has no ID.`
                     );
                 }
             } else if (
@@ -670,44 +649,27 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             ) {
                 const markingModule = this.getModule("marking") as MarkingModule;
                 if (markingModule && item.id) {
-                    this.logger.debug(
-                        `Clearing all previous markings before marking item ${item.label} and its descendants for generation.`
-                    );
-
                     markingModule.clearAllMarkings();
                     markingModule.markItemWithDescendants(item, projectKey, tovKey, "generation");
 
                     // Force an immediate save of the state to disk to prevent data loss on reload.
                     const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
                     if (persistenceModule) {
-                        this.logger.debug("Forcing immediate state persistence after marking for generation.");
                         await persistenceModule.forceSave();
                     }
                 } else {
                     this.logger.warn(
-                        `Could not mark item ${item.label}: Marking module not available or item has no ID.`
+                        `[TestThemesTreeView] Could not mark item ${item.label}: Marking module not available or item has no ID.`
                     );
                 }
-            } else if (testGenerationSuccessful && !ENABLE_ICON_MARKING_ON_TEST_GENERATION) {
-                this.logger.debug(`Test generation successful but icon marking is disabled`);
             }
 
             if (testGenerationSuccessful) {
-                try {
-                    await this.updateRobotFileExistenceForAllItems();
-                    this.logger.debug(
-                        "[TestThemesTreeView] Robot file existence updated after test generation, refreshing tree"
-                    );
-                    this._onDidChangeTreeData.fire(undefined);
-                } catch (error) {
-                    this.logger.error(
-                        "[TestThemesTreeView] Error updating robot file existence after test generation:",
-                        error
-                    );
-                }
+                await this.updateRobotFileAvailabilityForAllTreeItems();
+                this._onDidChangeTreeData.fire(undefined);
             }
         } catch (error) {
-            this.logger.error("Error generating test cases:", error);
+            this.logger.error("[TestThemesTreeView] Error generating test cases:", error);
             vscode.window.showErrorMessage(
                 `Error generating test cases: ${error instanceof Error ? error.message : "Unknown error"}`
             );
@@ -808,7 +770,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             return item;
         } catch (error) {
-            this.logger.error("Error creating tree item:", error);
+            this.logger.error("[TestThemesTreeView] Error creating tree item:", error);
             throw error;
         }
     }
@@ -854,16 +816,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private markForImport(item: TestThemesTreeItem): void {
         // Prevent import marking when opened from a TOV
         if (!this.isOpenedFromCycle) {
-            this.logger.warn("Cannot mark item for import: Test themes tree was opened from a TOV, not a cycle");
-            vscode.window.showWarningMessage(
-                "Import functionality is not available when viewing test themes from a TOV. Please open from a cycle to use import features."
+            this.logger.warn(
+                "[TestThemesTreeView] Cannot mark item for import: Test themes tree was opened from a TOV, not a cycle. Import is only available when opened from a cycle."
             );
             return;
         }
 
         const markingModule = this.getModule("marking") as MarkingModule | undefined;
         if (!markingModule || !item.id || !this.currentProjectKey || !this.currentCycleKey) {
-            this.logger.warn("Cannot mark item: Marking module or context is not available.", {
+            this.logger.warn("[TestThemesTreeView] Cannot mark item: Marking module or context is not available.", {
                 hasModule: !!markingModule,
                 id: item.id
             });
@@ -879,7 +840,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             }
             // The marking module will trigger the necessary refresh.
         } catch (error) {
-            this.logger.error("Error marking for import:", error);
+            this.logger.error("[TestThemesTreeView] Error marking for import:", error);
             throw error;
         }
     }
@@ -890,49 +851,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     private refreshItem(item: TestThemesTreeItem): void {
         this._onDidChangeTreeData.fire(item);
-    }
-
-    /**
-     * Selects and reveals a theme in the tree view
-     * @param themeKey The key of the theme to select
-     */
-    public async selectTheme(themeKey: string): Promise<void> {
-        try {
-            const theme = this.findThemeByKey(this.rootItems || [], themeKey);
-            if (!theme) {
-                throw new Error(`Theme not found: ${themeKey}`);
-            }
-
-            await this.vscTreeView?.reveal(theme, {
-                select: true,
-                focus: true,
-                expand: true
-            });
-        } catch (error) {
-            this.logger.error("Error selecting theme:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Finds a theme item by its key in the tree
-     * @param items Array of tree items to search
-     * @param key The key to search for
-     * @return The found theme item or null
-     */
-    private findThemeByKey(items: TestThemesTreeItem[], key: string): TestThemesTreeItem | null {
-        for (const item of items) {
-            if (item.data.base.key === key) {
-                return item;
-            }
-            if (item.children) {
-                const found = this.findThemeByKey(item.children as TestThemesTreeItem[], key);
-                if (found) {
-                    return found;
-                }
-            }
-        }
-        return null;
     }
 
     /**
@@ -985,7 +903,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param options Optional refresh options
      */
     public override refresh(item?: TestThemesTreeItem, options?: { immediate?: boolean }): void {
-        this.logger.debug(`Refreshing test themes tree view${item ? ` for item: ${item.label}` : ""}`);
         if (item) {
             super.refresh(item, options);
             return;
@@ -1000,22 +917,25 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                     this.currentProjectName,
                     this.currentTovName,
                     this.currentCycleLabel || undefined
-                )
-                    .then(() => {
-                        this.logger.debug("Successfully refreshed test themes tree from cycle context");
-                    })
-                    .catch((error) => {
-                        this.logger.error("Error refreshing test themes tree from cycle context:", error);
-                    });
+                ).catch((error) => {
+                    this.logger.error(
+                        "[TestThemesTreeView] Error refreshing test themes tree from cycle context:",
+                        error
+                    );
+                });
             } else if (this.currentTovKey) {
                 this.dataProvider.invalidateCache(this.currentProjectKey, this.currentTovKey, true);
-                this.loadTov(this.currentProjectKey, this.currentTovKey, this.currentProjectName, this.currentTovName)
-                    .then(() => {
-                        this.logger.debug("Successfully refreshed test themes tree from TOV context");
-                    })
-                    .catch((error) => {
-                        this.logger.error("Error refreshing test themes tree from TOV context:", error);
-                    });
+                this.loadTov(
+                    this.currentProjectKey,
+                    this.currentTovKey,
+                    this.currentProjectName,
+                    this.currentTovName
+                ).catch((error) => {
+                    this.logger.error(
+                        "[TestThemesTreeView] Error refreshing test themes tree from TOV context:",
+                        error
+                    );
+                });
             } else {
                 this.clearTree();
             }
@@ -1025,15 +945,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Updates robot file existence for all tree items that can generate tests
+     * Updates robot file availability for all tree items that can generate tests
      * and updates the context to show/hide the "Open Generated Robot File" button
      */
-    private async updateRobotFileExistenceForAllItems(): Promise<void> {
+    private async updateRobotFileAvailabilityForAllTreeItems(): Promise<void> {
         try {
-            this.logger.debug("[TestThemesTreeView] Starting robot file existence check for all items");
             const allTestThemeTreeItems = this.getAllTestThemeTreeItems();
             let hasAnyRobotFile = false;
-            let updatedItemsCount = 0;
 
             const robotFileChecks = allTestThemeTreeItems
                 .filter((item) => item.canGenerateTests())
@@ -1042,18 +960,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                         const hasRobotFile = await item.checkRobotFileExists();
                         if (hasRobotFile) {
                             hasAnyRobotFile = true;
-                            this.logger.debug(`[TestThemesTreeView] Robot file found for: ${item.data.base.name}`);
                         }
 
                         item.updateContextValue();
-                        updatedItemsCount++;
-
-                        this.logger.debug(
-                            `[TestThemesTreeView] Updated context for ${item.data.base.name}: ${item.contextValue}`
-                        );
                     } catch (error) {
                         this.logger.error(
-                            `[TestThemesTreeView] Error checking robot file for ${item.data.base.name}:`,
+                            `[TestThemesTreeView] Error checking robot file availability for ${item.data.base.name}:`,
                             error
                         );
                     }
@@ -1061,12 +973,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             await Promise.all(robotFileChecks);
             await vscode.commands.executeCommand("setContext", ContextKeys.HAS_GENERATED_ROBOT_FILE, hasAnyRobotFile);
-
-            this.logger.debug(
-                `[TestThemesTreeView] Robot file existence check completed. Updated ${updatedItemsCount} items, has any robot file: ${hasAnyRobotFile}`
-            );
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error updating robot file existence for all items:", error);
+            this.logger.error("[TestThemesTreeView] Error updating robot file availability for all tree items:", error);
             throw error;
         }
     }
@@ -1117,19 +1025,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param item The test case set tree item that was single clicked
      */
     private async handleTestCaseSetSingleClick(item: TestThemesTreeItem): Promise<void> {
-        this.logger.debug(`Test case set item single clicked: ${item.label}`);
+        this.logger.debug(`[TestThemesTreeView] Test case set item single clicked: ${item.label}`);
 
         if (!item.hasGeneratedRobotFile()) {
             return;
         }
 
-        try {
-            await item.openGeneratedRobotFile();
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            this.logger.error(`Error opening robot file for ${item.label}: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
-        }
+        await item.openGeneratedRobotFile();
     }
 
     /**
@@ -1137,26 +1039,19 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param item The test case set tree item that was double clicked
      */
     private async handleTestCaseSetDoubleClick(item: TestThemesTreeItem): Promise<void> {
-        this.logger.debug(`Test case set item double clicked: ${item.label}`);
+        this.logger.debug(`[TestThemesTreeView] Test case set item double clicked: ${item.label}`);
 
         if (!item.hasGeneratedRobotFile()) {
-            // vscode.window.showWarningMessage(`No robot file found for "${item.label}". Please generate test cases first.`);
             return;
         }
 
-        try {
-            await item.openGeneratedRobotFile();
+        await item.openGeneratedRobotFile();
 
-            const robotFilePath = item.getRobotFilePath();
-            if (robotFilePath) {
-                const uri = vscode.Uri.file(robotFilePath);
-                await vscode.commands.executeCommand("revealInExplorer", uri);
-                this.logger.debug(`Revealed robot file in explorer: ${robotFilePath}`);
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            this.logger.error(`Error opening robot file for ${item.label}: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
+        const robotFilePath = item.getRobotFilePath();
+        if (robotFilePath) {
+            const uri = vscode.Uri.file(robotFilePath);
+            await vscode.commands.executeCommand("revealInExplorer", uri);
+            this.logger.debug(`[TestThemesTreeView] Revealed robot file in explorer: ${robotFilePath}`);
         }
     }
 }

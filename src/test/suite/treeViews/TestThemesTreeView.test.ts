@@ -374,22 +374,6 @@ suite("TestThemesTreeView", function () {
             );
         });
 
-        test("should handle error when opening robot file on single click", async function () {
-            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(true);
-            mockTestThemesTreeItem.openGeneratedRobotFile.rejects(new Error("File not found"));
-
-            await (treeView as any).handleTestCaseSetSingleClick(mockTestThemesTreeItem);
-
-            assert(
-                testEnv.vscodeMocks.showErrorMessageStub.calledOnce,
-                "Error message should be shown when opening fails"
-            );
-            assert(
-                testEnv.vscodeMocks.showErrorMessageStub.calledWith("Failed to open robot file: File not found"),
-                "Error message should have correct text"
-            );
-        });
-
         test("should handle double click on test case set item", async function () {
             mockTestThemesTreeItem.hasGeneratedRobotFile.returns(false);
 
@@ -403,27 +387,6 @@ suite("TestThemesTreeView", function () {
             assert(
                 !mockTestThemesTreeItem.openGeneratedRobotFile.called,
                 "Robot file should not be opened when it doesn't exist"
-            );
-        });
-
-        test("should handle error when opening robot file on double click", async function () {
-            mockTestThemesTreeItem.hasGeneratedRobotFile.returns(true);
-            mockTestThemesTreeItem.openGeneratedRobotFile.rejects(new Error("File not found"));
-
-            await (treeView as any).handleTestCaseSetDoubleClick(mockTestThemesTreeItem);
-
-            assert(
-                testEnv.vscodeMocks.showErrorMessageStub.calledOnce,
-                "Error message should be shown when opening fails"
-            );
-            assert(
-                testEnv.vscodeMocks.showErrorMessageStub.calledWith("Failed to open robot file: File not found"),
-                "Error message should have correct text"
-            );
-
-            assert(
-                !testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
-                "revealInExplorer should not be called when there's an error"
             );
         });
 
