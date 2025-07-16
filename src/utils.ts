@@ -3,8 +3,7 @@
  * @description Utility functions for the TestBench VS Code extension.
  */
 
-import { logger, setLogger } from "./extension";
-import * as testBenchLogger from "./testBenchLogger";
+import { logger } from "./extension";
 import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -346,47 +345,6 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
     }
 
     return homeDirectory;
-}
-
-/**
- * Clears the cached workspace location and prompts the user to select a new workspace.
- * Adjusts the logger to use the new workspace location.
- *
- * @param {boolean} enableLogging - Whether to output trace logging (defaults to true).
- */
-export async function setWorkspaceLocation(enableLogging: boolean = true): Promise<void> {
-    cachedWorkspaceLocation = undefined;
-    if (logger && enableLogging) {
-        const logger: testBenchLogger.TestBenchLogger = new testBenchLogger.TestBenchLogger();
-        setLogger(logger);
-        logger.trace("Cleared cached workspace location.");
-    }
-
-    const availableWorkspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
-    if (availableWorkspaceFolders && availableWorkspaceFolders.length > 0) {
-        const selectedWorkspaceFolder: vscode.WorkspaceFolder | undefined = await vscode.window.showWorkspaceFolderPick(
-            {
-                placeHolder: "Select a workspace folder"
-            }
-        );
-        if (selectedWorkspaceFolder) {
-            cachedWorkspaceLocation = selectedWorkspaceFolder.uri.fsPath;
-            vscode.window.showInformationMessage(`Workspace changed to: "${cachedWorkspaceLocation}"`);
-            if (logger && enableLogging) {
-                logger.trace(`New workspace selected: "${cachedWorkspaceLocation}"`);
-            }
-        } else {
-            vscode.window.showWarningMessage("No workspace selected; workspace cache remains cleared.");
-            if (logger && enableLogging) {
-                logger.trace("User canceled new workspace selection.");
-            }
-        }
-    } else {
-        vscode.window.showErrorMessage("No workspace folders are available to select from.");
-        if (logger && enableLogging) {
-            logger.trace("No workspace folders available to choose.");
-        }
-    }
 }
 
 /**

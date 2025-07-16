@@ -185,7 +185,6 @@ export const TreeViewTiming = {
  * All extension commands as defined in package.json.
  */
 export const allExtensionCommands = {
-    setWorkspace: `${baseKeyOfExtension}.setWorkspace`,
     login: `${baseKeyOfExtension}.login`,
     logout: `${baseKeyOfExtension}.logout`,
     generateTestCasesForCycle: `${baseKeyOfExtension}.generateTestCasesForCycle`,
@@ -206,7 +205,6 @@ export const allExtensionCommands = {
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
     openCycleFromProjectsView: `${baseKeyOfExtension}.openCycleFromProjectsView`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,
-    modifyReportWithResultsZip: `${baseKeyOfExtension}.modifyReportWithResultsZip`,
     handleCycleClick: `${baseKeyOfExtension}.handleCycleClick`,
     handleTOVClick: `${baseKeyOfExtension}.handleTOVClick`,
     resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
