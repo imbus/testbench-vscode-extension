@@ -816,20 +816,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             vscode.window.showErrorMessage(`Failed to open resource file: ${errorMessage}`);
             return;
         }
-
         try {
             const interactionLineNumber = await findInteractionPositionInResourceFile(
                 textDocument.uri,
                 interactionName,
                 uid
             );
-
             if (interactionLineNumber !== undefined) {
                 const position = new vscode.Position(interactionLineNumber, 0);
                 textEditor.selection = new vscode.Selection(position, position);
                 textEditor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
-            } else {
-                this.logger.warn(`Interaction '${interactionName}' not found in resource file`);
             }
         } catch (positioningError) {
             const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";

@@ -494,6 +494,10 @@ function setupClientNotifications(
         vscode.window.showErrorMessage(`${params.message}`);
     });
 
+    client.onNotification("testbench-language-server/show-warning", (params) => {
+        vscode.window.showWarningMessage(`${params.message}`);
+    });
+
     client.onNotification("testbench-language-server/show-info", (params) => {
         vscode.window.showInformationMessage(`${params.message}`);
     });
@@ -1114,15 +1118,10 @@ export async function findInteractionPositionInResourceFile(
             interactionName,
             interactionUid
         );
-
         if (typeof lineNumber === "number") {
             return lineNumber;
-        } else {
-            logger.warn(
-                `[findInteractionPositionInResourceFile] Interaction '${interactionName}' (UID: ${interactionUid}) not found in ${uri.fsPath}`
-            );
-            return undefined;
         }
+        return undefined;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         logger.error(

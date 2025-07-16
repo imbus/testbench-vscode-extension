@@ -48,7 +48,7 @@ from .ls_exceptions import (
     MultipleKeywordsWithUid,
     TestBenchKeywordNotFound,
 )
-from .ls_logging import LogLevel, log, show_error, show_info
+from .ls_logging import LogLevel, log, show_error, show_info, show_warning
 from .messages import (
     COMMAND_ATTEMPT_PUSH_KEYWORD,
     COMMAND_ATTEMPT_PUSH_SUBDIVISION,
@@ -73,8 +73,11 @@ from .messages import (
     ERROR_CONTEXT_MISMATCH,
     ERROR_CONTEXT_NOT_SET,
     ERROR_DUPLICATE_KEYWORD_NAME,
+    ERROR_DUPLICATE_KEYWORD_NAME_IN_FILE,
     ERROR_DUPLICATE_KEYWORD_UID,
+    ERROR_DUPLICATE_KEYWORD_UID_IN_FILE,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
+    ERROR_FINDING_TESTBENCH_KEYWORD,
     ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
@@ -82,6 +85,7 @@ from .messages import (
     INFO_ALREADY_UP_TO_DATE,
     INFO_CHANGES_PUSHED,
     INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST,
+    INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST_IN_FILE,
     KEYWORD_INTERFACE_CHANGE_LABEL,
     PULL_KEYWORD_TITLE,
     PULL_SUBDIVISON_TITLE,
@@ -963,43 +967,38 @@ def find_interaction_position(ls: LanguageServer, args) -> int | None:
     resource = TestBenchResourceModel.from_file(document.source)
     keywords_by_uid = resource.get_keywords(interaction_uid)
     if len(keywords_by_uid) > 1:
-        show_error(
+        show_warning(
             ls,
             ERROR_DUPLICATE_KEYWORD_UID.format(uid=interaction_uid),
         )
         log(
             ls,
-            ERROR_DUPLICATE_KEYWORD_UID.format(
-                interaction_uid=interaction_uid, document_uri=document_uri
-            ),
-            LogLevel.ERROR,
+            ERROR_DUPLICATE_KEYWORD_UID_IN_FILE.format(uid=interaction_uid, uri=document_uri),
+            LogLevel.DEBUG,
         )
         return
-    
     if len(keywords_by_uid) == 1:
         return keywords_by_uid[0].lineno - 1
     keywords_by_name = resource.get_keywords_by_name(interaction_name)
     if len(keywords_by_name) > 1:
-        show_error(
+        show_warning(
             ls,
             ERROR_DUPLICATE_KEYWORD_NAME.format(name=interaction_name),
         )
         log(
             ls,
-            ERROR_DUPLICATE_KEYWORD_NAME.format(
-                interaction_name=interaction_name, document_uri=document_uri
-            ),
-            LogLevel.ERROR,
+            ERROR_DUPLICATE_KEYWORD_NAME_IN_FILE.format(name=interaction_name, uri=document_uri),
+            LogLevel.DEBUG,
         )
         return
     if len(keywords_by_uid) == 1:
         return keywords_by_name[0].lineno - 1
-    show_info(
-        ls, INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST.format(uid=interaction_uid, name=interaction_name)
-    )
+    show_info(ls, INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST.format(name=interaction_name))
     log(
         ls,
-        INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST.format(uid=interaction_uid, name=interaction_name),
+        INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST_IN_FILE.format(
+            name=interaction_name, uid=interaction_uid, uri=document_uri
+        ),
         LogLevel.INFO,
     )
     return
