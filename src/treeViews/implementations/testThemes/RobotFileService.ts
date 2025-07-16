@@ -77,7 +77,7 @@ export class RobotFileService {
             try {
                 await fs.promises.stat(hierarchicalDirPath);
             } catch {
-                this.logger.debug(`[RobotFileService] Hierarchical directory does not exist: ${hierarchicalDirPath}`);
+                // this.logger.trace(`[RobotFileService] Hierarchical directory does not exist: ${hierarchicalDirPath}`);
             }
 
             try {
@@ -96,7 +96,7 @@ export class RobotFileService {
                     duplicateFiles: duplicateFiles.length > 0 ? duplicateFiles : undefined
                 };
             } catch {
-                this.logger.debug(`[RobotFileService] Robot file does not exist at exact path: ${actualRobotFilePath}`);
+                // this.logger.trace(`[RobotFileService] Robot file does not exist at exact path: ${actualRobotFilePath}`);
             }
 
             // If exact path not found, try to find files with different numbering patterns
@@ -119,7 +119,7 @@ export class RobotFileService {
                 };
             }
 
-            this.logger.debug(`[RobotFileService] No robot file found for: ${item.data.base.name}`);
+            // this.logger.trace(`[RobotFileService] No robot file found for: ${item.data.base.name}`);
             return {
                 exists: false,
                 hierarchicalPath: actualHierarchicalPathOfItem,
