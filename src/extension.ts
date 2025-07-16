@@ -834,18 +834,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
-        try {
-            await item.openGeneratedRobotFile();
-            const robotFilePath = item.getRobotFilePath();
-            if (robotFilePath) {
-                const uri = vscode.Uri.file(robotFilePath);
-                await vscode.commands.executeCommand("revealInExplorer", uri);
-                logger.debug(`Revealed robot file in explorer: ${robotFilePath}`);
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[Cmd] Error in handleOpenAndRevealGeneratedRobotFile: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to open robot file: ${errorMessage}`);
+        await item.openGeneratedRobotFile();
+        const robotFilePath = item.getRobotFilePath();
+        if (robotFilePath) {
+            const uri = vscode.Uri.file(robotFilePath);
+            await vscode.commands.executeCommand("revealInExplorer", uri);
+            logger.debug(`Revealed robot file in explorer: ${robotFilePath}`);
         }
     };
 

@@ -351,7 +351,6 @@ export class RobotFileService {
             await vscode.window.showTextDocument(document);
         } catch (error) {
             this.logger.error(`[RobotFileService] Error while opening robot file "${filePath}":`, error);
-            throw error;
         }
     }
 
