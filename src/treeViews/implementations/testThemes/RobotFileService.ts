@@ -32,77 +32,56 @@ export class RobotFileService {
         try {
             const workspaceLocation = await validateAndReturnWorkspaceLocation();
             if (!workspaceLocation) {
-                this.logger.error("[RobotFileService] Workspace location not found");
+                this.logger.error(
+                    "[RobotFileService] Workspace location is not available while checking robot file existence"
+                );
                 return { exists: false };
             }
 
             const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
             if (!generatedRobotFilesOutputDirectory) {
-                this.logger.error("[RobotFileService] Output directory not configured");
+                this.logger.error(
+                    "[RobotFileService] Output directory is not configured while checking robot file existence"
+                );
                 return { exists: false };
             }
 
             const hierarchicalPath = this.buildHierarchicalPath(item);
             const robotFileName = this.generateRobotFileName(item.data.base.name, item.data.base.numbering);
-            const robotFilePath = path.join(
-                workspaceLocation,
-                generatedRobotFilesOutputDirectory,
-                hierarchicalPath,
-                robotFileName
-            );
-
-            this.logger.debug(`[RobotFileService] Checking for robot file: ${robotFilePath}`);
-            this.logger.debug(
-                `[RobotFileService] Item: ${item.data.base.name}, Type: ${item.data.elementType}, Hierarchical path: ${hierarchicalPath}, File name: ${robotFileName}`
-            );
-            this.logger.debug(
-                `[RobotFileService] Workspace: ${workspaceLocation}, Output dir: ${generatedRobotFilesOutputDirectory}`
-            );
-
             const outputDirPath = path.join(workspaceLocation, generatedRobotFilesOutputDirectory);
             try {
-                const outputDirStats = await fs.promises.stat(outputDirPath);
-                this.logger.debug(
-                    `[RobotFileService] Output directory exists: ${outputDirPath} (isDirectory: ${outputDirStats.isDirectory()})`
-                );
+                await fs.promises.stat(outputDirPath);
             } catch {
-                this.logger.debug(`[RobotFileService] Output directory does not exist: ${outputDirPath}`);
+                this.logger.debug(
+                    `[RobotFileService] Test generation output directory does not exist: ${outputDirPath}`
+                );
             }
 
-            const actualFolderName = await this.findActualFolderPath(
+            const actualHierarchicalPathOfItem = await this.resolveFolderName(
                 workspaceLocation,
                 generatedRobotFilesOutputDirectory,
                 hierarchicalPath
             );
-            const actualHierarchicalPath = actualFolderName;
             const actualRobotFilePath = path.join(
                 workspaceLocation,
                 generatedRobotFilesOutputDirectory,
-                actualHierarchicalPath,
+                actualHierarchicalPathOfItem,
                 robotFileName
             );
-
-            this.logger.debug(`[RobotFileService] Actual hierarchical path: ${actualHierarchicalPath}`);
-            this.logger.debug(`[RobotFileService] Actual robot file path: ${actualRobotFilePath}`);
 
             const hierarchicalDirPath = path.join(
                 workspaceLocation,
                 generatedRobotFilesOutputDirectory,
-                actualHierarchicalPath
+                actualHierarchicalPathOfItem
             );
             try {
-                const hierarchicalDirStats = await fs.promises.stat(hierarchicalDirPath);
-                this.logger.debug(
-                    `[RobotFileService] Hierarchical directory exists: ${hierarchicalDirPath} (isDirectory: ${hierarchicalDirStats.isDirectory()})`
-                );
+                await fs.promises.stat(hierarchicalDirPath);
             } catch {
                 this.logger.debug(`[RobotFileService] Hierarchical directory does not exist: ${hierarchicalDirPath}`);
             }
 
             try {
                 await fs.promises.access(actualRobotFilePath, fs.constants.F_OK);
-                this.logger.debug(`[RobotFileService] Robot file exists at exact path: ${actualRobotFilePath}`);
-
                 const duplicateFiles = await this.findDuplicateRobotFiles(
                     workspaceLocation,
                     generatedRobotFilesOutputDirectory,
@@ -113,7 +92,7 @@ export class RobotFileService {
                     exists: true,
                     filePath: actualRobotFilePath,
                     fileName: robotFileName,
-                    hierarchicalPath: actualHierarchicalPath,
+                    hierarchicalPath: actualHierarchicalPathOfItem,
                     duplicateFiles: duplicateFiles.length > 0 ? duplicateFiles : undefined
                 };
             } catch {
@@ -121,9 +100,6 @@ export class RobotFileService {
             }
 
             // If exact path not found, try to find files with different numbering patterns
-            this.logger.debug(
-                `[RobotFileService] Searching for robot files with different numbering patterns for: ${item.data.base.name}`
-            );
             const foundFiles = await this.findRobotFilesWithDifferentNumbering(
                 workspaceLocation,
                 generatedRobotFilesOutputDirectory,
@@ -132,16 +108,13 @@ export class RobotFileService {
             );
 
             if (foundFiles.length > 0) {
-                // Use the first found file
                 const foundFilePath = foundFiles[0];
                 const foundFileName = path.basename(foundFilePath);
-                this.logger.debug(`[RobotFileService] Found robot file with different numbering: ${foundFilePath}`);
-
                 return {
                     exists: true,
                     filePath: foundFilePath,
                     fileName: foundFileName,
-                    hierarchicalPath: actualHierarchicalPath,
+                    hierarchicalPath: actualHierarchicalPathOfItem,
                     duplicateFiles: foundFiles.length > 1 ? foundFiles : undefined
                 };
             }
@@ -149,7 +122,7 @@ export class RobotFileService {
             this.logger.debug(`[RobotFileService] No robot file found for: ${item.data.base.name}`);
             return {
                 exists: false,
-                hierarchicalPath: actualHierarchicalPath,
+                hierarchicalPath: actualHierarchicalPathOfItem,
                 fileName: robotFileName
             };
         } catch (error) {
@@ -200,14 +173,15 @@ export class RobotFileService {
     }
 
     /**
-     * Finds the actual folder path that exists in the filesystem
-     * This handles cases where the folder name might have different numbering patterns
+     * Resolves the folder name that exists in the filesystem while accounting for numbering prefixes
+     * (e.g., "1_TestTheme" vs "01_TestTheme" vs "001_TestTheme")
+     *
      * @param workspaceLocation The workspace root location
      * @param outputDirectory The output directory for robot files
-     * @param expectedFolderName The expected folder name
-     * @returns The actual folder path if found, or the expected path if not found
+     * @param expectedFolderName The expected folder name to search for
+     * @returns The actual folder name if a match is found, or the expected folder name as fallback
      */
-    private async findActualFolderPath(
+    private async resolveFolderName(
         workspaceLocation: string,
         outputDirectory: string,
         expectedFolderName: string
@@ -232,9 +206,6 @@ export class RobotFileService {
                         // This will match: 1_FolderName, 01_FolderName, 001_FolderName, etc.
                         const regexPattern = new RegExp(
                             `^0*${numberingNum}_${folderName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`
-                        );
-                        this.logger.debug(
-                            `[RobotFileService] Using regex pattern for folder search: ${regexPattern.source}`
                         );
 
                         for (const file of outputDirectoryFiles) {
@@ -271,7 +242,7 @@ export class RobotFileService {
                     }
                 }
             } catch (error) {
-                this.logger.debug(`[RobotFileService] Error searching for folder:`, error);
+                this.logger.debug(`[RobotFileService] Error searching for folder "${expectedFolderName}":`, error);
             }
         }
 
@@ -299,7 +270,7 @@ export class RobotFileService {
                 duplicateFiles.push(...allFiles);
             }
         } catch (error) {
-            this.logger.error(`[RobotFileService] Error finding duplicate files:`, error);
+            this.logger.error(`[RobotFileService] Error while searching for duplicate files for "${fileName}":`, error);
         }
 
         return duplicateFiles;
@@ -328,7 +299,10 @@ export class RobotFileService {
                 }
             }
         } catch (error) {
-            this.logger.debug(`[RobotFileService] Could not read directory ${searchPath}:`, error);
+            this.logger.error(
+                `[RobotFileService] Error while searching for robot files in "${searchPath}" for file name "${fileName}":`,
+                error
+            );
         }
 
         return foundFiles;
@@ -357,7 +331,10 @@ export class RobotFileService {
                 }
             }
         } catch (error) {
-            this.logger.debug(`[RobotFileService] Could not read directory ${searchPath}:`, error);
+            this.logger.error(
+                `[RobotFileService] Error while searching for robot files in "${searchPath}" for regex pattern "${regexPattern}":`,
+                error
+            );
         }
 
         return foundFiles;
@@ -372,9 +349,8 @@ export class RobotFileService {
         try {
             const document = await vscode.workspace.openTextDocument(filePath);
             await vscode.window.showTextDocument(document);
-            this.logger.debug(`[RobotFileService] Opened robot file: ${filePath}`);
         } catch (error) {
-            this.logger.error(`[RobotFileService] Error opening robot file ${filePath}:`, error);
+            this.logger.error(`[RobotFileService] Error while opening robot file "${filePath}":`, error);
             throw error;
         }
     }
@@ -390,9 +366,6 @@ export class RobotFileService {
         const prefixOfFileName = lastNumberingPart ? `${lastNumberingPart}_` : "";
         // Normalize whitespace to underscores for file name matching
         const normalizedName = treeItemName.replace(/\s+/g, "_");
-        this.logger.debug(
-            `[RobotFileService] generateRobotFileName: original numbering="${treeItemNumbering}", last part="${lastNumberingPart}", prefix="${prefixOfFileName}", tree item name="${treeItemName}", normalized name="${normalizedName}"`
-        );
         return `${prefixOfFileName}${normalizedName}.robot`;
     }
 
@@ -414,10 +387,6 @@ export class RobotFileService {
         const lastNumberingPart = numbering ? numbering.split(".")?.pop() || numbering : "";
         // Normalize whitespace to underscores for file name matching
         const normalizedName = itemName.replace(/\s+/g, "_");
-        this.logger.debug(
-            `[RobotFileService] findRobotFilesWithDifferentNumbering: item="${itemName}", normalized name="${normalizedName}", original numbering="${numbering}", last part="${lastNumberingPart}"`
-        );
-
         const foundRobotFiles: string[] = [];
         const outputPath = path.join(workspaceLocation, outputDirectory);
 
@@ -429,18 +398,20 @@ export class RobotFileService {
                 const regexPattern = new RegExp(
                     `^0*${numberingNum}_${normalizedName.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\.robot$`
                 );
-                this.logger.debug(`[RobotFileService] Using regex pattern: ${regexPattern.source}`);
 
                 try {
                     const allRegexMatchingRobotFiles = await this.findAllRobotFilesByRegex(outputPath, regexPattern);
                     foundRobotFiles.push(...allRegexMatchingRobotFiles);
                     if (allRegexMatchingRobotFiles.length > 0) {
                         this.logger.debug(
-                            `[RobotFileService] Found files with regex: ${allRegexMatchingRobotFiles.join(", ")}`
+                            `[RobotFileService] Found robot files with regex pattern "${regexPattern}": ${allRegexMatchingRobotFiles.join(", ")}`
                         );
                     }
                 } catch (error) {
-                    this.logger.debug(`[RobotFileService] Error searching with regex:`, error);
+                    this.logger.error(
+                        `[RobotFileService] Error while searching for robot files in "${outputPath}" for regex pattern "${regexPattern}":`,
+                        error
+                    );
                 }
             } else {
                 // Numbering is not numeric, try searching with exact matching
@@ -450,11 +421,14 @@ export class RobotFileService {
                     foundRobotFiles.push(...allRobotFiles);
                     if (allRobotFiles.length > 0) {
                         this.logger.debug(
-                            `[RobotFileService] Found files for ${exactFileName}: ${allRobotFiles.join(", ")}`
+                            `[RobotFileService] Found robot files for "${exactFileName}": ${allRobotFiles.join(", ")}`
                         );
                     }
                 } catch (error) {
-                    this.logger.debug(`[RobotFileService] Error searching for ${exactFileName}:`, error);
+                    this.logger.error(
+                        `[RobotFileService] Error while searching for robot files in "${outputPath}" for exact file name "${exactFileName}":`,
+                        error
+                    );
                 }
             }
         } else {
@@ -465,11 +439,14 @@ export class RobotFileService {
                 foundRobotFiles.push(...allRobotFiles);
                 if (allRobotFiles.length > 0) {
                     this.logger.debug(
-                        `[RobotFileService] Found files for ${exactFileName}: ${allRobotFiles.join(", ")}`
+                        `[RobotFileService] Found robot files for "${exactFileName}": ${allRobotFiles.join(", ")}`
                     );
                 }
             } catch (error) {
-                this.logger.debug(`[RobotFileService] Error searching for ${exactFileName}:`, error);
+                this.logger.error(
+                    `[RobotFileService] Error while searching for robot files in "${outputPath}" for exact file name "${exactFileName}":`,
+                    error
+                );
             }
         }
 
@@ -501,7 +478,7 @@ export class RobotFileService {
             const workspaceLocation = await validateAndReturnWorkspaceLocation();
             if (!workspaceLocation) {
                 this.logger.error(
-                    "[RobotFileService] Cannot show duplicate file warning: workspace location not available"
+                    "[RobotFileService] Workspace location is not available. Cannot show duplicate file warning."
                 );
                 return undefined;
             }
