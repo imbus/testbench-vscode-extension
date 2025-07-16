@@ -855,6 +855,20 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
+    const handleOpenIssueReporter = async () => {
+        logger.debug(`[Cmd] Called: ${allExtensionCommands.openIssueReporter}`);
+        try {
+            await vscode.commands.executeCommand("workbench.action.openIssueReporter", {
+                extensionId: "imbus.testbench-extension"
+            });
+            logger.info("[Cmd] Opened VS Code issue reporter with TestBench extension preselected");
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[Cmd] Error opening issue reporter: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to open issue reporter: ${errorMessage}`);
+        }
+    };
+
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
@@ -1011,6 +1025,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         {
             id: allExtensionCommands.checkForTestCaseSetDoubleClick,
             handler: handleCheckForTestCaseSetDoubleClick
+        },
+        {
+            id: allExtensionCommands.openIssueReporter,
+            handler: handleOpenIssueReporter
         }
     ];
 
