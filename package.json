@@ -457,10 +457,6 @@
                 "title": "TestBench: Open Issue Reporter"
             },
             {
-                "command": "testbenchExtension.setWorkspace",
-                "title": "TestBench: Set Workspace"
-            },
-            {
                 "command": "testbenchExtension.checkForCycleDoubleClick",
                 "title": "Handle Cycle Click"
             },

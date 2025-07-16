@@ -185,7 +185,6 @@ export const TreeViewTiming = {
  * All extension commands as defined in package.json.
  */
 export const allExtensionCommands = {
-    setWorkspace: `${baseKeyOfExtension}.setWorkspace`,
     login: `${baseKeyOfExtension}.login`,
     logout: `${baseKeyOfExtension}.logout`,
     generateTestCasesForCycle: `${baseKeyOfExtension}.generateTestCasesForCycle`,
