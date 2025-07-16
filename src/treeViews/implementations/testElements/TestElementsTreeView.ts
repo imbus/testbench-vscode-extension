@@ -15,6 +15,7 @@ import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { FilterService } from "../../utils/FilterService";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
+import { findInteractionPositionInResourceFile } from "../../../server";
 
 export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private dataProvider: TestElementsDataProvider;
@@ -754,33 +755,31 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     /**
      * Opens a file in VS Code editor.
      * @param filePath The path of the file to open
-     * @param operationType The type of operation for error context
      */
-    private async openFileInVSCodeEditor(filePath: string, operationType: string): Promise<void> {
+    private async openFileInVSCodeEditor(filePath: string): Promise<void> {
         try {
             const document = await vscode.workspace.openTextDocument(filePath);
             await vscode.window.showTextDocument(document);
         } catch (error) {
-            this.logger.error(`[TestElementsTreeView] Error opening ${operationType} file in editor:`, error);
+            this.logger.error(`[TestElementsTreeView] Error opening file in editor:`, error);
             vscode.window.showErrorMessage(
-                `Error opening ${operationType} file: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Error opening file: ${error instanceof Error ? error.message : "Unknown error"}`
             );
         }
     }
 
     /**
-     * Reveals a file in VS Code's file explorer.
+     * Reveals a file in VS Code's explorer view.
      * @param filePath The path of the file to reveal
-     * @param operationType The type of operation for logging context
      */
-    private async revealFileInExplorer(filePath: string, operationType: string): Promise<void> {
+    private async revealFileInVSCodeExplorer(filePath: string): Promise<void> {
         try {
             const uri = vscode.Uri.file(filePath);
             await vscode.commands.executeCommand("revealInExplorer", uri);
-            this.logger.debug(`Revealed ${operationType} file in explorer: ${filePath}`);
+            this.logger.debug(`Revealed file in explorer: ${filePath}`);
         } catch (error) {
             this.logger.warn(
-                `Failed to reveal ${operationType} file in explorer: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Failed to reveal file in explorer: ${error instanceof Error ? error.message : "Unknown error"}`
             );
         }
     }
@@ -788,11 +787,53 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     /**
      * Opens and reveals a resource file in VS Code.
      * @param resourcePath The path of the resource file
-     * @param operationType The type of operation for logging context
      */
-    private async openAndRevealResourceFile(resourcePath: string, operationType: string): Promise<void> {
-        await this.openFileInVSCodeEditor(resourcePath, operationType);
-        await this.revealFileInExplorer(resourcePath, operationType);
+    private async openAndRevealResourceFile(resourcePath: string): Promise<void> {
+        await this.openFileInVSCodeEditor(resourcePath);
+        await this.revealFileInVSCodeExplorer(resourcePath);
+    }
+
+    /**
+     * Opens a resource file in VS Code editor and positions cursor at a specific interaction.
+     * @param resourcePath The path of the resource file
+     * @param interactionName The name of the interaction to find and position cursor at
+     * @param uid The unique identifier of the tree item
+     */
+    private async openFileAndJumpToInteraction(
+        resourcePath: string,
+        interactionName: string,
+        uid: string
+    ): Promise<void> {
+        let textDocument: vscode.TextDocument;
+        let textEditor: vscode.TextEditor;
+
+        try {
+            textDocument = await vscode.workspace.openTextDocument(resourcePath);
+            textEditor = await vscode.window.showTextDocument(textDocument);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            this.logger.error(`[TestElementsTreeView] Failed to open file ${resourcePath}: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to open resource file: ${errorMessage}`);
+            return;
+        }
+        try {
+            const interactionLineNumber = await findInteractionPositionInResourceFile(
+                textDocument.uri,
+                interactionName,
+                uid
+            );
+            if (interactionLineNumber !== undefined) {
+                const position = new vscode.Position(interactionLineNumber, 0);
+                textEditor.selection = new vscode.Selection(position, position);
+                textEditor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+            }
+        } catch (positioningError) {
+            const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";
+            this.logger.warn(
+                `[TestElementsTreeView] Failed to position cursor for interaction '${interactionName}': ${errorMessage}`,
+                positioningError
+            );
+        }
     }
 
     /**
@@ -832,7 +873,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 }
             }
 
-            await this.openAndRevealResourceFile(resourcePath, "resource");
+            await this.openAndRevealResourceFile(resourcePath);
         } catch (error) {
             this.logger.error(`Error checking file existence for ${resourcePath}:`, error);
             vscode.window.showErrorMessage(
@@ -873,7 +914,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 return;
             }
 
-            await this.openAndRevealResourceFile(resourcePath, "resource");
+            await this.openAndRevealResourceFile(resourcePath);
         } catch (error) {
             this.logger.error(`Error creating missing resource file ${resourcePath}:`, error);
             vscode.window.showErrorMessage(
@@ -923,7 +964,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
     /**
      * Finds and opens the robot resource of an interaction and reveals the opened file in the VS Code explorer view.
-     * If the parent resource file doesn't exist, it will create the file first..
+     * Also jumps to the interaction position in the file.
+     * If the parent resource file doesn't exist, it will create the file first.
      * @param item The tree item representing an interaction.
      */
     public async goToInteractionResource(item: TestElementsTreeItem): Promise<void> {
@@ -939,12 +981,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             targetItem: parentResource,
             parentItem: item,
             errorMessages: {
-                noHierarchicalName: "Cannot determine parent resource path: parent has no hierarchical name.",
+                noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
-                noParent: "Could not find the parent resource for this interaction.",
+                noParent: "Cannot find parent resource for interaction.",
                 noUid: "Parent resource {label} has no UID.",
                 fileNotFound: "Parent resource file does not exist: {path}.",
-                folderNotFound: ""
+                folderNotFound: "Parent resource folder does not exist: {path}."
             }
         };
 
@@ -966,7 +1008,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         }
 
-        await this.openAndRevealResourceFile(resourcePath, "interaction resource");
+        const interactionName = typeof item.label === "string" ? item.label : item.label?.toString() || "";
+        await this.openFileAndJumpToInteraction(resourcePath, interactionName, item.data.uniqueID);
+        await this.revealFileInVSCodeExplorer(resourcePath);
     }
 
     /**
@@ -982,17 +1026,17 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         const config: ResourceOperationConfig = {
-            operationType: "interaction",
+            operationType: "create",
             createMissing: true,
             targetItem: parentResource,
             parentItem: item,
             errorMessages: {
-                noHierarchicalName: "Cannot determine parent resource path: parent has no hierarchical name.",
+                noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
-                noParent: "Could not find the parent resource for this interaction.",
+                noParent: "Cannot find parent resource for interaction.",
                 noUid: "Parent resource {label} has no UID.",
                 fileNotFound: "Parent resource file does not exist: {path}.",
-                folderNotFound: ""
+                folderNotFound: "Parent resource folder does not exist: {path}."
             }
         };
 
@@ -1014,12 +1058,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         }
 
-        await this.openAndRevealResourceFile(resourcePath, "interaction parent resource");
+        await this.openAndRevealResourceFile(resourcePath);
     }
 
     /**
      * Handles interaction single click events.
-     * Opens the .resource file in the editor.
+     * Opens or creates the .resource file in the editor and jumps to the interaction.
      * @param item The interaction tree item that was single clicked
      */
     private async handleInteractionSingleClick(item: TestElementsTreeItem): Promise<void> {
@@ -1029,6 +1073,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
     /**
      * Opens the robot resource of an interaction in the editor without revealing it in the explorer.
+     * Jumps to the interaction position in the file.
      * If the parent resource file doesn't exist, it will create the file first.
      * @param item The tree item representing an interaction.
      */
@@ -1045,12 +1090,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             targetItem: parentResource,
             parentItem: item,
             errorMessages: {
-                noHierarchicalName: "Cannot determine parent resource path: parent has no hierarchical name.",
+                noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
-                noParent: "Could not find the parent resource for this interaction.",
+                noParent: "Cannot find parent resource for interaction.",
                 noUid: "Parent resource {label} has no UID.",
                 fileNotFound: "Parent resource file does not exist: {path}.",
-                folderNotFound: ""
+                folderNotFound: "Parent resource folder does not exist: {path}."
             }
         };
 
@@ -1072,16 +1117,44 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         }
 
-        await this.openFileInVSCodeEditor(resourcePath, "interaction resource");
+        const interactionName = typeof item.label === "string" ? item.label : item.label?.toString() || "";
+        await this.openFileAndJumpToInteraction(resourcePath, interactionName, item.data.uniqueID);
     }
 
     /**
      * Handles interaction double click events.
+     * Opens the resource file, jumps to the interaction position, and reveals the file in explorer.
      * @param item The interaction tree item that was double clicked
      */
     private async handleInteractionDoubleClick(item: TestElementsTreeItem): Promise<void> {
         this.logger.debug(`Interaction item double clicked: ${item.label}`);
-        await this.goToInteractionResource(item);
+        await this.openInteractionResource(item);
+
+        const parentResource = item.parent as TestElementsTreeItem;
+        if (parentResource) {
+            const config: ResourceOperationConfig = {
+                operationType: "open",
+                createMissing: true,
+                targetItem: parentResource,
+                parentItem: item,
+                errorMessages: {
+                    noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
+                    noPath: "Cannot construct resource path: workspace location not found.",
+                    noParent: "Cannot find parent resource for interaction.",
+                    noUid: "Parent resource {label} has no UID.",
+                    fileNotFound: "Parent resource file does not exist: {path}.",
+                    folderNotFound: "Parent resource folder does not exist: {path}."
+                }
+            };
+
+            const pathResult = await this.validateAndConstructPath(
+                parentResource.data.hierarchicalName,
+                config.errorMessages
+            );
+            if (pathResult) {
+                await this.revealFileInVSCodeExplorer(pathResult.resourcePath);
+            }
+        }
     }
 
     /**

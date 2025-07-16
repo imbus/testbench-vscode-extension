@@ -23,6 +23,7 @@ dev = [
   "nox",
   "invoke",
   "pip-tools",
+  "ruff",
 ]
 
 
@@ -40,5 +41,41 @@ exclude = [
   "__pycache__",
 ]
 
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+lint.select = [
+  "A",
+  "B",
+  "C",
+  "DTZ",
+  "E",
+  "F",
+  "I",
+  "ICN",
+  "INP",
+  "ISC",
+  "N",
+  "PIE",
+  "PL",
+  "PT",
+  "PTH",
+  "PYI",
+  "RET",
+  "RSE",
+  "RUF",
+  "SIM",
+  "T20",
+  "UP",
+  "W"
+]
 
+lint.ignore = [
+  "ISC001"
+]
 
+exclude = [
+  "__pycache__",
+  "model.py",
+  "legacy_model.py",
+]

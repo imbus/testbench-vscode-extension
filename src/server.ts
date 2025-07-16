@@ -32,6 +32,8 @@ const onVirtualDocumentChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
 const virtualDocumentProvider: vscode.TextDocumentContentProvider = {
     onDidChange: onVirtualDocumentChangeEmitter.event,
     provideTextDocumentContent(uri: vscode.Uri): string {
+        // uri parameter is required by VS Code API but not used in this implementation
+        void uri;
         return virtualDocumentContent;
     }
 };
@@ -490,6 +492,10 @@ function setupClientNotifications(
 ): void {
     client.onNotification("testbench-language-server/show-error", (params) => {
         vscode.window.showErrorMessage(`${params.message}`);
+    });
+
+    client.onNotification("testbench-language-server/show-warning", (params) => {
+        vscode.window.showWarningMessage(`${params.message}`);
     });
 
     client.onNotification("testbench-language-server/show-info", (params) => {
@@ -1083,4 +1089,45 @@ export async function waitForLanguageServerReady(
     }
 
     throw new Error(`Language server did not become ready within ${timeoutMs}ms`);
+}
+
+/**
+ * Finds the position of an interaction in a resource file using the language server.
+ *
+ * @param uri The URI of the resource file to search in
+ * @param interactionName The name of the interaction to find
+ * @param interactionUid The unique ID of the tree item
+ * @returns Promise that resolves to the line number where the interaction was found, or undefined if not found
+ */
+export async function findInteractionPositionInResourceFile(
+    uri: vscode.Uri,
+    interactionName: string,
+    interactionUid: string
+): Promise<number | undefined> {
+    if (!isLanguageServerRunning()) {
+        logger.warn(
+            "[findInteractionPositionInResourceFile] Language server not running, cannot find interaction position"
+        );
+        return undefined;
+    }
+
+    try {
+        const lineNumber = await vscode.commands.executeCommand(
+            "testbench_ls.getInteractionPosition",
+            uri.toString(),
+            interactionName,
+            interactionUid
+        );
+        if (typeof lineNumber === "number") {
+            return lineNumber;
+        }
+        return undefined;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        logger.error(
+            `[findInteractionPositionInResourceFile] Error finding interaction position: ${errorMessage}`,
+            error
+        );
+        return undefined;
+    }
 }

@@ -31,6 +31,13 @@ def show_info(ls: LanguageServer, message: str):
     )
 
 
+def show_warning(ls: LanguageServer, message: str):
+    ls.send_notification(
+        f"{TESTBENCH_LS_CLASS_NAME}/show-warning",
+        {"message": message},
+    )
+
+
 def log(ls: LanguageServer, message: str, level: LogLevel = LogLevel.INFO):
     ls.send_notification(
         f"{TESTBENCH_LS_CLASS_NAME}/log-{level.value}",
