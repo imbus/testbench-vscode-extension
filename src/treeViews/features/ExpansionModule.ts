@@ -36,8 +36,6 @@ export class ExpansionModule implements TreeViewModule {
             this.expandedItems = new Set(state.expansion.expandedItems);
             this.collapsedItems = new Set(state.expansion.collapsedItems);
             this.defaultExpanded = state.expansion.defaultExpanded ?? this.defaultExpanded;
-
-            context.logger.debug(`Expansion state loaded from current state manager state`);
         }
 
         context.eventBus.on("tree:itemExpanded", (event) => {
@@ -62,7 +60,7 @@ export class ExpansionModule implements TreeViewModule {
             }
         });
 
-        context.logger.debug("ExpansionModule initialized");
+        context.logger.debug("[ExpansionModule] Expansion module initialized");
     }
 
     /**
@@ -108,7 +106,7 @@ export class ExpansionModule implements TreeViewModule {
         this.context.stateManager.setState({ expansion: expansionState });
 
         this.context.logger.debug(
-            `Saving expansion state: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed`
+            `[ExpansionModule] Saving expansion state: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed`
         );
 
         this.context.eventBus.emit({
