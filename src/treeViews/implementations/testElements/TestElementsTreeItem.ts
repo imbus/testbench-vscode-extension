@@ -43,7 +43,6 @@ export class TestElementsTreeItem extends TreeItemBase {
     public readonly data: TestElementItemData;
     private _resourceStatus: "none" | "available" | "missing" | "partial" = "none";
     private eventBus: EventBus;
-    private _isLocallyAvailable: boolean = false;
 
     constructor(
         data: TestElementItemData,
@@ -525,7 +524,6 @@ export class TestElementsTreeItem extends TreeItemBase {
      * @param {string} [localPath] - The absolute local file path.
      */
     public updateLocalAvailability(isAvailable: boolean, localPath?: string): void {
-        this._isLocallyAvailable = isAvailable;
         this.data.isLocallyAvailable = isAvailable;
         this.data.localPath = localPath;
         this.updateContextValue();

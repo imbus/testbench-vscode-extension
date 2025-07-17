@@ -275,13 +275,15 @@ export class PlayServerConnection {
      * @returns {Promise<any | null>} The test elements data fetched from the server or null if an error occurs.
      */
     async getTestElementsWithTovKeyUsingOldPlayServer(tovKey: string | null): Promise<any | null> {
-        logger.debug("Fetching test elements with TOV key:", tovKey);
+        logger.debug(`[testBenchConnection] Fetching test elements with TOV key: ${tovKey}`);
         if (!this.sessionToken) {
-            logger.error("Session token is null. Cannot fetch test elements for TOV key:", tovKey);
+            logger.error(
+                `[testBenchConnection] Session token is null. Cannot fetch test elements for TOV key: ${tovKey}`
+            );
             return null;
         }
         if (!tovKey) {
-            logger.error("TOV key is null or undefined. Cannot fetch test elements.");
+            logger.error(`[testBenchConnection] TOV key is null or undefined. Cannot fetch test elements.`);
             return null;
         }
 
@@ -290,7 +292,9 @@ export class PlayServerConnection {
             const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
             const getTestElementsURL: string = `tovs/${tovKey}/testElements`;
 
-            logger.trace("Creating session for old play server with URL:", oldPlayServerBaseUrl);
+            logger.debug(
+                `[testBenchConnection] Creating session for old play server with URL: ${oldPlayServerBaseUrl}`
+            );
 
             const userNameFromConfig: string = this.username;
             const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
@@ -313,13 +317,13 @@ export class PlayServerConnection {
             });
 
             if (!oldPlayServerSession) {
-                logger.error("Failed to create session for old play server.");
+                logger.error(`[testBenchConnection] Failed to create session for old play server.`);
                 return null;
-            } else {
-                logger.trace(`Old play server session created successfully.`);
             }
 
-            logger.trace(`Sending GET request to ${getTestElementsURL} for TOV key ${tovKey}`);
+            logger.debug(
+                `[testBenchConnection] Fetching test elements with TOV key ${tovKey} from ${getTestElementsURL}`
+            );
             const testElementsResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getTestElementsURL),
                 3, // maxRetries
@@ -354,17 +358,21 @@ export class PlayServerConnection {
             }
             */
 
-            logger.trace("Response status of get test elements request:", testElementsResponse.status);
+            logger.debug(
+                `[testBenchConnection] Response status of GET test elements request: ${testElementsResponse.status}`
+            );
             if (testElementsResponse.data) {
                 // Note: The output of testElementsResponse is large
-                // logger.trace("Fetched test elements data:", testElementsResponse.data);
+                logger.trace(
+                    `[testBenchConnection] Fetched test elements data for ${oldPlayServerBaseUrl}: ${testElementsResponse.data}`
+                );
                 return testElementsResponse.data;
             } else {
-                logger.error("Test elements data is null or undefined.");
+                logger.error(`[testBenchConnection] Test elements data is null or undefined.`);
                 return null;
             }
         } catch (error) {
-            logger.error("Error fetching test elements:", error);
+            logger.error(`[testBenchConnection] Error fetching test elements for TOV key ${tovKey}: ${error}`);
             vscode.window.showErrorMessage("Error fetching test elements. Please check the logs for details.");
             return null;
         }
