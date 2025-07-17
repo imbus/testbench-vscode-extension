@@ -405,7 +405,7 @@ export class RobotFileService {
                     const allRegexMatchingRobotFiles = await this.findAllRobotFilesByRegex(outputPath, regexPattern);
                     foundRobotFiles.push(...allRegexMatchingRobotFiles);
                     if (allRegexMatchingRobotFiles.length > 0) {
-                        this.logger.debug(
+                        this.logger.trace(
                             `[RobotFileService] Found robot files with regex pattern "${regexPattern}": ${allRegexMatchingRobotFiles.join(", ")}`
                         );
                     }

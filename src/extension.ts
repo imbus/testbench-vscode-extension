@@ -130,8 +130,8 @@ async function prepareLanguageServerForTreeItemOperation(
 
     if (!languageServerParams) {
         const errorMessage = `Cannot ${operationName}: invalid tree item. Missing project or TOV information.`;
-        logger.error(`[Cmd] ${errorMessage}`);
-        vscode.window.showErrorMessage(`Invalid tree item: ${errorMessage}`);
+        logger.error(`[extension] ${errorMessage}`);
+        vscode.window.showErrorMessage(errorMessage);
         throw new Error(errorMessage);
     }
 
@@ -166,8 +166,8 @@ export function safeCommandHandler(handler: (...args: any[]) => any): (...args: 
             await handler(...args);
         } catch (error) {
             const errorMessage: string = error instanceof Error ? error.message : "An unknown error occurred";
-            logger.error(`Error executing command: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`An error occurred: ${errorMessage}`);
+            logger.error(`[extension] Error executing command: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Error executing command: ${errorMessage}`);
         }
     };
 }
@@ -183,7 +183,7 @@ function withSingleTestOperation<T extends any[]>(
 ): (...args: T) => Promise<void> {
     return async (...args: T) => {
         if (isTestOperationInProgress) {
-            logger?.warn("[TestOperation] Attempted to start a test operation while another is in progress");
+            logger?.warn("[extension] Attempted to start a test operation while another is in progress");
             vscode.window.showWarningMessage(
                 "Another test operation is already in progress. Please wait for it to complete."
             );
@@ -217,10 +217,10 @@ function registerSafeCommand(
             // Errors expected in silent auto-login, dont show error message to user.
             if (commandId === allExtensionCommands.automaticLoginAfterExtensionActivation) {
                 logger.warn(
-                    `Command ${commandId} error (expected for silent auto-login if conditions not met): ${error.message}`
+                    `[extension] Command ${commandId} error (expected for silent auto-login if conditions not met): ${error.message}`
                 );
             } else {
-                logger.error(`Command ${commandId} error: ${error.message}`, error);
+                logger.error(`[extension] Command ${commandId} error: ${error.message}`, error);
                 vscode.window.showErrorMessage(`Command ${commandId} failed: ${error.message}`);
             }
         }
@@ -248,7 +248,7 @@ async function performDeferredViewRestoration(
     }
 
     try {
-        logger.debug(`Performing deferred view restoration for: ${savedViewId}`);
+        logger.debug(`[extension] Performing deferred view restoration for: ${savedViewId}`);
         if (savedContext.isCycle) {
             await treeViews.testThemesTree.loadCycle(
                 savedContext.projectKey,
@@ -277,10 +277,10 @@ async function performDeferredViewRestoration(
         await displayTestElementsTreeView();
         await hideProjectManagementTreeView();
 
-        logger.info(`Successfully restored view to context of TOV: ${savedContext.tovName}`);
+        logger.info(`[extension] Successfully restored view to context of TOV: ${savedContext.tovName}`);
         return true;
     } catch (error) {
-        logger.error("Failed to restore view state:", error);
+        logger.error("[extension] Failed to restore view state:", error);
         return false;
     }
 }
@@ -293,13 +293,13 @@ async function performDeferredViewRestoration(
  */
 async function registerExtensionCommands(context: vscode.ExtensionContext): Promise<void> {
     if (!treeViews) {
-        logger.warn("Tree views not initialized. Skipping command registration.");
+        logger.warn("[extension] Tree views not initialized. Skipping command registration.");
         return;
     }
 
     // --- Command Handlers ---
     const handleAutomaticLogin = async () => {
-        logger.debug(`[Cmd] Called: ${allExtensionCommands.automaticLoginAfterExtensionActivation}`);
+        logger.debug(`[extension] Command called: ${allExtensionCommands.automaticLoginAfterExtensionActivation}`);
         const config = getExtensionConfiguration();
         if (config.get(ConfigKeys.AUTO_LOGIN)) {
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
@@ -312,7 +312,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleLogin = async () => {
-        logger.debug(`[Cmd] Called: ${allExtensionCommands.login}`);
+        logger.debug(`[extension] Command called: ${allExtensionCommands.login}`);
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             createIfNone: true
         });
@@ -322,14 +322,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleLogout = async () => {
-        logger.debug("[Cmd] Called: logout");
+        logger.debug(`[extension] Command called: ${allExtensionCommands.logout}`);
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             silent: true
         });
         if (session && authProviderInstance) {
             // Removing the session fires onDidChangeSessions and triggers proper UI cleanup.
             await authProviderInstance.removeSession(session.id);
-            logger.info(`[Cmd] Session ${session.id} removed by logout command.`);
         }
 
         await stopLanguageClient();
@@ -341,10 +340,14 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleCycleClick = async (cycleItem: ProjectsTreeItem) => {
-        logger.debug(`[Cmd] Called: ${allExtensionCommands.handleCycleClick} for item ${cycleItem.label}`);
+        logger.debug(
+            `[extension] Command called: ${allExtensionCommands.handleCycleClick} for item ${cycleItem.label}`
+        );
 
         if (!connection) {
-            logger.warn("[Cmd] handleCycleClick called without active connection.");
+            logger.warn(
+                `[extension] Command ${allExtensionCommands.handleCycleClick} called without active connection.`
+            );
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
@@ -374,10 +377,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleTOVClick = async (versionItem: ProjectsTreeItem) => {
-        logger.debug(`[Cmd] Called: ${allExtensionCommands.handleTOVClick} for item ${versionItem.label}`);
+        logger.debug(
+            `[extension] Command called: ${allExtensionCommands.handleTOVClick} for item ${versionItem.label}`
+        );
 
         if (!connection) {
-            logger.warn("[Cmd] handleTOVClick called without active connection.");
+            logger.warn(`[extension] Command ${allExtensionCommands.handleTOVClick} called without active connection.`);
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
@@ -388,13 +393,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const tovName = versionItem.label?.toString();
 
         if (projectKey && tovKey && projectName && tovName) {
-            logger.debug(`Version item clicked: ${tovName} in project ${projectName}`);
-
             await updateOrRestartLS(projectName, tovName);
         } else {
-            const errorMessage = `Cannot update language server: invalid project or TOV information. Project: ${projectName}, TOV: ${tovName}`;
+            const errorMessage = `Cannot update language server: Invalid project or TOV values. Project name: ${projectName}, TOV name: ${tovName}`;
             vscode.window.showErrorMessage(errorMessage);
-            logger.error(errorMessage);
+            logger.error(`[extension] ${errorMessage}`);
         }
     };
 
@@ -404,7 +407,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!connection) {
-            logger.warn("[Cmd] handleOpenTOV called without active connection.");
+            logger.warn(`[extension] handleOpenTOV called without active connection.`);
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
@@ -433,7 +436,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!connection) {
-            logger.warn("[Cmd] handleOpenCycle called without active connection.");
+            logger.warn(`[extension] handleOpenCycle called without active connection.`);
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
@@ -474,7 +477,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const clearInternalFolder = async () => {
-        logger.debug(`Command Called: ${allExtensionCommands.clearInternalTestbenchFolder}`);
+        logger.debug(`[extension] Command called: ${allExtensionCommands.clearInternalTestbenchFolder}`);
         const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
             return;
@@ -526,13 +529,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     // Test Generation Handlers
     const _handleGenerateTestCasesForTOV = async (tovItem: ProjectsTreeItem) => {
         if (!tovItem) {
-            logger.error("[Cmd] handleGenerateTestCasesForTOV called with undefined item");
+            logger.error(`[extension] _handleGenerateTestCasesForTOV called with undefined item`);
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined item");
             return;
         }
 
         if (!treeViews?.projectsTree) {
-            logger.error("[Cmd] handleGenerateTestCasesForTOV called before tree views are initialized");
+            logger.error(`[extension] _handleGenerateTestCasesForTOV called before tree views are initialized`);
             vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
@@ -550,10 +553,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
-                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                logger.debug(`[extension] Language server wait operation was cancelled by user`);
                 vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
             } else {
-                logger.error(`[Cmd] Error in generateTestCasesForTOV: ${errorMessage}`, error);
+                logger.error(`[extension] Error in generateTestCasesForTOV: ${errorMessage}`, error);
                 vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
             }
         }
@@ -562,13 +565,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const _handleGenerateTestCasesForCycle = async (cycleItem: ProjectsTreeItem) => {
         if (!cycleItem) {
-            logger.error("[Cmd] handleGenerateTestCasesForCycle called with undefined item");
+            logger.error(`[extension] _handleGenerateTestCasesForCycle called with undefined item`);
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined cycle item");
             return;
         }
 
         if (!connection) {
-            logger.warn("[Cmd] handleGenerateForCycle called without active connection.");
+            logger.error(`[extension] _handleGenerateTestCasesForCycle called without active connection.`);
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
         }
@@ -586,10 +589,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
-                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                logger.debug(`[extension] Language server wait operation was cancelled by user`);
                 vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
             } else {
-                logger.error(`[Cmd] Error in generateTestCasesForCycle: ${errorMessage}`, error);
+                logger.error(`[extension] Error in generateTestCasesForCycle: ${errorMessage}`, error);
                 vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
             }
         }
@@ -598,14 +601,14 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const _handleGenerateTestCasesForTestThemeOrTestCaseSet = async (testThemeTreeItem: TestThemesTreeItem) => {
         if (!testThemeTreeItem) {
-            logger.error("[Cmd] handleGenerateTestCasesForTestThemeOrTestCaseSet called with undefined item");
+            logger.error(`[extension] _handleGenerateTestCasesForTestThemeOrTestCaseSet called with undefined item`);
             vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined test theme item");
             return;
         }
 
         if (!treeViews?.testThemesTree) {
             logger.error(
-                "[Cmd] handleGenerateTestCasesForTestThemeOrTestCaseSet called before tree views are initialized"
+                `[extension] _handleGenerateTestCasesForTestThemeOrTestCaseSet called before tree views are initialized`
             );
             vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
@@ -620,10 +623,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
-                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                logger.debug(`[extension] Language server wait operation was cancelled by user`);
                 vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
             } else {
-                logger.error(`[Cmd] Error in generateTestCasesForTestThemeOrTestCaseSet: ${errorMessage}`, error);
+                logger.error(`[extension] Error in generateTestCasesForTestThemeOrTestCaseSet: ${errorMessage}`, error);
                 vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
             }
         }
@@ -634,14 +637,14 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const _handleGenerateTestsForTestThemeTreeItemFromTOV = async (testThemeTreeItem: TestThemesTreeItem) => {
         if (!testThemeTreeItem) {
-            logger.error("[Cmd] handleGenerateTestsForTestThemeTreeItemFromTOV called with undefined item");
-            vscode.window.showErrorMessage("Invalid item: Cannot generate test cases for undefined test theme item");
+            logger.error(`[extension] _handleGenerateTestsForTestThemeTreeItemFromTOV called with undefined item`);
+            vscode.window.showErrorMessage("Tree item is invalid, cannot generate test cases");
             return;
         }
 
         if (!treeViews?.testThemesTree) {
             logger.error(
-                "[Cmd] handleGenerateTestsForTestThemeTreeItemFromTOV called before tree views are initialized"
+                `[extension] _handleGenerateTestsForTestThemeTreeItemFromTOV called before tree views are initialized`
             );
             vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
@@ -656,10 +659,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
-                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                logger.debug(`[extension] Language server wait operation was cancelled by user`);
                 vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
             } else {
-                logger.error(`[Cmd] Error in generateTestsForTestThemeTreeItemFromTOV: ${errorMessage}`, error);
+                logger.error(`[extension] Error in generateTestsForTestThemeTreeItemFromTOV: ${errorMessage}`, error);
                 vscode.window.showErrorMessage(`Failed to generate test cases: ${errorMessage}`);
             }
         }
@@ -670,13 +673,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const _handleReadAndImportTestResultsToTestbench = async (testThemeTreeItem: TestThemesTreeItem) => {
         if (!testThemeTreeItem) {
-            logger.error("[Cmd] handleReadAndImportTestResultsToTestbench called with undefined item");
-            vscode.window.showErrorMessage("Invalid item: Cannot import test results for undefined test theme item");
+            logger.error(`[extension] _handleReadAndImportTestResultsToTestbench called with undefined item`);
+            vscode.window.showErrorMessage("Tree item is invalid, cannot import test results");
             return;
         }
 
         if (!treeViews?.testThemesTree) {
-            logger.error("[Cmd] handleReadAndImportTestResultsToTestbench called before tree views are initialized");
+            logger.error(
+                `[extension] _handleReadAndImportTestResultsToTestbench called before tree views are initialized`
+            );
             vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
@@ -687,10 +692,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
-                logger.info("[Cmd] Language server wait operation was cancelled by user");
+                logger.debug(`[extension] Language server wait operation was cancelled by user`);
                 vscode.window.showInformationMessage("Operation cancelled while waiting for language server.");
             } else {
-                logger.error(`[Cmd] Error in readAndImportTestResultsToTestbench: ${errorMessage}`, error);
+                logger.error(`[extension] Error in readAndImportTestResultsToTestbench: ${errorMessage}`, error);
                 vscode.window.showErrorMessage(`Failed to import test results: ${errorMessage}`);
             }
         }
@@ -829,8 +834,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const handleOpenAndRevealGeneratedRobotFile = async (item: TestThemesTreeItem) => {
         if (!item) {
-            logger.error("[Cmd] handleOpenAndRevealGeneratedRobotFile called with undefined item");
-            vscode.window.showErrorMessage("Invalid item: Cannot open robot file for undefined item");
+            logger.error(`[extension] handleOpenAndRevealGeneratedRobotFile called with undefined item`);
+            vscode.window.showErrorMessage("Tree item is invalid, cannot open robot file");
             return;
         }
 
@@ -839,7 +844,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         if (robotFilePath) {
             const uri = vscode.Uri.file(robotFilePath);
             await vscode.commands.executeCommand("revealInExplorer", uri);
-            logger.debug(`Revealed robot file in explorer: ${robotFilePath}`);
         }
     };
 
@@ -850,15 +854,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleOpenIssueReporter = async () => {
-        logger.debug(`[Cmd] Called: ${allExtensionCommands.openIssueReporter}`);
+        logger.debug(`[extension] Command called: ${allExtensionCommands.openIssueReporter}`);
         try {
             await vscode.commands.executeCommand("workbench.action.openIssueReporter", {
                 extensionId: "imbus.testbench-extension"
             });
-            logger.info("[Cmd] Opened VS Code issue reporter with TestBench extension preselected");
+            logger.debug(`[extension] Opened VS Code issue reporter with TestBench extension preselected`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[Cmd] Error opening issue reporter: ${errorMessage}`, error);
+            logger.error(`[extension] Error opening issue reporter: ${errorMessage}`, error);
             vscode.window.showErrorMessage(`Failed to open issue reporter: ${errorMessage}`);
         }
     };
@@ -1049,7 +1053,7 @@ async function createNewConnection(
 ): Promise<PlayServerConnection> {
     if (currentConnection) {
         logger.warn(
-            "[Extension] A different connection was active. Logging out from previous server session before establishing new one."
+            "[extension] A different connection was active. Logging out from previous server session before establishing new one."
         );
         await currentConnection.logoutUserOnServer();
     }
@@ -1088,7 +1092,6 @@ function isValidSavedContext(savedContext: any): boolean {
  * @returns A promise that resolves when the default tree views are loaded.
  */
 async function loadDefaultTreeViewsUI(): Promise<void> {
-    logger.debug("Loading default tree views.");
     if (treeViews) {
         treeViews.projectsTree.refresh();
     }
@@ -1103,10 +1106,10 @@ async function loadDefaultTreeViewsUI(): Promise<void> {
  * @returns A promise that resolves when the tree views are refreshed and the previous view state is restored.
  */
 async function restoreTreeViewsState(context: vscode.ExtensionContext): Promise<void> {
-    logger.debug("[Extension] Restoring tree views state");
+    logger.debug("[extension] Restoring tree views state");
 
     if (!treeViews) {
-        logger.error("Tree views not initialized, cannot restore view state.");
+        logger.error("[extension] Tree views not initialized, cannot restore view state.");
         return;
     }
 
@@ -1119,44 +1122,38 @@ async function restoreTreeViewsState(context: vscode.ExtensionContext): Promise<
         const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
         const savedContext = savedCycleContext || savedTovContext;
 
-        logger.debug(
-            `[Extension] Checking for saved view state: savedViewId=${savedViewId}, hasSavedContext=${!!savedContext}`
-        );
-
         let viewRestored = false;
 
         if (savedContext && isValidSavedContext(savedContext)) {
-            logger.info(
-                `Found last-active context for ${savedContext.projectName}/${savedContext.tovName}. Initializing language server.`
-            );
             await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
         }
 
         if (savedViewId && savedViewId !== "projects" && savedContext) {
             if (!isValidSavedContext(savedContext)) {
                 logger.warn(
-                    `Cannot restore view state: invalid context data. ` +
+                    `[extension] Cannot restore view state: invalid context data. ` +
                         `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
                         `Clearing invalid state and loading default view.`
                 );
                 await clearViewState(context);
             } else {
-                logger.debug(`Attempting to restore previous view: ${savedViewId}`);
                 try {
                     viewRestored = await performDeferredViewRestoration(context, savedViewId, savedContext);
                 } catch (error) {
-                    logger.error("Failed to restore view state:", error);
+                    logger.error(`[extension] Failed to restore view state:`, error);
                     viewRestored = false;
                 }
             }
         }
 
         if (!viewRestored) {
-            logger.debug("Loading default projects view (no saved state to restore or restoration failed).");
+            logger.debug(
+                "[extension] No saved state available to restore or restoration failed. Loading default view."
+            );
             await loadDefaultTreeViewsUI();
         }
     } catch (error) {
-        logger.warn("[Extension] Error managing trees during session change:", error);
+        logger.warn(`[extension] Error managing trees during session change:`, error);
         await loadDefaultTreeViewsUI();
     }
 }
@@ -1165,8 +1162,6 @@ async function restoreTreeViewsState(context: vscode.ExtensionContext): Promise<
  * Handles the case when there's no active connection but a session exists. *
  */
 async function handleNoActiveConnection(): Promise<void> {
-    logger.warn("[Extension] Session exists, but no active connection. Clearing connection.");
-
     if (connection) {
         await connection.logoutUserOnServer();
     }
@@ -1176,15 +1171,12 @@ async function handleNoActiveConnection(): Promise<void> {
     }
 
     await loadDefaultTreeViewsUI();
-    logger.debug("[Extension] View state preserved for potential restoration on next login.");
 }
 
 /**
  * Handles the case when there's no session (logout).
  */
 async function handleNoSession(): Promise<void> {
-    logger.info("[Extension] No active session. Clearing connection.");
-
     if (connection) {
         await connection.logoutUserOnServer();
     }
@@ -1194,7 +1186,6 @@ async function handleNoSession(): Promise<void> {
     }
 
     await loadDefaultTreeViewsUI();
-    logger.debug("[Extension] View state preserved for potential restoration on next login.");
 }
 
 /**
@@ -1207,7 +1198,7 @@ async function handleTestBenchSessionChange(
     context: vscode.ExtensionContext,
     existingSession?: vscode.AuthenticationSession
 ): Promise<void> {
-    logger.info(`[handleTestBenchSessionChange] Session changed. Processing... Has session: ${!!existingSession}`);
+    logger.info(`[extension] Handling session change`);
 
     const sessionToProcess = await getSessionToProcess(existingSession);
     const wasPreviouslyConnected = !!connection;
@@ -1223,17 +1214,11 @@ async function handleTestBenchSessionChange(
 
         if (connectionManager.isConnectionAlreadyActive(connection, sessionToProcess, activeConnection)) {
             logger.info(
-                `[Extension] Connection for '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
+                `[extension] Connection for '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
             );
             return;
         }
-
-        logger.info(
-            `[Extension] TestBench session active for connection: ${activeConnection.label}. Initializing PlayServerConnection.`
-        );
-
         const newConnection = await createNewConnection(activeConnection, sessionToProcess, connection);
-
         await handleLanguageServerRestartOnSessionChange(previousSessionToken, newConnection.getSessionToken());
 
         const isNewConnection =
@@ -1241,7 +1226,7 @@ async function handleTestBenchSessionChange(
             !!(connection && connection.getSessionToken() !== newConnection.getSessionToken());
 
         if (isNewConnection) {
-            logger.info("[Extension] New connection established. Restoring tree views state.");
+            logger.info("[extension] New connection established.");
             await restoreTreeViewsState(context);
         }
     } else {
@@ -1279,7 +1264,7 @@ async function saveUIContext(
 
         if (!hasValidProjectName || !hasValidTovName) {
             logger.warn(
-                `Cannot save UI context: invalid contextData. ` +
+                `[extension] Cannot save UI context: invalid contextData. ` +
                     `projectName: ${contextData.projectName}, tovName: ${contextData.tovName}. ` +
                     `Clearing context state.`
             );
@@ -1309,7 +1294,7 @@ async function saveUIContext(
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     logger = new testBenchLogger.TestBenchLogger();
-    logger.info("Extension activated.");
+    logger.info("[extension] Activating extension");
     initializeConfigurationWatcher();
 
     // Register AuthenticationProvider
@@ -1322,32 +1307,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             { supportsMultipleAccounts: false }
         )
     );
-    logger.info("TestBenchAuthenticationProvider registered.");
+    logger.info("[extension] TestBenchAuthenticationProvider registered.");
 
     // Session Change Listener
     context.subscriptions.push(
         vscode.authentication.onDidChangeSessions(async (e) => {
             if (e.provider.id === TESTBENCH_AUTH_PROVIDER_ID) {
                 if (isHandlingSessionChange) {
-                    logger.trace(
-                        "[Extension] onDidChangeSessions: Already handling a session change, skipping this invocation."
-                    );
                     return;
                 }
                 isHandlingSessionChange = true;
-                logger.info("[Extension] TestBench authentication sessions changed.");
+                logger.debug("[extension] TestBench authentication sessions changed.");
                 try {
                     const currentSession = await vscode.authentication.getSession(
                         TESTBENCH_AUTH_PROVIDER_ID,
                         ["api_access"],
                         { createIfNone: false, silent: true }
                     );
-                    logger.info(
-                        `[Extension] Fetched current session in onDidChangeSessions: ${currentSession ? currentSession.id : "undefined"}`
-                    );
                     await handleTestBenchSessionChange(context, currentSession);
                 } catch (error) {
-                    logger.error("[Extension] Error getting session in onDidChangeSessions listener:", error);
+                    logger.error("[extension] Error getting session in onDidChangeSessions listener:", error);
                     await handleTestBenchSessionChange(context, undefined);
                 } finally {
                     isHandlingSessionChange = false;
@@ -1361,7 +1340,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Set the initial connection context state
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
-    logger.trace(`Initial connectionActive context set to: ${connection !== null}`);
 
     await vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
     await vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
@@ -1389,44 +1367,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await registerExtensionCommands(context);
 
     // Attempt to restore session on activation
-    logger.trace("[Extension] Attempting to silently restore existing TestBench session on activation...");
+    logger.debug("[extension] Attempting to silently restore existing TestBench session on activation...");
     try {
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             createIfNone: false,
             silent: true
         });
         if (session) {
-            logger.debug(
-                "[Extension] Found existing VS Code AuthenticationSession for TestBench during initial check."
-            );
             await handleTestBenchSessionChange(context, session);
         } else {
-            logger.debug("[Extension] No existing TestBench session found during initial check.");
             if (!getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
             }
         }
     } catch (error) {
-        logger.warn("[Extension] Error trying to get initial session silently:", error);
+        logger.warn("[extension] Error trying to get initial session silently:", error);
         await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
     }
 
     if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-        logger.debug("[Extension] Auto-login configured. Scheduling automatic login command.");
+        logger.debug("[extension] Auto-login is enabled. Scheduling automatic login command.");
         // Short delay to ensure webview is loaded
         setTimeout(async () => {
             try {
                 await vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
             } catch (error) {
-                logger.warn("[Extension] Error during automatic login:", error);
+                logger.warn("[extension] Error during automatic login:", error);
             }
         }, TreeViewTiming.WEBVIEW_LOAD_DELAY_MS);
-    } else {
-        logger.debug("[Extension] Auto-login is disabled. Skipping automatic login command.");
     }
 
-    logger.info("Extension activated successfully.");
+    logger.info("[extension] Extension activated successfully.");
 }
 
 export async function clearAllExtensionData(
@@ -1441,7 +1413,6 @@ export async function clearAllExtensionData(
                     "• All saved connections and passwords\n" +
                     "• Current login session\n" +
                     "• Tree view states and custom roots\n" +
-                    "• Test generation history\n" +
                     "• Import tracking data\n" +
                     "• All persistent settings\n\n" +
                     "This action cannot be undone. Are you sure you want to continue?",
@@ -1450,25 +1421,21 @@ export async function clearAllExtensionData(
             );
 
             if (confirmation !== "Clear All Data") {
-                logger.debug("[clearAllExtensionData] User cancelled clear all extension data operation.");
                 return false;
             }
         }
 
-        logger.debug("[clearAllExtensionData] Starting comprehensive extension data cleanup...");
-
         if (connection) {
-            logger.debug("[clearAllExtensionData] Logging out from server...");
             try {
                 await connection.logoutUserOnServer();
             } catch (error) {
-                logger.warn("[clearAllExtensionData] Error logging out from server:", error);
+                logger.error("[extension] Error logging out from server while clearing all extension data:", error);
             }
             setConnection(null);
         }
 
         try {
-            logger.debug("[clearAllExtensionData] Clearing VS Code authentication sessions...");
+            logger.debug("[extension] Clearing VS Code authentication sessions...");
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, [], {
                 createIfNone: false,
                 silent: true
@@ -1477,10 +1444,10 @@ export async function clearAllExtensionData(
                 await authProviderInstance.removeSession(session.id);
             }
         } catch (error) {
-            logger.warn("[clearAllExtensionData] Error clearing authentication session:", error);
+            logger.error("[extension] Error clearing authentication session while clearing all extension data:", error);
         }
 
-        logger.debug("[clearAllExtensionData] Clearing workspace state storage...");
+        logger.debug("[extension] Clearing workspace state storage...");
         const workspaceStateKeys = [
             StorageKeys.LAST_GENERATED_PARAMS,
             StorageKeys.MARKED_TEST_GENERATION_ITEM,
@@ -1508,11 +1475,14 @@ export async function clearAllExtensionData(
             try {
                 await context.workspaceState.update(key, undefined);
             } catch (error) {
-                logger.warn(`[clearAllExtensionData] Error clearing workspace state key ${key}:`, error);
+                logger.error(
+                    `[extension] Error clearing workspace state key ${key} while clearing all extension data:`,
+                    error
+                );
             }
         }
 
-        logger.debug("[clearAllExtensionData] Clearing global state storage...");
+        logger.debug("[extension] Clearing global state storage...");
         const globalStateKeys: string[] = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
 
         for (const treeViewId of treeViewIds) {
@@ -1523,27 +1493,33 @@ export async function clearAllExtensionData(
             try {
                 await context.globalState.update(key, undefined);
             } catch (error) {
-                logger.warn(`[clearAllExtensionData] Error clearing global state key ${key}:`, error);
+                logger.error(
+                    `[extension] Error clearing global state key ${key} while clearing all extension data:`,
+                    error
+                );
             }
         }
 
-        logger.debug("[clearAllExtensionData] Clearing connection passwords from secret storage...");
+        logger.debug("[extension] Clearing connection passwords from secret storage...");
         try {
             const connections = await connectionManager.getConnections(context);
             for (const conn of connections) {
                 try {
                     await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + conn.id);
-                    logger.trace(`[clearAllExtensionData] Cleared password for connection: ${conn.label}`);
+                    logger.debug(`[extension] Cleared password for connection: ${conn.label}`);
                 } catch (error) {
-                    logger.warn(`[clearAllExtensionData] Error clearing password for connection ${conn.label}:`, error);
+                    logger.error(
+                        `[extension] Error clearing password for connection ${conn.label} while clearing all extension data:`,
+                        error
+                    );
                 }
             }
         } catch (error) {
-            logger.warn("[clearAllExtensionData] Error clearing connection passwords:", error);
+            logger.error("[extension] Error clearing connection passwords while clearing all extension data:", error);
         }
 
         if (treeViews) {
-            logger.debug("[clearAllExtensionData] Clearing tree data and state...");
+            logger.debug("[extension] Clearing tree data and state...");
             try {
                 treeViews.clear();
 
@@ -1666,11 +1642,10 @@ export async function clearAllExtensionData(
                     treeViews.testElementsTree.refresh();
                 }
             } catch (error) {
-                logger.warn("[clearAllExtensionData] Error clearing tree data:", error);
+                logger.error("[extension] Error clearing tree data while clearing all extension data:", error);
             }
         }
 
-        logger.debug("[clearAllExtensionData] Updating UI state...");
         const contextUpdates = [
             ["setContext", ContextKeys.CONNECTION_ACTIVE, false],
             ["setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false],
@@ -1682,27 +1657,26 @@ export async function clearAllExtensionData(
             try {
                 await vscode.commands.executeCommand(command as string, key, value);
             } catch (error) {
-                logger.warn(`[clearAllExtensionData] Error updating context ${key}:`, error);
+                logger.error(`[extension] Error updating context ${key}:`, error);
             }
         }
 
-        logger.debug("[clearAllExtensionData] Updating login webview...");
         try {
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
         } catch (error) {
-            logger.warn("[clearAllExtensionData] Error updating login webview:", error);
+            logger.error("[extension] Error updating login webview while clearing all extension data:", error);
         }
 
         if (client) {
-            logger.debug("[clearAllExtensionData] Stopping language client...");
+            logger.debug("[extension] Stopping language client...");
             try {
                 await stopLanguageClient(true);
             } catch (error) {
-                logger.warn("[clearAllExtensionData] Error stopping language client:", error);
+                logger.error("[extension] Error stopping language client while clearing all extension data:", error);
             }
         }
 
-        logger.debug("[clearAllExtensionData] Clearing internal testbench folder...");
+        logger.debug("[extension] Clearing internal testbench folder...");
         try {
             const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
             if (workspaceLocation) {
@@ -1717,7 +1691,10 @@ export async function clearAllExtensionData(
                 );
             }
         } catch (error) {
-            logger.warn("[clearAllExtensionData] Error clearing internal testbench folder:", error);
+            logger.error(
+                "[extension] Error clearing internal testbench folder while clearing all extension data:",
+                error
+            );
         }
 
         try {
@@ -1725,10 +1702,10 @@ export async function clearAllExtensionData(
             await hideTestThemeTreeView();
             await hideTestElementsTreeView();
         } catch (error) {
-            logger.warn("[clearAllExtensionData] Error managing view visibility:", error);
+            logger.error("[extension] Error managing view visibility while clearing all extension data:", error);
         }
 
-        logger.info("[clearAllExtensionData] All extension data cleared successfully.");
+        logger.info("[extension] All extension data cleared successfully.");
 
         if (showConfirmation) {
             vscode.window.showInformationMessage(
@@ -1739,7 +1716,7 @@ export async function clearAllExtensionData(
         return true;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        logger.error(`[clearAllExtensionData] Error during clear all extension data operation: ${errorMessage}`, error);
+        logger.error(`[extension] Error during clear all extension data operation: ${errorMessage}`, error);
 
         if (showConfirmation) {
             vscode.window.showErrorMessage(`Error clearing extension data: ${errorMessage}`);
@@ -1753,27 +1730,24 @@ export async function clearAllExtensionData(
  * Called when the extension is deactivated.
  */
 export async function deactivate(): Promise<void> {
+    logger.info("[extension] Deactivating extension");
     try {
         isTestOperationInProgress = false;
 
         if (connection) {
-            logger.debug("[Extension] Performing server logout on deactivation.");
             await connection.logoutUserOnServer();
         }
         if (client) {
-            logger.debug("[Extension] Attempting to stop language server on deactivation.");
             await stopLanguageClient(true);
-            logger.info("[Extension] Language server stopped on deactivation.");
         }
         if (treeViews) {
-            logger.debug("[Extension] Disposing TreeViews on deactivation.");
             await treeViews.projectsTree.dispose();
             await treeViews.testThemesTree.dispose();
             await treeViews.testElementsTree.dispose();
             treeViews = null;
         }
-        logger.info("Extension deactivated.");
+        logger.info("[extension] Extension deactivated");
     } catch (error) {
-        logger.error("Error during deactivation:", error);
+        logger.error("[extension] Error during deactivation:", error);
     }
 }

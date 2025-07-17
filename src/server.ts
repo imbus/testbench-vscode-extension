@@ -1048,14 +1048,12 @@ export async function handleLanguageServerRestartOnSessionChange(
     newSessionToken: string
 ): Promise<void> {
     if (previousSessionToken !== newSessionToken) {
-        logger.info(
-            "[Extension] Session token changed. Stopping language server to ensure it gets updated credentials."
-        );
+        logger.info("[server] Session token changed. Stopping language server to ensure it gets updated credentials.");
         try {
             await stopLanguageClient();
-            logger.debug("[Extension] Language server stopped due to session token change.");
+            logger.debug("[server] Language server stopped due to session token change.");
         } catch (error) {
-            logger.warn("[Extension] Error stopping language server during session change:", error);
+            logger.warn("[server] Error stopping language server during session change:", error);
         }
     }
 }
