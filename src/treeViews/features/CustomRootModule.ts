@@ -37,7 +37,7 @@ export class CustomRootModule implements TreeViewModule {
             }
         });
 
-        context.logger.debug("CustomRootModule initialized");
+        context.logger.debug("[CustomRootModule] Custom root module initialized");
     }
 
     /**
@@ -118,7 +118,7 @@ export class CustomRootModule implements TreeViewModule {
     public setCustomRoot(item: TreeItemBase): void {
         const customRootConfig = this.context.config.modules.customRoot;
         if (!customRootConfig?.enabled) {
-            this.context.logger.warn("Custom root is not enabled");
+            this.context.logger.debug("[CustomRootModule] Custom root is not enabled");
             return;
         }
 
@@ -126,7 +126,6 @@ export class CustomRootModule implements TreeViewModule {
             customRootConfig.allowedItemTypes &&
             !customRootConfig.allowedItemTypes.includes(item.originalContextValue)
         ) {
-            this.context.logger.warn(`Item type ${item.originalContextValue} is not allowed as custom root`);
             return;
         }
 
@@ -134,7 +133,7 @@ export class CustomRootModule implements TreeViewModule {
             const itemDepth = item.getDepth();
             if (itemDepth > customRootConfig.maxDepth) {
                 this.context.logger.warn(
-                    `Item depth ${itemDepth} exceeds maximum allowed depth ${customRootConfig.maxDepth}`
+                    `[CustomRootModule]Item depth ${itemDepth} exceeds maximum allowed depth ${customRootConfig.maxDepth}`
                 );
                 return;
             }
@@ -174,7 +173,7 @@ export class CustomRootModule implements TreeViewModule {
         });
 
         this.context.refresh({ immediate: true });
-        this.context.logger.info(`Set custom root: ${item.label}`);
+        this.context.logger.info(`[CustomRootModule] Tree item set as custom root: ${item.label}`);
     }
 
     /**
@@ -198,7 +197,7 @@ export class CustomRootModule implements TreeViewModule {
         });
 
         this.context.refresh({ immediate: true });
-        this.context.logger.info("Custom root reset");
+        this.context.logger.info("[CustomRootModule] Custom root reset");
     }
 
     /**
