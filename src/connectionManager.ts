@@ -88,6 +88,7 @@ export async function saveConnection(
         } else {
             await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionToSave.id);
         }
+        logger.debug(`[ConnectionManager] Connection saved: ${connectionToSave.label}`);
         return connectionToSave.id;
     } catch (error) {
         logger.error(`[ConnectionManager] Error saving connection ${connection.label}:`, error);
