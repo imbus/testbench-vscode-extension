@@ -364,7 +364,8 @@ export class PlayServerConnection {
             if (testElementsResponse.data) {
                 // Note: The output of testElementsResponse is large
                 logger.trace(
-                    `[testBenchConnection] Fetched test elements data for ${oldPlayServerBaseUrl}: ${testElementsResponse.data}`
+                    `[testBenchConnection] Fetched test elements data for ${oldPlayServerBaseUrl}`,
+                    testElementsResponse.data
                 );
                 return testElementsResponse.data;
             } else {

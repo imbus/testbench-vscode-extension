@@ -74,11 +74,9 @@ export class ExpansionModule implements TreeViewModule {
         if (isExpanded) {
             this.expandedItems.add(itemId);
             this.collapsedItems.delete(itemId);
-            this.context.logger.debug(`Item expanded: ${itemId}`);
         } else {
             this.expandedItems.delete(itemId);
             this.collapsedItems.add(itemId);
-            this.context.logger.debug(`Item collapsed: ${itemId}`);
         }
 
         this.saveStateDebounced();

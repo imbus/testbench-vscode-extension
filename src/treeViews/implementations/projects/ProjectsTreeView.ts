@@ -10,10 +10,9 @@ import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { ProjectsDataProvider } from "./ProjectsDataProvider";
 import { projectsConfig } from "./ProjectsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
-import { allExtensionCommands, ConfigKeys, ContextKeys, ProjectItemTypes, TreeViewTiming } from "../../../constants";
+import { allExtensionCommands, ConfigKeys, ContextKeys, TreeViewTiming } from "../../../constants";
 import { displayTestThemeTreeView } from "../testThemes/TestThemesTreeView";
 import { displayTestElementsTreeView } from "../testElements/TestElementsTreeView";
-import { TreeNode } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
@@ -115,20 +114,14 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         // Listen for expand/collapse events
         this.eventBus.on("tree:itemExpanded", async (event) => {
             const item = event.data.item;
-            this.logger.debug(`Item expanded: ${item.label}`);
-
             if (item instanceof ProjectsTreeItem && item.data.type === "version") {
-                this.logger.debug(`TOV item expanded, initializing LS for: ${item.label}`);
                 await vscode.commands.executeCommand(allExtensionCommands.handleTOVClick, item);
             }
         });
 
         this.eventBus.on("tree:itemCollapsed", async (event) => {
             const item = event.data.item;
-            this.logger.debug(`Item collapsed: ${item.label}`);
-
             if (item instanceof ProjectsTreeItem && item.data.type === "version") {
-                this.logger.debug(`TOV item collapsed, initializing LS for: ${item.label}`);
                 await vscode.commands.executeCommand(allExtensionCommands.handleTOVClick, item);
             }
         });
@@ -157,64 +150,45 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @return Promise resolving to an array of ProjectsTreeItem objects
      */
     protected async fetchRootItems(): Promise<ProjectsTreeItem[]> {
-        try {
-            const connection = this.getConnection();
-            if (!connection) {
-                this.logger.debug("No connection available for fetching projects");
-                return [];
-            }
-
-            this.logger.debug("Starting to fetch projects");
-            const fetchedProjects = await this.dataProvider.fetchProjects();
-            this.logger.debug(`Fetched ${fetchedProjects.length} projects from data provider`);
-            if (!fetchedProjects || fetchedProjects.length === 0) {
-                return [];
-            }
-
-            const createdProjectTreeItems = fetchedProjects.map((project) =>
-                this.createTreeItem({
-                    key: project.key,
-                    name: project.name,
-                    description: project.description || "",
-                    type: "project",
-                    metadata: project.metadata
-                })
-            );
-
-            // If filtering is active, we must load the entire hierarchy upfront
-            // so that the filter logic can inspect children of non-matching parents.
-            const filteringModule = this.getModule("filtering");
-            const isFilteringActive = filteringModule?.isActive() || false;
-
-            if (isFilteringActive) {
-                this.logger.debug("Filtering is active. Performing deep load of project hierarchy.");
-                await Promise.all(
-                    createdProjectTreeItems.map(async (projectItem) => {
-                        // Fetch versions for the project
-                        const versionItems = await this.getChildrenForItem(projectItem);
-                        projectItem.children = versionItems;
-
-                        // Fetch cycles for each version
-                        await Promise.all(
-                            versionItems.map(async (versionItem) => {
-                                const cycleItems = await this.getChildrenForItem(versionItem);
-                                versionItem.children = cycleItems;
-                            })
-                        );
-                    })
-                );
-                this.logger.debug("Deep load completed for filtering.");
-            }
-
-            this.logger.debug(`Created ${createdProjectTreeItems.length} tree items successfully`);
-            return createdProjectTreeItems;
-        } catch (error) {
-            this.logger.error("Error in fetchRootItems:", error);
-            if (error instanceof Error) {
-                this.logger.error(`Error details - message: ${error.message}, stack: ${error.stack}`);
-            }
+        const fetchedProjects = await this.dataProvider.fetchProjects();
+        if (!fetchedProjects || fetchedProjects.length === 0) {
             return [];
         }
+
+        const createdProjectTreeItems = fetchedProjects.map((project) =>
+            this.createTreeItem({
+                key: project.key,
+                name: project.name,
+                description: project.description || "",
+                type: "project",
+                metadata: project.metadata
+            })
+        );
+
+        // If filtering is active, we must load the entire hierarchy upfront
+        // so that the filter logic can inspect children of non-matching parents.
+        const filteringModule = this.getModule("filtering");
+        const isFilteringActive = filteringModule?.isActive() || false;
+
+        if (isFilteringActive) {
+            await Promise.all(
+                createdProjectTreeItems.map(async (projectItem) => {
+                    // Fetch versions for the project
+                    const versionItems = await this.getChildrenForItem(projectItem);
+                    projectItem.children = versionItems;
+
+                    // Fetch cycles for each version
+                    await Promise.all(
+                        versionItems.map(async (versionItem) => {
+                            const cycleItems = await this.getChildrenForItem(versionItem);
+                            versionItem.children = cycleItems;
+                        })
+                    );
+                })
+            );
+        }
+
+        return createdProjectTreeItems;
     }
 
     /**
@@ -224,8 +198,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @return Promise resolving to an array of child ProjectsTreeItem objects
      */
     protected async getChildrenForItem(item: ProjectsTreeItem): Promise<ProjectsTreeItem[]> {
-        this.logger.debug(`Fetching children for ${item.label} (${item.data.type})`);
-
         const filteringModule = this.getModule("filtering");
         const isFilteringActive = filteringModule?.isActive() || false;
 
@@ -247,10 +219,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
 
             // If filtering is active, we need to load all children to properly evaluate parent/child relationships
             if (isFilteringActive && filteringModule) {
-                this.logger.debug(
-                    `Filtering active, loading all children for project ${item.label} to evaluate relationships`
-                );
-
                 // For each version, load its cycles for proper filtering
                 for (const versionItem of versionItems) {
                     const cycles = await this.loadCyclesForVersion(versionItem);
@@ -279,13 +247,15 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     private async loadCyclesForVersion(versionItem: ProjectsTreeItem): Promise<ProjectsTreeItem[]> {
         const projectKey = versionItem.getProjectKey();
         if (!projectKey) {
-            this.logger.warn(`No project key found for version item ${versionItem.label}`);
+            this.logger.warn(
+                `[ProjectsTreeView] No project key found for version item ${versionItem.label} when loading cycles`
+            );
             return [];
         }
 
         const fetchedProjectTree = await this.dataProvider.fetchProjectTree(projectKey);
         if (!fetchedProjectTree || !fetchedProjectTree.children) {
-            this.logger.warn(`No project tree found for project ${projectKey}`);
+            this.logger.warn(`[ProjectsTreeView] No project tree found for project ${projectKey} when loading cycles`);
             return [];
         }
 
@@ -294,7 +264,9 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         );
 
         if (!versionNode || !versionNode.children) {
-            this.logger.warn(`No version node or children found for version ${versionItem.data.key}`);
+            this.logger.warn(
+                `[ProjectsTreeView] No version node or children found for version ${versionItem.data.key} when loading cycles`
+            );
             return [];
         }
 
@@ -305,8 +277,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                 const cycleData = this.dataProvider.transformTreeNode(cycleNode, "cycle", versionItem.data.key);
                 return this.createTreeItem(cycleData, versionItem);
             });
-
-        this.logger.debug(`Found ${cycleItems.length} cycles for version ${versionItem.label}`);
         return cycleItems;
     }
 
@@ -322,78 +292,11 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     }
 
     /**
-     * Handles item selection events in the projects tree view.
-     * @param item The selected tree item
-     */
-    private async handleItemSelection(item: ProjectsTreeItem): Promise<void> {
-        if (item.data.type === "version") {
-            const tovKey = item.getVersionKey();
-            const tovLabel = item.label as string;
-
-            if (tovKey) {
-                const projectName = item.parent?.label?.toString();
-                const tovName = item.label?.toString();
-
-                if (!projectName || !tovName) {
-                    const errorMessage = `Cannot update language server: invalid project or TOV name. Project: ${projectName}, TOV: ${tovName}`;
-                    vscode.window.showErrorMessage(errorMessage);
-                    this.logger.error(errorMessage);
-                } else {
-                    await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
-                }
-
-                this.eventBus.emit({
-                    type: "version:selected",
-                    source: this.config.id,
-                    data: {
-                        projectKey: item.getProjectKey(),
-                        versionKey: tovKey,
-                        versionLabel: tovLabel,
-                        tovKey: tovKey,
-                        tovLabel: tovLabel
-                    },
-                    timestamp: Date.now()
-                });
-            }
-        } else if (item.data.type === "cycle") {
-            const cycleKey = item.getCycleKey();
-            const projectKey = item.getProjectKey();
-            const cycleLabel = item.label as string;
-
-            if (cycleKey && projectKey) {
-                const projectName = item.parent?.parent?.label?.toString();
-                const tovName = item.parent?.label?.toString();
-
-                if (!projectName || !tovName) {
-                    const errorMessage = `Cannot update language server: invalid project or TOV name. Project: ${projectName}, TOV: ${tovName}`;
-                    vscode.window.showErrorMessage(errorMessage);
-                    this.logger.error(errorMessage);
-                } else {
-                    await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
-                }
-
-                this.eventBus.emit({
-                    type: "cycle:selected",
-                    source: this.config.id,
-                    data: {
-                        projectKey,
-                        cycleKey,
-                        cycleLabel,
-                        projectName,
-                        tovName
-                    },
-                    timestamp: Date.now()
-                });
-            }
-        }
-    }
-
-    /**
      * Handles project selection events.
      * @param projectKey The key of the selected project
      */
     private async handleProjectSelection(projectKey: string): Promise<void> {
-        this.logger.info(`Project selected: ${projectKey}`);
+        this.logger.info(`[ProjectsTreeView] Project selected: ${projectKey}`);
 
         this.stateManager.setState({
             selectedProjectKey: projectKey
@@ -424,7 +327,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const tovName = item.parent?.label?.toString();
 
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
-            this.logger.debug(`Cycle item single clicked: ${item.label}`);
+            this.logger.debug(`[ProjectsTreeView] Cycle item single clicked: ${item.label}`);
 
             await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
 
@@ -438,7 +341,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                 );
             }
             if (treeViews?.testElementsTree) {
-                this.logger.debug(`Loading test elements for TOV ${versionKey} (from cycle ${cycleKey})`);
                 await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
             }
         } else {
@@ -462,14 +364,17 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const tovName = item.parent?.label?.toString();
 
         if (!cycleKey || !projectKey) {
-            this.logger.warn("Missing required keys for cycle selection");
+            this.logger.warn(
+                "[ProjectsTreeView] Missing cycle and project keys for cycle selection when handling cycle double click"
+            );
             return;
         }
 
         if (!projectName || !tovName) {
-            const errorMessage = `Cannot update language server: invalid project or TOV name. Project: ${projectName}, TOV: ${tovName}`;
-            vscode.window.showErrorMessage(errorMessage);
-            this.logger.error(errorMessage);
+            const missingProjectAndTovNameErrorMessage = `[ProjectsTreeView] Cannot update language server: Missing project / TOV name. Project: ${projectName}, TOV: ${tovName}`;
+            const missingProjectAndTovNameErrorMessageForUser = `Cannot update language server: Missing project / TOV name.`;
+            this.logger.error(missingProjectAndTovNameErrorMessage);
+            vscode.window.showErrorMessage(missingProjectAndTovNameErrorMessageForUser);
         } else {
             await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
         }
@@ -618,59 +523,16 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     }
 
     /**
-     * Fetches versions for a project item.
-     * @param projectItem The project item to fetch versions for
-     * @returns Promise that resolves to an array of version tree items
-     */
-    private async getVersionsForProject(projectItem: ProjectsTreeItem): Promise<ProjectsTreeItem[]> {
-        try {
-            const connection = this.getConnection();
-            if (!connection) {
-                this.logger.debug("No connection available, returning empty array");
-                return [];
-            }
-
-            const projectKey = projectItem.data.key;
-            const projectTree = await this.dataProvider.fetchProjectTree(projectKey);
-
-            if (!projectTree || !projectTree.children) {
-                this.logger.debug(`No versions found for project ${projectKey}`);
-                return [];
-            }
-
-            const versions = projectTree.children
-                .filter((child: TreeNode) => child.nodeType === ProjectItemTypes.VERSION)
-                .map((versionNode: TreeNode) =>
-                    this.createTreeItem(
-                        {
-                            key: versionNode.key,
-                            name: versionNode.name,
-                            description: "",
-                            type: "version",
-                            metadata: versionNode
-                        },
-                        projectItem
-                    )
-                )
-                .filter((item) => !item.data.metadata?.error); // Filter out error items
-
-            this.logger.debug(`Found ${versions.length} versions for project ${projectItem.label}`);
-            return versions;
-        } catch (error) {
-            return this.errorHandler.handle(error as Error, `Failed to fetch versions for ${projectItem.label}`, []);
-        }
-    }
-
-    /**
      * Generates test cases for the selected cycle.
      * @param item The cycle item to generate test cases for
      */
     public async generateTestCasesForCycle(item: ProjectsTreeItem): Promise<void> {
-        this.logger.debug(`Command Called: generateTestCasesForCycle for item ${item.label}`);
         const connection = this.getConnection();
         if (!connection) {
-            vscode.window.showErrorMessage("No connection available. Please log in first.");
-            this.logger.error(`generateTestCasesForCycle command called without connection.`);
+            vscode.window.showErrorMessage(`No connection available. Please log in first.`);
+            this.logger.error(
+                `[ProjectsTreeView] No connection available. Cannot generate test cases for cycle ${item.label}`
+            );
             return;
         }
 
@@ -687,11 +549,12 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @returns Promise that resolves when test generation is complete
      */
     public async generateTestCasesForTOV(item: ProjectsTreeItem): Promise<void> {
-        this.logger.debug(`Command Called: generateTestCasesForTOV for item ${item.label}`);
         const connection = this.getConnection();
         if (!connection) {
-            vscode.window.showErrorMessage("No connection available. Please log in first.");
-            this.logger.error(`generateTestCasesForTOV command called without connection.`);
+            vscode.window.showErrorMessage(`No connection available. Please log in first.`);
+            this.logger.error(
+                `[ProjectsTreeView] No connection available. Cannot generate test cases for TOV ${item.label}`
+            );
             return;
         }
 
@@ -702,21 +565,22 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         try {
             const projectKey = item.getProjectKey();
             const tovKey = item.getVersionKey();
-            const tovName = typeof item.label === "string" ? item.label : "Unknown TOV";
 
             if (!projectKey || !tovKey) {
-                const errorMessage = "Could not determine project or TOV key for test generation.";
-                vscode.window.showErrorMessage(errorMessage);
-                this.logger.error(`${errorMessage} Project: ${projectKey}, TOV: ${tovKey}`);
+                const missingProjectAndTovKeyErrorMessage = `[ProjectsTreeView] Could not determine project or TOV key for test generation. Project: ${projectKey}, TOV: ${tovKey}`;
+                const missingProjectAndTovKeyErrorMessageForUser = `Could not determine project or TOV key for test generation.`;
+                vscode.window.showErrorMessage(missingProjectAndTovKeyErrorMessageForUser);
+                this.logger.error(missingProjectAndTovKeyErrorMessage);
                 return;
             }
 
-            this.logger.info(`Starting test generation for TOV: ${tovName} (${tovKey}) in project: ${projectKey}`);
             await reportHandler.startTestGenerationUsingTOV(this.extensionContext, item, projectKey, tovKey, false);
         } catch (error) {
-            this.logger.error("[Cmd] Error in generateTestCasesForTOV:", error);
+            this.logger.error(
+                `[ProjectsTreeView] Error in generateTestCasesForTOV: ${error instanceof Error ? error.message : String(error)}`
+            );
             vscode.window.showErrorMessage(
-                `Error generating tests for TOV: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Error generating tests for TOV: ${error instanceof Error ? error.message : String(error)}`
             );
         }
     }
@@ -728,7 +592,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param options Optional refresh options
      */
     public override refresh(item?: ProjectsTreeItem, options?: { immediate?: boolean }): void {
-        this.logger.debug(`Refreshing projects tree view${item ? ` for item: ${item.label}` : ""}`);
+        this.logger.debug(`[ProjectsTreeView] Refreshing projects tree view${item ? ` for item: ${item.label}` : ""}`);
 
         if (item) {
             super.refresh(item, options);
@@ -736,7 +600,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         }
 
         super.refresh(undefined, options);
-        this.logger.debug("Projects tree view refresh initiated - will fetch fresh data from server");
     }
 }
 

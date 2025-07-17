@@ -81,7 +81,7 @@ export class ResourceFileService {
             return undefined;
         }
         const absolutePath = path.join(workspaceRootPath, hierarchicalName);
-        this.logger.debug(`[ResourceFileService] Constructed absolute path for '${hierarchicalName}': ${absolutePath}`);
+        this.logger.trace(`[ResourceFileService] Constructed absolute path for '${hierarchicalName}': ${absolutePath}`);
         return absolutePath;
     }
 

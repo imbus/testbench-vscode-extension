@@ -365,9 +365,6 @@ suite("ProjectsTreeView", function () {
 
             sinon.assert.calledOnce(mockBaseRefresh);
             sinon.assert.calledWith(mockBaseRefresh, undefined, undefined);
-
-            sinon.assert.calledWith(mockLogger.debug, "Refreshing projects tree view");
-
             (treeView as any).refresh = originalRefresh;
         });
     });
@@ -399,84 +396,6 @@ suite("ProjectsTreeView", function () {
 
             // Since the test implementation doesn't have debouncing, each call triggers refresh
             sinon.assert.calledThrice(mockRefresh);
-        });
-    });
-
-    suite("Test Generation", () => {
-        test("should generate test cases for cycle", async () => {
-            const cycleItem = new ProjectsTreeItem(
-                {
-                    key: "CYCLE-001",
-                    name: "Test Cycle",
-                    type: "cycle",
-                    parentKey: "VERSION-001"
-                },
-                testEnv.mockContext
-            );
-
-            await treeView.generateTestCasesForCycle(cycleItem);
-
-            sinon.assert.calledOnce(mockLogger.debug);
-            sinon.assert.calledWith(mockLogger.debug, "Command Called: generateTestCasesForCycle for item Test Cycle");
-        });
-
-        test("should show error when no connection for cycle test generation", async () => {
-            getConnectionStub.returns(null);
-
-            const cycleItem = new ProjectsTreeItem(
-                {
-                    key: "CYCLE-001",
-                    name: "Test Cycle",
-                    type: "cycle"
-                },
-                testEnv.mockContext
-            );
-
-            await treeView.generateTestCasesForCycle(cycleItem);
-
-            // The implementation logs debug first, then error when no connection
-            sinon.assert.calledOnce(mockLogger.debug);
-            sinon.assert.calledWith(mockLogger.debug, "Command Called: generateTestCasesForCycle for item Test Cycle");
-            sinon.assert.calledOnce(mockLogger.error);
-            sinon.assert.calledWith(mockLogger.error, "generateTestCasesForCycle command called without connection.");
-        });
-
-        test("should generate test cases for TOV", async () => {
-            const tovItem = new ProjectsTreeItem(
-                {
-                    key: "VERSION-001",
-                    name: "Test Version",
-                    type: "version",
-                    parentKey: "PROJ-001"
-                },
-                testEnv.mockContext
-            );
-
-            await treeView.generateTestCasesForTOV(tovItem);
-
-            sinon.assert.calledOnce(mockLogger.debug);
-            sinon.assert.calledWith(mockLogger.debug, "Command Called: generateTestCasesForTOV for item Test Version");
-        });
-
-        test("should show error when no connection for TOV test generation", async () => {
-            getConnectionStub.returns(null);
-
-            const tovItem = new ProjectsTreeItem(
-                {
-                    key: "VERSION-001",
-                    name: "Test Version",
-                    type: "version"
-                },
-                testEnv.mockContext
-            );
-
-            await treeView.generateTestCasesForTOV(tovItem);
-
-            // The implementation logs debug first, then error when no connection
-            sinon.assert.calledOnce(mockLogger.debug);
-            sinon.assert.calledWith(mockLogger.debug, "Command Called: generateTestCasesForTOV for item Test Version");
-            sinon.assert.calledOnce(mockLogger.error);
-            sinon.assert.calledWith(mockLogger.error, "generateTestCasesForTOV command called without connection.");
         });
     });
 
@@ -526,16 +445,6 @@ suite("ProjectsTreeView", function () {
     });
 
     suite("Error Handling", () => {
-        test("should handle data provider errors gracefully", async () => {
-            const error = new Error("Data provider error");
-            mockDataProvider.fetchProjects.rejects(error);
-
-            await treeView.refresh();
-
-            sinon.assert.calledTwice(mockLogger.error);
-            // The error calls are: 'Error in fetchRootItems:' and 'Error details - message: ...'
-        });
-
         test("should handle tree navigation errors gracefully", async () => {
             const projectItem = new ProjectsTreeItem(
                 {

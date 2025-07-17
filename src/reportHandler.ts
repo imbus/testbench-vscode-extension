@@ -1268,25 +1268,26 @@ export async function startTestGenerationForCycle(
 ): Promise<void | null> {
     try {
         if (!connection) {
-            const connectionErrorMessage: string = "No connection available. Cannot generate tests for cycle.";
+            const connectionErrorMessage: string =
+                "[reportHandler] No connection available. Cannot generate tests for cycle.";
             vscode.window.showErrorMessage(connectionErrorMessage);
             logger.error(connectionErrorMessage);
             return null;
         }
         const cycleKey = selectedCycleTreeItem.data.key;
         if (!cycleKey) {
-            const cycleKeyMissingMessage: string = "Cycle key is missing for test generation.";
+            const cycleKeyMissingMessage: string = "[reportHandler] Cycle key is missing for test generation.";
             logger.error(cycleKeyMissingMessage);
             return null;
         }
         const projectKey: string | null = selectedCycleTreeItem.getProjectKey();
         if (!projectKey) {
-            const projectKeyMissingMessage = "Project key of cycle is missing.";
+            const projectKeyMissingMessage = "[reportHandler] Project key of cycle is missing.";
             logger.error(projectKeyMissingMessage);
             return null;
         }
         if (typeof selectedCycleTreeItem.label !== "string") {
-            const invalidLabelTypeMessage: string = "Invalid label type. Test generation aborted.";
+            const invalidLabelTypeMessage: string = "[reportHandler] Invalid label type. Test generation aborted.";
             logger.error(invalidLabelTypeMessage);
             return null;
         }
@@ -1298,7 +1299,7 @@ export async function startTestGenerationForCycle(
         const cycleUID = selectedCycleTreeItem.data.key || "";
         if (!cycleUID) {
             logger.warn(
-                `Could not determine UID or Key for cycle: ${selectedCycleTreeItem.label}. Using empty string.`
+                `[reportHandler] Could not determine UID or Key for cycle: ${selectedCycleTreeItem.label}. Using empty string.`
             );
         }
 
@@ -1311,7 +1312,9 @@ export async function startTestGenerationForCycle(
             cycleUID
         );
     } catch (error) {
-        logger.error("Error in startTestGenerationForCycle:", (error as Error).message);
+        logger.error(
+            `[reportHandler] Error in startTestGenerationForCycle: ${error instanceof Error ? error.message : String(error)}`
+        );
         vscode.window.showErrorMessage((error as Error).message);
     }
 }
@@ -1373,8 +1376,8 @@ export async function startTestGenerationUsingTOV(
                     filters: []
                 };
 
-                logger.trace(
-                    `Requesting TOV structure for project ${projectKey} with root UID ${rootUIDToUse} and options: ${JSON.stringify(tovStructureOptions)}`
+                logger.debug(
+                    `[reportHandler] Requesting TOV structure for project ${projectKey} with root UID ${rootUIDToUse} and options: ${JSON.stringify(tovStructureOptions)}`
                 );
 
                 const tovReportJobID = await connection.requestToPackageTovsInServerAndGetJobID(
@@ -1388,11 +1391,11 @@ export async function startTestGenerationUsingTOV(
                 }
 
                 if (!tovReportJobID) {
-                    logger.error("Failed to fetch TOV structure report");
+                    logger.error("[reportHandler] Failed to fetch TOV structure report");
                     throw new Error("Failed to fetch TOV structure report");
                 }
 
-                logger.debug(`TOV structure report job ID: ${tovReportJobID}`);
+                logger.debug(`[reportHandler] TOV structure report job ID: ${tovReportJobID}`);
 
                 // Poll job status until completed
                 const tovReportJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
@@ -1403,14 +1406,14 @@ export async function startTestGenerationUsingTOV(
                     cancellationToken
                 );
                 if (!tovReportJobStatus || !isReportJobCompletedSuccessfully(tovReportJobStatus)) {
-                    const reportGenerationErrorMsg: string = "Report generation was unsuccessful.";
+                    const reportGenerationErrorMsg: string = "[reportHandler] Report generation was unsuccessful.";
+                    const reportGenerationErrorMsgForUser: string = "Report generation was unsuccessful.";
                     logger.error(reportGenerationErrorMsg);
-                    vscode.window.showErrorMessage(reportGenerationErrorMsg);
+                    vscode.window.showErrorMessage(reportGenerationErrorMsgForUser);
                     return false;
                 }
                 const downloadedTovReportName: string =
                     tovReportJobStatus.completion.result.ReportingSuccess!.reportName;
-                logger.debug(`Report name to download: ${downloadedTovReportName}`);
 
                 const downloadedTovReportPath: string | null = await downloadReport(
                     projectKey,
@@ -1419,11 +1422,11 @@ export async function startTestGenerationUsingTOV(
                 );
 
                 if (!downloadedTovReportPath) {
-                    logger.warn("Report download failed or was canceled.");
+                    logger.warn("[reportHandler] Report download failed or was canceled.");
                     return false;
                 }
 
-                logger.debug(`Report downloaded successfully to: ${downloadedTovReportPath}`);
+                logger.info(`[reportHandler] Report downloaded successfully to: ${downloadedTovReportPath}`);
                 progress.report({ increment: 20, message: "Generating tests for TOV..." });
 
                 const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
@@ -1440,12 +1443,11 @@ export async function startTestGenerationUsingTOV(
                 const tovTestGenerationSuccessMessage = generateTestForSpecificTestThemeTreeItem
                     ? `Test generation completed for specific item: ${treeItem.label}`
                     : `Test generation completed for entire TOV: ${treeItem.label}`;
-                logger.info(`[ReportHandler] ${tovTestGenerationSuccessMessage}`);
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
 
                 if (getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false)) {
                     await vscode.commands.executeCommand("workbench.view.extension.test");
-                    logger.debug("Testing view opened after successful test generation");
+                    logger.debug("[reportHandler] Testing view opened after successful test generation");
                 }
 
                 return true;
@@ -1453,10 +1455,13 @@ export async function startTestGenerationUsingTOV(
         );
     } catch (error) {
         const tovTestGenerationErrorMessage = generateTestForSpecificTestThemeTreeItem
+            ? `[reportHandler] Test generation failed for specific item ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`
+            : `[reportHandler] Test generation failed for TOV ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
+        const tovTestGenerationErrorMessageForUser = generateTestForSpecificTestThemeTreeItem
             ? `Test generation failed for specific item ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`
             : `Test generation failed for TOV ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
-        logger.error(`[ReportHandler] ${tovTestGenerationErrorMessage}`, error);
-        vscode.window.showErrorMessage(tovTestGenerationErrorMessage);
+        logger.error(tovTestGenerationErrorMessage, error);
+        vscode.window.showErrorMessage(tovTestGenerationErrorMessageForUser);
         return false;
     }
 }

@@ -78,31 +78,34 @@ suite("ProjectsDataProvider", function () {
 
             const result = await dataProvider.fetchProjects();
 
-            assert.strictEqual(result.length, 2);
-            assert.strictEqual(result[0].key, "PROJ-001");
-            assert.strictEqual(result[0].name, "Test Project 1");
-            assert.strictEqual(result[0].type, "project");
-            assert.strictEqual(result[0].metadata?.tovsCount, 5);
-            assert.strictEqual(result[0].metadata?.cyclesCount, 10);
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(result!.length, 2);
+            assert.strictEqual(result![0].key, "PROJ-001");
+            assert.strictEqual(result![0].name, "Test Project 1");
+            assert.strictEqual(result![0].type, "project");
+            assert.strictEqual(result![0].metadata?.tovsCount, 5);
+            assert.strictEqual(result![0].metadata?.cyclesCount, 10);
 
-            assert.strictEqual(result[1].key, "PROJ-002");
-            assert.strictEqual(result[1].name, "Test Project 2");
-            assert.strictEqual(result[1].type, "project");
-            assert.strictEqual(result[1].metadata?.tovsCount, 3);
-            assert.strictEqual(result[1].metadata?.cyclesCount, 7);
+            assert.strictEqual(result![1].key, "PROJ-002");
+            assert.strictEqual(result![1].name, "Test Project 2");
+            assert.strictEqual(result![1].type, "project");
+            assert.strictEqual(result![1].metadata?.tovsCount, 3);
+            assert.strictEqual(result![1].metadata?.cyclesCount, 7);
 
             sinon.assert.calledOnce(mockConnection.getProjectsList);
-            sinon.assert.calledOnce(mockLogger.debug);
-            sinon.assert.calledWith(mockLogger.debug, "Fetching projects from server");
         });
 
         test("should handle missing connection", async () => {
             getConnectionStub.returns(null);
 
-            await assert.rejects(async () => await dataProvider.fetchProjects(), /No connection available/);
+            const result = await dataProvider.fetchProjects();
 
+            assert.strictEqual(result, null);
             sinon.assert.calledOnce(mockLogger.error);
-            sinon.assert.calledWith(mockLogger.error, "No connection available");
+            sinon.assert.calledWith(
+                mockLogger.error,
+                "[ProjectsDataProvider] No connection available when fetching projects"
+            );
         });
 
         test("should handle empty projects response", async () => {
@@ -110,7 +113,8 @@ suite("ProjectsDataProvider", function () {
 
             const result = await dataProvider.fetchProjects();
 
-            assert.strictEqual(result.length, 0);
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(result!.length, 0);
             // Empty array is valid, so no warning should be logged
             sinon.assert.notCalled(mockLogger.warn);
         });
@@ -120,7 +124,8 @@ suite("ProjectsDataProvider", function () {
 
             const result = await dataProvider.fetchProjects();
 
-            assert.strictEqual(result.length, 0);
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(result!.length, 0);
             sinon.assert.calledOnce(mockLogger.warn);
         });
 
@@ -176,9 +181,10 @@ suite("ProjectsDataProvider", function () {
 
             const result = await dataProvider.fetchProjects();
 
-            assert.strictEqual(result.length, 1);
-            assert.strictEqual(result[0].key, "PROJ-001");
-            assert.strictEqual(result[0].name, "Valid Project");
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(result!.length, 1);
+            assert.strictEqual(result![0].key, "PROJ-001");
+            assert.strictEqual(result![0].name, "Valid Project");
 
             sinon.assert.called(mockLogger.warn);
         });
@@ -204,15 +210,17 @@ suite("ProjectsDataProvider", function () {
 
             const result = await dataProvider.fetchProjects();
 
-            assert.strictEqual(result.length, 1);
-            assert.strictEqual(result[0].name, "PROJ-001");
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(result!.length, 1);
+            assert.strictEqual(result![0].name, "PROJ-001");
         });
 
         test("should handle server error", async () => {
             mockConnection.getProjectsList.rejects(new Error("Server connection failed"));
 
-            await assert.rejects(async () => await dataProvider.fetchProjects(), /Server connection failed/);
+            const result = await dataProvider.fetchProjects();
 
+            assert.strictEqual(result, null);
             sinon.assert.calledOnce(mockLogger.error);
         });
     });
