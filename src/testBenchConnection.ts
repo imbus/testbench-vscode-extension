@@ -52,7 +52,7 @@ export class PlayServerConnection {
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         logger.trace(
-            `[PlayServerConnection] Initializing for server: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
+            `[testBenchConnection] Initializing for server: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
         );
 
         this.apiClient = axios.create({
@@ -67,7 +67,7 @@ export class PlayServerConnection {
             // Start the keep-alive process immediately to prevent session timeout after 5 minutes
             this.startKeepAlive();
         } else {
-            logger.warn("[PlayServerConnection] Initialized without a session token. Keep-alive not started.");
+            logger.warn("[testBenchConnection] Initialized without a session token. Keep-alive not started.");
         }
     }
 
@@ -109,10 +109,10 @@ export class PlayServerConnection {
      */
     async logoutUserOnServer(): Promise<boolean> {
         logger.debug(
-            `[PlayServerConnection] Attempting to log out user ${this.username} from server ${this.serverName}.`
+            `[testBenchConnection] Attempting to log out user ${this.username} from server ${this.serverName}.`
         );
         if (!this.sessionToken) {
-            logger.warn("[PlayServerConnection] No session token available. Cannot perform server-side logout.");
+            logger.warn("[testBenchConnection] No session token available. Cannot perform server-side logout.");
             this.stopKeepAlive();
             return true;
         }
@@ -128,7 +128,7 @@ export class PlayServerConnection {
             );
 
             if (logoutResponse.status === 204) {
-                logger.debug("[PlayServerConnection] Server logout successful (204).");
+                logger.debug("[testBenchConnection] Server logout successful (204).");
                 setConnection(null);
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 this.sessionToken = "";
@@ -137,17 +137,17 @@ export class PlayServerConnection {
                 return true;
             } else {
                 logger.error(
-                    `[PlayServerConnection] Server logout failed. Unexpected response status: ${logoutResponse.status}`
+                    `[testBenchConnection] Server logout failed. Unexpected response status: ${logoutResponse.status}`
                 );
                 return false;
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 logger.error(
-                    `[PlayServerConnection] Error during server logout: ${error.response?.status} - ${error.response?.statusText}.`
+                    `[testBenchConnection] Error during server logout: ${error.response?.status} - ${error.response?.statusText}.`
                 );
             } else {
-                logger.error(`[PlayServerConnection] Unexpected error during server logout: ${error}`);
+                logger.error(`[testBenchConnection] Unexpected error during server logout: ${error}`);
             }
             return false;
         } finally {
@@ -162,12 +162,12 @@ export class PlayServerConnection {
      */
     async getProjectsList(): Promise<testBenchTypes.Project[] | null> {
         if (!this.sessionToken || !this.apiClient) {
-            logger.error("Session token is null. Cannot fetch projects list.");
+            logger.error("[testBenchConnection] Session token is null. Cannot fetch projects list.");
             return null;
         }
         try {
-            logger.debug("Fetching projects list.");
             const projectsURL: string = `/projects/v1`;
+            logger.debug(`[testBenchConnection] Fetching projects list using URL: ${projectsURL}`);
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
                     this.apiClient.get(projectsURL, {
@@ -194,17 +194,22 @@ export class PlayServerConnection {
             }
             */
 
-            logger.trace("Response status of project list request:", projectsResponse.status);
+            logger.debug(
+                `[testBenchConnection] Response status of project list request for URL ${projectsURL}: ${projectsResponse.status}`
+            );
             if (projectsResponse.data) {
-                logger.trace("Fetched project list:", projectsResponse.data);
+                logger.trace(
+                    `[testBenchConnection] Fetched project list for request ${projectsURL}:`,
+                    projectsResponse.data
+                );
                 return projectsResponse.data;
             } else {
-                logger.error("Project list data is null or undefined.");
+                logger.error("[testBenchConnection] Project list data is null or undefined.");
                 return null;
             }
         } catch (error) {
             // Axios throws an error automatically if the response status is not 2xx
-            logger.error("Error fetching projects:", error);
+            logger.error("[testBenchConnection] Error fetching projects:", error);
             return null;
         }
     }
@@ -216,17 +221,21 @@ export class PlayServerConnection {
      * @returns {Promise<testBenchTypes.TreeNode | null>} The project tree fetched from the server or null if an error occurs.
      */
     async getProjectTreeOfProject(projectKey: string | null): Promise<testBenchTypes.TreeNode | null> {
-        logger.trace("Fetching project tree for project key:", projectKey);
         if (!this.sessionToken) {
-            logger.error("Session token is null. Cannot fetch project tree for project key:", projectKey);
+            logger.error(
+                `[testBenchConnection] Session token is null. Cannot fetch project tree for project key: ${projectKey}`
+            );
             return null;
         }
         if (!projectKey) {
-            logger.error("Project key is null or undefined. Cannot fetch project tree.");
+            logger.error("[testBenchConnection] Project key is null or undefined. Cannot fetch project tree.");
             return null;
         }
         try {
             const projectTreeURL: string = `/projects/${projectKey}/tree/v1`;
+            logger.debug(
+                `[testBenchConnection] Fetching project tree for project key ${projectKey} using URL ${projectTreeURL}`
+            );
             const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await withRetry(
                 () =>
                     this.apiClient.get(projectTreeURL, {
@@ -253,16 +262,21 @@ export class PlayServerConnection {
             }
             */
 
-            logger.trace("Response status of project tree request:", projectTreeResponse.status);
+            logger.debug(
+                `[testBenchConnection] Response status of project tree request for URL ${projectTreeURL}: ${projectTreeResponse.status}`
+            );
             if (projectTreeResponse.data) {
-                logger.trace("Fetched project tree:", projectTreeResponse.data);
+                logger.trace(
+                    `[testBenchConnection] Fetched project tree for request ${projectTreeURL}:`,
+                    projectTreeResponse.data
+                );
                 return projectTreeResponse.data;
             } else {
-                logger.error("Project tree data is null or undefined.");
+                logger.error("[testBenchConnection] Project tree data is null or undefined.");
                 return null;
             }
         } catch (error) {
-            logger.error("Error fetching project tree:", error);
+            logger.error(`[testBenchConnection] Error fetching project tree: ${error}`);
             return null;
         }
     }
@@ -275,7 +289,6 @@ export class PlayServerConnection {
      * @returns {Promise<any | null>} The test elements data fetched from the server or null if an error occurs.
      */
     async getTestElementsWithTovKeyUsingOldPlayServer(tovKey: string | null): Promise<any | null> {
-        logger.debug(`[testBenchConnection] Fetching test elements with TOV key: ${tovKey}`);
         if (!this.sessionToken) {
             logger.error(
                 `[testBenchConnection] Session token is null. Cannot fetch test elements for TOV key: ${tovKey}`
@@ -292,12 +305,12 @@ export class PlayServerConnection {
             const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
             const getTestElementsURL: string = `tovs/${tovKey}/testElements`;
 
-            logger.debug(
-                `[testBenchConnection] Creating session for old play server with URL: ${oldPlayServerBaseUrl}`
-            );
-
             const userNameFromConfig: string = this.username;
             const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
+
+            logger.debug(
+                `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch test elements for TOV key ${tovKey}`
+            );
             const oldPlayServerSession: axios.AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
                 // Old play server, which runs on port 9443, uses BasicAuth.
@@ -317,12 +330,14 @@ export class PlayServerConnection {
             });
 
             if (!oldPlayServerSession) {
-                logger.error(`[testBenchConnection] Failed to create session for old play server.`);
+                logger.error(
+                    `[testBenchConnection] Failed to create session for old play server with URL ${oldPlayServerBaseUrl} while fetching test elements for TOV key ${tovKey}`
+                );
                 return null;
             }
 
             logger.debug(
-                `[testBenchConnection] Fetching test elements with TOV key ${tovKey} from ${getTestElementsURL}`
+                `[testBenchConnection] Fetching test elements for TOV key ${tovKey} from ${getTestElementsURL}`
             );
             const testElementsResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getTestElementsURL),
@@ -359,17 +374,19 @@ export class PlayServerConnection {
             */
 
             logger.debug(
-                `[testBenchConnection] Response status of GET test elements request: ${testElementsResponse.status}`
+                `[testBenchConnection] Response status of GET test elements request for URL ${getTestElementsURL}: ${testElementsResponse.status}`
             );
             if (testElementsResponse.data) {
                 // Note: The output of testElementsResponse is large
                 logger.trace(
-                    `[testBenchConnection] Fetched test elements data for ${oldPlayServerBaseUrl}`,
+                    `[testBenchConnection] Fetched test elements data for request ${getTestElementsURL}:`,
                     testElementsResponse.data
                 );
                 return testElementsResponse.data;
             } else {
-                logger.error(`[testBenchConnection] Test elements data is null or undefined.`);
+                logger.error(
+                    `[testBenchConnection] Test elements data is null or undefined for request ${getTestElementsURL}.`
+                );
                 return null;
             }
         } catch (error) {
@@ -384,9 +401,8 @@ export class PlayServerConnection {
      * Returns all filters that can be accessed by the connected user.
      */
     async getFiltersFromOldPlayServer(): Promise<any | null> {
-        logger.debug("Fetching filters");
         if (!this.sessionToken) {
-            logger.error("Session token is null. Cannot fetch filters");
+            logger.error("[testBenchConnection] Session token is null. Cannot fetch filters");
             return null;
         }
 
@@ -395,7 +411,9 @@ export class PlayServerConnection {
             const oldPlayServerBaseUrl: string = `https://${this.serverName}:${oldPlayServerPortNumber}/api/1`;
             const getFiltersURL: string = `${oldPlayServerBaseUrl}/filters`;
 
-            logger.trace("Creating session for old play server with URL:", oldPlayServerBaseUrl);
+            logger.debug(
+                `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch filters`
+            );
 
             const userNameFromConfig: string = this.username;
             const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
@@ -418,13 +436,15 @@ export class PlayServerConnection {
             });
 
             if (!oldPlayServerSession) {
-                logger.error("Failed to create session for old play server.");
+                logger.error(
+                    `[testBenchConnection] Failed to create session for old play server with URL ${oldPlayServerBaseUrl} while fetching filters`
+                );
                 return null;
             } else {
-                logger.trace(`Old play server session created successfully.`);
+                logger.debug(`[testBenchConnection] Old play server session created successfully.`);
             }
 
-            logger.trace(`Sending GET request to ${getFiltersURL}`);
+            logger.debug(`[testBenchConnection] Sending GET request to ${getFiltersURL}`);
             const getFiltersResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getFiltersURL),
                 3, // maxRetries
@@ -459,16 +479,21 @@ export class PlayServerConnection {
             }
             */
 
-            logger.trace("Response status of get filters request:", getFiltersResponse.status);
+            logger.debug(
+                `[testBenchConnection] Response status of get filters request for URL ${getFiltersURL}: ${getFiltersResponse.status}`
+            );
             if (getFiltersResponse.data) {
-                logger.trace("Fetched filters data:", getFiltersResponse.data);
+                logger.trace(
+                    `[testBenchConnection] Fetched filters data for request ${getFiltersURL}:`,
+                    getFiltersResponse.data
+                );
                 return getFiltersResponse.data;
             } else {
-                logger.error("Filters data is null or undefined.");
+                logger.error(`[testBenchConnection] Filters data is null or undefined for request ${getFiltersURL}.`);
                 return null;
             }
         } catch (error) {
-            logger.error("Error fetching filters:", error);
+            logger.error(`[testBenchConnection] Error fetching filters: ${error}`);
             vscode.window.showErrorMessage("Error fetching filters. Please check the logs for details.");
             return null;
         }
@@ -944,7 +969,7 @@ export class PlayServerConnection {
      */
     private async sendKeepAliveRequest(): Promise<void> {
         if (!this.sessionToken || !this.apiClient) {
-            logger.error("[PlayServerConnection] Session token or apiClient is null. Cannot send keep-alive request.");
+            logger.error("[testBenchConnection] Session token or apiClient is null. Cannot send keep-alive request.");
             this.stopKeepAlive();
             return;
         }

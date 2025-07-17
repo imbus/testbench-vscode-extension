@@ -34,7 +34,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const fullConfig = { ...projectsConfig, ...config };
         super(extensionContext, fullConfig);
 
-        this.dataProvider = new ProjectsDataProvider(this.logger, this.errorHandler, getConnection);
+        this.dataProvider = new ProjectsDataProvider(this.logger, getConnection);
         this.filterService = FilterService.getInstance();
         this.cycleClickHandler = new ClickHandler<ProjectsTreeItem>();
         this.registerCommands();
@@ -150,7 +150,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @return Promise resolving to an array of ProjectsTreeItem objects
      */
     protected async fetchRootItems(): Promise<ProjectsTreeItem[]> {
-        const fetchedProjects = await this.dataProvider.fetchProjects();
+        const fetchedProjects = await this.dataProvider.fetchAndTransformProjects();
         if (!fetchedProjects || fetchedProjects.length === 0) {
             return [];
         }

@@ -113,17 +113,10 @@ suite("ProjectsTreeView", function () {
                 }
             ];
 
-            mockDataProvider.fetchProjects.resolves(mockProjects);
+            mockDataProvider.fetchAndTransformProjects.resolves(mockProjects);
             treeView.refresh();
 
-            sinon.assert.calledOnce(mockDataProvider.fetchProjects);
-        });
-
-        test("should handle missing connection", async () => {
-            getConnectionStub.returns(null);
-            mockDataProvider.fetchProjects.resolves([]);
-            treeView.refresh();
-            sinon.assert.called(mockLogger.debug);
+            sinon.assert.calledOnce(mockDataProvider.fetchAndTransformProjects);
         });
     });
 

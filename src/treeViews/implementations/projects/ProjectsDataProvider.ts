@@ -4,7 +4,6 @@
  */
 
 import { TestBenchLogger } from "../../../testBenchLogger";
-import { ErrorHandler } from "../../utils/ErrorHandler";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TreeNode } from "../../../testBenchTypes";
 import { ProjectData } from "./ProjectsTreeItem";
@@ -13,15 +12,14 @@ import { ProjectItemTypes } from "../../../constants";
 export class ProjectsDataProvider {
     constructor(
         private logger: TestBenchLogger,
-        private errorHandler: ErrorHandler,
         private getConnection: () => PlayServerConnection | null
     ) {}
 
     /**
-     * Fetch all projects from the server and transform them to ProjectData format.
+     * Fetches all projects from the server and transforms them to ProjectData format.
      * @returns Promise resolving to ProjectData array on success, null on failure
      */
-    public async fetchProjects(): Promise<ProjectData[] | null> {
+    public async fetchAndTransformProjects(): Promise<ProjectData[] | null> {
         const connection = this.getConnection();
         if (!connection) {
             this.logger.error("[ProjectsDataProvider] No connection available when fetching projects");
@@ -29,14 +27,9 @@ export class ProjectsDataProvider {
         }
 
         try {
-            this.logger.debug(
-                `[ProjectsDataProvider] Fetching projects from server using connection: ${connection.getServerName()}:${connection.getServerPort()}`
-            );
-
             const projectsFetchedFromServer = await connection.getProjectsList();
 
             if (!projectsFetchedFromServer || !Array.isArray(projectsFetchedFromServer)) {
-                this.logger.warn("[ProjectsDataProvider] No projects returned from server or invalid response format");
                 return [];
             }
 
@@ -91,25 +84,22 @@ export class ProjectsDataProvider {
     public async fetchProjectTree(projectKey: string): Promise<TreeNode | null> {
         const connection = this.getConnection();
         if (!connection) {
-            this.logger.error("No connection available");
-            throw new Error("No connection available");
+            this.logger.error("[ProjectsDataProvider] No connection available when fetching project tree");
+            return null;
         }
 
         try {
-            this.logger.trace(
-                `Fetching project tree for ${projectKey} using connection: ${connection.getServerName()}:${connection.getServerPort()}`
-            );
-
             const projectTreeFromServer = await connection.getProjectTreeOfProject(projectKey);
             if (!projectTreeFromServer) {
-                this.logger.warn(`No project tree returned for ${projectKey}`);
                 return null;
             }
 
-            this.logger.trace(`Project tree has ${projectTreeFromServer.children?.length || 0} children`);
             return projectTreeFromServer;
         } catch (error) {
-            this.logger.error(`Failed to fetch project tree for ${projectKey}:`, error);
+            this.logger.error(
+                `[ProjectsDataProvider] Failed to fetch project tree for project key ${projectKey}:`,
+                error
+            );
             throw error;
         }
     }

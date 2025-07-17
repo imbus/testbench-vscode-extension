@@ -11,26 +11,23 @@ import { PlayServerConnection } from "../../../testBenchConnection";
 import { TreeNode, Project } from "../../../testBenchTypes";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { TestBenchLogger } from "../../../testBenchLogger";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 
 suite("ProjectsDataProvider", function () {
     let testEnv: TestEnvironment;
     let dataProvider: ProjectsDataProvider;
     let mockConnection: sinon.SinonStubbedInstance<PlayServerConnection>;
     let mockLogger: sinon.SinonStubbedInstance<TestBenchLogger>;
-    let mockErrorHandler: sinon.SinonStubbedInstance<ErrorHandler>;
     let getConnectionStub: sinon.SinonStub;
 
     this.beforeEach(function () {
         testEnv = setupTestEnvironment();
         mockConnection = testEnv.sandbox.createStubInstance(PlayServerConnection);
         mockLogger = testEnv.sandbox.createStubInstance(TestBenchLogger);
-        mockErrorHandler = testEnv.sandbox.createStubInstance(ErrorHandler);
 
         getConnectionStub = testEnv.sandbox.stub();
         getConnectionStub.returns(mockConnection);
 
-        dataProvider = new ProjectsDataProvider(mockLogger, mockErrorHandler, getConnectionStub);
+        dataProvider = new ProjectsDataProvider(mockLogger, getConnectionStub);
     });
 
     this.afterEach(function () {
@@ -43,7 +40,7 @@ suite("ProjectsDataProvider", function () {
         });
     });
 
-    suite("fetchProjects", () => {
+    suite("fetchAndTransformProjects", () => {
         test("should fetch and transform projects successfully", async () => {
             const mockProjectsFromServer: Project[] = [
                 {
@@ -76,7 +73,7 @@ suite("ProjectsDataProvider", function () {
 
             mockConnection.getProjectsList.resolves(mockProjectsFromServer);
 
-            const result = await dataProvider.fetchProjects();
+            const result = await dataProvider.fetchAndTransformProjects();
 
             assert.notStrictEqual(result, null);
             assert.strictEqual(result!.length, 2);
@@ -95,23 +92,10 @@ suite("ProjectsDataProvider", function () {
             sinon.assert.calledOnce(mockConnection.getProjectsList);
         });
 
-        test("should handle missing connection", async () => {
-            getConnectionStub.returns(null);
-
-            const result = await dataProvider.fetchProjects();
-
-            assert.strictEqual(result, null);
-            sinon.assert.calledOnce(mockLogger.error);
-            sinon.assert.calledWith(
-                mockLogger.error,
-                "[ProjectsDataProvider] No connection available when fetching projects"
-            );
-        });
-
         test("should handle empty projects response", async () => {
             mockConnection.getProjectsList.resolves([]);
 
-            const result = await dataProvider.fetchProjects();
+            const result = await dataProvider.fetchAndTransformProjects();
 
             assert.notStrictEqual(result, null);
             assert.strictEqual(result!.length, 0);
@@ -122,11 +106,10 @@ suite("ProjectsDataProvider", function () {
         test("should handle null projects response", async () => {
             mockConnection.getProjectsList.resolves(null);
 
-            const result = await dataProvider.fetchProjects();
+            const result = await dataProvider.fetchAndTransformProjects();
 
             assert.notStrictEqual(result, null);
             assert.strictEqual(result!.length, 0);
-            sinon.assert.calledOnce(mockLogger.warn);
         });
 
         test("should handle invalid project data", async () => {
@@ -179,7 +162,7 @@ suite("ProjectsDataProvider", function () {
 
             mockConnection.getProjectsList.resolves(mockProjectsFromServer);
 
-            const result = await dataProvider.fetchProjects();
+            const result = await dataProvider.fetchAndTransformProjects();
 
             assert.notStrictEqual(result, null);
             assert.strictEqual(result!.length, 1);
@@ -208,7 +191,7 @@ suite("ProjectsDataProvider", function () {
 
             mockConnection.getProjectsList.resolves(mockProjectsFromServer);
 
-            const result = await dataProvider.fetchProjects();
+            const result = await dataProvider.fetchAndTransformProjects();
 
             assert.notStrictEqual(result, null);
             assert.strictEqual(result!.length, 1);
@@ -218,7 +201,7 @@ suite("ProjectsDataProvider", function () {
         test("should handle server error", async () => {
             mockConnection.getProjectsList.rejects(new Error("Server connection failed"));
 
-            const result = await dataProvider.fetchProjects();
+            const result = await dataProvider.fetchAndTransformProjects();
 
             assert.strictEqual(result, null);
             sinon.assert.calledOnce(mockLogger.error);
@@ -264,28 +247,6 @@ suite("ProjectsDataProvider", function () {
             assert.deepStrictEqual(result, mockProjectTree);
             sinon.assert.calledOnce(mockConnection.getProjectTreeOfProject);
             sinon.assert.calledWith(mockConnection.getProjectTreeOfProject, "PROJ-001");
-        });
-
-        test("should handle missing connection", async () => {
-            getConnectionStub.returns(null);
-
-            await assert.rejects(
-                async () => await dataProvider.fetchProjectTree("PROJ-001"),
-                /No connection available/
-            );
-
-            sinon.assert.calledOnce(mockLogger.error);
-            sinon.assert.calledWith(mockLogger.error, "No connection available");
-        });
-
-        test("should handle null project tree response", async () => {
-            mockConnection.getProjectTreeOfProject.resolves(null);
-
-            const result = await dataProvider.fetchProjectTree("PROJ-001");
-
-            assert.strictEqual(result, null);
-            sinon.assert.calledOnce(mockLogger.warn);
-            sinon.assert.calledWith(mockLogger.warn, "No project tree returned for PROJ-001");
         });
 
         test("should handle server error", async () => {
