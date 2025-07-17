@@ -38,7 +38,7 @@ export class MarkingModule implements TreeViewModule {
             }
         });
 
-        this.context.logger.debug("MarkingModule initialized");
+        this.context.logger.debug("[MarkingModule] Marking module initialized");
     }
 
     /**
@@ -62,12 +62,12 @@ export class MarkingModule implements TreeViewModule {
     public markItem(item: TreeItemBase, projectKey: string, cycleKey: string, type: string = "default"): void {
         const markingConfig = this.context.config.modules.marking;
         if (!markingConfig?.enabled) {
-            this.context.logger.warn("Marking is not enabled");
+            this.context.logger.warn("[MarkingModule] Marking is not enabled");
             return;
         }
 
         if (!item.id) {
-            this.context.logger.warn(`Cannot mark item without ID: ${item.label}`);
+            this.context.logger.warn(`[MarkingModule] Item ID does not exist for ${item.label}. Cannot mark item`);
             return;
         }
 
@@ -75,7 +75,7 @@ export class MarkingModule implements TreeViewModule {
             markingConfig.markingContextValues &&
             markingConfig.markingContextValues.includes(item.originalContextValue);
         if (!canBeMarked) {
-            this.context.logger.warn(`Item type ${item.originalContextValue} cannot be marked`);
+            this.context.logger.debug(`[MarkingModule] Item type ${item.originalContextValue} cannot be marked`);
             return;
         }
 
@@ -107,7 +107,7 @@ export class MarkingModule implements TreeViewModule {
             },
             timestamp: Date.now()
         });
-        this.context.logger.info(`Marked item: ${item.label}`);
+        this.context.logger.info(`[MarkingModule] Marked item: ${item.label}`);
     }
 
     /**
@@ -124,7 +124,9 @@ export class MarkingModule implements TreeViewModule {
         type: string = "default"
     ): void {
         if (!item.id) {
-            this.context.logger.warn(`Cannot mark item without ID: ${item.label}`);
+            this.context.logger.warn(
+                `[MarkingModule] Item ID does not exist for ${item.label}. Cannot mark item and its descendants`
+            );
             return;
         }
 
@@ -132,12 +134,6 @@ export class MarkingModule implements TreeViewModule {
         const descendants = item.getDescendants();
         const validDescendants = descendants.filter((desc) => desc.id !== undefined);
         const descendantIds = validDescendants.map((desc) => desc.id!);
-        const skippedCount: number = descendants.length - validDescendants.length;
-        if (skippedCount > 0) {
-            this.context.logger.warn(
-                `Skipped ${skippedCount} descendants without IDs while marking item with descendants`
-            );
-        }
 
         const markHierarchy: MarkingHierarchy = {
             rootId: item.id,
@@ -149,7 +145,9 @@ export class MarkingModule implements TreeViewModule {
             this.markItem(descendant, projectKey, cycleKey, type);
         });
         this.updateState();
-        this.context.logger.info(`Marked item and ${validDescendants.length} descendants: ${item.label}`);
+        this.context.logger.info(
+            `[MarkingModule] Marked item  ${item.label} and ${validDescendants.length} descendants`
+        );
         this.context.refresh({ immediate: true });
     }
 
@@ -175,7 +173,7 @@ export class MarkingModule implements TreeViewModule {
         }
 
         this.updateState();
-        this.context.logger.info(`Unmarked item: ${itemId}`);
+        this.context.logger.info(`[MarkingModule] Unmarked item: ${itemId}`);
     }
 
     /**
@@ -205,42 +203,12 @@ export class MarkingModule implements TreeViewModule {
     }
 
     /**
-     * Gets marked items filtered by type
-     * @param type The marking type to filter by
-     * @returns Array of marking information for items of the specified type
-     */
-    public getMarkedItemsByType(type: string): MarkingInfo[] {
-        const items: MarkingInfo[] = [];
-        this.markingState.markedItems.forEach((info) => {
-            if (info.type === type) {
-                items.push(info);
-            }
-        });
-        return items;
-    }
-
-    /**
      * Gets hierarchy information for a root item
      * @param rootId The ID of the root item
      * @returns Hierarchy information or undefined if not found
      */
     public getHierarchy(rootId: string): MarkingHierarchy | undefined {
         return this.markingState.hierarchies.get(rootId);
-    }
-
-    /**
-     * Checks if an item is marked as a descendant in any hierarchy
-     * @param itemId The ID of the item to check
-     * @returns True if the item is marked as a descendant, false otherwise
-     */
-    public isDescendantMarked(itemId: string): boolean {
-        // Check if this item is part of any hierarchy as a descendant
-        for (const hierarchy of this.markingState.hierarchies.values()) {
-            if (hierarchy.descendantIds.has(itemId)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -266,7 +234,7 @@ export class MarkingModule implements TreeViewModule {
         this.markingState = this.createEmptyState();
         this.updateState();
         this.context.refresh();
-        this.context.logger.info("Cleared all markings");
+        this.context.logger.info("[MarkingModule] Cleared all markings");
 
         if (emitGlobalEvent) {
             this.context.eventBus.emit({
@@ -279,21 +247,6 @@ export class MarkingModule implements TreeViewModule {
                 timestamp: Date.now()
             });
         }
-    }
-
-    /**
-     * Clears markings filtered by type
-     * @param type The marking type to clear
-     */
-    public clearMarkingsByType(type: string): void {
-        const itemsToRemove: string[] = [];
-        this.markingState.markedItems.forEach((info, itemId) => {
-            if (info.type === type) {
-                itemsToRemove.push(itemId);
-            }
-        });
-        itemsToRemove.forEach((itemId) => this.unmarkItemByID(itemId));
-        this.context.logger.info(`Cleared ${itemsToRemove.length} markings of type: ${type}`);
     }
 
     /**
@@ -336,16 +289,6 @@ export class MarkingModule implements TreeViewModule {
     private updateState(): void {
         this.context.stateManager.setState({ marking: this.markingState });
         this.context.refresh({ immediate: true });
-    }
-
-    /**
-     * Refreshes marking state for all items in the tree
-     * This should be called when the tree is rebuilt or when marking state changes
-     */
-    public refreshMarkingState(): void {
-        // The marking state will be applied to items when they are created or refreshed
-        this.context.refresh({ immediate: true });
-        this.context.logger.debug("Refreshed marking state for all items");
     }
 
     /**
