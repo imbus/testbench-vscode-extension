@@ -13,7 +13,6 @@ import { TreeViewModule } from "./TreeViewModule";
 import { ModuleRegistry } from "./ModuleRegistry";
 import { StateManager } from "../state/StateManager";
 import { EventBus } from "../utils/EventBus";
-import { ErrorHandler } from "../utils/ErrorHandler";
 import { TestBenchLogger } from "../../testBenchLogger";
 import { CustomRootModule } from "../features/CustomRootModule";
 import { FilteringModule } from "../features/FilteringModule";
@@ -28,7 +27,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     protected readonly context: TreeViewContext;
     public readonly stateManager: StateManager;
     public readonly logger: TestBenchLogger;
-    public readonly errorHandler: ErrorHandler;
     public readonly eventBus: EventBus;
     protected vscTreeView: vscode.TreeView<T> | undefined;
 
@@ -44,7 +42,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         public readonly config: TreeViewConfig
     ) {
         this.logger = new TestBenchLogger();
-        this.errorHandler = new ErrorHandler(this.logger);
         this.eventBus = new EventBus();
         this.stateManager = new StateManager(extensionContext, config.id, this.eventBus);
         this.context = new TreeViewContextImpl(
@@ -53,7 +50,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this.stateManager,
             this.eventBus,
             this.logger,
-            this.errorHandler,
             this
         );
 
@@ -105,12 +101,12 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      */
     public async initialize(): Promise<void> {
         if (this._initialized) {
-            this.logger.warn("Tree view already initialized");
+            this.logger.warn("[TreeViewBase] Tree view already initialized");
             return;
         }
 
         try {
-            this.logger.debug("Initializing tree view");
+            this.logger.debug("[TreeViewBase] Initializing tree view");
             await this.initializeModules();
             // Don't load data during initialization, wait for connection event
             this._initialized = true;
@@ -134,11 +130,11 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
                     }
                 });
             }
-            this.logger.debug("Tree view initialized successfully");
+            this.logger.debug("[TreeViewBase] Tree view initialized successfully");
         } catch (error) {
-            this.errorHandler.handleVoid(
-                error instanceof Error ? error : new Error(String(error)),
-                "TreeViewBase.initialize"
+            this.logger.error(
+                "[TreeViewBase] Error during initialization",
+                error instanceof Error ? error : new Error(String(error))
             );
             throw error;
         }
@@ -289,10 +285,9 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      */
     async getChildren(element?: T): Promise<T[]> {
         try {
-            this.logger.trace(`getChildren called for: ${element?.label || "root"}`);
+            this.logger.trace(`[TreeViewBase] getChildren called for: ${element?.label || "root"}`);
             const customRootModule = this.getModule("customRoot");
             if (!element && customRootModule && customRootModule.isActive()) {
-                this.logger.trace("Using custom root module for getChildren");
                 const customRoot = customRootModule.getCustomRoot();
                 if (customRoot) {
                     return [customRoot as T];
@@ -301,10 +296,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
 
             let children: T[];
             if (!element) {
-                this.logger.trace("Getting root items for getChildren");
                 children = await this.getRootItems();
             } else {
-                this.logger.trace(`Getting children for item: ${element.label}`);
                 children = await this.getChildrenForItem(element);
             }
 
@@ -315,27 +308,23 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
                 // If this is the root level and parent/child inclusion is enabled,
                 // tree structure should be loaded fully for filtering
                 if (!element && this.shouldExpandForFiltering(filterModule)) {
-                    this.logger.trace("Expanding tree structure for filtering");
                     children = await this.expandTreeForFiltering(children);
                 }
 
                 children = filterModule.filterTreeItems(children);
-                this.logger.trace(`After filtering: ${children.length} children`);
-            } else {
-                this.logger.trace("No filtering applied");
             }
 
             const expansionModule = this.getModule("expansion");
             if (expansionModule) {
-                this.logger.trace("Applying expansion state");
+                this.logger.trace("[TreeViewBase] Applying expansion state");
                 children.forEach((child) => expansionModule.applyExpansionState(child));
             }
 
-            this.logger.trace(`Returning ${children.length} children`);
             return children;
         } catch (error) {
             const emptyArray: T[] = [];
-            return this.errorHandler.handle(error as Error, "Failed to get children", emptyArray);
+            this.logger.error("[TreeViewBase] Failed to get children", error as Error);
+            return emptyArray;
         }
     }
 

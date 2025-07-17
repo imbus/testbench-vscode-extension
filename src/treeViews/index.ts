@@ -29,7 +29,6 @@ export { StateManager } from "./state/StateManager";
 export * from "./state/StateTypes";
 
 // Utility exports
-export { ErrorHandler } from "./utils/ErrorHandler";
 export { EventBus } from "./utils/EventBus";
 export type { TreeViewEvent, EventHandler } from "./utils/EventBus";
 

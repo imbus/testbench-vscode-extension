@@ -10,7 +10,6 @@ import { TreeViewContext } from "../../../treeViews/core/TreeViewContext";
 import { TreeViewConfig } from "../../../treeViews/core/TreeViewConfig";
 import { StateManager } from "../../../treeViews/state/StateManager";
 import { EventBus } from "../../../treeViews/utils/EventBus";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { TreeViewBase } from "../../../treeViews/core/TreeViewBase";
 import { TreeItemBase } from "../../../treeViews/core/TreeItemBase";
@@ -110,7 +109,6 @@ suite("TreeViewModule", function () {
     let stateManager: StateManager;
     let eventBus: EventBus;
     let logger: TestBenchLogger;
-    let errorHandler: ErrorHandler;
     let mockTreeView: MockTreeView;
     let treeViewContext: TreeViewContext;
 
@@ -150,7 +148,6 @@ suite("TreeViewModule", function () {
         // Create dependencies
         eventBus = new EventBus();
         logger = new TestBenchLogger();
-        errorHandler = new ErrorHandler(logger);
         stateManager = new StateManager(mockContext, config.id, eventBus);
         mockTreeView = new MockTreeView(mockContext, config);
 
@@ -161,7 +158,6 @@ suite("TreeViewModule", function () {
             stateManager: stateManager,
             eventBus: eventBus,
             logger: logger,
-            errorHandler: errorHandler,
             refresh: () => mockTreeView.refresh(),
             getTreeView: () => mockTreeView,
             getCurrentRootItems: () => mockTreeView.getCurrentRootItems()
@@ -233,7 +229,6 @@ suite("TreeViewModule", function () {
             assert.strictEqual(context.stateManager, stateManager);
             assert.strictEqual(context.eventBus, eventBus);
             assert.strictEqual(context.logger, logger);
-            assert.strictEqual(context.errorHandler, errorHandler);
         });
 
         test("should throw error during initialization if needed", async () => {
@@ -379,17 +374,6 @@ suite("TreeViewModule", function () {
             const logger = context.logger;
             assert.ok(logger instanceof TestBenchLogger);
             assert.strictEqual(typeof logger.info, "function");
-        });
-
-        test("should access error handler through module context", async () => {
-            const module = new TestModule();
-
-            await module.initialize(treeViewContext);
-
-            const context = module.moduleContext!;
-            const errorHandler = context.errorHandler;
-            assert.ok(errorHandler instanceof ErrorHandler);
-            assert.strictEqual(typeof errorHandler.handle, "function");
         });
     });
 

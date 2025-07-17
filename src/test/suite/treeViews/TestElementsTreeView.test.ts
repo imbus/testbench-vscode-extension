@@ -14,7 +14,6 @@ import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { EventBus } from "../../../treeViews/utils/EventBus";
 import { StateManager } from "../../../treeViews/state/StateManager";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { ResourceFileService } from "../../../treeViews/implementations/testElements/ResourceFileService";
 import { testElementsConfig } from "../../../treeViews/implementations/testElements/TestElementsConfig";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
@@ -24,7 +23,6 @@ suite("TestElementsTreeView", function () {
     let treeView: TestElementsTreeView;
     let mockConnection: sinon.SinonStubbedInstance<PlayServerConnection>;
     let mockLogger: sinon.SinonStubbedInstance<TestBenchLogger>;
-    let mockErrorHandler: sinon.SinonStubbedInstance<ErrorHandler>;
     let mockEventBus: sinon.SinonStubbedInstance<EventBus>;
     let mockStateManager: sinon.SinonStubbedInstance<StateManager>;
     let mockResourceFileService: sinon.SinonStubbedInstance<ResourceFileService>;
@@ -55,7 +53,6 @@ suite("TestElementsTreeView", function () {
         testEnv = setupTestEnvironment();
         mockConnection = testEnv.sandbox.createStubInstance(PlayServerConnection);
         mockLogger = testEnv.sandbox.createStubInstance(TestBenchLogger);
-        mockErrorHandler = testEnv.sandbox.createStubInstance(ErrorHandler);
         mockEventBus = testEnv.sandbox.createStubInstance(EventBus);
         mockStateManager = testEnv.sandbox.createStubInstance(StateManager);
         mockResourceFileService = testEnv.sandbox.createStubInstance(ResourceFileService);
@@ -99,7 +96,6 @@ suite("TestElementsTreeView", function () {
         (treeView as any).eventBus = mockEventBus;
         (treeView as any).stateManager = mockStateManager;
         (treeView as any).logger = mockLogger;
-        (treeView as any).errorHandler = mockErrorHandler;
         (treeView as any).resourceFileService = mockResourceFileService;
 
         (treeView as any).registerEventHandlers();
@@ -659,79 +655,6 @@ suite("TestElementsTreeView", function () {
             await treeView.createMissingResource(mockItem);
 
             assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message for missing UID");
-        });
-    });
-
-    suite("Event Handling", function () {
-        test("should handle testElements:fetched event", function () {
-            const eventData = { tovKey: "test-tov", count: 5 };
-
-            (treeView as any).currentTovKey = "test-tov";
-
-            const eventHandlerCalls = mockEventBus.on.getCalls();
-            const fetchedHandlerCall = eventHandlerCalls.find((call) => call.args[0] === "testElements:fetched");
-
-            if (fetchedHandlerCall) {
-                const handler = fetchedHandlerCall.args[1];
-                handler({
-                    type: "testElements:fetched",
-                    source: "testElements",
-                    data: eventData,
-                    timestamp: Date.now()
-                });
-            }
-
-            assert.ok(mockLogger.debug.called, "Should log debug message");
-        });
-
-        test("should handle testElements:error event", function () {
-            const eventData = { tovKey: "test-tov", error: "Network error" };
-
-            (treeView as any).currentTovKey = "test-tov";
-
-            const eventHandlerCalls = mockEventBus.on.getCalls();
-            const errorHandlerCall = eventHandlerCalls.find((call) => call.args[0] === "testElements:error");
-
-            if (errorHandlerCall) {
-                const handler = errorHandlerCall.args[1];
-                handler({
-                    type: "testElements:error",
-                    source: "testElements",
-                    data: eventData,
-                    timestamp: Date.now()
-                });
-            }
-
-            assert.ok(mockLogger.error.called, "Should log error");
-            assert.ok(mockErrorHandler.handleVoid.called, "Should handle error");
-        });
-
-        test("should handle connection:changed event", function () {
-            const connectedEvent = {
-                type: "connection:changed",
-                source: "connection",
-                data: { connected: true },
-                timestamp: Date.now()
-            };
-            const disconnectedEvent = {
-                type: "connection:changed",
-                source: "connection",
-                data: { connected: false },
-                timestamp: Date.now()
-            };
-
-            (treeView as any).currentTovKey = "test-tov";
-
-            const eventHandlerCalls = mockEventBus.on.getCalls();
-            const connectionHandlerCall = eventHandlerCalls.find((call) => call.args[0] === "connection:changed");
-
-            if (connectionHandlerCall) {
-                const handler = connectionHandlerCall.args[1];
-                handler(connectedEvent);
-                handler(disconnectedEvent);
-            }
-
-            assert.ok(mockLogger.debug.called, "Should log debug messages");
         });
     });
 

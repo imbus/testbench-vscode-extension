@@ -85,7 +85,7 @@ export class tb2robotLib {
                 testbench_report: reportPath
             });
             isFetchResultsCommandSuccessful = true;
-        } catch (error) {
+        } catch {
             isFetchResultsCommandSuccessful = false;
         }
         return isFetchResultsCommandSuccessful;

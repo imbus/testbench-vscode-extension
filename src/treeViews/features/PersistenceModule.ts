@@ -36,17 +36,15 @@ export class PersistenceModule implements TreeViewModule {
 
         const loadedState = await this.load();
         if (loadedState) {
-            context.logger.debug("Persistence module loaded state from storage");
             context.stateManager.setState(loadedState);
-            context.logger.debug("Persistence module set state in state manager");
 
             // Apply expansion state after a delay to ensure tree is ready
             setTimeout(() => {
-                context.logger.debug("Triggering expansion state restoration");
+                context.logger.debug("[PersistenceModule] Triggering expansion state restoration");
                 this.restoreExpansionState();
             }, 200);
         } else {
-            context.logger.debug("Persistence module: no saved state found");
+            context.logger.debug("[PersistenceModule] No saved state found");
         }
 
         // Listen for VS Code workspace events to save before shutdown
@@ -56,7 +54,7 @@ export class PersistenceModule implements TreeViewModule {
             })
         );
 
-        context.logger.debug("PersistenceModule initialized");
+        context.logger.info("[PersistenceModule] PersistenceModule initialized");
     }
 
     /**
@@ -93,11 +91,11 @@ export class PersistenceModule implements TreeViewModule {
                 await this.saveToGlobal(dataToSave);
             }
 
-            this.context.logger.debug("State saved successfully");
+            this.context.logger.debug("[PersistenceModule] State saved successfully");
         } catch (error) {
             // Only log error if it's not a cancellation
             if (error instanceof Error && !error.message.includes("Canceled")) {
-                this.context.errorHandler.handleVoid(error, "Failed to save state");
+                this.context.logger.error("[PersistenceModule] Failed to save state:", error);
             }
         } finally {
             this.isSaving = false;
@@ -125,7 +123,7 @@ export class PersistenceModule implements TreeViewModule {
 
             return this.parseLoadedData(data);
         } catch (error) {
-            this.context.errorHandler.handleVoid(error as Error, "Failed to load state");
+            this.context.logger.error("[PersistenceModule] Failed to load state:", error);
             return null;
         }
     }
@@ -139,12 +137,14 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
-        this.context.logger.debug(`Restoring expansion for ${state.expansion.expandedItems.size} items`);
+        this.context.logger.debug(
+            `[PersistenceModule] Restoring expansion for ${state.expansion.expandedItems.size} items`
+        );
 
         // Get the VS Code tree view if available
         const treeView = (this.context as any).treeView?.vscTreeView;
         if (!treeView) {
-            this.context.logger.debug("No VS Code tree view available for expansion restoration");
+            this.context.logger.warn("[PersistenceModule] No VS Code tree view available for expansion restoration");
             return;
         }
 
@@ -175,7 +175,7 @@ export class PersistenceModule implements TreeViewModule {
                 defaultExpanded: state.expansion.defaultExpanded
             };
             this.context.logger.debug(
-                `Saving expansion state: ${dataToSave.expansion.expandedItems.length} expanded, ${dataToSave.expansion.collapsedItems.length} collapsed`
+                `[PersistenceModule] Saving expansion state: ${dataToSave.expansion.expandedItems.length} expanded, ${dataToSave.expansion.collapsedItems.length} collapsed`
             );
         }
 
@@ -213,7 +213,9 @@ export class PersistenceModule implements TreeViewModule {
         }
 
         if (data.version && data.version !== this.STORAGE_VERSION) {
-            this.context.logger.warn(`Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}`);
+            this.context.logger.warn(
+                `[PersistenceModule] Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}`
+            );
         }
 
         const state: Partial<TreeViewState> = {};
@@ -234,7 +236,7 @@ export class PersistenceModule implements TreeViewModule {
                 defaultExpanded: data.expansion.defaultExpanded ?? expansionConfig?.defaultExpanded ?? false
             };
             this.context.logger.debug(
-                `Loaded expansion state: ${state.expansion.expandedItems.size} expanded, ${state.expansion.collapsedItems.size} collapsed`
+                `[PersistenceModule] Loaded expansion state: ${state.expansion.expandedItems.size} expanded, ${state.expansion.collapsedItems.size} collapsed`
             );
         }
 

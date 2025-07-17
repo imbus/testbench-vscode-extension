@@ -3,7 +3,6 @@
  * @description Data provider for managing test elements in the tree view.
  */
 
-import { ErrorHandler } from "../../utils/ErrorHandler";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestElementData, TestElementType } from "./TestElementsTreeItem";
 import { EventBus } from "../../utils/EventBus";
@@ -36,7 +35,6 @@ export class TestElementsDataProvider {
 
     constructor(
         private logger: TestBenchLogger,
-        private errorHandler: ErrorHandler,
         private getConnection: () => PlayServerConnection | null,
         private eventBus: EventBus
     ) {

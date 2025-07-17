@@ -13,14 +13,12 @@ import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { EventBus } from "../../../treeViews/utils/EventBus";
 import { StateManager } from "../../../treeViews/state/StateManager";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 
 suite("ProjectsTreeView", function () {
     let testEnv: TestEnvironment;
     let treeView: ProjectsTreeView;
     let mockConnection: sinon.SinonStubbedInstance<PlayServerConnection>;
     let mockLogger: sinon.SinonStubbedInstance<TestBenchLogger>;
-    let mockErrorHandler: sinon.SinonStubbedInstance<ErrorHandler>;
     let mockDataProvider: sinon.SinonStubbedInstance<ProjectsDataProvider>;
     let mockEventBus: sinon.SinonStubbedInstance<EventBus>;
     let mockStateManager: sinon.SinonStubbedInstance<StateManager>;
@@ -31,7 +29,6 @@ suite("ProjectsTreeView", function () {
         testEnv = setupTestEnvironment();
         mockConnection = testEnv.sandbox.createStubInstance(PlayServerConnection);
         mockLogger = testEnv.sandbox.createStubInstance(TestBenchLogger);
-        mockErrorHandler = testEnv.sandbox.createStubInstance(ErrorHandler);
         mockDataProvider = testEnv.sandbox.createStubInstance(ProjectsDataProvider);
         mockEventBus = testEnv.sandbox.createStubInstance(EventBus);
         mockStateManager = testEnv.sandbox.createStubInstance(StateManager);
@@ -67,7 +64,6 @@ suite("ProjectsTreeView", function () {
         (treeView as any).stateManager = mockStateManager;
         (treeView as any).vscTreeView = mockVscTreeView;
         (treeView as any).logger = mockLogger;
-        (treeView as any).errorHandler = mockErrorHandler;
     });
 
     this.afterEach(function () {

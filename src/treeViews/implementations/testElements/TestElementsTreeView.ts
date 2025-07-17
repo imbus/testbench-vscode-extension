@@ -37,7 +37,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         const fullConfig = { ...testElementsConfig, ...config };
         super(extensionContext, fullConfig);
 
-        this.dataProvider = new TestElementsDataProvider(this.logger, this.errorHandler, getConnection, this.eventBus);
+        this.dataProvider = new TestElementsDataProvider(this.logger, getConnection, this.eventBus);
         this.resourceFileService = new ResourceFileService(this.logger);
         this.filterService = FilterService.getInstance();
         this.interactionClickHandler = new ClickHandler<TestElementsTreeItem>();
@@ -83,7 +83,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.logger.error(
                     `[TestElementsTreeView] Received test elements error event for TOV ${tovKey}: ${error}`
                 );
-                this.errorHandler.handleVoid(new Error(error), "testElements:error");
             }
         });
 
@@ -301,7 +300,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
 
-            this.errorHandler.handleVoid(error as Error, "Failed to load test elements");
+            this.logger.error("[TestElementsTreeView] Failed to load test elements", error as Error);
             throw error;
         }
     }
@@ -372,7 +371,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return rootTestElementItems;
         } catch (error) {
             this.logger.error(`[TestElementsTreeView] Failed to fetch root tree items and build tree items:`, error);
-            this.errorHandler.handleVoid(error as Error, "Could not load Test Elements.");
             return [];
         }
     }
