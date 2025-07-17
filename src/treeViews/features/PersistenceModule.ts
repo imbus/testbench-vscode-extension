@@ -54,7 +54,7 @@ export class PersistenceModule implements TreeViewModule {
             })
         );
 
-        context.logger.info("[PersistenceModule] Persistence module initialized");
+        context.logger.debug("[PersistenceModule] Persistence module initialized");
     }
 
     /**
