@@ -89,7 +89,7 @@ export class FilteringModule implements TreeViewModule {
             }
         });
 
-        context.logger.debug("FilteringModule initialized");
+        context.logger.debug("[FilteringModule] Filtering module initialized");
     }
 
     /**
@@ -174,7 +174,7 @@ export class FilteringModule implements TreeViewModule {
      */
     public setFilterDiffMode(enabled: boolean): void {
         this.filterDiffState.enabled = enabled;
-        this.context.logger.debug(`Filter diff mode ${enabled ? "enabled" : "disabled"}`);
+        this.context.logger.debug(`[FilteringModule] Filter diff mode ${enabled ? "enabled" : "disabled"}`);
 
         // Update context keys to control which diff button icon is shown
         this.updateDiffModeContextKeys(enabled);
@@ -214,7 +214,6 @@ export class FilteringModule implements TreeViewModule {
         // Use VS Code's setContext command to update the context key
         // This will trigger the UI to show the appropriate diff button icon
         vscode.commands.executeCommand("setContext", contextKey, enabled);
-        this.context.logger.debug(`Updated context key ${contextKey} to ${enabled}`);
     }
 
     /**
@@ -247,7 +246,9 @@ export class FilteringModule implements TreeViewModule {
             }
         }
 
-        this.context.logger.debug(`Filter diff: ${this.filterDiffState.filteredItems.size} items marked as filtered`);
+        this.context.logger.debug(
+            `[FilteringModule] Filter diff mode marked ${this.filterDiffState.filteredItems.size} items as filtered`
+        );
     }
 
     /**
@@ -322,12 +323,10 @@ export class FilteringModule implements TreeViewModule {
 
         const searchText = this.textFilter.searchText;
         const searchTextLower = this.textFilter.caseSensitive ? searchText : searchText.toLowerCase();
-        this.context.logger.trace(`Checking text filter for item "${item.label}" with search text "${searchText}"`);
         // Search in label
         if (this.textFilter.searchInLabel && item.label) {
             const label = this.textFilter.caseSensitive ? item.label.toString() : item.label.toString().toLowerCase();
             if (label.includes(searchTextLower)) {
-                this.context.logger.trace(`Item "${item.label}" matches text filter in label`);
                 return true;
             }
         }
@@ -338,7 +337,6 @@ export class FilteringModule implements TreeViewModule {
                 ? item.description.toString()
                 : item.description.toString().toLowerCase();
             if (description.includes(searchTextLower)) {
-                this.context.logger.trace(`Item "${item.label}" matches text filter in description`);
                 return true;
             }
         }
@@ -349,12 +347,10 @@ export class FilteringModule implements TreeViewModule {
                 ? item.tooltip.toString()
                 : item.tooltip.toString().toLowerCase();
             if (tooltip.includes(searchTextLower)) {
-                this.context.logger.trace(`Item "${item.label}" matches text filter in tooltip`);
                 return true;
             }
         }
 
-        this.context.logger.trace(`Item "${item.label}" does not match text filter`);
         return false;
     }
 
@@ -468,7 +464,7 @@ export class FilteringModule implements TreeViewModule {
         }
 
         if (this.filterDiffState.enabled) {
-            this.context.logger.debug("Filter diff mode enabled, skipping hierarchical filtering.");
+            this.context.logger.debug("[FilteringModule] Filter diff mode enabled, skipping hierarchical filtering.");
             return items;
         }
 
@@ -495,7 +491,7 @@ export class FilteringModule implements TreeViewModule {
 
         const filteredItems = recursiveFilter(items);
         this.context.logger.debug(
-            `Filtered ${items.length} root items down to ${filteredItems.length} visible items in hierarchy`
+            `[FilteringModule] Filtered ${items.length} root items down to ${filteredItems.length} visible items in hierarchy`
         );
         return filteredItems;
     }
@@ -523,13 +519,11 @@ export class FilteringModule implements TreeViewModule {
 
         // Check if we should show parents of matching items
         if (this.textFilter.showParentsOfMatches && this.hasMatchingDescendant(item)) {
-            this.context.logger.trace(`Item "${item.label}" is visible because it has matching descendants`);
             return true;
         }
 
         // Check if we should show children of matching items
         if (this.textFilter.showChildrenOfMatches && this.hasMatchingAncestor(item)) {
-            this.context.logger.trace(`Item "${item.label}" is visible because it has matching ancestors`);
             return true;
         }
 
@@ -687,7 +681,7 @@ export class FilteringModule implements TreeViewModule {
 
         this.updateState();
         this.context.refresh({ immediate: true });
-        this.context.logger.debug("All filters cleared");
+        this.context.logger.debug("[FilteringModule] All filters cleared");
     }
 
     /**
@@ -733,7 +727,7 @@ export class FilteringModule implements TreeViewModule {
         try {
             this.compiledFilters.set(filter.id, filter.predicate);
         } catch (error) {
-            this.context.logger.error(`Failed to compile filter ${filter.id}:`, error);
+            this.context.logger.error(`[FilteringModule] Failed to compile filter ${filter.id}:`, error);
         }
     }
 
