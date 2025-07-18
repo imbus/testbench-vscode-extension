@@ -52,7 +52,7 @@ export class PlayServerConnection {
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         logger.trace(
-            `[testBenchConnection] Initializing for server: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
+            `[testBenchConnection] Initializing server connection for server name: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
         );
 
         this.apiClient = axios.create({
@@ -128,7 +128,7 @@ export class PlayServerConnection {
             );
 
             if (logoutResponse.status === 204) {
-                logger.debug("[testBenchConnection] Server logout successful (204).");
+                logger.debug("[testBenchConnection] Server logout successful.");
                 setConnection(null);
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 this.sessionToken = "";
@@ -136,9 +136,7 @@ export class PlayServerConnection {
 
                 return true;
             } else {
-                logger.error(
-                    `[testBenchConnection] Server logout failed. Unexpected response status: ${logoutResponse.status}`
-                );
+                logger.error(`[testBenchConnection] Server logout failed. Response status: ${logoutResponse.status}`);
                 return false;
             }
         } catch (error) {
@@ -204,7 +202,7 @@ export class PlayServerConnection {
                 );
                 return projectsResponse.data;
             } else {
-                logger.error("[testBenchConnection] Project list data is null or undefined.");
+                logger.error("[testBenchConnection] Project list data is not available.");
                 return null;
             }
         } catch (error) {
@@ -228,7 +226,7 @@ export class PlayServerConnection {
             return null;
         }
         if (!projectKey) {
-            logger.error("[testBenchConnection] Project key is null or undefined. Cannot fetch project tree.");
+            logger.error("[testBenchConnection] Project key is missing. Cannot fetch project tree.");
             return null;
         }
         try {
@@ -272,7 +270,7 @@ export class PlayServerConnection {
                 );
                 return projectTreeResponse.data;
             } else {
-                logger.error("[testBenchConnection] Project tree data is null or undefined.");
+                logger.error("[testBenchConnection] Project tree data is not available.");
                 return null;
             }
         } catch (error) {
@@ -296,7 +294,7 @@ export class PlayServerConnection {
             return null;
         }
         if (!tovKey) {
-            logger.error(`[testBenchConnection] TOV key is null or undefined. Cannot fetch test elements.`);
+            logger.error(`[testBenchConnection] TOV key is missing. Cannot fetch test elements.`);
             return null;
         }
 
@@ -379,13 +377,13 @@ export class PlayServerConnection {
             if (testElementsResponse.data) {
                 // Note: The output of testElementsResponse is large
                 logger.trace(
-                    `[testBenchConnection] Fetched test elements data for request ${getTestElementsURL}:`,
+                    `[testBenchConnection] Fetched test elements data from URL ${getTestElementsURL}:`,
                     testElementsResponse.data
                 );
                 return testElementsResponse.data;
             } else {
                 logger.error(
-                    `[testBenchConnection] Test elements data is null or undefined for request ${getTestElementsURL}.`
+                    `[testBenchConnection] Test elements data is not available from URL ${getTestElementsURL}.`
                 );
                 return null;
             }
@@ -440,11 +438,9 @@ export class PlayServerConnection {
                     `[testBenchConnection] Failed to create session for old play server with URL ${oldPlayServerBaseUrl} while fetching filters`
                 );
                 return null;
-            } else {
-                logger.debug(`[testBenchConnection] Old play server session created successfully.`);
             }
 
-            logger.debug(`[testBenchConnection] Sending GET request to ${getFiltersURL}`);
+            logger.debug(`[testBenchConnection] Fetching filters from URL ${getFiltersURL}`);
             const getFiltersResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getFiltersURL),
                 3, // maxRetries
@@ -489,7 +485,7 @@ export class PlayServerConnection {
                 );
                 return getFiltersResponse.data;
             } else {
-                logger.error(`[testBenchConnection] Filters data is null or undefined for request ${getFiltersURL}.`);
+                logger.error(`[testBenchConnection] Filters data is not available from URL ${getFiltersURL}.`);
                 return null;
             }
         } catch (error) {
@@ -604,7 +600,7 @@ export class PlayServerConnection {
         };
 
         logger.debug(
-            `[testBenchConnection] Fetching cycle structure using ${testStructureOfCycleUrl} and request body:`,
+            `[testBenchConnection] Fetching cycle structure from URL ${testStructureOfCycleUrl} and request body:`,
             requestBody
         );
 
@@ -649,7 +645,7 @@ export class PlayServerConnection {
             */
 
             logger.debug(
-                `[testBenchConnection] Response status code for test structure of cycle ${testStructureOfCycleUrl}:`,
+                `[testBenchConnection] Response status of test structure of cycle request for URL ${testStructureOfCycleUrl}:`,
                 testStructureOfCycleResponse.status
             );
             if (testStructureOfCycleResponse.data) {
@@ -695,7 +691,7 @@ export class PlayServerConnection {
         };
 
         logger.debug(
-            `[testBenchConnection] Fetching test structure of TOV using ${testStructureOfTOVUrl} and request body:`,
+            `[testBenchConnection] Fetching test structure of TOV from URL ${testStructureOfTOVUrl} and request body:`,
             requestBody
         );
 
@@ -740,25 +736,25 @@ export class PlayServerConnection {
             */
 
             logger.debug(
-                `[testBenchConnection] Test structure of TOV response for TOV key ${tovKey}:`,
+                `[testBenchConnection] Received test structure of TOV response status for URL ${testStructureOfTOVUrl}:`,
                 testStructureOfTOVResponse.status
             );
             if (testStructureOfTOVResponse.data) {
                 // Note: The output is large
                 logger.trace(
-                    `[testBenchConnection] Received test structure for TOV key ${tovKey}:`,
+                    `[testBenchConnection] Received test structure from URL ${testStructureOfTOVUrl}:`,
                     testStructureOfTOVResponse.data
                 );
                 return testStructureOfTOVResponse.data;
             } else {
                 logger.error(
-                    `[testBenchConnection] Unexpected response code when fetching test structure for TOV using ${testStructureOfTOVUrl}: ${testStructureOfTOVResponse.status}`
+                    `[testBenchConnection] Unexpected response code when fetching test structure for TOV using URL ${testStructureOfTOVUrl}: ${testStructureOfTOVResponse.status}`
                 );
                 return null;
             }
         } catch (error) {
             logger.error(
-                `[testBenchConnection] Error fetching test structure for TOV using ${testStructureOfTOVUrl}:`,
+                `[testBenchConnection] Error fetching test structure for TOV using URL ${testStructureOfTOVUrl}:`,
                 error
             );
             return null;
@@ -781,7 +777,7 @@ export class PlayServerConnection {
 
         try {
             const zipFileData: Buffer = fs.readFileSync(zipFilePath);
-            logger.debug(`Importing zip file "${zipFilePath}" to ${importResultZipURL}`);
+            logger.debug(`[testBenchConnection] Importing zip file "${zipFilePath}" using URL ${importResultZipURL}`);
             const importZipResponse: AxiosResponse = await withRetry(
                 () =>
                     this.apiClient.post(importResultZipURL, zipFileData, {
@@ -808,47 +804,47 @@ export class PlayServerConnection {
 
             switch (importZipResponse.status) {
                 case 201: {
-                    logger.debug("Report imported successfully.");
+                    logger.debug(`[testBenchConnection] Report "${zipFilePath}" imported successfully.`);
                     const fileName: string | undefined = importZipResponse.data?.fileName;
                     if (fileName) {
                         return fileName;
                     } else {
-                        const fileNameNotFoundMessage: string = "File name not found in server response.";
-                        logger.error(fileNameNotFoundMessage);
-                        throw new Error(fileNameNotFoundMessage);
+                        const fileNameNotFoundErrorMessage: string = `[testBenchConnection] Imported file name not found in server response.`;
+                        logger.error(fileNameNotFoundErrorMessage);
+                        throw new Error(fileNameNotFoundErrorMessage);
                     }
                 }
                 case 403: {
                     const importForbiddenMessage: string =
-                        "Forbidden: You do not have permission to import execution results.";
+                        "[testBenchConnection] Error when importing report: 403 Forbidden: You do not have permission to import execution results.";
                     logger.error(importForbiddenMessage);
                     throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const importNotFoundMessage: string = "Not Found: The requested project was not found.";
+                    const importNotFoundMessage: string =
+                        "[testBenchConnection] Error when importing report: 404 Not Found: The requested project was not found.";
                     logger.error(importNotFoundMessage);
                     throw new Error(importNotFoundMessage);
                 }
                 case 422: {
                     const importUnprocessableEntityMessage: string =
-                        "Unprocessable Entity: The imported file is invalid.";
+                        "[testBenchConnection] Error when importing report: 422 Unprocessable Entity: The imported file is invalid.";
                     logger.error(importUnprocessableEntityMessage);
                     throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importZipResponse.status} received.`;
+                    const importUnexpectedErrorMessage: string = `[testBenchConnection] Error when importing report: Unexpected status code ${importZipResponse.status} received.`;
                     logger.error(importUnexpectedErrorMessage);
                     throw new Error(importUnexpectedErrorMessage);
                 }
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                logger.error("An Axios error occurred while importing the file:", error.message);
-                if (error.response) {
-                    logger.error("Error response data:", error.response.data);
-                }
+                logger.error(
+                    `[testBenchConnection] Error when importing report: Axios error: ${error.message}. Error response data: ${error?.response?.data}`
+                );
             } else {
-                logger.error("An unexpected error occurred while importing the file:", error);
+                logger.error(`[testBenchConnection] Unexpected error when importing report:`, error);
             }
             throw error;
         }
@@ -869,6 +865,11 @@ export class PlayServerConnection {
         importData: testBenchTypes.ImportData
     ): Promise<string> {
         const getJobIDOfImportUrl: string = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
+
+        logger.debug(
+            `[testBenchConnection] Fetching job ID of import job from URL ${getJobIDOfImportUrl} and import data request body:`,
+            importData
+        );
 
         try {
             const importJobIDResponse: AxiosResponse = await withRetry(
@@ -898,51 +899,52 @@ export class PlayServerConnection {
                 case 200: {
                     const jobID: string | undefined = importJobIDResponse.data?.jobID;
                     if (jobID) {
-                        logger.debug(`Import initiated successfully. Job ID: ${jobID}`);
+                        logger.debug(`[testBenchConnection] Job ID of import job retrieved successfully: ${jobID}`);
                         return jobID;
                     } else {
                         const importJobIDNotFoundMessage: string =
-                            "Success response received but no jobID found in the response.";
+                            "[testBenchConnection] Success response received but no jobID found in the response.";
                         logger.error(importJobIDNotFoundMessage);
                         throw new Error(importJobIDNotFoundMessage);
                     }
                 }
                 case 400: {
-                    const importBadRequestMessage: string = "Bad Request: The request body is invalid.";
+                    const importBadRequestMessage: string =
+                        "[testBenchConnection] Error when fetching job ID of import job: 400 Bad Request: The request body is invalid.";
                     logger.error(importBadRequestMessage);
                     throw new Error(importBadRequestMessage);
                 }
                 case 403: {
                     const importForbiddenMessage: string =
-                        "Forbidden: You do not have permission to import execution results.";
+                        "[testBenchConnection] Error when fetching job ID of import job: 403 Forbidden: You do not have permission to import execution results.";
                     logger.error(importForbiddenMessage);
                     throw new Error(importForbiddenMessage);
                 }
                 case 404: {
-                    const importNotFoundMessage: string = "Not Found: Project or test cycle not found.";
+                    const importNotFoundMessage: string =
+                        "[testBenchConnection] Error when fetching job ID of import job: 404 Not Found: Project or test cycle not found.";
                     logger.error(importNotFoundMessage);
                     throw new Error(importNotFoundMessage);
                 }
                 case 422: {
                     const importUnprocessableEntityMessage: string =
-                        "Unprocessable Entity: The server cannot process the request.";
+                        "[testBenchConnection] Error when fetching job ID of import job: 422 Unprocessable Entity: The server cannot process the request.";
                     logger.error(importUnprocessableEntityMessage);
                     throw new Error(importUnprocessableEntityMessage);
                 }
                 default: {
-                    const importUnexpectedErrorMessage: string = `Unexpected status code ${importJobIDResponse.status} received.`;
+                    const importUnexpectedErrorMessage: string = `[testBenchConnection] Error when fetching job ID of import job: Unexpected status code ${importJobIDResponse.status} received.`;
                     logger.error(importUnexpectedErrorMessage);
                     throw new Error(importUnexpectedErrorMessage);
                 }
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                logger.error("Axios error during import job ID retrieval:", error.message);
-                if (error.response) {
-                    logger.error("Error response data:", error.response.data);
-                }
+                logger.error(
+                    `[testBenchConnection] Error when fetching job ID of import job: Axios error: ${error.message}. Error response data: ${error?.response?.data}`
+                );
             } else {
-                logger.error("Unexpected error during import job ID retrieval:", error);
+                logger.error(`[testBenchConnection] Unexpected error when fetching job ID of import job:`, error);
             }
             throw error;
         }
@@ -961,7 +963,7 @@ export class PlayServerConnection {
             this.sendKeepAliveRequest();
         }, this.keepAliveIntervalInSeconds);
         this.sendKeepAliveRequest();
-        logger.trace("Keep-alive started.");
+        logger.trace("[testBenchConnection] Keep-alive started.");
     }
 
     /** Stops the keep-alive process. */
@@ -969,7 +971,7 @@ export class PlayServerConnection {
         if (this.keepAliveIntervalId) {
             clearInterval(this.keepAliveIntervalId);
             this.keepAliveIntervalId = null;
-            logger.trace("Keep-alive stopped.");
+            logger.trace("[testBenchConnection] Keep-alive stopped.");
         }
     }
 
@@ -981,7 +983,9 @@ export class PlayServerConnection {
      */
     private async sendKeepAliveRequest(): Promise<void> {
         if (!this.sessionToken || !this.apiClient) {
-            logger.error("[testBenchConnection] Session token or apiClient is null. Cannot send keep-alive request.");
+            logger.error(
+                "[testBenchConnection] Session token or apiClient is missing. Cannot send keep-alive request."
+            );
             this.stopKeepAlive();
             return;
         }
@@ -995,10 +999,12 @@ export class PlayServerConnection {
                 5, // maxRetries
                 2000 // delayMs
             );
-            logger.trace("Keep-alive request sent.");
+            logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
-            logger.error("Keep-alive request failed after retries:", error);
-            logger.warn("Logging out the user after keep-alive failure.");
+            logger.error(
+                "[testBenchConnection] Keep-alive request failed after retries, logging out the user after keep-alive failure:",
+                error
+            );
             await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
         }
     }
@@ -1030,16 +1036,18 @@ export async function withRetry<T>(
         try {
             return await asyncFunction();
         } catch (error) {
-            logger.warn(`Attempt ${retryCount} failed. Retrying in ${delayMs}ms...`);
+            logger.warn(`[testBenchConnection] Attempt ${retryCount} failed. Retrying in ${delayMs}ms...`);
 
             if (shouldRetry && !shouldRetry(error)) {
-                logger.warn(`Error is not retryable. Aborting further retry attempts.`);
+                logger.warn(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
                 throw error;
             }
 
             retryCount++;
             if (retryCount > maxAllowedRetryCount) {
-                logger.error(`Attempt ${retryCount} failed. Maximum retries reached, aborting further retries.`);
+                logger.error(
+                    `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries reached, aborting further retries.`
+                );
                 throw error;
             }
 
@@ -1072,8 +1080,10 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
     try {
         const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
-            const workspaceLocationErrorMessage: string = "Workspace location could not be determined.";
-            vscode.window.showErrorMessage(workspaceLocationErrorMessage);
+            const workspaceLocationErrorMessage: string =
+                "[testBenchConnection] Workspace location could not be determined while selecting report zip file.";
+            const workspaceLocationErrorMessageForUser: string = "Workspace location could not be determined.";
+            vscode.window.showErrorMessage(workspaceLocationErrorMessageForUser);
             logger.warn(workspaceLocationErrorMessage);
             return null;
         }
@@ -1090,23 +1100,30 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
 
         const fileUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog(options);
         if (!fileUri || !fileUri[0]) {
-            const noZipFileSelectedMessage: string = "No zip file selected. Please select a valid .zip file.";
-            vscode.window.showErrorMessage(noZipFileSelectedMessage);
+            const noZipFileSelectedMessage: string =
+                "[testBenchConnection] No zip file selected while selecting report zip file.";
+            const noZipFileSelectedMessageForUser: string = "No zip file selected. Please select a valid .zip file.";
+            vscode.window.showErrorMessage(noZipFileSelectedMessageForUser);
             logger.debug(noZipFileSelectedMessage);
             return null;
         }
 
         const selectedFilePath: string = fileUri[0].fsPath;
         if (!selectedFilePath.endsWith(".zip")) {
-            vscode.window.showErrorMessage("Selected file is not a .zip file. Please select a valid .zip file.");
-            logger.debug("Selected file is not a .zip file.");
+            const selectedFileIsNotZipFileMessage: string =
+                "[testBenchConnection] Selected file is not a .zip file while selecting report zip file.";
+            const selectedFileIsNotZipFileMessageForUser: string =
+                "Selected file is not a .zip file. Please select a valid .zip file.";
+            vscode.window.showErrorMessage(selectedFileIsNotZipFileMessageForUser);
+            logger.debug(selectedFileIsNotZipFileMessage);
             return null;
         }
         return selectedFilePath;
     } catch (error: any) {
-        const zipSelectionErrorMessage: string = `An error occurred while selecting the report zip file: ${error.message}`;
-        vscode.window.showErrorMessage(zipSelectionErrorMessage);
-        logger.error(zipSelectionErrorMessage);
+        const zipSelectionErrorMessage: string = "[testBenchConnection] Error while selecting report zip file:";
+        const zipSelectionErrorMessageForUser: string = "An error occurred while selecting the report zip file.";
+        vscode.window.showErrorMessage(zipSelectionErrorMessageForUser);
+        logger.error(`${zipSelectionErrorMessage} ${error.message}`);
         return null;
     }
 }
@@ -1130,30 +1147,31 @@ export async function importReportWithResultsToTestbench(
         logger.debug("Importing report with results to TestBench server.");
         const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
         if (!uniqueID) {
-            const extractionErrorMsg: string = "Error extracting unique ID from the zip file.";
-            vscode.window.showErrorMessage(extractionErrorMsg);
+            const extractionErrorMsg: string =
+                "[testBenchConnection] Error extracting unique ID from the zip file during import report with results process.";
+            const extractionErrorMsgForUser: string =
+                "Error extracting unique ID from the zip file during import process.";
+            vscode.window.showErrorMessage(extractionErrorMsgForUser);
             logger.error(extractionErrorMsg);
             return null;
         }
-
-        // TODO: We are currently searching for the Cycle key of the exported test theme locally, which causes issues if the project management tree is not initialized.
-        // Later, we should fetch the project tree from the server and search for the cycle key there.
 
         /*
         // For debugging, save the tree items to a file called allTreeElements.json
         const allTreeElementsPath = path.join(__dirname, "allTreeElements.json");
         utils.saveJsonDataToFile(allTreeElementsPath, allTreeElementsInTreeView);
-        console.log(`allTreeElements saved to ${allTreeElementsPath}`);
+        logger.debug(`[testBenchConnection] All tree elements saved to ${allTreeElementsPath}`);
         */
 
         const projectKey: number = Number(projectKeyString);
         const cycleKey: number = Number(cycleKeyString);
 
         if (isNaN(projectKey) || isNaN(cycleKey)) {
-            logger.error(
-                `Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`
-            );
-            vscode.window.showErrorMessage("Internal error: Invalid project or cycle identifier for import.");
+            const invalidProjectOrCycleKeyMessage: string =
+                "[testBenchConnection] Invalid projectKey or cycleKey provided for import.";
+            const invalidProjectOrCycleKeyMessageForUser: string = "Invalid project or cycle key provided for import.";
+            vscode.window.showErrorMessage(invalidProjectOrCycleKeyMessageForUser);
+            logger.error(invalidProjectOrCycleKeyMessage);
             return null;
         }
 
@@ -1162,9 +1180,11 @@ export async function importReportWithResultsToTestbench(
             reportWithResultsZipFilePath
         );
         if (!zipFilenameFromServer) {
-            const importErrorMessage: string = "Error importing the result file to the server.";
+            const importErrorMessage: string =
+                "[testBenchConnection] Error importing the report file with results to the server.";
+            const importErrorMessageForUser: string = "Error importing the report file to the server.";
+            vscode.window.showErrorMessage(importErrorMessageForUser);
             logger.error(importErrorMessage);
-            vscode.window.showErrorMessage(importErrorMessage);
             return null;
         }
 
@@ -1186,7 +1206,6 @@ export async function importReportWithResultsToTestbench(
         };
 
         try {
-            logger.debug("Starting import execution results.");
             const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
 
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await reportHandler.pollJobStatus(
@@ -1196,28 +1215,29 @@ export async function importReportWithResultsToTestbench(
             );
 
             if (!importJobStatus || reportHandler.isImportJobFailed(importJobStatus)) {
-                const importJobFailedMessage: string = "Import job could not be completed.";
-                logger.warn(importJobFailedMessage);
-                vscode.window.showErrorMessage(importJobFailedMessage);
+                const importJobFailedMessageForUser: string = "Import job could not be completed.";
+                vscode.window.showErrorMessage(importJobFailedMessageForUser);
                 return null;
-            } else if (reportHandler.isImportJobCompletedSuccessfully(importJobStatus)) {
-                const isImportJobCompletedSuccessfullyMessage: string = `Import job completed successfully for Project ${projectKeyString}, Cycle ${cycleKeyString}.`;
-                logger.info(isImportJobCompletedSuccessfullyMessage);
-                // vscode.window.showInformationMessage("Import job completed successfully.");
-            } else {
-                logger.warn("Import job finished polling but status is unknown.", importJobStatus);
-                vscode.window.showWarningMessage("Import job status unknown after polling.");
+            } else if (!reportHandler.isImportJobCompletedSuccessfully(importJobStatus)) {
+                const importJobStatusUnknownMessage: string =
+                    "[testBenchConnection] Import job finished polling but status is unknown.";
+                const importJobStatusUnknownMessageForUser: string = "Import job status unknown after polling.";
+                logger.warn(importJobStatusUnknownMessage, importJobStatus);
+                vscode.window.showWarningMessage(importJobStatusUnknownMessageForUser);
             }
         } catch (error: any) {
             logger.error(
-                `Error during import job initiation or polling for Project ${projectKey}, Cycle ${cycleKey}:`,
+                `[testBenchConnection] Error during import job initiation or polling for Project key ${projectKey}, Cycle key ${cycleKey}:`,
                 error.message
             );
             return null;
         }
     } catch (error: any) {
-        logger.error("Error importing report:", error.message);
-        vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
+        const unexpectedErrorMessage: string =
+            "[testBenchConnection] Unexpected error during import report with results process.";
+        const unexpectedErrorMessageForUser: string = "Unexpected error during import process.";
+        logger.error(`${unexpectedErrorMessage} ${error.message}`);
+        vscode.window.showErrorMessage(unexpectedErrorMessageForUser);
         return null;
     }
 }
@@ -1249,9 +1269,11 @@ export async function selectReportWithResultsAndImportToTestbench(
 
             if (!projectKey || !cycleKey) {
                 const missingDataContextMsg: string =
+                    "[testBenchConnection] Could not extract necessary project or cycle key from the selected report file.";
+                const missingDataContextMsgForUser: string =
                     "Could not extract necessary project or cycle key from the selected report file.";
                 logger.error(missingDataContextMsg);
-                vscode.window.showErrorMessage(missingDataContextMsg);
+                vscode.window.showErrorMessage(missingDataContextMsgForUser);
                 await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
                 return null;
             }
@@ -1293,11 +1315,11 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
         const cycleKey: string | null = projectJson?.projectContext?.cycleKey || null;
 
         logger.debug(
-            `Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`
+            `[testBenchConnection] Extracted data from zip file "${zipFilePath}": uniqueID = ${uniqueID}, projectKey = ${projectKey}, cycleName = ${cycleNameOfProject}, cycleKey = ${cycleKey}`
         );
         return { uniqueID, projectKey, cycleNameOfProject, cycleKey };
     } catch (error) {
-        logger.error("Error extracting JSON data from zip file:", error);
+        logger.error(`[testBenchConnection] Error extracting JSON data from zip file "${zipFilePath}":`, error);
         return { uniqueID: null, projectKey: null, cycleNameOfProject: null, cycleKey: null };
     }
 }

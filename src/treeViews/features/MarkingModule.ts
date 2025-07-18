@@ -146,7 +146,7 @@ export class MarkingModule implements TreeViewModule {
         });
         this.updateState();
         this.context.logger.info(
-            `[MarkingModule] Marked item  ${item.label} and ${validDescendants.length} descendants`
+            `[MarkingModule] Marked item ${item.label} and ${validDescendants.length} descendants`
         );
         this.context.refresh({ immediate: true });
     }

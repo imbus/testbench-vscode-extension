@@ -540,8 +540,7 @@ export async function fetchReportZipOfCycleFromServer(
         }
 
         logger.debug(
-            `[reportHandler] Fetching report zip for projectKey: ${projectKey}, cycleKey: ${cycleKey}, 
-            folder: ${folderNameToDownloadReport} and request parameters:`,
+            `[reportHandler] Fetching report zip for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folder: ${folderNameToDownloadReport} and request parameters:`,
             requestParameters
         );
 

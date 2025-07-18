@@ -108,7 +108,7 @@ export class ResourceFileService {
             return filesInDir.includes(filename);
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                this.logger.debug(`[ResourceFileService] Path does not exist: ${cleanedPath}`);
+                this.logger.trace(`[ResourceFileService] Path does not exist: ${cleanedPath}`);
                 return false;
             }
             this.logger.error(`[ResourceFileService] Error stating file/dir "${cleanedPath}": ${err.message}`);

@@ -22,7 +22,6 @@ let cachedWorkspaceLocation: string | undefined;
  * @returns A promise that resolves after the delay.
  */
 export function delay(milliseconds: number): Promise<void> {
-    logger.trace(`Waiting for ${milliseconds} milliseconds for job completion.`);
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 

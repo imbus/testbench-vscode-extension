@@ -560,7 +560,7 @@ function setupClientNotifications(
         vscode.commands.executeCommand("vscode.diff", virtualUri, realUri, `${realFileName} (TestBench Changes)`);
     });
 
-    logger.info(
+    logger.debug(
         `[server] Language server notification handler set up for ${projectName}/${tovName}, Op ID ${operationId}`
     );
 }
