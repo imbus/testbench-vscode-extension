@@ -1327,7 +1327,7 @@ export async function loginToServerAndGetSessionDetails(
     const baseURL: string = `https://${serverName}:${portNumber}/api`;
     const loginURL: string = `${baseURL}/login/session/v1`;
 
-    logger.trace(`[Connection] Sending login request to: ${loginURL} for user ${username}`);
+    logger.debug(`[testBenchConnection] Sending login request to: ${loginURL} for user ${username}`);
 
     try {
         const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await withRetry(
@@ -1344,7 +1344,9 @@ export async function loginToServerAndGetSessionDetails(
             (error) => {
                 // shouldRetry predicate
                 if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-                    logger.warn("[Connection] Login attempt failed with 401 (Invalid Credentials). Not retrying.");
+                    logger.warn(
+                        "[testBenchConnection] Login attempt failed with 401 (Invalid Credentials). Not retrying."
+                    );
                     return false;
                 }
                 return true;
@@ -1352,7 +1354,7 @@ export async function loginToServerAndGetSessionDetails(
         );
 
         if (loginResponse.status === 201 && loginResponse.data && loginResponse.data.sessionToken) {
-            logger.info(`[Connection] Login successful for user ${username} on ${serverName}.`);
+            logger.info(`[testBenchConnection] Login successful for user ${username} on ${serverName}.`);
             return {
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
@@ -1360,15 +1362,15 @@ export async function loginToServerAndGetSessionDetails(
             };
         } else {
             logger.error(
-                `[Connection] Login failed for ${username}. Unexpected status code: ${loginResponse.status}, Data: ${JSON.stringify(loginResponse.data)}`
+                `[testBenchConnection] Login failed for ${username}. Unexpected status code: ${loginResponse.status}, Data: ${JSON.stringify(loginResponse.data)}`
             );
             return null;
         }
     } catch (error: any) {
         if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            logger.error(`[Connection] Login failed for ${username} to ${serverName}: Invalid credentials.`);
+            logger.error(`[testBenchConnection] Login failed for ${username} to ${serverName}: Invalid credentials.`);
         } else {
-            logger.error(`[Connection] Error during login for ${username} to ${serverName}:`, error.message);
+            logger.error(`[testBenchConnection] Error during login for ${username} to ${serverName}:`, error.message);
         }
         return null;
     }

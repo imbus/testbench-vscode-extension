@@ -31,7 +31,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
     private _isAttemptingSilentAutoLogin: boolean = false;
 
     constructor(private context: vscode.ExtensionContext) {
-        logger.trace("[AuthProvider] TestBenchAuthenticationProvider initialized.");
+        logger.trace("[AuthenticationProvider] TestBenchAuthenticationProvider initialized.");
     }
 
     /**
@@ -40,7 +40,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * is invoked for an auto-login scenario.
      */
     public prepareForSilentAutoLogin(): void {
-        logger.trace("[AuthProvider] Preparing for silent auto-login attempt.");
+        logger.trace("[AuthenticationProvider] Preparing for silent auto-login attempt.");
         this._isAttemptingSilentAutoLogin = true;
     }
 
@@ -50,7 +50,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * @returns A promise that resolves to an array of authentication sessions.
      */
     async getSessions(scopes?: readonly string[]): Promise<vscode.AuthenticationSession[]> {
-        logger.trace(`[AuthProvider] getSessions called. Scopes: ${scopes}`);
         const sessionsToReturn: vscode.AuthenticationSession[] = [];
         for (const sessionData of this.activeSessions.values()) {
             sessionsToReturn.push({
@@ -60,7 +59,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 scopes: ["api_access"]
             });
         }
-        logger.trace(`[AuthProvider] getSessions returning ${sessionsToReturn.length} session(s).`);
+        logger.trace(`[AuthenticationProvider] Returning ${sessionsToReturn.length} session(s).`);
         return sessionsToReturn;
     }
 
@@ -84,11 +83,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
         const isSilent: boolean = this._isAttemptingSilentAutoLogin;
         if (this._isAttemptingSilentAutoLogin) {
             this._isAttemptingSilentAutoLogin = false;
-            logger.trace("[AuthProvider] createSession: Silent auto-login attempt detected.");
-        } else {
-            logger.trace(
-                `[AuthProvider] createSession called (interactive). Scopes: ${scopes}, Options: ${JSON.stringify(options)}`
-            );
+            logger.debug("[AuthenticationProvider] Silent auto-login attempt detected while creating session.");
         }
 
         try {
@@ -104,13 +99,9 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     this.context
                 );
                 targetConnection = allConnections.find((p) => p.id === activeConnectionIdFromManager);
-                if (targetConnection) {
-                    logger.info(
-                        `[AuthProvider] Using active connection for ${isSilent ? "silent " : ""}login: ${targetConnection.label}`
-                    );
-                } else {
+                if (!targetConnection) {
                     logger.warn(
-                        `[AuthProvider] Active connection ID ${activeConnectionIdFromManager} was set, but connection not found.`
+                        `[AuthenticationProvider] Active connection ID ${activeConnectionIdFromManager} was set, but connection not found.`
                     );
                     await connectionManager.clearActiveConnection(this.context);
                     if (isSilent) {
@@ -123,7 +114,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 if (isSilent) {
                     throw new Error("No active connection available for silent auto-login.");
                 }
-                logger.trace("[AuthProvider] No valid pre-selected connection, proceeding with QuickPick.");
                 const connections = await connectionManager.getConnections(this.context);
                 const quickPickItems: (vscode.QuickPickItem & {
                     connection?: TestBenchConnection;
@@ -202,7 +192,9 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                             targetConnection.id = savedId;
                             await connectionManager.setActiveConnectionId(this.context, targetConnection.id);
                         } catch (saveError: any) {
-                            logger.error(`[AuthProvider] Failed to save new connection: ${saveError.message}`);
+                            logger.error(
+                                `[AuthenticationProvider] Failed to save new connection: ${saveError.message}`
+                            );
                             throw new Error(`Failed to save connection: ${saveError.message}`);
                         }
                     } else if (!passwordToUse) {
@@ -217,9 +209,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 passwordToUse = await connectionManager.getPasswordForConnection(this.context, targetConnection.id);
 
                 if (passwordToUse === undefined) {
-                    logger.info(
-                        `[AuthProvider] Connection "${targetConnection.label}" has no stored password. Prompting for password ${isSilent ? "(during auto-login attempt)" : ""}.`
-                    );
                     const manuallyEnteredPassword: string | undefined = await vscode.window.showInputBox({
                         prompt: `Enter password for ${targetConnection.label}${isSilent ? " (auto-login attempt)" : ""}`,
                         password: true,
@@ -237,9 +226,6 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     }
                     passwordToUse = manuallyEnteredPassword;
                 } else if (passwordToUse === "") {
-                    logger.warn(
-                        `[AuthProvider] Retrieved an empty string password for connection "${targetConnection.label}".`
-                    );
                     if (isSilent) {
                         throw new Error(
                             `Empty password stored for connection "${targetConnection.label}". Auto-login failed. Please update connection interactively.`
@@ -269,13 +255,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             try {
                 this.validateConnectionForLogin(targetConnection, passwordToUse);
             } catch (validationError: any) {
-                logger.error(`[AuthProvider] Connection validation failed: ${validationError.message}`);
+                logger.error(`[AuthenticationProvider] Connection validation failed: ${validationError.message}`);
                 throw validationError;
             }
 
-            logger.info(
-                `[AuthProvider] Attempting login to ${targetConnection.serverName} as ${targetConnection.username}`
-            );
             const loginResult: TestBenchLoginResult | null = await loginToServerAndGetSessionDetails(
                 targetConnection.serverName,
                 targetConnection.portNumber,
@@ -329,7 +312,9 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 removed: [],
                 changed: []
             });
-            logger.info(`[AuthProvider] TestBench session created successfully for ${sessionData.accountLabel}`);
+            logger.debug(
+                `[AuthenticationProvider] TestBench session created successfully for ${sessionData.accountLabel}`
+            );
             return {
                 id: vsCodeSessionId,
                 accessToken: sessionData.testBenchSessionToken,
@@ -337,7 +322,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 scopes
             };
         } catch (error: any) {
-            logger.error(`[AuthProvider] createSession error${isSilent ? " (auto-login)" : ""}:`, error);
+            logger.error(
+                `[AuthenticationProvider] Error during createSession${isSilent ? " (auto-login)" : ""}:`,
+                error
+            );
             if (!isSilent) {
                 await connectionManager.clearActiveConnection(this.context);
             }
@@ -356,10 +344,11 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * @returns A promise that resolves when the session has been removed.
      */
     async removeSession(sessionId: string): Promise<void> {
-        logger.trace(`[AuthProvider] removeSession called for ID ${sessionId}`);
         const sessionData: TestBenchSessionData | undefined = this.activeSessions.get(sessionId);
         if (sessionData) {
-            logger.info(`[AuthProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`);
+            logger.debug(
+                `[AuthenticationProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`
+            );
             this.activeSessions.delete(sessionId);
 
             this._onDidChangeSessions.fire({
@@ -367,9 +356,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 removed: [{ id: sessionId, accessToken: "", account: { label: "", id: "" }, scopes: [] }],
                 changed: []
             });
-            logger.info(`[AuthProvider] Fired onDidChangeSessions for removed session: ${sessionData.accountLabel}`);
         } else {
-            logger.warn(`[AuthProvider] removeSession called for an unknown session ID: ${sessionId}`);
+            logger.warn(`[AuthenticationProvider] Session removal requested for unknown session ID: ${sessionId}`);
         }
     }
 
@@ -478,7 +466,7 @@ export async function getSessionToProcess(
             silent: true
         });
     } catch (error) {
-        logger.warn("[Extension] Error getting current session during handleTestBenchSessionChange:", error);
+        logger.warn("[AuthenticationProvider] Error getting current session:", error);
         return undefined;
     }
 }
