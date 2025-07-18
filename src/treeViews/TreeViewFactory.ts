@@ -224,7 +224,7 @@ export class TreeViewFactory {
         const selectionDisposable = vscTreeView.onDidChangeSelection((e) => {
             if (e.selection.length > 0) {
                 const item = e.selection[0];
-                this.logger.trace(`[TreeViewFactory] ${treeType} tree item selected:`, item.label);
+                this.logger.trace(`[TreeViewFactory] ${treeType} tree item selected: ${item.label}`);
 
                 treeView.eventBus.emit({
                     type: "tree:itemSelected",
@@ -240,7 +240,7 @@ export class TreeViewFactory {
 
         // Track expansion/collapse
         const expansionDisposable = vscTreeView.onDidExpandElement((e) => {
-            this.logger.trace(`[TreeViewFactory] ${treeType} tree item expanded:`, e.element.label);
+            this.logger.trace(`[TreeViewFactory] ${treeType} tree item expanded: ${e.element.label}`);
 
             treeView.eventBus.emit({
                 type: "tree:itemExpanded",
@@ -251,7 +251,7 @@ export class TreeViewFactory {
         });
 
         const collapseDisposable = vscTreeView.onDidCollapseElement((e) => {
-            this.logger.trace(`[TreeViewFactory] ${treeType} tree item collapsed:`, e.element.label);
+            this.logger.trace(`[TreeViewFactory] ${treeType} tree item collapsed: ${e.element.label}`);
 
             treeView.eventBus.emit({
                 type: "tree:itemCollapsed",
@@ -407,7 +407,7 @@ export class TreeViewFactory {
 
         // Clear all custom roots
         const clearRootsCmd = vscode.commands.registerCommand(allExtensionCommands.clearAllCustomRoots, () => {
-            this.logger.info("[TreeViewFactory] Clearing all custom roots of tree views");
+            this.logger.trace("[TreeViewFactory] Clearing all custom roots of tree views");
 
             projectsTree.resetCustomRoot();
             testThemesTree.resetCustomRoot();
@@ -416,7 +416,7 @@ export class TreeViewFactory {
 
         // Clear all marks
         const clearMarksCmd = vscode.commands.registerCommand(allExtensionCommands.clearAllMarks, () => {
-            this.logger.info("[TreeViewFactory] Clearing all markings from test theme tree view");
+            this.logger.trace("[TreeViewFactory] Clearing all markings from test theme tree view");
 
             const markingModule = testThemesTree.getModule("marking");
             if (markingModule) {

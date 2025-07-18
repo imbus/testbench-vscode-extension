@@ -76,7 +76,7 @@ export class tb2robotLib {
         resultPath?: string
     ): Promise<boolean> {
         const fetchResultsCommand: string = `fetch-results`;
-        logger.debug(`Starting tb2robot ${fetchResultsCommand} command.`);
+        logger.debug(`[testbench2robotframeworkLib] Starting tb2robot ${fetchResultsCommand} command.`);
         let isFetchResultsCommandSuccessful: boolean = true;
         try {
             await vscode.commands.executeCommand("testbench_ls.fetchResults", {

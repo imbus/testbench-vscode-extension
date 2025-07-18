@@ -514,6 +514,10 @@ export class PlayServerConnection {
     ): Promise<string | null> {
         const tovReportUrl: string = `/projects/${projectKey}/tovs/${tovKey}/report/v1`;
 
+        logger.debug(
+            `[testBenchConnection] Requesting TOV report job ID using URL ${tovReportUrl} and options: ${JSON.stringify(tovStructureOptions)}`
+        );
+
         try {
             const tovReportJobResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
                 () =>
@@ -537,12 +541,20 @@ export class PlayServerConnection {
                 }
             );
 
-            logger.trace(`TOV report job ID response for TOV key ${tovKey}:`, tovReportJobResponse.status);
+            logger.debug(
+                `[testBenchConnection] Response status of TOV report job ID request for URL ${tovReportUrl}:`,
+                tovReportJobResponse.status
+            );
             if (tovReportJobResponse.data.jobID) {
-                logger.trace(`Received TOV report Job ID for TOV key ${tovKey}:`, tovReportJobResponse.data);
+                logger.trace(
+                    `[testBenchConnection] Received TOV report Job ID for URL ${tovReportUrl}:`,
+                    tovReportJobResponse.data
+                );
                 return tovReportJobResponse.data.jobID;
             } else {
-                logger.error(`Unexpected response code: ${tovReportJobResponse.status}`);
+                logger.error(
+                    `[testBenchConnection] Unexpected response code when fetching TOV report job ID: ${tovReportJobResponse.status}`
+                );
                 return null;
             }
         } catch (error) {
@@ -550,22 +562,22 @@ export class PlayServerConnection {
                 switch (error.response.status) {
                     case 404:
                         logger.error(
-                            `TOV report job ID fetch failed: Project (${projectKey}) or TOV (${tovKey}) not found.`
+                            `[testBenchConnection] TOV report job ID fetch failed: Project (${projectKey}) or TOV (${tovKey}) not found.`
                         );
                         break;
                     case 422:
                         logger.error(
-                            `TOV report job ID fetch failed: Invalid tree root UID, filter, or test theme UID.`
+                            `[testBenchConnection] TOV report job ID fetch failed: Invalid tree root UID, filter, or test theme UID.`
                         );
                         break;
                     default:
                         logger.error(
-                            `TOV report job ID fetch failed with status ${error.response.status}:`,
+                            `[testBenchConnection] TOV report job ID fetch failed with status ${error.response.status}:`,
                             error.message
                         );
                 }
             } else {
-                logger.error("Error fetching TOV report job ID:", error);
+                logger.error(`[testBenchConnection] Error fetching TOV report job ID: ${error}`);
             }
             return null;
         }

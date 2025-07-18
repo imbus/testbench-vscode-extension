@@ -1019,7 +1019,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The interaction tree item that was single clicked
      */
     private async handleInteractionSingleClick(item: TestElementsTreeItem): Promise<void> {
-        this.logger.debug(`[TestElementsTreeView] Interaction tree item single clicked: ${item.label}`);
         await this.openInteractionResource(item);
     }
 

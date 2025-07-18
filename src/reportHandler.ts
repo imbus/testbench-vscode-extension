@@ -13,7 +13,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import axios, { AxiosResponse } from "axios";
-import { connection, logger, ALLOW_PERSISTENT_IMPORT_BUTTON } from "./extension";
+import { connection, logger } from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
@@ -59,10 +59,10 @@ async function saveLastGeneratedReportParams(
     try {
         await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, paramsToSave);
         logger.debug(
-            `Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
+            `[reportHandler] Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
         );
     } catch (error) {
-        logger.error("Failed to save last generated report params to workspace state:", error);
+        logger.error("[reportHandler] Failed to save last generated report params to workspace state:", error);
     }
 }
 
@@ -87,14 +87,14 @@ function getLastGeneratedReportParams(
             storedParams.executionMode !== undefined &&
             storedParams.alreadyImported !== undefined
         ) {
-            logger.debug("Retrieved last generated report params from workspace state:", storedParams);
+            logger.debug("[reportHandler] Retrieved last generated report params from workspace state:", storedParams);
             return storedParams;
         } else {
-            logger.warn("No valid last generated report params found in workspace state.");
+            logger.warn("[reportHandler] No valid last generated report params found in workspace state.");
             return undefined;
         }
     } catch (error) {
-        logger.error("Failed to retrieve last generated report params from workspace state:", error);
+        logger.error("[reportHandler] Failed to retrieve last generated report params from workspace state:", error);
         return undefined;
     }
 }
@@ -106,7 +106,7 @@ function getLastGeneratedReportParams(
  */
 export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     const success = !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
-    logger.trace(`isReportJobCompletedSuccessfully: ${success}`);
+    logger.debug(`[reportHandler] Is report job completed successfully: ${success}`);
     return success;
 }
 
@@ -117,7 +117,7 @@ export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
  */
 export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     const success = !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
-    logger.trace(`isImportJobCompletedSuccessfully: ${success}`);
+    logger.debug(`[reportHandler] Is import job completed successfully: ${success}`);
     return success;
 }
 
@@ -128,7 +128,7 @@ export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
  */
 export function isImportJobFailed(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     const failed = !!jobStatus?.completion?.result?.ExecutionImportingFailure;
-    logger.trace(`isImportJobFailed: ${failed}`);
+    logger.debug(`[reportHandler] Is import job failed: ${failed}`);
     return failed;
 }
 
@@ -160,12 +160,12 @@ export async function pollJobStatus(
     while (true) {
         if (cancellationToken?.isCancellationRequested) {
             const cancellationMsg = "Job status polling cancelled by the user.";
-            logger.debug(cancellationMsg);
+            logger.debug(`[reportHandler] ${cancellationMsg}`);
             vscode.window.showInformationMessage(cancellationMsg);
             throw new vscode.CancellationError();
         }
         if (!connection) {
-            logger.error("Connection object is missing, cannot poll job status.");
+            logger.error("[reportHandler] No connection available, cannot poll job status.");
             return null;
         }
         pollingAttemptAmount++;
@@ -173,7 +173,7 @@ export async function pollJobStatus(
         try {
             jobStatus = await getJobStatus(projectKey, jobId, jobType);
             if (!jobStatus) {
-                logger.error("Job status not received from server.");
+                logger.error("[reportHandler] Job status not received from server.");
                 return null;
             }
 
@@ -186,30 +186,28 @@ export async function pollJobStatus(
                     message: `Fetching job status (${handledItems}/${totalItems}).`,
                     increment: (percentage - lastProgressIncrement) / 3
                 });
-                logger.debug(`Polling attempt ${pollingAttemptAmount}: Progress ${percentage}%`);
+                logger.trace(`[reportHandler] Polling attempt ${pollingAttemptAmount}: Progress ${percentage}%`);
                 lastProgressIncrement = percentage;
             } else {
-                logger.debug(`Polling attempt ${pollingAttemptAmount}: Job status fetched.`);
+                logger.trace(`[reportHandler] Polling attempt ${pollingAttemptAmount}: Job status fetched.`);
             }
 
             if (jobType === JobTypes.REPORT && isReportJobCompletedSuccessfully(jobStatus)) {
-                logger.debug("Report job completed successfully.");
                 return jobStatus;
             } else if (jobType === JobTypes.IMPORT) {
                 if (isImportJobCompletedSuccessfully(jobStatus)) {
-                    logger.debug("Import job completed successfully.");
                     return jobStatus;
                 } else if (isImportJobFailed(jobStatus)) {
                     return null;
                 }
             }
         } catch (error) {
-            logger.error(`Polling attempt ${pollingAttemptAmount}: Failed to get job status.`, error);
+            logger.error(`[reportHandler] Failed to get job status at polling attempt ${pollingAttemptAmount}:`, error);
         }
 
         // Check if the maximum polling time has been exceeded.
         if (maxPollingTimeMs !== undefined && Date.now() - startTime >= maxPollingTimeMs) {
-            logger.warn("Maximum polling time exceeded. Aborting job status polling.");
+            logger.warn("[reportHandler] Maximum polling time exceeded. Aborting job status polling.");
             break;
         }
 
@@ -219,8 +217,6 @@ export async function pollJobStatus(
         const delayMs: number = elapsedTime < 10000 ? 200 : 1000;
         await utils.delay(delayMs);
     }
-
-    logger.trace("Final job status:", jobStatus);
     return jobStatus;
 }
 
@@ -238,12 +234,12 @@ export async function getJobIdOfCycleReport(
     requestParams?: testBenchTypes.OptionalJobIDRequestParameter
 ): Promise<string | null> {
     if (!connection) {
-        logger.error("Connection object is missing, cannot get job ID.");
+        logger.error("[reportHandler] No connection available, cannot get job ID.");
         return null;
     }
 
     const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
-    logger.debug(`Fetching job ID from URL: ${getJobIDUrl}`);
+    logger.debug(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
     try {
         const apiClient: axios.AxiosInstance = connection.getApiClient();
         const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
@@ -262,7 +258,7 @@ export async function getJobIdOfCycleReport(
                     const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
                     if (nonRetryableStatusCodes.includes(error.response.status)) {
                         logger.warn(
-                            `[ReportHandler] Non-retryable error ${error.response.status} for getJobId. Not retrying.`
+                            `[reportHandler] Non-retryable error ${error.response.status} for getJobId call. Not retrying.`
                         );
                         return false;
                     }
@@ -271,19 +267,20 @@ export async function getJobIdOfCycleReport(
             }
         );
 
-        logger.trace("[ReportHandler] Job ID response status:", jobIdResponse.status);
-        logger.trace("[ReportHandler] Job ID response data:", jobIdResponse.data);
+        logger.debug(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
+        logger.trace(`[reportHandler] Job ID response data for URL: ${getJobIDUrl}:`, jobIdResponse.data);
 
         if (jobIdResponse.status !== 200) {
-            logger.error(`Failed to fetch job ID, status code: ${jobIdResponse.status}`);
-
+            const errorMsg: string = `[reportHandler] Failed to fetch job ID, status code: ${jobIdResponse.status}`;
+            logger.error(errorMsg);
             return null;
         }
 
         return jobIdResponse.data.jobID;
     } catch (error: any) {
-        logger.error("Error fetching job ID:", error);
-        vscode.window.showErrorMessage(`Failed to fetch job ID: ${error.message}`);
+        const errorMsg: string = `Error fetching job ID: ${error.message}`;
+        logger.error("[reportHandler] " + errorMsg);
+        vscode.window.showErrorMessage(errorMsg);
         return null;
     }
 }
@@ -302,11 +299,11 @@ export async function getJobStatus(
     jobType: string
 ): Promise<testBenchTypes.JobStatusResponse | null> {
     if (!connection) {
-        logger.error("Connection object is missing, cannot get job status.");
+        logger.error("[reportHandler] No connection available, cannot get job status.");
         return null;
     }
     const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
-    logger.debug(`Checking job status at: ${getJobStatusUrl}`);
+    logger.debug(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
 
     const apiClient: axios.AxiosInstance = connection.getApiClient();
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
@@ -323,7 +320,7 @@ export async function getJobStatus(
                 const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
                 if (nonRetryableStatusCodes.includes(error.response.status)) {
                     logger.warn(
-                        `[ReportHandler] Non-retryable error ${error.response.status} for getJobStatus. Not retrying.`
+                        `[reportHandler] Non-retryable error ${error.response.status} for getJobStatus call. Not retrying.`
                     );
                     return false;
                 }
@@ -332,10 +329,12 @@ export async function getJobStatus(
         }
     );
 
-    logger.trace("Job status response:", jobStatusResponse.data);
+    logger.debug(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
+    logger.trace(`[reportHandler] Job status response data for URL: ${getJobStatusUrl}:`, jobStatusResponse.data);
     if (jobStatusResponse.status !== 200) {
-        logger.error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
-        throw new Error(`Failed to fetch job status, status code: ${jobStatusResponse.status}`);
+        const errorMsg: string = `[reportHandler] Failed to fetch job status, status code: ${jobStatusResponse.status}`;
+        logger.error(errorMsg);
+        throw new Error(errorMsg);
     }
     return jobStatusResponse.data;
 }
@@ -362,13 +361,13 @@ export async function downloadReport(
 ): Promise<string | null> {
     try {
         if (!connection) {
-            const missingConnectionError: string = "Connection object is missing, cannot download report.";
-            logger.error(missingConnectionError);
+            const missingConnectionError: string = "No connection available, cannot download report.";
+            logger.error(`[reportHandler] ${missingConnectionError}`);
             vscode.window.showErrorMessage(missingConnectionError);
             return null;
         }
         const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
-        logger.debug(`Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
+        logger.debug(`[reportHandler] Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
         const apiClient: axios.AxiosInstance = connection.getApiClient();
         const downloadZipResponse: AxiosResponse<any> = await withRetry(
@@ -389,7 +388,7 @@ export async function downloadReport(
                     nonRetryableStatusCodes.includes(error.response.status)
                 ) {
                     logger.warn(
-                        `[ReportHandler] Non-retryable error ${error.response.status} during report download. Not retrying.`
+                        `[reportHandler] Non-retryable error ${error.response.status} during report download. Not retrying.`
                     );
                     return false;
                 }
@@ -399,13 +398,13 @@ export async function downloadReport(
 
         if (downloadZipResponse.status !== 200) {
             const downloadReportErrorMessage: string = `Failed to download report, status code: ${downloadZipResponse.status}`;
-            logger.error(downloadReportErrorMessage);
+            logger.error(`[reportHandler] ${downloadReportErrorMessage}`);
             throw new Error(downloadReportErrorMessage);
         }
 
         const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation || !fs.existsSync(workspaceLocation)) {
-            const invalidWorkspaceLocationError: string = `Workspace location is not valid: ${workspaceLocation}`;
+            const invalidWorkspaceLocationError: string = `[reportHandler] Workspace location is not valid: ${workspaceLocation}`;
             logger.error(invalidWorkspaceLocationError);
             return await promptUserForSaveLocationAndSaveReportToFile(fileNameToDownload, downloadZipResponse);
         }
@@ -417,7 +416,7 @@ export async function downloadReport(
         );
     } catch (error) {
         const downloadReportErrorMessage: string = `Failed to download report: ${(error as Error).message}`;
-        logger.error(downloadReportErrorMessage);
+        logger.error(`[reportHandler] ${downloadReportErrorMessage}`);
         vscode.window.showErrorMessage(downloadReportErrorMessage);
         return null;
     }
@@ -442,11 +441,11 @@ async function storeReportFileLocally(
         const filePath: string = path.join(workspaceLocation, folderNameOfReport, fileNameOfReport);
         const uri: vscode.Uri = vscode.Uri.file(filePath);
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
-        logger.debug(`Report saved to ${uri.fsPath}`);
+        logger.debug(`[reportHandler] Report file saved to ${uri.fsPath}`);
         return uri.fsPath;
     } catch (error) {
         const failedReportSaveMessage: string = `Failed to save report file: ${(error as Error).message}`;
-        logger.error(failedReportSaveMessage);
+        logger.error(`[reportHandler] ${failedReportSaveMessage}`);
         vscode.window.showErrorMessage(failedReportSaveMessage);
         return null;
     }
@@ -463,14 +462,12 @@ async function promptUserForSaveLocationAndSaveReportToFile(
     fileNameOfReport: string,
     downloadResponse: AxiosResponse<any>
 ): Promise<string | null> {
-    logger.debug("Prompting user to select a save location for the report file.");
     const zipUri: vscode.Uri | undefined = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file(fileNameOfReport),
         filters: { "Zip Files": ["zip"] },
         title: "Select a location to save the report file"
     });
     if (!zipUri) {
-        logger.debug("User cancelled save location selection.");
         return null;
     }
     try {
@@ -481,7 +478,9 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         } catch (error) {
             // If the file does not exist, ignore; otherwise, rethrow
             if ((error as vscode.FileSystemError).code !== "FileNotFound") {
-                logger.error(`Error checking file existence: ${(error as Error).message}`);
+                logger.error(
+                    `[reportHandler] Error checking file existence while prompting user for save location: ${(error as Error).message}`
+                );
                 throw error;
             }
         }
@@ -494,19 +493,18 @@ async function promptUserForSaveLocationAndSaveReportToFile(
                 "Skip"
             );
             if (overwritePromptResult === "Skip") {
-                const skipDownloadMsg: string = "File download skipped by the user.";
-                vscode.window.showInformationMessage(skipDownloadMsg);
+                const skipDownloadMsg: string = "[reportHandler] File download skipped by the user.";
                 logger.debug(skipDownloadMsg);
                 return null;
             }
         }
 
         await vscode.workspace.fs.writeFile(zipUri, new Uint8Array(downloadResponse.data));
-        logger.debug(`Report saved to ${zipUri.fsPath}`);
+        logger.debug(`[reportHandler] Report file saved to ${zipUri.fsPath}`);
         return zipUri.fsPath;
     } catch (error) {
-        const failedReportSaveMessage: string = `Failed to save report: ${(error as Error).message}`;
-        logger.error(failedReportSaveMessage);
+        const failedReportSaveMessage: string = `Failed to save report file: ${(error as Error).message}`;
+        logger.error(`[reportHandler] ${failedReportSaveMessage}`);
         vscode.window.showErrorMessage(failedReportSaveMessage);
         return null;
     }
@@ -537,21 +535,20 @@ export async function fetchReportZipOfCycleFromServer(
 ): Promise<string | null> {
     try {
         if (!connection) {
-            logger.error("Connection object is missing, cannot fetch report.");
+            logger.error("[reportHandler] No connection available, cannot fetch report.");
             return null;
         }
 
         logger.debug(
-            `Fetching report zip for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folder: ${folderNameToDownloadReport}.`
+            `[reportHandler] Fetching report zip for projectKey: ${projectKey}, cycleKey: ${cycleKey}, 
+            folder: ${folderNameToDownloadReport} and request parameters:`,
+            requestParameters
         );
-        logger.trace("Request parameters:", requestParameters);
 
         const jobId: string | null = await getJobIdOfCycleReport(projectKey, cycleKey, requestParameters);
         if (!jobId) {
-            logger.error("Job ID not received from server.");
             return null;
         }
-        logger.debug(`Job ID received: ${jobId}`);
 
         const jobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
             projectKey,
@@ -562,27 +559,24 @@ export async function fetchReportZipOfCycleFromServer(
         );
         if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
             const reportGenerationErrorMsg: string = "Report generation was unsuccessful.";
-            logger.error(reportGenerationErrorMsg);
+            logger.error(`[reportHandler] ${reportGenerationErrorMsg}`);
             vscode.window.showErrorMessage(reportGenerationErrorMsg);
             return null;
         }
         const reportName: string = jobStatus.completion.result.ReportingSuccess!.reportName;
-        logger.debug(`Report name to download: ${reportName}`);
-
         const downloadedFilePath: string | null = await downloadReport(
             projectKey,
             reportName,
             folderNameToDownloadReport
         );
         if (downloadedFilePath) {
-            logger.debug(`Report downloaded successfully to: ${downloadedFilePath}`);
             return downloadedFilePath;
         } else {
-            logger.warn("Report download failed or was canceled.");
+            logger.warn("[reportHandler] Downloading report failed or was canceled.");
             return null;
         }
     } catch (error) {
-        logger.error("Error in fetchReportZipFromServer:", error);
+        logger.error(`[reportHandler] Error while fetching report zip from server: ${error}`);
         return null;
     }
 }
@@ -595,9 +589,9 @@ export async function fetchReportZipOfCycleFromServer(
 async function setLastImportedItem(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
     try {
         await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, reportRootUID);
-        logger.debug(`Set last imported item UID to ${reportRootUID}.`);
+        logger.debug(`[reportHandler] Set last imported item UID to ${reportRootUID}.`);
     } catch (error) {
-        logger.error("Error setting last imported item UID:", error);
+        logger.error(`[reportHandler] Error setting last imported item UID: ${error}`);
     }
 }
 
@@ -622,23 +616,23 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
 ): Promise<boolean> {
     let testGenerationSuccessful: boolean = false;
     try {
-        logger.debug("Generating tests for:", selectedTreeItem.label);
+        logger.debug(`[reportHandler] Generating tests for tree item with label: ${selectedTreeItem.label}`);
         const defaultExecutionMode: testBenchTypes.ExecutionMode = testBenchTypes.ExecutionMode.Execute;
         let UIDforRequest: string;
 
         const effectiveContext: string | undefined = selectedTreeItem.originalContextValue;
 
         if (effectiveContext?.toLowerCase() === ProjectItemTypes.CYCLE.toLowerCase()) {
-            logger.debug("Generating tests for the entire cycle.");
+            logger.debug("[reportHandler] Generating tests for the entire cycle.");
             UIDforRequest = "";
         } else if (
             effectiveContext === TestThemeItemTypes.TEST_THEME ||
             effectiveContext === TestThemeItemTypes.TEST_CASE_SET
         ) {
-            logger.debug(`Generating tests for specific tree item UID: ${treeItemUID}.`);
+            logger.debug(`[reportHandler] Generating tests for specific tree item UID: ${treeItemUID}.`);
             UIDforRequest = treeItemUID;
         } else {
-            logger.error(`Unsupported item type for test generation: ${effectiveContext}`);
+            logger.error(`[reportHandler] Unsupported item type for test generation: ${effectiveContext}`);
             vscode.window.showErrorMessage(`Cannot generate tests for item type: ${effectiveContext}`);
             return false;
         }
@@ -675,17 +669,15 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
         );
     } catch (error) {
         if (error instanceof vscode.CancellationError) {
-            const testGenerationCancelledMessage: string =
-                "[generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary] Test generation cancelled by the user.";
+            const testGenerationCancelledMessage: string = "[reportHandler] Test generation cancelled by the user.";
             logger.debug(testGenerationCancelledMessage);
             vscode.window.showInformationMessage(testGenerationCancelledMessage);
             return false;
         } else {
-            logger.error(
-                "[generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLibrary] Error during test generation:",
-                error
+            logger.error("[reportHandler] Error during test generation:", error);
+            vscode.window.showErrorMessage(
+                `Error during test generation: ${error instanceof Error ? error.message : error}`
             );
-            vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : error}`);
             return false;
         }
     }
@@ -693,12 +685,11 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
     if (testGenerationSuccessful) {
         if (getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false)) {
             await vscode.commands.executeCommand("workbench.view.extension.test");
-            logger.debug("Testing view opened after successful test generation");
         }
 
         const successfulTestGenerationMessage: string = `Robot Framework tests generated successfully for: ${itemLabel}`;
         vscode.window.showInformationMessage(successfulTestGenerationMessage);
-        logger.info(successfulTestGenerationMessage);
+        logger.info(`[reportHandler] ${successfulTestGenerationMessage}`);
         return true;
     }
     return false;
@@ -737,7 +728,7 @@ async function runRobotFrameworkTestGenerationProcess(
         cancellationToken
     );
     if (!downloadedReportZipPath) {
-        logger.warn("[runRobotFrameworkTestGenerationProcess] Download cancelled or failed.");
+        logger.warn("[reportHandler] Download cancelled or failed.");
         return false;
     }
 
@@ -745,9 +736,11 @@ async function runRobotFrameworkTestGenerationProcess(
     const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
     if (!workspaceLocation) {
         const workspaceLocationMissingErrorMessage: string =
-            "[runRobotFrameworkTestGenerationProcess] Workspace location not configured.";
+            "[reportHandler] Workspace location not configured, cannot generate tests.";
+        const workspaceLocationMissingErrorMessageForUser: string =
+            "Workspace location not configured, cannot generate tests.";
         logger.error(workspaceLocationMissingErrorMessage);
-        vscode.window.showErrorMessage(workspaceLocationMissingErrorMessage);
+        vscode.window.showErrorMessage(workspaceLocationMissingErrorMessageForUser);
         return false;
     }
 
@@ -761,7 +754,7 @@ async function runRobotFrameworkTestGenerationProcess(
     // Update the last generated report parameters workspaceState to be able to import the generated tests later
     await saveLastGeneratedReportParams(context, treeItemUID, projectKey, cycleKey, executionMode, false);
 
-    logger.trace("[runRobotFrameworkTestGenerationProcess] Test generation process completed successfully.");
+    logger.debug("[reportHandler] Test generation process completed successfully.");
     return true;
 }
 
@@ -791,9 +784,8 @@ export async function removeReportZipFile(
     maxRetries: number = 5,
     delayMs: number = 500
 ): Promise<void> {
-    logger.debug(`Removing report zip file: ${zipFileFullPath}`);
+    logger.debug(`[reportHandler] Removing report zip file: ${zipFileFullPath}`);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        logger.debug(`Attempt ${attempt} to delete ${zipFileFullPath}`);
         try {
             // Check if the file exists (throws error if not)
             await fsPromise.access(zipFileFullPath);
@@ -802,20 +794,20 @@ export async function removeReportZipFile(
             }
 
             await fsPromise.unlink(zipFileFullPath);
-            logger.debug(`Zip file removed: ${zipFileFullPath}`);
+            logger.debug(`[reportHandler] Zip file removed: ${zipFileFullPath}`);
             return;
         } catch (error: any) {
             if (error.code === "ENOENT") {
                 const fileNotFoundMsg: string = `File not found: ${zipFileFullPath}`;
-                logger.error(fileNotFoundMsg);
+                logger.error(`[reportHandler] ${fileNotFoundMsg}`);
                 vscode.window.showWarningMessage(fileNotFoundMsg);
                 return;
             } else if (error.code === "EBUSY" && attempt < maxRetries) {
-                logger.warn(`Attempt ${attempt} failed due to EBUSY. Retrying in ${delayMs}ms...`);
+                logger.warn(`[reportHandler] Attempt ${attempt} failed due to EBUSY. Retrying in ${delayMs}ms...`);
                 await utils.delay(delayMs);
             } else {
-                logger.error(`Error removing file ${zipFileFullPath}:`, error);
-                vscode.window.showErrorMessage(`Error removing file: ${(error as Error).message}`);
+                logger.error(`[reportHandler] Error removing file ${zipFileFullPath}:`, error);
+                vscode.window.showErrorMessage(`Error removing file ${zipFileFullPath}: ${(error as Error).message}`);
                 return;
             }
         }
@@ -832,7 +824,7 @@ export async function removeReportZipFile(
  * @returns {Promise<string | null>} The absolute path of the selected output XML file, or null if none selected.
  */
 async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): Promise<string | null> {
-    logger.debug(`Choosing output XML file using working directory: ${workingDirectoryPath}`);
+    logger.debug(`[reportHandler] Choosing output XML file using working directory: ${workingDirectoryPath}`);
 
     // To use relative paths to the workspace root,
     // get the workspace location to construct the full path of outputXmlFilePath.
@@ -844,10 +836,10 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         true
     );
     if (outputXMLFileAbsolutePath) {
+        logger.debug(`[reportHandler] Using output XML file from extension settings: ${outputXMLFileAbsolutePath}`);
         return outputXMLFileAbsolutePath;
     }
 
-    logger.trace("outputXmlFilePath could not be constructred. Prompting user to select output XML file manually.");
     const firstWorkspaceFolderPath: string | undefined = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     // Determine which path to use as the default URI for the file selection dialog
     const defaultUri: vscode.Uri = firstWorkspaceFolderPath
@@ -855,7 +847,6 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         : workingDirectoryPath
           ? vscode.Uri.file(workingDirectoryPath) // Try working directory
           : vscode.Uri.file(os.homedir()); // Fallback to the user's home directory
-    logger.trace(`Default URI for XML selection: ${defaultUri.fsPath}`);
     const selectedXMLFileUri: vscode.Uri[] | undefined = await vscode.window.showOpenDialog({
         defaultUri: defaultUri,
         canSelectFiles: true,
@@ -866,12 +857,12 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     });
 
     if (selectedXMLFileUri && selectedXMLFileUri.length > 0) {
-        logger.debug(`Output XML file selected: ${selectedXMLFileUri[0].fsPath}`);
+        logger.debug(`[reportHandler] Output XML file selected by user: ${selectedXMLFileUri[0].fsPath}`);
         return selectedXMLFileUri[0].fsPath;
     }
 
     const xmlFileNotSelectedError: string = "No output.xml file selected.";
-    logger.error(xmlFileNotSelectedError);
+    logger.error(`[reportHandler] ${xmlFileNotSelectedError}`);
     vscode.window.showErrorMessage(xmlFileNotSelectedError);
     return null;
 }
@@ -892,9 +883,10 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
         filters: { "Zip Files": ["zip"] }
     });
     if (selectedFiles && selectedFiles.length > 0) {
+        logger.debug(`[reportHandler] Report zip file without results selected by user: ${selectedFiles[0].fsPath}`);
         return selectedFiles[0].fsPath;
     }
-    logger.error("No report zip file selected for the results zip file.");
+    logger.error("[reportHandler] No report zip file selected for the results zip file.");
     return null;
 }
 
@@ -911,7 +903,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
 ): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
-        logger.debug("Started fetching test results and creating report with results.");
+        logger.debug("[reportHandler] Fetching test results and creating report with results.");
         const executeWithProgress = async (
             progress: vscode.Progress<{ message?: string; increment?: number }>
         ): Promise<
@@ -924,7 +916,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             const timestampedResultsZipName: string = `ReportWithResults_${Date.now()}.zip`;
             const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
             if (!workspaceLocation) {
-                logger.error("Workspace location not configured for report creation.");
+                logger.error("[reportHandler] Workspace location not configured for report creation.");
                 vscode.window.showErrorMessage("Workspace location not configured. Cannot create report.");
                 return undefined;
             }
@@ -937,17 +929,17 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             if (!outputXMLPath) {
                 return undefined;
             }
-            logger.trace(`Using output XML file: ${outputXMLPath}`);
 
-            logger.debug(`Generated report zip file will be named ${timestampedResultsZipName}`);
             reportProgress("Fetching base report structure.", reportIncrement);
             const retrievedParams: testBenchTypes.LastGeneratedReportParams | undefined =
                 getLastGeneratedReportParams(context);
             if (!retrievedParams) {
-                const missingParamsError: string =
+                const missingParamsErrorForUser: string =
                     "Could not find parameters from previous test generation required for base report. Please generate tests first in this workspace.";
+                const missingParamsError: string =
+                    "[reportHandler] Could not find parameters from previous test generation required for base report.";
                 logger.error(missingParamsError);
-                vscode.window.showErrorMessage(missingParamsError);
+                vscode.window.showErrorMessage(missingParamsErrorForUser);
                 return undefined;
             }
 
@@ -960,9 +952,11 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 alreadyImported === undefined
             ) {
                 const invalidParamsError: string =
-                    "Retrieved parameters from previous test generation are incomplete/invalid for fetching base report.";
+                    "[reportHandler] Previous test generation parameters are invalid for fetching report.";
+                const invalidParamsErrorForUser: string =
+                    "Previous test generation parameters are invalid for fetching report.";
                 logger.error(invalidParamsError);
-                vscode.window.showErrorMessage(invalidParamsError);
+                vscode.window.showErrorMessage(invalidParamsErrorForUser);
                 return undefined;
             }
 
@@ -985,13 +979,12 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 (await chooseReportWithoutResultsZipFile(testbenchWorkingDirectoryPathInsideWorkspace));
 
             if (!finalBaseReportPath) {
-                logger.error("Base report (without results) could not be obtained.");
-                vscode.window.showErrorMessage(
-                    "Could not obtain the necessary base report file (without results). Process aborted."
-                );
+                const baseReportNotObtainedError: string =
+                    "[reportHandler] Could not obtain the necessary base report file without results. Process aborted.";
+                logger.error(baseReportNotObtainedError);
+                vscode.window.showErrorMessage("Could not obtain the necessary report file. Process aborted.");
                 return undefined;
             }
-            logger.trace(`Using base report file: ${finalBaseReportPath}`);
 
             reportProgress("Merging results with base report.", reportIncrement / 2);
             const reportWithResultsZipFullPath: string = path.join(
@@ -1012,12 +1005,13 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const testResultsImportError: string =
-                    "Merging test results with base report failed. Please check the output.xml and base report.";
+                    "[reportHandler] Fetching results with testbench2robotframework failed.";
+                const testResultsImportErrorForUser: string = "Fetching results with testbench2robotframework failed.";
                 logger.error(testResultsImportError);
-                vscode.window.showErrorMessage(testResultsImportError);
+                vscode.window.showErrorMessage(testResultsImportErrorForUser);
                 return undefined;
             }
-            const successMessage: string = `Report with results created: ${reportWithResultsZipFullPath}`;
+            const successMessage: string = `[reportHandler] Report with results created: ${reportWithResultsZipFullPath}`;
             logger.debug(successMessage);
 
             return {
@@ -1040,9 +1034,10 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             );
         }
     } catch (error) {
-        const fetchResultsErrorMessage: string = `An error occurred while creating report with results: ${error instanceof Error ? error.message : String(error)}`;
-        vscode.window.showErrorMessage(fetchResultsErrorMessage);
-        logger.error(fetchResultsErrorMessage, error);
+        const fetchResultsErrorMessage: string = `[reportHandler] Error while creating report with results: ${error instanceof Error ? error.message : String(error)}`;
+        const fetchResultsErrorMessageForUser: string = "Error while creating report with results.";
+        logger.error(fetchResultsErrorMessage);
+        vscode.window.showErrorMessage(fetchResultsErrorMessageForUser);
         return undefined;
     }
 }
@@ -1065,29 +1060,27 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
     reportRootUID: string
 ): Promise<void | null> {
     try {
-        logger.debug(`[Import] Starting import for specific UID: ${reportRootUID}`);
-        logger.debug(`[Import] Report file: ${reportWithResultsZipFilePath}`);
-        logger.debug(`[Import] Target: Project ${projectKeyString}, Cycle ${cycleKeyString}`);
-
+        logger.debug(
+            `[reportHandler] Starting import for specific UID: ${reportRootUID}, Report file: ${reportWithResultsZipFilePath}, Project key: ${projectKeyString}, Cycle key: ${cycleKeyString}`
+        );
         const { uniqueID } = await extractDataFromReport(reportWithResultsZipFilePath);
         if (!uniqueID) {
-            const extractionErrorMsg: string = "Error extracting unique ID from the zip file.";
-            vscode.window.showErrorMessage(extractionErrorMsg);
+            const extractionErrorMsg: string = "[reportHandler] Error extracting unique ID from the zip file.";
+            const extractionErrorMsgForUser: string = "Error extracting unique ID from the zip file.";
+            vscode.window.showErrorMessage(extractionErrorMsgForUser);
             logger.error(extractionErrorMsg);
             return null;
         }
 
-        logger.debug(`[Import] Extracted report cycle root UID from zip: ${uniqueID}`);
-        logger.debug(`[Import] Using specific target UID for import: ${reportRootUID}`);
-
+        logger.trace(`[reportHandler] Extracted report cycle root UID from zip: ${uniqueID}`);
         const projectKey: number = Number(projectKeyString);
         const cycleKey: number = Number(cycleKeyString);
 
         if (isNaN(projectKey) || isNaN(cycleKey)) {
-            logger.error(
-                `Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`
-            );
-            vscode.window.showErrorMessage("Internal error: Invalid project or cycle identifier for import.");
+            const invalidProjectOrCycleKeyError: string = `[reportHandler] Invalid projectKey (${projectKeyString}) or cycleKey (${cycleKeyString}) provided for import.`;
+            const invalidProjectOrCycleKeyErrorForUser: string = "Invalid project or cycle identifier for import.";
+            logger.error(invalidProjectOrCycleKeyError);
+            vscode.window.showErrorMessage(invalidProjectOrCycleKeyErrorForUser);
             return null;
         }
 
@@ -1097,9 +1090,10 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
         );
 
         if (!zipFilenameFromServer) {
-            const importErrorMessage: string = "Error importing the result file to the server.";
+            const importErrorMessage: string = "[reportHandler] Error importing the result file to the server.";
+            const importErrorMessageForUser: string = "Error importing the result file to the server.";
             logger.error(importErrorMessage);
-            vscode.window.showErrorMessage(importErrorMessage);
+            vscode.window.showErrorMessage(importErrorMessageForUser);
             return null;
         }
 
@@ -1112,7 +1106,6 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
         };
 
         try {
-            logger.debug(`Starting import execution results for specific tree item with UID: ${reportRootUID}`);
             const importJobID: string = await connection.getJobIDOfImportJob(projectKey, cycleKey, importData);
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
                 projectKeyString,
@@ -1121,23 +1114,22 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             );
 
             if (!importJobStatus || isImportJobFailed(importJobStatus)) {
-                const importJobFailedMessage: string = `Import job for tree item UID "${reportRootUID}" could not be completed.`;
-                logger.warn(importJobFailedMessage);
-                vscode.window.showErrorMessage(importJobFailedMessage);
+                const importJobFailedMessageForUser: string = "Import job could not be completed.";
+                vscode.window.showErrorMessage(importJobFailedMessageForUser);
                 return null;
-            } else if (isImportJobCompletedSuccessfully(importJobStatus)) {
-                logger.debug(`Import job for specific tree item UID "${reportRootUID}" completed successfully.`);
-            } else {
-                logger.warn("Import job finished polling but status is unknown.", importJobStatus);
-                vscode.window.showWarningMessage("Import job status unknown after polling.");
+            } else if (!isImportJobCompletedSuccessfully(importJobStatus)) {
+                logger.warn("[reportHandler] Import job finished polling but status is unknown.", importJobStatus);
             }
         } catch (error: any) {
-            logger.error(`Error during import job for specific tree item UID ${reportRootUID}:`, error.message);
+            logger.error(
+                `[reportHandler] Error during import job for specific tree item UID ${reportRootUID}:`,
+                error.message
+            );
             return null;
         }
     } catch (error: any) {
-        logger.error("Error importing report for specific tree item:", error.message);
-        vscode.window.showErrorMessage(`An unexpected error occurred: ${error.message}`);
+        logger.error("[reportHandler] Error importing report:", error.message);
+        vscode.window.showErrorMessage(`Error importing report: ${error.message}`);
         return null;
     }
 }
@@ -1149,9 +1141,9 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
 export async function clearImportedSubTreeItemsTracking(context: vscode.ExtensionContext): Promise<void> {
     try {
         await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, undefined);
-        logger.debug("Cleared last imported item tracking.");
+        logger.debug("[reportHandler] Cleared last imported item tracking.");
     } catch (error) {
-        logger.error("Error clearing last imported item tracking:", error);
+        logger.error("[reportHandler] Error clearing last imported item tracking:", error);
     }
 }
 
@@ -1171,8 +1163,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     resolvedTargetCycleKey: string,
     resolvedReportRootUID: string
 ): Promise<boolean> {
-    logger.trace("Starting: Read, Create, and Import Test Results to Testbench.");
-    logger.trace(`Invoked on item: ${invokedOnItem.label}`);
+    logger.debug(`[reportHandler] Fetching results and importing to Testbench for tree item: ${invokedOnItem.label}`);
     return vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -1182,7 +1173,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
         async (progress, cancellationToken) => {
             try {
                 if (cancellationToken.isCancellationRequested) {
-                    logger.trace("User cancelled the import process at the beginning.");
+                    logger.debug("[reportHandler] User cancelled the fetch and import process.");
                     vscode.window.showInformationMessage("Import process cancelled.");
                     return false;
                 }
@@ -1190,7 +1181,6 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 progress.report({ message: "Step 1/4: Validating parameters...", increment: 10 });
 
                 if (cancellationToken.isCancellationRequested) {
-                    logger.trace("Cancelled after param retrieval.");
                     return false;
                 }
 
@@ -1200,18 +1190,15 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     progress
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
-                    logger.error("Failed to create report with results, or process was cancelled. Aborting import.");
+                    logger.error("[reportHandler] Failed to create report with results, or process was cancelled.");
                     return false;
                 }
 
                 const { createdReportPath } = reportCreationDetails!;
-                const reportFileNameForDisplay: string = path.basename(createdReportPath);
                 progress.report({
                     message: `Step 3/4: Importing ${invokedOnItem.label} to TestBench...`,
                     increment: 30
                 });
-                const importTargetMessage: string = `Importing "${invokedOnItem.label}" from report '${reportFileNameForDisplay}' to TestBench Project: ${resolvedTargetProjectKey}, Cycle: ${resolvedTargetCycleKey}.`;
-                logger.trace(importTargetMessage);
 
                 await importReportWithResultsToTestbenchWithSpecificUID(
                     connection!,
@@ -1222,34 +1209,22 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 );
 
                 if (cancellationToken.isCancellationRequested) {
-                    logger.trace("Cancelled after import to TestBench.");
+                    logger.debug("[reportHandler] Fetch and import process cancelled.");
                     return false;
                 }
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
                 await setLastImportedItem(context, resolvedReportRootUID);
-
                 await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
-                if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
-                    logger.debug(
-                        `[ReportHandler] Import successful. Command handler should clear marked state for item: ${invokedOnItem.label} if configured.`
-                    );
-                } else {
-                    logger.debug(
-                        `[ReportHandler] Import successful. Import command will persist on item: ${invokedOnItem.label} if configured.`
-                    );
-                }
-
-                logger.trace(
-                    "[ReportHandler] Process Completed: Read, Create, and Import specific tree item to Testbench."
-                );
+                logger.debug("[reportHandler] Fetch and import process completed.");
                 return true;
             } catch (error) {
-                const errorMsg: string = `An error occurred during the import process: ${
+                const fetchAndImportErrorMsg: string = `[reportHandler] Error during fetch and import process: ${
                     error instanceof Error ? error.message : String(error)
                 }`;
-                logger.error(errorMsg, error);
-                vscode.window.showErrorMessage(errorMsg);
+                const fetchAndImportErrorMsgForUser: string = "Error during fetch and import process.";
+                logger.error(fetchAndImportErrorMsg, error);
+                vscode.window.showErrorMessage(fetchAndImportErrorMsgForUser);
                 return false;
             }
         }
@@ -1336,7 +1311,7 @@ export async function startTestGenerationUsingTOV(
     tovKey: string,
     generateTestForSpecificTestThemeTreeItem: boolean = false
 ): Promise<boolean> {
-    logger.debug(`[ReportHandler] Starting test generation for TOV: ${treeItem.label} (${tovKey})`);
+    logger.debug(`[reportHandler] Starting test generation for TOV: ${treeItem.label}, TOV key: ${tovKey}`);
 
     try {
         return await vscode.window.withProgress(
@@ -1354,18 +1329,13 @@ export async function startTestGenerationUsingTOV(
                 });
 
                 if (!connection) {
-                    throw new Error("No connection available");
+                    throw new Error("[reportHandler] No connection available. Cannot generate tests for TOV.");
                 }
 
                 // Use undefined for root when generating tests for all test themes in TOV
                 const rootUIDToUse = generateTestForSpecificTestThemeTreeItem
                     ? (treeItem as any).data?.base?.uniqueID
                     : undefined;
-
-                logger.debug(
-                    `[ReportHandler] generateTestForSpecificTestThemeTreeItem: ${generateTestForSpecificTestThemeTreeItem}`
-                );
-                logger.debug(`[ReportHandler] Extracted root UID: ${rootUIDToUse}`);
 
                 // Fetch TOV structure to get all test themes
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
@@ -1375,10 +1345,6 @@ export async function startTestGenerationUsingTOV(
                     suppressEmptyTestThemes: false,
                     filters: []
                 };
-
-                logger.debug(
-                    `[reportHandler] Requesting TOV structure for project ${projectKey} with root UID ${rootUIDToUse} and options: ${JSON.stringify(tovStructureOptions)}`
-                );
 
                 const tovReportJobID = await connection.requestToPackageTovsInServerAndGetJobID(
                     projectKey,
@@ -1391,11 +1357,8 @@ export async function startTestGenerationUsingTOV(
                 }
 
                 if (!tovReportJobID) {
-                    logger.error("[reportHandler] Failed to fetch TOV structure report");
-                    throw new Error("Failed to fetch TOV structure report");
+                    throw new Error("[reportHandler] Failed to fetch TOV structure report");
                 }
-
-                logger.debug(`[reportHandler] TOV structure report job ID: ${tovReportJobID}`);
 
                 // Poll job status until completed
                 const tovReportJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
@@ -1426,7 +1389,6 @@ export async function startTestGenerationUsingTOV(
                     return false;
                 }
 
-                logger.info(`[reportHandler] Report downloaded successfully to: ${downloadedTovReportPath}`);
                 progress.report({ increment: 20, message: "Generating tests for TOV..." });
 
                 const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
@@ -1447,7 +1409,6 @@ export async function startTestGenerationUsingTOV(
 
                 if (getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false)) {
                     await vscode.commands.executeCommand("workbench.view.extension.test");
-                    logger.debug("[reportHandler] Testing view opened after successful test generation");
                 }
 
                 return true;
