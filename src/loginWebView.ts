@@ -63,7 +63,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         // Listen for messages from the webview to respond to user actions.
         this._messageListenerDisposable = webviewView.webview.onDidReceiveMessage(async (message) => {
-            logger.debug(`[loginWebView] Received message from webview: ${message.command}`);
+            logger.trace(`[loginWebView] Received message from webview: ${message.command}`);
             switch (message.command) {
                 case WebviewMessageCommands.CONNECTION_UI_LOADED:
                     await this.sendConnectionToWebview();

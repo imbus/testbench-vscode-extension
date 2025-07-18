@@ -461,7 +461,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * Clears the tree view by removing all root items and resetting state
      */
     public clearTree(): void {
-        this.logger.debug("[TreeViewBase] Clearing tree view");
+        this.logger.trace("[TreeViewBase] Clearing tree view");
         this.rootItems = [];
         this.stateManager.clear();
         this._lastDataFetch = 0;

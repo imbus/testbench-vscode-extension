@@ -60,7 +60,7 @@ export async function isAbsolutePath(filePath: string, verifyExistenceOfFile: bo
         if (verifyExistenceOfFile) {
             await fsPromises.access(filePath);
         }
-        logger.debug(`[utils] File path "${filePath}" is absolute.`);
+        logger.trace(`[utils] File path "${filePath}" is absolute.`);
         return true;
     } catch {
         logger.error(`[utils] Error while checking if file path "${filePath}" is absolute.`);

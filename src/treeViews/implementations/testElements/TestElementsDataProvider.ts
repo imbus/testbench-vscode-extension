@@ -94,9 +94,6 @@ export class TestElementsDataProvider {
                 timestamp: Date.now()
             });
 
-            this.logger.info(
-                `[TestElementsDataProvider] Successfully created test elements tree for TOV key ${tovKey}`
-            );
             return hierarchicalTestElemData;
         } catch (error) {
             this.logger.error(`[TestElementsDataProvider] Failed to fetch test elements for TOV key ${tovKey}:`, error);

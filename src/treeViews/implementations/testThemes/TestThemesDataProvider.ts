@@ -119,7 +119,7 @@ export class TestThemesDataProvider {
      */
     public clearCache(): void {
         this.cache.clear();
-        this.logger.debug("[TestThemesDataProvider] Cleared all cached test structures");
+        this.logger.trace("[TestThemesDataProvider] Cleared all cached test structures");
     }
 
     /**
@@ -131,7 +131,7 @@ export class TestThemesDataProvider {
     public invalidateCache(projectKey: string, key: string, isTov: boolean = false): void {
         const cacheKey = isTov ? `${projectKey}:tov:${key}` : `${projectKey}:${key}`;
         this.cache.clear(cacheKey);
-        this.logger.debug(`[TestThemesDataProvider] Invalidated cache for ${cacheKey}`);
+        this.logger.trace(`[TestThemesDataProvider] Invalidated cache for ${cacheKey}`);
     }
 
     /**

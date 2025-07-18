@@ -823,7 +823,7 @@ export async function removeReportZipFile(
  * @returns {Promise<string | null>} The absolute path of the selected output XML file, or null if none selected.
  */
 async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): Promise<string | null> {
-    logger.debug(`[reportHandler] Choosing output XML file using working directory: ${workingDirectoryPath}`);
+    logger.debug(`[reportHandler] Searching output XML file using working directory: ${workingDirectoryPath}`);
 
     // To use relative paths to the workspace root,
     // get the workspace location to construct the full path of outputXmlFilePath.
