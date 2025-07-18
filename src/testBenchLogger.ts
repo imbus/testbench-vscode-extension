@@ -121,17 +121,19 @@ export class TestBenchLogger {
                 );
                 this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
             } else {
-                console.log("Workspace location is not set in the extension settings. Using default log folder.");
+                console.log(
+                    "[testBenchLogger] Workspace location is not set in the extension settings. Using default log folder."
+                );
             }
             await fsp.mkdir(this.logFolderPath, { recursive: true });
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
-                    `Logger Fatal Error: Permission denied to create log directory at '${this.logFolderPath}'. Please check folder permissions. Logging to file will be disabled.`
+                    `[testBenchLogger] Logger Fatal Error: Permission denied to create log directory at '${this.logFolderPath}'. Please check folder permissions. Logging to file will be disabled.`
                 );
                 this.cachedLogLevel = "No logging";
             } else {
-                console.error("Error during logger initialization:", error);
+                console.error(`[testBenchLogger] Error during logger initialization:`, error);
             }
         }
     }
@@ -146,7 +148,7 @@ export class TestBenchLogger {
         if (this.cachedLogLevel !== newLogLevel) {
             const oldLogLevel: string = this.cachedLogLevel;
             this.cachedLogLevel = newLogLevel;
-            console.log(`Logger level changed from "${oldLogLevel}" to "${this.cachedLogLevel}"`);
+            console.log(`[testBenchLogger] Logger level changed from "${oldLogLevel}" to "${this.cachedLogLevel}"`);
             return true;
         }
         return false;
@@ -169,7 +171,7 @@ export class TestBenchLogger {
                 return;
             }
             console.error(
-                `Logger Error: Could not get stats for log file '${this.logFilePath}'. Rotation skipped.`,
+                `[testBenchLogger] Logger Error: Could not get stats for log file '${this.logFilePath}'. Rotation skipped.`,
                 error
             );
             return;
@@ -201,10 +203,12 @@ export class TestBenchLogger {
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
-                    `Logger Error: Permission denied during log rotation in '${this.logFolderPath}'. Please check file and folder permissions.`
+                    `[testBenchLogger] Logger Error: Permission denied during log rotation in '${this.logFolderPath}'. Please check file and folder permissions.`
                 );
             } else {
-                console.error(`Logger Error: An unexpected error occurred during log rotation: ${error.message}`);
+                console.error(
+                    `[testBenchLogger] Logger Error: An unexpected error occurred during log rotation: ${error.message}`
+                );
             }
         }
     }
@@ -270,7 +274,10 @@ export class TestBenchLogger {
         // Wait for any ongoing rotation to complete.
         while (this.rotationPromise) {
             await this.rotationPromise.catch((err) => {
-                console.error("Logger Warning: Waited for a rotation that resulted in an error.", err);
+                console.error(
+                    "[testBenchLogger] Logger Warning: Waited for a rotation that resulted in an error.",
+                    err
+                );
             });
         }
 
@@ -330,10 +337,10 @@ export class TestBenchLogger {
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
-                    `Logger Fatal Error: Permission denied to write to log file '${this.logFilePath}'. Please check file permissions. Further file logging may fail.`
+                    `[testBenchLogger] Logger Fatal Error: Permission denied to write to log file '${this.logFilePath}'. Please check file permissions. Further file logging may fail.`
                 );
             } else {
-                console.error(`Logger Error: Failed to write to log file.`, error);
+                console.error(`[testBenchLogger] Logger Error: Failed to write to log file.`, error);
             }
         }
     }
