@@ -28,10 +28,10 @@ export async function getConnections(context: vscode.ExtensionContext): Promise<
             StorageKeys.CONNECTIONS_STORAGE_KEY,
             []
         );
-        logger.debug(`[ConnectionManager] Retrieved ${connections.length} connections.`);
+        logger.debug(`[connectionManager] Retrieved ${connections.length} connections.`);
         return connections;
     } catch (error) {
-        logger.error("[ConnectionManager] Error retrieving connections:", error);
+        logger.error("[connectionManager] Error retrieving connections:", error);
         return [];
     }
 }
@@ -62,7 +62,7 @@ export async function saveConnection(
 
         const duplicateConnection = await findConnectionByLabel(context, connection.label, connection.id);
         if (duplicateConnection) {
-            const errorMessage = `[ConnectionManager] A connection with the label "${connection.label}" already exists. Connection labels must be unique.`;
+            const errorMessage = `[connectionManager] A connection with the label "${connection.label}" already exists. Connection labels must be unique.`;
             logger.warn(errorMessage);
             throw new Error(errorMessage);
         }
@@ -71,14 +71,14 @@ export async function saveConnection(
             connectionToSave = { ...connections[existingConnectionIndex], ...connection };
             connections[existingConnectionIndex] = connectionToSave;
             logger.debug(
-                `[ConnectionManager] Updating connection: ${connectionToSave.label} with ID ${connectionToSave.id}`
+                `[connectionManager] Updating connection: ${connectionToSave.label} with ID ${connectionToSave.id}`
             );
         } else {
             const newId: string = uuidv4();
             connectionToSave = { ...connection, id: newId } as TestBenchConnection;
             connections.push(connectionToSave);
             logger.debug(
-                `[ConnectionManager] Adding new connection ${connectionToSave.label} with ID ${connectionToSave.id}`
+                `[connectionManager] Adding new connection ${connectionToSave.label} with ID ${connectionToSave.id}`
             );
         }
 
@@ -88,10 +88,10 @@ export async function saveConnection(
         } else {
             await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionToSave.id);
         }
-        logger.debug(`[ConnectionManager] Connection saved: ${connectionToSave.label}`);
+        logger.debug(`[connectionManager] Connection saved: ${connectionToSave.label}`);
         return connectionToSave.id;
     } catch (error) {
-        logger.error(`[ConnectionManager] Error saving connection ${connection.label}:`, error);
+        logger.error(`[connectionManager] Error saving connection ${connection.label}:`, error);
         vscode.window.showErrorMessage(`Failed to save connection: ${(error as Error).message}`);
         throw error;
     }
@@ -111,17 +111,17 @@ export async function deleteConnection(context: vscode.ExtensionContext, connect
         if (connections.length < initialLength) {
             await context.globalState.update(StorageKeys.CONNECTIONS_STORAGE_KEY, connections);
             await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionIdToDelete);
-            logger.debug(`[ConnectionManager] Deleted connection with ID: ${connectionIdToDelete}`);
+            logger.debug(`[connectionManager] Deleted connection with ID: ${connectionIdToDelete}`);
 
             const activeConnectionId: string | undefined = await getActiveConnectionId(context);
             if (activeConnectionId === connectionIdToDelete) {
                 await setActiveConnectionId(context, undefined);
             }
         } else {
-            logger.warn(`[ConnectionManager] Connection with ID ${connectionIdToDelete} not found for deletion.`);
+            logger.warn(`[connectionManager] Connection with ID ${connectionIdToDelete} not found for deletion.`);
         }
     } catch (error) {
-        logger.error(`[ConnectionManager] Error deleting connection ${connectionIdToDelete}:`, error);
+        logger.error(`[connectionManager] Error deleting connection ${connectionIdToDelete}:`, error);
         vscode.window.showErrorMessage(`Failed to delete connection: ${(error as Error).message}`);
     }
 }
@@ -142,7 +142,7 @@ export async function getPasswordForConnection(
         );
         return password;
     } catch (error) {
-        logger.error(`[ConnectionManager] Error retrieving password for connection ${connectionId}:`, error);
+        logger.error(`[connectionManager] Error retrieving password for connection ${connectionId}:`, error);
         return undefined;
     }
 }
@@ -159,10 +159,10 @@ export async function setActiveConnectionId(
     try {
         await context.globalState.update(StorageKeys.ACTIVE_CONNECTION_ID_KEY, connectionId);
         if (connectionId) {
-            logger.debug(`[ConnectionManager] Active connection ID set to: ${connectionId}`);
+            logger.debug(`[connectionManager] Active connection ID set to: ${connectionId}`);
         }
     } catch (error) {
-        logger.error(`[ConnectionManager] Error setting active connection ID ${connectionId}:`, error);
+        logger.error(`[connectionManager] Error setting active connection ID ${connectionId}:`, error);
     }
 }
 
@@ -176,7 +176,7 @@ export async function getActiveConnectionId(context: vscode.ExtensionContext): P
         const activeId = context.globalState.get<string | undefined>(StorageKeys.ACTIVE_CONNECTION_ID_KEY);
         return activeId;
     } catch (error) {
-        logger.error(`[ConnectionManager] Error retrieving active connection ID:`, error);
+        logger.error(`[connectionManager] Error retrieving active connection ID:`, error);
         return undefined;
     }
 }
@@ -196,15 +196,15 @@ export async function getActiveConnection(context: vscode.ExtensionContext): Pro
                 return activeConnection;
             } else {
                 logger.warn(
-                    `[ConnectionManager] Active connection ID ${activeId} set, but connection not found in storage. Clearing active ID.`
+                    `[connectionManager] Active connection ID ${activeId} set, but connection not found in storage. Clearing active ID.`
                 );
                 await setActiveConnectionId(context, undefined);
             }
         }
-        logger.debug("[ConnectionManager] No active connection found.");
+        logger.debug("[connectionManager] No active connection found.");
         return undefined;
     } catch (error) {
-        logger.error(`[ConnectionManager] Error retrieving active connection details:`, error);
+        logger.error(`[connectionManager] Error retrieving active connection details:`, error);
         return undefined;
     }
 }
@@ -242,10 +242,10 @@ export async function findConnectionByCredentials(
                 return connection;
             }
         }
-        logger.debug(`[ConnectionManager] No existing connection found with the provided server/user.`);
+        logger.debug(`[connectionManager] No existing connection found with the provided server/user.`);
         return undefined;
     } catch (error) {
-        logger.error(`[ConnectionManager] Error checking for duplicate connection by server/user:`, error);
+        logger.error(`[connectionManager] Error checking for duplicate connection by server/user:`, error);
         return undefined;
     }
 }
@@ -276,10 +276,10 @@ export async function findConnectionByLabel(
             }
         }
 
-        logger.debug(`[ConnectionManager] No existing connection found with label: ${label}`);
+        logger.debug(`[connectionManager] No existing connection found with label: ${label}`);
         return undefined;
     } catch (error) {
-        logger.error(`[ConnectionManager] Error checking for duplicate connection by label ${label}:`, error);
+        logger.error(`[connectionManager] Error checking for duplicate connection by label ${label}:`, error);
         return undefined;
     }
 }

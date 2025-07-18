@@ -12,7 +12,7 @@ export function getExtensionSetting<T>(key: string): T | undefined {
 }
 
 export function refreshConfig() {
-    console.log("Refreshing config...");
+    console.log("[configuration] Refreshing config...");
     extensionConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
 }
 

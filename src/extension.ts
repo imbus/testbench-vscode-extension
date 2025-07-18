@@ -71,6 +71,9 @@ export let logger: testBenchLogger.TestBenchLogger;
 export function setLogger(newLogger: testBenchLogger.TestBenchLogger): void {
     logger = newLogger;
 }
+export function getLogger(): testBenchLogger.TestBenchLogger {
+    return logger;
+}
 
 // Global connection to the (new) TestBench Play server.
 export let connection: testBenchConnection.PlayServerConnection | null = null;
@@ -1747,7 +1750,13 @@ export async function deactivate(): Promise<void> {
             treeViews = null;
         }
         logger.info("[extension] Extension deactivated");
+        if (logger) {
+            logger.dispose();
+        }
     } catch (error) {
         logger.error("[extension] Error during deactivation:", error);
+        if (logger) {
+            logger.dispose();
+        }
     }
 }

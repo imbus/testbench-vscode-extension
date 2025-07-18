@@ -5,9 +5,10 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import * as vscode from "vscode";
 import * as utils from "./utils";
 import { getExtensionConfiguration } from "./configuration";
-import { ConfigKeys, folderNameOfInternalTestbenchFolder } from "./constants";
+import { ConfigKeys, folderNameOfInternalTestbenchFolder, baseKeyOfExtension } from "./constants";
 
 // Use the native promises API for filesystem operations.
 const fsp = fs.promises;
@@ -33,6 +34,7 @@ export class TestBenchLogger {
     private rotationPromise: Promise<void> | null = null;
     private flattedPromise: Promise<{ stringify: (obj: any) => string }> | null = null;
     private cachedLogLevel: string;
+    private configChangeListener: vscode.Disposable | null = null;
 
     /**
      * Log levels are 0 to 5, with 1 being the most verbose (trace) and 5 being the least verbose (error).
@@ -99,8 +101,29 @@ export class TestBenchLogger {
         this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
         this.outputLogToTerminal = outputToTerminal === true;
         this.cachedLogLevel = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
+
+        // Set up configuration change listener
+        this.setupConfigurationListener();
+
         // Begin asynchronous initialization
         this.initPromise = this.initialize();
+    }
+
+    /**
+     * Sets up a listener for configuration changes that affect the logger level.
+     */
+    private setupConfigurationListener(): void {
+        this.configChangeListener = vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration(`${baseKeyOfExtension}.${ConfigKeys.LOGGER_LEVEL}`)) {
+                console.log(`[testBenchLogger] Configuration change detected for logger level`);
+                const wasUpdated = this.updateCachedLogLevel();
+                if (wasUpdated) {
+                    console.log(`[testBenchLogger] Successfully updated logger level to: ${this.cachedLogLevel}`);
+                } else {
+                    console.log(`[testBenchLogger] Logger level unchanged: ${this.cachedLogLevel}`);
+                }
+            }
+        });
     }
 
     /**
@@ -144,7 +167,10 @@ export class TestBenchLogger {
      * @returns {boolean} True if the log level was updated, false otherwise.
      */
     public updateCachedLogLevel(): boolean {
-        const newLogLevel: string = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
+        // Read configuration directly from VS Code instead of using cached version
+        // to avoid race conditions with the configuration watcher
+        const freshConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
+        const newLogLevel: string = freshConfiguration.get(ConfigKeys.LOGGER_LEVEL, "No logging");
         if (this.cachedLogLevel !== newLogLevel) {
             const oldLogLevel: string = this.cachedLogLevel;
             this.cachedLogLevel = newLogLevel;
@@ -152,6 +178,16 @@ export class TestBenchLogger {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Disposes of the logger and cleans up resources.
+     */
+    public dispose(): void {
+        if (this.configChangeListener) {
+            this.configChangeListener.dispose();
+            this.configChangeListener = null;
+        }
     }
 
     /**

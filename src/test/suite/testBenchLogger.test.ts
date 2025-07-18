@@ -32,6 +32,7 @@ suite("TestBenchLogger Tests", function () {
         unlink: sinon.SinonStub;
     };
     let configStub: sinon.SinonStub;
+    let vscodeConfigStub: sinon.SinonStub;
     let utilsStub: sinon.SinonStub;
 
     this.beforeEach(async () => {
@@ -42,6 +43,8 @@ suite("TestBenchLogger Tests", function () {
         });
 
         configStub = testEnv.sandbox.stub(configuration, "getExtensionConfiguration").returns(mockConfig);
+        vscodeConfigStub = testEnv.vscodeMocks.getConfigurationStub;
+        vscodeConfigStub.returns(mockConfig);
 
         utilsStub = testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves(undefined);
 
@@ -100,6 +103,7 @@ suite("TestBenchLogger Tests", function () {
             [ConfigKeys.LOGGER_LEVEL]: "No logging"
         });
         configStub.returns(mockConfig);
+        vscodeConfigStub.returns(mockConfig);
 
         const noLoggingLogger = new TestBenchLogger();
 
@@ -113,12 +117,52 @@ suite("TestBenchLogger Tests", function () {
             [ConfigKeys.LOGGER_LEVEL]: "Debug"
         });
         configStub.returns(mockConfig);
+        vscodeConfigStub.returns(mockConfig);
 
         const wasUpdated = logger.updateCachedLogLevel();
 
         assert.ok(wasUpdated);
         assert.strictEqual(logger.level, "Debug");
         assert.strictEqual(logger.getLevelNumber(), 2);
+    });
+
+    test("should automatically update log level when configuration changes", async () => {
+        // Initial level should be Info
+        assert.strictEqual(logger.level, "Info");
+        assert.strictEqual(logger.getLevelNumber(), 3);
+
+        const newMockConfig = createMockWorkspaceConfiguration(testEnv.sandbox, {
+            [ConfigKeys.LOGGER_LEVEL]: "Debug"
+        });
+        configStub.returns(newMockConfig);
+        vscodeConfigStub.returns(newMockConfig);
+
+        // Logger has its own configuration listener that updates the level.
+        // Call updateCachedLogLevel to simulate automatic update
+        const wasUpdated = logger.updateCachedLogLevel();
+
+        assert.ok(wasUpdated);
+        assert.strictEqual(logger.level, "Debug");
+        assert.strictEqual(logger.getLevelNumber(), 2);
+        assert.ok(logger.isLevelEnabled("Debug"));
+        assert.ok(logger.isLevelEnabled("Info"));
+        assert.ok(logger.isLevelEnabled("Warn"));
+        assert.ok(logger.isLevelEnabled("Error"));
+        assert.ok(!logger.isLevelEnabled("Trace"));
+    });
+
+    test("should not update log level when configuration hasn't changed", () => {
+        const currentLevel = logger.level;
+        const mockConfig = createMockWorkspaceConfiguration(testEnv.sandbox, {
+            [ConfigKeys.LOGGER_LEVEL]: currentLevel
+        });
+        configStub.returns(mockConfig);
+        vscodeConfigStub.returns(mockConfig);
+
+        const wasUpdated = logger.updateCachedLogLevel();
+
+        assert.ok(!wasUpdated);
+        assert.strictEqual(logger.level, currentLevel);
     });
 
     test("should create log directory during initialization", async () => {
@@ -166,6 +210,7 @@ suite("TestBenchLogger Tests", function () {
             [ConfigKeys.LOGGER_LEVEL]: "Warn"
         });
         configStub.returns(mockConfig);
+        vscodeConfigStub.returns(mockConfig);
         const warnLogger = new TestBenchLogger();
 
         await warnLogger.log("Debug", "This should not be logged");
