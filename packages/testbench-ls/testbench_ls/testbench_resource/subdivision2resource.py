@@ -99,9 +99,6 @@ def create_keyword_from_interaction(
             # KeywordCall.from_params("Fail", args=("Not Implemented",)),
         ],
     )
-    if keyword_tags:
-        kw_tags = Tags.from_params(keyword_tags)
-        kw.body.insert(0, kw_tags)
     if keyword_arguments:
         kw_arguments = Arguments.from_params(
             [
@@ -112,6 +109,9 @@ def create_keyword_from_interaction(
             ]
         )
         kw.body.insert(0, kw_arguments)
+    if keyword_tags:
+        kw_tags = Tags.from_params(keyword_tags)
+        kw.body.insert(0, kw_tags)
     if keyword_documentation:
         doc = Documentation.from_params(keyword_documentation, settings_section=False)
         kw.body.insert(0, doc)

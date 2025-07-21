@@ -42,7 +42,12 @@ from testbench_ls import __version__
 from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
-from .file_edits import get_kw_arguments_edit, get_kw_documentation_edit, get_kw_tags_edit
+from .file_edits import (
+    get_kw_arguments_edit,
+    get_kw_documentation_edit,
+    get_kw_tags_edit,
+    get_tags_values,
+)
 from .ls_exceptions import (
     MultipleKeywordsWithName,
     MultipleKeywordsWithUid,
@@ -77,11 +82,11 @@ from .messages import (
     ERROR_DUPLICATE_KEYWORD_UID,
     ERROR_DUPLICATE_KEYWORD_UID_IN_FILE,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
-    ERROR_FINDING_TESTBENCH_KEYWORD,
     ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
     ERROR_SUBDIVISON_MAPPING_FORMAT,
+    IGNORE_TAGS,
     INFO_ALREADY_UP_TO_DATE,
     INFO_CHANGES_PUSHED,
     INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST,
@@ -413,7 +418,9 @@ def show_testbench_diff(ls: LanguageServer, kwargs):
         if not keyword_match:
             edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
         else:
-            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+            if get_keyword_tags(keyword_match) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
+            ):
                 continue
             edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
     if not edits:
@@ -435,7 +442,14 @@ def apply_text_edits(content: str, text_edits: list[AnnotatedTextEdit]) -> str:
         return sum(len(l) for l in lines[: pos.line]) + pos.character
 
     for edit in sorted(
-        text_edits, key=lambda e: (e.range.start.line, e.range.start.character), reverse=True
+        text_edits,
+        key=lambda e: (
+            e.range.start.line,
+            e.range.start.character,
+            e.range.end.line,
+            e.range.end.character,
+        ),
+        reverse=True,
     ):
         start = edit.range.start
         end = edit.range.end
@@ -485,7 +499,9 @@ def attempt_push_subdivision(ls: LanguageServer, args):
         if not keyword_match:
             edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
         else:
-            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+            if get_keyword_tags(keyword_match) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
+            ):
                 continue
             edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
     if not edits:
@@ -540,7 +556,9 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
     rd = ResourceDocumentation(document.path)
     push_success = True
     for keyword in existing_resource.keyword_section.body:
-        if "robot:private" in robot_model_to_string(get_keyword_tags(keyword)):
+        if get_keyword_tags(keyword) and any(
+            tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
+        ):
             continue
         keyword_uid = get_kw_uid(keyword)
         existing_keywords = existing_resource.get_keywords(keyword_uid)
@@ -602,7 +620,9 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         edits.extend(keyword_section_edit(kw_section_start, change_identifier))
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
+    visited_keywords = []
     for new_keyword in new_resource.keyword_section.body:
+        visited_keywords.append(get_kw_uid(new_keyword))
         try:
             keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
         except MultipleKeywordsWithUid as e:
@@ -620,9 +640,19 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         if not keyword_match:
             edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
         else:
-            if "robot:private" in robot_model_to_string(get_keyword_tags(keyword_match)):
+            if get_keyword_tags(keyword_match) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
+            ):
                 continue
             edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+    for existing_keyword in existing_resource.keyword_section.body:
+        if get_kw_uid(existing_keyword) in visited_keywords:
+            continue
+        if get_keyword_tags(existing_keyword) and any(
+            tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
+        ):
+            continue
+        edits.extend(create_keyword_edits(existing_keyword, None, change_identifier))
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
@@ -678,9 +708,23 @@ def keyword_section_edit(keyword_section_line, change_identifier):
 
 
 def create_keyword_edits(
-    existing_keyword, new_keyword, change_identifier
+    existing_keyword: Keyword,
+    new_keyword: Keyword | None,
+    change_identifier: ChangeAnnotationIdentifier,
 ) -> list[AnnotatedTextEdit]:
     edits = []
+    if not new_keyword:
+        edits.append(
+            AnnotatedTextEdit(
+                change_identifier,
+                range=Range(
+                    start=Position(existing_keyword.lineno - 1, 0),
+                    end=Position(existing_keyword.end_lineno - 1, existing_keyword.end_col_offset),
+                ),
+                new_text="",
+            )
+        )
+        return edits
     documentation_edit = get_kw_documentation_edit(existing_keyword, new_keyword, change_identifier)
     if documentation_edit:
         edits.append(documentation_edit)
@@ -976,7 +1020,7 @@ def find_interaction_position(ls: LanguageServer, args) -> int | None:
             ERROR_DUPLICATE_KEYWORD_UID_IN_FILE.format(uid=interaction_uid, uri=document_uri),
             LogLevel.DEBUG,
         )
-        return
+        return None
     if len(keywords_by_uid) == 1:
         return keywords_by_uid[0].lineno - 1
     keywords_by_name = resource.get_keywords_by_name(interaction_name)
@@ -990,7 +1034,7 @@ def find_interaction_position(ls: LanguageServer, args) -> int | None:
             ERROR_DUPLICATE_KEYWORD_NAME_IN_FILE.format(name=interaction_name, uri=document_uri),
             LogLevel.DEBUG,
         )
-        return
+        return None
     if len(keywords_by_uid) == 1:
         return keywords_by_name[0].lineno - 1
     show_info(ls, INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST.format(name=interaction_name))
@@ -1001,7 +1045,7 @@ def find_interaction_position(ls: LanguageServer, args) -> int | None:
         ),
         LogLevel.INFO,
     )
-    return
+    return None
 
 
 def start_language_server(

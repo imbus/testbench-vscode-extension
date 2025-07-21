@@ -219,9 +219,6 @@ class TestBenchResourceModel:
                 EmptyLine.from_params(),
             ],
         )
-        if tags:
-            kw_tags = Tags.from_params(tags)
-            kw.body.insert(0, kw_tags)
         if args:
             kw_arguments = Arguments.from_params(
                 [
@@ -234,6 +231,9 @@ class TestBenchResourceModel:
                 ]
             )
             kw.body.insert(0, kw_arguments)
+        if tags:
+            kw_tags = Tags.from_params(tags)
+            kw.body.insert(0, kw_tags)
         if documentation:
             doc = Documentation.from_params(documentation, settings_section=False)
             kw.body.insert(0, doc)
