@@ -189,7 +189,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         "compound-interaction-logging": kwargs.get("compound_interaction_logging"),
         "config": None,
         "fully-qualified": kwargs.get("fully_qualified"),
-        "library-regex": (
+        "library-regex": list(
             rf"(?:.*\.)?(?P<resourceName>[^.]+?)\s*{re.escape(marker)}.*"
             for marker in kwargs.get("library_marker", ())
         ),
@@ -197,7 +197,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         "log-suite-numbering": kwargs.get("log_suite_numbering"),
         "output-directory": pathlib.Path(kwargs.get("output_directory")).as_posix(),
         "resource-directory": pathlib.Path(kwargs.get("resource_directory"), "").as_posix(),
-        "resource-regex": (
+        "resource-regex": list(
             rf"(?:.*\.)?(?P<resourceName>[^.]+?)\s*{re.escape(marker)}.*"
             for marker in kwargs.get("resource_marker", ())
         ),
