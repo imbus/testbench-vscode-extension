@@ -70,3 +70,4 @@ CONTEXT_CHANGE_LABEL = "TestBench Context Change"
 
 # Variables
 CONTEXT_STRING = "tb:context:{project}/{tov}"
+IGNORE_TAGS = ["robot:private", "tb:ignore"]

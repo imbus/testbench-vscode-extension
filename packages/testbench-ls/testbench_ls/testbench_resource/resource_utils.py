@@ -21,10 +21,10 @@ def get_keyword_documentation(keyword: Keyword) -> Documentation:
 
 def get_keyword_name_end_position(keyword: Keyword) -> tuple[int]:
     return (
-        keyword.header.end_lineno - 1,
-        keyword.header.end_col_offset,
-        keyword.header.end_lineno - 1,
-        keyword.header.end_col_offset,
+        keyword.header.end_lineno,
+        keyword.header.col_offset,
+        keyword.header.end_lineno,
+        keyword.header.col_offset,
     )
 
 
@@ -33,10 +33,10 @@ def get_keyword_documentation_end_position(keyword: Keyword) -> tuple[int]:
     if not documentation:
         return get_keyword_name_end_position(keyword)
     return (
-        documentation.end_lineno - 1,
-        documentation.end_col_offset,
-        documentation.end_lineno - 1,
-        documentation.end_col_offset,
+        documentation.end_lineno,
+        documentation.col_offset,
+        documentation.end_lineno,
+        documentation.col_offset,
     )
 
 
@@ -44,7 +44,7 @@ def get_keyword_tags_end_position(keyword: Keyword) -> tuple[int]:
     tags = get_keyword_tags(keyword)
     if not tags:
         return get_keyword_documentation_end_position(keyword)
-    return (tags.end_lineno - 1, tags.end_col_offset, tags.end_lineno - 1, tags.end_col_offset)
+    return (tags.end_lineno, tags.col_offset, tags.end_lineno, tags.col_offset)
 
 
 def get_keyword_arguments_end_position(keyword: Keyword) -> tuple[int]:
@@ -52,10 +52,10 @@ def get_keyword_arguments_end_position(keyword: Keyword) -> tuple[int]:
     if not arguments:
         return get_keyword_tags_end_position(keyword)
     return (
-        arguments.end_lineno - 1,
-        arguments.end_col_offset,
         arguments.end_lineno,
-        arguments.end_col_offset,
+        arguments.col_offset,
+        arguments.end_lineno,
+        arguments.col_offset,
     )
 
 
@@ -66,8 +66,8 @@ def get_keyword_documentation_position(keyword: Keyword) -> tuple[int]:
     return (
         documentation.lineno - 1,
         documentation.col_offset,
-        documentation.end_lineno - 1,
-        documentation.end_col_offset,
+        documentation.end_lineno,
+        0,
     )
 
 
@@ -130,8 +130,8 @@ def get_keyword_arguments_position(keyword: Keyword) -> tuple[int]:
     return (
         arguments.lineno - 1,
         arguments.col_offset,
-        arguments.end_lineno - 1,
-        arguments.end_col_offset,
+        arguments.end_lineno,
+        0,
     )
 
 
@@ -143,11 +143,11 @@ def get_keyword_tags_position(keyword: Keyword) -> tuple[int]:
     tags = get_keyword_tags(keyword)
     if not tags:
         return get_keyword_documentation_end_position(keyword)
-    return (tags.lineno - 1, tags.col_offset, tags.end_lineno - 1, tags.end_col_offset)
+    return (tags.lineno - 1, tags.col_offset, tags.end_lineno, 0)
 
 
 def robot_model_to_string(model_item: Block | Statement) -> str:
-    return "".join(_robot_item_to_string(model_item))  # .rstrip()
+    return "".join(_robot_item_to_string(model_item))
 
 
 def _robot_item_to_string(item):
