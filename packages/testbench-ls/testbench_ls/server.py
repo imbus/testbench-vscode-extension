@@ -455,7 +455,7 @@ def apply_text_edits(content: str, text_edits: list[AnnotatedTextEdit]) -> str:
         end = edit.range.end
         start_offset = edit_position_offset(start)
         end_offset = edit_position_offset(end)
-        content = content[:start_offset] + edit.new_text + content[end_offset - 1 :]
+        content = content[:start_offset] + edit.new_text + content[end_offset:]
         lines = content.splitlines(keepends=True)
     return content
 
