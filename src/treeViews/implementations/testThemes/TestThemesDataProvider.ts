@@ -3,10 +3,8 @@
  * @description Data provider for managing test themes in the tree view.
  */
 
-import { ErrorHandler } from "../../utils/ErrorHandler";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestStructure } from "../../../testBenchTypes";
-import { EventBus } from "../../utils/EventBus";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { FrameworkCache } from "../../utils/FrameworkCache";
 import { TestThemeItemTypes } from "../../../constants";
@@ -20,9 +18,7 @@ export class TestThemesDataProvider {
 
     constructor(
         private logger: TestBenchLogger,
-        private errorHandler: ErrorHandler,
-        private getConnection: () => PlayServerConnection | null,
-        private eventBus: EventBus
+        private getConnection: () => PlayServerConnection | null
     ) {}
 
     /**
@@ -33,37 +29,40 @@ export class TestThemesDataProvider {
      */
     public async fetchCycleStructure(projectKey: string, cycleKey: string): Promise<TestStructure | null> {
         const cacheKey = `${projectKey}:${cycleKey}`;
-
         const cached = this.cache.get(cacheKey);
         if (cached) {
-            this.logger.debug(`Using cached structure for ${cacheKey}`);
             return cached;
         }
 
         const connection = this.getConnection();
         if (!connection) {
-            throw new Error("No connection available");
+            this.logger.error("[TestThemesDataProvider] No connection available when fetching cycle structure");
+            return null;
         }
 
         try {
-            this.logger.debug(`Fetching cycle structure for project: ${projectKey}, cycle: ${cycleKey}`);
-
             const testStructure = await connection.fetchTestStructureOfCycleFromServer(projectKey, cycleKey);
-
             if (!testStructure) {
-                this.logger.warn("No test structure returned from server");
                 return null;
             }
 
             // Validate and normalize the structure
-            const normalized = this.normalizeTestStructure(testStructure);
+            const normalizedTestStructure = this.normalizeTestStructure(testStructure);
+            if (!normalizedTestStructure) {
+                return null;
+            }
 
-            this.cache.set(cacheKey, normalized);
-            this.logger.info(`Successfully fetched test structure with ${normalized.nodes?.length || 0} nodes`);
+            this.cache.set(cacheKey, normalizedTestStructure);
+            this.logger.info(
+                `[TestThemesDataProvider] Successfully fetched test structure with ${normalizedTestStructure.nodes?.length || 0} nodes`
+            );
 
-            return normalized;
+            return normalizedTestStructure;
         } catch (error) {
-            this.logger.error(`Failed to fetch cycle structure for ${cacheKey}:`, error as Error);
+            this.logger.error(
+                `[TestThemesDataProvider] Failed to fetch cycle structure for project key ${projectKey} and cycle key ${cycleKey}:`,
+                error as Error
+            );
             throw error;
         }
     }
@@ -76,37 +75,41 @@ export class TestThemesDataProvider {
      */
     public async fetchTovStructure(projectKey: string, tovKey: string): Promise<TestStructure | null> {
         const cacheKey = `${projectKey}:tov:${tovKey}`;
-
         const cached = this.cache.get(cacheKey);
         if (cached) {
-            this.logger.debug(`Using cached TOV structure for ${cacheKey}`);
             return cached;
         }
 
         const connection = this.getConnection();
         if (!connection) {
-            throw new Error("No connection available");
+            this.logger.error("[TestThemesDataProvider] No connection available when fetching TOV structure");
+            return null;
         }
 
         try {
-            this.logger.debug(`Fetching TOV structure for project: ${projectKey}, TOV: ${tovKey}`);
-
             const testStructure = await connection.fetchTestStructureOfTOVFromServer(projectKey, tovKey);
 
             if (!testStructure) {
-                this.logger.warn("No test structure returned from server");
                 return null;
             }
 
             // Validate and normalize the structure
-            const normalized = this.normalizeTestStructure(testStructure);
+            const normalizedTestStructure = this.normalizeTestStructure(testStructure);
+            if (!normalizedTestStructure) {
+                return null;
+            }
 
-            this.cache.set(cacheKey, normalized);
-            this.logger.info(`Successfully fetched TOV structure with ${normalized.nodes?.length || 0} nodes`);
+            this.cache.set(cacheKey, normalizedTestStructure);
+            this.logger.debug(
+                `[TestThemesDataProvider] Successfully fetched TOV structure with ${normalizedTestStructure.nodes?.length || 0} nodes`
+            );
 
-            return normalized;
+            return normalizedTestStructure;
         } catch (error) {
-            this.logger.error(`Failed to fetch TOV structure for ${cacheKey}:`, error as Error);
+            this.logger.error(
+                `[TestThemesDataProvider] Failed to fetch TOV structure for project key ${projectKey} and TOV key ${tovKey}:`,
+                error as Error
+            );
             throw error;
         }
     }
@@ -116,7 +119,7 @@ export class TestThemesDataProvider {
      */
     public clearCache(): void {
         this.cache.clear();
-        this.logger.debug("Cleared all cached test structures");
+        this.logger.trace("[TestThemesDataProvider] Cleared all cached test structures");
     }
 
     /**
@@ -128,7 +131,7 @@ export class TestThemesDataProvider {
     public invalidateCache(projectKey: string, key: string, isTov: boolean = false): void {
         const cacheKey = isTov ? `${projectKey}:tov:${key}` : `${projectKey}:${key}`;
         this.cache.clear(cacheKey);
-        this.logger.debug(`Invalidated cache for ${cacheKey}`);
+        this.logger.trace(`[TestThemesDataProvider] Invalidated cache for ${cacheKey}`);
     }
 
     /**
@@ -137,10 +140,11 @@ export class TestThemesDataProvider {
      * @return Normalized TestStructure object
      * @throws Error if structure format is invalid
      */
-    private normalizeTestStructure(structure: any): TestStructure {
+    private normalizeTestStructure(structure: any): TestStructure | null {
         // Handle different possible formats of the test structure
         if (!structure || typeof structure !== "object") {
-            throw new Error("Invalid test structure format");
+            this.logger.error(`[TestThemesDataProvider] Invalid test structure format`);
+            return null;
         }
 
         // If the structure already has the expected format
@@ -148,8 +152,7 @@ export class TestThemesDataProvider {
             return this.normalizeExistingStructure(structure);
         }
 
-        // Convert old format to new format
-        return this.convertOldFormat(structure);
+        return this.formatTestStructure(structure);
     }
 
     /**
@@ -219,12 +222,12 @@ export class TestThemesDataProvider {
     }
 
     /**
-     * Converts old format test structure to new normalized format
-     * @param structure The old format test structure
-     * @return Normalized TestStructure object
+     * Formats test structure to contain the proper fields.
+     * @param structure The test structure to format
+     * @return Formatted TestStructure object
      */
-    private convertOldFormat(structure: any): TestStructure {
-        const normalized: TestStructure = {
+    private formatTestStructure(structure: any): TestStructure {
+        const formatted: TestStructure = {
             root: {
                 base: {
                     key: structure.elementKey || structure.key || "",
@@ -240,12 +243,11 @@ export class TestThemesDataProvider {
             nodes: []
         };
 
-        // Convert old format to new format
         if (structure.children && Array.isArray(structure.children)) {
-            this.flattenTreeToNodes(structure, normalized.nodes);
+            this.flattenTreeToNodes(structure, formatted.nodes);
         }
 
-        return normalized;
+        return formatted;
     }
 
     /**

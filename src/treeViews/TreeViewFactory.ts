@@ -51,7 +51,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         options?: TreeViewFactoryOptions
     ): TreeViews {
-        this.logger.info("Creating all tree views");
+        this.logger.debug("[TreeViewFactory] Creating all tree views");
 
         const projectsTree = this.createProjectsTreeView(context, getConnection, options?.customConfigs?.projects);
 
@@ -113,7 +113,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         customConfig?: Partial<TreeViewConfig>
     ): ProjectsTreeView {
-        this.logger.debug("Creating Projects tree view");
+        this.logger.debug("[TreeViewFactory] Creating Projects tree view");
 
         const treeView = new ProjectsTreeView(context, getConnection, customConfig);
 
@@ -145,7 +145,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         customConfig?: Partial<TreeViewConfig>
     ): TestThemesTreeView {
-        this.logger.debug("Creating Test Themes tree view");
+        this.logger.debug("[TreeViewFactory] Creating Test Themes tree view");
 
         const treeView = new TestThemesTreeView(context, getConnection, customConfig);
 
@@ -177,7 +177,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         customConfig?: Partial<TreeViewConfig>
     ): TestElementsTreeView {
-        this.logger.debug("Creating Test Elements tree view");
+        this.logger.debug("[TreeViewFactory] Creating Test Elements tree view");
 
         const treeView = new TestElementsTreeView(context, getConnection, customConfig);
 
@@ -210,7 +210,7 @@ export class TreeViewFactory {
     ): void {
         // Track visibility
         const visibilityDisposable = vscTreeView.onDidChangeVisibility((e) => {
-            this.logger.trace(`${treeType} tree visibility changed: ${e.visible}`);
+            this.logger.trace(`[TreeViewFactory] ${treeType} tree visibility changed: ${e.visible}`);
 
             treeView.eventBus.emit({
                 type: "tree:visible",
@@ -224,7 +224,7 @@ export class TreeViewFactory {
         const selectionDisposable = vscTreeView.onDidChangeSelection((e) => {
             if (e.selection.length > 0) {
                 const item = e.selection[0];
-                this.logger.trace(`${treeType} tree item selected:`, item.label);
+                this.logger.trace(`[TreeViewFactory] ${treeType} tree item selected: ${item.label}`);
 
                 treeView.eventBus.emit({
                     type: "tree:itemSelected",
@@ -240,7 +240,7 @@ export class TreeViewFactory {
 
         // Track expansion/collapse
         const expansionDisposable = vscTreeView.onDidExpandElement((e) => {
-            this.logger.trace(`${treeType} tree item expanded:`, e.element.label);
+            this.logger.trace(`[TreeViewFactory] ${treeType} tree item expanded: ${e.element.label}`);
 
             treeView.eventBus.emit({
                 type: "tree:itemExpanded",
@@ -251,7 +251,7 @@ export class TreeViewFactory {
         });
 
         const collapseDisposable = vscTreeView.onDidCollapseElement((e) => {
-            this.logger.trace(`${treeType} tree item collapsed:`, e.element.label);
+            this.logger.trace(`[TreeViewFactory] ${treeType} tree item collapsed: ${e.element.label}`);
 
             treeView.eventBus.emit({
                 type: "tree:itemCollapsed",
@@ -344,37 +344,35 @@ export class TreeViewFactory {
         testThemesTree: TestThemesTreeView,
         testElementsTree: TestElementsTreeView
     ): void {
-        this.logger.debug("Setting up inter-tree communication");
+        this.logger.debug("[TreeViewFactory] Setting up inter-tree communication");
 
         // Projects to Test Themes: When cycle is selected
         const cycleSelectionDisposable = projectsTree.eventBus.on("cycle:selected", async (event) => {
             const { projectKey, cycleKey, cycleLabel, projectName, tovName } = event.data;
-            this.logger.debug(`Cycle selected: ${cycleLabel} (${cycleKey})`);
+            this.logger.debug(`[TreeViewFactory] Cycle selected: ${cycleLabel} (${cycleKey})`);
 
             if (projectName && tovName) {
                 await testThemesTree.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
             } else {
-                this.logger.error("Missing project or TOV name for cycle selection event.");
+                this.logger.error("[TreeViewFactory] Missing project or TOV name for cycle selection event.");
             }
         });
 
         // Projects to Test Elements: When version is selected
         const versionSelectionDisposable = projectsTree.eventBus.on("version:selected", async (event) => {
             const { tovKey, tovLabel, projectName, tovName } = event.data;
-            this.logger.debug(`Version selected: ${tovLabel} (${tovKey})`);
+            this.logger.debug(`[TreeViewFactory] Version selected: ${tovLabel} (${tovKey})`);
 
             await testElementsTree.loadTov(tovKey, tovLabel, projectName, tovName);
         });
 
         // Test Themes to Projects: When test generation completes
         const testGenerationDisposable = testThemesTree.eventBus.on("testGeneration:completed", () => {
-            this.logger.debug("Test generation completed, refreshing projects tree");
             projectsTree.refresh();
         });
 
         // Marking synchronization
         const markingDisposable = testThemesTree.eventBus.on("marking:added", () => {
-            this.logger.debug("Item marked in test themes, updating projects tree");
             projectsTree.refresh();
         });
 
@@ -400,42 +398,29 @@ export class TreeViewFactory {
         testThemesTree: TestThemesTreeView,
         testElementsTree: TestElementsTreeView
     ): void {
-        this.logger.debug("Registering global tree commands");
+        this.logger.debug("[TreeViewFactory] Registering global tree commands");
 
         // Refresh all trees
         const refreshAllCmd = vscode.commands.registerCommand(allExtensionCommands.refreshAllTrees, async () => {
-            this.logger.info("Refreshing all trees");
-
-            const startTime = Date.now();
             await Promise.all([projectsTree.refresh(), testThemesTree.refresh(), testElementsTree.refresh()]);
-
-            const duration = Date.now() - startTime;
-            this.logger.info(`All trees refreshed in ${duration}ms`);
-
-            vscode.window.showInformationMessage("All trees refreshed");
         });
 
         // Clear all custom roots
         const clearRootsCmd = vscode.commands.registerCommand(allExtensionCommands.clearAllCustomRoots, () => {
-            this.logger.info("Clearing all custom roots");
+            this.logger.trace("[TreeViewFactory] Clearing all custom roots of tree views");
 
             projectsTree.resetCustomRoot();
             testThemesTree.resetCustomRoot();
             // TestElementsTreeView doesnt support custom roots
-
-            vscode.window.showInformationMessage("All custom roots cleared");
         });
 
         // Clear all marks
         const clearMarksCmd = vscode.commands.registerCommand(allExtensionCommands.clearAllMarks, () => {
-            this.logger.info("Clearing all marks");
+            this.logger.trace("[TreeViewFactory] Clearing all markings from test theme tree view");
 
             const markingModule = testThemesTree.getModule("marking");
             if (markingModule) {
                 markingModule.clearAllMarks();
-                vscode.window.showInformationMessage("All marks cleared");
-            } else {
-                vscode.window.showWarningMessage("Marking module not available");
             }
         });
 
@@ -448,13 +433,13 @@ export class TreeViewFactory {
      * Dispose of all resources
      */
     public dispose(): void {
-        this.logger.debug("Disposing TreeViewFactory");
+        this.logger.debug("[TreeViewFactory] Disposing TreeViewFactory");
 
         for (const disposable of this.disposables) {
             try {
                 disposable.dispose();
             } catch (error) {
-                this.logger.error("Error disposing resource:", error);
+                this.logger.error("[TreeViewFactory] Error disposing resource:", error);
             }
         }
 
@@ -476,7 +461,7 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
         setTreeViews(createAllTreeViews(extensionContext, getConnection));
 
         if (!treeViews) {
-            logger.error("Global tree views variable is null. Cannot initialize tree views.");
+            logger.error("[TreeViewFactory] Global tree views variable is null. Cannot initialize tree views.");
             return;
         }
 
@@ -508,10 +493,9 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
         await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, showTestThemes);
         await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, showTestElements);
 
-        logger.info("Tree views initialized successfully");
+        logger.info("[TreeViewFactory] Tree views initialized successfully");
     } catch (error) {
-        logger.error("Failed to initialize tree views:", error);
-        vscode.window.showErrorMessage("Failed to initialize tree views. Please reload the window.");
+        logger.error("[TreeViewFactory] Failed to initialize tree views:", error);
         throw error;
     }
 }

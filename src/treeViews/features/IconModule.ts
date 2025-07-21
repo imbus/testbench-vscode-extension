@@ -55,7 +55,7 @@ export class IconModule implements TreeViewModule {
                 this.onConfigChange(event.data.icons);
             }
         });
-        this.context.logger.debug(`IconModule initialized with theme: ${this.config.theme}`);
+        this.context.logger.debug(`[IconModule] Icon module initialized with theme: ${this.config.theme}`);
     }
 
     /**
@@ -390,45 +390,12 @@ export class IconModule implements TreeViewModule {
     }
 
     /**
-     * Sets a loading icon for a tree item
-     * @param item The tree item to set loading icon for
-     */
-    public setLoadingIcon(item: TreeItemBase): void {
-        // Check if filter diff mode is enabled and this item is filtered
-        const treeView = this.context.getTreeView();
-        const filteringModule = treeView.getModule("filtering") as FilteringModule | undefined;
-        if (filteringModule && typeof filteringModule.getFilterDiffState === "function") {
-            const filterDiffState = filteringModule.getFilterDiffState();
-            if (filterDiffState.enabled && item.id && filterDiffState.filteredItems.has(item.id)) {
-                // Skip setting loading icon for filtered items in diff mode - let the FilteringModule handle it
-                return;
-            }
-        }
-
-        if (this.config.animateLoading) {
-            item.iconPath = new vscode.ThemeIcon("sync~spin");
-        } else {
-            item.iconPath = new vscode.ThemeIcon("sync");
-        }
-        item.setMetadata("loading", true);
-    }
-
-    /**
-     * Clears loading icon and restores original icon for tree item
-     * @param item The tree item to clear loading icon for
-     */
-    public clearLoadingIcon(item: TreeItemBase): void {
-        item.setMetadata("loading", false);
-        this.setItemIcon(item);
-    }
-
-    /**
      * Sets the active icon theme
      * @param themeName The name of the theme to set
      */
     public setTheme(themeName: string): void {
         if (!this.isValidThemeName(themeName)) {
-            this.context.logger.warn(`Invalid theme name: ${themeName}`);
+            this.context.logger.warn(`[IconModule] Cannot set theme. Invalid theme name: ${themeName}`);
             return;
         }
 
@@ -437,7 +404,7 @@ export class IconModule implements TreeViewModule {
             this.currentTheme = theme;
             this.config.theme = themeName;
             this.context.refresh();
-            this.context.logger.info(`Icon theme changed to: ${themeName}`);
+            this.context.logger.debug(`[IconModule] Icon theme changed to: ${themeName}`);
         }
     }
 
@@ -448,38 +415,6 @@ export class IconModule implements TreeViewModule {
      */
     private isValidThemeName(themeName: string): themeName is IconThemeName {
         return ["default", "minimal", "colorful", "custom"].includes(themeName);
-    }
-
-    /**
-     * Registers custom icon for context value
-     * @param contextValue The context value to map icon to
-     * @param icon The icon to register
-     */
-    public registerCustomIcon(contextValue: string, icon: vscode.ThemeIcon | string): void {
-        this.customMappings.set(contextValue, icon);
-    }
-
-    /**
-     * Clears all custom icon mappings
-     */
-    public clearCustomIcons(): void {
-        this.customMappings.clear();
-    }
-
-    /**
-     * Gets list of available theme names
-     * @return Array of available theme names
-     */
-    public getAvailableThemes(): IconThemeName[] {
-        return Array.from(this.themes.keys());
-    }
-
-    /**
-     * Gets the currently active theme
-     * @return The current icon theme
-     */
-    public getCurrentTheme(): IconTheme {
-        return this.currentTheme;
     }
 
     /**

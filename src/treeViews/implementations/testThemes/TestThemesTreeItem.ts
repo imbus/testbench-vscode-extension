@@ -186,10 +186,6 @@ export class TestThemesTreeItem extends TreeItemBase {
             contextValue = `${contextValue}.hasRobotFile`;
         }
 
-        this.logger.debug(
-            `[TestThemesTreeItem] getContextValue for ${this.data.base.name}: originalContextValue=${this.originalContextValue}, robotFileExists=${this.robotFileExists}, final=${contextValue}`
-        );
-
         return contextValue;
     }
 
@@ -239,11 +235,7 @@ export class TestThemesTreeItem extends TreeItemBase {
      * Updates the context value of the tree item by recalculating it from its current state.
      */
     public updateContextValue(): void {
-        const oldContextValue = this.contextValue;
         this.contextValue = this.getContextValue();
-        this.logger.debug(
-            `[TestThemesTreeItem] updateContextValue called for ${this.data.base.name}: old=${oldContextValue}, new=${this.contextValue}`
-        );
     }
 
     /**
@@ -252,9 +244,6 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     public async checkRobotFileExists(): Promise<boolean> {
         if (!this.canHaveRobotFile()) {
-            this.logger.debug(
-                `[TestThemesTreeItem] Cannot have robot file for ${this.data.base.name} (type: ${this.data.elementType})`
-            );
             return false;
         }
 
@@ -262,13 +251,6 @@ export class TestThemesTreeItem extends TreeItemBase {
             const fileInfo = await this.robotFileService.checkRobotFileExists(this);
             this.robotFileExists = fileInfo.exists;
             this.robotFilePath = fileInfo.filePath;
-
-            this.logger.debug(
-                `[TestThemesTreeItem] Robot file check for ${this.data.base.name}: ${fileInfo.exists ? "exists" : "not found"}`
-            );
-            if (fileInfo.exists) {
-                this.logger.debug(`[TestThemesTreeItem] Robot file path: ${fileInfo.filePath}`);
-            }
 
             return fileInfo.exists;
         } catch (error) {
@@ -302,11 +284,17 @@ export class TestThemesTreeItem extends TreeItemBase {
      */
     public async openGeneratedRobotFile(): Promise<void> {
         if (!this.canHaveRobotFile()) {
-            throw new Error("This item type cannot have a robot file");
+            this.logger.debug(
+                `[TestThemesTreeItem] Cannot open robot file: Item type ${this.data.elementType} cannot have a robot file`
+            );
+            return;
         }
 
         if (!this.robotFilePath) {
-            throw new Error("No robot file path available");
+            this.logger.debug(
+                `[TestThemesTreeItem] Cannot open robot file: No robot file path available for ${this.data.base.name}`
+            );
+            return;
         }
 
         await this.robotFileService.openRobotFile(this.robotFilePath);
@@ -438,7 +426,9 @@ export class TestThemesTreeItem extends TreeItemBase {
         }
 
         if (!treeViews) {
-            this.logger.error("Tree views are not initialized, cannot get language server parameters.");
+            this.logger.error(
+                "[TestThemesTreeItem] Tree views are not initialized, cannot get language server parameters."
+            );
             return undefined;
         }
 

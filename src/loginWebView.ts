@@ -30,7 +30,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @param {vscode.ExtensionContext} extensionContext The extension context.
      */
     constructor(private extensionContext: vscode.ExtensionContext) {
-        logger.trace("LoginWebViewProvider initialized.");
+        logger.debug("[loginWebView] LoginWebViewProvider initialized.");
     }
 
     /**
@@ -44,12 +44,11 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         _token: vscode.CancellationToken
     ): Promise<void> {
-        logger.trace("Resolving login webview view.");
+        logger.trace("[loginWebView] Resolving login webview view.");
         this.currentWebview = webviewView;
 
         if (this._messageListenerDisposable) {
             this._messageListenerDisposable.dispose();
-            logger.trace("Disposed previous message listener.");
         }
 
         webviewView.webview.options = {
@@ -64,7 +63,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         // Listen for messages from the webview to respond to user actions.
         this._messageListenerDisposable = webviewView.webview.onDidReceiveMessage(async (message) => {
-            logger.trace(`[LoginWebView] Received message from webview: ${message.command}`);
+            logger.trace(`[loginWebView] Received message from webview: ${message.command}`);
             switch (message.command) {
                 case WebviewMessageCommands.CONNECTION_UI_LOADED:
                     await this.sendConnectionToWebview();
@@ -79,11 +78,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     await this.handleRequestDeleteConfirmation(message.payload.connectionId);
                     break;
                 case WebviewMessageCommands.LOGIN:
-                    logger.info(
-                        '[LoginWebView] Old "Sign In" button clicked. Triggering TestBench login command for generic flow.'
-                    );
+                    logger.debug('[loginWebView] "Sign In" button clicked. Triggering TestBench login command.');
                     vscode.commands.executeCommand(allExtensionCommands.login).then(undefined, (err) => {
-                        logger.error("[LoginWebView] Error executing generic login command:", err);
+                        logger.error("[loginWebView] Error executing login command:", err);
                         this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                             type: "error",
                             text: "Could not start TestBench login process."
@@ -92,12 +89,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case WebviewMessageCommands.TRIGGER_COMMAND:
                     if (message.payload && message.payload.commandId) {
-                        logger.info(
-                            `[LoginWebView] Webview requested to trigger command: ${message.payload.commandId}`
+                        logger.debug(
+                            `[loginWebView] Webview requested to trigger command: ${message.payload.commandId}`
                         );
                         vscode.commands.executeCommand(message.payload.commandId).then(undefined, (err) => {
                             logger.error(
-                                `[LoginWebView] Error executing command '${message.payload.commandId}' from webview:`,
+                                `[loginWebView] Error executing command '${message.payload.commandId}' from webview:`,
                                 err
                             );
                             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -117,7 +114,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     await this.handleCancelEditConnection();
                     break;
                 default:
-                    logger.warn(`[LoginWebView] Unknown command from webview: ${message.command}`);
+                    logger.warn(`[loginWebView] Unknown command from webview: ${message.command}`);
                     break;
             }
         });
@@ -137,7 +134,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 if (this._messageListenerDisposable) {
                     this._messageListenerDisposable.dispose();
                 }
-                logger.trace("[LoginWebView] Connection Management webview disposed.");
             },
             null,
             this.extensionContext?.subscriptions
@@ -152,19 +148,17 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the confirmation process is complete.
      */
     private async handleRequestDeleteConfirmation(connectionId: string): Promise<void> {
-        logger.info(`[LoginWebView] Received request for delete confirmation for connection ID: ${connectionId}`);
         // Prevent deletion of connection currently being edited
         if (this.editingConnectionId === connectionId) {
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "warning",
                 text: "Cannot delete connection while editing it. Please save or cancel your changes first."
             });
-            logger.warn(`[LoginWebView] Attempted to delete connection ${connectionId} while it's being edited.`);
             return;
         }
 
         if (!connectionId) {
-            logger.warn("[LoginWebView] No connectionId provided for delete confirmation.");
+            logger.warn("[loginWebView] No connection ID provided for delete confirmation.");
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: "Cannot delete: Connection ID missing."
@@ -191,12 +185,12 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         );
 
         if (confirmation === "Delete") {
-            logger.info(
-                `[LoginWebView] User confirmed deletion for connection ID: ${connectionId}. Proceeding with delete.`
+            logger.debug(
+                `[loginWebView] User confirmed deletion for connection ID: ${connectionId}. Proceeding with deletion.`
             );
             await this.handleDeleteConnection(connectionId);
         } else {
-            logger.info(`[LoginWebView] User cancelled deletion for connection ID: ${connectionId}.`);
+            logger.debug(`[loginWebView] User cancelled deletion for connection ID: ${connectionId}.`);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "info",
                 text: "Delete operation cancelled."
@@ -235,7 +229,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 editingConnectionId: this.editingConnectionId
             });
         } catch (error: any) {
-            logger.error("[LoginWebView] Error fetching connections for webview:", error);
+            logger.error("[loginWebView] Error fetching connections for webview:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: "Error loading connections."
@@ -252,7 +246,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the login attempt is complete.
      */
     private async handleLoginWithConnection(connectionId: string): Promise<void> {
-        logger.info(`[LoginWebView] Attempting login with connection ID: ${connectionId}`);
+        logger.debug(`[loginWebView] Attempting login with connection ID: ${connectionId}`);
         try {
             const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
                 this.extensionContext
@@ -276,8 +270,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             });
 
             if (session) {
-                logger.info(`[LoginWebView] Login successful via provider for connection: ${selectedConnection.label}`);
-                // The onDidChangeSessions listener in extension.ts handles UI updates
+                logger.info(`[loginWebView] Login successful via provider for connection: ${selectedConnection.label}`);
             } else {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
@@ -285,7 +278,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 });
             }
         } catch (error: any) {
-            logger.error(`[LoginWebView] Login failed for connection ${connectionId}:`, error);
+            logger.error(`[loginWebView] Login failed for connection ${connectionId}:`, error);
             await connectionManager.clearActiveConnection(this.extensionContext);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
@@ -308,7 +301,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     private async handleSaveNewConnection(
         connectionData: Omit<TestBenchConnection, "id"> & { password?: string }
     ): Promise<void> {
-        logger.info(`[LoginWebView] Attempting to save new connection: ${connectionData.label || "No Label"}`);
+        logger.debug(`[loginWebView] Attempting to save new connection: ${connectionData.label || "No Label"}`);
         try {
             if (!connectionData.serverName || !connectionData.portNumber || !connectionData.username) {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -329,7 +322,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         text: `A connection with the label "${connectionData.label}" already exists. Connection labels must be unique.`
                     });
                     logger.warn(
-                        `[LoginWebView] Attempt to save connection with duplicate label prevented: ${connectionData.label}`
+                        `[loginWebView] Attempt to save connection with duplicate label prevented: ${connectionData.label}`
                     );
                     return;
                 }
@@ -350,7 +343,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     text: `A connection with the same server, port, and username already exists: "${existingConnection.label}". Not saving duplicate.`
                 });
                 logger.warn(
-                    `[LoginWebView] Attempt to save duplicate connection (server/user match) prevented for: ${existingConnection.label}`
+                    `[loginWebView] Attempt to save duplicate connection (server/user match) prevented for: ${existingConnection.label}`
                 );
                 return;
             }
@@ -360,14 +353,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 connectionData,
                 connectionData.password
             );
-            logger.info(`[LoginWebView] New connection saved with ID: ${newConnectionId}`);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "success",
                 text: `Connection "${connectionData.label || newConnectionId}" saved.`
             });
             await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error("[LoginWebView] Error saving new connection:", error);
+            logger.error("[loginWebView] Error saving new connection:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Error saving connection: ${error.message}`
@@ -384,7 +376,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the deletion process is complete.
      */
     private async handleDeleteConnection(connectionId: string): Promise<void> {
-        logger.info(`[LoginWebView] Attempting to delete connection ID: ${connectionId}`);
+        logger.debug(`[loginWebView] Attempting to delete connection ID: ${connectionId}`);
         try {
             const connectionToDelete: connectionManager.TestBenchConnection | undefined = (
                 await connectionManager.getConnections(this.extensionContext)
@@ -398,14 +390,13 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
 
             await connectionManager.deleteConnection(this.extensionContext, connectionId);
-            logger.info(`[LoginWebView] Connection deleted: ${connectionId}`);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "success",
                 text: `Connection "${connectionToDelete.label}" deleted.`
             });
             await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error(`[LoginWebView] Error deleting connection ${connectionId}:`, error);
+            logger.error(`[loginWebView] Error deleting connection ${connectionId}:`, error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Error deleting connection: ${error.message}`
@@ -421,7 +412,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the edit mode is set up.
      */
     private async handleEditConnection(connectionId: string): Promise<void> {
-        logger.info(`[LoginWebView] Entering edit mode for connection ID: ${connectionId}`);
         try {
             const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
                 this.extensionContext
@@ -453,9 +443,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             // Refresh connections to disable delete button for the editing connection
             await this.sendConnectionToWebview();
 
-            logger.info(`[LoginWebView] Edit mode activated for connection: ${connectionToEdit.label}`);
+            logger.debug(`[loginWebView] Edit mode activated for connection: ${connectionToEdit.label}`);
         } catch (error: any) {
-            logger.error(`[LoginWebView] Error entering edit mode for connection ${connectionId}:`, error);
+            logger.error(`[loginWebView] Error entering edit mode for connection ${connectionId}:`, error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Error loading connection for editing: ${error.message}`
@@ -471,7 +461,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the update operation is complete.
      */
     private async handleUpdateConnection(payload: EditingConnectionData): Promise<void> {
-        logger.info(`[LoginWebView] Attempting to update connection: ${payload.label || payload.id}`);
+        logger.info(`[loginWebView] Attempting to update connection: ${payload.label || payload.id}`);
 
         try {
             if (!payload.id || !payload.serverName || !payload.portNumber || !payload.username) {
@@ -497,7 +487,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                         text: `Another connection with the label "${payload.label}" already exists. Connection labels must be unique.`
                     });
                     logger.warn(
-                        `[LoginWebView] Attempt to update to duplicate label prevented. Existing connection: ${existingConnectionByLabel.label}`
+                        `[loginWebView] Attempt to update to duplicate label prevented. Existing connection: ${existingConnectionByLabel.label}`
                     );
                     return;
                 }
@@ -519,7 +509,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     text: `Another connection with the same server, port, and username already exists: "${existingConnection.label}". Cannot save duplicate.`
                 });
                 logger.warn(
-                    `[LoginWebView] Attempt to update to duplicate connection credentials prevented. Existing connection: ${existingConnection.label}`
+                    `[loginWebView] Attempt to update to duplicate connection credentials prevented. Existing connection: ${existingConnection.label}`
                 );
                 return;
             }
@@ -541,7 +531,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             );
 
             if (confirmation !== "Save Changes") {
-                logger.info(`[LoginWebView] User cancelled update for connection: ${payload.label}`);
+                logger.debug(`[loginWebView] User cancelled update for connection: ${payload.label}`);
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "info",
                     text: "Connection update cancelled."
@@ -549,12 +539,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            const updatedConnectionId = await connectionManager.saveConnection(
-                this.extensionContext,
-                payload,
-                payload.password
-            );
-            logger.info(`[LoginWebView] Connection updated successfully with ID: ${updatedConnectionId}`);
+            await connectionManager.saveConnection(this.extensionContext, payload, payload.password);
 
             this.editingConnectionId = null;
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -565,7 +550,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             this.postMessageToWebview("exitEditMode", {});
             await this.sendConnectionToWebview();
         } catch (error: any) {
-            logger.error("[LoginWebView] Error updating connection:", error);
+            logger.error("[loginWebView] Error updating connection:", error);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
                 text: `Error updating connection: ${error.message}`
@@ -579,7 +564,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the cancel operation is complete.
      */
     private async handleCancelEditConnection(): Promise<void> {
-        logger.info(`[LoginWebView] Cancelling edit mode for connection ID: ${this.editingConnectionId}`);
+        logger.trace(`[loginWebView] Cancelling edit mode for connection ID: ${this.editingConnectionId}`);
         this.editingConnectionId = null;
 
         this.postMessageToWebview("exitEditMode", {});
@@ -591,7 +576,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         // Refresh connections to re-enable delete button
         await this.sendConnectionToWebview();
 
-        logger.info("[LoginWebView] Edit mode cancelled and form reset.");
+        logger.debug("[loginWebView] Edit mode cancelled and form reset.");
     }
 
     /**
@@ -616,7 +601,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      */
     private createIconUri(webview: vscode.Webview, iconName: string): vscode.Uri | null {
         if (!this.extensionContext) {
-            logger.error("[LoginWebView] Extension context is undefined; cannot create icon URI.");
+            logger.error("[loginWebView] Extension context is undefined. Cannot create icon URI.");
             return null;
         }
         const iconUri = webview.asWebviewUri(

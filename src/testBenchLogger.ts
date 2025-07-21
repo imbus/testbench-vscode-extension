@@ -5,9 +5,10 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import * as vscode from "vscode";
 import * as utils from "./utils";
 import { getExtensionConfiguration } from "./configuration";
-import { ConfigKeys, folderNameOfInternalTestbenchFolder } from "./constants";
+import { ConfigKeys, folderNameOfInternalTestbenchFolder, baseKeyOfExtension } from "./constants";
 
 // Use the native promises API for filesystem operations.
 const fsp = fs.promises;
@@ -33,6 +34,7 @@ export class TestBenchLogger {
     private rotationPromise: Promise<void> | null = null;
     private flattedPromise: Promise<{ stringify: (obj: any) => string }> | null = null;
     private cachedLogLevel: string;
+    private configChangeListener: vscode.Disposable | null = null;
 
     /**
      * Log levels are 0 to 5, with 1 being the most verbose (trace) and 5 being the least verbose (error).
@@ -99,8 +101,29 @@ export class TestBenchLogger {
         this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
         this.outputLogToTerminal = outputToTerminal === true;
         this.cachedLogLevel = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
+
+        // Set up configuration change listener
+        this.setupConfigurationListener();
+
         // Begin asynchronous initialization
         this.initPromise = this.initialize();
+    }
+
+    /**
+     * Sets up a listener for configuration changes that affect the logger level.
+     */
+    private setupConfigurationListener(): void {
+        this.configChangeListener = vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration(`${baseKeyOfExtension}.${ConfigKeys.LOGGER_LEVEL}`)) {
+                console.log(`[testBenchLogger] Configuration change detected for logger level`);
+                const wasUpdated = this.updateCachedLogLevel();
+                if (wasUpdated) {
+                    console.log(`[testBenchLogger] Successfully updated logger level to: ${this.cachedLogLevel}`);
+                } else {
+                    console.log(`[testBenchLogger] Logger level unchanged: ${this.cachedLogLevel}`);
+                }
+            }
+        });
     }
 
     /**
@@ -121,17 +144,19 @@ export class TestBenchLogger {
                 );
                 this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
             } else {
-                console.log("Workspace location is not set in the extension settings. Using default log folder.");
+                console.log(
+                    "[testBenchLogger] Workspace location is not set in the extension settings. Using default log folder."
+                );
             }
             await fsp.mkdir(this.logFolderPath, { recursive: true });
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
-                    `Logger Fatal Error: Permission denied to create log directory at '${this.logFolderPath}'. Please check folder permissions. Logging to file will be disabled.`
+                    `[testBenchLogger] Logger Fatal Error: Permission denied to create log directory at '${this.logFolderPath}'. Please check folder permissions. Logging to file will be disabled.`
                 );
                 this.cachedLogLevel = "No logging";
             } else {
-                console.error("Error during logger initialization:", error);
+                console.error(`[testBenchLogger] Error during logger initialization:`, error);
             }
         }
     }
@@ -142,14 +167,27 @@ export class TestBenchLogger {
      * @returns {boolean} True if the log level was updated, false otherwise.
      */
     public updateCachedLogLevel(): boolean {
-        const newLogLevel: string = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
+        // Read configuration directly from VS Code instead of using cached version
+        // to avoid race conditions with the configuration watcher
+        const freshConfiguration = vscode.workspace.getConfiguration(baseKeyOfExtension);
+        const newLogLevel: string = freshConfiguration.get(ConfigKeys.LOGGER_LEVEL, "No logging");
         if (this.cachedLogLevel !== newLogLevel) {
             const oldLogLevel: string = this.cachedLogLevel;
             this.cachedLogLevel = newLogLevel;
-            console.log(`Logger level changed from "${oldLogLevel}" to "${this.cachedLogLevel}"`);
+            console.log(`[testBenchLogger] Logger level changed from "${oldLogLevel}" to "${this.cachedLogLevel}"`);
             return true;
         }
         return false;
+    }
+
+    /**
+     * Disposes of the logger and cleans up resources.
+     */
+    public dispose(): void {
+        if (this.configChangeListener) {
+            this.configChangeListener.dispose();
+            this.configChangeListener = null;
+        }
     }
 
     /**
@@ -169,7 +207,7 @@ export class TestBenchLogger {
                 return;
             }
             console.error(
-                `Logger Error: Could not get stats for log file '${this.logFilePath}'. Rotation skipped.`,
+                `[testBenchLogger] Logger Error: Could not get stats for log file '${this.logFilePath}'. Rotation skipped.`,
                 error
             );
             return;
@@ -201,10 +239,12 @@ export class TestBenchLogger {
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
-                    `Logger Error: Permission denied during log rotation in '${this.logFolderPath}'. Please check file and folder permissions.`
+                    `[testBenchLogger] Logger Error: Permission denied during log rotation in '${this.logFolderPath}'. Please check file and folder permissions.`
                 );
             } else {
-                console.error(`Logger Error: An unexpected error occurred during log rotation: ${error.message}`);
+                console.error(
+                    `[testBenchLogger] Logger Error: An unexpected error occurred during log rotation: ${error.message}`
+                );
             }
         }
     }
@@ -270,7 +310,10 @@ export class TestBenchLogger {
         // Wait for any ongoing rotation to complete.
         while (this.rotationPromise) {
             await this.rotationPromise.catch((err) => {
-                console.error("Logger Warning: Waited for a rotation that resulted in an error.", err);
+                console.error(
+                    "[testBenchLogger] Logger Warning: Waited for a rotation that resulted in an error.",
+                    err
+                );
             });
         }
 
@@ -330,10 +373,10 @@ export class TestBenchLogger {
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
-                    `Logger Fatal Error: Permission denied to write to log file '${this.logFilePath}'. Please check file permissions. Further file logging may fail.`
+                    `[testBenchLogger] Logger Fatal Error: Permission denied to write to log file '${this.logFilePath}'. Please check file permissions. Further file logging may fail.`
                 );
             } else {
-                console.error(`Logger Error: Failed to write to log file.`, error);
+                console.error(`[testBenchLogger] Logger Error: Failed to write to log file.`, error);
             }
         }
     }

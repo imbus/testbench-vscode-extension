@@ -3,7 +3,6 @@
  * @description Data provider for managing test elements in the tree view.
  */
 
-import { ErrorHandler } from "../../utils/ErrorHandler";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestElementData, TestElementType } from "./TestElementsTreeItem";
 import { EventBus } from "../../utils/EventBus";
@@ -36,7 +35,6 @@ export class TestElementsDataProvider {
 
     constructor(
         private logger: TestBenchLogger,
-        private errorHandler: ErrorHandler,
         private getConnection: () => PlayServerConnection | null,
         private eventBus: EventBus
     ) {
@@ -76,16 +74,13 @@ export class TestElementsDataProvider {
 
         const cachedElements = this.elementsCache.get(tovKey);
         if (cachedElements) {
-            this.logger.debug(`Returning cached test elements for TOV: ${tovKey}`);
+            this.logger.debug(`[TestElementsDataProvider] Returning cached test elements for TOV: ${tovKey}`);
             return cachedElements;
         }
 
         try {
-            this.logger.debug(`Fetching raw test elements for TOV: ${tovKey}`);
             const rawTestElementsData = await connection.getTestElementsWithTovKeyUsingOldPlayServer(tovKey);
-
             if (!rawTestElementsData || !Array.isArray(rawTestElementsData)) {
-                this.logger.warn(`No test elements returned for TOV: ${tovKey}`);
                 return [];
             }
 
@@ -99,12 +94,9 @@ export class TestElementsDataProvider {
                 timestamp: Date.now()
             });
 
-            this.logger.info(
-                `Successfully built and filtered tree with ${hierarchicalTestElemData.length} root elements for TOV: ${tovKey}`
-            );
             return hierarchicalTestElemData;
         } catch (error) {
-            this.logger.error(`Failed to fetch test elements for TOV ${tovKey}:`, error);
+            this.logger.error(`[TestElementsDataProvider] Failed to fetch test elements for TOV key ${tovKey}:`, error);
             this.eventBus.emit({
                 type: "testElements:error",
                 source: "testElements",
@@ -121,11 +113,6 @@ export class TestElementsDataProvider {
      * @returns Array of root TestElementData objects forming the filtered hierarchy
      */
     private _buildAndFilterHierarchy(flatJsonTestElements: RawTestElement[]): TestElementData[] {
-        this.logger.trace(
-            "[TestElementsDataProvider] Building tree with regex patterns:",
-            this.resourceRegexPatterns.map((p) => p.source)
-        );
-
         const testElementIdToDataMap = this._transformRawElements(flatJsonTestElements);
         const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
         const filteredRoots = this._filterElementTree(roots);
@@ -216,9 +203,6 @@ export class TestElementsDataProvider {
                     testElementData.parent = foundParentTestElementData;
                     foundParentTestElementData.children!.push(testElementData);
                 } else {
-                    this.logger.warn(
-                        `[TestElementsDataProvider] Parent with ID '${testElementData.parentId}' not found for element '${testElementData.name}' (ID: ${testElementData.id}). Making it a root.`
-                    );
                     roots.push(testElementData);
                 }
             } else {
@@ -355,7 +339,7 @@ export class TestElementsDataProvider {
                     return `${specificKey.serial}_${raw.uniqueID}`;
                 }
                 this.logger.warn(
-                    `[generateElementId] Test element type ${elementType} for item ${raw.uniqueID} missing specific key serial.`
+                    `[TestElementsDataProvider] Test element tree item with UID ${raw.uniqueID} and type ${elementType} is missing specific key serial.`
                 );
                 return raw.uniqueID || `fallback_${Date.now()}_${Math.random()}`;
             }
@@ -386,10 +370,8 @@ export class TestElementsDataProvider {
     public clearCache(tovKey?: string): void {
         if (tovKey) {
             this.elementsCache.clear(tovKey);
-            this.logger.debug(`Cleared cache for TOV: ${tovKey}`);
         } else {
             this.elementsCache.clear();
-            this.logger.debug("Cleared all test elements cache");
         }
     }
 }

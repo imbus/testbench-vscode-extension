@@ -7,7 +7,6 @@ import * as vscode from "vscode";
 import { TreeViewConfig } from "./TreeViewConfig";
 import { StateManager } from "../state/StateManager";
 import { EventBus } from "../utils/EventBus";
-import { ErrorHandler } from "../utils/ErrorHandler";
 import { TreeViewBase } from "./TreeViewBase";
 import { TestBenchLogger } from "../../testBenchLogger";
 
@@ -21,7 +20,6 @@ export interface TreeViewContext {
     readonly stateManager: StateManager;
     readonly eventBus: EventBus;
     readonly logger: TestBenchLogger;
-    readonly errorHandler: ErrorHandler;
 
     // Tree view reference
     readonly refresh: (options?: { immediate?: boolean }) => void;
@@ -39,7 +37,6 @@ export class TreeViewContextImpl implements TreeViewContext {
         public readonly stateManager: StateManager,
         public readonly eventBus: EventBus,
         public readonly logger: TestBenchLogger,
-        public readonly errorHandler: ErrorHandler,
         public readonly treeView: TreeViewBase<any>
     ) {}
 

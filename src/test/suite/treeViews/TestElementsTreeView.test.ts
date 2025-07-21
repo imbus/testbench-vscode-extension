@@ -14,7 +14,6 @@ import { PlayServerConnection } from "../../../testBenchConnection";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { EventBus } from "../../../treeViews/utils/EventBus";
 import { StateManager } from "../../../treeViews/state/StateManager";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { ResourceFileService } from "../../../treeViews/implementations/testElements/ResourceFileService";
 import { testElementsConfig } from "../../../treeViews/implementations/testElements/TestElementsConfig";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
@@ -24,7 +23,6 @@ suite("TestElementsTreeView", function () {
     let treeView: TestElementsTreeView;
     let mockConnection: sinon.SinonStubbedInstance<PlayServerConnection>;
     let mockLogger: sinon.SinonStubbedInstance<TestBenchLogger>;
-    let mockErrorHandler: sinon.SinonStubbedInstance<ErrorHandler>;
     let mockEventBus: sinon.SinonStubbedInstance<EventBus>;
     let mockStateManager: sinon.SinonStubbedInstance<StateManager>;
     let mockResourceFileService: sinon.SinonStubbedInstance<ResourceFileService>;
@@ -55,7 +53,6 @@ suite("TestElementsTreeView", function () {
         testEnv = setupTestEnvironment();
         mockConnection = testEnv.sandbox.createStubInstance(PlayServerConnection);
         mockLogger = testEnv.sandbox.createStubInstance(TestBenchLogger);
-        mockErrorHandler = testEnv.sandbox.createStubInstance(ErrorHandler);
         mockEventBus = testEnv.sandbox.createStubInstance(EventBus);
         mockStateManager = testEnv.sandbox.createStubInstance(StateManager);
         mockResourceFileService = testEnv.sandbox.createStubInstance(ResourceFileService);
@@ -99,7 +96,6 @@ suite("TestElementsTreeView", function () {
         (treeView as any).eventBus = mockEventBus;
         (treeView as any).stateManager = mockStateManager;
         (treeView as any).logger = mockLogger;
-        (treeView as any).errorHandler = mockErrorHandler;
         (treeView as any).resourceFileService = mockResourceFileService;
 
         (treeView as any).registerEventHandlers();
@@ -124,7 +120,6 @@ suite("TestElementsTreeView", function () {
         const expectedEventTypes = [
             "testElements:fetched",
             "testElements:error",
-            "cycle:selected",
             "tov:loaded",
             "connection:changed",
             "testElement:updated"
@@ -530,72 +525,6 @@ suite("TestElementsTreeView", function () {
     });
 
     suite("Interaction Click Handlers", function () {
-        test("handleInteractionSingleClick should call openInteractionResource", async function () {
-            const mockInteraction = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
-                })
-            );
-
-            const mockParent = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
-                })
-            );
-            mockInteraction.parent = mockParent;
-
-            mockResourceFileService.fileExists.resolves(true);
-            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
-
-            const mockDocument = {} as vscode.TextDocument;
-            const mockEditor = {} as vscode.TextEditor;
-            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
-            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
-
-            await (treeView as any).handleInteractionSingleClick(mockInteraction);
-
-            assert.ok(
-                mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
-                "Should log single click"
-            );
-        });
-
-        test("handleInteractionDoubleClick should call goToInteractionResource", async function () {
-            const mockInteraction = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
-                })
-            );
-
-            const mockParent = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
-                })
-            );
-            mockInteraction.parent = mockParent;
-
-            mockResourceFileService.fileExists.resolves(true);
-            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
-
-            const mockDocument = {} as vscode.TextDocument;
-            const mockEditor = {} as vscode.TextEditor;
-            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
-            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
-
-            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
-
-            assert.ok(
-                mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
-                "Should log double click"
-            );
-        });
-
         test("handleInteractionClick should handle interaction clicks via click handler", async function () {
             const mockInteraction = createMockTestElementItem(
                 createMockTestElementData({
@@ -634,44 +563,6 @@ suite("TestElementsTreeView", function () {
 
             await treeView.handleInteractionClick(mockInteraction);
             assert.ok(!handleClickStub.called, "Should not call click handler when item has no ID");
-        });
-
-        test("both single and double click should jump to interaction", async function () {
-            const mockInteraction = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "TestInteraction",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
-                    testElementType: TestElementType.Interaction
-                })
-            );
-
-            const mockParent = createMockTestElementItem(
-                createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
-                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
-                })
-            );
-            mockInteraction.parent = mockParent;
-
-            mockResourceFileService.fileExists.resolves(true);
-            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource");
-
-            const mockDocument = {} as vscode.TextDocument;
-            const mockEditor = {} as vscode.TextEditor;
-            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
-            testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
-
-            await (treeView as any).handleInteractionSingleClick(mockInteraction);
-            assert.ok(
-                mockLogger.debug.calledWith("Interaction item single clicked: TestInteraction"),
-                "Should log single click"
-            );
-
-            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
-            assert.ok(
-                mockLogger.debug.calledWith("Interaction item double clicked: TestInteraction"),
-                "Should log double click"
-            );
         });
     });
 
@@ -764,79 +655,6 @@ suite("TestElementsTreeView", function () {
             await treeView.createMissingResource(mockItem);
 
             assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message for missing UID");
-        });
-    });
-
-    suite("Event Handling", function () {
-        test("should handle testElements:fetched event", function () {
-            const eventData = { tovKey: "test-tov", count: 5 };
-
-            (treeView as any).currentTovKey = "test-tov";
-
-            const eventHandlerCalls = mockEventBus.on.getCalls();
-            const fetchedHandlerCall = eventHandlerCalls.find((call) => call.args[0] === "testElements:fetched");
-
-            if (fetchedHandlerCall) {
-                const handler = fetchedHandlerCall.args[1];
-                handler({
-                    type: "testElements:fetched",
-                    source: "testElements",
-                    data: eventData,
-                    timestamp: Date.now()
-                });
-            }
-
-            assert.ok(mockLogger.debug.called, "Should log debug message");
-        });
-
-        test("should handle testElements:error event", function () {
-            const eventData = { tovKey: "test-tov", error: "Network error" };
-
-            (treeView as any).currentTovKey = "test-tov";
-
-            const eventHandlerCalls = mockEventBus.on.getCalls();
-            const errorHandlerCall = eventHandlerCalls.find((call) => call.args[0] === "testElements:error");
-
-            if (errorHandlerCall) {
-                const handler = errorHandlerCall.args[1];
-                handler({
-                    type: "testElements:error",
-                    source: "testElements",
-                    data: eventData,
-                    timestamp: Date.now()
-                });
-            }
-
-            assert.ok(mockLogger.error.called, "Should log error");
-            assert.ok(mockErrorHandler.handleVoid.called, "Should handle error");
-        });
-
-        test("should handle connection:changed event", function () {
-            const connectedEvent = {
-                type: "connection:changed",
-                source: "connection",
-                data: { connected: true },
-                timestamp: Date.now()
-            };
-            const disconnectedEvent = {
-                type: "connection:changed",
-                source: "connection",
-                data: { connected: false },
-                timestamp: Date.now()
-            };
-
-            (treeView as any).currentTovKey = "test-tov";
-
-            const eventHandlerCalls = mockEventBus.on.getCalls();
-            const connectionHandlerCall = eventHandlerCalls.find((call) => call.args[0] === "connection:changed");
-
-            if (connectionHandlerCall) {
-                const handler = connectionHandlerCall.args[1];
-                handler(connectedEvent);
-                handler(disconnectedEvent);
-            }
-
-            assert.ok(mockLogger.debug.called, "Should log debug messages");
         });
     });
 

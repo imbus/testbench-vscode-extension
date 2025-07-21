@@ -38,7 +38,6 @@ export class ResourceFileService {
      */
     private removeRobotResourceFromPathString(pathStr: string): string {
         const cleanedPath: string = pathStr.replace(/\[Robot-Resource\]/g, "");
-        this.logger.trace(`[ResourceFileService] Removed [Robot-Resource] from path ${pathStr}: ${cleanedPath}`);
         return cleanedPath;
     }
 
@@ -49,20 +48,21 @@ export class ResourceFileService {
      * @param initialContent The content to write if the file is created.
      */
     public async ensureFileExists(filePath: string, initialContent: string): Promise<void> {
-        this.logger.trace(`[ResourceFileService] Ensuring file exists: ${filePath}`);
         if (!(await this.pathExists(filePath))) {
-            this.logger.debug(`[ResourceFileService] File not found. Creating: ${filePath}`);
+            this.logger.debug(`[ResourceFileService] Resource file not found. Creating: ${filePath}`);
             const dirName = path.dirname(filePath);
             await this.ensureFolderPathExists(dirName);
             try {
                 await fs.promises.writeFile(filePath, initialContent, { encoding: "utf8" });
-                this.logger.info(`[ResourceFileService] File created and content written: ${filePath}`);
+                this.logger.info(`[ResourceFileService] Resource file with initial content created: ${filePath}`);
             } catch (writeError) {
-                this.logger.error(`[ResourceFileService] Error writing file ${filePath}:`, writeError);
+                this.logger.error(`[ResourceFileService] Error writing to resource file ${filePath}:`, writeError);
                 throw writeError;
             }
         } else {
-            this.logger.trace(`[ResourceFileService] File already exists, content not overwritten: ${filePath}`);
+            this.logger.debug(
+                `[ResourceFileService] Resource file already exists, content not overwritten: ${filePath}`
+            );
         }
     }
 
@@ -94,16 +94,9 @@ export class ResourceFileService {
     public async pathExists(filePath: string, caseSensitiveCheck: boolean = false): Promise<boolean> {
         // Remove [Robot-Resource] suffix before checking
         const cleanedPath = this.removeRobotResourceFromPathString(filePath);
-
-        /*
-        this.logger.trace(
-            `[ResourceFileService] Checking if path exists: ${cleanedPath}, CaseSensitive: ${caseSensitiveCheck}`
-        );
-        */
         try {
             await fs.promises.stat(cleanedPath);
 
-            // If we got here, the path exists
             if (process.platform === "win32" || !caseSensitiveCheck) {
                 return true;
             }
@@ -130,14 +123,12 @@ export class ResourceFileService {
      */
     public async directoryExists(dirPath: string): Promise<boolean> {
         const cleanedPath = this.removeRobotResourceFromPathString(dirPath);
-
-        this.logger.trace(`[ResourceFileService] Checking if directory exists: ${cleanedPath}`);
         try {
             const stats = await fs.promises.stat(cleanedPath);
             return stats.isDirectory();
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                this.logger.trace(`[ResourceFileService] Directory does not exist: ${cleanedPath}`);
+                this.logger.debug(`[ResourceFileService] Directory does not exist: ${cleanedPath}`);
                 return false;
             }
             this.logger.error(`[ResourceFileService] Error stating directory "${cleanedPath}": ${err.message}`);
@@ -152,14 +143,12 @@ export class ResourceFileService {
      */
     public async fileExists(filePath: string): Promise<boolean> {
         const cleanedPath = this.removeRobotResourceFromPathString(filePath);
-
-        this.logger.trace(`[ResourceFileService] Checking if file exists: ${cleanedPath}`);
         try {
             const stats = await fs.promises.stat(cleanedPath);
             return stats.isFile();
         } catch (err: any) {
             if (err.code === "ENOENT") {
-                this.logger.trace(`[ResourceFileService] File does not exist: ${cleanedPath}`);
+                this.logger.debug(`[ResourceFileService] File does not exist: ${cleanedPath}`);
                 return false;
             }
             this.logger.error(`[ResourceFileService] Error stating file "${cleanedPath}": ${err.message}`);
@@ -180,7 +169,7 @@ export class ResourceFileService {
             await fs.promises.mkdir(cleanedPath, { recursive: true });
         } catch (error: any) {
             this.logger.error(
-                `[ResourceFileService] Failed to ensure folder path "${cleanedPath}": ${error.message}`,
+                `[ResourceFileService] Failed to check if folder path exists: "${cleanedPath}": ${error.message}`,
                 error
             );
             throw error;

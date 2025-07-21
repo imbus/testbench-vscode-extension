@@ -11,7 +11,6 @@ import { TreeViewConfig } from "../../../treeViews/core/TreeViewConfig";
 import { TreeViewModule } from "../../../treeViews/core/TreeViewModule";
 import { StateManager } from "../../../treeViews/state/StateManager";
 import { EventBus } from "../../../treeViews/utils/EventBus";
-import { ErrorHandler } from "../../../treeViews/utils/ErrorHandler";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 
@@ -125,10 +124,6 @@ class TestTreeView extends TreeViewBase<TestTreeItem> {
         return (this as any).logger;
     }
 
-    public getProtectedErrorHandler(): ErrorHandler {
-        return (this as any).errorHandler;
-    }
-
     public getProtectedStateManager(): StateManager {
         return (this as any).stateManager;
     }
@@ -216,7 +211,6 @@ suite("TreeViewBase", function () {
 
         test("should initialize core components", () => {
             assert.ok(treeView.getProtectedLogger() instanceof TestBenchLogger);
-            assert.ok(treeView.getProtectedErrorHandler() instanceof ErrorHandler);
             assert.ok(treeView.eventBus instanceof EventBus);
             assert.ok(treeView.getProtectedStateManager() instanceof StateManager);
         });
