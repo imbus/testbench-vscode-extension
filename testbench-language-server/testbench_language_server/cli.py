@@ -1,6 +1,6 @@
 import click
 
-from testbench_ls import __version__
+from testbench_language_server import __version__
 
 from .server import start_language_server
 
