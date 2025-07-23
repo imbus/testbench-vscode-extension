@@ -263,7 +263,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 targetConnection.serverName,
                 targetConnection.portNumber,
                 targetConnection.username,
-                passwordToUse
+                passwordToUse,
+                this.context
             );
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
@@ -322,6 +323,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 scopes
             };
         } catch (error: any) {
+            // TODO: Remove this log in production, it contains sensitive information
             logger.error(
                 `[AuthenticationProvider] Error during createSession${isSilent ? " (auto-login)" : ""}:`,
                 error

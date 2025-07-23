@@ -6,7 +6,6 @@
 // Before releasing the extension:
 // TODO: Add License.md to the extension
 // TODO: Set logger level to info or debug in production, remove too detailed logs.
-// TODO: In production, remove process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; in connection class.
 // Note: A virtual python environment is required for the extension to work + an empty pyproject.toml in workspace root.
 
 import * as vscode from "vscode";
@@ -1052,7 +1051,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 async function createNewConnection(
     activeConnection: connectionManager.TestBenchConnection,
     session: vscode.AuthenticationSession,
-    currentConnection: PlayServerConnection | null
+    currentConnection: PlayServerConnection | null,
+    context: vscode.ExtensionContext
 ): Promise<PlayServerConnection> {
     if (currentConnection) {
         logger.warn(
@@ -1065,7 +1065,8 @@ async function createNewConnection(
         activeConnection.serverName,
         activeConnection.portNumber,
         activeConnection.username,
-        session.accessToken
+        session.accessToken,
+        context
     );
 
     setConnection(newConnection);
@@ -1221,7 +1222,7 @@ async function handleTestBenchSessionChange(
             );
             return;
         }
-        const newConnection = await createNewConnection(activeConnection, sessionToProcess, connection);
+        const newConnection = await createNewConnection(activeConnection, sessionToProcess, connection, context);
         await handleLanguageServerRestartOnSessionChange(previousSessionToken, newConnection.getSessionToken());
 
         const isNewConnection =

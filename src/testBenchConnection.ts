@@ -4,6 +4,7 @@
  */
 
 import * as https from "https";
+import * as tls from "tls";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as testBenchTypes from "./testBenchTypes";
@@ -17,13 +18,37 @@ import * as utils from "./utils";
 import { ContextKeys, JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
 import { ExecutionMode } from "./testBenchTypes";
 
-// TODO: Temporarily ignore SSL certificate validation (remove in production)
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+let agentForNextConnection: https.Agent | null = null;
 
 export interface TestBenchLoginResult {
     sessionToken: string;
     userKey: string; // From LoginResponse
     loginName: string;
+}
+
+/**
+ * Creates a secure HTTPS agent that trusts default system CAs and a custom bundled CA.
+ * @param {string} extensionPath The absolute path to the extension's root directory.
+ * @returns {https.Agent} A configured https.Agent.
+ */
+function createSecureHttpsAgent(extensionPath: string): https.Agent {
+    try {
+        const certPath = path.join(extensionPath, "certs", "TestBenchServer.pem");
+        const customCA = fs.readFileSync(certPath);
+
+        const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
+        const combinedCAs = [...defaultCAs, customCA];
+
+        return new https.Agent({
+            ca: combinedCAs
+        });
+    } catch (error) {
+        logger.error(
+            "[testBenchConnection] Failed to create secure HTTPS agent. The TestBenchServer.pem file might be missing.",
+            error
+        );
+        return new https.Agent();
+    }
 }
 
 /**
@@ -43,24 +68,33 @@ export class PlayServerConnection {
      * @param {number} portNumber - The port number of the server.
      * @param {string} username - The username for authentication.
      * @param {string} sessionToken - The session token for authentication.
+     * @param {vscode.ExtensionContext} context - The extension context for path resolution.
      */
     constructor(
         public serverName: string,
         public portNumber: number,
         public username: string,
-        private sessionToken: string
+        private sessionToken: string,
+        private context: vscode.ExtensionContext
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         logger.trace(
             `[testBenchConnection] Initializing server connection for server name: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
         );
 
+        let agentToUse: https.Agent;
+        if (agentForNextConnection) {
+            logger.debug("[testBenchConnection] Using pre-configured agent for the new session.");
+            agentToUse = agentForNextConnection;
+            agentForNextConnection = null;
+        } else {
+            logger.warn("[testBenchConnection] No pre-configured agent found. Defaulting to a new secure agent.");
+            agentToUse = createSecureHttpsAgent(this.context.extensionPath);
+        }
         this.apiClient = axios.create({
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
-            httpsAgent: new https.Agent({
-                rejectUnauthorized: false // TODO: Use true in production.
-            })
+            httpsAgent: agentToUse
         });
 
         if (this.sessionToken) {
@@ -321,10 +355,7 @@ export class PlayServerConnection {
                     Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
-                // Ignore self-signed certificates
-                httpsAgent: new https.Agent({
-                    rejectUnauthorized: false //TODO: This should only be used in a development environment
-                })
+                httpsAgent: this.apiClient.defaults.httpsAgent
             });
 
             if (!oldPlayServerSession) {
@@ -427,10 +458,7 @@ export class PlayServerConnection {
                     Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
-                // Ignore self-signed certificates
-                httpsAgent: new https.Agent({
-                    rejectUnauthorized: false //TODO: This should only be used in a development environment
-                })
+                httpsAgent: this.apiClient.defaults.httpsAgent
             });
 
             if (!oldPlayServerSession) {
@@ -1332,14 +1360,18 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
  * @param {number} portNumber The server port.
  * @param {string} username The TestBench username.
  * @param {string} password The TestBench password.
+ * @param {vscode.ExtensionContext} context - The extension context for path resolution.
  * @returns {Promise<TestBenchLoginResult | null>} A promise resolving to TestBenchLoginResult if successful, otherwise null.
  */
 export async function loginToServerAndGetSessionDetails(
     serverName: string,
     portNumber: number,
     username: string,
-    password: string
+    password: string,
+    context: vscode.ExtensionContext
 ): Promise<TestBenchLoginResult | null> {
+    agentForNextConnection = null;
+
     const requestBody: testBenchTypes.LoginRequestBody = {
         login: username,
         password: password,
@@ -1351,49 +1383,107 @@ export async function loginToServerAndGetSessionDetails(
 
     logger.debug(`[testBenchConnection] Sending login request to: ${loginURL} for user ${username}`);
 
-    try {
-        const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await withRetry(
+    /**
+     * Performs login with retry logic depending on certificate validation and HTTP status codes.
+     * @param agent The HTTPS agent to use for the request.
+     * @param isSecureAttempt A flag to determine the retry strategy.
+     */
+    const performLogin = async (
+        agent: https.Agent,
+        isSecureAttempt: boolean
+    ): Promise<AxiosResponse<testBenchTypes.LoginResponse>> => {
+        const shouldRetryPredicate = (error: any): boolean => {
+            if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+                return false;
+            }
+
+            if (isSecureAttempt) {
+                const certErrorCodes = [
+                    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+                    "CERT_UNTRUSTED",
+                    "DEPTH_ZERO_SELF_SIGNED_CERT"
+                ];
+                if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        return withRetry(
             () =>
                 axios.post(loginURL, requestBody, {
                     headers: {
                         accept: "application/vnd.testbench+json",
                         "Content-Type": "application/vnd.testbench+json"
                     },
-                    httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: Review for production
+                    httpsAgent: agent
                 }),
             3, // maxRetries
             2000, // delayMs
-            (error) => {
-                // shouldRetry predicate
-                if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-                    logger.warn(
-                        "[testBenchConnection] Login attempt failed with 401 (Invalid Credentials). Not retrying."
-                    );
-                    return false;
-                }
-                return true;
-            }
+            shouldRetryPredicate
         );
+    };
 
-        if (loginResponse.status === 201 && loginResponse.data && loginResponse.data.sessionToken) {
+    try {
+        const secureAgent = createSecureHttpsAgent(context.extensionPath);
+        const loginResponse = await performLogin(secureAgent, true);
+        if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
             logger.info(`[testBenchConnection] Login successful for user ${username} on ${serverName}.`);
+            agentForNextConnection = secureAgent;
+
             return {
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
                 loginName: loginResponse.data.login
             };
-        } else {
-            logger.error(
-                `[testBenchConnection] Login failed for ${username}. Unexpected status code: ${loginResponse.status}, Data: ${JSON.stringify(loginResponse.data)}`
-            );
-            return null;
-        }
-    } catch (error: any) {
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            logger.error(`[testBenchConnection] Login failed for ${username} to ${serverName}: Invalid credentials.`);
-        } else {
-            logger.error(`[testBenchConnection] Error during login for ${username} to ${serverName}:`, error.message);
         }
         return null;
+    } catch (error: any) {
+        const certErrorCodes = ["UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_UNTRUSTED", "DEPTH_ZERO_SELF_SIGNED_CERT"];
+
+        if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
+            logger.warn(`[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}`);
+
+            const proceedAnywayPromptText = "Proceed Anyway (insecure)";
+            const choice = await vscode.window.showWarningMessage(
+                `The security certificate for "${serverName}" is not trusted. This could expose you to security risks.`,
+                { modal: true },
+                proceedAnywayPromptText
+            );
+
+            if (choice === proceedAnywayPromptText) {
+                logger.warn(
+                    `[testBenchConnection] User chose to bypass SSL validation for this login attempt to ${serverName}.`
+                );
+
+                const insecureAgent = new https.Agent({ rejectUnauthorized: false });
+                const loginResponse = await performLogin(insecureAgent, false);
+                if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
+                    logger.info(
+                        `[testBenchConnection] Insecure login successful for user ${username} on ${serverName}.`
+                    );
+                    agentForNextConnection = insecureAgent;
+                    return {
+                        sessionToken: loginResponse.data.sessionToken,
+                        userKey: loginResponse.data.userKey,
+                        loginName: loginResponse.data.login
+                    };
+                }
+            }
+            return null;
+        } else {
+            if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+                logger.error(
+                    `[testBenchConnection] Login failed for ${username} to ${serverName}: Invalid credentials.`
+                );
+            } else {
+                logger.error(
+                    `[testBenchConnection] Error during login for ${username} to ${serverName}:`,
+                    error.message
+                );
+            }
+            return null;
+        }
     }
 }
