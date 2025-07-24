@@ -14,6 +14,8 @@ bundled/libs/bin/
 out/
 /out
 
+certs/
+
 # Typescript
 tsconfig.tsbuildinfo
 

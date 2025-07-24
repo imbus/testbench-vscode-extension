@@ -28,3 +28,4 @@ requirements.txt
 .nox/**
 .ruff_cache/**
 .whl
+certs/**
