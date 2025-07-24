@@ -16,7 +16,7 @@ dynamic = ["version"]
 dependencies = [
   "testbench2robotframework>=0.8.0a3",
   "robotframework==7.2",
-  "testbench-ls @ file:./packages/testbench-ls"
+  "testbench-language-server @ file:./testbench-language-server"
 ]
 
 [project.optional-dependencies]

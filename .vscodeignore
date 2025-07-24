@@ -19,7 +19,7 @@ vsc-extension-quickstart.md
 *.vsix
 .env
 package-lock.json
-packages/**
+testbench-language-server/**
 **/__pycache__/**
 .python-version
 pyproject.toml

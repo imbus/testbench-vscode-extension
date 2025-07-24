@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from testbench_ls.messages import TESTBENCH_LS_CLASS_NAME
+from testbench_language_server.messages import TESTBENCH_LS_CLASS_NAME
 
 if TYPE_CHECKING:
     from pygls.server import LanguageServer

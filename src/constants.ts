@@ -11,14 +11,14 @@ export const BUNDLED_PYTHON_SCRIPTS_DIR: string = path.join(EXTENSION_ROOT_DIR, 
 export const LANGUAGE_SERVER_SCRIPT_PATH: string = path.join(
     BUNDLED_PYTHON_SCRIPTS_DIR,
     "libs",
-    "testbench_ls",
+    "testbench_language_server",
     "extension_entry.py"
 );
 
 export const LANGUAGE_SERVER_DEBUG_PATH: string = path.join(
     BUNDLED_PYTHON_SCRIPTS_DIR,
     "libs",
-    "testbench_ls",
+    "testbench_language_server",
     "extension_debug_entry.py"
 );
 
