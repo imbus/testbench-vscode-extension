@@ -7,6 +7,7 @@ import * as https from "https";
 import * as tls from "tls";
 import * as vscode from "vscode";
 import * as fs from "fs";
+
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
 import * as base64 from "base-64";
@@ -26,6 +27,76 @@ import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionSetting } from "./configuration";
 
 let agentForNextConnection: https.Agent | null = null;
+
+/**
+ * Manages TLS security state globally for the extension.
+ * Provides a centralized way to handle secure vs insecure connections
+ */
+export class TLSSecurityManager {
+    private static instance: TLSSecurityManager;
+    private isInsecureMode: boolean = false;
+    private originalNODE_TLS_REJECT_UNAUTHORIZED: string | undefined;
+
+    private constructor() {
+        this.originalNODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    }
+
+    public static getInstance(): TLSSecurityManager {
+        if (!TLSSecurityManager.instance) {
+            TLSSecurityManager.instance = new TLSSecurityManager();
+        }
+        return TLSSecurityManager.instance;
+    }
+
+    /**
+     * Enables insecure mode globally for the extension.
+     * This should only be called when the user explicitly chooses to proceed with insecure connections.
+     */
+    public enableInsecureMode(): void {
+        if (!this.isInsecureMode) {
+            logger.warn("[TLSSecurityManager] Enabling insecure TLS mode globally");
+            this.isInsecureMode = true;
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+        }
+    }
+
+    /**
+     * Disables insecure mode and restores original TLS settings.
+     * This should be called when logging out or when a new secure login is attempted.
+     */
+    public disableInsecureMode(): void {
+        if (this.isInsecureMode) {
+            logger.info("[TLSSecurityManager] Disabling insecure TLS mode and restoring original settings");
+            this.isInsecureMode = false;
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = this.originalNODE_TLS_REJECT_UNAUTHORIZED;
+        }
+    }
+
+    /**
+     * Checks if the extension is currently in insecure mode.
+     * @returns {boolean} True if insecure mode is enabled, false otherwise.
+     */
+    public isInInsecureMode(): boolean {
+        return this.isInsecureMode;
+    }
+
+    /**
+     * Resets the security manager to its initial state.
+     * This should be called when the extension is deactivated or when a new session starts.
+     */
+    public reset(): void {
+        this.disableInsecureMode();
+        this.originalNODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    }
+
+    /**
+     * Gets the current TLS security status for debugging purposes.
+     * @returns {string} A string describing the current TLS security state.
+     */
+    public getTLSSecurityManagerStatus(): string {
+        return `TLS Security Manager: ${this.isInsecureMode ? "INSECURE" : "SECURE"} mode, NODE_TLS_REJECT_UNAUTHORIZED=${process.env.NODE_TLS_REJECT_UNAUTHORIZED}`;
+    }
+}
 
 export interface TestBenchLoginResult {
     sessionToken: string;
@@ -110,6 +181,10 @@ export class PlayServerConnection {
             logger.debug("[testBenchConnection] Using pre-configured agent for the new session.");
             agentToUse = agentForNextConnection;
             agentForNextConnection = null;
+
+            if (agentToUse.options && agentToUse.options.rejectUnauthorized === false) {
+                logger.debug("[testBenchConnection] Using insecure agent for this session.");
+            }
         } else {
             logger.warn("[testBenchConnection] No pre-configured agent found. Defaulting to a new secure agent.");
             agentToUse = await createSecureHttpsAgent();
@@ -159,6 +234,33 @@ export class PlayServerConnection {
     }
 
     /**
+     * Creates a retry predicate that handles certificate errors appropriately based on the agent type.
+     * @returns A function that determines whether to retry based on the error.
+     */
+    private createRetryPredicate(): (error: any) => boolean {
+        const isInsecureAgent =
+            this.apiClient.defaults.httpsAgent &&
+            (this.apiClient.defaults.httpsAgent as any).options &&
+            (this.apiClient.defaults.httpsAgent as any).options.rejectUnauthorized === false;
+
+        return (error: any): boolean => {
+            if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+                return false;
+            }
+
+            if (isInsecureAgent) {
+                return true;
+            }
+
+            const certErrorCodes = ["UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_UNTRUSTED", "DEPTH_ZERO_SELF_SIGNED_CERT"];
+            if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
+                return false;
+            }
+            return true;
+        };
+    }
+
+    /**
      * Logs out the user from the TestBench server by invalidating the current session token.
      * This method now focuses on the server-side logout. UI and global state changes
      * should be handled by the AuthenticationProvider or session change listeners.
@@ -181,11 +283,15 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3,
-                2000
+                2000,
+                this.createRetryPredicate()
             );
 
             if (logoutResponse.status === 204) {
                 logger.debug("[testBenchConnection] Server logout successful.");
+                const tlsManager = TLSSecurityManager.getInstance();
+                tlsManager.disableInsecureMode();
+
                 setConnection(null);
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 this.sessionToken = "";
@@ -229,7 +335,8 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3, // Try 3 additional times
-                2000 // delayMs
+                2000, // delayMs
+                this.createRetryPredicate()
             );
 
             // Save the response from server to a file for analyzing the structure
@@ -297,7 +404,8 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 3, // maxRetries
-                2000 // delayMs
+                2000, // delayMs
+                this.createRetryPredicate()
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -1048,7 +1156,8 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" }
                     }),
                 5, // maxRetries
-                2000 // delayMs
+                2000, // delayMs
+                this.createRetryPredicate()
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
@@ -1407,26 +1516,17 @@ export async function loginToServerAndGetSessionDetails(
     /**
      * Performs login with retry logic depending on certificate validation and HTTP status codes.
      * @param agent The HTTPS agent to use for the request.
-     * @param isSecureAttempt A flag to determine the retry strategy.
      */
-    const performLogin = async (
-        agent: https.Agent,
-        isSecureAttempt: boolean
-    ): Promise<AxiosResponse<testBenchTypes.LoginResponse>> => {
+    const performLogin = async (agent: https.Agent): Promise<AxiosResponse<testBenchTypes.LoginResponse>> => {
         const shouldRetryPredicate = (error: any): boolean => {
             if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
                 return false;
             }
 
-            if (isSecureAttempt) {
-                const certErrorCodes = [
-                    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
-                    "CERT_UNTRUSTED",
-                    "DEPTH_ZERO_SELF_SIGNED_CERT"
-                ];
-                if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
-                    return false;
-                }
+            // Don't retry on certificate errors for secure attempts
+            const certErrorCodes = ["UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_UNTRUSTED", "DEPTH_ZERO_SELF_SIGNED_CERT"];
+            if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
+                return false;
             }
             return true;
         };
@@ -1448,7 +1548,7 @@ export async function loginToServerAndGetSessionDetails(
 
     try {
         const secureAgent = await createSecureHttpsAgent();
-        const loginResponse = await performLogin(secureAgent, true);
+        const loginResponse = await performLogin(secureAgent);
         if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
             logger.info(`[testBenchConnection] Login successful for user ${username} on ${serverName}.`);
             agentForNextConnection = secureAgent;
@@ -1478,18 +1578,52 @@ export async function loginToServerAndGetSessionDetails(
                     `[testBenchConnection] User chose to bypass SSL validation for this login attempt to ${serverName}.`
                 );
 
-                const insecureAgent = new https.Agent({ rejectUnauthorized: false });
-                const loginResponse = await performLogin(insecureAgent, false);
-                if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
-                    logger.info(
-                        `[testBenchConnection] Insecure login successful for user ${username} on ${serverName}.`
+                const tlsManager = TLSSecurityManager.getInstance();
+                tlsManager.enableInsecureMode();
+
+                try {
+                    logger.debug(`[testBenchConnection] Attempting insecure connection to ${serverName}:${portNumber}`);
+
+                    const insecureAgent = new https.Agent({
+                        rejectUnauthorized: false,
+                        checkServerIdentity: () => undefined
+                    });
+
+                    const insecureLoginResponse = await axios.post(loginURL, requestBody, {
+                        headers: {
+                            accept: "application/vnd.testbench+json",
+                            "Content-Type": "application/vnd.testbench+json"
+                        },
+                        httpsAgent: insecureAgent,
+                        timeout: 10000,
+                        validateStatus: () => true // Accept any status code
+                    });
+
+                    if (insecureLoginResponse.status === 201 && insecureLoginResponse.data?.sessionToken) {
+                        logger.info(
+                            `[testBenchConnection] Insecure login successful for user ${username} on ${serverName}.`
+                        );
+                        agentForNextConnection = insecureAgent;
+                        return {
+                            sessionToken: insecureLoginResponse.data.sessionToken,
+                            userKey: insecureLoginResponse.data.userKey,
+                            loginName: insecureLoginResponse.data.login
+                        };
+                    } else {
+                        logger.error(
+                            `[testBenchConnection] Insecure login returned status ${insecureLoginResponse.status}`
+                        );
+                    }
+                } catch (insecureError: any) {
+                    logger.error(
+                        `[testBenchConnection] Insecure login attempt failed for ${username} on ${serverName}:`,
+                        insecureError.message
                     );
-                    agentForNextConnection = insecureAgent;
-                    return {
-                        sessionToken: loginResponse.data.sessionToken,
-                        userKey: loginResponse.data.userKey,
-                        loginName: loginResponse.data.login
-                    };
+                    if (axios.isAxiosError(insecureError)) {
+                        logger.error(`[testBenchConnection] Insecure error code: ${insecureError.code}`);
+                        logger.error(`[testBenchConnection] Insecure error response:`, insecureError.response?.data);
+                        logger.error(`[testBenchConnection] Insecure error config:`, insecureError.config);
+                    }
                 }
             }
             return null;
