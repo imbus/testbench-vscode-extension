@@ -105,38 +105,40 @@ export interface TestBenchLoginResult {
 }
 
 /**
- * Creates a secure HTTPS agent that trusts default system CAs and a custom bundled CA.
+ * Creates a secure HTTPS agent that trusts default system CAs and optionally a custom bundled CA.
+ * Falls back to using only default CAs if the custom certificate file is not found.
  * @returns {Promise<https.Agent>} A configured https.Agent.
  */
 async function createSecureHttpsAgent(): Promise<https.Agent> {
     try {
+        const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
         const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
         if (!certificatePathSetting) {
-            throw new Error(
-                "Certificate path is not configured. Please set the 'testbenchExtension.certificatePath' setting."
-            );
+            logger.debug("[testBenchConnection] No certificate path configured. Using default system CAs only.");
+            return new https.Agent({ ca: defaultCAs });
         }
 
         const absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
         if (!absoluteCertPath) {
-            throw new Error(
-                `Certificate path "${certificatePathSetting}" could not be resolved or file does not exist.`
+            logger.debug(
+                `[testBenchConnection] Certificate path "${certificatePathSetting}" could not be resolved or file does not exist. Falling back to default system CAs.`
             );
+            return new https.Agent({ ca: defaultCAs });
         }
 
         const customCA = fs.readFileSync(absoluteCertPath);
-        const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
         const combinedCAs = [...defaultCAs, customCA];
 
+        logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
         return new https.Agent({
             ca: combinedCAs
         });
     } catch (error) {
-        logger.error(
-            "[testBenchConnection] Failed to create secure HTTPS agent. The certificate file might be missing or invalid.",
+        logger.warn(
+            "[testBenchConnection] Failed to read custom certificate file. Falling back to default system CAs.",
             error
         );
-        throw error;
+        return new https.Agent();
     }
 }
 
@@ -1514,36 +1516,17 @@ export async function loginToServerAndGetSessionDetails(
     logger.debug(`[testBenchConnection] Sending login request to: ${loginURL} for user ${username}`);
 
     /**
-     * Performs login with retry logic depending on certificate validation and HTTP status codes.
+     * Performs login without retry logic.
      * @param agent The HTTPS agent to use for the request.
      */
     const performLogin = async (agent: https.Agent): Promise<AxiosResponse<testBenchTypes.LoginResponse>> => {
-        const shouldRetryPredicate = (error: any): boolean => {
-            if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-                return false;
-            }
-
-            // Don't retry on certificate errors for secure attempts
-            const certErrorCodes = ["UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_UNTRUSTED", "DEPTH_ZERO_SELF_SIGNED_CERT"];
-            if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
-                return false;
-            }
-            return true;
-        };
-
-        return withRetry(
-            () =>
-                axios.post(loginURL, requestBody, {
-                    headers: {
-                        accept: "application/vnd.testbench+json",
-                        "Content-Type": "application/vnd.testbench+json"
-                    },
-                    httpsAgent: agent
-                }),
-            3, // maxRetries
-            2000, // delayMs
-            shouldRetryPredicate
-        );
+        return axios.post(loginURL, requestBody, {
+            headers: {
+                accept: "application/vnd.testbench+json",
+                "Content-Type": "application/vnd.testbench+json"
+            },
+            httpsAgent: agent
+        });
     };
 
     try {
@@ -1564,7 +1547,9 @@ export async function loginToServerAndGetSessionDetails(
         const certErrorCodes = ["UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_UNTRUSTED", "DEPTH_ZERO_SELF_SIGNED_CERT"];
 
         if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
-            logger.warn(`[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}`);
+            logger.warn(
+                `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
+            );
 
             const proceedAnywayPromptText = "Proceed Anyway (insecure)";
             const choice = await vscode.window.showWarningMessage(
@@ -1574,9 +1559,7 @@ export async function loginToServerAndGetSessionDetails(
             );
 
             if (choice === proceedAnywayPromptText) {
-                logger.warn(
-                    `[testBenchConnection] User chose to bypass SSL validation for this login attempt to ${serverName}.`
-                );
+                logger.debug(`[testBenchConnection] User chose to proceed with insecure connection to ${serverName}.`);
 
                 const tlsManager = TLSSecurityManager.getInstance();
                 tlsManager.enableInsecureMode();
