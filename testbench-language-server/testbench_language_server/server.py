@@ -39,7 +39,9 @@ from testbench2robotframework.cli import fetch_results, get_tb2robot_file_config
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
 from testbench_language_server import __version__
-from testbench_language_server.testbench_api.testbench_resource_connection import TestBenchResourceConnection
+from testbench_language_server.testbench_api.testbench_resource_connection import (
+    TestBenchResourceConnection,
+)
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
 from .file_edits import (
@@ -108,6 +110,7 @@ from .testbench_resource.resource_utils import (
     get_keyword_section,
     get_keyword_section_position,
     get_keyword_tags,
+    get_setting_section,
     get_setting_section_position,
     get_testbench_context_position,
     get_variables_section,
@@ -614,45 +617,49 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     create_kw_section = not bool(get_keyword_section(existing_resource.file))
     if create_kw_section:
         if get_variables_section(existing_resource.file):
-            _, _, kw_section_start, _ = get_variables_section_position(existing_resource.file)
+            kw_section_start = get_variables_section_position(existing_resource.file)[-2]
+        elif get_setting_section(existing_resource.file):
+            kw_section_start = get_setting_section_position(existing_resource.file)[-2]
         else:
-            _, _, kw_section_start, _ = get_setting_section_position(existing_resource.file)
+            kw_section_start = get_testbench_context_position(existing_resource.file)[-2]
         edits.extend(keyword_section_edit(kw_section_start, change_identifier))
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
     visited_keywords = []
-    for new_keyword in new_resource.keyword_section.body:
-        visited_keywords.append(get_kw_uid(new_keyword))
-        try:
-            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
-        except MultipleKeywordsWithUid as e:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
-            )
-            continue
-        except MultipleKeywordsWithName as e:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
-            )
-            continue
-        if not keyword_match:
-            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
-        else:
-            if get_keyword_tags(keyword_match) and any(
-                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
+    if new_resource and new_resource.keyword_section:
+        for new_keyword in new_resource.keyword_section.body:
+            visited_keywords.append(get_kw_uid(new_keyword))
+            try:
+                keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+            except MultipleKeywordsWithUid as e:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
+                )
+                continue
+            except MultipleKeywordsWithName as e:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+                )
+                continue
+            if not keyword_match:
+                edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+            else:
+                if get_keyword_tags(keyword_match) and any(
+                    tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
+                ):
+                    continue
+                edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+    if existing_resource and existing_resource.keyword_section:
+        for existing_keyword in existing_resource.keyword_section.body:
+            if get_kw_uid(existing_keyword) in visited_keywords:
+                continue
+            if get_keyword_tags(existing_keyword) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
             ):
                 continue
-            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
-    for existing_keyword in existing_resource.keyword_section.body:
-        if get_kw_uid(existing_keyword) in visited_keywords:
-            continue
-        if get_keyword_tags(existing_keyword) and any(
-            tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
-        ):
-            continue
-        edits.extend(create_keyword_edits(existing_keyword, None, change_identifier))
+            edits.extend(create_keyword_edits(existing_keyword, None, change_identifier))
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
