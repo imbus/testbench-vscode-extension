@@ -711,7 +711,12 @@ function createLanguageClient(
     const serverOptions = buildServerOptions(pythonPath, tbConnectionDetails, projectName, tovName);
     const clientOptions = buildClientOptions();
 
-    const newClientInstance = new LanguageClient("testbench-ls", "TestBench LS", serverOptions, clientOptions);
+    const newClientInstance = new LanguageClient(
+        "testbench-language-server",
+        "TestBench Language Server",
+        serverOptions,
+        clientOptions
+    );
 
     logger.debug(`[server] New LanguageClient instance created for ${projectName}/${tovName}, Op ID ${operationId}`);
 

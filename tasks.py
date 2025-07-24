@@ -31,4 +31,4 @@ def update_dependencies(c):
     
 @task
 def update_language_server(c):
-    shutil.copytree("packages/testbench-ls/testbench_ls", "bundled/libs/testbench_ls", dirs_exist_ok=True)
+    shutil.copytree("testbench-language-server/testbench_language_server", "bundled/libs/testbench_language_server", dirs_exist_ok=True)

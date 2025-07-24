@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "testbench-ls"
+name = "testbench-language-server"
 authors = [
     {name = "imbus AG", email = "support@imbus.de"},
 ]
@@ -36,16 +36,16 @@ dev = [
 ]
 
 [project.scripts]
-testbench-ls = "testbench_ls.cli:testbench_ls_cli"
+testbench-language-server = "testbench_language_server.cli:testbench_language_server"
 
 # [project.urls]
 # Repository = ""
 
 [tool.setuptools]
-packages = ["testbench_ls", "testbench_ls.testbench_api", "testbench_ls.testbench_resource"]
+packages = ["testbench_language_server", "testbench_language_server.testbench_api", "testbench_language_server.testbench_resource"]
 
 [tool.setuptools.dynamic]
-version = {attr = "testbench_ls.__version__"}
+version = {attr = "testbench_language_server.__version__"}
 
 
 [tool.check-manifest]

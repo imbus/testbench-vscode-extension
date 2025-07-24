@@ -38,8 +38,8 @@ from robot.api.parsing import Keyword, KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
-from testbench_ls import __version__
-from testbench_ls.testbench_api.testbench_resource_connection import TestBenchResourceConnection
+from testbench_language_server import __version__
+from testbench_language_server.testbench_api.testbench_resource_connection import TestBenchResourceConnection
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
 from .file_edits import (
