@@ -651,15 +651,15 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
                 ):
                     continue
                 edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
-    if existing_resource and existing_resource.keyword_section:
-        for existing_keyword in existing_resource.keyword_section.body:
-            if get_kw_uid(existing_keyword) in visited_keywords:
-                continue
-            if get_keyword_tags(existing_keyword) and any(
-                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
-            ):
-                continue
-            edits.extend(create_keyword_edits(existing_keyword, None, change_identifier))
+    # if existing_resource and existing_resource.keyword_section:
+    #     for existing_keyword in existing_resource.keyword_section.body:
+    #         if get_kw_uid(existing_keyword) in visited_keywords:
+    #             continue
+    #         if get_keyword_tags(existing_keyword) and any(
+    #             tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
+    #         ):
+    #             continue
+    #         edits.extend(create_keyword_edits(existing_keyword, None, change_identifier))
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
@@ -740,8 +740,8 @@ def create_keyword_edits(
         name_edit = AnnotatedTextEdit(
             change_identifier,
             range=Range(
-                start=Position(existing_keyword.lineno - 1, 0),
-                end=Position(existing_keyword.lineno - 1, len(existing_keyword.name)),
+                start=Position(existing_keyword.header.lineno - 1, existing_keyword.header.col_offset),
+                end=Position(existing_keyword.header.end_lineno - 1, existing_keyword.header.end_col_offset),
             ),
             new_text=new_keyword.name,
         )
