@@ -263,8 +263,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 targetConnection.serverName,
                 targetConnection.portNumber,
                 targetConnection.username,
-                passwordToUse,
-                this.context
+                passwordToUse
             );
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {

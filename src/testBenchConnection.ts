@@ -15,8 +15,15 @@ import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
 import { getLoginWebViewProvider, logger, setConnection } from "./extension";
 import * as utils from "./utils";
-import { ContextKeys, JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
+import {
+    ContextKeys,
+    JobTypes,
+    allExtensionCommands,
+    folderNameOfInternalTestbenchFolder,
+    ConfigKeys
+} from "./constants";
 import { ExecutionMode } from "./testBenchTypes";
+import { getExtensionSetting } from "./configuration";
 
 let agentForNextConnection: https.Agent | null = null;
 
@@ -28,14 +35,25 @@ export interface TestBenchLoginResult {
 
 /**
  * Creates a secure HTTPS agent that trusts default system CAs and a custom bundled CA.
- * @param {string} extensionPath The absolute path to the extension's root directory.
- * @returns {https.Agent} A configured https.Agent.
+ * @returns {Promise<https.Agent>} A configured https.Agent.
  */
-function createSecureHttpsAgent(extensionPath: string): https.Agent {
+async function createSecureHttpsAgent(): Promise<https.Agent> {
     try {
-        const certPath = path.join(extensionPath, "certs", "TestBenchServer.pem");
-        const customCA = fs.readFileSync(certPath);
+        const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
+        if (!certificatePathSetting) {
+            throw new Error(
+                "Certificate path is not configured. Please set the 'testbenchExtension.certificatePath' setting."
+            );
+        }
 
+        const absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
+        if (!absoluteCertPath) {
+            throw new Error(
+                `Certificate path "${certificatePathSetting}" could not be resolved or file does not exist.`
+            );
+        }
+
+        const customCA = fs.readFileSync(absoluteCertPath);
         const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
         const combinedCAs = [...defaultCAs, customCA];
 
@@ -44,10 +62,10 @@ function createSecureHttpsAgent(extensionPath: string): https.Agent {
         });
     } catch (error) {
         logger.error(
-            "[testBenchConnection] Failed to create secure HTTPS agent. The TestBenchServer.pem file might be missing.",
+            "[testBenchConnection] Failed to create secure HTTPS agent. The certificate file might be missing or invalid.",
             error
         );
-        return new https.Agent();
+        throw error;
     }
 }
 
@@ -57,7 +75,7 @@ function createSecureHttpsAgent(extensionPath: string): https.Agent {
  */
 export class PlayServerConnection {
     private baseURL: string;
-    private apiClient: AxiosInstance;
+    private apiClient!: AxiosInstance;
     private readonly keepAliveIntervalInSeconds: number = 4 * 60 * 1000; // 4 minutes
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
@@ -81,7 +99,12 @@ export class PlayServerConnection {
         logger.trace(
             `[testBenchConnection] Initializing server connection for server name: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
         );
+    }
 
+    /**
+     * Initializes the connection asynchronously, setting up the HTTPS agent and API client.
+     */
+    async initialize(): Promise<void> {
         let agentToUse: https.Agent;
         if (agentForNextConnection) {
             logger.debug("[testBenchConnection] Using pre-configured agent for the new session.");
@@ -89,7 +112,7 @@ export class PlayServerConnection {
             agentForNextConnection = null;
         } else {
             logger.warn("[testBenchConnection] No pre-configured agent found. Defaulting to a new secure agent.");
-            agentToUse = createSecureHttpsAgent(this.context.extensionPath);
+            agentToUse = await createSecureHttpsAgent();
         }
         this.apiClient = axios.create({
             baseURL: this.baseURL,
@@ -1360,15 +1383,13 @@ export async function extractDataFromReport(zipFilePath: string): Promise<{
  * @param {number} portNumber The server port.
  * @param {string} username The TestBench username.
  * @param {string} password The TestBench password.
- * @param {vscode.ExtensionContext} context - The extension context for path resolution.
  * @returns {Promise<TestBenchLoginResult | null>} A promise resolving to TestBenchLoginResult if successful, otherwise null.
  */
 export async function loginToServerAndGetSessionDetails(
     serverName: string,
     portNumber: number,
     username: string,
-    password: string,
-    context: vscode.ExtensionContext
+    password: string
 ): Promise<TestBenchLoginResult | null> {
     agentForNextConnection = null;
 
@@ -1426,7 +1447,7 @@ export async function loginToServerAndGetSessionDetails(
     };
 
     try {
-        const secureAgent = createSecureHttpsAgent(context.extensionPath);
+        const secureAgent = await createSecureHttpsAgent();
         const loginResponse = await performLogin(secureAgent, true);
         if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
             logger.info(`[testBenchConnection] Login successful for user ${username} on ${serverName}.`);

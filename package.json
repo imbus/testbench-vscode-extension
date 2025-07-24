@@ -246,6 +246,17 @@
                         "scope": "resource"
                     }
                 }
+            },
+            {
+                "title": "Connection",
+                "properties": {
+                    "testbenchExtension.certificatePath": {
+                        "type": "string",
+                        "description": "Path to the TestBench public certificate .pem file relative to the workspace location.",
+                        "order": 1,
+                        "scope": "resource"
+                    }
+                }
             }
         ],
         "commands": [

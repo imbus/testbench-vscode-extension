@@ -1068,7 +1068,7 @@ async function createNewConnection(
         session.accessToken,
         context
     );
-
+    await newConnection.initialize();
     setConnection(newConnection);
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
     getLoginWebViewProvider()?.updateWebviewHTMLContent();
