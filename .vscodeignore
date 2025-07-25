@@ -29,3 +29,16 @@ requirements.txt
 .ruff_cache/**
 .whl
 certs/**
+*.whl
+*.pem
+*.crt
+.nycrc.json
+.nycrc
+commitlint.config.js
+*.log
+noxfile.py
+release.config.js
+tasks.py
+eslint.config.mjs
+tsconfig.tsbuildinfo
+webpack.test.config.js
