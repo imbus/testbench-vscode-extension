@@ -3,6 +3,8 @@ import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./const
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions, State } from "vscode-languageclient/node";
 import { connection, logger } from "./extension";
+import { ConfigKeys } from "./constants";
+import { getExtensionSetting } from "./configuration";
 
 interface TbConnectionDetails {
     serverName: string;
@@ -236,15 +238,31 @@ function buildServerOptions(
         projectName,
         tovName || ""
     ];
-
+    const proxySettings: { [key: string]: any } = {};
+    const http_config = vscode.workspace.getConfiguration("http");
+    const proxy_url = http_config.get<string>("proxy");
+    const no_proxy = http_config.get<string[]>("noProxy");
+    if (proxy_url) {
+        proxySettings["HTTP_PROXY"] = proxy_url;
+        proxySettings["HTTPS_PROXY"] = proxy_url;
+    }
+    if (no_proxy) {
+        proxySettings["NO_PROXY"] = no_proxy;
+    }
     return {
         run: {
             command: pythonPath,
-            args: [LANGUAGE_SERVER_SCRIPT_PATH, ...commonArgs]
+            args: [LANGUAGE_SERVER_SCRIPT_PATH, ...commonArgs],
+            options: {
+                env: proxySettings
+            }
         },
         debug: {
             command: pythonPath,
-            args: [LANGUAGE_SERVER_DEBUG_PATH, ...commonArgs]
+            args: [LANGUAGE_SERVER_DEBUG_PATH, ...commonArgs],
+            options: {
+                env: proxySettings
+            }
         }
     };
 }

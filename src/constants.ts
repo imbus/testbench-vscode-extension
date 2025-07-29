@@ -69,7 +69,9 @@ export const ConfigKeys = {
     TB2ROBOT_RESOURCE_MAPPING: "resourceMapping",
     TB2ROBOT_OUTPUT_XML_PATH: "outputXmlFilePath",
     OPEN_TESTING_VIEW_AFTER_GENERATION: "openTestingViewAfterGeneration",
-    CERTIFICATE_PATH: "certificatePath"
+    CERTIFICATE_PATH: "certificatePath",
+    PROXY_URL: "proxy"
+    // PROXY_STRICT_SSL: "proxyStrictSSL",
 } as const;
 
 // --- Context Keys ---

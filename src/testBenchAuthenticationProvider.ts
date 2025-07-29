@@ -268,7 +268,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
                 await connectionManager.clearActiveConnection(this.context);
-                throw new Error("Login to TestBench server failed. Check credentials or server details.");
+                throw new Error("Login to TestBench failed.");
             }
             const initialPasswordFromStorage: string | undefined = await connectionManager.getPasswordForConnection(
                 this.context,

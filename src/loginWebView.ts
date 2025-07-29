@@ -274,7 +274,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             } else {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
-                    text: "Login failed. Please check credentials or server details."
+                    text: "TestBench Login Failed."
                 });
             }
         } catch (error: any) {

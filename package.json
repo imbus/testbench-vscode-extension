@@ -59,7 +59,7 @@
                     "testbenchExtension.testBenchLogger": {
                         "type": "string",
                         "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
-                        "default": "Trace",
+                        "default": "Info",
                         "order": 9,
                         "enum": [
                             "No logging",
@@ -141,6 +141,7 @@
                         "type": "string",
                         "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location.",
                         "order": 16,
+                        "default": "resources",
                         "scope": "window"
                     },
                     "testbenchExtension.libraryMarker": {
@@ -1084,6 +1085,7 @@
         "axios": "^1.10.0",
         "base-64": "^1.0.0",
         "flatted": "^3.3.3",
+        "https-proxy-agent": "^7.0.6",
         "jszip": "^3.10.1",
         "regex-translator": "^0.2.8",
         "uuid": "^11.1.0",

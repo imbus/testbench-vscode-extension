@@ -19,7 +19,7 @@ def testbench_ls_cli(
     login_name,
     session_token,
     testbench_project,
-    testbench_tov,
+    testbench_tov
 ):
     """TestBench Language Server..."""
     start_language_server(
