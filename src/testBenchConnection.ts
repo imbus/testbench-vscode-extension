@@ -26,6 +26,7 @@ import {
 } from "./constants";
 import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionSetting } from "./configuration";
+import { log } from "console";
 
 let agentForNextConnection: https.Agent | null = null;
 
@@ -122,39 +123,28 @@ async function createSecureHttpsAgent(): Promise<HttpsProxyAgent<string> | https
     const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
     const proxy_url = http_config.get<string>(ConfigKeys.PROXY_URL);
     const agent_url: string = proxy_url ?? "";
-    // const proxy_strict_ssl = http_config.get<boolean>(ConfigKeys.PROXY_STRICT_SSL);
-
     const proxy_agent = await createProxyHttpsAgent(agent_url);
-    // if (proxy_agent && proxy_strict_ssl === false) {
-    //     proxy_agent.options.rejectUnauthorized = false;
-    // }
-    // else{
-    //     proxy_agent.options.rejectUnauthorized = true;
-    // }
     let absoluteCertPath: string | Buffer | null = null;
     if (certificatePathSetting) {
         absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
     } else {
         const certPath = process.env.NODE_EXTRA_CA_CERTS;
         if (!certPath) {
-            logger.debug("NODE_EXTRA_CA_CERTS is not set");
+            logger.debug("Environment variable 'NODE_EXTRA_CA_CERTS' is not set.");
         } else {
             absoluteCertPath = fs.readFileSync(certPath);
         }
     }
     if (!absoluteCertPath) {
-        logger.debug(
-            `[testBenchConnection] Certificate path "${certificatePathSetting}" could not be resolved or file does not exist. Falling back to default system CAs.`
-        );
+        logger.debug(`Certificate path "${certificatePathSetting}" could not be resolved or file does not exist.`);
         proxy_agent.options.ca = defaultCAs;
+        logger.debug("Using default system CAs only.");
         return proxy_agent;
     }
-
     const customCA = fs.readFileSync(absoluteCertPath);
-    // const combinedCAs = [customCA];
     const combinedCAs = [...defaultCAs, customCA];
 
-    logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
+    logger.debug("Using combined CAs (default system CAs + custom CA).");
     proxy_agent.options.ca = combinedCAs;
     return proxy_agent;
 }
@@ -1574,8 +1564,6 @@ export async function loginToServerAndGetSessionDetails(
         }
         return null;
     } catch (error: any) {
-        // vscode.window.showErrorMessage(`${error.code}:${error.message}`);
-        // return null;
         const certErrorCodes = [
             "SELF_SIGNED_CERT_IN_CHAIN",
             "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
@@ -1584,26 +1572,22 @@ export async function loginToServerAndGetSessionDetails(
         ];
 
         if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
-            //     logger.warn(
-            //         `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
-            //     );
-
-            const proceedAnywayPromptText = "Proceed Anyway";
+            logger.warn(
+                `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
+            );
+            const proceedAnywayOption = "Proceed Anyway";
             const choice = await vscode.window.showWarningMessage(
                 `Connection Error: Untrusted Certificate. This could expose you to security risks.\n${error}`,
                 { modal: true },
-                proceedAnywayPromptText
+                proceedAnywayOption
             );
 
-            if (choice === proceedAnywayPromptText) {
+            if (choice === proceedAnywayOption) {
                 logger.debug(`[testBenchConnection] User chose to proceed with insecure connection to ${serverName}.`);
-
                 const tlsManager = TLSSecurityManager.getInstance();
                 tlsManager.enableInsecureMode();
-
                 try {
                     logger.debug(`[testBenchConnection] Attempting insecure connection to ${serverName}:${portNumber}`);
-
                     let insecureAgent = await createSecureHttpsAgent();
                     insecureAgent.options.rejectUnauthorized = false;
                     insecureAgent.options.checkServerIdentity = () => undefined;
@@ -1617,7 +1601,6 @@ export async function loginToServerAndGetSessionDetails(
                         validateStatus: () => true,
                         proxy: false
                     });
-
                     if (insecureLoginResponse.status === 201 && insecureLoginResponse.data?.sessionToken) {
                         logger.info(
                             `[testBenchConnection] Insecure login successful for user ${username} on ${serverName}.`
@@ -1652,16 +1635,7 @@ export async function loginToServerAndGetSessionDetails(
             return null;
         } else {
             vscode.window.showErrorMessage(`${error} ${error.code}: ${error.message}`);
-            // if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            //     logger.error(
-            //         `[testBenchConnection] Login failed for ${username} to ${serverName}: Invalid credentials.`
-            //     );
-            // } else {
-            //     logger.error(
-            //         `[testBenchConnection] Error during login for ${username} to ${serverName}:`,
-            //         error.message
-            //     );
-            // }
+            logger.error(`[testBenchConnection] Error during login for ${username} to ${serverName}:`, error.message);
             return null;
         }
     }
