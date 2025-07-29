@@ -311,7 +311,8 @@ export async function getJobStatus(
             apiClient.get(getJobStatusUrl, {
                 headers: {
                     accept: "application/vnd.testbench+json"
-                }
+                },
+                proxy: false
             }),
         3, // max retries
         2000, // delay in ms between retries
@@ -376,7 +377,8 @@ export async function downloadReport(
                     responseType: "arraybuffer", // Expecting binary data
                     headers: {
                         accept: "application/vnd.testbench+json"
-                    }
+                    },
+                    proxy: false
                 }),
             3, // maxRetries
             2000, // delayMs

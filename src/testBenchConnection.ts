@@ -11,6 +11,7 @@ import * as fs from "fs";
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
 import * as base64 from "base-64";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
@@ -104,42 +105,58 @@ export interface TestBenchLoginResult {
     loginName: string;
 }
 
+async function createProxyHttpsAgent(proxy_url: string): Promise<HttpsProxyAgent<string> | https.Agent> {
+    if (!proxy_url) {
+        return new https.Agent();
+    }
+    return new HttpsProxyAgent(proxy_url);
+}
 /**
  * Creates a secure HTTPS agent that trusts default system CAs and optionally a custom bundled CA.
  * Falls back to using only default CAs if the custom certificate file is not found.
  * @returns {Promise<https.Agent>} A configured https.Agent.
  */
-async function createSecureHttpsAgent(): Promise<https.Agent> {
-    try {
-        const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
-        const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
-        if (!certificatePathSetting) {
-            logger.debug("[testBenchConnection] No certificate path configured. Using default system CAs only.");
-            return new https.Agent({ ca: defaultCAs });
+async function createSecureHttpsAgent(): Promise<HttpsProxyAgent<string> | https.Agent> {
+    const http_config = vscode.workspace.getConfiguration("http");
+    const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
+    const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
+    const proxy_url = http_config.get<string>(ConfigKeys.PROXY_URL);
+    const agent_url: string = proxy_url ?? "";
+    // const proxy_strict_ssl = http_config.get<boolean>(ConfigKeys.PROXY_STRICT_SSL);
+
+    const proxy_agent = await createProxyHttpsAgent(agent_url);
+    // if (proxy_agent && proxy_strict_ssl === false) {
+    //     proxy_agent.options.rejectUnauthorized = false;
+    // }
+    // else{
+    //     proxy_agent.options.rejectUnauthorized = true;
+    // }
+    let absoluteCertPath: string | Buffer | null = null;
+    if (certificatePathSetting) {
+        absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
+    } else {
+        const certPath = process.env.NODE_EXTRA_CA_CERTS;
+        if (!certPath) {
+            logger.debug("NODE_EXTRA_CA_CERTS is not set");
+        } else {
+            absoluteCertPath = fs.readFileSync(certPath);
         }
-
-        const absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
-        if (!absoluteCertPath) {
-            logger.debug(
-                `[testBenchConnection] Certificate path "${certificatePathSetting}" could not be resolved or file does not exist. Falling back to default system CAs.`
-            );
-            return new https.Agent({ ca: defaultCAs });
-        }
-
-        const customCA = fs.readFileSync(absoluteCertPath);
-        const combinedCAs = [...defaultCAs, customCA];
-
-        logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
-        return new https.Agent({
-            ca: combinedCAs
-        });
-    } catch (error) {
-        logger.warn(
-            "[testBenchConnection] Failed to read custom certificate file. Falling back to default system CAs.",
-            error
-        );
-        return new https.Agent();
     }
+    if (!absoluteCertPath) {
+        logger.debug(
+            `[testBenchConnection] Certificate path "${certificatePathSetting}" could not be resolved or file does not exist. Falling back to default system CAs.`
+        );
+        proxy_agent.options.ca = defaultCAs;
+        return proxy_agent;
+    }
+
+    const customCA = fs.readFileSync(absoluteCertPath);
+    // const combinedCAs = [customCA];
+    const combinedCAs = [...defaultCAs, customCA];
+
+    logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
+    proxy_agent.options.ca = combinedCAs;
+    return proxy_agent;
 }
 
 /**
@@ -194,7 +211,8 @@ export class PlayServerConnection {
         this.apiClient = axios.create({
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
-            httpsAgent: agentToUse
+            httpsAgent: agentToUse,
+            proxy: false
         });
 
         if (this.sessionToken) {
@@ -282,7 +300,8 @@ export class PlayServerConnection {
             const logoutResponse: AxiosResponse = await withRetry(
                 () =>
                     this.apiClient.delete(`/login/session/v1`, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                        headers: { accept: "application/vnd.testbench+json" },
+                        proxy: false
                     }),
                 3,
                 2000,
@@ -334,7 +353,8 @@ export class PlayServerConnection {
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
                     this.apiClient.get(projectsURL, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                        headers: { accept: "application/vnd.testbench+json" },
+                        proxy: false
                     }),
                 3, // Try 3 additional times
                 2000, // delayMs
@@ -403,7 +423,8 @@ export class PlayServerConnection {
             const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await withRetry(
                 () =>
                     this.apiClient.get(projectTreeURL, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                        headers: { accept: "application/vnd.testbench+json" },
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
@@ -488,6 +509,7 @@ export class PlayServerConnection {
                     Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
+                proxy: false,
                 httpsAgent: this.apiClient.defaults.httpsAgent
             });
 
@@ -591,6 +613,7 @@ export class PlayServerConnection {
                     Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
+                proxy: false,
                 httpsAgent: this.apiClient.defaults.httpsAgent
             });
 
@@ -682,7 +705,8 @@ export class PlayServerConnection {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
-                        }
+                        },
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
@@ -772,7 +796,8 @@ export class PlayServerConnection {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
-                        }
+                        },
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
@@ -863,7 +888,8 @@ export class PlayServerConnection {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
-                        }
+                        },
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
@@ -947,7 +973,8 @@ export class PlayServerConnection {
                             accept: "application/json"
                         },
                         // Handle all status codes manually
-                        validateStatus: () => true
+                        validateStatus: () => true,
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
@@ -1040,6 +1067,7 @@ export class PlayServerConnection {
                             "Content-Type": "application/json",
                             accept: "application/json"
                         },
+                        proxy: false,
                         validateStatus: () => true
                     }),
                 3, // maxRetries
@@ -1155,7 +1183,8 @@ export class PlayServerConnection {
             await withRetry(
                 () =>
                     this.apiClient.get(`/login/session/v1`, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                        headers: { accept: "application/vnd.testbench+json" },
+                        proxy: false
                     }),
                 5, // maxRetries
                 2000, // delayMs
@@ -1525,6 +1554,7 @@ export async function loginToServerAndGetSessionDetails(
                 accept: "application/vnd.testbench+json",
                 "Content-Type": "application/vnd.testbench+json"
             },
+            proxy: false,
             httpsAgent: agent
         });
     };
@@ -1544,16 +1574,23 @@ export async function loginToServerAndGetSessionDetails(
         }
         return null;
     } catch (error: any) {
-        const certErrorCodes = ["UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_UNTRUSTED", "DEPTH_ZERO_SELF_SIGNED_CERT"];
+        // vscode.window.showErrorMessage(`${error.code}:${error.message}`);
+        // return null;
+        const certErrorCodes = [
+            "SELF_SIGNED_CERT_IN_CHAIN",
+            "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+            "CERT_UNTRUSTED",
+            "DEPTH_ZERO_SELF_SIGNED_CERT"
+        ];
 
         if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
-            logger.warn(
-                `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
-            );
+            //     logger.warn(
+            //         `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
+            //     );
 
-            const proceedAnywayPromptText = "Proceed Anyway (insecure)";
+            const proceedAnywayPromptText = "Proceed Anyway";
             const choice = await vscode.window.showWarningMessage(
-                `The security certificate for "${serverName}" is not trusted. This could expose you to security risks.`,
+                `Connection Error: Untrusted Certificate. This could expose you to security risks.\n${error}`,
                 { modal: true },
                 proceedAnywayPromptText
             );
@@ -1567,11 +1604,9 @@ export async function loginToServerAndGetSessionDetails(
                 try {
                     logger.debug(`[testBenchConnection] Attempting insecure connection to ${serverName}:${portNumber}`);
 
-                    const insecureAgent = new https.Agent({
-                        rejectUnauthorized: false,
-                        checkServerIdentity: () => undefined
-                    });
-
+                    let insecureAgent = await createSecureHttpsAgent();
+                    insecureAgent.options.rejectUnauthorized = false;
+                    insecureAgent.options.checkServerIdentity = () => undefined;
                     const insecureLoginResponse = await axios.post(loginURL, requestBody, {
                         headers: {
                             accept: "application/vnd.testbench+json",
@@ -1579,7 +1614,8 @@ export async function loginToServerAndGetSessionDetails(
                         },
                         httpsAgent: insecureAgent,
                         timeout: 10000,
-                        validateStatus: () => true // Accept any status code
+                        validateStatus: () => true,
+                        proxy: false
                     });
 
                     if (insecureLoginResponse.status === 201 && insecureLoginResponse.data?.sessionToken) {
@@ -1596,8 +1632,12 @@ export async function loginToServerAndGetSessionDetails(
                         logger.error(
                             `[testBenchConnection] Insecure login returned status ${insecureLoginResponse.status}`
                         );
+                        vscode.window.showErrorMessage(
+                            `ERR_BAD_RESPONSE: Request failed with status code ${insecureLoginResponse.status}`
+                        );
                     }
                 } catch (insecureError: any) {
+                    vscode.window.showErrorMessage(`${insecureError.code}: ${insecureError.message}`);
                     logger.error(
                         `[testBenchConnection] Insecure login attempt failed for ${username} on ${serverName}:`,
                         insecureError.message
@@ -1611,16 +1651,17 @@ export async function loginToServerAndGetSessionDetails(
             }
             return null;
         } else {
-            if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-                logger.error(
-                    `[testBenchConnection] Login failed for ${username} to ${serverName}: Invalid credentials.`
-                );
-            } else {
-                logger.error(
-                    `[testBenchConnection] Error during login for ${username} to ${serverName}:`,
-                    error.message
-                );
-            }
+            vscode.window.showErrorMessage(`${error} ${error.code}: ${error.message}`);
+            // if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+            //     logger.error(
+            //         `[testBenchConnection] Login failed for ${username} to ${serverName}: Invalid credentials.`
+            //     );
+            // } else {
+            //     logger.error(
+            //         `[testBenchConnection] Error during login for ${username} to ${serverName}:`,
+            //         error.message
+            //     );
+            // }
             return null;
         }
     }
