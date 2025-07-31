@@ -127,6 +127,8 @@ from .testbench_resource.testbench_resource_model import (
     get_kw_uid,
 )
 
+from robot.api.parsing import KeywordName
+
 
 class TestBenchLanguageServer(LanguageServer):
     def __init__(self):
@@ -740,10 +742,12 @@ def create_keyword_edits(
         name_edit = AnnotatedTextEdit(
             change_identifier,
             range=Range(
-                start=Position(existing_keyword.header.lineno - 1, existing_keyword.header.col_offset),
-                end=Position(existing_keyword.header.end_lineno - 1, existing_keyword.header.end_col_offset),
+                start=Position(
+                    existing_keyword.header.lineno - 1, existing_keyword.header.col_offset
+                ),
+                end=Position(existing_keyword.header.end_lineno, 0),
             ),
-            new_text=new_keyword.name,
+            new_text=robot_model_to_string(KeywordName.from_params(new_keyword.name)),
         )
         edits.append(name_edit)
 

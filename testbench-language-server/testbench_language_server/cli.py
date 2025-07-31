@@ -14,12 +14,7 @@ from .server import start_language_server
 @click.argument("testbench-project")
 @click.argument("testbench-tov")
 def testbench_ls_cli(
-    server_name,
-    server_port,
-    login_name,
-    session_token,
-    testbench_project,
-    testbench_tov
+    server_name, server_port, login_name, session_token, testbench_project, testbench_tov
 ):
     """TestBench Language Server..."""
     start_language_server(
