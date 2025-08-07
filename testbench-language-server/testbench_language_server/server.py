@@ -202,6 +202,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         "log-suite-numbering": kwargs.get("log_suite_numbering"),
         "output-directory": pathlib.Path(kwargs.get("output_directory")).as_posix(),
         "resource-directory": pathlib.Path(kwargs.get("resource_directory"), "").as_posix(),
+        "resource-directory-regex": kwargs.get("resource_directory_regex", ""),
         "resource-regex": list(
             rf"(?:.*\.)?(?P<resourceName>[^.]+?)\s*{re.escape(marker)}.*"
             for marker in kwargs.get("resource_marker", ())
