@@ -667,7 +667,11 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
     edit = create_workspace_edit(
-        document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL, needs_user_confirmation
+        document_uri,
+        edits,
+        change_identifier,
+        KEYWORD_INTERFACE_CHANGE_LABEL,
+        needs_user_confirmation,
     )
 
     ls.lsp.send_request(
@@ -845,7 +849,9 @@ def create_workspace_edit(
             )
         ],
         change_annotations={
-            change_identifier: ChangeAnnotation(change_label, needs_confirmation=needs_user_confirmation)
+            change_identifier: ChangeAnnotation(
+                change_label, needs_confirmation=needs_user_confirmation
+            )
         },
     )
 
