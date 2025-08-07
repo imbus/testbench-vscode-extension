@@ -651,6 +651,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             await this.updateParentIcons(targetItem);
             this.refreshItemWithParents(targetItem);
 
+            const uri = vscode.Uri.file(resourcePath);
+            vscode.commands.executeCommand("testbench_ls.pullSubdivision", uri.toString(), uid, false);
             if (config.successMessages?.created) {
                 vscode.window.showInformationMessage(config.successMessages.created);
             }

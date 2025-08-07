@@ -311,7 +311,7 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
         command=Command(
             title=PULL_SUBDIVISON_TITLE,
             command=COMMAND_PULL_SUBDIVISION,
-            arguments=[document_uri, testbench_resource.tb_subdivision_uid],
+            arguments=[document_uri, testbench_resource.tb_subdivision_uid, True],
         ),
     )
     code_lenses.append(pull_resource_lens)
@@ -607,7 +607,7 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
 def pull_testbench_subdivision(ls: LanguageServer, args):
-    document_uri, subdivision_uid, *_ = args
+    document_uri, subdivision_uid, needs_user_confirmation, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
     if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
@@ -667,7 +667,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
     edit = create_workspace_edit(
-        document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
+        document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL, needs_user_confirmation
     )
 
     ls.lsp.send_request(
@@ -835,6 +835,7 @@ def create_workspace_edit(
     edits: list[AnnotatedTextEdit],
     change_identifier: ChangeAnnotationIdentifier,
     change_label: str,
+    needs_user_confirmation: bool = True,
 ) -> WorkspaceEdit:
     return WorkspaceEdit(
         document_changes=[
@@ -844,7 +845,7 @@ def create_workspace_edit(
             )
         ],
         change_annotations={
-            change_identifier: ChangeAnnotation(change_label, needs_confirmation=True)
+            change_identifier: ChangeAnnotation(change_label, needs_confirmation=needs_user_confirmation)
         },
     )
 
