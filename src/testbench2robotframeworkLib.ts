@@ -35,6 +35,9 @@ export class tb2robotLib {
             ConfigKeys.TB2ROBOT_LOG_SUITE_NUMBERING
         );
         const outputDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
+        const resourceDirectoryRegex: string | undefined = getExtensionSetting<string>(
+            ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_REGEX
+        );
         const resourceDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
         const resourceMapping: string[] | undefined = getExtensionSetting<string[]>(
             ConfigKeys.TB2ROBOT_RESOURCE_MAPPING
@@ -52,6 +55,7 @@ export class tb2robotLib {
             log_suite_numbering: logSuiteNumbering,
             output_directory: outputDirectory,
             resource_directory: resourceDirectory,
+            resource_directory_regex: resourceDirectoryRegex,
             resource_marker: resourceMarker,
             resource_root: resourceRoot,
             library_mapping: libraryMapping,
