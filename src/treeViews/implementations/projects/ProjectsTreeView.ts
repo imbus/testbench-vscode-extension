@@ -296,7 +296,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param projectKey The key of the selected project
      */
     private async handleProjectSelection(projectKey: string): Promise<void> {
-        this.logger.info(`[ProjectsTreeView] Project selected: ${projectKey}`);
+        this.logger.trace(`[ProjectsTreeView] Project selected: ${projectKey}`);
 
         this.stateManager.setState({
             selectedProjectKey: projectKey

@@ -107,7 +107,7 @@ export class MarkingModule implements TreeViewModule {
             },
             timestamp: Date.now()
         });
-        this.context.logger.info(`[MarkingModule] Marked item: ${item.label}`);
+        this.context.logger.trace(`[MarkingModule] Marked item: ${item.label}`);
     }
 
     /**
@@ -145,7 +145,7 @@ export class MarkingModule implements TreeViewModule {
             this.markItem(descendant, projectKey, cycleKey, type);
         });
         this.updateState();
-        this.context.logger.info(
+        this.context.logger.trace(
             `[MarkingModule] Marked item ${item.label} and ${validDescendants.length} descendants`
         );
         this.context.refresh({ immediate: true });
@@ -173,7 +173,7 @@ export class MarkingModule implements TreeViewModule {
         }
 
         this.updateState();
-        this.context.logger.info(`[MarkingModule] Unmarked item: ${itemId}`);
+        this.context.logger.trace(`[MarkingModule] Unmarked item: ${itemId}`);
     }
 
     /**
@@ -234,7 +234,7 @@ export class MarkingModule implements TreeViewModule {
         this.markingState = this.createEmptyState();
         this.updateState();
         this.context.refresh();
-        this.context.logger.info("[MarkingModule] Cleared all markings");
+        this.context.logger.trace("[MarkingModule] Cleared all markings");
 
         if (emitGlobalEvent) {
             this.context.eventBus.emit({

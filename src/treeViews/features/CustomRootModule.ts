@@ -173,7 +173,7 @@ export class CustomRootModule implements TreeViewModule {
         });
 
         this.context.refresh({ immediate: true });
-        this.context.logger.info(`[CustomRootModule] Tree item set as custom root: ${item.label}`);
+        this.context.logger.trace(`[CustomRootModule] Tree item set as custom root: ${item.label}`);
     }
 
     /**
@@ -197,7 +197,7 @@ export class CustomRootModule implements TreeViewModule {
         });
 
         this.context.refresh({ immediate: true });
-        this.context.logger.info("[CustomRootModule] Custom root reset");
+        this.context.logger.trace("[CustomRootModule] Custom root reset");
     }
 
     /**

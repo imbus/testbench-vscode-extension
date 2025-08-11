@@ -461,7 +461,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the update operation is complete.
      */
     private async handleUpdateConnection(payload: EditingConnectionData): Promise<void> {
-        logger.info(`[loginWebView] Attempting to update connection: ${payload.label || payload.id}`);
+        logger.trace(`[loginWebView] Attempting to update connection: ${payload.label || payload.id}`);
 
         try {
             if (!payload.id || !payload.serverName || !payload.portNumber || !payload.username) {

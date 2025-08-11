@@ -279,7 +279,7 @@ async function performDeferredViewRestoration(
         await displayTestElementsTreeView();
         await hideProjectManagementTreeView();
 
-        logger.info(`[extension] Successfully restored view to context of TOV: ${savedContext.tovName}`);
+        logger.trace(`[extension] Successfully restored view to context of TOV: ${savedContext.tovName}`);
         return true;
     } catch (error) {
         logger.error("[extension] Failed to restore view state:", error);
@@ -1202,7 +1202,7 @@ async function handleTestBenchSessionChange(
     context: vscode.ExtensionContext,
     existingSession?: vscode.AuthenticationSession
 ): Promise<void> {
-    logger.info(`[extension] Handling session change`);
+    logger.trace(`[extension] Handling session change`);
 
     const sessionToProcess = await getSessionToProcess(existingSession);
     const wasPreviouslyConnected = !!connection;
@@ -1217,7 +1217,7 @@ async function handleTestBenchSessionChange(
         }
 
         if (connectionManager.isConnectionAlreadyActive(connection, sessionToProcess, activeConnection)) {
-            logger.info(
+            logger.trace(
                 `[extension] Connection for '${activeConnection.label}' and current session token is already active. Skipping re-initialization.`
             );
             return;
@@ -1311,7 +1311,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             { supportsMultipleAccounts: false }
         )
     );
-    logger.info("[extension] TestBenchAuthenticationProvider registered.");
+    logger.trace("[extension] TestBenchAuthenticationProvider registered.");
 
     // Session Change Listener
     context.subscriptions.push(
@@ -1734,7 +1734,7 @@ export async function clearAllExtensionData(
  * Called when the extension is deactivated.
  */
 export async function deactivate(): Promise<void> {
-    logger.info("[extension] Deactivating extension");
+    logger.trace("[extension] Deactivating extension");
     try {
         isTestOperationInProgress = false;
 

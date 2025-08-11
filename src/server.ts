@@ -3,8 +3,6 @@ import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./const
 import { getInterpreterPath } from "./python";
 import { LanguageClient, LanguageClientOptions, ServerOptions, State } from "vscode-languageclient/node";
 import { connection, logger } from "./extension";
-import { ConfigKeys } from "./constants";
-import { getExtensionSetting } from "./configuration";
 
 interface TbConnectionDetails {
     serverName: string;
@@ -689,7 +687,7 @@ async function startAndMonitorClient(
     try {
         await withTimeout(() => newClient.start(), CLIENT_START_TIMEOUT_MS, "Language server start");
 
-        logger.info(`[server] LS for ${projectName}/${tovName} started successfully, Op ID ${operationId}`);
+        logger.trace(`[server] LS for ${projectName}/${tovName} started successfully, Op ID ${operationId}`);
 
         const isStillCurrent = await validateClientAfterStart(newClient, operationId, projectName, tovName);
         if (!isStillCurrent) {

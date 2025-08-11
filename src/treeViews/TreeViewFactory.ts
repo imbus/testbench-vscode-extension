@@ -493,7 +493,7 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
         await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, showTestThemes);
         await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, showTestElements);
 
-        logger.info("[TreeViewFactory] Tree views initialized successfully");
+        logger.trace("[TreeViewFactory] Tree views initialized successfully");
     } catch (error) {
         logger.error("[TreeViewFactory] Failed to initialize tree views:", error);
         throw error;
