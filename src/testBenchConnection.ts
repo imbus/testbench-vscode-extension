@@ -1184,18 +1184,17 @@ export async function withRetry<T>(
         try {
             return await asyncFunction();
         } catch (error) {
-            // Log the error details for debugging
             if (axios.isAxiosError(error)) {
-                logger.warn(
+                logger.trace(
                     `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${error.response?.status}: ${error.message}`
                 );
             } else {
-                logger.warn(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
+                logger.trace(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
             }
 
             // Check if we should retry this error
             if (shouldRetry && !shouldRetry(error)) {
-                logger.warn(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
+                logger.trace(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
                 throw error;
             }
 
