@@ -124,6 +124,7 @@ from .testbench_resource.subdivision2resource import (
 from .testbench_resource.testbench_resource_model import (
     TestBenchResourceModel,
     get_interaction_call_type,
+    get_kw_tags,
     get_kw_uid,
 )
 
@@ -326,34 +327,37 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     code_lenses.append(push_resource_lens)
     for keyword in testbench_resource.keywords:
         keyword_uid = get_kw_uid(keyword)
-        if keyword_uid:
-            keyword_line = keyword.lineno - 1
-            code_lenses.append(
-                CodeLens(
-                    range=Range(
-                        start=Position(line=keyword_line, character=0),
-                        end=Position(line=keyword_line, character=0),
-                    ),
-                    command=Command(
-                        title=PULL_KEYWORD_TITLE,
-                        command=COMMAND_PULL_KEYWORD,
-                        arguments=[document_uri, keyword_uid],
-                    ),
-                )
+        if not keyword_uid or any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
+            ):
+            continue
+        keyword_line = keyword.lineno - 1
+        code_lenses.append(
+            CodeLens(
+                range=Range(
+                    start=Position(line=keyword_line, character=0),
+                    end=Position(line=keyword_line, character=0),
+                ),
+                command=Command(
+                    title=PULL_KEYWORD_TITLE,
+                    command=COMMAND_PULL_KEYWORD,
+                    arguments=[document_uri, keyword_uid],
+                ),
             )
-            code_lenses.append(
-                CodeLens(
-                    range=Range(
-                        start=Position(line=keyword_line, character=0),
-                        end=Position(line=keyword_line, character=0),
-                    ),
-                    command=Command(
-                        title=PUSH_KEYWORD_TITLE,
-                        command=COMMAND_ATTEMPT_PUSH_KEYWORD,
-                        arguments=[document_uri, keyword_uid],
-                    ),
-                )
+        )
+        code_lenses.append(
+            CodeLens(
+                range=Range(
+                    start=Position(line=keyword_line, character=0),
+                    end=Position(line=keyword_line, character=0),
+                ),
+                command=Command(
+                    title=PUSH_KEYWORD_TITLE,
+                    command=COMMAND_ATTEMPT_PUSH_KEYWORD,
+                    arguments=[document_uri, keyword_uid],
+                ),
             )
+        )
     return code_lenses
 
 
