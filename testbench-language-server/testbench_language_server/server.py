@@ -34,7 +34,7 @@ from lsprotocol.types import (
 )
 from pygls.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
-from robot.api.parsing import Keyword, KeywordSection, SectionHeader, Token
+from robot.api.parsing import Keyword, KeywordName, KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
@@ -45,6 +45,7 @@ from testbench_language_server.testbench_api.testbench_resource_connection impor
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
 from .file_edits import (
+    get_deleted_testbench_kw_tags_edit,
     get_kw_arguments_edit,
     get_kw_documentation_edit,
     get_kw_tags_edit,
@@ -124,11 +125,8 @@ from .testbench_resource.subdivision2resource import (
 from .testbench_resource.testbench_resource_model import (
     TestBenchResourceModel,
     get_interaction_call_type,
-    get_kw_tags,
     get_kw_uid,
 )
-
-from robot.api.parsing import KeywordName
 
 
 class TestBenchLanguageServer(LanguageServer):
@@ -328,8 +326,8 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     for keyword in testbench_resource.keywords:
         keyword_uid = get_kw_uid(keyword)
         if not keyword_uid or any(
-                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
-            ):
+            tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
+        ):
             continue
         keyword_line = keyword.lineno - 1
         code_lenses.append(
@@ -658,15 +656,15 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
                 ):
                     continue
                 edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
-    # if existing_resource and existing_resource.keyword_section:
-    #     for existing_keyword in existing_resource.keyword_section.body:
-    #         if get_kw_uid(existing_keyword) in visited_keywords:
-    #             continue
-    #         if get_keyword_tags(existing_keyword) and any(
-    #             tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
-    #         ):
-    #             continue
-    #         edits.extend(create_keyword_edits(existing_keyword, None, change_identifier))
+    if existing_resource and existing_resource.keyword_section:
+        for existing_keyword in existing_resource.keyword_section.body:
+            if get_kw_uid(existing_keyword) in visited_keywords:
+                continue
+            if get_keyword_tags(existing_keyword) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
+            ):
+                continue
+            edits.append(get_deleted_testbench_kw_tags_edit(existing_keyword, change_identifier))
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
