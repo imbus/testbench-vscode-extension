@@ -26,7 +26,6 @@ import {
 } from "./constants";
 import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionSetting } from "./configuration";
-import { log } from "console";
 
 let agentForNextConnection: https.Agent | null = null;
 
@@ -97,6 +96,46 @@ export class TLSSecurityManager {
      */
     public getTLSSecurityManagerStatus(): string {
         return `TLS Security Manager: ${this.isInsecureMode ? "INSECURE" : "SECURE"} mode, NODE_TLS_REJECT_UNAUTHORIZED=${process.env.NODE_TLS_REJECT_UNAUTHORIZED}`;
+    }
+}
+
+/**
+ * Retry predicate factory to handle retry logic based on the status code of the response.
+ */
+export class RetryPredicateFactory {
+    /**
+     * Creates a retry predicate that never retries on client errors (4xx status codes).
+     * @returns A retry predicate function
+     */
+    public static createDefaultPredicate(): (error: any) => boolean {
+        return (error: any): boolean => {
+            if (axios.isAxiosError(error) && error.response) {
+                const status = error.response.status;
+                if (status >= 400 && status < 500) {
+                    logger.debug(`[testBenchConnection] Not retrying on client error ${status}`);
+                    return false;
+                }
+            }
+            return true;
+        };
+    }
+
+    /**
+     * Creates a retry predicate that never retries on specific status codes.
+     * @param nonRetryableStatusCodes Array of HTTP status codes that should not be retried
+     * @returns A retry predicate function
+     */
+    public static createCustomPredicate(nonRetryableStatusCodes: number[]): (error: any) => boolean {
+        return (error: any): boolean => {
+            if (axios.isAxiosError(error) && error.response) {
+                const status = error.response.status;
+                if (nonRetryableStatusCodes.includes(status)) {
+                    logger.debug(`[testBenchConnection] Not retrying on status code ${status}`);
+                    return false;
+                }
+            }
+            return true;
+        };
     }
 }
 
@@ -244,33 +283,6 @@ export class PlayServerConnection {
     }
 
     /**
-     * Creates a retry predicate that handles certificate errors appropriately based on the agent type.
-     * @returns A function that determines whether to retry based on the error.
-     */
-    private createRetryPredicate(): (error: any) => boolean {
-        const isInsecureAgent =
-            this.apiClient.defaults.httpsAgent &&
-            (this.apiClient.defaults.httpsAgent as any).options &&
-            (this.apiClient.defaults.httpsAgent as any).options.rejectUnauthorized === false;
-
-        return (error: any): boolean => {
-            if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-                return false;
-            }
-
-            if (isInsecureAgent) {
-                return true;
-            }
-
-            const certErrorCodes = ["UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_UNTRUSTED", "DEPTH_ZERO_SELF_SIGNED_CERT"];
-            if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
-                return false;
-            }
-            return true;
-        };
-    }
-
-    /**
      * Logs out the user from the TestBench server by invalidating the current session token.
      * This method now focuses on the server-side logout. UI and global state changes
      * should be handled by the AuthenticationProvider or session change listeners.
@@ -295,7 +307,7 @@ export class PlayServerConnection {
                     }),
                 3,
                 2000,
-                this.createRetryPredicate()
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             if (logoutResponse.status === 204) {
@@ -348,7 +360,7 @@ export class PlayServerConnection {
                     }),
                 3, // Try 3 additional times
                 2000, // delayMs
-                this.createRetryPredicate()
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             // Save the response from server to a file for analyzing the structure
@@ -418,7 +430,7 @@ export class PlayServerConnection {
                     }),
                 3, // maxRetries
                 2000, // delayMs
-                this.createRetryPredicate()
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -517,16 +529,7 @@ export class PlayServerConnection {
                 () => oldPlayServerSession.get(getTestElementsURL),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates
-                        const nonRetryableStatusCodes: number[] = [401, 404];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -619,16 +622,7 @@ export class PlayServerConnection {
                 () => oldPlayServerSession.get(getFiltersURL),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates
-                        const nonRetryableStatusCodes: number[] = [401, 404];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -700,16 +694,7 @@ export class PlayServerConnection {
                     }),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates - don't retry on client errors
-                        const nonRetryableStatusCodes = [404, 422];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             logger.debug(
@@ -968,16 +953,7 @@ export class PlayServerConnection {
                     }),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    // Retry predicates
-                    if (axios.isAxiosError(error) && error.response) {
-                        const nonRetryableStatusCodes = [403, 404, 422];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             switch (importZipResponse.status) {
@@ -1062,16 +1038,7 @@ export class PlayServerConnection {
                     }),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    // Retry predicates
-                    if (axios.isAxiosError(error) && error.response) {
-                        const nonRetryableStatusCodes = [400, 403, 404, 422];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             switch (importJobIDResponse.status) {
@@ -1178,7 +1145,7 @@ export class PlayServerConnection {
                     }),
                 5, // maxRetries
                 2000, // delayMs
-                this.createRetryPredicate()
+                RetryPredicateFactory.createDefaultPredicate()
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
@@ -1198,9 +1165,9 @@ export class PlayServerConnection {
  * @template T - The type returned by the asynchronous function.
  * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
  * @param {number} maxAllowedRetryCount - Maximum number of retry attempts (default is 3).
- * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
+ * @param {number} delayMs - Delay in milliseconds between retries (default is 2000ms).
  * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
- * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is false).
+ * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is true).
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
@@ -1217,17 +1184,24 @@ export async function withRetry<T>(
         try {
             return await asyncFunction();
         } catch (error) {
-            logger.warn(`[testBenchConnection] Attempt ${retryCount} failed. Retrying in ${delayMs}ms...`);
+            if (axios.isAxiosError(error)) {
+                logger.trace(
+                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${error.response?.status}: ${error.message}`
+                );
+            } else {
+                logger.trace(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
+            }
 
+            // Check if we should retry this error
             if (shouldRetry && !shouldRetry(error)) {
-                logger.warn(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
+                logger.trace(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
                 throw error;
             }
 
             retryCount++;
             if (retryCount > maxAllowedRetryCount) {
                 logger.error(
-                    `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries reached, aborting further retries.`
+                    `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
                 );
                 throw error;
             }
@@ -1588,7 +1562,7 @@ export async function loginToServerAndGetSessionDetails(
                 tlsManager.enableInsecureMode();
                 try {
                     logger.debug(`[testBenchConnection] Attempting insecure connection to ${serverName}:${portNumber}`);
-                    let insecureAgent = await createSecureHttpsAgent();
+                    const insecureAgent = await createSecureHttpsAgent();
                     insecureAgent.options.rejectUnauthorized = false;
                     insecureAgent.options.checkServerIdentity = () => undefined;
                     const insecureLoginResponse = await axios.post(loginURL, requestBody, {

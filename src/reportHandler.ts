@@ -22,7 +22,7 @@ import {
     ProjectItemTypes,
     TestThemeItemTypes
 } from "./constants";
-import { extractDataFromReport, PlayServerConnection, withRetry } from "./testBenchConnection";
+import { extractDataFromReport, PlayServerConnection, withRetry, RetryPredicateFactory } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionConfiguration } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
@@ -252,19 +252,7 @@ export async function getJobIdOfCycleReport(
                 }),
             3, // maxRetries
             2000, // delayMs
-            (error: { response: { status: number } }) => {
-                // shouldRetry predicate
-                if (axios.isAxiosError(error) && error.response) {
-                    const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
-                    if (nonRetryableStatusCodes.includes(error.response.status)) {
-                        logger.warn(
-                            `[reportHandler] Non-retryable error ${error.response.status} for getJobId call. Not retrying.`
-                        );
-                        return false;
-                    }
-                }
-                return true;
-            }
+            RetryPredicateFactory.createDefaultPredicate()
         );
 
         logger.debug(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
@@ -316,18 +304,7 @@ export async function getJobStatus(
             }),
         3, // max retries
         2000, // delay in ms between retries
-        (error: { response: { status: number } }) => {
-            if (axios.isAxiosError(error) && error.response) {
-                const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
-                if (nonRetryableStatusCodes.includes(error.response.status)) {
-                    logger.warn(
-                        `[reportHandler] Non-retryable error ${error.response.status} for getJobStatus call. Not retrying.`
-                    );
-                    return false;
-                }
-            }
-            return true;
-        }
+        RetryPredicateFactory.createDefaultPredicate()
     );
 
     logger.debug(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
@@ -382,20 +359,7 @@ export async function downloadReport(
                 }),
             3, // maxRetries
             2000, // delayMs
-            (error: { response: { status: number } }) => {
-                const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
-                if (
-                    axios.isAxiosError(error) &&
-                    error.response &&
-                    nonRetryableStatusCodes.includes(error.response.status)
-                ) {
-                    logger.warn(
-                        `[reportHandler] Non-retryable error ${error.response.status} during report download. Not retrying.`
-                    );
-                    return false;
-                }
-                return true;
-            }
+            RetryPredicateFactory.createDefaultPredicate()
         );
 
         if (downloadZipResponse.status !== 200) {
