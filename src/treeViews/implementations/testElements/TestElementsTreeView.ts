@@ -290,7 +290,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 },
                 timestamp: Date.now()
             });
-            this.logger.info(`[TestElementsTreeView] Successfully loaded test elements for TOV ${tovKey}`);
+            this.logger.trace(`[TestElementsTreeView] Successfully loaded test elements for TOV ${tovKey}`);
         } catch (error) {
             this.logger.error(`[TestElementsTreeView] Error loading TOV:`, error);
 
