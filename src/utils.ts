@@ -62,8 +62,8 @@ export async function isAbsolutePath(filePath: string, verifyExistenceOfFile: bo
         }
         logger.trace(`[utils] File path "${filePath}" is absolute.`);
         return true;
-    } catch {
-        logger.error(`[utils] Error while checking if file path "${filePath}" is absolute.`);
+    } catch (error) {
+        logger.error(`[utils] Error while checking if file path "${filePath}" is absolute:`, error);
         return false;
     }
 }

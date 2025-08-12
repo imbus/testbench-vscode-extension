@@ -1230,7 +1230,7 @@ async function handleTestBenchSessionChange(
             !!(connection && connection.getSessionToken() !== newConnection.getSessionToken());
 
         if (isNewConnection) {
-            logger.info("[extension] New connection established.");
+            logger.trace("[extension] New connection established.");
             await restoreTreeViewsState(context);
         }
     } else {

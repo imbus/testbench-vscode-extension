@@ -409,7 +409,7 @@ export async function stopLanguageClient(isDeactivating: boolean = false): Promi
     );
 
     if (!clientToStop) {
-        logger.error(`[server] No client instance to stop, Op ID ${operationId}`);
+        logger.trace(`[server] No client instance to stop, Op ID ${operationId}`);
         return;
     }
 

@@ -55,7 +55,7 @@ export class TLSSecurityManager {
      */
     public enableInsecureMode(): void {
         if (!this.isInsecureMode) {
-            logger.warn("[TLSSecurityManager] Enabling insecure TLS mode globally");
+            logger.warn("[testBenchConnection] Enabling insecure TLS mode globally");
             this.isInsecureMode = true;
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
         }
@@ -67,7 +67,7 @@ export class TLSSecurityManager {
      */
     public disableInsecureMode(): void {
         if (this.isInsecureMode) {
-            logger.info("[TLSSecurityManager] Disabling insecure TLS mode and restoring original settings");
+            logger.trace("[testBenchConnection] Disabling insecure TLS mode and restoring original settings");
             this.isInsecureMode = false;
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = this.originalNODE_TLS_REJECT_UNAUTHORIZED;
         }
