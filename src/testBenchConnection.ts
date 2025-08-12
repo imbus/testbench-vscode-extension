@@ -311,7 +311,7 @@ export class PlayServerConnection {
             );
 
             if (logoutResponse.status === 204) {
-                logger.info("[testBenchConnection] Server logout successful.");
+                logger.debug("[testBenchConnection] Server logout successful.");
                 const tlsManager = TLSSecurityManager.getInstance();
                 tlsManager.disableInsecureMode();
 
