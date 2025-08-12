@@ -48,7 +48,6 @@ const RESTART_DEBOUNCE_MS = 300;
 const CLIENT_START_TIMEOUT_MS = 30000;
 const CLIENT_STOP_TIMEOUT_MS = 5000;
 const CLIENT_DISPOSE_TIMEOUT_MS = 3000;
-const STARTING_STATE_WAIT_MS = 1000;
 
 // Getter and setter functions for global state
 export function getLatestLsContextRequestId(): number {
@@ -337,10 +336,9 @@ async function handleClientByState(clientToStop: LanguageClient, operationId: nu
     const state = clientToStop.state;
     switch (state) {
         case State.Starting:
-            logger.warn(`[server] Client is starting. Waiting briefly before disposal, Op ID ${operationId}`);
-            // Wait briefly for starting to complete, then dispose
-            await new Promise((resolve) => setTimeout(resolve, STARTING_STATE_WAIT_MS));
-            await safeClientDispose(clientToStop, operationId, "starting state");
+            logger.warn(
+                `[server] Stop called on a client that is still starting. The startup process will be cancelled. Op ID ${operationId}`
+            );
             break;
 
         case State.Running:
@@ -402,6 +400,11 @@ function shouldRethrowError(errorMessage: string, isDeactivating: boolean, opera
 export async function stopLanguageClient(isDeactivating: boolean = false): Promise<void> {
     const clientToStop = getLanguageClientInstance();
     const operationId = getCurrentLsOperationId();
+
+    // Invalidate the current operation to prevent race condition on quick logout.
+    if (!isDeactivating) {
+        setCurrentLsOperationId(++latestLsContextRequestId);
+    }
 
     logger.trace(
         `[server] Request to stop TestBench LS, Op ID ${operationId}. Deactivating: ${isDeactivating}. Client present: ${!!clientToStop}. ` +
@@ -829,6 +832,18 @@ export async function initializeLanguageServer(project: string, tov: string, ope
     }
 
     setLanguageClientInstance(newClientInstance);
+
+    // Final check for staleness. Handles race condition where a `stop`
+    // command is processed between the `setLanguageClientInstance` call above and the `start` call below.
+    if (!isOperationCurrent(operationId)) {
+        logger.warn(
+            `[server] Initialization for ${project}/${tov} is stale just before start (current global OpId is ${getCurrentLsOperationId()}). Aborting, Op ID ${operationId}`
+        );
+        setLanguageClientInstance(undefined);
+        await safeClientDispose(newClientInstance, operationId, "stale before start");
+        return;
+    }
+
     await startAndMonitorClient(newClientInstance, project, tov, operationId);
 }
 
