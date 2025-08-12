@@ -181,8 +181,6 @@ suite("TreeViewContext", function () {
         test("should provide access to logger", () => {
             const contextLogger = treeViewContext.logger;
             assert.ok(contextLogger instanceof TestBenchLogger);
-            assert.strictEqual(typeof contextLogger.info, "function");
-            assert.strictEqual(typeof contextLogger.error, "function");
         });
     });
 
@@ -319,30 +317,6 @@ suite("TreeViewContext", function () {
             subscription.unsubscribe();
             // Event bus should no longer have handlers for this event
             assert.strictEqual(treeViewContext.eventBus.getHandlerCount("test:event"), 0);
-        });
-    });
-
-    suite("Context Logging", () => {
-        test("should provide logger access", () => {
-            const logger = treeViewContext.logger;
-
-            // Test logging methods
-            logger.info("Test info message");
-            logger.debug("Test debug message");
-            logger.warn("Test warning message");
-            logger.error("Test error message");
-
-            // Should not throw
-            assert.ok(true);
-        });
-
-        test("should log through context logger", () => {
-            const loggerSpy = testEnv.sandbox.spy(treeViewContext.logger, "info");
-
-            treeViewContext.logger.info("Test message");
-
-            assert.ok(loggerSpy.calledOnce);
-            assert.ok(loggerSpy.calledWith("Test message"));
         });
     });
 

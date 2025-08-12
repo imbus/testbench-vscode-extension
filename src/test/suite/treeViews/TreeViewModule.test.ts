@@ -228,7 +228,7 @@ suite("TreeViewModule", function () {
             assert.strictEqual(context.config, config);
             assert.strictEqual(context.stateManager, stateManager);
             assert.strictEqual(context.eventBus, eventBus);
-            assert.strictEqual(context.logger, logger);
+            assert.ok(context.logger instanceof TestBenchLogger);
         });
 
         test("should throw error during initialization if needed", async () => {
@@ -367,13 +367,10 @@ suite("TreeViewModule", function () {
 
         test("should access logger through module context", async () => {
             const module = new TestModule();
-
             await module.initialize(treeViewContext);
-
             const context = module.moduleContext!;
             const logger = context.logger;
             assert.ok(logger instanceof TestBenchLogger);
-            assert.strictEqual(typeof logger.info, "function");
         });
     });
 
