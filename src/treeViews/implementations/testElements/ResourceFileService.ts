@@ -54,7 +54,7 @@ export class ResourceFileService {
             await this.ensureFolderPathExists(dirName);
             try {
                 await fs.promises.writeFile(filePath, initialContent, { encoding: "utf8" });
-                this.logger.info(`[ResourceFileService] Resource file with initial content created: ${filePath}`);
+                this.logger.info(`[ResourceFileService] Resource file created at ${filePath}`);
             } catch (writeError) {
                 this.logger.error(`[ResourceFileService] Error writing to resource file ${filePath}:`, writeError);
                 throw writeError;
