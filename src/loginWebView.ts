@@ -278,7 +278,6 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 });
             }
         } catch (error: any) {
-            logger.error(`[loginWebView] Login failed for connection ${connectionId}:`, error);
             await connectionManager.clearActiveConnection(this.extensionContext);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",

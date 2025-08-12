@@ -1608,8 +1608,9 @@ export async function loginToServerAndGetSessionDetails(
             }
             return null;
         } else {
-            vscode.window.showErrorMessage(`${error} ${error.code}: ${error.message}`);
-            logger.error(`[testBenchConnection] Error during login for ${username} to ${serverName}:`, error.message);
+            vscode.window.showErrorMessage(`Error during login: ${error.code}`);
+            // Note: The error object is very large and contains sensitive information
+            logger.error(`[testBenchConnection] Error during login for ${username} to ${serverName}`);
             return null;
         }
     }
