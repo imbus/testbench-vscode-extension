@@ -22,7 +22,10 @@ export class ProjectsDataProvider {
     public async fetchAndTransformProjects(): Promise<ProjectData[] | null> {
         const connection = this.getConnection();
         if (!connection) {
-            this.logger.error("[ProjectsDataProvider] No connection available when fetching projects");
+            // TODO: Check if tree views can be initialized after connection is established
+            this.logger.debug(
+                "[ProjectsDataProvider] No connection available when fetching projects. This is expected during startup/logout"
+            );
             return null;
         }
 
