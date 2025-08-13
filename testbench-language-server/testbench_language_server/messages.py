@@ -18,9 +18,9 @@ ERROR_DUPLICATE_KEYWORD_NAME = (
 )
 ERROR_DUPLICATE_KEYWORD_NAME_IN_FILE = "Multiple keywords with name '{name}' found in file '{uri}'. Please resolve the conflict manually."
 ERROR_FINDING_TESTBENCH_KEYWORD = (
-    "Failed to find TestBench keyword by uid '{uid}' or name '{name}'."
+    "TestBench keyword with uid '{uid}' or name '{name}' does not exist."
 )
-ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID = "Failed to find TestBench keyword by uid '{uid}'."
+ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID = "TestBench keyword with uid '{uid}' does not exist."
 
 # Info messages
 INFO_ALREADY_UP_TO_DATE = "Already up to date."
