@@ -47,7 +47,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
         this.registerEventHandlers();
         this.registerCommands();
-        this.initializeMarkingState();
         this.setupTestCaseSetClickHandlers();
     }
 
@@ -887,13 +886,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.isOpenedFromCycle = false;
         this._onDidChangeTreeData.fire(undefined);
         this.resetTitle();
-    }
-
-    /**
-     * Initializes the marking state by waiting for modules
-     */
-    private async initializeMarkingState(): Promise<void> {
-        await this.initialize();
     }
 
     /**
