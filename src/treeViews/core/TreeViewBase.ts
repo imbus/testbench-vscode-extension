@@ -471,6 +471,47 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
+     * Clears the state of all modules associated with this tree view.
+     */
+    public async clearAllModuleState(): Promise<void> {
+        this.logger.debug(`[TreeViewBase] Clearing all module states for tree: ${this.config.id}`);
+
+        const persistenceModule = this.getModule("persistence");
+        if (persistenceModule && typeof (persistenceModule as any).clear === "function") {
+            await (persistenceModule as any).clear();
+        }
+
+        const expansionModule = this.getModule("expansion");
+        if (expansionModule && typeof (expansionModule as any).reset === "function") {
+            (expansionModule as any).reset();
+        }
+
+        const markingModule = this.getModule("marking");
+        if (markingModule && typeof (markingModule as any).clearAllMarkings === "function") {
+            (markingModule as any).clearAllMarkings(false); // Don't emit global event
+        }
+
+        const filteringModule = this.getModule("filtering");
+        if (filteringModule && typeof (filteringModule as any).clearAllFilters === "function") {
+            (filteringModule as any).clearAllFilters();
+        }
+
+        const customRootModule = this.getModule("customRoot");
+        if (customRootModule && typeof (customRootModule as any).reset === "function") {
+            (customRootModule as any).reset();
+        }
+
+        if (this.stateManager && typeof this.stateManager.setState === "function") {
+            this.stateManager.setState({
+                expansion: null,
+                marking: null,
+                customRoot: null,
+                filtering: null
+            });
+        }
+    }
+
+    /**
      * Updates the tree view configuration and notifies modules of changes
      * @param newConfig Partial configuration to merge with existing config
      */

@@ -985,7 +985,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         // Other extension commands
         { id: allExtensionCommands.clearInternalTestbenchFolder, handler: clearInternalFolder },
-        { id: allExtensionCommands.clearAllExtensionData, handler: clearAllExtensionData },
+        { id: allExtensionCommands.clearAllExtensionData, handler: () => clearAllExtensionData(context, true) },
         {
             id: allExtensionCommands.showExtensionSettings,
             handler: handleShowExtensionSettings
@@ -1046,6 +1046,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
  * @param activeConnection - The active connection to use.
  * @param session - The session to use.
  * @param currentConnection - The current connection to use.
+ * @param context - The extension context.
  * @returns The new connection.
  */
 async function createNewConnection(
@@ -1438,6 +1439,24 @@ export async function clearAllExtensionData(
             setConnection(null);
         }
 
+        logger.debug("[extension] Clearing connection passwords from secret storage...");
+        try {
+            const connections = await connectionManager.getConnections(context);
+            for (const conn of connections) {
+                try {
+                    await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + conn.id);
+                    logger.debug(`[extension] Cleared password for connection: ${conn.label}`);
+                } catch (error) {
+                    logger.error(
+                        `[extension] Error clearing password for connection ${conn.label} while clearing all extension data:`,
+                        error
+                    );
+                }
+            }
+        } catch (error) {
+            logger.error("[extension] Error clearing connection passwords while clearing all extension data:", error);
+        }
+
         try {
             logger.debug("[extension] Clearing VS Code authentication sessions...");
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, [], {
@@ -1504,136 +1523,19 @@ export async function clearAllExtensionData(
             }
         }
 
-        logger.debug("[extension] Clearing connection passwords from secret storage...");
-        try {
-            const connections = await connectionManager.getConnections(context);
-            for (const conn of connections) {
-                try {
-                    await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + conn.id);
-                    logger.debug(`[extension] Cleared password for connection: ${conn.label}`);
-                } catch (error) {
-                    logger.error(
-                        `[extension] Error clearing password for connection ${conn.label} while clearing all extension data:`,
-                        error
-                    );
-                }
-            }
-        } catch (error) {
-            logger.error("[extension] Error clearing connection passwords while clearing all extension data:", error);
-        }
-
         if (treeViews) {
             logger.debug("[extension] Clearing tree data and state...");
             try {
                 treeViews.clear();
 
                 if (treeViews.projectsTree) {
-                    const projectsPersistence = (treeViews.projectsTree as any).modules?.get("persistence");
-                    if (projectsPersistence?.clear) {
-                        await projectsPersistence.clear();
-                    }
-
-                    const projectsExpansion = (treeViews.projectsTree as any).modules?.get("expansion");
-                    if (projectsExpansion?.reset) {
-                        projectsExpansion.reset();
-                    }
-
-                    const projectsMarking = (treeViews.projectsTree as any).modules?.get("marking");
-                    if (projectsMarking?.clearAllMarkings) {
-                        projectsMarking.clearAllMarkings(false); // Don't emit global event during clear all
-                    }
-
-                    const projectsFiltering = (treeViews.projectsTree as any).modules?.get("filtering");
-                    if (projectsFiltering?.clearAllFilters) {
-                        projectsFiltering.clearAllFilters();
-                    }
-
-                    const projectsCustomRoot = (treeViews.projectsTree as any).modules?.get("customRoot");
-                    if (projectsCustomRoot?.reset) {
-                        projectsCustomRoot.reset();
-                    }
-
-                    const projectsStateManager = (treeViews.projectsTree as any).stateManager;
-                    if (projectsStateManager?.setState) {
-                        projectsStateManager.setState({
-                            expansion: null,
-                            marking: null,
-                            customRoot: null,
-                            filtering: null
-                        });
-                    }
+                    await treeViews.projectsTree.clearAllModuleState();
                 }
                 if (treeViews.testThemesTree) {
-                    const testThemesPersistence = (treeViews.testThemesTree as any).modules?.get("persistence");
-                    if (testThemesPersistence?.clear) {
-                        await testThemesPersistence.clear();
-                    }
-
-                    const testThemesExpansion = (treeViews.testThemesTree as any).modules?.get("expansion");
-                    if (testThemesExpansion?.reset) {
-                        testThemesExpansion.reset();
-                    }
-
-                    const testThemesMarking = (treeViews.testThemesTree as any).modules?.get("marking");
-                    if (testThemesMarking?.clearAllMarkings) {
-                        testThemesMarking.clearAllMarkings(false); // Don't emit global event during clear all
-                    }
-
-                    const testThemesFiltering = (treeViews.testThemesTree as any).modules?.get("filtering");
-                    if (testThemesFiltering?.clearAllFilters) {
-                        testThemesFiltering.clearAllFilters();
-                    }
-
-                    const testThemesCustomRoot = (treeViews.testThemesTree as any).modules?.get("customRoot");
-                    if (testThemesCustomRoot?.reset) {
-                        testThemesCustomRoot.reset();
-                    }
-
-                    const testThemesStateManager = (treeViews.testThemesTree as any).stateManager;
-                    if (testThemesStateManager?.setState) {
-                        testThemesStateManager.setState({
-                            expansion: null,
-                            marking: null,
-                            customRoot: null,
-                            filtering: null
-                        });
-                    }
+                    await treeViews.testThemesTree.clearAllModuleState();
                 }
                 if (treeViews.testElementsTree) {
-                    const testElementsPersistence = (treeViews.testElementsTree as any).modules?.get("persistence");
-                    if (testElementsPersistence?.clear) {
-                        await testElementsPersistence.clear();
-                    }
-
-                    const testElementsExpansion = (treeViews.testElementsTree as any).modules?.get("expansion");
-                    if (testElementsExpansion?.reset) {
-                        testElementsExpansion.reset();
-                    }
-
-                    const testElementsMarking = (treeViews.testElementsTree as any).modules?.get("marking");
-                    if (testElementsMarking?.clearAllMarkings) {
-                        testElementsMarking.clearAllMarkings(false); // Don't emit global event during clear all
-                    }
-
-                    const testElementsFiltering = (treeViews.testElementsTree as any).modules?.get("filtering");
-                    if (testElementsFiltering?.clearAllFilters) {
-                        testElementsFiltering.clearAllFilters();
-                    }
-
-                    const testElementsCustomRoot = (treeViews.testElementsTree as any).modules?.get("customRoot");
-                    if (testElementsCustomRoot?.reset) {
-                        testElementsCustomRoot.reset();
-                    }
-
-                    const testElementsStateManager = (treeViews.testElementsTree as any).stateManager;
-                    if (testElementsStateManager?.setState) {
-                        testElementsStateManager.setState({
-                            expansion: null,
-                            marking: null,
-                            customRoot: null,
-                            filtering: null
-                        });
-                    }
+                    await treeViews.testElementsTree.clearAllModuleState();
                 }
 
                 if (treeViews.projectsTree) {
