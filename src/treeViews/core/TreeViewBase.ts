@@ -106,7 +106,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         }
 
         try {
-            this.logger.debug("[TreeViewBase] Initializing tree view");
+            this.logger.trace("[TreeViewBase] Initializing tree view");
             await this.initializeModules();
             // Don't load data during initialization, wait for connection event
             this._initialized = true;
@@ -130,7 +130,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
                     }
                 });
             }
-            this.logger.debug("[TreeViewBase] Tree view initialized successfully");
+            this.logger.trace("[TreeViewBase] Tree view initialized successfully");
         } catch (error) {
             this.logger.error(
                 "[TreeViewBase] Error during initialization",
@@ -200,7 +200,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         }
 
         this.modules.set(module.id, module);
-        this.logger.debug(`[TreeViewBase] Registered module: ${module.id}`);
+        this.logger.trace(`[TreeViewBase] Registered module: ${module.id}`);
     }
 
     /**
@@ -401,7 +401,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * @param options Optional refresh options including immediate flag
      */
     public refresh(item?: T, options?: { immediate?: boolean }): void {
-        this.logger.debug(
+        this.logger.trace(
             `[TreeViewBase] Refreshing tree view${item ? ` for item: ${item.label}` : ""}${options?.immediate ? " immediately" : ""}`
         );
         if (this._dataFetchDebounceTimeout) {
@@ -502,7 +502,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         }
 
         this._disposed = true;
-        this.logger.debug("[TreeViewBase] Disposing tree view");
+        this.logger.trace("[TreeViewBase] Disposing tree view");
 
         // Dispose other modules first
         for (const [id, module] of this.modules.entries()) {
@@ -672,7 +672,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             return;
         }
 
-        this.logger.debug(`[TreeViewBase] Restoring expansion state for ${state.expansion.expandedItems.size} items`);
+        this.logger.trace(`[TreeViewBase] Restoring expansion state for ${state.expansion.expandedItems.size} items`);
 
         const itemsById = new Map<string, T>();
 
@@ -715,7 +715,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
         }
 
-        this.logger.debug(`[TreeViewBase] Expansion state restoration completed`);
+        this.logger.trace(`[TreeViewBase] Expansion state restoration completed`);
     }
 
     /**
