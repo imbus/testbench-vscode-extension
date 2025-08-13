@@ -792,9 +792,14 @@ async function handleExistingClient(operationId: number, projectName: string, to
  */
 export async function initializeLanguageServer(project: string, tov: string, operationId: number): Promise<void> {
     logger.trace(
-        `[server] Initializing TestBench LS for ` +
+        `[server] Attempting to initialize language server for ` +
             `Project: ${project}, TOV: ${tov}. Current global OpId: ${getCurrentLsOperationId()}, Received Op ID ${operationId}`
     );
+
+    if (!connection) {
+        logger.trace(`[server] No connection, skipping initialization for ${project}/${tov}`);
+        return;
+    }
 
     if (!isOperationCurrent(operationId)) {
         logger.warn(
@@ -887,6 +892,11 @@ function scheduleDebouncedRestart(projectName: string, tovName: string): void {
  *          regardless of whether it was skipped, successful, or encountered an error.
  */
 async function executeRestart(projectName: string, tovName: string): Promise<void> {
+    if (!connection) {
+        logger.trace(`[server] No connection, skipping restart for ${projectName}/${tovName}`);
+        return;
+    }
+
     if (isLanguageServerBusy) {
         logger.warn(`[server] Already busy, skipping restart for ${projectName}/${tovName}`);
         return;
