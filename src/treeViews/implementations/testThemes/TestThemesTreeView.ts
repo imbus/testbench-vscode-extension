@@ -13,7 +13,12 @@ import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, StorageKeys, TestThemeItemTypes } from "../../../constants";
 import { TestStructure } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
-import { ALLOW_PERSISTENT_IMPORT_BUTTON, ENABLE_ICON_MARKING_ON_TEST_GENERATION, treeViews } from "../../../extension";
+import {
+    ALLOW_PERSISTENT_IMPORT_BUTTON,
+    ENABLE_ICON_MARKING_ON_TEST_GENERATION,
+    treeViews,
+    userSessionManager
+} from "../../../extension";
 import { MarkingModule } from "../../features/MarkingModule";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
@@ -189,7 +194,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             }
 
             // Check if this is the same item as the last import
-            const lastImportedItemKey = `${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_last`;
+            const userId = userSessionManager.getCurrentUserId();
+            const lastImportedItemKey = `${userId}.${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_lastItemId`;
             const lastImportedItem = this.extensionContext.workspaceState.get<string>(lastImportedItemKey);
 
             if (lastImportedItem === item.id) {
@@ -250,10 +256,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.logger.info(importSuccessfulMessage);
                 vscode.window.showInformationMessage(importSuccessfulMessageForUser);
 
-                this.extensionContext.workspaceState.update(
-                    `${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_last`,
-                    item.id
-                );
+                this.extensionContext.workspaceState.update(lastImportedItemKey, item.id);
 
                 if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
                     // If this was a root item with descendants, unmark the entire hierarchy
@@ -439,6 +442,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
+            await this.restoreExpansionStateWithDataLoading();
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading cycle:", error);
 
@@ -513,6 +517,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
+            await this.restoreExpansionStateWithDataLoading();
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading TOV:", error);
 

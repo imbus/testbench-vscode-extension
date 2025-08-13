@@ -195,6 +195,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             this._onDidChangeTreeData.fire(undefined);
             this.updateSubdivisionIcons(newRootItems);
+            await this.restoreExpansionStateWithDataLoading();
 
             const loadTime = Date.now() - startTime;
             this.logger.debug(
@@ -280,6 +281,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             (this as any)._intentionallyCleared = false;
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
+            await this.restoreExpansionStateWithDataLoading();
 
             this.eventBus.emit({
                 type: "tov:loaded",

@@ -7,6 +7,7 @@ import { TreeViewModule } from "../core/TreeViewModule";
 import { TreeViewContext } from "../core/TreeViewContext";
 import { TreeViewState } from "../state/StateTypes";
 import * as vscode from "vscode";
+import { userSessionManager } from "../../extension";
 
 export class PersistenceModule implements TreeViewModule {
     readonly id = "persistence";
@@ -34,7 +35,7 @@ export class PersistenceModule implements TreeViewModule {
             this.debouncedSave();
         });
 
-        const loadedState = await this.load();
+        const loadedState = await this.loadState();
         if (loadedState) {
             context.stateManager.setState(loadedState);
 
@@ -79,6 +80,11 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
+        const userId = userSessionManager.getCurrentUserId();
+        if (!userId || userId === "global_fallback") {
+            return;
+        }
+
         this.isSaving = true;
 
         try {
@@ -106,7 +112,7 @@ export class PersistenceModule implements TreeViewModule {
      * Loads state from storage
      * @returns The loaded state or null if not found
      */
-    public async load(): Promise<Partial<TreeViewState> | null> {
+    public async loadState(): Promise<Partial<TreeViewState> | null> {
         const persistenceConfig = this.context.config.modules.persistence;
         if (!persistenceConfig || persistenceConfig.strategy === "none") {
             return null;
@@ -280,7 +286,8 @@ export class PersistenceModule implements TreeViewModule {
      * @param data The data to save
      */
     private async saveToWorkspace(data: any): Promise<void> {
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
         await this.context.extensionContext.workspaceState.update(storageKey, data);
     }
 
@@ -289,7 +296,8 @@ export class PersistenceModule implements TreeViewModule {
      * @returns The loaded data or undefined
      */
     private async loadFromWorkspace(): Promise<any> {
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
         return this.context.extensionContext.workspaceState.get(storageKey);
     }
 
@@ -298,7 +306,8 @@ export class PersistenceModule implements TreeViewModule {
      * @param data The data to save
      */
     private async saveToGlobal(data: any): Promise<void> {
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
         await this.context.extensionContext.globalState.update(storageKey, data);
     }
 
@@ -307,7 +316,8 @@ export class PersistenceModule implements TreeViewModule {
      * @returns The loaded data or undefined
      */
     private async loadFromGlobal(): Promise<any> {
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
         return this.context.extensionContext.globalState.get(storageKey);
     }
 
@@ -320,7 +330,8 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
-        const storageKey = `${this.STORAGE_KEY_PREFIX}${this.context.config.id}`;
+        const userId = userSessionManager.getCurrentUserId();
+        const storageKey = `${this.STORAGE_KEY_PREFIX}${userId}.${this.context.config.id}`;
 
         if (config.strategy === "workspace") {
             await this.context.extensionContext.workspaceState.update(storageKey, undefined);

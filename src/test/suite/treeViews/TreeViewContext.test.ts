@@ -13,6 +13,7 @@ import { TestBenchLogger } from "../../../testBenchLogger";
 import { TreeViewBase } from "../../../treeViews/core/TreeViewBase";
 import { TreeItemBase } from "../../../treeViews/core/TreeItemBase";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
+import { UserSessionManager } from "../../../userSessionManager";
 
 // Mock TreeViewBase for testing
 class MockTreeView extends TreeViewBase<TreeItemBase> {
@@ -20,7 +21,7 @@ class MockTreeView extends TreeViewBase<TreeItemBase> {
         return [];
     }
 
-    protected async getChildrenForItem(item: TreeItemBase): Promise<TreeItemBase[]> {
+    protected async getChildrenForItem(_item: TreeItemBase): Promise<TreeItemBase[]> {
         return [];
     }
 
@@ -55,10 +56,13 @@ suite("TreeViewContext", function () {
     let logger: TestBenchLogger;
     let mockTreeView: MockTreeView;
     let treeViewContext: TreeViewContextImpl;
+    let userSessionManager: UserSessionManager;
 
     this.beforeEach(function () {
         testEnv = setupTestEnvironment();
         mockContext = testEnv.mockContext;
+        userSessionManager = new UserSessionManager(mockContext);
+        testEnv.sandbox.stub(userSessionManager, "getCurrentUserId").returns("test-user-id");
 
         // Create test configuration
         config = {
@@ -92,7 +96,8 @@ suite("TreeViewContext", function () {
         // Create dependencies
         eventBus = new EventBus();
         logger = new TestBenchLogger();
-        stateManager = new StateManager(mockContext, config.id, eventBus);
+        userSessionManager = new UserSessionManager(mockContext);
+        stateManager = new StateManager(mockContext, config.id, eventBus, userSessionManager);
         mockTreeView = new MockTreeView(mockContext, config);
 
         // Create the context

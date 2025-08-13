@@ -60,6 +60,7 @@ import {
     hideTestThemeTreeView
 } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { initializeTreeViews } from "./treeViews/TreeViewFactory";
+import { UserSessionManager } from "./userSessionManager";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -109,6 +110,8 @@ let isHandlingSessionChange: boolean = false;
 // Prevent multiple test generation or import operations simultaneously
 let isTestOperationInProgress: boolean = false;
 
+export let userSessionManager: UserSessionManager;
+
 // Determines if the icon of the tree item should be changed after generating tests for that item.
 export const ENABLE_ICON_MARKING_ON_TEST_GENERATION: boolean = true;
 // Determines if the import button of the tree item should still persist after importing test results for that item.
@@ -153,6 +156,15 @@ async function prepareLanguageServerForTreeItemOperation(
     );
 
     return { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem };
+}
+
+/**
+ * Generates user-specific storage key
+ * @param baseStorageKey The base key to use for storage
+ * @returns The user-specific storage key
+ */
+export function getUserStorageKey(baseStorageKey: string): string {
+    return `${userSessionManager.getCurrentUserId()}.${baseStorageKey}`;
 }
 
 /**
@@ -1073,7 +1085,6 @@ async function createNewConnection(
     setConnection(newConnection);
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
     getLoginWebViewProvider()?.updateWebviewHTMLContent();
-
     return newConnection;
 }
 
@@ -1122,9 +1133,13 @@ async function restoreTreeViewsState(context: vscode.ExtensionContext): Promise<
         treeViews.clear();
         treeViews.projectsTree.refresh();
 
-        const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
-        const savedCycleContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
-        const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+        const visibleViewsKey = getUserStorageKey(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+        const cycleContextKey = getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+        const tovContextKey = getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+
+        const savedViewId = context.workspaceState.get<string>(visibleViewsKey);
+        const savedCycleContext = context.workspaceState.get<any>(cycleContextKey);
+        const savedTovContext = context.workspaceState.get<any>(tovContextKey);
         const savedContext = savedCycleContext || savedTovContext;
 
         let viewRestored = false;
@@ -1186,8 +1201,12 @@ async function handleNoSession(): Promise<void> {
         await connection.logoutUserOnServer();
     }
 
+    userSessionManager.endSession();
+
     if (treeViews) {
-        treeViews.clear();
+        treeViews.projectsTree.resetForNewSession();
+        treeViews.testThemesTree.resetForNewSession();
+        treeViews.testElementsTree.resetForNewSession();
     }
 
     await loadDefaultTreeViewsUI();
@@ -1210,6 +1229,20 @@ async function handleTestBenchSessionChange(
     const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess?.accessToken) {
+        const wasNewSessionStarted = userSessionManager.getCurrentUserId() !== sessionToProcess.account.id;
+
+        userSessionManager.startSession({
+            userKey: sessionToProcess.account.id,
+            login: sessionToProcess.account.label
+        });
+
+        if (treeViews) {
+            const reason = wasNewSessionStarted ? "New user session" : "Session restored/relogged";
+            logger.debug(`[extension] ${reason} for ${sessionToProcess.account.label}. Reloading persistent UI state.`);
+            await treeViews.projectsTree.reloadStateFromPersistence();
+            await treeViews.testThemesTree.reloadStateFromPersistence();
+            await treeViews.testElementsTree.reloadStateFromPersistence();
+        }
         const activeConnection = await connectionManager.getActiveConnection(context);
 
         if (!activeConnection) {
@@ -1245,9 +1278,13 @@ async function handleTestBenchSessionChange(
  * @param context The extension context
  */
 async function clearViewState(context: vscode.ExtensionContext): Promise<void> {
-    await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, "projects");
-    await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-    await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
+    const visibleViewsKey = getUserStorageKey(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+    const cycleContextKey = getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+    const tovContextKey = getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+
+    await context.workspaceState.update(visibleViewsKey, "projects");
+    await context.workspaceState.update(cycleContextKey, undefined);
+    await context.workspaceState.update(tovContextKey, undefined);
 }
 
 /**
@@ -1261,7 +1298,8 @@ async function saveUIContext(
     viewId: "projects" | "testThemes" | "testElements",
     contextData?: any
 ) {
-    await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, viewId);
+    const visibleViewsKey = getUserStorageKey(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+    await context.workspaceState.update(visibleViewsKey, viewId);
 
     if (contextData) {
         const hasValidProjectName = contextData.projectName && typeof contextData.projectName === "string";
@@ -1273,17 +1311,22 @@ async function saveUIContext(
                     `projectName: ${contextData.projectName}, tovName: ${contextData.tovName}. ` +
                     `Clearing context state.`
             );
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
+            const cycleContextKey = getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+            const tovContextKey = getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+            await context.workspaceState.update(cycleContextKey, undefined);
+            await context.workspaceState.update(tovContextKey, undefined);
             return;
         }
 
+        const cycleContextKey = getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+        const tovContextKey = getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+
         if (contextData.isCycle) {
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, contextData);
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
+            await context.workspaceState.update(cycleContextKey, contextData);
+            await context.workspaceState.update(tovContextKey, undefined);
         } else {
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, contextData);
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
+            await context.workspaceState.update(tovContextKey, contextData);
+            await context.workspaceState.update(cycleContextKey, undefined);
         }
     }
 }
@@ -1339,6 +1382,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         })
     );
+
+    userSessionManager = new UserSessionManager(context);
 
     // Initialize tree views
     await initializeTreeViews(context);
@@ -1470,56 +1515,36 @@ export async function clearAllExtensionData(
             logger.error("[extension] Error clearing authentication session while clearing all extension data:", error);
         }
 
-        logger.debug("[extension] Clearing workspace state storage...");
-        const workspaceStateKeys = [
-            StorageKeys.LAST_GENERATED_PARAMS,
-            StorageKeys.MARKED_TEST_GENERATION_ITEM,
-            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY,
-            `${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_last`,
-            StorageKeys.VISIBLE_VIEWS_STORAGE_KEY,
-            StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY,
-            StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY,
-            StorageKeys.CUSTOM_ROOT_PROJECT_TREE,
-            StorageKeys.CUSTOM_ROOT_TEST_THEME_TREE,
-            StorageKeys.CUSTOM_ROOT_TEST_ELEMENTS_TREE,
-            StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY,
-            StorageKeys.HAS_USED_EXTENSION_BEFORE,
-            `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`
-        ];
+        // State Clearing Logic
+        const extensionKeyPatterns = ["testbenchExtension.", "treeState.", "treeView.state."];
 
-        // View state storage keys (dynamic keys based on tree view IDs)
-        const treeViewIds = ["testbench.projects", "testbench.testThemes", "testbench.testElements"];
-        for (const treeViewId of treeViewIds) {
-            workspaceStateKeys.push(`treeState.${treeViewId}`);
-            workspaceStateKeys.push(`treeView.state.${treeViewId}`);
-        }
+        logger.debug("[extension] Clearing workspace state storage for all users...");
+        const allWorkspaceKeys = context.workspaceState.keys();
+        const extensionWorkspaceKeys = allWorkspaceKeys.filter((key) =>
+            extensionKeyPatterns.some((pattern) => key.includes(pattern))
+        );
 
-        for (const key of workspaceStateKeys) {
+        for (const key of extensionWorkspaceKeys) {
             try {
                 await context.workspaceState.update(key, undefined);
+                logger.trace(`[extension] Cleared workspace state key: ${key}`);
             } catch (error) {
-                logger.error(
-                    `[extension] Error clearing workspace state key ${key} while clearing all extension data:`,
-                    error
-                );
+                logger.error(`[extension] Error clearing workspace state key ${key}:`, error);
             }
         }
 
-        logger.debug("[extension] Clearing global state storage...");
-        const globalStateKeys: string[] = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
+        logger.debug("[extension] Clearing global state storage for all users...");
+        const allGlobalKeys = context.globalState.keys();
+        const extensionGlobalKeys = allGlobalKeys.filter((key) =>
+            extensionKeyPatterns.some((pattern) => key.includes(pattern))
+        );
 
-        for (const treeViewId of treeViewIds) {
-            globalStateKeys.push(`treeView.state.${treeViewId}`);
-        }
-
-        for (const key of globalStateKeys) {
+        for (const key of extensionGlobalKeys) {
             try {
                 await context.globalState.update(key, undefined);
+                logger.trace(`[extension] Cleared global state key: ${key}`);
             } catch (error) {
-                logger.error(
-                    `[extension] Error clearing global state key ${key} while clearing all extension data:`,
-                    error
-                );
+                logger.error(`[extension] Error clearing global state key ${key}:`, error);
             }
         }
 

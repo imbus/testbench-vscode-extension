@@ -18,6 +18,8 @@ import { CustomRootModule } from "../features/CustomRootModule";
 import { FilteringModule } from "../features/FilteringModule";
 import { TreeViewTiming } from "../../constants";
 import { IconModule } from "../features/IconModule";
+import { userSessionManager } from "../../extension";
+import { PersistenceModule } from "../features/PersistenceModule";
 
 export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.TreeDataProvider<T> {
     protected readonly _onDidChangeTreeData = new vscode.EventEmitter<T | undefined | null | void>();
@@ -43,7 +45,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     ) {
         this.logger = new TestBenchLogger();
         this.eventBus = new EventBus();
-        this.stateManager = new StateManager(extensionContext, config.id, this.eventBus);
+        this.stateManager = new StateManager(extensionContext, config.id, this.eventBus, userSessionManager);
         this.context = new TreeViewContextImpl(
             extensionContext,
             config,
@@ -512,6 +514,54 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
+     * Resets the tree view and all its modules to a clean state for a new session.
+     */
+    public resetForNewSession(): void {
+        this.logger.debug(`[TreeViewBase] Performing full state reset for new session: ${this.config.id}`);
+
+        this.stateManager.resetState();
+
+        for (const module of this.modules.values()) {
+            if (typeof module.reset === "function") {
+                module.reset();
+            }
+        }
+
+        this.rootItems = [];
+        this._lastDataFetch = 0;
+        this._intentionallyCleared = true;
+        this.resetTitle();
+        this._onDidChangeTreeData.fire(undefined);
+        this.updateTreeViewMessage();
+    }
+
+    /**
+     * Forces a reload of the tree's persistent UI state (expansion, marking, etc.) from storage.
+     * This is intended to be used after a user logs in.
+     */
+    public async reloadStateFromPersistence(): Promise<void> {
+        const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
+        if (persistenceModule) {
+            this.logger.debug(`[TreeViewBase] Reloading persistent state for ${this.config.id}`);
+            const loadedState = await persistenceModule.loadState();
+            if (loadedState) {
+                this.stateManager.setState(loadedState);
+
+                // Schedule expansion state restoration to happen after tree data loads
+                // to ensure coordination between state loading and tree data loading
+                setTimeout(() => {
+                    this.restoreExpansionStateWithDataLoading().catch((error) => {
+                        this.logger.error(
+                            "[TreeViewBase] Failed to restore expansion state after persistence reload:",
+                            error
+                        );
+                    });
+                }, 100);
+            }
+        }
+    }
+
+    /**
      * Updates the tree view configuration and notifies modules of changes
      * @param newConfig Partial configuration to merge with existing config
      */
@@ -683,8 +733,9 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
                 }, TreeViewTiming.UI_REFRESH_DEBOUNCE_MS);
             }
 
+            // Restore expansion state after tree data is loaded and UI is updated
             setTimeout(() => {
-                this.restoreExpansionState().catch((error) => {
+                this.restoreExpansionStateWithDataLoading().catch((error) => {
                     this.logger.error("[TreeViewBase] Failed to restore expansion state:", error);
                 });
             }, 100);
@@ -696,6 +747,93 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         } finally {
             this._isLoading = false;
         }
+    }
+
+    /**
+     * Restores the expansion state for all items in the tree with data loading.
+     * Ensures that child items are loaded before attempting expansion restoration.
+     */
+    protected async restoreExpansionStateWithDataLoading(): Promise<void> {
+        const expansionModule = this.getModule("expansion");
+        if (!expansionModule || !this.vscTreeView) {
+            return;
+        }
+
+        const state = this.stateManager.getState();
+        if (!state.expansion || state.expansion.expandedItems.size === 0) {
+            return;
+        }
+
+        this.logger.trace(
+            `[TreeViewBase] Restoring expansion state with data loading for ${state.expansion.expandedItems.size} items`
+        );
+
+        await this.preloadChildrenForExpansion();
+        await this.restoreExpansionState();
+    }
+
+    /**
+     * Preloads children for items that have expansion state saved.
+     * Necessary for version items in projects tree view that need their cycles loaded.
+     */
+    protected async preloadChildrenForExpansion(): Promise<void> {
+        const state = this.stateManager.getState();
+        if (!state.expansion || state.expansion.expandedItems.size === 0) {
+            return;
+        }
+
+        const itemsById = new Map<string, TreeItemBase>();
+        const collectCurrentItems = (items: TreeItemBase[]): void => {
+            for (const item of items) {
+                if (item.id) {
+                    itemsById.set(item.id, item);
+                }
+                if (item.children && item.children.length > 0) {
+                    collectCurrentItems(item.children);
+                }
+            }
+        };
+
+        collectCurrentItems(this.rootItems as TreeItemBase[]);
+
+        // For each expanded item ID, ensure its children are loaded, but only
+        // if the item's ancestor chain is effectively expanded
+        const expandedItems = state.expansion.expandedItems;
+        const collapsedItems = state.expansion.collapsedItems;
+        const defaultExpanded = state.expansion.defaultExpanded ?? false;
+
+        for (const expandedItemId of expandedItems) {
+            const item = itemsById.get(expandedItemId);
+            if (
+                item &&
+                this.shouldLoadChildrenForExpansion(item) &&
+                this.isAncestorChainExpanded(item, expandedItems, collapsedItems, defaultExpanded)
+            ) {
+                try {
+                    this.logger.trace(
+                        `[TreeViewBase] Preloading children for expanded item: ${item.label} (${expandedItemId})`
+                    );
+                    const children = await this.getChildrenForItem(item as any);
+                    (item as any).children = children;
+
+                    collectCurrentItems(children as TreeItemBase[]);
+                } catch (error) {
+                    this.logger.warn(`[TreeViewBase] Failed to preload children for item ${expandedItemId}:`, error);
+                }
+            }
+        }
+    }
+
+    /**
+     * Determines if children should be loaded for an item during expansion restoration.
+     * @param item The item to check if children should be loaded for
+     * @returns True if children should be loaded, false otherwise
+     */
+    protected shouldLoadChildrenForExpansion(item: TreeItemBase): boolean {
+        return (
+            item.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed ||
+            item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded
+        );
     }
 
     /**
@@ -730,10 +868,14 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
 
         collectItems(this.rootItems);
 
+        const expandedItems = state.expansion.expandedItems;
+        const collapsedItems = state.expansion.collapsedItems;
+        const defaultExpanded = state.expansion.defaultExpanded ?? false;
         const itemsToExpand: T[] = [];
-        for (const itemId of state.expansion.expandedItems) {
+
+        for (const itemId of expandedItems) {
             const item = itemsById.get(itemId);
-            if (item) {
+            if (item && this.isAncestorChainExpanded(item, expandedItems, collapsedItems, defaultExpanded)) {
                 itemsToExpand.push(item);
             }
         }
@@ -757,6 +899,38 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         }
 
         this.logger.trace(`[TreeViewBase] Expansion state restoration completed`);
+    }
+
+    /**
+     * Determines whether the ancestor chain of the provided tree item
+     * is expanded given the current expansion state.
+     * If any ancestor is explicitly collapsed, or neither explicitly expanded
+     * nor covered by defaultExpanded=true, the chain is considered not expanded.
+     * @param treeItem The tree item to check
+     * @param expandedItems Set of expanded item IDs
+     * @param collapsedItems Set of collapsed item IDs
+     * @param defaultExpanded Whether items are expanded by default
+     */
+    protected isAncestorChainExpanded(
+        treeItem: TreeItemBase,
+        expandedItems: Set<string>,
+        collapsedItems: Set<string>,
+        defaultExpanded: boolean
+    ): boolean {
+        let current: TreeItemBase | undefined = treeItem.parent as TreeItemBase | undefined;
+        while (current) {
+            const currentId = (current as any).id as string | undefined;
+            if (currentId) {
+                if (collapsedItems.has(currentId)) {
+                    return false;
+                }
+                if (!expandedItems.has(currentId) && !defaultExpanded) {
+                    return false;
+                }
+            }
+            current = current.parent as TreeItemBase | undefined;
+        }
+        return true;
     }
 
     /**

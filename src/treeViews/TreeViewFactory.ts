@@ -12,7 +12,15 @@ import { TreeViewConfig } from "./core/TreeViewConfig";
 import { allExtensionCommands, ContextKeys, StorageKeys } from "../constants";
 import { TestBenchLogger } from "../testBenchLogger";
 import { createAllTreeViews } from ".";
-import { extensionContext, treeViews, getConnection, logger, setTreeViews, setExtensionContext } from "../extension";
+import {
+    extensionContext,
+    treeViews,
+    getConnection,
+    logger,
+    setTreeViews,
+    setExtensionContext,
+    userSessionManager
+} from "../extension";
 
 export interface TreeViews {
     projectsTree: ProjectsTreeView;
@@ -467,10 +475,13 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
 
         await treeViews.initialize();
 
-        // Check for saved view state before setting default visibility
-        const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
-        const savedCycleContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
-        const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+        // Check for saved view state before setting default visibility (user scoped)
+        const userId = userSessionManager.getCurrentUserId();
+        const savedViewId = context.workspaceState.get<string>(`${userId}.${StorageKeys.VISIBLE_VIEWS_STORAGE_KEY}`);
+        const savedCycleContext = context.workspaceState.get<any>(
+            `${userId}.${StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY}`
+        );
+        const savedTovContext = context.workspaceState.get<any>(`${userId}.${StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY}`);
         const savedContext = savedCycleContext || savedTovContext;
 
         // Determine initial visibility based on saved state

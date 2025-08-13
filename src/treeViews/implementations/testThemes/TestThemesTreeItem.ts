@@ -5,7 +5,7 @@
 
 import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
-import { logger, treeViews } from "../../../extension";
+import { logger, treeViews, userSessionManager } from "../../../extension";
 import { TestThemeItemTypes, allExtensionCommands } from "../../../constants";
 import { MarkingInfo } from "../../state/StateTypes";
 import { RobotFileService } from "./RobotFileService";
@@ -135,8 +135,9 @@ export class TestThemesTreeItem extends TreeItemBase {
         const contextKey = this.data.cycleKey || "unknown-context";
         const isOpenedFromCycle = this.getMetadata("openedFromCycle") === true;
         const contextType = isOpenedFromCycle ? "cycle" : "tov";
+        const userId = userSessionManager.getCurrentUserId();
 
-        return `${contextType}:${projectKey}:${contextKey}`;
+        return `${userId}:${contextType}:${projectKey}:${contextKey}`;
     }
 
     /**

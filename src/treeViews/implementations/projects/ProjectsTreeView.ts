@@ -5,6 +5,7 @@
 
 import * as vscode from "vscode";
 import { TreeViewBase } from "../../core/TreeViewBase";
+import { TreeItemBase } from "../../core/TreeItemBase";
 import { ProjectData, ProjectsTreeItem } from "./ProjectsTreeItem";
 import { TreeViewConfig } from "../../core/TreeViewConfig";
 import { ProjectsDataProvider } from "./ProjectsDataProvider";
@@ -520,6 +521,28 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         treeItem.updateId();
         this.applyModulesToProjectsItem(treeItem);
         return treeItem;
+    }
+
+    /**
+     * Determines if children should be loaded for an item during expansion restoration.
+     * @param item The tree item to check
+     * @returns True if children should be loaded for this item
+     */
+    protected shouldLoadChildrenForExpansion(item: TreeItemBase): boolean {
+        const projectsItem = item as ProjectsTreeItem;
+
+        // For version items, load children (cycles) if they haven't been loaded yet
+        if (projectsItem.data?.type === "version") {
+            return !projectsItem.children || projectsItem.children.length === 0;
+        }
+
+        // For project items, load children (versions) if they haven't been loaded yet
+        if (projectsItem.data?.type === "project") {
+            return !projectsItem.children || projectsItem.children.length === 0;
+        }
+
+        // Cycles don't have children in projects tree view
+        return false;
     }
 
     /**
