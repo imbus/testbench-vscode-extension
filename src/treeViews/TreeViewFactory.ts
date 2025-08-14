@@ -21,6 +21,16 @@ import {
     setExtensionContext,
     userSessionManager
 } from "../extension";
+import { updateOrRestartLS } from "../server";
+import {
+    displayProjectManagementTreeView,
+    hideProjectManagementTreeView
+} from "./implementations/projects/ProjectsTreeView";
+import {
+    displayTestElementsTreeView,
+    hideTestElementsTreeView
+} from "./implementations/testElements/TestElementsTreeView";
+import { displayTestThemeTreeView, hideTestThemeTreeView } from "./implementations/testThemes/TestThemesTreeView";
 
 export interface TreeViews {
     projectsTree: ProjectsTreeView;
@@ -31,6 +41,14 @@ export interface TreeViews {
     refresh: () => void;
     clear: () => void;
     saveCurrentState: () => Promise<void>;
+    resetForNewUser: () => Promise<void>;
+    reloadAllTreeViewsStateFromPersistence: () => Promise<void>;
+    // View state management methods
+    saveUIContext: (viewId: "projects" | "testThemes" | "testElements", contextData?: any) => Promise<void>;
+    clearViewState: () => Promise<void>;
+    restoreViewsState: () => Promise<void>;
+    loadDefaultViewsUI: () => Promise<void>;
+    isValidSavedContext: (savedContext: any) => boolean;
 }
 
 export interface TreeViewFactoryOptions {
@@ -109,6 +127,28 @@ export class TreeViewFactory {
             },
             saveCurrentState: async () => {
                 await this.saveCurrentTreeViewState(projectsTree, testThemesTree, testElementsTree);
+            },
+            resetForNewUser: async () => {
+                await this.resetTreeViewsForNewUser(projectsTree, testThemesTree, testElementsTree);
+            },
+            reloadAllTreeViewsStateFromPersistence: async () => {
+                await this.reloadAllTreeViewStateFromPersistence(projectsTree, testThemesTree, testElementsTree);
+            },
+            // View state management methods
+            saveUIContext: async (viewId: "projects" | "testThemes" | "testElements", contextData?: any) => {
+                await this.saveUIContext(context, viewId, contextData);
+            },
+            clearViewState: async () => {
+                await this.clearViewState(context);
+            },
+            restoreViewsState: async () => {
+                await this.restoreTreeViewsState(context, { projectsTree, testThemesTree, testElementsTree });
+            },
+            loadDefaultViewsUI: async () => {
+                await this.loadDefaultTreeViewsUI({ projectsTree, testThemesTree, testElementsTree });
+            },
+            isValidSavedContext: (savedContext: any) => {
+                return this.isValidSavedContext(savedContext);
             }
         };
     }
@@ -472,6 +512,281 @@ export class TreeViewFactory {
             this.logger.debug("[TreeViewFactory] Successfully saved current tree view state");
         } catch (error) {
             this.logger.error("[TreeViewFactory] Error saving tree view state:", error);
+        }
+    }
+
+    /**
+     * Resets tree view state when switching to a different user.
+     * Ensures each user has their own clean state when logging in for the first time
+     * or when switching between different user accounts.
+     * @param projectsTree The projects tree view
+     * @param testThemesTree The test themes tree view
+     * @param testElementsTree The test elements tree view
+     */
+    private async resetTreeViewsForNewUser(
+        projectsTree: ProjectsTreeView,
+        testThemesTree: TestThemesTreeView,
+        testElementsTree: TestElementsTreeView
+    ): Promise<void> {
+        try {
+            await this.saveCurrentTreeViewState(projectsTree, testThemesTree, testElementsTree);
+
+            projectsTree.resetForNewSession();
+            testThemesTree.resetForNewSession();
+            testElementsTree.resetForNewSession();
+
+            this.logger.debug("[TreeViewFactory] Successfully reset tree views for new user");
+        } catch (error) {
+            this.logger.error("[TreeViewFactory] Error resetting tree views for new user:", error);
+        }
+    }
+
+    /**
+     * Reloads tree view state from persistence for all tree views.
+     * Called when a user session is established to restore their saved UI state.
+     * @param projectsTree The projects tree view
+     * @param testThemesTree The test themes tree view
+     * @param testElementsTree The test elements tree view
+     */
+    private async reloadAllTreeViewStateFromPersistence(
+        projectsTree: ProjectsTreeView,
+        testThemesTree: TestThemesTreeView,
+        testElementsTree: TestElementsTreeView
+    ): Promise<void> {
+        try {
+            await Promise.all([
+                projectsTree.reloadStateFromPersistence(),
+                testThemesTree.reloadStateFromPersistence(),
+                testElementsTree.reloadStateFromPersistence()
+            ]);
+            this.logger.debug(`[TreeViewFactory] Successfully reloaded tree view state`);
+        } catch (error) {
+            this.logger.error(`[TreeViewFactory] Error reloading tree view state:`, error);
+        }
+    }
+
+    // View State Management Methods
+
+    /**
+     * Generates user-specific storage key
+     * @param baseStorageKey The base key to use for storage
+     * @returns The user-specific storage key
+     */
+    private getUserStorageKey(baseStorageKey: string): string {
+        return `${userSessionManager.getCurrentUserId()}.${baseStorageKey}`;
+    }
+
+    /**
+     * Validates saved context data for view restoration.
+     * @param savedContext The saved context to validate
+     * @returns True if the saved context is valid, false otherwise
+     */
+    private isValidSavedContext(savedContext: any): boolean {
+        return !!(
+            savedContext &&
+            savedContext.projectName &&
+            typeof savedContext.projectName === "string" &&
+            savedContext.tovName &&
+            typeof savedContext.tovName === "string"
+        );
+    }
+
+    /**
+     * Saves the UI context data to the workspace state for later restoration.
+     * @param context The extension context
+     * @param viewId The ID of the currently visible primary view
+     * @param contextData The data required to restore the view (e.g., keys and names)
+     */
+    private async saveUIContext(
+        context: vscode.ExtensionContext,
+        viewId: "projects" | "testThemes" | "testElements",
+        contextData?: any
+    ): Promise<void> {
+        const visibleViewsKey = this.getUserStorageKey(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+        await context.workspaceState.update(visibleViewsKey, viewId);
+
+        if (contextData) {
+            const hasValidProjectName = contextData.projectName && typeof contextData.projectName === "string";
+            const hasValidTovName = contextData.tovName && typeof contextData.tovName === "string";
+
+            if (!hasValidProjectName || !hasValidTovName) {
+                this.logger.warn(
+                    `[TreeViewFactory] Cannot save UI context: invalid contextData. ` +
+                        `projectName: ${contextData.projectName}, tovName: ${contextData.tovName}. ` +
+                        `Clearing context state.`
+                );
+                const cycleContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+                const tovContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+                await context.workspaceState.update(cycleContextKey, undefined);
+                await context.workspaceState.update(tovContextKey, undefined);
+                return;
+            }
+
+            const cycleContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+            const tovContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+
+            if (contextData.isCycle) {
+                await context.workspaceState.update(cycleContextKey, contextData);
+                await context.workspaceState.update(tovContextKey, undefined);
+            } else {
+                await context.workspaceState.update(tovContextKey, contextData);
+                await context.workspaceState.update(cycleContextKey, undefined);
+            }
+        }
+    }
+
+    /**
+     * Clears all view state storage. This function is used to clear invalid view state
+     * when restoration fails, not for logout scenarios where view state should be preserved.
+     * @param context The extension context
+     */
+    private async clearViewState(context: vscode.ExtensionContext): Promise<void> {
+        const visibleViewsKey = this.getUserStorageKey(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+        const cycleContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+        const tovContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+
+        await context.workspaceState.update(visibleViewsKey, "projects");
+        await context.workspaceState.update(cycleContextKey, undefined);
+        await context.workspaceState.update(tovContextKey, undefined);
+    }
+
+    /**
+     * Loads the default tree views where only projects tree view is visible.
+     * @param treeViews The tree views object containing individual tree view instances
+     */
+    private async loadDefaultTreeViewsUI(treeViews: {
+        projectsTree: ProjectsTreeView;
+        testThemesTree: TestThemesTreeView;
+        testElementsTree: TestElementsTreeView;
+    }): Promise<void> {
+        treeViews.projectsTree.refresh();
+        await displayProjectManagementTreeView();
+        await hideTestThemeTreeView();
+        await hideTestElementsTreeView();
+    }
+
+    /**
+     * Restores a previously saved view state.
+     * Updates the language server, loads data into the tree views based on the saved context,
+     * and adjusts the visibility of the tree views accordingly.
+     * @param savedViewId The identifier of the view to restore
+     * @param savedContext An object containing the saved view information (project, TOV, cycle data)
+     * @param treeViews The tree views object containing individual tree view instances
+     * @returns A promise that resolves to true if the view was successfully restored, false otherwise
+     */
+    private async performDeferredViewRestoration(
+        savedViewId: string,
+        savedContext: any,
+        treeViews: {
+            projectsTree: ProjectsTreeView;
+            testThemesTree: TestThemesTreeView;
+            testElementsTree: TestElementsTreeView;
+        }
+    ): Promise<boolean> {
+        try {
+            this.logger.debug(`[TreeViewFactory] Performing deferred view restoration for: ${savedViewId}`);
+
+            if (savedContext.isCycle) {
+                await treeViews.testThemesTree.loadCycle(
+                    savedContext.projectKey,
+                    savedContext.cycleKey,
+                    savedContext.projectName,
+                    savedContext.tovName,
+                    savedContext.cycleLabel
+                );
+            } else {
+                await treeViews.testThemesTree.loadTov(
+                    savedContext.projectKey,
+                    savedContext.tovKey,
+                    savedContext.projectName,
+                    savedContext.tovName
+                );
+            }
+
+            await treeViews.testElementsTree.loadTov(
+                savedContext.tovKey,
+                savedContext.tovName,
+                savedContext.projectName,
+                savedContext.tovName
+            );
+
+            await displayTestThemeTreeView();
+            await displayTestElementsTreeView();
+            await hideProjectManagementTreeView();
+
+            this.logger.trace(
+                `[TreeViewFactory] Successfully restored view to context of TOV: ${savedContext.tovName}`
+            );
+            return true;
+        } catch (error) {
+            this.logger.error("[TreeViewFactory] Failed to restore view state:", error);
+            return false;
+        }
+    }
+
+    /**
+     * Refreshes tree views and attempts to restore previous view state.
+     * @param context The extension context
+     * @param treeViews The tree views object containing individual tree view instances
+     */
+    private async restoreTreeViewsState(
+        context: vscode.ExtensionContext,
+        treeViews: {
+            projectsTree: ProjectsTreeView;
+            testThemesTree: TestThemesTreeView;
+            testElementsTree: TestElementsTreeView;
+        }
+    ): Promise<void> {
+        this.logger.debug("[TreeViewFactory] Restoring tree views state");
+
+        try {
+            treeViews.projectsTree.clearTree();
+            treeViews.testThemesTree.clearTree();
+            treeViews.testElementsTree.clearTree();
+            treeViews.projectsTree.refresh();
+
+            const visibleViewsKey = this.getUserStorageKey(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
+            const cycleContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
+            const tovContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
+
+            const savedViewId = context.workspaceState.get<string>(visibleViewsKey);
+            const savedCycleContext = context.workspaceState.get<any>(cycleContextKey);
+            const savedTovContext = context.workspaceState.get<any>(tovContextKey);
+            const savedContext = savedCycleContext || savedTovContext;
+
+            let viewRestored = false;
+
+            if (savedContext && this.isValidSavedContext(savedContext)) {
+                await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
+            }
+
+            if (savedViewId && savedViewId !== "projects" && savedContext) {
+                if (!this.isValidSavedContext(savedContext)) {
+                    this.logger.warn(
+                        `[TreeViewFactory] Cannot restore view state: invalid context data. ` +
+                            `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
+                            `Clearing invalid state and loading default view.`
+                    );
+                    await this.clearViewState(context);
+                } else {
+                    try {
+                        viewRestored = await this.performDeferredViewRestoration(savedViewId, savedContext, treeViews);
+                    } catch (error) {
+                        this.logger.error(`[TreeViewFactory] Failed to restore view state:`, error);
+                        viewRestored = false;
+                    }
+                }
+            }
+
+            if (!viewRestored) {
+                this.logger.debug(
+                    "[TreeViewFactory] No saved state available to restore or restoration failed. Loading default view."
+                );
+                await this.loadDefaultTreeViewsUI(treeViews);
+            }
+        } catch (error) {
+            this.logger.warn(`[TreeViewFactory] Error managing trees during session change:`, error);
+            await this.loadDefaultTreeViewsUI(treeViews);
         }
     }
 

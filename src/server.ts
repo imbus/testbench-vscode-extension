@@ -1055,6 +1055,47 @@ export async function waitForLanguageServerReady(
 }
 
 /**
+ * Extracts project and TOV names from different tree item types (projects or test theme tree items),
+ * retrieves language server parameters and initializes or updates the language server.
+ *
+ * @param item The tree item that extends TreeItemBase and implements LanguageServerParameterProvider
+ * @param operationName Human readable name of the operation for error messages
+ * @returns Promise that resolves to the extracted project and TOV names, or throws an error
+ */
+export async function prepareLanguageServerForTreeItemOperation(
+    item: any, // Using any to avoid circular imports - the item should have getLanguageServerParameters method
+    operationName: string
+): Promise<{ projectName: string; tovName: string }> {
+    const timeOutMs = 30000;
+    const checkIntervallMs = 100;
+    const languageServerParams = item.getLanguageServerParameters?.();
+
+    if (!languageServerParams) {
+        const errorMessage = `Cannot ${operationName}: invalid tree item. Missing project or TOV information.`;
+        logger.error(`[server] ${errorMessage}`);
+        vscode.window.showErrorMessage(errorMessage);
+        throw new Error(errorMessage);
+    }
+
+    const { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem } = languageServerParams;
+    await updateOrRestartLS(projectNameOfTreeItem, tovNameOfTreeItem);
+
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: "Waiting for Language Server",
+            cancellable: true
+        },
+        async (progress, cancellationToken) => {
+            progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+            await waitForLanguageServerReady(timeOutMs, checkIntervallMs, cancellationToken);
+        }
+    );
+
+    return { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem };
+}
+
+/**
  * Finds the position of an interaction in a resource file using the language server.
  *
  * @param uri The URI of the resource file to search in
