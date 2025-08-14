@@ -13,7 +13,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import axios, { AxiosResponse } from "axios";
-import { connection, logger, getUserStorageKey, userSessionManager } from "./extension";
+import { connection, logger, userSessionManager } from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
@@ -57,16 +57,19 @@ async function saveLastGeneratedReportParams(
     };
 
     try {
-        const userId = userSessionManager.getCurrentUserId();
-        if (!userId || userId === "global_fallback") {
+        if (!userSessionManager.hasValidUserSession()) {
             logger.debug("[reportHandler] No user session active, skipping last generated params storage");
             return;
         }
 
-        const storageKey = getUserStorageKey(StorageKeys.LAST_GENERATED_PARAMS);
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.LAST_GENERATED_PARAMS);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping last generated params storage");
+            return;
+        }
         await context.workspaceState.update(storageKey, paramsToSave);
         logger.debug(
-            `[reportHandler] Saved last generated report params to workspace state for user ${userId}: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
+            `[reportHandler] Saved last generated report params to workspace state for user ${userSessionManager.getCurrentUserId()}: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
         );
     } catch (error) {
         logger.error("[reportHandler] Failed to save last generated report params to workspace state:", error);
@@ -83,13 +86,16 @@ function getLastGeneratedReportParams(
     context: vscode.ExtensionContext
 ): testBenchTypes.LastGeneratedReportParams | undefined {
     try {
-        const userId = userSessionManager.getCurrentUserId();
-        if (!userId || userId === "global_fallback") {
+        if (!userSessionManager.hasValidUserSession()) {
             logger.debug("[reportHandler] No user session active, cannot retrieve last generated params");
             return undefined;
         }
 
-        const storageKey = `${userId}.${StorageKeys.LAST_GENERATED_PARAMS}`;
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.LAST_GENERATED_PARAMS);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, cannot retrieve last generated params");
+            return undefined;
+        }
         const storedParams: testBenchTypes.LastGeneratedReportParams | undefined =
             context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(storageKey);
 
@@ -567,15 +573,20 @@ export async function fetchReportZipOfCycleFromServer(
  */
 async function setLastImportedItem(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
     try {
-        const userId = userSessionManager.getCurrentUserId();
-        if (!userId || userId === "global_fallback") {
+        if (!userSessionManager.hasValidUserSession()) {
             logger.debug("[reportHandler] No user session active, skipping last imported item tracking");
             return;
         }
 
-        const storageKey = getUserStorageKey(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY);
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping last imported item tracking");
+            return;
+        }
         await context.workspaceState.update(storageKey, reportRootUID);
-        logger.debug(`[reportHandler] Set last imported item UID to ${reportRootUID} for user ${userId}.`);
+        logger.debug(
+            `[reportHandler] Set last imported item UID to ${reportRootUID} for user ${userSessionManager.getCurrentUserId()}.`
+        );
     } catch (error) {
         logger.error(`[reportHandler] Error setting last imported item UID: ${error}`);
     }
@@ -1126,15 +1137,20 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
  */
 export async function clearImportedSubTreeItemsTracking(context: vscode.ExtensionContext): Promise<void> {
     try {
-        const userId = userSessionManager.getCurrentUserId();
-        if (!userId || userId === "global_fallback") {
+        if (!userSessionManager.hasValidUserSession()) {
             logger.debug("[reportHandler] No user session active, skipping clear imported item tracking");
             return;
         }
 
-        const storageKey = getUserStorageKey(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY);
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping clear imported item tracking");
+            return;
+        }
         await context.workspaceState.update(storageKey, undefined);
-        logger.debug(`[reportHandler] Cleared last imported item tracking for user ${userId}.`);
+        logger.debug(
+            `[reportHandler] Cleared last imported item tracking for user ${userSessionManager.getCurrentUserId()}.`
+        );
     } catch (error) {
         logger.error("[reportHandler] Error clearing last imported item tracking:", error);
     }

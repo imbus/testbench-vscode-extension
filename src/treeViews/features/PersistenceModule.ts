@@ -35,12 +35,20 @@ export class PersistenceModule implements TreeViewModule {
             this.debouncedSave();
         });
 
-        const loadedState = await this.loadState();
-        if (loadedState) {
-            context.stateManager.setState(loadedState);
-            context.logger.debug("[PersistenceModule] State loaded and applied to state manager");
+        // Skip state loading during initialization if user session is not available yet.
+        // State will be loaded later during session restoration.
+        if (userSessionManager.hasValidUserSession()) {
+            const loadedState = await this.loadState();
+            if (loadedState) {
+                context.stateManager.setState(loadedState);
+                context.logger.debug("[PersistenceModule] State loaded and applied to state manager");
+            } else {
+                context.logger.debug("[PersistenceModule] No saved state found");
+            }
         } else {
-            context.logger.debug("[PersistenceModule] No saved state found");
+            context.logger.debug(
+                "[PersistenceModule] Skipping state loading during initialization - user session not available yet"
+            );
         }
 
         // Listen for VS Code workspace events to save before shutdown
@@ -75,8 +83,7 @@ export class PersistenceModule implements TreeViewModule {
             return;
         }
 
-        const userId = userSessionManager.getCurrentUserId();
-        if (!userId || userId === "global_fallback") {
+        if (!userSessionManager.hasValidUserSession()) {
             this.context.logger.trace("[PersistenceModule] No valid user session for saving state, skipping");
             return;
         }
@@ -93,7 +100,9 @@ export class PersistenceModule implements TreeViewModule {
                 await this.saveToGlobal(dataToSave);
             }
 
-            this.context.logger.debug(`[PersistenceModule] State saved successfully for user ${userId}`);
+            this.context.logger.debug(
+                `[PersistenceModule] State saved successfully for user ${userSessionManager.getCurrentUserId()}`
+            );
             if (dataToSave.expansion) {
                 this.context.logger.debug(
                     `[PersistenceModule] Saved expansion state: ${dataToSave.expansion.expandedItems?.length || 0} expanded items`
@@ -119,8 +128,7 @@ export class PersistenceModule implements TreeViewModule {
             return null;
         }
 
-        const userId = userSessionManager.getCurrentUserId();
-        if (!userId || userId === "global_fallback") {
+        if (!userSessionManager.hasValidUserSession()) {
             this.context.logger.warn("[PersistenceModule] No valid user session for loading state, skipping");
             return null;
         }
@@ -136,14 +144,18 @@ export class PersistenceModule implements TreeViewModule {
 
             const parsedState = this.parseLoadedData(data);
             if (parsedState) {
-                this.context.logger.debug(`[PersistenceModule] Successfully loaded state for user ${userId}`);
+                this.context.logger.debug(
+                    `[PersistenceModule] Successfully loaded state for user ${userSessionManager.getCurrentUserId()}`
+                );
                 if (parsedState.expansion) {
                     this.context.logger.debug(
                         `[PersistenceModule] Loaded expansion state: ${parsedState.expansion.expandedItems?.size || 0} expanded items`
                     );
                 }
             } else {
-                this.context.logger.debug(`[PersistenceModule] No saved state found for user ${userId}`);
+                this.context.logger.debug(
+                    `[PersistenceModule] No saved state found for user ${userSessionManager.getCurrentUserId()}`
+                );
             }
 
             return parsedState;

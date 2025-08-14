@@ -415,8 +415,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 throw new Error("Failed to fetch test structure");
             }
 
-            // Clear existing items
-            this._onDidChangeTreeData.fire(undefined);
+            // Clear existing tree data only, preserving UI state (expansion, marking, etc.)
+            this.clearTreeDataOnly();
 
             // Build the tree structure
             const nodeMap = new Map(
@@ -490,8 +490,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 throw new Error("Failed to fetch test structure");
             }
 
-            // Clear existing items
-            this._onDidChangeTreeData.fire(undefined);
+            // Clear existing tree data only, preserving UI state (expansion, marking, etc.)
+            this.clearTreeDataOnly();
 
             const nodeMap = new Map(
                 fetchedTestStructure.nodes.map((node) => [node.base.key, { ...node, hasChildren: false }])

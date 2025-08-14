@@ -532,6 +532,19 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
+     * Clears only the tree data (root items) but preserves UI state like expansion, marking, etc.
+     * This is useful when refreshing data while maintaining user's UI preferences.
+     */
+    public clearTreeDataOnly(): void {
+        this.logger.trace("[TreeViewBase] Clearing tree data only, preserving UI state");
+        this.rootItems = [];
+        this._lastDataFetch = 0;
+        this._intentionallyCleared = true;
+        this._onDidChangeTreeData.fire(undefined);
+        this.updateTreeViewMessage();
+    }
+
+    /**
      * Clears the state of all modules associated with this tree view.
      */
     public async clearAllModuleState(): Promise<void> {
@@ -807,31 +820,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         } finally {
             this._isLoading = false;
         }
-    }
-
-    /**
-     * Restores the expansion state for all items in the tree with data loading.
-     * Ensures that child items are loaded before attempting expansion restoration.
-     * @deprecated This method is no longer used in the normal expansion flow.
-     * Expansion state is now applied directly during tree rendering via preloadChildrenForExpandedItems().
-     */
-    protected async restoreExpansionStateWithDataLoading(): Promise<void> {
-        const expansionModule = this.getModule("expansion");
-        if (!expansionModule || !this.vscTreeView) {
-            return;
-        }
-
-        const state = this.stateManager.getState();
-        if (!state.expansion || state.expansion.expandedItems.size === 0) {
-            return;
-        }
-
-        this.logger.trace(
-            `[TreeViewBase] Restoring expansion state with data loading for ${state.expansion.expandedItems.size} items`
-        );
-
-        await this.preloadChildrenForExpansion();
-        await this.restoreExpansionState();
     }
 
     /**

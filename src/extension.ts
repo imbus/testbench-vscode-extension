@@ -117,15 +117,6 @@ export const ENABLE_ICON_MARKING_ON_TEST_GENERATION: boolean = true;
 export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = true;
 
 /**
- * Generates user-specific storage key
- * @param baseStorageKey The base key to use for storage
- * @returns The user-specific storage key
- */
-export function getUserStorageKey(baseStorageKey: string): string {
-    return `${userSessionManager.getCurrentUserId()}.${baseStorageKey}`;
-}
-
-/**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
  * It takes a handler function as input and returns a new function that executes the original handler inside a try/catch block.
  *

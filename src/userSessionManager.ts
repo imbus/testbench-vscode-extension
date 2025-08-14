@@ -35,4 +35,25 @@ export class UserSessionManager {
     public getCurrentUserId(): string {
         return this.currentUser?.userKey ?? "global_fallback";
     }
+
+    /**
+     * Checks if a valid user session is active (not the fallback session)
+     * @returns True if a valid user session is active, false otherwise
+     */
+    public hasValidUserSession(): boolean {
+        const userId = this.getCurrentUserId();
+        return userId !== "global_fallback";
+    }
+
+    /**
+     * Gets a user-specific storage key if a valid session exists
+     * @param baseKey The base key to make user-specific
+     * @returns User-specific storage key or null if no valid session
+     */
+    public getUserStorageKey(baseKey: string): string | null {
+        if (!this.hasValidUserSession()) {
+            return null;
+        }
+        return `${this.getCurrentUserId()}.${baseKey}`;
+    }
 }

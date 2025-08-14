@@ -33,10 +33,7 @@ export class ExpansionModule implements TreeViewModule {
 
         const state = context.stateManager.getState();
         if (state.expansion) {
-            this.expandedItems = new Set(state.expansion.expandedItems);
-            this.collapsedItems = new Set(state.expansion.collapsedItems);
-            this.defaultExpanded = state.expansion.defaultExpanded ?? this.defaultExpanded;
-
+            this.updateExpansionFromState(state.expansion);
             context.logger.debug(
                 `[ExpansionModule] Initialized with expansion state: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed items`
             );
@@ -59,11 +56,9 @@ export class ExpansionModule implements TreeViewModule {
         });
 
         context.eventBus.on("state:changed", (event) => {
-            if (event.data?.expansion) {
-                this.expandedItems = new Set(event.data.expansion.expandedItems);
-                this.collapsedItems = new Set(event.data.expansion.collapsedItems);
-                this.defaultExpanded = event.data.expansion.defaultExpanded ?? this.defaultExpanded;
-
+            const newState = event.data?.newState;
+            if (newState?.expansion) {
+                this.updateExpansionFromState(newState.expansion);
                 context.logger.debug(
                     `[ExpansionModule] Updated expansion state from persistence: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed items`
                 );
@@ -71,6 +66,16 @@ export class ExpansionModule implements TreeViewModule {
         });
 
         context.logger.debug("[ExpansionModule] Expansion module initialized");
+    }
+
+    /**
+     * Updates the expansion state from loaded state data
+     * @param expansionState The expansion state to apply
+     */
+    private updateExpansionFromState(expansionState: ExpansionState): void {
+        this.expandedItems = new Set(expansionState.expandedItems);
+        this.collapsedItems = new Set(expansionState.collapsedItems);
+        this.defaultExpanded = expansionState.defaultExpanded ?? this.defaultExpanded;
     }
 
     /**

@@ -570,10 +570,14 @@ export class TreeViewFactory {
     /**
      * Generates user-specific storage key
      * @param baseStorageKey The base key to use for storage
-     * @returns The user-specific storage key
+     * @returns The user-specific storage key or throws if no valid session
      */
     private getUserStorageKey(baseStorageKey: string): string {
-        return `${userSessionManager.getCurrentUserId()}.${baseStorageKey}`;
+        const key = userSessionManager.getUserStorageKey(baseStorageKey);
+        if (!key) {
+            throw new Error("No valid user session available for storage key generation");
+        }
+        return key;
     }
 
     /**
@@ -828,30 +832,10 @@ export async function initializeTreeViews(context: vscode.ExtensionContext): Pro
 
         await treeViews.initialize();
 
-        // Check for saved view state before setting default visibility (user scoped)
-        const userId = userSessionManager.getCurrentUserId();
-        const savedViewId = context.workspaceState.get<string>(`${userId}.${StorageKeys.VISIBLE_VIEWS_STORAGE_KEY}`);
-        const savedCycleContext = context.workspaceState.get<any>(
-            `${userId}.${StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY}`
-        );
-        const savedTovContext = context.workspaceState.get<any>(`${userId}.${StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY}`);
-        const savedContext = savedCycleContext || savedTovContext;
-
-        // Determine initial visibility based on saved state
-        let showProjects = true;
-        let showTestThemes = false;
-        let showTestElements = false;
-
-        if (savedViewId && savedViewId !== "projects" && savedContext) {
-            const hasValidProjectName = savedContext.projectName && typeof savedContext.projectName === "string";
-            const hasValidTovName = savedContext.tovName && typeof savedContext.tovName === "string";
-
-            if (hasValidProjectName && hasValidTovName) {
-                showProjects = false;
-                showTestThemes = savedViewId === "testThemes" || savedViewId === "testElements";
-                showTestElements = savedViewId === "testElements";
-            }
-        }
+        // Skip user-specific state loading during initialization, user session is not available yet.
+        const showProjects = true;
+        const showTestThemes = false;
+        const showTestElements = false;
 
         await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, showProjects);
         await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, showTestThemes);
