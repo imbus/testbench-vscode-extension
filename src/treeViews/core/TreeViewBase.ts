@@ -109,7 +109,12 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
 
         try {
             this.logger.trace("[TreeViewBase] Initializing tree view");
+
+            // Load persistence state first before other modules to ensure expansion state
+            // is available during tree rendering phase
+            await this.initializePersistence();
             await this.initializeModules();
+
             // Don't load data during initialization, wait for connection event
             this._initialized = true;
 
@@ -151,6 +156,28 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
+     * Initializes the persistence module to load saved state before other modules.
+     * This ensures expansion state is available during tree rendering, preventing animation delays.
+     * @returns Promise that resolves when persistence module is initialized
+     */
+    private async initializePersistence(): Promise<void> {
+        const enabledModules = ModuleRegistry.createEnabledModules(this.config.features);
+        const persistenceModule = enabledModules.get("persistence");
+
+        if (persistenceModule) {
+            try {
+                this.registerModule(persistenceModule);
+                await persistenceModule.initialize(this.context);
+                this.logger.debug(
+                    "[TreeViewBase] Persistence module initialized first for immediate state availability"
+                );
+            } catch (error) {
+                this.logger.error("[TreeViewBase] Failed to initialize persistence module first:", error);
+            }
+        }
+    }
+
+    /**
      * Initializes all enabled modules from the registry.
      * The modules are registered and then initialized.
      * If a module fails to initialize, it will continue with the other modules.
@@ -160,26 +187,14 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
         const enabledModules = ModuleRegistry.createEnabledModules(this.config.features);
         const modulePromises: Promise<void>[] = [];
 
-        for (const [, module] of enabledModules) {
-            this.registerModule(module);
-        }
-
-        // Initialize persistence module first to ensure state is loaded
-        const persistenceModule = enabledModules.get("persistence");
-        if (persistenceModule) {
-            try {
-                await persistenceModule.initialize(this.context);
-            } catch (error) {
-                this.logger.error("[TreeViewBase] Failed to initialize persistence module:", error);
-            }
-        }
-
-        // Initialize all other modules in parallel
+        // Register all modules and initialize non-persistence modules
         for (const [moduleName, module] of enabledModules) {
+            // Skip persistence module as it's already registered and initialized in initializePersistence
             if (moduleName === "persistence") {
                 continue;
             }
 
+            this.registerModule(module);
             modulePromises.push(
                 module.initialize(this.context).catch((error) => {
                     this.logger.error(`[TreeViewBase] Failed to initialize module ${moduleName}:`, error);
@@ -311,6 +326,9 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             this.logger.trace("[TreeViewBase] Applying expansion state to children tree items");
             if (expansionModule) {
                 children.forEach((child) => expansionModule.applyExpansionState(child));
+
+                // Preload children for items that should be expanded to eliminate expansion animation delay
+                await this.preloadChildrenForExpandedItems(children);
             }
 
             return children;
@@ -318,6 +336,47 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             const emptyArray: T[] = [];
             this.logger.error("[TreeViewBase] Failed to get children", error as Error);
             return emptyArray;
+        }
+    }
+
+    /**
+     * Preloads children for items that should be expanded to eliminate expansion animation delay.
+     * This ensures that when VS Code renders items with collapsibleState = Expanded,
+     * their children are already available in memory.
+     * @param items Array of tree items to check for expansion state
+     * @returns Promise that resolves when all expanded items have their children preloaded
+     */
+    private async preloadChildrenForExpandedItems(items: T[]): Promise<void> {
+        const preloadPromises: Promise<void>[] = [];
+
+        for (const item of items) {
+            if (item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                preloadPromises.push(this.preloadChildrenForSingleItem(item));
+            }
+        }
+
+        if (preloadPromises.length > 0) {
+            this.logger.trace(`[TreeViewBase] Preloading children for ${preloadPromises.length} expanded items`);
+            await Promise.all(preloadPromises);
+        }
+    }
+
+    /**
+     * Preloads children for a single expanded item.
+     * @param item The tree item to preload children for
+     * @returns Promise that resolves when children are preloaded
+     */
+    private async preloadChildrenForSingleItem(item: T): Promise<void> {
+        try {
+            if (!item.children || item.children.length === 0) {
+                const children = await this.getChildrenForItem(item);
+                item.children = children;
+                this.logger.trace(
+                    `[TreeViewBase] Preloaded ${children.length} children for expanded item: ${item.label}`
+                );
+            }
+        } catch (error) {
+            this.logger.trace(`[TreeViewBase] Failed to preload children for item ${item.id || item.label}:`, error);
         }
     }
 
@@ -538,26 +597,34 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     /**
      * Forces a reload of the tree's persistent UI state (expansion, marking, etc.) from storage.
      * This is intended to be used after a user logs in.
+     * Expansion state is applied directly during tree rendering.
      */
     public async reloadStateFromPersistence(): Promise<void> {
         const persistenceModule = this.getModule("persistence") as PersistenceModule | undefined;
-        if (persistenceModule) {
-            this.logger.debug(`[TreeViewBase] Reloading persistent state for ${this.config.id}`);
-            const loadedState = await persistenceModule.loadState();
-            if (loadedState) {
-                this.stateManager.setState(loadedState);
+        if (!persistenceModule) {
+            this.logger.warn(`[TreeViewBase] No persistence module available for ${this.config.id}`);
+            return;
+        }
 
-                // Schedule expansion state restoration to happen after tree data loads
-                // to ensure coordination between state loading and tree data loading
-                setTimeout(() => {
-                    this.restoreExpansionStateWithDataLoading().catch((error) => {
-                        this.logger.error(
-                            "[TreeViewBase] Failed to restore expansion state after persistence reload:",
-                            error
-                        );
-                    });
-                }, 100);
+        this.logger.debug(`[TreeViewBase] Reloading persistent state for ${this.config.id}`);
+        const loadedState = await persistenceModule.loadState();
+
+        if (loadedState) {
+            this.stateManager.setState(loadedState);
+            this.logger.debug(
+                `[TreeViewBase] Persistent state reloaded for ${this.config.id}, expansion will be applied during next tree render`
+            );
+
+            if (loadedState.expansion) {
+                this.logger.debug(
+                    `[TreeViewBase] Loaded expansion state for ${this.config.id}: ${loadedState.expansion.expandedItems?.size || 0} expanded items`
+                );
             }
+
+            // Apply the loaded state
+            this.refresh(undefined, { immediate: true });
+        } else {
+            this.logger.debug(`[TreeViewBase] No persistent state found for ${this.config.id}`);
         }
     }
 
@@ -732,13 +799,6 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
                     this._dataFetchDebounceTimeout = undefined;
                 }, TreeViewTiming.UI_REFRESH_DEBOUNCE_MS);
             }
-
-            // Restore expansion state after tree data is loaded and UI is updated
-            setTimeout(() => {
-                this.restoreExpansionStateWithDataLoading().catch((error) => {
-                    this.logger.error("[TreeViewBase] Failed to restore expansion state:", error);
-                });
-            }, 100);
         } catch (error) {
             this.logger.error("[TreeViewBase] Error during data load:", error);
             this.stateManager.setError(error as Error);
@@ -752,6 +812,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     /**
      * Restores the expansion state for all items in the tree with data loading.
      * Ensures that child items are loaded before attempting expansion restoration.
+     * @deprecated This method is no longer used in the normal expansion flow.
+     * Expansion state is now applied directly during tree rendering via preloadChildrenForExpandedItems().
      */
     protected async restoreExpansionStateWithDataLoading(): Promise<void> {
         const expansionModule = this.getModule("expansion");

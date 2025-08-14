@@ -36,6 +36,12 @@ export class ExpansionModule implements TreeViewModule {
             this.expandedItems = new Set(state.expansion.expandedItems);
             this.collapsedItems = new Set(state.expansion.collapsedItems);
             this.defaultExpanded = state.expansion.defaultExpanded ?? this.defaultExpanded;
+
+            context.logger.debug(
+                `[ExpansionModule] Initialized with expansion state: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed items`
+            );
+        } else {
+            context.logger.debug("[ExpansionModule] No expansion state found during initialization");
         }
 
         context.eventBus.on("tree:itemExpanded", (event) => {
@@ -57,6 +63,10 @@ export class ExpansionModule implements TreeViewModule {
                 this.expandedItems = new Set(event.data.expansion.expandedItems);
                 this.collapsedItems = new Set(event.data.expansion.collapsedItems);
                 this.defaultExpanded = event.data.expansion.defaultExpanded ?? this.defaultExpanded;
+
+                context.logger.debug(
+                    `[ExpansionModule] Updated expansion state from persistence: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed items`
+                );
             }
         });
 
@@ -126,12 +136,29 @@ export class ExpansionModule implements TreeViewModule {
             return;
         }
 
+        const originalState = item.collapsibleState;
+
         if (this.expandedItems.has(item.id)) {
             item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            if (originalState !== vscode.TreeItemCollapsibleState.Expanded) {
+                this.context.logger.trace(
+                    `[ExpansionModule] Applied expanded state to item: ${item.label} (${item.id})`
+                );
+            }
         } else if (this.collapsedItems.has(item.id)) {
             item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+            if (originalState !== vscode.TreeItemCollapsibleState.Collapsed) {
+                this.context.logger.trace(
+                    `[ExpansionModule] Applied collapsed state to item: ${item.label} (${item.id})`
+                );
+            }
         } else if (this.defaultExpanded) {
             item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            if (originalState !== vscode.TreeItemCollapsibleState.Expanded) {
+                this.context.logger.trace(
+                    `[ExpansionModule] Applied default expanded state to item: ${item.label} (${item.id})`
+                );
+            }
         }
     }
 

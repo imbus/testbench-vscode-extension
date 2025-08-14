@@ -1201,12 +1201,18 @@ async function handleNoSession(): Promise<void> {
         await connection.logoutUserOnServer();
     }
 
+    // Save current state before ending session to ensure persistence
+    if (treeViews) {
+        await treeViews.saveCurrentState();
+    }
+
     userSessionManager.endSession();
 
+    // Clear tree data but preserve persistent state (expansion, marking, etc.)
     if (treeViews) {
-        treeViews.projectsTree.resetForNewSession();
-        treeViews.testThemesTree.resetForNewSession();
-        treeViews.testElementsTree.resetForNewSession();
+        treeViews.projectsTree.clearTree();
+        treeViews.testThemesTree.clearTree();
+        treeViews.testElementsTree.clearTree();
     }
 
     await loadDefaultTreeViewsUI();
@@ -1229,7 +1235,17 @@ async function handleTestBenchSessionChange(
     const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess?.accessToken) {
-        const wasNewSessionStarted = userSessionManager.getCurrentUserId() !== sessionToProcess.account.id;
+        const previousUserId = userSessionManager.getCurrentUserId();
+        const newUserId = sessionToProcess.account.id;
+        const wasNewSessionStarted = previousUserId !== newUserId;
+
+        // If switching to a different user, reset state for the previous user's data
+        if (wasNewSessionStarted && previousUserId !== "global_fallback" && treeViews) {
+            logger.trace(
+                `[extension] Switching from user ${previousUserId} to ${newUserId}, clearing previous user's tree state`
+            );
+            await resetTreeViewsForNewUser(treeViews);
+        }
 
         userSessionManager.startSession({
             userKey: sessionToProcess.account.id,
@@ -1239,9 +1255,7 @@ async function handleTestBenchSessionChange(
         if (treeViews) {
             const reason = wasNewSessionStarted ? "New user session" : "Session restored/relogged";
             logger.debug(`[extension] ${reason} for ${sessionToProcess.account.label}. Reloading persistent UI state.`);
-            await treeViews.projectsTree.reloadStateFromPersistence();
-            await treeViews.testThemesTree.reloadStateFromPersistence();
-            await treeViews.testElementsTree.reloadStateFromPersistence();
+            await reloadTreeViewState(treeViews, reason);
         }
         const activeConnection = await connectionManager.getActiveConnection(context);
 
@@ -1273,6 +1287,47 @@ async function handleTestBenchSessionChange(
 }
 
 /**
+ * Reloads tree view state from persistence for all tree views.
+ * This is called when a user session is established to restore their saved UI state.
+ * @param treeViews The tree views to reload state for
+ * @param reason Description of why state is being reloaded (for logging)
+ */
+async function reloadTreeViewState(treeViews: TreeViews, reason: string): Promise<void> {
+    try {
+        await Promise.all([
+            treeViews.projectsTree.reloadStateFromPersistence(),
+            treeViews.testThemesTree.reloadStateFromPersistence(),
+            treeViews.testElementsTree.reloadStateFromPersistence()
+        ]);
+        logger.debug(`[extension] Successfully reloaded tree view state - ${reason}`);
+    } catch (error) {
+        logger.error(`[extension] Error reloading tree view state (${reason}):`, error);
+    }
+}
+
+/**
+ * Resets tree view state when switching to a different user.
+ * This ensures each user has their own clean state when logging in for the first time
+ * or when switching between different user accounts.
+ * @param treeViews The tree views to reset
+ */
+async function resetTreeViewsForNewUser(treeViews: TreeViews): Promise<void> {
+    try {
+        // Save current state before resetting (in case the previous user logs back in)
+        await treeViews.saveCurrentState();
+
+        // Reset all tree view state for the new user
+        treeViews.projectsTree.resetForNewSession();
+        treeViews.testThemesTree.resetForNewSession();
+        treeViews.testElementsTree.resetForNewSession();
+
+        logger.debug("[extension] Successfully reset tree views for new user");
+    } catch (error) {
+        logger.error("[extension] Error resetting tree views for new user:", error);
+    }
+}
+
+/**
  * Clears all view state storage. This function is used to clear invalid view state
  * when restoration fails, not for logout scenarios where view state should be preserved.
  * @param context The extension context
@@ -1288,7 +1343,7 @@ async function clearViewState(context: vscode.ExtensionContext): Promise<void> {
 }
 
 /**
- * Saves the UI context to the workspace state for later restoration.
+ * Saves the UI context data to the workspace state for later restoration.
  * @param context The extension context.
  * @param viewId The ID of the currently visible primary view.
  * @param contextData The data required to restore the view (e.g., keys and names).

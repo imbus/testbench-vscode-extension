@@ -442,7 +442,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
-            await this.restoreExpansionStateWithDataLoading();
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading cycle:", error);
 
@@ -517,7 +516,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
-            await this.restoreExpansionStateWithDataLoading();
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading TOV:", error);
 

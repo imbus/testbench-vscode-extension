@@ -30,6 +30,7 @@ export interface TreeViews {
     dispose: () => void;
     refresh: () => void;
     clear: () => void;
+    saveCurrentState: () => Promise<void>;
 }
 
 export interface TreeViewFactoryOptions {
@@ -105,6 +106,9 @@ export class TreeViewFactory {
                 projectsTree.clearTree();
                 testThemesTree.clearTree();
                 testElementsTree.clearTree();
+            },
+            saveCurrentState: async () => {
+                await this.saveCurrentTreeViewState(projectsTree, testThemesTree, testElementsTree);
             }
         };
     }
@@ -435,6 +439,40 @@ export class TreeViewFactory {
         // Store disposables
         context.subscriptions.push(refreshAllCmd, clearRootsCmd, clearMarksCmd);
         this.disposables.push(refreshAllCmd, clearRootsCmd, clearMarksCmd);
+    }
+
+    /**
+     * Saves the current state of all tree views to ensure persistence across sessions.
+     * This method forces immediate persistence of expansion state and other UI state.
+     * @param projectsTree The projects tree view
+     * @param testThemesTree The test themes tree view
+     * @param testElementsTree The test elements tree view
+     */
+    private async saveCurrentTreeViewState(
+        projectsTree: ProjectsTreeView,
+        testThemesTree: TestThemesTreeView,
+        testElementsTree: TestElementsTreeView
+    ): Promise<void> {
+        try {
+            const savePromises: Promise<void>[] = [];
+
+            const persistenceModules = [
+                projectsTree.getModule("persistence"),
+                testThemesTree.getModule("persistence"),
+                testElementsTree.getModule("persistence")
+            ];
+
+            for (const persistenceModule of persistenceModules) {
+                if (persistenceModule && typeof (persistenceModule as any).forceSave === "function") {
+                    savePromises.push((persistenceModule as any).forceSave());
+                }
+            }
+
+            await Promise.all(savePromises);
+            this.logger.debug("[TreeViewFactory] Successfully saved current tree view state");
+        } catch (error) {
+            this.logger.error("[TreeViewFactory] Error saving tree view state:", error);
+        }
     }
 
     /**

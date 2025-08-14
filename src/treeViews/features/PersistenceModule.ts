@@ -38,12 +38,7 @@ export class PersistenceModule implements TreeViewModule {
         const loadedState = await this.loadState();
         if (loadedState) {
             context.stateManager.setState(loadedState);
-
-            // Apply expansion state after a delay to ensure tree is ready
-            setTimeout(() => {
-                context.logger.debug("[PersistenceModule] Triggering expansion state restoration");
-                this.restoreExpansionState();
-            }, 200);
+            context.logger.debug("[PersistenceModule] State loaded and applied to state manager");
         } else {
             context.logger.debug("[PersistenceModule] No saved state found");
         }
@@ -82,6 +77,7 @@ export class PersistenceModule implements TreeViewModule {
 
         const userId = userSessionManager.getCurrentUserId();
         if (!userId || userId === "global_fallback") {
+            this.context.logger.trace("[PersistenceModule] No valid user session for saving state, skipping");
             return;
         }
 
@@ -97,7 +93,12 @@ export class PersistenceModule implements TreeViewModule {
                 await this.saveToGlobal(dataToSave);
             }
 
-            this.context.logger.debug("[PersistenceModule] State saved successfully");
+            this.context.logger.debug(`[PersistenceModule] State saved successfully for user ${userId}`);
+            if (dataToSave.expansion) {
+                this.context.logger.debug(
+                    `[PersistenceModule] Saved expansion state: ${dataToSave.expansion.expandedItems?.length || 0} expanded items`
+                );
+            }
         } catch (error) {
             // Only log error if it's not a cancellation
             if (error instanceof Error && !error.message.includes("Canceled")) {
@@ -118,6 +119,12 @@ export class PersistenceModule implements TreeViewModule {
             return null;
         }
 
+        const userId = userSessionManager.getCurrentUserId();
+        if (!userId || userId === "global_fallback") {
+            this.context.logger.warn("[PersistenceModule] No valid user session for loading state, skipping");
+            return null;
+        }
+
         try {
             let data: any;
 
@@ -127,34 +134,23 @@ export class PersistenceModule implements TreeViewModule {
                 data = await this.loadFromGlobal();
             }
 
-            return this.parseLoadedData(data);
+            const parsedState = this.parseLoadedData(data);
+            if (parsedState) {
+                this.context.logger.debug(`[PersistenceModule] Successfully loaded state for user ${userId}`);
+                if (parsedState.expansion) {
+                    this.context.logger.debug(
+                        `[PersistenceModule] Loaded expansion state: ${parsedState.expansion.expandedItems?.size || 0} expanded items`
+                    );
+                }
+            } else {
+                this.context.logger.debug(`[PersistenceModule] No saved state found for user ${userId}`);
+            }
+
+            return parsedState;
         } catch (error) {
             this.context.logger.error("[PersistenceModule] Failed to load state:", error);
             return null;
         }
-    }
-
-    /**
-     * Restores expansion state by triggering expansion of saved items
-     */
-    private async restoreExpansionState(): Promise<void> {
-        const state = this.context.stateManager.getState();
-        if (!state.expansion || state.expansion.expandedItems.size === 0) {
-            return;
-        }
-
-        this.context.logger.debug(
-            `[PersistenceModule] Restoring expansion for ${state.expansion.expandedItems.size} items`
-        );
-
-        // Get the VS Code tree view if available
-        const treeView = (this.context as any).treeView?.vscTreeView;
-        if (!treeView) {
-            this.context.logger.warn("[PersistenceModule] No VS Code tree view available for expansion restoration");
-            return;
-        }
-
-        this.context.refresh();
     }
 
     /**
