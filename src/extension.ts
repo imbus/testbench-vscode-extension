@@ -238,6 +238,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const handleLogout = async () => {
         logger.debug(`[extension] Command called: ${allExtensionCommands.logout}`);
+
+        if (connection) {
+            await connection.logoutUserOnServer();
+        }
+
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             silent: true
         });
