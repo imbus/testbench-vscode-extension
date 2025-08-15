@@ -41,13 +41,15 @@ export class PersistenceModule implements TreeViewModule {
             const loadedState = await this.loadState();
             if (loadedState) {
                 context.stateManager.setState(loadedState);
-                context.logger.debug("[PersistenceModule] State loaded and applied to state manager");
+                context.logger.debug(
+                    `[PersistenceModule:${context.config.id}] State loaded and applied to state manager`
+                );
             } else {
-                context.logger.debug("[PersistenceModule] No saved state found");
+                context.logger.debug(`[PersistenceModule:${context.config.id}] No saved state found`);
             }
         } else {
             context.logger.debug(
-                "[PersistenceModule] Skipping state loading during initialization - user session not available yet"
+                `[PersistenceModule:${context.config.id}] Skipping state loading during initialization - user session not available yet`
             );
         }
 
@@ -58,7 +60,7 @@ export class PersistenceModule implements TreeViewModule {
             })
         );
 
-        context.logger.debug("[PersistenceModule] Persistence module initialized");
+        context.logger.debug(`[PersistenceModule:${context.config.id}] Persistence module initialized`);
     }
 
     /**
@@ -84,7 +86,9 @@ export class PersistenceModule implements TreeViewModule {
         }
 
         if (!userSessionManager.hasValidUserSession()) {
-            this.context.logger.trace("[PersistenceModule] No valid user session for saving state, skipping");
+            this.context.logger.trace(
+                `[PersistenceModule:${this.context.config.id}] No valid user session for saving state, skipping`
+            );
             return;
         }
 
@@ -101,17 +105,17 @@ export class PersistenceModule implements TreeViewModule {
             }
 
             this.context.logger.debug(
-                `[PersistenceModule] State saved successfully for user ${userSessionManager.getCurrentUserId()}`
+                `[PersistenceModule:${this.context.config.id}] State saved successfully for user ${userSessionManager.getCurrentUserId()}`
             );
             if (dataToSave.expansion) {
                 this.context.logger.debug(
-                    `[PersistenceModule] Saved expansion state: ${dataToSave.expansion.expandedItems?.length || 0} expanded items`
+                    `[PersistenceModule:${this.context.config.id}] Saved expansion state: ${dataToSave.expansion.expandedItems?.length || 0} expanded items`
                 );
             }
         } catch (error) {
             // Only log error if it's not a cancellation
             if (error instanceof Error && !error.message.includes("Canceled")) {
-                this.context.logger.error("[PersistenceModule] Failed to save state:", error);
+                this.context.logger.error(`[PersistenceModule:${this.context.config.id}] Failed to save state:`, error);
             }
         } finally {
             this.isSaving = false;
@@ -129,7 +133,9 @@ export class PersistenceModule implements TreeViewModule {
         }
 
         if (!userSessionManager.hasValidUserSession()) {
-            this.context.logger.warn("[PersistenceModule] No valid user session for loading state, skipping");
+            this.context.logger.warn(
+                `[PersistenceModule:${this.context.config.id}] No valid user session for loading state, skipping`
+            );
             return null;
         }
 
@@ -145,22 +151,22 @@ export class PersistenceModule implements TreeViewModule {
             const parsedState = this.parseLoadedData(data);
             if (parsedState) {
                 this.context.logger.debug(
-                    `[PersistenceModule] Successfully loaded state for user ${userSessionManager.getCurrentUserId()}`
+                    `[PersistenceModule:${this.context.config.id}] Successfully loaded state for user ${userSessionManager.getCurrentUserId()}`
                 );
                 if (parsedState.expansion) {
                     this.context.logger.debug(
-                        `[PersistenceModule] Loaded expansion state: ${parsedState.expansion.expandedItems?.size || 0} expanded items`
+                        `[PersistenceModule:${this.context.config.id}] Loaded expansion state: ${parsedState.expansion.expandedItems?.size || 0} expanded items`
                     );
                 }
             } else {
                 this.context.logger.debug(
-                    `[PersistenceModule] No saved state found for user ${userSessionManager.getCurrentUserId()}`
+                    `[PersistenceModule:${this.context.config.id}] No saved state found for user ${userSessionManager.getCurrentUserId()}`
                 );
             }
 
             return parsedState;
         } catch (error) {
-            this.context.logger.error("[PersistenceModule] Failed to load state:", error);
+            this.context.logger.error(`[PersistenceModule:${this.context.config.id}] Failed to load state:`, error);
             return null;
         }
     }
@@ -189,7 +195,7 @@ export class PersistenceModule implements TreeViewModule {
                 defaultExpanded: state.expansion.defaultExpanded
             };
             this.context.logger.debug(
-                `[PersistenceModule] Saving expansion state: ${dataToSave.expansion.expandedItems.length} expanded, ${dataToSave.expansion.collapsedItems.length} collapsed`
+                `[PersistenceModule:${this.context.config.id}] Saving expansion state: ${dataToSave.expansion.expandedItems.length} expanded, ${dataToSave.expansion.collapsedItems.length} collapsed`
             );
         }
 
@@ -228,7 +234,7 @@ export class PersistenceModule implements TreeViewModule {
 
         if (data.version && data.version !== this.STORAGE_VERSION) {
             this.context.logger.warn(
-                `[PersistenceModule] Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}`
+                `[PersistenceModule:${this.context.config.id}] Storage version mismatch: expected ${this.STORAGE_VERSION}, got ${data.version}`
             );
         }
 
@@ -250,7 +256,7 @@ export class PersistenceModule implements TreeViewModule {
                 defaultExpanded: data.expansion.defaultExpanded ?? expansionConfig?.defaultExpanded ?? false
             };
             this.context.logger.debug(
-                `[PersistenceModule] Loaded expansion state: ${state.expansion.expandedItems.size} expanded, ${state.expansion.collapsedItems.size} collapsed`
+                `[PersistenceModule:${this.context.config.id}] Loaded expansion state: ${state.expansion.expandedItems.size} expanded, ${state.expansion.collapsedItems.size} collapsed`
             );
         }
 
