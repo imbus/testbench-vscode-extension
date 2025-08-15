@@ -18,7 +18,7 @@ import pathlib
 import sys
 
 
-def update_sys_path(path_to_add: str, strategy: str) -> None:
+def update_sys_path(path_to_add: str, strategy: str = "") -> None:
     """Add given path to `sys.path`."""
     if path_to_add not in sys.path and os.path.isdir(path_to_add):
         if strategy == "useBundled":
@@ -28,7 +28,7 @@ def update_sys_path(path_to_add: str, strategy: str) -> None:
 
 
 BUNDLE_DIR = pathlib.Path(__file__).parent.parent
-update_sys_path(os.fspath(BUNDLE_DIR), "useBundled")
+update_sys_path(os.fspath(BUNDLE_DIR))
 
 from testbench_language_server.cli import testbench_ls_cli
 
