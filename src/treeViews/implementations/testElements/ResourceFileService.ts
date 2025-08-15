@@ -34,6 +34,25 @@ export class ResourceFileService {
     constructor(private readonly logger: TestBenchLogger) {}
 
     /**
+     * Normalizes a hierarchical name by replacing invalid file path characters with underscores.
+     * @param component The path component to normalize
+     * @returns The normalized component with special characters replaced by underscores
+     */
+    private normalizePathComponent(component: string): string {
+        return component.replace(/[<>:"/\\|?*,]/g, "_");
+    }
+
+    /**
+     * Converts a hierarchical name to an array of normalized path components.
+     * @param hierarchicalName The hierarchical name (e.g., "Folder/SubFolder/Resource")
+     * @returns Array of normalized path components ready for file system operations
+     */
+    private hierarchicalNameToPathComponents(hierarchicalName: string): string[] {
+        const components = hierarchicalName.split("/");
+        return components.map((component) => this.normalizePathComponent(component));
+    }
+
+    /**
      * Removes all occurrences of "[Robot-Resource]" from a given path string.
      */
     private removeRobotResourceFromPathString(pathStr: string): string {
@@ -80,8 +99,13 @@ export class ResourceFileService {
             this.logger.error("[ResourceFileService] Hierarchical name is empty. Cannot construct absolute path.");
             return undefined;
         }
-        const absolutePath = path.join(workspaceRootPath, hierarchicalName);
-        this.logger.trace(`[ResourceFileService] Constructed absolute path for '${hierarchicalName}': ${absolutePath}`);
+
+        const normalizedComponents = this.hierarchicalNameToPathComponents(hierarchicalName);
+        const absolutePath = path.join(workspaceRootPath, ...normalizedComponents);
+
+        this.logger.trace(
+            `[ResourceFileService] Constructed absolute path for '${hierarchicalName}' (normalized components: [${normalizedComponents.join(", ")}]): ${absolutePath}`
+        );
         return absolutePath;
     }
 
