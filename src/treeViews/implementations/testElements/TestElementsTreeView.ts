@@ -1018,11 +1018,58 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
     /**
      * Handles interaction single click events.
-     * Opens or creates the .resource file in the editor and jumps to the interaction.
+     * Opens the .resource file in the editor and jumps to the interaction only if it exists.
      * @param item The interaction tree item that was single clicked
      */
     private async handleInteractionSingleClick(item: TestElementsTreeItem): Promise<void> {
-        await this.openInteractionResource(item);
+        await this.openExistingInteractionResource(item);
+    }
+
+    /**
+     * Opens an existing robot resource file for an interaction in the editor.
+     * Only opens the file if it exists, does not create it.
+     * @param item The tree item representing an interaction.
+     */
+    public async openExistingInteractionResource(item: TestElementsTreeItem): Promise<void> {
+        const parentResource = item.parent as TestElementsTreeItem;
+        if (!parentResource) {
+            vscode.window.showErrorMessage(`Could not find the parent resource for interaction ${item.label}`);
+            return;
+        }
+
+        const config: ResourceOperationConfig = {
+            operationType: "interaction",
+            createMissing: false,
+            targetItem: parentResource,
+            parentItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "Cannot find parent resource for interaction.",
+                noUid: "Parent resource {label} has no UID.",
+                fileNotFound:
+                    "Parent resource file does not exist. Use double-click or 'Create Resource' button to create it.",
+                folderNotFound: "Parent resource folder does not exist: {path}."
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(
+            parentResource.data.hierarchicalName,
+            config.errorMessages
+        );
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+        const fileExists = await this.resourceFileService.fileExists(resourcePath);
+
+        if (!fileExists) {
+            return;
+        }
+
+        const interactionName = typeof item.label === "string" ? item.label : item.label?.toString() || "";
+        await this.openFileAndJumpToInteraction(resourcePath, interactionName, item.data.uniqueID);
     }
 
     /**
@@ -1077,38 +1124,57 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
     /**
      * Handles interaction double click events.
-     * Opens the resource file, jumps to the interaction position, and reveals the file in explorer.
+     * Creates/opens the resource file, jumps to the interaction position, and reveals the file in explorer.
      * @param item The interaction tree item that was double clicked
      */
     private async handleInteractionDoubleClick(item: TestElementsTreeItem): Promise<void> {
         this.logger.debug(`[TestElementsTreeView] Interaction tree item double clicked: ${item.label}`);
-        await this.openInteractionResource(item);
 
         const parentResource = item.parent as TestElementsTreeItem;
-        if (parentResource) {
-            const config: ResourceOperationConfig = {
-                operationType: "open",
-                createMissing: true,
-                targetItem: parentResource,
-                parentItem: item,
-                errorMessages: {
-                    noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
-                    noPath: "Cannot construct resource path: workspace location not found.",
-                    noParent: "Cannot find parent resource for interaction.",
-                    noUid: "Parent resource {label} has no UID.",
-                    fileNotFound: "Parent resource file does not exist: {path}.",
-                    folderNotFound: "Parent resource folder does not exist: {path}."
-                }
-            };
+        if (!parentResource) {
+            vscode.window.showErrorMessage(`Could not find the parent resource for interaction ${item.label}`);
+            return;
+        }
 
-            const pathResult = await this.validateAndConstructPath(
-                parentResource.data.hierarchicalName,
-                config.errorMessages
-            );
-            if (pathResult) {
-                await this.revealFileInVSCodeExplorer(pathResult.resourcePath);
+        const config: ResourceOperationConfig = {
+            operationType: "interaction",
+            createMissing: true,
+            targetItem: parentResource,
+            parentItem: item,
+            errorMessages: {
+                noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
+                noPath: "Cannot construct resource path: workspace location not found.",
+                noParent: "Cannot find parent resource for interaction.",
+                noUid: "Parent resource {label} has no UID.",
+                fileNotFound: "Parent resource file does not exist: {path}.",
+                folderNotFound: "Parent resource folder does not exist: {path}."
+            }
+        };
+
+        const pathResult = await this.validateAndConstructPath(
+            parentResource.data.hierarchicalName,
+            config.errorMessages
+        );
+        if (!pathResult) {
+            return;
+        }
+
+        const { resourcePath } = pathResult;
+        const fileExists = await this.resourceFileService.fileExists(resourcePath);
+
+        if (!fileExists) {
+            const created = await this.createMissingResourceFile(config, resourcePath, parentResource);
+            if (!created) {
+                return;
             }
         }
+
+        // Open the file and jump to interaction
+        const interactionName = typeof item.label === "string" ? item.label : item.label?.toString() || "";
+        await this.openFileAndJumpToInteraction(resourcePath, interactionName, item.data.uniqueID);
+
+        // Reveal the file in explorer
+        await this.revealFileInVSCodeExplorer(resourcePath);
     }
 
     /**
