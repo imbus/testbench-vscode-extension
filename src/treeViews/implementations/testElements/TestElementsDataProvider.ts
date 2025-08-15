@@ -10,6 +10,7 @@ import { TestBenchLogger } from "../../../testBenchLogger";
 import { FrameworkCache } from "../../utils/FrameworkCache";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
+import * as vscode from "vscode";
 
 interface RawTestElement {
     id: string;
@@ -31,18 +32,48 @@ interface RawTestElement {
 
 export class TestElementsDataProvider {
     private elementsCache = new FrameworkCache<TestElementData[]>();
-    private readonly resourceRegexPatterns: RegExp[];
+    private disposables: vscode.Disposable[] = [];
 
     constructor(
         private logger: TestBenchLogger,
         private getConnection: () => PlayServerConnection | null,
         private eventBus: EventBus
     ) {
-        this.resourceRegexPatterns = this._getResourceRegexPatternsFromSettings();
+        this.setupConfigurationChangeListener();
+    }
+
+    /**
+     * Sets up a listener for configuration changes to clear cache when resource markers change
+     */
+    private setupConfigurationChangeListener(): void {
+        const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration("testbenchExtension.resourceMarker")) {
+                this.logger.debug("[TestElementsDataProvider] Resource marker configuration changed, clearing cache");
+
+                const newPatterns = this._getResourceRegexPatternsFromSettings();
+                this.logger.debug(
+                    `[TestElementsDataProvider] New resource marker patterns: ${JSON.stringify(newPatterns.map((p) => p.source))}`
+                );
+
+                this.clearCache();
+                this.eventBus.emit({
+                    type: "testElements:configurationChanged",
+                    source: "testElements",
+                    data: {
+                        message: "Resource marker configuration changed, cache cleared",
+                        newPatterns: newPatterns.map((p) => p.source),
+                        timestamp: Date.now()
+                    },
+                    timestamp: Date.now()
+                });
+            }
+        });
+        this.disposables.push(configChangeDisposable);
     }
 
     /**
      * Retrieves resource regex patterns from extension settings.
+     * This method is now dynamic and will always return the current configuration.
      *
      * @returns {RegExp[]} Array of compiled regex patterns for resource markers.
      */
@@ -50,13 +81,26 @@ export class TestElementsDataProvider {
         const resourceMarkers: string[] | undefined = getExtensionSetting<string[]>(
             ConfigKeys.TB2ROBOT_RESOURCE_MARKER
         );
-        if (!resourceMarkers) {
+
+        this.logger.debug(
+            `[TestElementsDataProvider] Retrieved resource markers from settings: ${JSON.stringify(resourceMarkers)}`
+        );
+
+        if (!resourceMarkers || resourceMarkers.length === 0) {
+            this.logger.debug("[TestElementsDataProvider] No resource markers configured, returning empty patterns");
             return [];
         }
-        return resourceMarkers.map((marker) => {
+
+        const patterns = resourceMarkers.map((marker) => {
+            // Escape special regex characters in the marker
             const escaped = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-            return new RegExp(`(?:.*\\.)?(?<resourceName>[^.]+?)\\s*${escaped}.*`);
+            return new RegExp(escaped);
         });
+
+        this.logger.debug(
+            `[TestElementsDataProvider] Generated regex patterns: ${JSON.stringify(patterns.map((p) => p.source))}`
+        );
+        return patterns;
     }
 
     /**
@@ -144,6 +188,16 @@ export class TestElementsDataProvider {
             const compositeId: string = this._generateElementId(jsonTestElement);
             const parentIdString: string | null = this._getParentId(jsonTestElement);
 
+            const currentPatterns = this._getResourceRegexPatternsFromSettings();
+            const directRegexMatch =
+                currentPatterns.length > 0 ? this._matchesRegex(jsonTestElement.name, currentPatterns) : true;
+
+            if (currentPatterns.length > 0) {
+                this.logger.debug(
+                    `[TestElementsDataProvider] Element "${jsonTestElement.name}" regex match: ${directRegexMatch} (patterns: ${JSON.stringify(currentPatterns.map((p) => p.source))})`
+                );
+            }
+
             const testElement: TestElementData = {
                 id: compositeId,
                 parentId: parentIdString,
@@ -153,10 +207,7 @@ export class TestElementsDataProvider {
                 jsonString: JSON.stringify(jsonTestElement, null, 2),
                 details: jsonTestElement || {},
                 testElementType: testElementType,
-                directRegexMatch:
-                    this.resourceRegexPatterns.length > 0
-                        ? this._matchesRegex(jsonTestElement.name, this.resourceRegexPatterns)
-                        : true,
+                directRegexMatch: directRegexMatch,
                 children: [],
                 hierarchicalName: jsonTestElement.name // Will be properly set later
             };
@@ -373,5 +424,16 @@ export class TestElementsDataProvider {
         } else {
             this.elementsCache.clear();
         }
+    }
+
+    /**
+     * Cleans up resources and disposes of configuration listeners
+     */
+    public dispose(): void {
+        for (const disposable of this.disposables) {
+            disposable.dispose();
+        }
+        this.disposables = [];
+        this.clearCache();
     }
 }

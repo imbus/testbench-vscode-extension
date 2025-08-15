@@ -7,6 +7,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { validateAndReturnWorkspaceLocation } from "../../../utils";
+import { getExtensionSetting } from "../../../configuration";
+import { ConfigKeys } from "../../../constants";
 import { TestElementsTreeItem } from "./TestElementsTreeItem";
 
 /**
@@ -53,11 +55,37 @@ export class ResourceFileService {
     }
 
     /**
-     * Removes all occurrences of "[Robot-Resource]" from a given path string.
+     * Removes all occurrences of configured resource markers from a given path string.
+     * @param pathStr The path string to clean
+     * @returns The cleaned path string with resource markers removed
      */
-    private removeRobotResourceFromPathString(pathStr: string): string {
-        const cleanedPath: string = pathStr.replace(/\[Robot-Resource\]/g, "");
+    private removeResourceMarkersFromPathString(pathStr: string): string {
+        const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+        if (!resourceMarkers || resourceMarkers.length === 0) {
+            return pathStr;
+        }
+
+        let cleanedPath = pathStr;
+        for (const marker of resourceMarkers) {
+            const escapedMarker = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+            const regex = new RegExp(escapedMarker, "g");
+            cleanedPath = cleanedPath.replace(regex, "");
+        }
         return cleanedPath;
+    }
+
+    /**
+     * Checks if a string contains any configured resource markers.
+     * @param str The string to check for resource markers
+     * @returns True if the string contains any configured resource markers
+     */
+    public static hasResourceMarker(str: string): boolean {
+        const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+        if (!resourceMarkers || resourceMarkers.length === 0) {
+            return false;
+        }
+
+        return resourceMarkers.some((marker) => str.includes(marker));
     }
 
     /**
@@ -116,8 +144,7 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the path exists (respecting case sensitivity if checked).
      */
     public async pathExists(filePath: string, caseSensitiveCheck: boolean = false): Promise<boolean> {
-        // Remove [Robot-Resource] suffix before checking
-        const cleanedPath = this.removeRobotResourceFromPathString(filePath);
+        const cleanedPath = this.removeResourceMarkersFromPathString(filePath);
         try {
             await fs.promises.stat(cleanedPath);
 
@@ -146,7 +173,7 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the directory exists.
      */
     public async directoryExists(dirPath: string): Promise<boolean> {
-        const cleanedPath = this.removeRobotResourceFromPathString(dirPath);
+        const cleanedPath = this.removeResourceMarkersFromPathString(dirPath);
         try {
             const stats = await fs.promises.stat(cleanedPath);
             return stats.isDirectory();
@@ -166,7 +193,7 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the file exists.
      */
     public async fileExists(filePath: string): Promise<boolean> {
-        const cleanedPath = this.removeRobotResourceFromPathString(filePath);
+        const cleanedPath = this.removeResourceMarkersFromPathString(filePath);
         try {
             const stats = await fs.promises.stat(cleanedPath);
             return stats.isFile();
@@ -186,8 +213,7 @@ export class ResourceFileService {
      * @returns {Promise<void>}
      */
     public async ensureFolderPathExists(folderPath: string): Promise<void> {
-        // Remove [Robot-Resource] suffix before creating folder
-        const cleanedPath = this.removeRobotResourceFromPathString(folderPath);
+        const cleanedPath = this.removeResourceMarkersFromPathString(folderPath);
 
         try {
             await fs.promises.mkdir(cleanedPath, { recursive: true });

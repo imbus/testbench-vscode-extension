@@ -8,6 +8,7 @@ import { TreeItemBase } from "../../core/TreeItemBase";
 import { EventBus } from "../../utils/EventBus";
 import { allExtensionCommands } from "../../../constants";
 import { userSessionManager } from "../../../extension";
+import { ResourceFileService } from "./ResourceFileService";
 
 export enum TestElementType {
     Subdivision = "Subdivision",
@@ -90,7 +91,7 @@ export class TestElementsTreeItem extends TreeItemBase {
         const elementType = data.testElementType;
 
         if (elementType === TestElementType.Subdivision) {
-            const isResource = data.name.includes("[Robot-Resource]");
+            const isResource = ResourceFileService.hasResourceMarker(data.name);
             if (isResource) {
                 return data.isLocallyAvailable
                     ? "testElement.subdivision.resource.available"
@@ -291,7 +292,10 @@ export class TestElementsTreeItem extends TreeItemBase {
             timestamp: Date.now()
         });
 
-        if (this.data.testElementType === TestElementType.Subdivision && this.data.name.includes("[Robot-Resource]")) {
+        if (
+            this.data.testElementType === TestElementType.Subdivision &&
+            ResourceFileService.hasResourceMarker(this.data.name)
+        ) {
             this.updateChildInteractions(isAvailable);
         }
     }
@@ -531,7 +535,10 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.updateContextValue();
         this.tooltip = this.generateTooltip();
 
-        if (this.data.testElementType === TestElementType.Subdivision && this.data.name.includes("[Robot-Resource]")) {
+        if (
+            this.data.testElementType === TestElementType.Subdivision &&
+            ResourceFileService.hasResourceMarker(this.data.name)
+        ) {
             this.updateChildInteractions(isAvailable);
         }
 

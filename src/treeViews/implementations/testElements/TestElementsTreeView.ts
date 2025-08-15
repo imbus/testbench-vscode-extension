@@ -16,6 +16,8 @@ import { FilterService } from "../../utils/FilterService";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import { findInteractionPositionInResourceFile } from "../../../server";
+import { getExtensionSetting } from "../../../configuration";
+import { ConfigKeys } from "../../../constants";
 
 export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private dataProvider: TestElementsDataProvider;
@@ -112,6 +114,15 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const { item } = event.data;
             if (item) {
                 this.refreshItemWithParents(item);
+            }
+        });
+
+        this.eventBus.on("testElements:configurationChanged", () => {
+            this.logger.debug("[TestElementsTreeView] Resource marker configuration changed, refreshing tree view");
+            // Clear cache and refresh to apply new filtering
+            if (this.currentTovKey) {
+                this.dataProvider.clearCache(this.currentTovKey);
+                this.refresh();
             }
         });
 
@@ -401,8 +412,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 try {
                     const hierarchicalName = item.data.hierarchicalName;
                     if (hierarchicalName) {
-                        const isResourceFile = hierarchicalName.includes("[Robot-Resource]");
-                        const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
+                        const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
+                        const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
                         let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
 
                         if (resourcePath) {
@@ -437,9 +448,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             while (parent) {
                 if (parent.data.testElementType === TestElementType.Subdivision) {
                     const hierarchicalName = parent.data.hierarchicalName;
-                    const isResourceFile = hierarchicalName && hierarchicalName.includes("[Robot-Resource]");
+                    const isResourceFile = hierarchicalName && ResourceFileService.hasResourceMarker(hierarchicalName);
                     if (hierarchicalName && isResourceFile) {
-                        const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
+                        const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
                         let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
                         if (resourcePath) {
                             if (!resourcePath.endsWith(".resource")) {
@@ -582,10 +593,30 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Validates and constructs the robot resource file path to be created and returns it.
-     * @param hierarchicalName The hierarchical name from the item
-     * @param errorMessages Error messages for validation failures
-     * @returns Promise resolving to the cleaned name and constructed path
+     * Removes all occurrences of configured resource markers from a given hierarchical name.
+     * @param hierarchicalName The hierarchical name to clean
+     * @returns The cleaned hierarchical name with resource markers removed
+     */
+    private removeResourceMarkersFromHierarchicalName(hierarchicalName: string): string {
+        const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+        if (!resourceMarkers || resourceMarkers.length === 0) {
+            return hierarchicalName;
+        }
+
+        let cleanedName = hierarchicalName;
+        for (const marker of resourceMarkers) {
+            const escapedMarker = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+            const regex = new RegExp(escapedMarker, "g");
+            cleanedName = cleanedName.replace(regex, "");
+        }
+        return cleanedName;
+    }
+
+    /**
+     * Validates and constructs a resource path from a hierarchical name.
+     * @param hierarchicalName The hierarchical name to validate and convert.
+     * @param errorMessages Error messages to display on failure.
+     * @returns Promise resolving to the clean name and resource path, or null on failure.
      */
     private async validateAndConstructPath(
         hierarchicalName: string | undefined,
@@ -596,7 +627,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return null;
         }
 
-        const cleanName = hierarchicalName.replace(/\[Robot-Resource\]/g, "").trim();
+        const cleanName = this.removeResourceMarkersFromHierarchicalName(hierarchicalName).trim();
         let resourcePath = await this.resourceFileService.constructAbsolutePath(cleanName);
 
         if (!resourcePath) {
@@ -624,7 +655,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         targetItem: TestElementsTreeItem
     ): Promise<boolean> {
         if (!config.createMissing) {
-            const cleanName = targetItem.data.hierarchicalName?.replace(/\[Robot-Resource\]/g, "").trim();
+            const cleanName = this.removeResourceMarkersFromHierarchicalName(
+                targetItem.data.hierarchicalName || ""
+            ).trim();
             vscode.window.showErrorMessage(
                 config.errorMessages.fileNotFound.replace("{path}", `${cleanName}.resource`)
             );
@@ -681,7 +714,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         targetItem: TestElementsTreeItem
     ): Promise<boolean> {
         if (!config.createMissing) {
-            const cleanName = targetItem.data.hierarchicalName?.replace(/\[Robot-Resource\]/g, "").trim();
+            const cleanName = this.removeResourceMarkersFromHierarchicalName(
+                targetItem.data.hierarchicalName || ""
+            ).trim();
             vscode.window.showErrorMessage(config.errorMessages.folderNotFound.replace("{path}", cleanName || ""));
             return false;
         }
@@ -1197,6 +1232,12 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             disposable.dispose();
         }
         this.disposables = [];
+
+        // Dispose of the data provider to clean up configuration listeners
+        if (this.dataProvider) {
+            this.dataProvider.dispose();
+        }
+
         await super.dispose();
     }
 
