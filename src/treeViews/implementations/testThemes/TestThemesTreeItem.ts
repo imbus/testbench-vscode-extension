@@ -298,7 +298,7 @@ export class TestThemesTreeItem extends TreeItemBase {
             return;
         }
 
-        await this.robotFileService.openRobotFile(this.robotFilePath);
+        await this.robotFileService.openRobotFileInVSCodeEditor(this.robotFilePath, this);
     }
 
     /**

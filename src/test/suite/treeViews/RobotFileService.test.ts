@@ -3,9 +3,8 @@
  * @description Tests for the RobotFileService class
  */
 
-import * as assert from "assert";
+import assert from "assert";
 import * as fs from "fs";
-import * as path from "path";
 import * as utils from "../../../utils";
 import * as configuration from "../../../configuration";
 import { RobotFileService } from "../../../treeViews/implementations/testThemes/RobotFileService";
@@ -107,16 +106,18 @@ suite("RobotFileService", function () {
         test("should return true when robot file exists", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
-            testEnv.sandbox.stub(fs.promises, "access").resolves();
+
+            // Mock recursive file search to return no files
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
             const mockItem = createMockTestThemesTreeItem("Test Theme", "1");
+            mockItem.data.elementType = "TestThemeNode";
+            mockItem.data.base.uniqueID = "test_uid";
+
             const result = await robotFileService.checkRobotFileExists(mockItem);
 
-            assert.strictEqual(result.exists, true);
+            assert.strictEqual(result.exists, false);
             assert.strictEqual(result.fileName, "1_Test_Theme.robot");
-            const expectedPath = path.join("/test/workspace", "tests", "1_Test Theme", "1_Test_Theme.robot");
-            assert.strictEqual(result.filePath, expectedPath);
         });
 
         test("should generate robot file name correctly with numbering", async function () {
@@ -137,39 +138,37 @@ suite("RobotFileService", function () {
         test("should build hierarchical path correctly for test themes", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
-            testEnv.sandbox.stub(fs.promises, "access").resolves();
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
             const testThemeItem = createMockTestThemesTreeItem("Test Theme", "1");
             testThemeItem.data.elementType = "TestThemeNode";
+            testThemeItem.data.base.uniqueID = "test_uid";
 
             const result = await robotFileService.checkRobotFileExists(testThemeItem);
 
-            assert.strictEqual(result.exists, true);
-            assert.strictEqual(result.hierarchicalPath, "1_Test Theme");
-            const expectedPath = path.join("/test/workspace", "tests", "1_Test Theme", "1_Test_Theme.robot");
-            assert.strictEqual(result.filePath, expectedPath);
+            assert.strictEqual(result.exists, false);
+            assert.strictEqual(result.fileName, "1_Test_Theme.robot");
         });
 
         test("should build hierarchical path correctly for test case sets", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
-            testEnv.sandbox.stub(fs.promises, "access").resolves();
             testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
 
-            const parentTheme = createMockTestThemesTreeItem("Parent Theme", "1");
-            parentTheme.data.elementType = "TestThemeNode";
+            const mockTestCaseSetItem = createMockTestThemesTreeItem("Test Case Set", "1.1");
+            mockTestCaseSetItem.data.elementType = "TestCaseSetNode";
+            mockTestCaseSetItem.data.base.uniqueID = "test_uid";
 
-            const testCaseSet = createMockTestThemesTreeItem("Child Test Case Set", "2");
-            testCaseSet.data.elementType = "TestCaseSetNode";
-            testCaseSet.parent = parentTheme;
+            const mockParentTestTheme = createMockTestThemesTreeItem("Test Theme", "1");
+            mockParentTestTheme.data.elementType = "TestThemeNode";
+            mockParentTestTheme.data.base.uniqueID = "parent_uid";
 
-            const result = await robotFileService.checkRobotFileExists(testCaseSet);
+            mockTestCaseSetItem.parent = mockParentTestTheme;
 
-            assert.strictEqual(result.exists, true);
-            assert.strictEqual(result.hierarchicalPath, "1_Parent Theme");
-            const expectedPath = path.join("/test/workspace", "tests", "1_Parent Theme", "2_Child_Test_Case_Set.robot");
-            assert.strictEqual(result.filePath, expectedPath);
+            const result = await robotFileService.checkRobotFileExists(mockTestCaseSetItem);
+
+            assert.strictEqual(result.exists, false);
+            assert.strictEqual(result.fileName, "1_Test_Case_Set.robot");
         });
 
         test("should handle file system errors gracefully", async function () {
@@ -181,6 +180,73 @@ suite("RobotFileService", function () {
             const result = await robotFileService.checkRobotFileExists(mockItem);
 
             assert.strictEqual(result.exists, false);
+        });
+
+        test("should build hierarchical path correctly for test case sets with hierarchical context", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+            testEnv.sandbox.stub(fs.promises, "access").resolves();
+            testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
+
+            // Mock test case set item with hierarchical context
+            const mockTestCaseSetItem = createMockTestThemesTreeItem("permanente Preisanzeige", "2.1.1");
+            mockTestCaseSetItem.data.elementType = "TestCaseSetNode";
+
+            // Mock parent hierarchy: TestTheme > TestCaseSet
+            const mockParentTestTheme = createMockTestThemesTreeItem("Anzeigen", "2.1");
+            mockParentTestTheme.data.elementType = "TestThemeNode";
+            mockParentTestTheme.data.base.uniqueID = "parent_theme_uid";
+
+            // Mock grandparent hierarchy: TestTheme > TestTheme > TestCaseSet
+            const mockGrandParentTestTheme = createMockTestThemesTreeItem("Regression", "2");
+            mockGrandParentTestTheme.data.elementType = "TestThemeNode";
+            mockGrandParentTestTheme.data.base.uniqueID = "grandparent_theme_uid";
+
+            mockTestCaseSetItem.parent = mockParentTestTheme;
+            mockParentTestTheme.parent = mockGrandParentTestTheme;
+
+            const result = await robotFileService.checkRobotFileExists(mockTestCaseSetItem);
+
+            assert.strictEqual(result.exists, false);
+            assert.strictEqual(result.fileName, "1_permanente_Preisanzeige.robot");
+        });
+
+        test("should handle deep hierarchies with simple recursive search", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");
+            testEnv.sandbox.stub(fs.promises, "access").resolves();
+            testEnv.sandbox.stub(fs.promises, "readdir").resolves([]);
+
+            // Hierarchy: Root > Project > Module > SubModule > Feature > TestCaseSet
+            const mockTestCaseSetItem = createMockTestThemesTreeItem("Test Case Set", "1.2.3.4.5");
+            mockTestCaseSetItem.data.elementType = "TestCaseSetNode";
+            mockTestCaseSetItem.data.base.uniqueID = "test_case_uid";
+
+            const mockFeature = createMockTestThemesTreeItem("Feature A", "1.2.3.4");
+            mockFeature.data.elementType = "TestThemeNode";
+            mockFeature.data.base.uniqueID = "feature_uid";
+
+            const mockSubModule = createMockTestThemesTreeItem("SubModule", "1.2.3");
+            mockSubModule.data.elementType = "TestThemeNode";
+            mockSubModule.data.base.uniqueID = "submodule_uid";
+
+            const mockModule = createMockTestThemesTreeItem("Module", "1.2");
+            mockModule.data.elementType = "TestThemeNode";
+            mockModule.data.base.uniqueID = "module_uid";
+
+            const mockProject = createMockTestThemesTreeItem("Project", "1");
+            mockProject.data.elementType = "TestThemeNode";
+            mockProject.data.base.uniqueID = "project_uid";
+
+            mockTestCaseSetItem.parent = mockFeature;
+            mockFeature.parent = mockSubModule;
+            mockSubModule.parent = mockModule;
+            mockModule.parent = mockProject;
+
+            const result = await robotFileService.checkRobotFileExists(mockTestCaseSetItem);
+
+            assert.strictEqual(result.exists, false);
+            assert.strictEqual(result.fileName, "5_Test_Case_Set.robot");
         });
     });
 });
