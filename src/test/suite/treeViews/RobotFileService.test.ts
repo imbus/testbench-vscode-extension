@@ -135,6 +135,40 @@ suite("RobotFileService", function () {
             }
         });
 
+        test("should handle special characters in robot file names correctly", async function () {
+            const testCases = [
+                { name: "Test:Theme", numbering: "1", expected: "1_Test_Theme.robot" },
+                { name: "Test/Theme", numbering: "2", expected: "2_Test_Theme.robot" },
+                { name: "Test\\Theme", numbering: "3", expected: "3_Test_Theme.robot" },
+                { name: "Test*Theme", numbering: "4", expected: "4_Test_Theme.robot" },
+                { name: "Test?Theme", numbering: "5", expected: "5_Test_Theme.robot" },
+                { name: 'Test"Theme', numbering: "6", expected: "6_Test_Theme.robot" },
+                { name: "Test<Theme", numbering: "7", expected: "7_Test_Theme.robot" },
+                { name: "Test>Theme", numbering: "8", expected: "8_Test_Theme.robot" },
+                { name: "Test|Theme", numbering: "9", expected: "9_Test_Theme.robot" },
+                {
+                    name: "Test:Theme/With\\Special*Chars?",
+                    numbering: "10",
+                    expected: "10_Test_Theme_With_Special_Chars_.robot"
+                },
+                {
+                    name: "Test Theme with Multiple   Spaces",
+                    numbering: "11",
+                    expected: "11_Test_Theme_with_Multiple___Spaces.robot"
+                },
+                { name: "_Leading_Underscore_", numbering: "12", expected: "12__Leading_Underscore_.robot" },
+                { name: "Trailing_Underscore_", numbering: "13", expected: "13_Trailing_Underscore_.robot" },
+                { name: "Test_With_Underscores", numbering: "14", expected: "14_Test_With_Underscores.robot" },
+                { name: "Multiple___Underscores", numbering: "15", expected: "15_Multiple___Underscores.robot" }
+            ];
+
+            for (const testCase of testCases) {
+                const mockItem = createMockTestThemesTreeItem(testCase.name, testCase.numbering);
+                const result = await robotFileService.checkRobotFileExists(mockItem);
+                assert.strictEqual(result.fileName, testCase.expected);
+            }
+        });
+
         test("should build hierarchical path correctly for test themes", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").returns("tests");

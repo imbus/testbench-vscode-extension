@@ -208,6 +208,9 @@ export class RobotFileService {
 
     /**
      * Generates a robot file name based on the item name and numbering to generate the correct file suffix.
+     * Replaces invalid file path characters with underscores because
+     * testbench2robotframework replaces following special characters of a test theme / test case set name:
+     * < > : " / \ | ? * and spaces.
      * @param treeItemName The name of the test theme or test case set
      * @param treeItemNumbering The numbering prefix for the tree item
      * @returns The generated robot file name
@@ -215,8 +218,9 @@ export class RobotFileService {
     private generateRobotFileName(treeItemName: string, treeItemNumbering: string): string {
         const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
         const prefixOfFileName = lastNumberingPart ? `${lastNumberingPart}_` : "";
-        // Normalize whitespace to underscores for file name matching
-        const normalizedName = treeItemName.replace(/\s+/g, "_");
+        // Characters to replace with underscore: < > : " / \ | ? * and spaces
+        const normalizedName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");
+
         return `${prefixOfFileName}${normalizedName}.robot`;
     }
 
