@@ -164,7 +164,10 @@ suite("TreeViewModule", function () {
             logger: logger,
             refresh: () => mockTreeView.refresh(),
             getTreeView: () => mockTreeView,
-            getCurrentRootItems: () => mockTreeView.getCurrentRootItems()
+            getCurrentRootItems: () => mockTreeView.getCurrentRootItems(),
+            buildLogPrefix: (moduleId: string, operation: string): string => {
+                return `[${moduleId}:${config.id}] ${operation}`;
+            }
         };
     });
 

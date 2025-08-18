@@ -259,7 +259,7 @@ export async function getJobIdOfCycleReport(
     }
 
     const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
-    logger.debug(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
+    logger.trace(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
     try {
         const apiClient: axios.AxiosInstance = connection.getApiClient();
         const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
@@ -311,7 +311,7 @@ export async function getJobStatus(
         return null;
     }
     const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
-    logger.debug(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
+    logger.trace(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
 
     const apiClient: axios.AxiosInstance = connection.getApiClient();
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
@@ -525,7 +525,7 @@ export async function fetchReportZipOfCycleFromServer(
             return null;
         }
 
-        logger.debug(
+        logger.trace(
             `[reportHandler] Fetching report zip for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folder: ${folderNameToDownloadReport} and request parameters:`,
             requestParameters
         );
@@ -900,7 +900,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
 ): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
-        logger.debug("[reportHandler] Fetching test results and creating report with results.");
+        logger.trace("[reportHandler] Fetching test results and creating report with results.");
         const executeWithProgress = async (
             progress: vscode.Progress<{ message?: string; increment?: number }>
         ): Promise<
@@ -1172,7 +1172,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     resolvedTargetCycleKey: string,
     resolvedReportRootUID: string
 ): Promise<boolean> {
-    logger.debug(`[reportHandler] Fetching results and importing to Testbench for tree item: ${invokedOnItem.label}`);
+    logger.trace(`[reportHandler] Fetching results and importing to Testbench for tree item: ${invokedOnItem.label}`);
     return vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,

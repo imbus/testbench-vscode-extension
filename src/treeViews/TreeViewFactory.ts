@@ -783,7 +783,7 @@ export class TreeViewFactory {
             }
 
             if (!viewRestored) {
-                this.logger.debug(
+                this.logger.trace(
                     "[TreeViewFactory] No saved state available to restore or restoration failed. Loading default view."
                 );
                 await this.loadDefaultTreeViewsUI(treeViews);

@@ -23,7 +23,7 @@ export class ProjectsDataProvider {
         const connection = this.getConnection();
         if (!connection) {
             // TODO: Check if tree views can be initialized after connection is established
-            this.logger.debug(
+            this.logger.trace(
                 "[ProjectsDataProvider] No connection available when fetching projects. This is expected during startup/logout"
             );
             return null;

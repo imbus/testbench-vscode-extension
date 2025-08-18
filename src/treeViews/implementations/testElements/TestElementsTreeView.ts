@@ -1161,7 +1161,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 true
             );
         } else {
-            this.logger.debug("[TestElementsTreeView] No TOV key available while refreshing, clearing tree");
+            this.logger.trace("[TestElementsTreeView] No TOV key available while refreshing, clearing tree");
             this.clearTree();
         }
     }
