@@ -25,6 +25,9 @@ export interface TreeViewContext {
     readonly refresh: (options?: { immediate?: boolean }) => void;
     readonly getTreeView: () => TreeViewBase<any>;
     readonly getCurrentRootItems: () => any[];
+
+    // Utility methods
+    buildLogPrefix(moduleId: string, operation: string): string;
 }
 
 /**
@@ -52,5 +55,9 @@ export class TreeViewContextImpl implements TreeViewContext {
 
     public getCurrentRootItems(): any[] {
         return this.treeView.getCurrentRootItems();
+    }
+
+    public buildLogPrefix(moduleId: string, operation: string): string {
+        return `[${moduleId}:${this.config.id}] ${operation}`;
     }
 }

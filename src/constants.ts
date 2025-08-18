@@ -53,7 +53,7 @@ export const ConfigKeys = {
     AUTO_LOGIN: "automaticLoginAfterExtensionActivation",
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",
     CLEAR_REPORT_AFTER_PROCESSING: "clearReportAfterProcessing",
-    LOGGER_LEVEL: "testBenchLogger",
+    LOGGER_LEVEL: "testbenchLogLevel",
     USE_CONFIG_FILE_SETTING: "UseConfigurationFile",
     TB2ROBOT_CLEAN: "cleanFilesBeforeTestGeneration",
     TB2ROBOT_FULLY_QUALIFIED: "fullyQualifiedKeywords",

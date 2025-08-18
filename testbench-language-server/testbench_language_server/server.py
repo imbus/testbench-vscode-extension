@@ -125,8 +125,11 @@ from .testbench_resource.subdivision2resource import (
 from .testbench_resource.testbench_resource_model import (
     TestBenchResourceModel,
     get_interaction_call_type,
+    get_kw_tags,
     get_kw_uid,
 )
+
+from robot.api.parsing import KeywordName
 
 
 class TestBenchLanguageServer(LanguageServer):

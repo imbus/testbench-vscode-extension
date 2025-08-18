@@ -343,7 +343,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
     async removeSession(sessionId: string): Promise<void> {
         const sessionData: TestBenchSessionData | undefined = this.activeSessions.get(sessionId);
         if (sessionData) {
-            logger.debug(
+            logger.trace(
                 `[AuthenticationProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`
             );
 

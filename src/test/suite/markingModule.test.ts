@@ -43,7 +43,10 @@ suite("MarkingModule", () => {
                 emit: () => {},
                 on: () => ({ dispose: () => {} })
             },
-            refresh: () => {}
+            refresh: () => {},
+            buildLogPrefix: (moduleId: string, operation: string): string => {
+                return `[${moduleId}:test] ${operation}`;
+            }
         } as any;
 
         // Create mock item

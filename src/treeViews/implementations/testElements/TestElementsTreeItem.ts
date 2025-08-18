@@ -8,7 +8,6 @@ import { TreeItemBase } from "../../core/TreeItemBase";
 import { EventBus } from "../../utils/EventBus";
 import { allExtensionCommands } from "../../../constants";
 import { userSessionManager } from "../../../extension";
-import { ResourceFileService } from "./ResourceFileService";
 
 export enum TestElementType {
     Subdivision = "Subdivision",
