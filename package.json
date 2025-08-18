@@ -56,7 +56,7 @@
             {
                 "title": "Logger",
                 "properties": {
-                    "testbenchExtension.testBenchLogger": {
+                    "testbenchExtension.testbenchLogLevel": {
                         "type": "string",
                         "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
                         "default": "Info",
