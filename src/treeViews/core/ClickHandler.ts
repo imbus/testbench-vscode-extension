@@ -65,7 +65,7 @@ export class ClickHandler<T> {
 
         if (isDoubleClick) {
             if (this.config.enableLogging && logger) {
-                logger.debug(`[ClickHandler] Double click detected for item: ${itemId}`);
+                logger.trace(`[ClickHandler] Double click detected for item: ${itemId}`);
             }
 
             this.clickHistory.delete(itemId);
@@ -84,7 +84,7 @@ export class ClickHandler<T> {
             this.clickHistory.set(itemId, { id: itemId, timestamp: now });
 
             if (this.config.enableLogging && logger) {
-                logger.debug(`[ClickHandler] Single click detected for item: ${itemId}`);
+                logger.trace(`[ClickHandler] Single click detected for item: ${itemId}`);
             }
 
             if (this.handlers.onSingleClick) {

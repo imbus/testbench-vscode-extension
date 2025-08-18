@@ -112,7 +112,7 @@ export class RetryPredicateFactory {
             if (axios.isAxiosError(error) && error.response) {
                 const status = error.response.status;
                 if (status >= 400 && status < 500) {
-                    logger.debug(`[testBenchConnection] Not retrying on client error ${status}`);
+                    logger.trace(`[testBenchConnection] Not retrying on client error ${status}`);
                     return false;
                 }
             }
@@ -289,7 +289,7 @@ export class PlayServerConnection {
      * @returns {Promise<boolean>} True if server logout was successful or no action needed, false on API error.
      */
     async logoutUserOnServer(): Promise<boolean> {
-        logger.debug(
+        logger.trace(
             `[testBenchConnection] Attempting to log out user ${this.username} from server ${this.serverName}.`
         );
         if (!this.sessionToken) {
@@ -351,7 +351,7 @@ export class PlayServerConnection {
         }
         try {
             const projectsURL: string = `/projects/v1`;
-            logger.debug(`[testBenchConnection] Fetching projects list using URL: ${projectsURL}`);
+            logger.trace(`[testBenchConnection] Fetching projects list using URL: ${projectsURL}`);
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
                     this.apiClient.get(projectsURL, {
@@ -419,7 +419,7 @@ export class PlayServerConnection {
         }
         try {
             const projectTreeURL: string = `/projects/${projectKey}/tree/v1`;
-            logger.debug(
+            logger.trace(
                 `[testBenchConnection] Fetching project tree for project key ${projectKey} using URL ${projectTreeURL}`
             );
             const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await withRetry(
@@ -522,7 +522,7 @@ export class PlayServerConnection {
                 return null;
             }
 
-            logger.debug(
+            logger.trace(
                 `[testBenchConnection] Fetching test elements for TOV key ${tovKey} from ${getTestElementsURL}`
             );
             const testElementsResponse: AxiosResponse = await withRetry(
@@ -617,7 +617,7 @@ export class PlayServerConnection {
                 return null;
             }
 
-            logger.debug(`[testBenchConnection] Fetching filters from URL ${getFiltersURL}`);
+            logger.trace(`[testBenchConnection] Fetching filters from URL ${getFiltersURL}`);
             const getFiltersResponse: AxiosResponse = await withRetry(
                 () => oldPlayServerSession.get(getFiltersURL),
                 3, // maxRetries
@@ -698,8 +698,7 @@ export class PlayServerConnection {
             );
 
             logger.debug(
-                `[testBenchConnection] Response status of TOV report job ID request for URL ${tovReportUrl}:`,
-                tovReportJobResponse.status
+                `[testBenchConnection] Response status of TOV report job ID request for URL ${tovReportUrl}: ${tovReportJobResponse.status}`
             );
             if (tovReportJobResponse.data.jobID) {
                 logger.trace(
@@ -759,8 +758,8 @@ export class PlayServerConnection {
             filters: []
         };
 
-        logger.debug(
-            `[testBenchConnection] Fetching cycle structure from URL ${testStructureOfCycleUrl} and request body:`,
+        logger.trace(
+            `[testBenchConnection] Fetching cycle structure from URL ${testStructureOfCycleUrl} using request body:`,
             requestBody
         );
 
@@ -805,9 +804,8 @@ export class PlayServerConnection {
             }
             */
 
-            logger.debug(
-                `[testBenchConnection] Response status of test structure of cycle request for URL ${testStructureOfCycleUrl}:`,
-                testStructureOfCycleResponse.status
+            logger.trace(
+                `[testBenchConnection] Response status of test structure of cycle request for URL ${testStructureOfCycleUrl}: ${testStructureOfCycleResponse.status}`
             );
             if (testStructureOfCycleResponse.data) {
                 // Note: The output of cycleStructureResponse is large
@@ -851,7 +849,7 @@ export class PlayServerConnection {
             filters: []
         };
 
-        logger.debug(
+        logger.trace(
             `[testBenchConnection] Fetching test structure of TOV from URL ${testStructureOfTOVUrl} and request body:`,
             requestBody
         );
@@ -1020,7 +1018,7 @@ export class PlayServerConnection {
     ): Promise<string> {
         const getJobIDOfImportUrl: string = `/projects/${projectKey}/cycles/${cycleKey}/import/v1`;
 
-        logger.debug(
+        logger.trace(
             `[testBenchConnection] Fetching job ID of import job from URL ${getJobIDOfImportUrl} and import data request body:`,
             importData
         );

@@ -203,7 +203,7 @@ export async function pollJobStatus(
             if (totalItems && handledItems) {
                 const percentage: number = Math.round((handledItems / totalItems) * 100);
                 progress?.report({
-                    message: `Fetching job status (${handledItems}/${totalItems}).`,
+                    message: `Downloading TestBench report (${handledItems}/${totalItems}).`,
                     increment: (percentage - lastProgressIncrement) / 3
                 });
                 logger.trace(`[reportHandler] Polling attempt ${pollingAttemptAmount}: Progress ${percentage}%`);
@@ -259,7 +259,7 @@ export async function getJobIdOfCycleReport(
     }
 
     const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
-    logger.debug(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
+    logger.trace(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
     try {
         const apiClient: axios.AxiosInstance = connection.getApiClient();
         const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
@@ -311,7 +311,7 @@ export async function getJobStatus(
         return null;
     }
     const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
-    logger.debug(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
+    logger.trace(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
 
     const apiClient: axios.AxiosInstance = connection.getApiClient();
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
@@ -525,7 +525,7 @@ export async function fetchReportZipOfCycleFromServer(
             return null;
         }
 
-        logger.debug(
+        logger.trace(
             `[reportHandler] Fetching report zip for projectKey: ${projectKey}, cycleKey: ${cycleKey}, folder: ${folderNameToDownloadReport} and request parameters:`,
             requestParameters
         );
@@ -613,24 +613,29 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
 ): Promise<boolean> {
     let testGenerationSuccessful: boolean = false;
     try {
-        logger.debug(`[reportHandler] Generating tests for tree item with label: ${selectedTreeItem.label}`);
         const defaultExecutionMode: testBenchTypes.ExecutionMode = testBenchTypes.ExecutionMode.Execute;
         let UIDforRequest: string;
 
         const effectiveContext: string | undefined = selectedTreeItem.originalContextValue;
 
         if (effectiveContext?.toLowerCase() === ProjectItemTypes.CYCLE.toLowerCase()) {
-            logger.debug("[reportHandler] Generating tests for the entire cycle.");
+            logger.debug(`[reportHandler] Generating Robot Framework test suites for test cycle '${itemLabel}'.`);
             UIDforRequest = "";
         } else if (
             effectiveContext === TestThemeItemTypes.TEST_THEME ||
             effectiveContext === TestThemeItemTypes.TEST_CASE_SET
         ) {
-            logger.debug(`[reportHandler] Generating tests for specific tree item UID: ${treeItemUID}.`);
+            logger.debug(
+                `[reportHandler] Generating Robot Framework test suites from tree item ${treeItemUID} (${itemLabel}).`
+            );
             UIDforRequest = treeItemUID;
         } else {
-            logger.error(`[reportHandler] Unsupported item type for test generation: ${effectiveContext}`);
-            vscode.window.showErrorMessage(`Cannot generate tests for item type: ${effectiveContext}`);
+            logger.error(
+                `[reportHandler] Unsupported test structure element type for test generation: '${effectiveContext}'.`
+            );
+            vscode.window.showErrorMessage(
+                `Unsupported test structure element type for test generation: '${effectiveContext}'.`
+            );
             return false;
         }
 
@@ -645,7 +650,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Generating Tests for ${itemLabel}`,
+                title: `Generating Robot Framework test suites`,
                 cancellable: true
             },
             async (progress, cancellationToken) => {
@@ -666,14 +671,15 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
         );
     } catch (error) {
         if (error instanceof vscode.CancellationError) {
-            const testGenerationCancelledMessage: string = "[reportHandler] Test generation cancelled by the user.";
+            const testGenerationCancelledMessage: string =
+                "[reportHandler] Robot Framework test suite generation has been cancelled by user.";
             logger.debug(testGenerationCancelledMessage);
             vscode.window.showInformationMessage(testGenerationCancelledMessage);
             return false;
         } else {
-            logger.error("[reportHandler] Error during test generation:", error);
+            logger.error("[reportHandler] Error during Robot Framework test suite generation:", error);
             vscode.window.showErrorMessage(
-                `Error during test generation: ${error instanceof Error ? error.message : error}`
+                `Error during Robot Framework test suite generation. Check the logs for more details.`
             );
             return false;
         }
@@ -684,7 +690,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             await vscode.commands.executeCommand("workbench.view.extension.test");
         }
 
-        const successfulTestGenerationMessage: string = `Robot Framework tests generated successfully for: ${itemLabel}`;
+        const successfulTestGenerationMessage: string = `Successfully generated Robot Framework test suites from ${treeItemUID} (${itemLabel}).`;
         vscode.window.showInformationMessage(successfulTestGenerationMessage);
         logger.info(`[reportHandler] ${successfulTestGenerationMessage}`);
         return true;
@@ -729,7 +735,7 @@ async function runRobotFrameworkTestGenerationProcess(
         return false;
     }
 
-    progress.report({ increment: 30, message: "Generating tests via testbench2robotframework." });
+    progress.report({ increment: 30, message: "Generating Robot Framework test suites from TestBench report." });
     const workspaceLocation: string | undefined = await utils.validateAndReturnWorkspaceLocation();
     if (!workspaceLocation) {
         const workspaceLocationMissingErrorMessage: string =
@@ -900,7 +906,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
 ): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
-        logger.debug("[reportHandler] Fetching test results and creating report with results.");
+        logger.trace("[reportHandler] Fetching test results and creating report with results.");
         const executeWithProgress = async (
             progress: vscode.Progress<{ message?: string; increment?: number }>
         ): Promise<
@@ -1172,7 +1178,7 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
     resolvedTargetCycleKey: string,
     resolvedReportRootUID: string
 ): Promise<boolean> {
-    logger.debug(`[reportHandler] Fetching results and importing to Testbench for tree item: ${invokedOnItem.label}`);
+    logger.trace(`[reportHandler] Fetching results and importing to Testbench for tree item: ${invokedOnItem.label}`);
     return vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -1320,25 +1326,29 @@ export async function startTestGenerationUsingTOV(
     tovKey: string,
     generateTestForSpecificTestThemeTreeItem: boolean = false
 ): Promise<boolean> {
-    logger.debug(`[reportHandler] Starting test generation for TOV: ${treeItem.label}, TOV key: ${tovKey}`);
+    logger.debug(
+        `[reportHandler] Starting Robot Framework test suite generation from Test Object Version '${treeItem.label}' (${tovKey}).`
+    );
 
     try {
         return await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Generating tests for TOV: ${treeItem.label}`,
+                title: `Generating Robot Framework test suites from Test Object Version '${treeItem.label}'.`,
                 cancellable: true
             },
             async (progress, cancellationToken) => {
                 progress.report({
                     increment: 0,
                     message: generateTestForSpecificTestThemeTreeItem
-                        ? `Fetching TOV structure report for specific item: ${treeItem.label}...`
-                        : "Fetching TOV structure report for entire TOV..."
+                        ? `Fetching TestBench TOV report from tree item: ${treeItem.label}...`
+                        : "Fetching TestBench TOV report for Test Object Version..."
                 });
 
                 if (!connection) {
-                    throw new Error("[reportHandler] No connection available. Cannot generate tests for TOV.");
+                    throw new Error(
+                        "[reportHandler] No connection available. Cannot generate Robot Framework test suites for selected TOV."
+                    );
                 }
 
                 // Use undefined for root when generating tests for all test themes in TOV
@@ -1366,7 +1376,7 @@ export async function startTestGenerationUsingTOV(
                 }
 
                 if (!tovReportJobID) {
-                    throw new Error("[reportHandler] Failed to fetch TOV structure report");
+                    throw new Error("[reportHandler] Failed to fetch TestBench TOV report.");
                 }
 
                 // Poll job status until completed
@@ -1378,10 +1388,9 @@ export async function startTestGenerationUsingTOV(
                     cancellationToken
                 );
                 if (!tovReportJobStatus || !isReportJobCompletedSuccessfully(tovReportJobStatus)) {
-                    const reportGenerationErrorMsg: string = "[reportHandler] Report generation was unsuccessful.";
-                    const reportGenerationErrorMsgForUser: string = "Report generation was unsuccessful.";
-                    logger.error(reportGenerationErrorMsg);
-                    vscode.window.showErrorMessage(reportGenerationErrorMsgForUser);
+                    const reportGenerationErrorMsg: string = "TestBench TOV report generation failed.";
+                    logger.error(`[reportHandler] ${reportGenerationErrorMsg}`);
+                    vscode.window.showErrorMessage(reportGenerationErrorMsg);
                     return false;
                 }
                 const downloadedTovReportName: string =
@@ -1394,11 +1403,11 @@ export async function startTestGenerationUsingTOV(
                 );
 
                 if (!downloadedTovReportPath) {
-                    logger.warn("[reportHandler] Report download failed or was canceled.");
+                    logger.warn("[reportHandler] Failed to download TestBench TOV report.");
                     return false;
                 }
 
-                progress.report({ increment: 20, message: "Generating tests for TOV..." });
+                progress.report({ increment: 20, message: "Generating Robot Framework test suites..." });
 
                 const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
                     await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(
@@ -1412,8 +1421,8 @@ export async function startTestGenerationUsingTOV(
 
                 progress.report({ increment: 30, message: "Test generation completed" });
                 const tovTestGenerationSuccessMessage = generateTestForSpecificTestThemeTreeItem
-                    ? `Test generation completed for specific item: ${treeItem.label}`
-                    : `Test generation completed for entire TOV: ${treeItem.label}`;
+                    ? `Successfully generated Robot Framework test suites from ${rootUIDToUse} (${treeItem.label})`
+                    : `Successfully generated Robot Framework test suites from Test Object Version '${treeItem.label}'.`;
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
 
                 if (getExtensionConfiguration().get<boolean>(ConfigKeys.OPEN_TESTING_VIEW_AFTER_GENERATION, false)) {
@@ -1425,13 +1434,10 @@ export async function startTestGenerationUsingTOV(
         );
     } catch (error) {
         const tovTestGenerationErrorMessage = generateTestForSpecificTestThemeTreeItem
-            ? `[reportHandler] Test generation failed for specific item ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`
-            : `[reportHandler] Test generation failed for TOV ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
-        const tovTestGenerationErrorMessageForUser = generateTestForSpecificTestThemeTreeItem
-            ? `Test generation failed for specific item ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`
-            : `Test generation failed for TOV ${treeItem.label}: ${error instanceof Error ? error.message : "Unknown error"}`;
-        logger.error(tovTestGenerationErrorMessage, error);
-        vscode.window.showErrorMessage(tovTestGenerationErrorMessageForUser);
+            ? `[reportHandler] Robot Framework test suite generation failed for tree item '${treeItem.label}'. ${error instanceof Error ? error.message : "Unknown error"}`
+            : `[reportHandler] Robot Framework test suite generation failed for Test Object Version '${treeItem.label}'. ${error instanceof Error ? error.message : "Unknown error"}`;
+        logger.error(`[reportHandler] ${tovTestGenerationErrorMessage}`);
+        vscode.window.showErrorMessage(tovTestGenerationErrorMessage);
         return false;
     }
 }

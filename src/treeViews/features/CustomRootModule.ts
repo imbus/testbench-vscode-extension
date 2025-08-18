@@ -37,7 +37,7 @@ export class CustomRootModule implements TreeViewModule {
             }
         });
 
-        context.logger.debug(`[CustomRootModule:${context.config.id}] Custom root module initialized`);
+        context.logger.debug(context.buildLogPrefix("CustomRootModule", "Custom root module initialized"));
     }
 
     /**
@@ -118,7 +118,7 @@ export class CustomRootModule implements TreeViewModule {
     public setCustomRoot(item: TreeItemBase): void {
         const customRootConfig = this.context.config.modules.customRoot;
         if (!customRootConfig?.enabled) {
-            this.context.logger.debug(`[CustomRootModule:${this.context.config.id}] Custom root is not enabled`);
+            this.context.logger.debug(this.context.buildLogPrefix("CustomRootModule", "Custom root is not enabled"));
             return;
         }
 
@@ -133,7 +133,10 @@ export class CustomRootModule implements TreeViewModule {
             const itemDepth = item.getDepth();
             if (itemDepth > customRootConfig.maxDepth) {
                 this.context.logger.warn(
-                    `[CustomRootModule:${this.context.config.id}] Item depth ${itemDepth} exceeds maximum allowed depth ${customRootConfig.maxDepth}`
+                    this.context.buildLogPrefix(
+                        "CustomRootModule",
+                        `Item depth ${itemDepth} exceeds maximum allowed depth ${customRootConfig.maxDepth}`
+                    )
                 );
                 return;
             }
@@ -174,7 +177,7 @@ export class CustomRootModule implements TreeViewModule {
 
         this.context.refresh({ immediate: true });
         this.context.logger.trace(
-            `[CustomRootModule:${this.context.config.id}] Tree item set as custom root: ${item.label}`
+            this.context.buildLogPrefix("CustomRootModule", `Tree item set as custom root: ${item.label}`)
         );
     }
 
@@ -199,7 +202,7 @@ export class CustomRootModule implements TreeViewModule {
         });
 
         this.context.refresh({ immediate: true });
-        this.context.logger.trace(`[CustomRootModule:${this.context.config.id}] Custom root reset`);
+        this.context.logger.trace(this.context.buildLogPrefix("CustomRootModule", "Custom root reset"));
     }
 
     /**

@@ -38,7 +38,7 @@ export class MarkingModule implements TreeViewModule {
             }
         });
 
-        this.context.logger.debug(`[MarkingModule:${context.config.id}] Marking module initialized`);
+        this.context.logger.debug(context.buildLogPrefix("MarkingModule", "Marking module initialized"));
     }
 
     /**
@@ -62,13 +62,16 @@ export class MarkingModule implements TreeViewModule {
     public markItem(item: TreeItemBase, projectKey: string, cycleKey: string, type: string = "default"): void {
         const markingConfig = this.context.config.modules.marking;
         if (!markingConfig?.enabled) {
-            this.context.logger.warn(`[MarkingModule:${this.context.config.id}] Marking is not enabled`);
+            this.context.logger.warn(this.context.buildLogPrefix("MarkingModule", "Marking is not enabled"));
             return;
         }
 
         if (!item.id) {
             this.context.logger.warn(
-                `[MarkingModule:${this.context.config.id}] Item ID does not exist for ${item.label}. Cannot mark item`
+                this.context.buildLogPrefix(
+                    "MarkingModule",
+                    `Item ID does not exist for ${item.label}. Cannot mark item`
+                )
             );
             return;
         }
@@ -78,7 +81,7 @@ export class MarkingModule implements TreeViewModule {
             markingConfig.markingContextValues.includes(item.originalContextValue);
         if (!canBeMarked) {
             this.context.logger.debug(
-                `[MarkingModule:${this.context.config.id}] Item type ${item.originalContextValue} cannot be marked`
+                this.context.buildLogPrefix("MarkingModule", `Item type ${item.originalContextValue} cannot be marked`)
             );
             return;
         }
@@ -111,7 +114,7 @@ export class MarkingModule implements TreeViewModule {
             },
             timestamp: Date.now()
         });
-        this.context.logger.trace(`[MarkingModule:${this.context.config.id}] Marked item: ${item.label}`);
+        this.context.logger.trace(this.context.buildLogPrefix("MarkingModule", `Marked item: ${item.label}`));
     }
 
     /**
@@ -129,7 +132,10 @@ export class MarkingModule implements TreeViewModule {
     ): void {
         if (!item.id) {
             this.context.logger.warn(
-                `[MarkingModule:${this.context.config.id}] Item ID does not exist for ${item.label}. Cannot mark item and its descendants`
+                this.context.buildLogPrefix(
+                    "MarkingModule",
+                    `Item ID does not exist for ${item.label}. Cannot mark item and its descendants`
+                )
             );
             return;
         }
@@ -150,7 +156,10 @@ export class MarkingModule implements TreeViewModule {
         });
         this.updateState();
         this.context.logger.trace(
-            `[MarkingModule:${this.context.config.id}] Marked item ${item.label} and ${validDescendants.length} descendants`
+            this.context.buildLogPrefix(
+                "MarkingModule",
+                `Marked item ${item.label} and ${validDescendants.length} descendants`
+            )
         );
         this.context.refresh({ immediate: true });
     }
@@ -177,7 +186,7 @@ export class MarkingModule implements TreeViewModule {
         }
 
         this.updateState();
-        this.context.logger.trace(`[MarkingModule:${this.context.config.id}] Unmarked item: ${itemId}`);
+        this.context.logger.trace(this.context.buildLogPrefix("MarkingModule", `Unmarked item: ${itemId}`));
     }
 
     /**
@@ -238,7 +247,7 @@ export class MarkingModule implements TreeViewModule {
         this.markingState = this.createEmptyState();
         this.updateState();
         this.context.refresh();
-        this.context.logger.trace(`[MarkingModule:${this.context.config.id}] Cleared all markings`);
+        this.context.logger.trace(this.context.buildLogPrefix("MarkingModule", "Cleared all markings"));
 
         if (emitGlobalEvent) {
             this.context.eventBus.emit({
