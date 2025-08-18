@@ -82,9 +82,11 @@ export class TestElementsDataProvider {
             ConfigKeys.TB2ROBOT_RESOURCE_MARKER
         );
 
+        /*
         this.logger.debug(
             `[TestElementsDataProvider] Retrieved resource markers from settings: ${JSON.stringify(resourceMarkers)}`
         );
+        */
 
         if (!resourceMarkers || resourceMarkers.length === 0) {
             this.logger.debug("[TestElementsDataProvider] No resource markers configured, returning empty patterns");
@@ -97,9 +99,7 @@ export class TestElementsDataProvider {
             return new RegExp(escaped);
         });
 
-        this.logger.debug(
-            `[TestElementsDataProvider] Generated regex patterns: ${JSON.stringify(patterns.map((p) => p.source))}`
-        );
+        // this.logger.debug(`[TestElementsDataProvider] Generated regex patterns: ${JSON.stringify(patterns.map((p) => p.source))}`);
         return patterns;
     }
 
@@ -192,11 +192,11 @@ export class TestElementsDataProvider {
             const directRegexMatch =
                 currentPatterns.length > 0 ? this._matchesRegex(jsonTestElement.name, currentPatterns) : true;
 
+            /*
             if (currentPatterns.length > 0) {
-                this.logger.debug(
-                    `[TestElementsDataProvider] Element "${jsonTestElement.name}" regex match: ${directRegexMatch} (patterns: ${JSON.stringify(currentPatterns.map((p) => p.source))})`
-                );
+                this.logger.debug(`[TestElementsDataProvider] Element "${jsonTestElement.name}" regex match: ${directRegexMatch} (patterns: ${JSON.stringify(currentPatterns.map((p) => p.source))})`);
             }
+            */
 
             const testElement: TestElementData = {
                 id: compositeId,

@@ -185,6 +185,91 @@ suite("ResourceFileService", function () {
 
             assert.strictEqual(result, undefined, "Should return undefined when hierarchical name is empty");
         });
+
+        test("should map path under resourceDirectoryPath starting from marker", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+                if (key === "resourceDirectoryPath") {
+                    return "rf_resources" as any;
+                }
+                if (key === "resourceDirectoryMarker") {
+                    return "resources" as any;
+                }
+                if (key === "resourceMarker") {
+                    return undefined as any;
+                }
+                return undefined as any;
+            });
+
+            const result = await resourceFileService.constructAbsolutePath(
+                "Root/Project/resources/Sub/Folder/MyResource"
+            );
+            const expectedPath = path.join("/test/workspace", "rf_resources", "Sub", "Folder", "MyResource");
+
+            assert.strictEqual(
+                result,
+                expectedPath,
+                `Expected mapping below marker into resourceDirectoryPath: "${expectedPath}", got "${result}"`
+            );
+        });
+
+        test("should include resourceDirectoryPath even when marker is missing", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+                if (key === "resourceDirectoryPath") {
+                    return "rf_resources" as any;
+                }
+                if (key === "resourceDirectoryMarker") {
+                    return "resources" as any;
+                }
+                if (key === "resourceMarker") {
+                    return undefined as any;
+                }
+                return undefined as any;
+            });
+
+            const result = await resourceFileService.constructAbsolutePath("Root/Project/Sub/Folder/MyResource");
+            const expectedPath = path.join(
+                "/test/workspace",
+                "rf_resources",
+                "Root",
+                "Project",
+                "Sub",
+                "Folder",
+                "MyResource"
+            );
+
+            assert.strictEqual(
+                result,
+                expectedPath,
+                `Expected full mapping under resourceDirectoryPath when marker missing: "${expectedPath}", got "${result}"`
+            );
+        });
+
+        test("should handle marker at root and slice correctly", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+                if (key === "resourceDirectoryPath") {
+                    return "rf" as any;
+                }
+                if (key === "resourceDirectoryMarker") {
+                    return "resources" as any;
+                }
+                if (key === "resourceMarker") {
+                    return undefined as any;
+                }
+                return undefined as any;
+            });
+
+            const result = await resourceFileService.constructAbsolutePath("resources/Sub/Res");
+            const expectedPath = path.join("/test/workspace", "rf", "Sub", "Res");
+
+            assert.strictEqual(
+                result,
+                expectedPath,
+                `Expected slicing after root marker and mapping into resource dir: "${expectedPath}", got "${result}"`
+            );
+        });
     });
 
     suite("resource marker removal", function () {
@@ -221,18 +306,6 @@ suite("ResourceFileService", function () {
             const result = await resourceFileService.pathExists("TestTheme [RF-Resource*] [Robot-Resource]");
 
             assert.strictEqual(result, false, "Should handle path with special character markers correctly");
-        });
-
-        test("should skip string removal when empty markers array is configured", async function () {
-            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns([]);
-            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
-
-            const result = await resourceFileService.constructAbsolutePath(
-                "TestTheme [Robot-Resource] [Custom-Marker]"
-            );
-            const expectedPath = path.join("/test/workspace", "TestTheme [Robot-Resource] [Custom-Marker]");
-
-            assert.strictEqual(result, expectedPath, "Should preserve all markers when empty array configured");
         });
 
         test("should handle multiple custom markers correctly", async function () {

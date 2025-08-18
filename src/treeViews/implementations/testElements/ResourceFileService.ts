@@ -114,7 +114,12 @@ export class ResourceFileService {
     }
 
     /**
-     * Constructs an absolute path for a resource given its hierarchical name.
+     * Constructs an absolute file system path for a TestBench hierarchical name,
+     * respecting the configured Resource Directory Marker and Resource Directory Path.
+     *
+     * Below the "Resource Directory Marker" subdivision, folder structure matches the file system, everything above is ignored.
+     * Folder structure under "Resource Directory Path" mirrors the TestBench subdivisions starting at the marker.
+     * File path when creating: resourceDirectoryPath + subdivision path starting from the marker.
      * @param hierarchicalName The slash-separated hierarchical name (e.g., "Folder/SubFolder/MyResource").
      * @returns {Promise<string | undefined>} The absolute path or undefined if workspace root is not found.
      */
@@ -128,11 +133,28 @@ export class ResourceFileService {
             return undefined;
         }
 
-        const normalizedComponents = this.hierarchicalNameToPathComponents(hierarchicalName);
-        const absolutePath = path.join(workspaceRootPath, ...normalizedComponents);
+        const resourceDirRelative = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR) || "";
+        const resourceDirectoryMarker = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_REGEX) || "";
+
+        const cleanedHierarchical = this.removeResourceMarkersFromPathString(hierarchicalName);
+        const splitPathComponents = cleanedHierarchical.split("/");
+        const normalizedPathComponents = splitPathComponents.map((c) => this.normalizePathComponent(c));
+
+        // Find index of the resource directory marker (exact match)
+        let resourceFileSliceStartIndex = 0;
+        if (resourceDirectoryMarker) {
+            const resourceDirectoryMarkerIndex = splitPathComponents.findIndex((c) => c === resourceDirectoryMarker);
+            if (resourceDirectoryMarkerIndex !== -1) {
+                // Ignore everything up to and including the marker itself
+                resourceFileSliceStartIndex = resourceDirectoryMarkerIndex + 1;
+            }
+        }
+
+        const relativePathUnderMarker = normalizedPathComponents.slice(resourceFileSliceStartIndex);
+        const absolutePath = path.join(workspaceRootPath, resourceDirRelative, ...relativePathUnderMarker);
 
         this.logger.trace(
-            `[ResourceFileService] Constructed absolute path for '${hierarchicalName}' (normalized components: [${normalizedComponents.join(", ")}]): ${absolutePath}`
+            `[ResourceFileService] Constructed absolute path for '${hierarchicalName}' with marker='${resourceDirectoryMarker}' and resourceDir='${resourceDirRelative}' -> ${absolutePath}`
         );
         return absolutePath;
     }
