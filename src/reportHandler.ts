@@ -625,9 +625,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             effectiveContext === TestThemeItemTypes.TEST_THEME ||
             effectiveContext === TestThemeItemTypes.TEST_CASE_SET
         ) {
-            logger.debug(
-                `[reportHandler] Generating Robot Framework test suites from tree item ${treeItemUID} (${itemLabel}).`
-            );
+            logger.debug(`[reportHandler] Generating Robot Framework test suites from ${treeItemUID} (${itemLabel}).`);
             UIDforRequest = treeItemUID;
         } else {
             logger.error(
@@ -690,7 +688,12 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             await vscode.commands.executeCommand("workbench.view.extension.test");
         }
 
-        const successfulTestGenerationMessage: string = `Successfully generated Robot Framework test suites from ${treeItemUID} (${itemLabel}).`;
+        var successfulTestGenerationMessage: string = `Successfully generated Robot Framework test suites from ${treeItemUID} (${itemLabel}).`;
+        const effectiveContext: string | undefined = selectedTreeItem.originalContextValue;
+
+        if (effectiveContext?.toLowerCase() === ProjectItemTypes.CYCLE.toLowerCase()) {
+            successfulTestGenerationMessage = `Successfully generated Robot Framework test suites from test cycle '${itemLabel}'.`;
+        }
         vscode.window.showInformationMessage(successfulTestGenerationMessage);
         logger.info(`[reportHandler] ${successfulTestGenerationMessage}`);
         return true;
@@ -1008,8 +1011,9 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
 
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const testResultsImportError: string =
-                    "[reportHandler] Fetching results with testbench2robotframework failed.";
-                const testResultsImportErrorForUser: string = "Fetching results with testbench2robotframework failed.";
+                    "[reportHandler] Parsing Robot Framework results with testbench2robotframework failed.";
+                const testResultsImportErrorForUser: string =
+                    "Parsing Robot Framework results with testbench2robotframework failed.";
                 logger.error(testResultsImportError);
                 vscode.window.showErrorMessage(testResultsImportErrorForUser);
                 return undefined;
@@ -1030,15 +1034,15 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             return await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: "Creating Report with Test Results",
+                    title: "Creating TestBench report containing execution results",
                     cancellable: true
                 },
                 executeWithProgress
             );
         }
     } catch (error) {
-        const fetchResultsErrorMessage: string = `[reportHandler] Error while creating report with results: ${error instanceof Error ? error.message : String(error)}`;
-        const fetchResultsErrorMessageForUser: string = "Error while creating report with results.";
+        const fetchResultsErrorMessage: string = `[reportHandler] Error while creating TestBench report with execution results: ${error instanceof Error ? error.message : String(error)}`;
+        const fetchResultsErrorMessageForUser: string = "Error while creating TestBench report with execution results.";
         logger.error(fetchResultsErrorMessage);
         vscode.window.showErrorMessage(fetchResultsErrorMessageForUser);
         return undefined;
@@ -1334,14 +1338,14 @@ export async function startTestGenerationUsingTOV(
         return await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `Generating Robot Framework test suites from Test Object Version '${treeItem.label}'.`,
+                title: `Generating Robot Framework test suites from Test Object Version '${treeItem.label}'`,
                 cancellable: true
             },
             async (progress, cancellationToken) => {
                 progress.report({
                     increment: 0,
                     message: generateTestForSpecificTestThemeTreeItem
-                        ? `Fetching TestBench TOV report from tree item: ${treeItem.label}...`
+                        ? `Fetching TestBench TOV report from ${treeItem.label}...`
                         : "Fetching TestBench TOV report for Test Object Version..."
                 });
 
@@ -1421,7 +1425,7 @@ export async function startTestGenerationUsingTOV(
 
                 progress.report({ increment: 30, message: "Test generation completed" });
                 const tovTestGenerationSuccessMessage = generateTestForSpecificTestThemeTreeItem
-                    ? `Successfully generated Robot Framework test suites from ${rootUIDToUse} (${treeItem.label})`
+                    ? `Successfully generated Robot Framework test suites from ${rootUIDToUse} (${treeItem.label}).`
                     : `Successfully generated Robot Framework test suites from Test Object Version '${treeItem.label}'.`;
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
 

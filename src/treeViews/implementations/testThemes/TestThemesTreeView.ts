@@ -197,7 +197,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const userId = userSessionManager.getCurrentUserId();
             const lastImportedItemKey = `${userId}.${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_lastItemId`;
             const lastImportedItem = this.extensionContext.workspaceState.get<string>(lastImportedItemKey);
-
+            // TODO: Check if there are results in TestBench and only ask if they already exist
             if (lastImportedItem === item.id) {
                 const result = await vscode.window.showWarningMessage(
                     `You have already imported test results for "${itemLabel}". Do you want to import it again?`,
@@ -251,9 +251,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             );
 
             if (importSuccessful) {
-                const importSuccessfulMessageForUser = `Successfully imported test results for ${itemLabel}`;
-                const importSuccessfulMessage = `[TestThemesTreeView] Successfully imported test results for ${itemLabel} with UID ${reportRootUID}`;
-                this.logger.info(importSuccessfulMessage);
+                const importSuccessfulMessageForUser = `Successfully imported Robot Framework test results for ${reportRootUID} (${itemLabel}) to TestBench.`;
+                this.logger.info(`[TestThemesTreeView] ${importSuccessfulMessageForUser}`);
                 vscode.window.showInformationMessage(importSuccessfulMessageForUser);
 
                 this.extensionContext.workspaceState.update(lastImportedItemKey, item.id);
