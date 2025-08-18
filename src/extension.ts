@@ -43,10 +43,9 @@ import {
     updateOrRestartLS,
     stopLanguageClient,
     client,
-    waitForLanguageServerReady,
-    handleLanguageServerRestartOnSessionChange
+    handleLanguageServerRestartOnSessionChange,
+    prepareLanguageServerForTreeItemOperation
 } from "./server";
-import { TreeItemBase } from "./treeViews/core/TreeItemBase";
 import {
     hideProjectManagementTreeView,
     displayProjectManagementTreeView
@@ -60,6 +59,7 @@ import {
     hideTestThemeTreeView
 } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { initializeTreeViews } from "./treeViews/TreeViewFactory";
+import { UserSessionManager } from "./userSessionManager";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -109,51 +109,12 @@ let isHandlingSessionChange: boolean = false;
 // Prevent multiple test generation or import operations simultaneously
 let isTestOperationInProgress: boolean = false;
 
+export let userSessionManager: UserSessionManager;
+
 // Determines if the icon of the tree item should be changed after generating tests for that item.
 export const ENABLE_ICON_MARKING_ON_TEST_GENERATION: boolean = true;
 // Determines if the import button of the tree item should still persist after importing test results for that item.
 export const ALLOW_PERSISTENT_IMPORT_BUTTON: boolean = true;
-
-/**
- * Extracts project and TOV names from different tree item types (projects or test theme tree items),
- * retrieves language server parameters and initializes or updates the language server.
- *
- * @param item The tree item that extends TreeItemBase and implements LanguageServerParameterProvider
- * @param operationName Human readable name of the operation for error messages
- * @returns Promise that resolves to the extracted project and TOV names, or throws an error
- */
-async function prepareLanguageServerForTreeItemOperation(
-    item: TreeItemBase,
-    operationName: string
-): Promise<{ projectName: string; tovName: string }> {
-    const timeOutMs = 30000;
-    const checkIntervallMs = 100;
-    const languageServerParams = item.getLanguageServerParameters?.();
-
-    if (!languageServerParams) {
-        const errorMessage = `Cannot ${operationName}: invalid tree item. Missing project or TOV information.`;
-        logger.error(`[extension] ${errorMessage}`);
-        vscode.window.showErrorMessage(errorMessage);
-        throw new Error(errorMessage);
-    }
-
-    const { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem } = languageServerParams;
-    await updateOrRestartLS(projectNameOfTreeItem, tovNameOfTreeItem);
-
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: "Waiting for Language Server",
-            cancellable: true
-        },
-        async (progress, cancellationToken) => {
-            progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
-            await waitForLanguageServerReady(timeOutMs, checkIntervallMs, cancellationToken);
-        }
-    );
-
-    return { projectName: projectNameOfTreeItem, tovName: tovNameOfTreeItem };
-}
 
 /**
  * Wraps a command handler with error handling to prevent the extension from crashing due to unhandled exceptions in commands.
@@ -231,63 +192,6 @@ function registerSafeCommand(
 }
 
 /**
- * Restores a previously saved view state.
- * Updates the language server, loads data into the tree views based on the saved context,
- * and adjusts the visibility of the tree views accordingly.
- *
- * @param context The VS Code extension context.
- * @param savedViewId The identifier of the view to restore.
- * @param savedContext An object containing the saved view information (project, TOV, cycle data).
- * @returns A promise that resolves to true if the view was successfully restored, false otherwise.
- */
-async function performDeferredViewRestoration(
-    context: vscode.ExtensionContext,
-    savedViewId: string,
-    savedContext: any
-): Promise<boolean> {
-    if (!treeViews) {
-        return false;
-    }
-
-    try {
-        logger.debug(`[extension] Performing deferred view restoration for: ${savedViewId}`);
-        if (savedContext.isCycle) {
-            await treeViews.testThemesTree.loadCycle(
-                savedContext.projectKey,
-                savedContext.cycleKey,
-                savedContext.projectName,
-                savedContext.tovName,
-                savedContext.cycleLabel
-            );
-        } else {
-            await treeViews.testThemesTree.loadTov(
-                savedContext.projectKey,
-                savedContext.tovKey,
-                savedContext.projectName,
-                savedContext.tovName
-            );
-        }
-
-        await treeViews.testElementsTree.loadTov(
-            savedContext.tovKey,
-            savedContext.tovName,
-            savedContext.projectName,
-            savedContext.tovName
-        );
-
-        await displayTestThemeTreeView();
-        await displayTestElementsTreeView();
-        await hideProjectManagementTreeView();
-
-        logger.trace(`[extension] Successfully restored view to context of TOV: ${savedContext.tovName}`);
-        return true;
-    } catch (error) {
-        logger.error("[extension] Failed to restore view state:", error);
-        return false;
-    }
-}
-
-/**
  * Registers all extension commands.
  * Defines all commands handlers separately and associates them with the corresponding command IDs.
  *
@@ -325,6 +229,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     const handleLogout = async () => {
         logger.debug(`[extension] Command called: ${allExtensionCommands.logout}`);
+
+        if (connection) {
+            await connection.logoutUserOnServer();
+        }
+
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             silent: true
         });
@@ -361,8 +270,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const projectName = cycleItem.parent?.parent?.label?.toString();
         const tovName = cycleItem.parent?.label?.toString();
 
-        if (projectKey && cycleKey && versionKey && projectName && tovName) {
-            await saveUIContext(context, "testThemes", {
+        if (projectKey && cycleKey && versionKey && projectName && tovName && treeViews) {
+            await treeViews.saveUIContext("testThemes", {
                 isCycle: true,
                 projectKey,
                 cycleKey,
@@ -420,7 +329,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const tovName = tovItem.label?.toString();
 
         if (projectKey && tovKey && projectName && tovName) {
-            await saveUIContext(context, "testThemes", { isCycle: false, projectKey, tovKey, projectName, tovName });
+            await treeViews.saveUIContext("testThemes", { isCycle: false, projectKey, tovKey, projectName, tovName });
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
@@ -450,7 +359,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const tovName = cycleItem.parent?.label?.toString();
 
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
-            await saveUIContext(context, "testThemes", {
+            await treeViews.saveUIContext("testThemes", {
                 isCycle: true,
                 projectKey,
                 cycleKey,
@@ -711,7 +620,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         displayProjectManagementTreeView();
         hideTestThemeTreeView();
         hideTestElementsTreeView();
-        await saveUIContext(context, "projects");
+        if (treeViews) {
+            await treeViews.saveUIContext("projects");
+        }
     };
 
     const handleMakeRoot = (item: any) => {
@@ -985,7 +896,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         // Other extension commands
         { id: allExtensionCommands.clearInternalTestbenchFolder, handler: clearInternalFolder },
-        { id: allExtensionCommands.clearAllExtensionData, handler: clearAllExtensionData },
+        { id: allExtensionCommands.clearAllExtensionData, handler: () => clearAllExtensionData(context, true) },
         {
             id: allExtensionCommands.showExtensionSettings,
             handler: handleShowExtensionSettings
@@ -1046,6 +957,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
  * @param activeConnection - The active connection to use.
  * @param session - The session to use.
  * @param currentConnection - The current connection to use.
+ * @param context - The extension context.
  * @returns The new connection.
  */
 async function createNewConnection(
@@ -1072,94 +984,7 @@ async function createNewConnection(
     setConnection(newConnection);
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
     getLoginWebViewProvider()?.updateWebviewHTMLContent();
-
     return newConnection;
-}
-
-/**
- * Validates saved context data for view restoration.
- * @param savedContext - The saved context to validate.
- * @returns True if the saved context is valid, false otherwise.
- */
-function isValidSavedContext(savedContext: any): boolean {
-    return !!(
-        savedContext &&
-        savedContext.projectName &&
-        typeof savedContext.projectName === "string" &&
-        savedContext.tovName &&
-        typeof savedContext.tovName === "string"
-    );
-}
-
-/**
- * Loads the default tree views where only projects tree view is visible.
- * @returns A promise that resolves when the default tree views are loaded.
- */
-async function loadDefaultTreeViewsUI(): Promise<void> {
-    if (treeViews) {
-        treeViews.projectsTree.refresh();
-    }
-    await displayProjectManagementTreeView();
-    await hideTestThemeTreeView();
-    await hideTestElementsTreeView();
-}
-
-/**
- * Refreshes tree views and attempts to restore previous view state.
- * @param context - The extension context.
- * @returns A promise that resolves when the tree views are refreshed and the previous view state is restored.
- */
-async function restoreTreeViewsState(context: vscode.ExtensionContext): Promise<void> {
-    logger.debug("[extension] Restoring tree views state");
-
-    if (!treeViews) {
-        logger.error("[extension] Tree views not initialized, cannot restore view state.");
-        return;
-    }
-
-    try {
-        treeViews.clear();
-        treeViews.projectsTree.refresh();
-
-        const savedViewId = context.workspaceState.get<string>(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY);
-        const savedCycleContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
-        const savedTovContext = context.workspaceState.get<any>(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
-        const savedContext = savedCycleContext || savedTovContext;
-
-        let viewRestored = false;
-
-        if (savedContext && isValidSavedContext(savedContext)) {
-            await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
-        }
-
-        if (savedViewId && savedViewId !== "projects" && savedContext) {
-            if (!isValidSavedContext(savedContext)) {
-                logger.warn(
-                    `[extension] Cannot restore view state: invalid context data. ` +
-                        `projectName: ${savedContext.projectName}, tovName: ${savedContext.tovName}. ` +
-                        `Clearing invalid state and loading default view.`
-                );
-                await clearViewState(context);
-            } else {
-                try {
-                    viewRestored = await performDeferredViewRestoration(context, savedViewId, savedContext);
-                } catch (error) {
-                    logger.error(`[extension] Failed to restore view state:`, error);
-                    viewRestored = false;
-                }
-            }
-        }
-
-        if (!viewRestored) {
-            logger.debug(
-                "[extension] No saved state available to restore or restoration failed. Loading default view."
-            );
-            await loadDefaultTreeViewsUI();
-        }
-    } catch (error) {
-        logger.warn(`[extension] Error managing trees during session change:`, error);
-        await loadDefaultTreeViewsUI();
-    }
 }
 
 /**
@@ -1172,9 +997,8 @@ async function handleNoActiveConnection(): Promise<void> {
 
     if (treeViews) {
         treeViews.clear();
+        await treeViews.loadDefaultViewsUI();
     }
-
-    await loadDefaultTreeViewsUI();
 }
 
 /**
@@ -1185,11 +1009,20 @@ async function handleNoSession(): Promise<void> {
         await connection.logoutUserOnServer();
     }
 
+    // Save current state before ending session to ensure persistence
     if (treeViews) {
-        treeViews.clear();
+        await treeViews.saveCurrentState();
     }
 
-    await loadDefaultTreeViewsUI();
+    userSessionManager.endSession();
+
+    // Clear tree data but preserve persistent state (expansion, marking, etc.)
+    if (treeViews) {
+        treeViews.projectsTree.clearTree();
+        treeViews.testThemesTree.clearTree();
+        treeViews.testElementsTree.clearTree();
+        await treeViews.loadDefaultViewsUI();
+    }
 }
 
 /**
@@ -1209,6 +1042,28 @@ async function handleTestBenchSessionChange(
     const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess?.accessToken) {
+        const previousUserId = userSessionManager.getCurrentUserId();
+        const newUserId = sessionToProcess.account.id;
+        const wasNewSessionStarted = previousUserId !== newUserId;
+
+        // If switching to a different user, reset state for the previous user's data
+        if (wasNewSessionStarted && previousUserId !== "global_fallback" && treeViews) {
+            logger.trace(
+                `[extension] Switching from user ${previousUserId} to ${newUserId}, clearing previous user's tree state`
+            );
+            await treeViews.resetForNewUser();
+        }
+
+        userSessionManager.startSession({
+            userKey: sessionToProcess.account.id,
+            login: sessionToProcess.account.label
+        });
+
+        if (treeViews) {
+            const reason = wasNewSessionStarted ? "New user session" : "Session restored/relogged";
+            logger.trace(`[extension] ${reason} for ${sessionToProcess.account.label}. Reloading persistent UI state.`);
+            await treeViews.reloadAllTreeViewsStateFromPersistence();
+        }
         const activeConnection = await connectionManager.getActiveConnection(context);
 
         if (!activeConnection) {
@@ -1229,61 +1084,12 @@ async function handleTestBenchSessionChange(
             !wasPreviouslyConnected ||
             !!(connection && connection.getSessionToken() !== newConnection.getSessionToken());
 
-        if (isNewConnection) {
+        if (isNewConnection && treeViews) {
             logger.trace("[extension] New connection established.");
-            await restoreTreeViewsState(context);
+            await treeViews.restoreViewsState();
         }
     } else {
         await handleNoSession();
-    }
-}
-
-/**
- * Clears all view state storage. This function is used to clear invalid view state
- * when restoration fails, not for logout scenarios where view state should be preserved.
- * @param context The extension context
- */
-async function clearViewState(context: vscode.ExtensionContext): Promise<void> {
-    await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, "projects");
-    await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-    await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
-}
-
-/**
- * Saves the UI context to the workspace state for later restoration.
- * @param context The extension context.
- * @param viewId The ID of the currently visible primary view.
- * @param contextData The data required to restore the view (e.g., keys and names).
- */
-async function saveUIContext(
-    context: vscode.ExtensionContext,
-    viewId: "projects" | "testThemes" | "testElements",
-    contextData?: any
-) {
-    await context.workspaceState.update(StorageKeys.VISIBLE_VIEWS_STORAGE_KEY, viewId);
-
-    if (contextData) {
-        const hasValidProjectName = contextData.projectName && typeof contextData.projectName === "string";
-        const hasValidTovName = contextData.tovName && typeof contextData.tovName === "string";
-
-        if (!hasValidProjectName || !hasValidTovName) {
-            logger.warn(
-                `[extension] Cannot save UI context: invalid contextData. ` +
-                    `projectName: ${contextData.projectName}, tovName: ${contextData.tovName}. ` +
-                    `Clearing context state.`
-            );
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
-            return;
-        }
-
-        if (contextData.isCycle) {
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, contextData);
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, undefined);
-        } else {
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY, contextData);
-            await context.workspaceState.update(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY, undefined);
-        }
     }
 }
 
@@ -1338,6 +1144,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         })
     );
+
+    userSessionManager = new UserSessionManager(context);
 
     // Initialize tree views
     await initializeTreeViews(context);
@@ -1438,72 +1246,6 @@ export async function clearAllExtensionData(
             setConnection(null);
         }
 
-        try {
-            logger.debug("[extension] Clearing VS Code authentication sessions...");
-            const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, [], {
-                createIfNone: false,
-                silent: true
-            });
-            if (session && authProviderInstance) {
-                await authProviderInstance.removeSession(session.id);
-            }
-        } catch (error) {
-            logger.error("[extension] Error clearing authentication session while clearing all extension data:", error);
-        }
-
-        logger.debug("[extension] Clearing workspace state storage...");
-        const workspaceStateKeys = [
-            StorageKeys.LAST_GENERATED_PARAMS,
-            StorageKeys.MARKED_TEST_GENERATION_ITEM,
-            StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY,
-            `${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_last`,
-            StorageKeys.VISIBLE_VIEWS_STORAGE_KEY,
-            StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY,
-            StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY,
-            StorageKeys.CUSTOM_ROOT_PROJECT_TREE,
-            StorageKeys.CUSTOM_ROOT_TEST_THEME_TREE,
-            StorageKeys.CUSTOM_ROOT_TEST_ELEMENTS_TREE,
-            StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY,
-            StorageKeys.HAS_USED_EXTENSION_BEFORE,
-            `${StorageKeys.MARKED_TEST_GENERATION_ITEM}_hierarchies`
-        ];
-
-        // View state storage keys (dynamic keys based on tree view IDs)
-        const treeViewIds = ["testbench.projects", "testbench.testThemes", "testbench.testElements"];
-        for (const treeViewId of treeViewIds) {
-            workspaceStateKeys.push(`treeState.${treeViewId}`);
-            workspaceStateKeys.push(`treeView.state.${treeViewId}`);
-        }
-
-        for (const key of workspaceStateKeys) {
-            try {
-                await context.workspaceState.update(key, undefined);
-            } catch (error) {
-                logger.error(
-                    `[extension] Error clearing workspace state key ${key} while clearing all extension data:`,
-                    error
-                );
-            }
-        }
-
-        logger.debug("[extension] Clearing global state storage...");
-        const globalStateKeys: string[] = [StorageKeys.CONNECTIONS_STORAGE_KEY, StorageKeys.ACTIVE_CONNECTION_ID_KEY];
-
-        for (const treeViewId of treeViewIds) {
-            globalStateKeys.push(`treeView.state.${treeViewId}`);
-        }
-
-        for (const key of globalStateKeys) {
-            try {
-                await context.globalState.update(key, undefined);
-            } catch (error) {
-                logger.error(
-                    `[extension] Error clearing global state key ${key} while clearing all extension data:`,
-                    error
-                );
-            }
-        }
-
         logger.debug("[extension] Clearing connection passwords from secret storage...");
         try {
             const connections = await connectionManager.getConnections(context);
@@ -1522,118 +1264,65 @@ export async function clearAllExtensionData(
             logger.error("[extension] Error clearing connection passwords while clearing all extension data:", error);
         }
 
+        try {
+            logger.debug("[extension] Clearing VS Code authentication sessions...");
+            const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, [], {
+                createIfNone: false,
+                silent: true
+            });
+            if (session && authProviderInstance) {
+                await authProviderInstance.removeSession(session.id);
+            }
+        } catch (error) {
+            logger.error("[extension] Error clearing authentication session while clearing all extension data:", error);
+        }
+
+        // State Clearing Logic
+        const extensionKeyPatterns = ["testbenchExtension.", "treeState.", "treeView.state."];
+
+        logger.debug("[extension] Clearing workspace state storage for all users...");
+        const allWorkspaceKeys = context.workspaceState.keys();
+        const extensionWorkspaceKeys = allWorkspaceKeys.filter((key) =>
+            extensionKeyPatterns.some((pattern) => key.includes(pattern))
+        );
+
+        for (const key of extensionWorkspaceKeys) {
+            try {
+                await context.workspaceState.update(key, undefined);
+                logger.trace(`[extension] Cleared workspace state key: ${key}`);
+            } catch (error) {
+                logger.error(`[extension] Error clearing workspace state key ${key}:`, error);
+            }
+        }
+
+        logger.debug("[extension] Clearing global state storage for all users...");
+        const allGlobalKeys = context.globalState.keys();
+        const extensionGlobalKeys = allGlobalKeys.filter((key) =>
+            extensionKeyPatterns.some((pattern) => key.includes(pattern))
+        );
+
+        for (const key of extensionGlobalKeys) {
+            try {
+                await context.globalState.update(key, undefined);
+                logger.trace(`[extension] Cleared global state key: ${key}`);
+            } catch (error) {
+                logger.error(`[extension] Error clearing global state key ${key}:`, error);
+            }
+        }
+
         if (treeViews) {
             logger.debug("[extension] Clearing tree data and state...");
             try {
                 treeViews.clear();
 
                 if (treeViews.projectsTree) {
-                    const projectsPersistence = (treeViews.projectsTree as any).modules?.get("persistence");
-                    if (projectsPersistence?.clear) {
-                        await projectsPersistence.clear();
-                    }
-
-                    const projectsExpansion = (treeViews.projectsTree as any).modules?.get("expansion");
-                    if (projectsExpansion?.reset) {
-                        projectsExpansion.reset();
-                    }
-
-                    const projectsMarking = (treeViews.projectsTree as any).modules?.get("marking");
-                    if (projectsMarking?.clearAllMarkings) {
-                        projectsMarking.clearAllMarkings(false); // Don't emit global event during clear all
-                    }
-
-                    const projectsFiltering = (treeViews.projectsTree as any).modules?.get("filtering");
-                    if (projectsFiltering?.clearAllFilters) {
-                        projectsFiltering.clearAllFilters();
-                    }
-
-                    const projectsCustomRoot = (treeViews.projectsTree as any).modules?.get("customRoot");
-                    if (projectsCustomRoot?.reset) {
-                        projectsCustomRoot.reset();
-                    }
-
-                    const projectsStateManager = (treeViews.projectsTree as any).stateManager;
-                    if (projectsStateManager?.setState) {
-                        projectsStateManager.setState({
-                            expansion: null,
-                            marking: null,
-                            customRoot: null,
-                            filtering: null
-                        });
-                    }
+                    await treeViews.projectsTree.clearAllModuleState();
                 }
                 if (treeViews.testThemesTree) {
-                    const testThemesPersistence = (treeViews.testThemesTree as any).modules?.get("persistence");
-                    if (testThemesPersistence?.clear) {
-                        await testThemesPersistence.clear();
-                    }
-
-                    const testThemesExpansion = (treeViews.testThemesTree as any).modules?.get("expansion");
-                    if (testThemesExpansion?.reset) {
-                        testThemesExpansion.reset();
-                    }
-
-                    const testThemesMarking = (treeViews.testThemesTree as any).modules?.get("marking");
-                    if (testThemesMarking?.clearAllMarkings) {
-                        testThemesMarking.clearAllMarkings(false); // Don't emit global event during clear all
-                    }
-
-                    const testThemesFiltering = (treeViews.testThemesTree as any).modules?.get("filtering");
-                    if (testThemesFiltering?.clearAllFilters) {
-                        testThemesFiltering.clearAllFilters();
-                    }
-
-                    const testThemesCustomRoot = (treeViews.testThemesTree as any).modules?.get("customRoot");
-                    if (testThemesCustomRoot?.reset) {
-                        testThemesCustomRoot.reset();
-                    }
-
-                    const testThemesStateManager = (treeViews.testThemesTree as any).stateManager;
-                    if (testThemesStateManager?.setState) {
-                        testThemesStateManager.setState({
-                            expansion: null,
-                            marking: null,
-                            customRoot: null,
-                            filtering: null
-                        });
-                    }
+                    await treeViews.testThemesTree.clearAllModuleState();
                 }
                 if (treeViews.testElementsTree) {
-                    const testElementsPersistence = (treeViews.testElementsTree as any).modules?.get("persistence");
-                    if (testElementsPersistence?.clear) {
-                        await testElementsPersistence.clear();
-                    }
-
-                    const testElementsExpansion = (treeViews.testElementsTree as any).modules?.get("expansion");
-                    if (testElementsExpansion?.reset) {
-                        testElementsExpansion.reset();
-                    }
-
-                    const testElementsMarking = (treeViews.testElementsTree as any).modules?.get("marking");
-                    if (testElementsMarking?.clearAllMarkings) {
-                        testElementsMarking.clearAllMarkings(false); // Don't emit global event during clear all
-                    }
-
-                    const testElementsFiltering = (treeViews.testElementsTree as any).modules?.get("filtering");
-                    if (testElementsFiltering?.clearAllFilters) {
-                        testElementsFiltering.clearAllFilters();
-                    }
-
-                    const testElementsCustomRoot = (treeViews.testElementsTree as any).modules?.get("customRoot");
-                    if (testElementsCustomRoot?.reset) {
-                        testElementsCustomRoot.reset();
-                    }
-
-                    const testElementsStateManager = (treeViews.testElementsTree as any).stateManager;
-                    if (testElementsStateManager?.setState) {
-                        testElementsStateManager.setState({
-                            expansion: null,
-                            marking: null,
-                            customRoot: null,
-                            filtering: null
-                        });
-                    }
+                    await treeViews.testElementsTree.clearAllModuleState();
                 }
 
                 if (treeViews.projectsTree) {

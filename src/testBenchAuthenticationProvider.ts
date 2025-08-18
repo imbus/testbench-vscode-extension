@@ -346,11 +346,19 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             logger.debug(
                 `[AuthenticationProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`
             );
+
+            const removedSession: vscode.AuthenticationSession = {
+                id: sessionData.sessionId,
+                accessToken: sessionData.testBenchSessionToken,
+                account: { label: sessionData.accountLabel, id: sessionData.userKey },
+                scopes: ["api_access"]
+            };
+
             this.activeSessions.delete(sessionId);
 
             this._onDidChangeSessions.fire({
                 added: [],
-                removed: [{ id: sessionId, accessToken: "", account: { label: "", id: "" }, scopes: [] }],
+                removed: [removedSession],
                 changed: []
             });
         } else {

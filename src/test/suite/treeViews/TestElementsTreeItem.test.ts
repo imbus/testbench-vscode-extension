@@ -6,10 +6,13 @@ import {
 } from "../../../treeViews/implementations/testElements/TestElementsTreeItem";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { EventBus } from "../../../treeViews/utils/EventBus";
+import { UserSessionManager } from "../../../userSessionManager";
+import * as extension from "../../../extension";
 
 suite("TestElementsTreeItem", function () {
     let testEnv: TestEnvironment;
     let mockEventBus: sinon.SinonStubbedInstance<EventBus>;
+    let userSessionManager: UserSessionManager;
 
     const createMockTestElementData = (overrides: Partial<any> = {}) => ({
         id: "test-item-1",
@@ -34,6 +37,9 @@ suite("TestElementsTreeItem", function () {
     this.beforeEach(function () {
         testEnv = setupTestEnvironment();
         mockEventBus = testEnv.sandbox.createStubInstance(EventBus);
+        userSessionManager = new UserSessionManager(testEnv.mockContext);
+        testEnv.sandbox.stub(userSessionManager, "getCurrentUserId").returns("test-user-id");
+        (extension as any).userSessionManager = userSessionManager;
     });
 
     this.afterEach(function () {
@@ -222,7 +228,7 @@ suite("TestElementsTreeItem", function () {
             });
             const item = new TestElementsTreeItem(data, testEnv.mockContext, undefined, mockEventBus);
 
-            assert.strictEqual(item.id, "testElement:TestFolder/TestResource");
+            assert.strictEqual(item.id, "test-user-id:testElement:TestFolder/TestResource");
         });
 
         test("should extract label from hierarchical name", function () {

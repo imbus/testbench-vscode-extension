@@ -26,25 +26,6 @@ export function delay(milliseconds: number): Promise<void> {
 }
 
 /**
- * A simple debounce utility function to delay execution of a function.
- * @param func The function to debounce.
- * @param waitFor The time in milliseconds to wait before executing.
- * @returns A debounced version of the function.
- */
-export function debounce<F extends (...args: any[]) => any>(
-    func: F,
-    waitFor: number
-): (...args: Parameters<F>) => void {
-    let timeout: NodeJS.Timeout | null = null;
-    return (...args: Parameters<F>): void => {
-        if (timeout) {
-            clearTimeout(timeout);
-        }
-        timeout = setTimeout(() => func(...args), waitFor);
-    };
-}
-
-/**
  * Checks whether a given path is absolute and, optionally, whether it exists.
  *
  * @param {string} filePath - The path to check.

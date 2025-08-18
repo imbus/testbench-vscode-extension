@@ -34,7 +34,7 @@ from lsprotocol.types import (
 )
 from pygls.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
-from robot.api.parsing import Keyword, KeywordSection, SectionHeader, Token
+from robot.api.parsing import Keyword, KeywordName, KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
@@ -45,6 +45,7 @@ from testbench_language_server.testbench_api.testbench_resource_connection impor
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
 from .file_edits import (
+    get_deleted_testbench_kw_tags_edit,
     get_kw_arguments_edit,
     get_kw_documentation_edit,
     get_kw_tags_edit,
@@ -328,8 +329,8 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     for keyword in testbench_resource.keywords:
         keyword_uid = get_kw_uid(keyword)
         if not keyword_uid or any(
-                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
-            ):
+            tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
+        ):
             continue
         keyword_line = keyword.lineno - 1
         code_lenses.append(
@@ -491,29 +492,30 @@ def attempt_push_subdivision(ls: LanguageServer, args):
         edits.extend(keyword_section_edit(kw_section_start, change_identifier))
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
-    for new_keyword in new_resource.keyword_section.body:
-        try:
-            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
-        except MultipleKeywordsWithUid as e:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
-            )
-            continue
-        except MultipleKeywordsWithName as e:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
-            )
-            continue
-        if not keyword_match:
-            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
-        else:
-            if get_keyword_tags(keyword_match) and any(
-                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
-            ):
+    if new_resource and new_resource.keyword_section:
+        for new_keyword in new_resource.keyword_section.body:
+            try:
+                keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+            except MultipleKeywordsWithUid as e:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
+                )
                 continue
-            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+            except MultipleKeywordsWithName as e:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+                )
+                continue
+            if not keyword_match:
+                edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+            else:
+                if get_keyword_tags(keyword_match) and any(
+                    tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
+                ):
+                    continue
+                edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
@@ -658,15 +660,17 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
                 ):
                     continue
                 edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
-    # if existing_resource and existing_resource.keyword_section:
-    #     for existing_keyword in existing_resource.keyword_section.body:
-    #         if get_kw_uid(existing_keyword) in visited_keywords:
-    #             continue
-    #         if get_keyword_tags(existing_keyword) and any(
-    #             tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
-    #         ):
-    #             continue
-    #         edits.extend(create_keyword_edits(existing_keyword, None, change_identifier))
+    if existing_resource and existing_resource.keyword_section:
+        for existing_keyword in existing_resource.keyword_section.body:
+            if not isinstance(existing_keyword, Keyword):
+                continue
+            if not get_kw_uid(existing_keyword) or get_kw_uid(existing_keyword) in visited_keywords:
+                continue
+            if get_keyword_tags(existing_keyword) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
+            ):
+                continue
+            edits.append(get_deleted_testbench_kw_tags_edit(existing_keyword, change_identifier))
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
@@ -677,7 +681,6 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         KEYWORD_INTERFACE_CHANGE_LABEL,
         needs_user_confirmation,
     )
-
     ls.lsp.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )

@@ -76,6 +76,34 @@ def get_kw_tags_edit(
     return tags_edit
 
 
+def get_deleted_testbench_kw_tags_edit(
+    existing_keyword: Keyword, change_identifier: str
+) -> AnnotatedTextEdit | None:
+    existing_keyword_tags = get_tags_values(get_keyword_tags(existing_keyword))
+    if any(tag in existing_keyword_tags for tag in IGNORE_TAGS):
+        return None
+    new_tags = [
+        tag if not tag.startswith("tb:uid") else IGNORE_TAGS[0] for tag in existing_keyword_tags
+    ]
+    new_tags = [tag for tag in new_tags if not tag.startswith("tb:")]
+    all_tags = Tags.from_params(new_tags)
+    if get_tags_values(all_tags) == existing_keyword_tags:
+        return None
+    tags_start, tags_start_char, tags_end, tags_end_char = get_keyword_tags_position(
+        existing_keyword
+    )
+    new_tags_txt = robot_model_to_string(all_tags)
+    tags_edit = AnnotatedTextEdit(
+        change_identifier,
+        range=Range(
+            start=Position(tags_start, tags_start_char),
+            end=Position(tags_end, tags_end_char),
+        ),
+        new_text=f"{new_tags_txt}",
+    )
+    return tags_edit
+
+
 def get_kw_arguments_edit(
     existing_keyword: Keyword, new_keyword: Keyword, change_identifier: str
 ) -> AnnotatedTextEdit | None:

@@ -55,7 +55,9 @@ export class IconModule implements TreeViewModule {
                 this.onConfigChange(event.data.icons);
             }
         });
-        this.context.logger.debug(`[IconModule] Icon module initialized with theme: ${this.config.theme}`);
+        this.context.logger.debug(
+            `[IconModule:${context.config.id}] Icon module initialized with theme: ${this.config.theme}`
+        );
     }
 
     /**
@@ -395,7 +397,9 @@ export class IconModule implements TreeViewModule {
      */
     public setTheme(themeName: string): void {
         if (!this.isValidThemeName(themeName)) {
-            this.context.logger.warn(`[IconModule] Cannot set theme. Invalid theme name: ${themeName}`);
+            this.context.logger.warn(
+                `[IconModule:${this.context.config.id}] Cannot set theme. Invalid theme name: ${themeName}`
+            );
             return;
         }
 
@@ -404,7 +408,7 @@ export class IconModule implements TreeViewModule {
             this.currentTheme = theme;
             this.config.theme = themeName;
             this.context.refresh();
-            this.context.logger.debug(`[IconModule] Icon theme changed to: ${themeName}`);
+            this.context.logger.debug(`[IconModule:${this.context.config.id}] Icon theme changed to: ${themeName}`);
         }
     }
 

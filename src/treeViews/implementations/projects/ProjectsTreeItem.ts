@@ -6,6 +6,7 @@
 import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { allExtensionCommands } from "../../../constants";
+import { userSessionManager } from "../../../extension";
 
 export interface ProjectData {
     key: string;
@@ -63,7 +64,8 @@ export class ProjectsTreeItem extends TreeItemBase {
      */
     protected generateUniqueId(): string {
         const parentPath = this.parent ? (this.parent as ProjectsTreeItem).data.key : "";
-        return `${this.data.type}:${parentPath}:${this.data.key}`;
+        const userId = userSessionManager.getCurrentUserId();
+        return `${userId}:${this.data.type}:${parentPath}:${this.data.key}`;
     }
 
     /**

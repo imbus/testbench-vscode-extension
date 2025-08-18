@@ -242,7 +242,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             );
 
             if (clearFirst || this.currentTovKey !== tovKey) {
-                this.clearTree();
+                // Preserve UI state (expansion, marking, etc.) during data reload
+                this.clearTreeDataOnly();
             }
 
             this.dataProvider.clearCache(tovKey); // Only clear cache for this specific TOV

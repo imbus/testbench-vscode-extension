@@ -89,7 +89,7 @@ export class FilteringModule implements TreeViewModule {
             }
         });
 
-        context.logger.debug("[FilteringModule] Filtering module initialized");
+        context.logger.debug(`[FilteringModule:${context.config.id}] Filtering module initialized`);
     }
 
     /**
@@ -155,7 +155,9 @@ export class FilteringModule implements TreeViewModule {
      */
     public setTextFilter(options: TextFilterOptions | null): void {
         this.textFilter = options;
-        this.context.logger.debug(`Text filter ${options ? "set" : "cleared"}: ${options?.searchText || "none"}`);
+        this.context.logger.debug(
+            `[FilteringModule:${this.context.config.id}] Text filter ${options ? "set" : "cleared"}: ${options?.searchText || "none"}`
+        );
         this.updateState();
         this.context.refresh({ immediate: true });
     }
@@ -174,7 +176,9 @@ export class FilteringModule implements TreeViewModule {
      */
     public setFilterDiffMode(enabled: boolean): void {
         this.filterDiffState.enabled = enabled;
-        this.context.logger.debug(`[FilteringModule] Filter diff mode ${enabled ? "enabled" : "disabled"}`);
+        this.context.logger.debug(
+            `[FilteringModule:${this.context.config.id}] Filter diff mode ${enabled ? "enabled" : "disabled"}`
+        );
 
         // Update context keys to control which diff button icon is shown
         this.updateDiffModeContextKeys(enabled);
@@ -247,7 +251,7 @@ export class FilteringModule implements TreeViewModule {
         }
 
         this.context.logger.debug(
-            `[FilteringModule] Filter diff mode marked ${this.filterDiffState.filteredItems.size} items as filtered`
+            `[FilteringModule:${this.context.config.id}] Filter diff mode marked ${this.filterDiffState.filteredItems.size} items as filtered`
         );
     }
 
@@ -464,7 +468,9 @@ export class FilteringModule implements TreeViewModule {
         }
 
         if (this.filterDiffState.enabled) {
-            this.context.logger.debug("[FilteringModule] Filter diff mode enabled, skipping hierarchical filtering.");
+            this.context.logger.debug(
+                `[FilteringModule:${this.context.config.id}] Filter diff mode enabled, skipping hierarchical filtering.`
+            );
             return items;
         }
 
@@ -491,7 +497,7 @@ export class FilteringModule implements TreeViewModule {
 
         const filteredItems = recursiveFilter(items);
         this.context.logger.debug(
-            `[FilteringModule] Filtered ${items.length} root items down to ${filteredItems.length} visible items in hierarchy`
+            `[FilteringModule:${this.context.config.id}] Filtered ${items.length} root items down to ${filteredItems.length} visible items in hierarchy`
         );
         return filteredItems;
     }
@@ -681,7 +687,7 @@ export class FilteringModule implements TreeViewModule {
 
         this.updateState();
         this.context.refresh({ immediate: true });
-        this.context.logger.debug("[FilteringModule] All filters cleared");
+        this.context.logger.debug(`[FilteringModule:${this.context.config.id}] All filters cleared`);
     }
 
     /**
@@ -727,7 +733,10 @@ export class FilteringModule implements TreeViewModule {
         try {
             this.compiledFilters.set(filter.id, filter.predicate);
         } catch (error) {
-            this.context.logger.error(`[FilteringModule] Failed to compile filter ${filter.id}:`, error);
+            this.context.logger.error(
+                `[FilteringModule:${this.context.config.id}] Failed to compile filter ${filter.id}:`,
+                error
+            );
         }
     }
 

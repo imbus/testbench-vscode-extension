@@ -7,6 +7,7 @@ import * as vscode from "vscode";
 import { TreeItemBase } from "../../core/TreeItemBase";
 import { EventBus } from "../../utils/EventBus";
 import { allExtensionCommands } from "../../../constants";
+import { userSessionManager } from "../../../extension";
 
 export enum TestElementType {
     Subdivision = "Subdivision",
@@ -162,13 +163,14 @@ export class TestElementsTreeItem extends TreeItemBase {
      * @returns A unique string identifier for this tree item.
      */
     protected generateUniqueId(): string {
+        const userId = userSessionManager.getCurrentUserId();
         // Use hierarchical name as unique ID, or fallback to name + parent path
         if (this.data.hierarchicalName) {
-            return `testElement:${this.data.hierarchicalName}`;
+            return `${userId}:testElement:${this.data.hierarchicalName}`;
         }
 
         const parentPath = this.parent ? (this.parent as TestElementsTreeItem).id : "";
-        return `testElement:${parentPath}/${this.data.name}`;
+        return `${userId}:testElement:${parentPath}/${this.data.name}`;
     }
 
     /**

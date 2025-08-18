@@ -8,14 +8,20 @@ import * as vscode from "vscode";
 import { ProjectsTreeItem, ProjectData } from "../../../treeViews/implementations/projects/ProjectsTreeItem";
 import { setupTestEnvironment, TestEnvironment } from "../../setup/testSetup";
 import { allExtensionCommands } from "../../../constants";
+import { UserSessionManager } from "../../../userSessionManager";
+import * as extension from "../../../extension";
 
 suite("ProjectsTreeItem", function () {
     let testEnv: TestEnvironment;
     let mockContext: vscode.ExtensionContext;
+    let userSessionManager: UserSessionManager;
 
     this.beforeEach(function () {
         testEnv = setupTestEnvironment();
         mockContext = testEnv.mockContext;
+        userSessionManager = new UserSessionManager(mockContext);
+        testEnv.sandbox.stub(userSessionManager, "getCurrentUserId").returns("test-user-id");
+        (extension as any).userSessionManager = userSessionManager;
     });
 
     this.afterEach(function () {
@@ -124,7 +130,7 @@ suite("ProjectsTreeItem", function () {
             };
 
             const item = new ProjectsTreeItem(projectData, mockContext);
-            const expectedId = "project::PROJ-001";
+            const expectedId = "test-user-id:project::PROJ-001";
             assert.strictEqual(item.id, expectedId);
         });
 
@@ -143,7 +149,7 @@ suite("ProjectsTreeItem", function () {
 
             const parent = new ProjectsTreeItem(parentData, mockContext);
             const version = new ProjectsTreeItem(versionData, mockContext, parent);
-            const expectedId = "version:PROJ-001:VERSION-001";
+            const expectedId = "test-user-id:version:PROJ-001:VERSION-001";
             assert.strictEqual(version.id, expectedId);
         });
 
@@ -162,7 +168,7 @@ suite("ProjectsTreeItem", function () {
 
             const parent = new ProjectsTreeItem(parentData, mockContext);
             const cycle = new ProjectsTreeItem(cycleData, mockContext, parent);
-            const expectedId = "cycle:VERSION-001:CYCLE-001";
+            const expectedId = "test-user-id:cycle:VERSION-001:CYCLE-001";
             assert.strictEqual(cycle.id, expectedId);
         });
     });
