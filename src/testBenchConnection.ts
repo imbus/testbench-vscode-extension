@@ -112,7 +112,7 @@ export class RetryPredicateFactory {
             if (axios.isAxiosError(error) && error.response) {
                 const status = error.response.status;
                 if (status >= 400 && status < 500) {
-                    logger.debug(`[testBenchConnection] Not retrying on client error ${status}`);
+                    logger.trace(`[testBenchConnection] Not retrying on client error ${status}`);
                     return false;
                 }
             }
@@ -289,7 +289,7 @@ export class PlayServerConnection {
      * @returns {Promise<boolean>} True if server logout was successful or no action needed, false on API error.
      */
     async logoutUserOnServer(): Promise<boolean> {
-        logger.debug(
+        logger.trace(
             `[testBenchConnection] Attempting to log out user ${this.username} from server ${this.serverName}.`
         );
         if (!this.sessionToken) {

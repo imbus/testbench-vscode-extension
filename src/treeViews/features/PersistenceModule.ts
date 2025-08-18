@@ -215,7 +215,7 @@ export class PersistenceModule implements TreeViewModule {
                 collapsedItems: Array.from(state.expansion.collapsedItems),
                 defaultExpanded: state.expansion.defaultExpanded
             };
-            this.context.logger.debug(
+            this.context.logger.trace(
                 this.context.buildLogPrefix(
                     "PersistenceModule",
                     `Saving expansion state: ${dataToSave.expansion.expandedItems.length} expanded, ${dataToSave.expansion.collapsedItems.length} collapsed`

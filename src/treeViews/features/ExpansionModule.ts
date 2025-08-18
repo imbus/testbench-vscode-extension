@@ -128,7 +128,7 @@ export class ExpansionModule implements TreeViewModule {
 
         this.context.stateManager.setState({ expansion: expansionState });
 
-        this.context.logger.debug(
+        this.context.logger.trace(
             this.context.buildLogPrefix(
                 "ExpansionModule",
                 `Saving expansion state: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed`
