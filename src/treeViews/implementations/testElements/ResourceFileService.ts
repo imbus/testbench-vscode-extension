@@ -134,7 +134,8 @@ export class ResourceFileService {
         }
 
         const resourceDirRelative = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR) || "";
-        const resourceDirectoryMarker = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_REGEX) || "";
+        const resourceDirectoryMarker =
+            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
 
         const cleanedHierarchical = this.removeResourceMarkersFromPathString(hierarchicalName);
         const splitPathComponents = cleanedHierarchical.split("/");

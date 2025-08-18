@@ -461,7 +461,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                             updated = true;
                         }
                     } else {
-                        const cleanName = parent.data.name;
+                        const parentHierarchicalName = parent.data.hierarchicalName || parent.data.name;
+                        const cleanName = this.removeResourceMarkersFromHierarchicalName(parentHierarchicalName).trim();
                         const folderPath = await this.resourceFileService.constructAbsolutePath(cleanName);
                         if (folderPath) {
                             const exists = await this.resourceFileService.directoryExists(folderPath);
