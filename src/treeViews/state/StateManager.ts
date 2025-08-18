@@ -15,6 +15,7 @@ import {
 import { EventBus, TreeViewEvent } from "../utils/EventBus";
 import { TreeViewTiming } from "../../constants";
 import deepEqual from "fast-deep-equal";
+import { UserSessionManager } from "../../userSessionManager";
 
 export class StateManager {
     private state: TreeViewState;
@@ -27,7 +28,8 @@ export class StateManager {
     constructor(
         private readonly extensionContext: vscode.ExtensionContext,
         private readonly treeViewId: string,
-        private readonly eventBus: EventBus
+        private readonly eventBus: EventBus,
+        private readonly userSessionManager: UserSessionManager
     ) {
         this.state = this.createInitialState();
     }
@@ -107,6 +109,10 @@ export class StateManager {
         this.setState({ items });
     }
 
+    /**
+     * Clears the state.
+     * Used for simple refreshes, preserves UI state.
+     */
     public clear(): void {
         // Do not clear customRoot, marking, expansion, or filtering states (persistent UI states)
         this.setState({
@@ -118,14 +124,35 @@ export class StateManager {
     }
 
     /**
+     * Resets the entire state to its initial clean slate.
+     */
+    public resetState(): void {
+        const previousState = this.cloneState(this.state);
+        this.state = this.createInitialState();
+        this.emitStateChange(previousState, this.state);
+    }
+
+    /**
+     *  Creates a dynamic storage key for a user session
+     */
+    private getStorageKey(): string {
+        const userId = this.userSessionManager.getCurrentUserId();
+        return `${userId}.${this.treeViewId}`;
+    }
+
+    /**
      * Saves the current state to workspace storage
      * @return Promise that resolves when save is complete
      */
     public async save(): Promise<void> {
         try {
-            const dataToSave = this.serializeState(this.state);
-            const key = `treeState.${this.treeViewId}`;
+            const userId = this.userSessionManager.getCurrentUserId();
+            if (!userId || userId === "global_fallback") {
+                return;
+            }
 
+            const dataToSave = this.serializeState(this.state);
+            const key = this.getStorageKey();
             await this.extensionContext.workspaceState.update(key, dataToSave);
 
             this.eventBus.emit({
@@ -150,7 +177,12 @@ export class StateManager {
      */
     public async load(): Promise<void> {
         try {
-            const key = `treeState.${this.treeViewId}`;
+            const userId = this.userSessionManager.getCurrentUserId();
+            if (!userId || userId === "global_fallback") {
+                return;
+            }
+
+            const key = this.getStorageKey();
             const savedData = this.extensionContext.workspaceState.get<SerializedTreeViewState>(key);
 
             if (savedData) {

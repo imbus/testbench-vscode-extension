@@ -59,7 +59,7 @@
                     "testbenchExtension.testBenchLogger": {
                         "type": "string",
                         "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
-                        "default": "Trace",
+                        "default": "Info",
                         "order": 9,
                         "enum": [
                             "No logging",
@@ -141,6 +141,7 @@
                         "type": "string",
                         "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location.",
                         "order": 16,
+                        "default": "",
                         "scope": "window"
                     },
                     "testbenchExtension.libraryMarker": {
@@ -168,6 +169,13 @@
                         "order": 18,
                         "scope": "window"
                     },
+                    "testbenchExtension.resourceDirectoryMarker": {
+                        "type": "string",
+                        "description": "The Subdivision that matches with this marker will be considered as the <resource-directory>. Import paths of Robot Framework resources will be relative to this Subdivision.",
+                        "default": "resources",
+                        "order": 19,
+                        "scope": "window"
+                    },
                     "testbenchExtension.resourceMarker": {
                         "type": "array",
                         "description": "Marker that can be used to identify TestBench Subdivisions that correspond to Robot Framework resources. Subdivisions that end with this marker will be considered as Robot Framework resources.",
@@ -177,7 +185,7 @@
                         "default": [
                             "[Robot-Resource]"
                         ],
-                        "order": 19,
+                        "order": 20,
                         "scope": "window"
                     },
                     "testbenchExtension.resourceRoot": {
@@ -189,7 +197,7 @@
                         "default": [
                             "RF-Resource"
                         ],
-                        "order": 20,
+                        "order": 21,
                         "scope": "window"
                     },
                     "testbenchExtension.libraryMapping": {
@@ -199,7 +207,7 @@
                             "type": "string"
                         },
                         "default": [],
-                        "order": 21,
+                        "order": 22,
                         "scope": "window"
                     },
                     "testbenchExtension.resourceMapping": {
@@ -209,14 +217,14 @@
                             "type": "string"
                         },
                         "default": [],
-                        "order": 22,
+                        "order": 23,
                         "scope": "window"
                     },
                     "testbenchExtension.outputXmlFilePath": {
                         "type": "string",
                         "description": "The relative file path where the output XML file (Robotframework test results) is stored. If not set, the extension will prompt the user to select a output.xml file location when importing results to testbench server. The path is relative to the workspace location. Used for importing the test results to the TestBench Server.",
                         "default": "results/output.xml",
-                        "order": 23,
+                        "order": 24,
                         "scope": "window"
                     }
                 }
@@ -243,6 +251,17 @@
                         "default": true,
                         "description": "Remove the report file automatically after processing it.",
                         "order": 3,
+                        "scope": "resource"
+                    }
+                }
+            },
+            {
+                "title": "Connection",
+                "properties": {
+                    "testbenchExtension.certificatePath": {
+                        "type": "string",
+                        "description": "Path to the public TestBench certificate .pem file relative to the workspace location.",
+                        "order": 1,
                         "scope": "resource"
                     }
                 }
@@ -1073,6 +1092,7 @@
         "axios": "^1.10.0",
         "base-64": "^1.0.0",
         "flatted": "^3.3.3",
+        "https-proxy-agent": "^7.0.6",
         "jszip": "^3.10.1",
         "regex-translator": "^0.2.8",
         "uuid": "^11.1.0",

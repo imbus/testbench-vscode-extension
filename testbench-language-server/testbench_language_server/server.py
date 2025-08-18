@@ -34,7 +34,7 @@ from lsprotocol.types import (
 )
 from pygls.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
-from robot.api.parsing import Keyword, KeywordSection, SectionHeader, Token
+from robot.api.parsing import Keyword, KeywordName, KeywordSection, SectionHeader, Token
 from testbench2robotframework.cli import fetch_results, get_tb2robot_file_configuration
 from testbench2robotframework.testbench2robotframework import testbench2robotframework
 
@@ -45,6 +45,7 @@ from testbench_language_server.testbench_api.testbench_resource_connection impor
 
 from .constants import CONTEXT_MISMATCH_CODE, MISSING_CONTEXT_CODE
 from .file_edits import (
+    get_deleted_testbench_kw_tags_edit,
     get_kw_arguments_edit,
     get_kw_documentation_edit,
     get_kw_tags_edit,
@@ -200,6 +201,7 @@ def generate_test_suites(ls: LanguageServer, kwargs):
         "log-suite-numbering": kwargs.get("log_suite_numbering"),
         "output-directory": pathlib.Path(kwargs.get("output_directory")).as_posix(),
         "resource-directory": pathlib.Path(kwargs.get("resource_directory"), "").as_posix(),
+        "resource-directory-regex": kwargs.get("resource_directory_regex", ""),
         "resource-regex": list(
             rf"(?:.*\.)?(?P<resourceName>[^.]+?)\s*{re.escape(marker)}.*"
             for marker in kwargs.get("resource_marker", ())
@@ -308,7 +310,7 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
         command=Command(
             title=PULL_SUBDIVISON_TITLE,
             command=COMMAND_PULL_SUBDIVISION,
-            arguments=[document_uri, testbench_resource.tb_subdivision_uid],
+            arguments=[document_uri, testbench_resource.tb_subdivision_uid, True],
         ),
     )
     code_lenses.append(pull_resource_lens)
@@ -323,34 +325,37 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     code_lenses.append(push_resource_lens)
     for keyword in testbench_resource.keywords:
         keyword_uid = get_kw_uid(keyword)
-        if keyword_uid:
-            keyword_line = keyword.lineno - 1
-            code_lenses.append(
-                CodeLens(
-                    range=Range(
-                        start=Position(line=keyword_line, character=0),
-                        end=Position(line=keyword_line, character=0),
-                    ),
-                    command=Command(
-                        title=PULL_KEYWORD_TITLE,
-                        command=COMMAND_PULL_KEYWORD,
-                        arguments=[document_uri, keyword_uid],
-                    ),
-                )
+        if not keyword_uid or any(
+            tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
+        ):
+            continue
+        keyword_line = keyword.lineno - 1
+        code_lenses.append(
+            CodeLens(
+                range=Range(
+                    start=Position(line=keyword_line, character=0),
+                    end=Position(line=keyword_line, character=0),
+                ),
+                command=Command(
+                    title=PULL_KEYWORD_TITLE,
+                    command=COMMAND_PULL_KEYWORD,
+                    arguments=[document_uri, keyword_uid],
+                ),
             )
-            code_lenses.append(
-                CodeLens(
-                    range=Range(
-                        start=Position(line=keyword_line, character=0),
-                        end=Position(line=keyword_line, character=0),
-                    ),
-                    command=Command(
-                        title=PUSH_KEYWORD_TITLE,
-                        command=COMMAND_ATTEMPT_PUSH_KEYWORD,
-                        arguments=[document_uri, keyword_uid],
-                    ),
-                )
+        )
+        code_lenses.append(
+            CodeLens(
+                range=Range(
+                    start=Position(line=keyword_line, character=0),
+                    end=Position(line=keyword_line, character=0),
+                ),
+                command=Command(
+                    title=PUSH_KEYWORD_TITLE,
+                    command=COMMAND_ATTEMPT_PUSH_KEYWORD,
+                    arguments=[document_uri, keyword_uid],
+                ),
             )
+        )
     return code_lenses
 
 
@@ -484,29 +489,30 @@ def attempt_push_subdivision(ls: LanguageServer, args):
         edits.extend(keyword_section_edit(kw_section_start, change_identifier))
     else:
         _, _, kw_section_start, _ = get_keyword_section_position(existing_resource.file)
-    for new_keyword in new_resource.keyword_section.body:
-        try:
-            keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
-        except MultipleKeywordsWithUid as e:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
-            )
-            continue
-        except MultipleKeywordsWithName as e:
-            show_error(
-                ls,
-                ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
-            )
-            continue
-        if not keyword_match:
-            edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
-        else:
-            if get_keyword_tags(keyword_match) and any(
-                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
-            ):
+    if new_resource and new_resource.keyword_section:
+        for new_keyword in new_resource.keyword_section.body:
+            try:
+                keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
+            except MultipleKeywordsWithUid as e:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_UID.format(uid=e.uid),
+                )
                 continue
-            edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
+            except MultipleKeywordsWithName as e:
+                show_error(
+                    ls,
+                    ERROR_DUPLICATE_KEYWORD_NAME.format(uid=e.name),
+                )
+                continue
+            if not keyword_match:
+                edits.append(new_keyword_edit(new_keyword, kw_section_start + 1, change_identifier))
+            else:
+                if get_keyword_tags(keyword_match) and any(
+                    tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword_match))
+                ):
+                    continue
+                edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
@@ -604,7 +610,7 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
 
 @testbench_ls.command(COMMAND_PULL_SUBDIVISION)
 def pull_testbench_subdivision(ls: LanguageServer, args):
-    document_uri, subdivision_uid, *_ = args
+    document_uri, subdivision_uid, needs_user_confirmation, *_ = args
     document = testbench_ls.workspace.get_text_document(document_uri)
     existing_resource = TestBenchResourceModel.from_file(document.source)
     if not existing_resource.tb_subdivision_uid or not context_is_valid(ls, existing_resource):
@@ -651,22 +657,27 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
                 ):
                     continue
                 edits.extend(create_keyword_edits(keyword_match, new_keyword, change_identifier))
-    # if existing_resource and existing_resource.keyword_section:
-    #     for existing_keyword in existing_resource.keyword_section.body:
-    #         if get_kw_uid(existing_keyword) in visited_keywords:
-    #             continue
-    #         if get_keyword_tags(existing_keyword) and any(
-    #             tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
-    #         ):
-    #             continue
-    #         edits.extend(create_keyword_edits(existing_keyword, None, change_identifier))
+    if existing_resource and existing_resource.keyword_section:
+        for existing_keyword in existing_resource.keyword_section.body:
+            if not isinstance(existing_keyword, Keyword):
+                continue
+            if not get_kw_uid(existing_keyword) or get_kw_uid(existing_keyword) in visited_keywords:
+                continue
+            if get_keyword_tags(existing_keyword) and any(
+                tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
+            ):
+                continue
+            edits.append(get_deleted_testbench_kw_tags_edit(existing_keyword, change_identifier))
     if not edits:
         show_info(ls, INFO_ALREADY_UP_TO_DATE)
         return
     edit = create_workspace_edit(
-        document_uri, edits, change_identifier, KEYWORD_INTERFACE_CHANGE_LABEL
+        document_uri,
+        edits,
+        change_identifier,
+        KEYWORD_INTERFACE_CHANGE_LABEL,
+        needs_user_confirmation,
     )
-
     ls.lsp.send_request(
         WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
     )
@@ -740,10 +751,12 @@ def create_keyword_edits(
         name_edit = AnnotatedTextEdit(
             change_identifier,
             range=Range(
-                start=Position(existing_keyword.header.lineno - 1, existing_keyword.header.col_offset),
-                end=Position(existing_keyword.header.end_lineno - 1, existing_keyword.header.end_col_offset),
+                start=Position(
+                    existing_keyword.header.lineno - 1, existing_keyword.header.col_offset
+                ),
+                end=Position(existing_keyword.header.end_lineno, 0),
             ),
-            new_text=new_keyword.name,
+            new_text=robot_model_to_string(KeywordName.from_params(new_keyword.name)),
         )
         edits.append(name_edit)
 
@@ -830,6 +843,7 @@ def create_workspace_edit(
     edits: list[AnnotatedTextEdit],
     change_identifier: ChangeAnnotationIdentifier,
     change_label: str,
+    needs_user_confirmation: bool = True,
 ) -> WorkspaceEdit:
     return WorkspaceEdit(
         document_changes=[
@@ -839,7 +853,9 @@ def create_workspace_edit(
             )
         ],
         change_annotations={
-            change_identifier: ChangeAnnotation(change_label, needs_confirmation=True)
+            change_identifier: ChangeAnnotation(
+                change_label, needs_confirmation=needs_user_confirmation
+            )
         },
     )
 

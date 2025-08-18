@@ -53,7 +53,7 @@ export class TestThemesDataProvider {
             }
 
             this.cache.set(cacheKey, normalizedTestStructure);
-            this.logger.info(
+            this.logger.trace(
                 `[TestThemesDataProvider] Successfully fetched test structure with ${normalizedTestStructure.nodes?.length || 0} nodes`
             );
 

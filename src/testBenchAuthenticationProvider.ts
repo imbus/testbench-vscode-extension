@@ -268,7 +268,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
                 await connectionManager.clearActiveConnection(this.context);
-                throw new Error("Login to TestBench server failed. Check credentials or server details.");
+                throw new Error("Login to TestBench failed.");
             }
             const initialPasswordFromStorage: string | undefined = await connectionManager.getPasswordForConnection(
                 this.context,
@@ -322,10 +322,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 scopes
             };
         } catch (error: any) {
-            logger.error(
-                `[AuthenticationProvider] Error during createSession${isSilent ? " (auto-login)" : ""}:`,
-                error
-            );
+            logger.error(`[AuthenticationProvider] Error during createSession`);
             if (!isSilent) {
                 await connectionManager.clearActiveConnection(this.context);
             }
@@ -349,11 +346,19 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             logger.debug(
                 `[AuthenticationProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`
             );
+
+            const removedSession: vscode.AuthenticationSession = {
+                id: sessionData.sessionId,
+                accessToken: sessionData.testBenchSessionToken,
+                account: { label: sessionData.accountLabel, id: sessionData.userKey },
+                scopes: ["api_access"]
+            };
+
             this.activeSessions.delete(sessionId);
 
             this._onDidChangeSessions.fire({
                 added: [],
-                removed: [{ id: sessionId, accessToken: "", account: { label: "", id: "" }, scopes: [] }],
+                removed: [removedSession],
                 changed: []
             });
         } else {

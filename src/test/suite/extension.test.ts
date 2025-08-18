@@ -90,8 +90,6 @@ suite("Extension Test Suite", function () {
 
         test("should initialize logger on activation", async () => {
             await activate(testEnv.mockContext);
-
-            // The logger should be set and used during activation
             assert.ok(logger, "Logger should be initialized");
             assert.ok(typeof logger.info === "function", "Logger should have info method");
         });

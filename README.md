@@ -1,82 +1,45 @@
-# TestBench VS Code Extension
+# TestBench Extension for Visual Studio Code
 
-TestBench VS Code Extension integrates TestBench with Visual Studio Code to help testers to generate Robot Framework test cases inside VS Code and import test results back to the TestBench server.
+The **TestBench Extension** for Visual Studio Code enables seamless synchronization between [TestBench](https://www.testbench.com/) and [Robot Framework](https://github.com/robotframework/robotframework) files managed in VS Code. It allows you to:
 
-## Features
-
-- Visualize your TestBench project structure inside VS Code and navigate through the project contents.
-- Generate robotframework test cases for the selected test cycle, test theme or test case set.
-- Import test results back to the TestBench server.
-- Display test elements, where you can navigate to a robotframework resource file and open it in the VS Code editor.
-- Hovering over the tree view elements will display additional information in a tooltip such as the status and unique ID of the element.
+- Synchronize Robot Framework keywords between VS Code and TestBench
+- Export test cases specified in TestBench to run them externally
+- Import execution results back into TestBench
+- Visualize your TestBench project structure and navigate through the corresponding Robot Framework files
 
 ## Requirements
 
-- Visual Studio Code version 1.95.0 or higher.
-
-## Installation
-
-1. Open Visual Studio Code.
-2. Go to the **Extensions** view by clicking on the Extensions icon in the Activity Bar on the side of the window or by pressing `Ctrl+Shift+X`.
-3. Search for **"TestBench"**.
-4. Click Install.
-   The extension comes preinstalled with the testbench2robotframework library, which contains the functionality to convert reports to robot framework test cases.
-5. (Optional) Configure extension settings
-
-## Configuration
-
-The extension settings contains following configurations:
-
-- **TestBench Server Settings:**
-
-    - **Server Name:** Hostname or IP of the TestBench server.
-    - **Port Number:** Port on which the server is listening.
-    - **Username:** Your TestBench username.
-    - **Store Credentials:** Option to securely store your password.
-    - **Automatic Login:** Option to log in automatically upon extension activation.
-
-- **Workspace Settings:**
-
-    - **Workspace Location:** Directory for storing and processing files.
-    - **Clean Up Options:** Configure automatic cleanup of working directories and report files after processing.
-
-- **Testbench2Robotframework Settings:**
-
-    - **Configuration Path:** Path to the configuration file for testbench2robotframework.
-    - **Output Directory:** Directory to store generated robotframework tests.
-    - **Resource Regex Patterns:** Resource regex patterns for filtering test elements to display only Robot Framework resources.
-    - **Output XML Path:** Path to your Robot Framework `output.xml` file containing test results.
-
-- **Logging:**
-    - **Log Level:** Set the minimum log level (Trace, Debug, Info, Warn, Error).
+- Visual Studio Code version 1.95.0 or higher
+- Python 3.10 or higher
 
 ## Usage
 
-- **(Optional) Configure Extension Settings**
+- **Log in to the TestBench Server**
 
-    In the extension settings, adjust the configurations according to your requirements.
-
-- **Login to the TestBench Server**
-
-    Log in to the TestBench server by entering your credentials in the login form. You can securely store your password by checking the **Store Password** option. If you enable **Automatic Login**, the extension will log in automatically upon extension activation, provided your password is stored. You can configure your credentials within the extension settings for automatic autofill. Once logged in, a project selection form will appear for you to choose a project to work with.
+    Log in to the TestBench server by entering your credentials in the login form. You can securely store your password by selecting the **Store Password** option. If you enable **Automatic Login**, the extension will log in automatically upon activation, provided your password is stored. Once logged in, a project selection form will appear, allowing you to choose a project, a Test Object Version, or a Test Cycle to work with.
 
 - **Extension Views**
 
-    After selecting a project, the **Project Contents** will be displayed. Navigate through the project elements by expanding or clicking on the tree items. Clicking on a test cycle in the project management tree will automatically initialize the **Test Themes** and **Test Elements** views. In the test themes view, not executable elements and elements that are locked by the system are hidden.
+    After selecting the context of your project, the **Project Details** will be displayed in the form of **Test Themes** and **Test Elements** views. You can navigate through these elements by expanding or clicking on the tree items. If the corresponding files exist in the local file system, they will open automatically.
 
 - **Generate Test Cases**
 
-    The extension allows you to generate Robot Framework test cases for test cycles, test themes, and test case sets.
+    The extension allows you to generate Robot Framework test cases for Test Object Versions, Test Cycles, Test Themes, and Test Case Sets.
 
-    To generate test cases for a test cycle, click the **Generate Test Cases** button on a test cycle in the project management tree, which opens a quick pick menu, where you can either generate test cases for a specific test theme by selecting it in the quick pick, or generate all test cases for the chosen test cycle by clicking **Generate All**.
+    To generate test cases for a TOV or cycle, click the **Generate Test Cases** button on the corresponding element in the project management tree.
 
-    To generate test cases for a specific test theme or a test case set, click **Generate Test Cases** button on a test theme tree element in the Test Theme Tree.
-
-    During the test generation process, the extension retrieves the report in JSON format as a zip file from the TestBench server and uses the `testbench2robotframework` library to create Robot Framework test cases.
+    To generate test cases for a specific test theme or a test case set, click the **Generate Test Cases** button on the respective element in the Test Theme Tree.
 
 - **Execute and Import Test Results**
 
-    Once you’ve executed the generated Robot Framework tests (for example via [RobotCode](https://robotcode.io/)), you can click the **Import** button in the **Test Themes** view to send the test results back to the TestBench server. The extension locates the output.xml file that stores the Robot Framework test results inside your working directory using the path specified in the extension settings. During the creation process of the test results, a report file named `ReportWithResults_<TIMESTAMP>.zip` with a timestamp at the end of the file will be created, containing the test results. If you choose to clear the report file after processing in the extension settings, this report file will be deleted automatically after the import process.
+    Once you’ve executed the generated Robot Framework tests (e.g., via [RobotCode](https://robotcode.io/)), you can click the **Import** button in the **Test Themes** view to send the test results back to TestBench. This option does only exist for test cycles.
+
+- **Synchronize Robot Framework Keywords**
+
+    The extension also displays all subdivisions corresponding to Robot Framework resource files in the **Test Elements** view.  
+     Each subdivision ending with `[Robot-Resource]` is considered a Robot Framework resource file and is displayed in the tree view. The **Test Elements** view can be used to navigate between different resource files or even to create them if they do not exist.
+
+    When opening a Robot Framework resource file that is linked to a TestBench subdivision, code lenses are displayed in the editor. These can be used to pull or push changes of single keywords or the whole resource file from or to TestBench.
 
 ## License
 

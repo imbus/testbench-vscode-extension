@@ -13,7 +13,12 @@ import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, StorageKeys, TestThemeItemTypes } from "../../../constants";
 import { TestStructure } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
-import { ALLOW_PERSISTENT_IMPORT_BUTTON, ENABLE_ICON_MARKING_ON_TEST_GENERATION, treeViews } from "../../../extension";
+import {
+    ALLOW_PERSISTENT_IMPORT_BUTTON,
+    ENABLE_ICON_MARKING_ON_TEST_GENERATION,
+    treeViews,
+    userSessionManager
+} from "../../../extension";
 import { MarkingModule } from "../../features/MarkingModule";
 import * as reportHandler from "../../../reportHandler";
 import { FilterService } from "../../utils/FilterService";
@@ -47,7 +52,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
         this.registerEventHandlers();
         this.registerCommands();
-        this.initializeMarkingState();
         this.setupTestCaseSetClickHandlers();
     }
 
@@ -190,7 +194,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             }
 
             // Check if this is the same item as the last import
-            const lastImportedItemKey = `${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_last`;
+            const userId = userSessionManager.getCurrentUserId();
+            const lastImportedItemKey = `${userId}.${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_lastItemId`;
             const lastImportedItem = this.extensionContext.workspaceState.get<string>(lastImportedItemKey);
 
             if (lastImportedItem === item.id) {
@@ -251,10 +256,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.logger.info(importSuccessfulMessage);
                 vscode.window.showInformationMessage(importSuccessfulMessageForUser);
 
-                this.extensionContext.workspaceState.update(
-                    `${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_last`,
-                    item.id
-                );
+                this.extensionContext.workspaceState.update(lastImportedItemKey, item.id);
 
                 if (!ALLOW_PERSISTENT_IMPORT_BUTTON) {
                     // If this was a root item with descendants, unmark the entire hierarchy
@@ -413,8 +415,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 throw new Error("Failed to fetch test structure");
             }
 
-            // Clear existing items
-            this._onDidChangeTreeData.fire(undefined);
+            // Clear existing tree data only, preserving UI state (expansion, marking, etc.)
+            this.clearTreeDataOnly();
 
             // Build the tree structure
             const nodeMap = new Map(
@@ -488,8 +490,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 throw new Error("Failed to fetch test structure");
             }
 
-            // Clear existing items
-            this._onDidChangeTreeData.fire(undefined);
+            // Clear existing tree data only, preserving UI state (expansion, marking, etc.)
+            this.clearTreeDataOnly();
 
             const nodeMap = new Map(
                 fetchedTestStructure.nodes.map((node) => [node.base.key, { ...node, hasChildren: false }])
@@ -887,13 +889,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.isOpenedFromCycle = false;
         this._onDidChangeTreeData.fire(undefined);
         this.resetTitle();
-    }
-
-    /**
-     * Initializes the marking state by waiting for modules
-     */
-    private async initializeMarkingState(): Promise<void> {
-        await this.initialize();
     }
 
     /**

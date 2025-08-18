@@ -61,6 +61,7 @@ export const ConfigKeys = {
     TB2ROBOT_COMPOUND_LOGGING: "compoundInteractionLogging",
     TB2ROBOT_LOG_SUITE_NUMBERING: "logSuiteNumbering",
     TB2ROBOT_RESOURCE_DIR: "resourceDirectoryPath",
+    TB2ROBOT_RESOURCE_DIRECTORY_REGEX: "resourceDirectoryMarker",
     TB2ROBOT_LIBRARY_MARKER: "libraryMarker",
     TB2ROBOT_LIBRARY_ROOT: "libraryRoot",
     TB2ROBOT_RESOURCE_MARKER: "resourceMarker",
@@ -68,7 +69,10 @@ export const ConfigKeys = {
     TB2ROBOT_LIBRARY_MAPPING: "libraryMapping",
     TB2ROBOT_RESOURCE_MAPPING: "resourceMapping",
     TB2ROBOT_OUTPUT_XML_PATH: "outputXmlFilePath",
-    OPEN_TESTING_VIEW_AFTER_GENERATION: "openTestingViewAfterGeneration"
+    OPEN_TESTING_VIEW_AFTER_GENERATION: "openTestingViewAfterGeneration",
+    CERTIFICATE_PATH: "certificatePath",
+    PROXY_URL: "proxy"
+    // PROXY_STRICT_SSL: "proxyStrictSSL",
 } as const;
 
 // --- Context Keys ---

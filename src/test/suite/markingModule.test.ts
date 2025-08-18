@@ -7,13 +7,16 @@ import * as assert from "assert";
 import { MarkingModule } from "../../treeViews/features/MarkingModule";
 import { TreeViewContext } from "../../treeViews/core/TreeViewContext";
 import { TreeItemBase } from "../../treeViews/core/TreeItemBase";
+import { setupTestEnvironment, TestEnvironment } from "../setup/testSetup";
 
 suite("MarkingModule", () => {
     let markingModule: MarkingModule;
     let mockContext: TreeViewContext;
     let mockItem: TreeItemBase;
+    let testEnv: TestEnvironment;
 
     setup(() => {
+        testEnv = setupTestEnvironment();
         markingModule = new MarkingModule();
 
         // Create mock context
@@ -31,12 +34,7 @@ suite("MarkingModule", () => {
                     }
                 }
             },
-            logger: {
-                debug: () => {},
-                info: () => {},
-                warn: () => {},
-                error: () => {}
-            },
+            logger: testEnv.logger,
             stateManager: {
                 getState: () => ({}),
                 setState: () => {}
@@ -56,6 +54,10 @@ suite("MarkingModule", () => {
             setMetadata: () => {},
             getMetadata: () => undefined
         } as any;
+    });
+
+    teardown(() => {
+        testEnv.sandbox.restore();
     });
 
     test("should respect showImportButton configuration when applying import marking", async () => {

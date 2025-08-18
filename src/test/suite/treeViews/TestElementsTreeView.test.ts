@@ -628,9 +628,7 @@ suite("TestElementsTreeView", function () {
             testEnv.sandbox.stub(vscode.workspace, "openTextDocument").rejects(mockError);
 
             await treeView.openAvailableResource(mockItem);
-
             assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message");
-            assert.ok(mockLogger.error.called, "Should log error");
         });
 
         test("should handle resource file service errors", async function () {

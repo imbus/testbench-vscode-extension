@@ -242,7 +242,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             );
 
             if (clearFirst || this.currentTovKey !== tovKey) {
-                this.clearTree();
+                // Preserve UI state (expansion, marking, etc.) during data reload
+                this.clearTreeDataOnly();
             }
 
             this.dataProvider.clearCache(tovKey); // Only clear cache for this specific TOV
@@ -290,7 +291,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 },
                 timestamp: Date.now()
             });
-            this.logger.info(`[TestElementsTreeView] Successfully loaded test elements for TOV ${tovKey}`);
+            this.logger.trace(`[TestElementsTreeView] Successfully loaded test elements for TOV ${tovKey}`);
         } catch (error) {
             this.logger.error(`[TestElementsTreeView] Error loading TOV:`, error);
 
@@ -645,12 +646,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             const initialFileContent = `tb:uid:${uid}\n${contextWithProjectAndTovName}\n`;
             await this.resourceFileService.ensureFileExists(resourcePath, initialFileContent);
 
-            this.logger.info(`[TestElementsTreeView] Created missing resource file at path: ${resourcePath}`);
+            this.logger.trace(`[TestElementsTreeView] Created missing resource file at path: ${resourcePath}`);
 
             targetItem.updateLocalAvailability(true, resourcePath);
             await this.updateParentIcons(targetItem);
             this.refreshItemWithParents(targetItem);
 
+            const uri = vscode.Uri.file(resourcePath);
+            vscode.commands.executeCommand("testbench_ls.pullSubdivision", uri.toString(), uid, false);
             if (config.successMessages?.created) {
                 vscode.window.showInformationMessage(config.successMessages.created);
             }
@@ -685,7 +688,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         try {
             await this.resourceFileService.ensureFolderPathExists(folderPath);
-            this.logger.info(`[TestElementsTreeView] Created missing folder at path: ${folderPath}`);
+            this.logger.trace(`[TestElementsTreeView] Created missing folder at path: ${folderPath}`);
 
             targetItem.updateLocalAvailability(true, folderPath);
             await this.updateParentIcons(targetItem);

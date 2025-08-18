@@ -13,7 +13,7 @@ import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
 import axios, { AxiosResponse } from "axios";
-import { connection, logger } from "./extension";
+import { connection, logger, userSessionManager } from "./extension";
 import {
     ConfigKeys,
     StorageKeys,
@@ -22,7 +22,7 @@ import {
     ProjectItemTypes,
     TestThemeItemTypes
 } from "./constants";
-import { extractDataFromReport, PlayServerConnection, withRetry } from "./testBenchConnection";
+import { extractDataFromReport, PlayServerConnection, withRetry, RetryPredicateFactory } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
 import { getExtensionConfiguration } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
@@ -57,9 +57,19 @@ async function saveLastGeneratedReportParams(
     };
 
     try {
-        await context.workspaceState.update(StorageKeys.LAST_GENERATED_PARAMS, paramsToSave);
+        if (!userSessionManager.hasValidUserSession()) {
+            logger.debug("[reportHandler] No user session active, skipping last generated params storage");
+            return;
+        }
+
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.LAST_GENERATED_PARAMS);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping last generated params storage");
+            return;
+        }
+        await context.workspaceState.update(storageKey, paramsToSave);
         logger.debug(
-            `[reportHandler] Saved last generated report params to workspace state: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
+            `[reportHandler] Saved last generated report params to workspace state for user ${userSessionManager.getCurrentUserId()}: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
         );
     } catch (error) {
         logger.error("[reportHandler] Failed to save last generated report params to workspace state:", error);
@@ -76,8 +86,18 @@ function getLastGeneratedReportParams(
     context: vscode.ExtensionContext
 ): testBenchTypes.LastGeneratedReportParams | undefined {
     try {
+        if (!userSessionManager.hasValidUserSession()) {
+            logger.debug("[reportHandler] No user session active, cannot retrieve last generated params");
+            return undefined;
+        }
+
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.LAST_GENERATED_PARAMS);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, cannot retrieve last generated params");
+            return undefined;
+        }
         const storedParams: testBenchTypes.LastGeneratedReportParams | undefined =
-            context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(StorageKeys.LAST_GENERATED_PARAMS);
+            context.workspaceState.get<testBenchTypes.LastGeneratedReportParams>(storageKey);
 
         if (
             storedParams &&
@@ -252,19 +272,7 @@ export async function getJobIdOfCycleReport(
                 }),
             3, // maxRetries
             2000, // delayMs
-            (error: { response: { status: number } }) => {
-                // shouldRetry predicate
-                if (axios.isAxiosError(error) && error.response) {
-                    const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
-                    if (nonRetryableStatusCodes.includes(error.response.status)) {
-                        logger.warn(
-                            `[reportHandler] Non-retryable error ${error.response.status} for getJobId call. Not retrying.`
-                        );
-                        return false;
-                    }
-                }
-                return true;
-            }
+            RetryPredicateFactory.createDefaultPredicate()
         );
 
         logger.debug(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
@@ -311,22 +319,12 @@ export async function getJobStatus(
             apiClient.get(getJobStatusUrl, {
                 headers: {
                     accept: "application/vnd.testbench+json"
-                }
+                },
+                proxy: false
             }),
         3, // max retries
         2000, // delay in ms between retries
-        (error: { response: { status: number } }) => {
-            if (axios.isAxiosError(error) && error.response) {
-                const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
-                if (nonRetryableStatusCodes.includes(error.response.status)) {
-                    logger.warn(
-                        `[reportHandler] Non-retryable error ${error.response.status} for getJobStatus call. Not retrying.`
-                    );
-                    return false;
-                }
-            }
-            return true;
-        }
+        RetryPredicateFactory.createDefaultPredicate()
     );
 
     logger.debug(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
@@ -376,24 +374,12 @@ export async function downloadReport(
                     responseType: "arraybuffer", // Expecting binary data
                     headers: {
                         accept: "application/vnd.testbench+json"
-                    }
+                    },
+                    proxy: false
                 }),
             3, // maxRetries
             2000, // delayMs
-            (error: { response: { status: number } }) => {
-                const nonRetryableStatusCodes = [400, 401, 403, 404, 422];
-                if (
-                    axios.isAxiosError(error) &&
-                    error.response &&
-                    nonRetryableStatusCodes.includes(error.response.status)
-                ) {
-                    logger.warn(
-                        `[reportHandler] Non-retryable error ${error.response.status} during report download. Not retrying.`
-                    );
-                    return false;
-                }
-                return true;
-            }
+            RetryPredicateFactory.createDefaultPredicate()
         );
 
         if (downloadZipResponse.status !== 200) {
@@ -587,8 +573,20 @@ export async function fetchReportZipOfCycleFromServer(
  */
 async function setLastImportedItem(context: vscode.ExtensionContext, reportRootUID: string): Promise<void> {
     try {
-        await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, reportRootUID);
-        logger.debug(`[reportHandler] Set last imported item UID to ${reportRootUID}.`);
+        if (!userSessionManager.hasValidUserSession()) {
+            logger.debug("[reportHandler] No user session active, skipping last imported item tracking");
+            return;
+        }
+
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping last imported item tracking");
+            return;
+        }
+        await context.workspaceState.update(storageKey, reportRootUID);
+        logger.debug(
+            `[reportHandler] Set last imported item UID to ${reportRootUID} for user ${userSessionManager.getCurrentUserId()}.`
+        );
     } catch (error) {
         logger.error(`[reportHandler] Error setting last imported item UID: ${error}`);
     }
@@ -1139,8 +1137,20 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
  */
 export async function clearImportedSubTreeItemsTracking(context: vscode.ExtensionContext): Promise<void> {
     try {
-        await context.workspaceState.update(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY, undefined);
-        logger.debug("[reportHandler] Cleared last imported item tracking.");
+        if (!userSessionManager.hasValidUserSession()) {
+            logger.debug("[reportHandler] No user session active, skipping clear imported item tracking");
+            return;
+        }
+
+        const storageKey = userSessionManager.getUserStorageKey(StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY);
+        if (!storageKey) {
+            logger.debug("[reportHandler] Failed to generate storage key, skipping clear imported item tracking");
+            return;
+        }
+        await context.workspaceState.update(storageKey, undefined);
+        logger.debug(
+            `[reportHandler] Cleared last imported item tracking for user ${userSessionManager.getCurrentUserId()}.`
+        );
     } catch (error) {
         logger.error("[reportHandler] Error clearing last imported item tracking:", error);
     }

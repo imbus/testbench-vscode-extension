@@ -274,11 +274,10 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             } else {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",
-                    text: "Login failed. Please check credentials or server details."
+                    text: "TestBench Login Failed."
                 });
             }
         } catch (error: any) {
-            logger.error(`[loginWebView] Login failed for connection ${connectionId}:`, error);
             await connectionManager.clearActiveConnection(this.extensionContext);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "error",
@@ -461,7 +460,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the update operation is complete.
      */
     private async handleUpdateConnection(payload: EditingConnectionData): Promise<void> {
-        logger.info(`[loginWebView] Attempting to update connection: ${payload.label || payload.id}`);
+        logger.trace(`[loginWebView] Attempting to update connection: ${payload.label || payload.id}`);
 
         try {
             if (!payload.id || !payload.serverName || !payload.portNumber || !payload.username) {

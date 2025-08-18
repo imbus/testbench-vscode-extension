@@ -4,26 +4,188 @@
  */
 
 import * as https from "https";
+import * as tls from "tls";
 import * as vscode from "vscode";
 import * as fs from "fs";
+
 import * as testBenchTypes from "./testBenchTypes";
 import * as reportHandler from "./reportHandler";
 import * as base64 from "base-64";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
 import { getLoginWebViewProvider, logger, setConnection } from "./extension";
 import * as utils from "./utils";
-import { ContextKeys, JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder } from "./constants";
+import {
+    ContextKeys,
+    JobTypes,
+    allExtensionCommands,
+    folderNameOfInternalTestbenchFolder,
+    ConfigKeys
+} from "./constants";
 import { ExecutionMode } from "./testBenchTypes";
+import { getExtensionSetting } from "./configuration";
 
-// TODO: Temporarily ignore SSL certificate validation (remove in production)
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+let agentForNextConnection: https.Agent | null = null;
+
+/**
+ * Manages TLS security state globally for the extension.
+ * Provides a centralized way to handle secure vs insecure connections
+ */
+export class TLSSecurityManager {
+    private static instance: TLSSecurityManager;
+    private isInsecureMode: boolean = false;
+    private originalNODE_TLS_REJECT_UNAUTHORIZED: string | undefined;
+
+    private constructor() {
+        this.originalNODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    }
+
+    public static getInstance(): TLSSecurityManager {
+        if (!TLSSecurityManager.instance) {
+            TLSSecurityManager.instance = new TLSSecurityManager();
+        }
+        return TLSSecurityManager.instance;
+    }
+
+    /**
+     * Enables insecure mode globally for the extension.
+     * This should only be called when the user explicitly chooses to proceed with insecure connections.
+     */
+    public enableInsecureMode(): void {
+        if (!this.isInsecureMode) {
+            logger.warn("[testBenchConnection] Enabling insecure TLS mode globally");
+            this.isInsecureMode = true;
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+        }
+    }
+
+    /**
+     * Disables insecure mode and restores original TLS settings.
+     * This should be called when logging out or when a new secure login is attempted.
+     */
+    public disableInsecureMode(): void {
+        if (this.isInsecureMode) {
+            logger.trace("[testBenchConnection] Disabling insecure TLS mode and restoring original settings");
+            this.isInsecureMode = false;
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = this.originalNODE_TLS_REJECT_UNAUTHORIZED;
+        }
+    }
+
+    /**
+     * Checks if the extension is currently in insecure mode.
+     * @returns {boolean} True if insecure mode is enabled, false otherwise.
+     */
+    public isInInsecureMode(): boolean {
+        return this.isInsecureMode;
+    }
+
+    /**
+     * Resets the security manager to its initial state.
+     * This should be called when the extension is deactivated or when a new session starts.
+     */
+    public reset(): void {
+        this.disableInsecureMode();
+        this.originalNODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    }
+
+    /**
+     * Gets the current TLS security status for debugging purposes.
+     * @returns {string} A string describing the current TLS security state.
+     */
+    public getTLSSecurityManagerStatus(): string {
+        return `TLS Security Manager: ${this.isInsecureMode ? "INSECURE" : "SECURE"} mode, NODE_TLS_REJECT_UNAUTHORIZED=${process.env.NODE_TLS_REJECT_UNAUTHORIZED}`;
+    }
+}
+
+/**
+ * Retry predicate factory to handle retry logic based on the status code of the response.
+ */
+export class RetryPredicateFactory {
+    /**
+     * Creates a retry predicate that never retries on client errors (4xx status codes).
+     * @returns A retry predicate function
+     */
+    public static createDefaultPredicate(): (error: any) => boolean {
+        return (error: any): boolean => {
+            if (axios.isAxiosError(error) && error.response) {
+                const status = error.response.status;
+                if (status >= 400 && status < 500) {
+                    logger.debug(`[testBenchConnection] Not retrying on client error ${status}`);
+                    return false;
+                }
+            }
+            return true;
+        };
+    }
+
+    /**
+     * Creates a retry predicate that never retries on specific status codes.
+     * @param nonRetryableStatusCodes Array of HTTP status codes that should not be retried
+     * @returns A retry predicate function
+     */
+    public static createCustomPredicate(nonRetryableStatusCodes: number[]): (error: any) => boolean {
+        return (error: any): boolean => {
+            if (axios.isAxiosError(error) && error.response) {
+                const status = error.response.status;
+                if (nonRetryableStatusCodes.includes(status)) {
+                    logger.debug(`[testBenchConnection] Not retrying on status code ${status}`);
+                    return false;
+                }
+            }
+            return true;
+        };
+    }
+}
 
 export interface TestBenchLoginResult {
     sessionToken: string;
     userKey: string; // From LoginResponse
     loginName: string;
+}
+
+async function createProxyHttpsAgent(proxy_url: string): Promise<HttpsProxyAgent<string> | https.Agent> {
+    if (!proxy_url) {
+        return new https.Agent();
+    }
+    return new HttpsProxyAgent(proxy_url);
+}
+/**
+ * Creates a secure HTTPS agent that trusts default system CAs and optionally a custom bundled CA.
+ * Falls back to using only default CAs if the custom certificate file is not found.
+ * @returns {Promise<https.Agent>} A configured https.Agent.
+ */
+async function createSecureHttpsAgent(): Promise<HttpsProxyAgent<string> | https.Agent> {
+    const http_config = vscode.workspace.getConfiguration("http");
+    const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
+    const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
+    const proxy_url = http_config.get<string>(ConfigKeys.PROXY_URL);
+    const agent_url: string = proxy_url ?? "";
+    const proxy_agent = await createProxyHttpsAgent(agent_url);
+    let absoluteCertPath: string | Buffer | null = null;
+    if (certificatePathSetting) {
+        absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
+    } else {
+        const certPath = process.env.NODE_EXTRA_CA_CERTS;
+        if (!certPath) {
+            logger.debug("Environment variable 'NODE_EXTRA_CA_CERTS' is not set.");
+        } else {
+            absoluteCertPath = fs.readFileSync(certPath);
+        }
+    }
+    if (!absoluteCertPath) {
+        logger.debug(`Certificate path "${certificatePathSetting}" could not be resolved or file does not exist.`);
+        proxy_agent.options.ca = defaultCAs;
+        logger.debug("Using default system CAs only.");
+        return proxy_agent;
+    }
+    const customCA = fs.readFileSync(absoluteCertPath);
+    const combinedCAs = [...defaultCAs, customCA];
+
+    logger.debug("Using combined CAs (default system CAs + custom CA).");
+    proxy_agent.options.ca = combinedCAs;
+    return proxy_agent;
 }
 
 /**
@@ -32,7 +194,7 @@ export interface TestBenchLoginResult {
  */
 export class PlayServerConnection {
     private baseURL: string;
-    private apiClient: AxiosInstance;
+    private apiClient!: AxiosInstance;
     private readonly keepAliveIntervalInSeconds: number = 4 * 60 * 1000; // 4 minutes
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
@@ -43,24 +205,43 @@ export class PlayServerConnection {
      * @param {number} portNumber - The port number of the server.
      * @param {string} username - The username for authentication.
      * @param {string} sessionToken - The session token for authentication.
+     * @param {vscode.ExtensionContext} context - The extension context for path resolution.
      */
     constructor(
         public serverName: string,
         public portNumber: number,
         public username: string,
-        private sessionToken: string
+        private sessionToken: string,
+        private context: vscode.ExtensionContext
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         logger.trace(
             `[testBenchConnection] Initializing server connection for server name: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
         );
+    }
 
+    /**
+     * Initializes the connection asynchronously, setting up the HTTPS agent and API client.
+     */
+    async initialize(): Promise<void> {
+        let agentToUse: https.Agent;
+        if (agentForNextConnection) {
+            logger.debug("[testBenchConnection] Using pre-configured agent for the new session.");
+            agentToUse = agentForNextConnection;
+            agentForNextConnection = null;
+
+            if (agentToUse.options && agentToUse.options.rejectUnauthorized === false) {
+                logger.debug("[testBenchConnection] Using insecure agent for this session.");
+            }
+        } else {
+            logger.warn("[testBenchConnection] No pre-configured agent found. Defaulting to a new secure agent.");
+            agentToUse = await createSecureHttpsAgent();
+        }
         this.apiClient = axios.create({
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
-            httpsAgent: new https.Agent({
-                rejectUnauthorized: false // TODO: Use true in production.
-            })
+            httpsAgent: agentToUse,
+            proxy: false
         });
 
         if (this.sessionToken) {
@@ -121,14 +302,19 @@ export class PlayServerConnection {
             const logoutResponse: AxiosResponse = await withRetry(
                 () =>
                     this.apiClient.delete(`/login/session/v1`, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                        headers: { accept: "application/vnd.testbench+json" },
+                        proxy: false
                     }),
                 3,
-                2000
+                2000,
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             if (logoutResponse.status === 204) {
                 logger.debug("[testBenchConnection] Server logout successful.");
+                const tlsManager = TLSSecurityManager.getInstance();
+                tlsManager.disableInsecureMode();
+
                 setConnection(null);
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 this.sessionToken = "";
@@ -169,10 +355,12 @@ export class PlayServerConnection {
             const projectsResponse: AxiosResponse<testBenchTypes.Project[]> = await withRetry(
                 () =>
                     this.apiClient.get(projectsURL, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                        headers: { accept: "application/vnd.testbench+json" },
+                        proxy: false
                     }),
                 3, // Try 3 additional times
-                2000 // delayMs
+                2000, // delayMs
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             // Save the response from server to a file for analyzing the structure
@@ -237,10 +425,12 @@ export class PlayServerConnection {
             const projectTreeResponse: AxiosResponse<testBenchTypes.TreeNode> = await withRetry(
                 () =>
                     this.apiClient.get(projectTreeURL, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                        headers: { accept: "application/vnd.testbench+json" },
+                        proxy: false
                     }),
                 3, // maxRetries
-                2000 // delayMs
+                2000, // delayMs
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -321,10 +511,8 @@ export class PlayServerConnection {
                     Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
-                // Ignore self-signed certificates
-                httpsAgent: new https.Agent({
-                    rejectUnauthorized: false //TODO: This should only be used in a development environment
-                })
+                proxy: false,
+                httpsAgent: this.apiClient.defaults.httpsAgent
             });
 
             if (!oldPlayServerSession) {
@@ -341,16 +529,7 @@ export class PlayServerConnection {
                 () => oldPlayServerSession.get(getTestElementsURL),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates
-                        const nonRetryableStatusCodes: number[] = [401, 404];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -427,10 +606,8 @@ export class PlayServerConnection {
                     Authorization: `Basic ${encoded}`,
                     "Content-Type": "application/vnd.testbench+json; charset=utf-8"
                 },
-                // Ignore self-signed certificates
-                httpsAgent: new https.Agent({
-                    rejectUnauthorized: false //TODO: This should only be used in a development environment
-                })
+                proxy: false,
+                httpsAgent: this.apiClient.defaults.httpsAgent
             });
 
             if (!oldPlayServerSession) {
@@ -445,16 +622,7 @@ export class PlayServerConnection {
                 () => oldPlayServerSession.get(getFiltersURL),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates
-                        const nonRetryableStatusCodes: number[] = [401, 404];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             // Save the JSON to a file for analyzing the structure
@@ -521,20 +689,12 @@ export class PlayServerConnection {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
-                        }
+                        },
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates - don't retry on client errors
-                        const nonRetryableStatusCodes = [404, 422];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             logger.debug(
@@ -611,7 +771,8 @@ export class PlayServerConnection {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
-                        }
+                        },
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
@@ -702,7 +863,8 @@ export class PlayServerConnection {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
-                        }
+                        },
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
@@ -786,20 +948,12 @@ export class PlayServerConnection {
                             accept: "application/json"
                         },
                         // Handle all status codes manually
-                        validateStatus: () => true
+                        validateStatus: () => true,
+                        proxy: false
                     }),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    // Retry predicates
-                    if (axios.isAxiosError(error) && error.response) {
-                        const nonRetryableStatusCodes = [403, 404, 422];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             switch (importZipResponse.status) {
@@ -879,20 +1033,12 @@ export class PlayServerConnection {
                             "Content-Type": "application/json",
                             accept: "application/json"
                         },
+                        proxy: false,
                         validateStatus: () => true
                     }),
                 3, // maxRetries
                 2000, // delayMs
-                (error) => {
-                    // Retry predicates
-                    if (axios.isAxiosError(error) && error.response) {
-                        const nonRetryableStatusCodes = [400, 403, 404, 422];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
+                RetryPredicateFactory.createDefaultPredicate()
             );
 
             switch (importJobIDResponse.status) {
@@ -994,10 +1140,12 @@ export class PlayServerConnection {
             await withRetry(
                 () =>
                     this.apiClient.get(`/login/session/v1`, {
-                        headers: { accept: "application/vnd.testbench+json" }
+                        headers: { accept: "application/vnd.testbench+json" },
+                        proxy: false
                     }),
                 5, // maxRetries
-                2000 // delayMs
+                2000, // delayMs
+                RetryPredicateFactory.createDefaultPredicate()
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
@@ -1017,9 +1165,9 @@ export class PlayServerConnection {
  * @template T - The type returned by the asynchronous function.
  * @param {Promise<T>} asyncFunction - The asynchronous function to execute.
  * @param {number} maxAllowedRetryCount - Maximum number of retry attempts (default is 3).
- * @param {number} delayMs - Delay in milliseconds between retries (default is 1000ms).
+ * @param {number} delayMs - Delay in milliseconds between retries (default is 2000ms).
  * @param {boolean} shouldRetry - Optional predicate function that receives the error and returns whether to retry.
- * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is false).
+ * @param {boolean} showProgressBar - Optional flag to control whether to show a VS Code progress bar (default is true).
  * @returns {Promise<T>} A promise resolving to the function's return value.
  * @throws The error from the last failed attempt if all retries fail.
  */
@@ -1036,17 +1184,24 @@ export async function withRetry<T>(
         try {
             return await asyncFunction();
         } catch (error) {
-            logger.warn(`[testBenchConnection] Attempt ${retryCount} failed. Retrying in ${delayMs}ms...`);
+            if (axios.isAxiosError(error)) {
+                logger.trace(
+                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${error.response?.status}: ${error.message}`
+                );
+            } else {
+                logger.trace(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
+            }
 
+            // Check if we should retry this error
             if (shouldRetry && !shouldRetry(error)) {
-                logger.warn(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
+                logger.trace(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
                 throw error;
             }
 
             retryCount++;
             if (retryCount > maxAllowedRetryCount) {
                 logger.error(
-                    `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries reached, aborting further retries.`
+                    `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
                 );
                 throw error;
             }
@@ -1340,6 +1495,8 @@ export async function loginToServerAndGetSessionDetails(
     username: string,
     password: string
 ): Promise<TestBenchLoginResult | null> {
+    agentForNextConnection = null;
+
     const requestBody: testBenchTypes.LoginRequestBody = {
         login: username,
         password: password,
@@ -1351,49 +1508,110 @@ export async function loginToServerAndGetSessionDetails(
 
     logger.debug(`[testBenchConnection] Sending login request to: ${loginURL} for user ${username}`);
 
-    try {
-        const loginResponse: AxiosResponse<testBenchTypes.LoginResponse> = await withRetry(
-            () =>
-                axios.post(loginURL, requestBody, {
-                    headers: {
-                        accept: "application/vnd.testbench+json",
-                        "Content-Type": "application/vnd.testbench+json"
-                    },
-                    httpsAgent: new https.Agent({ rejectUnauthorized: false }) // TODO: Review for production
-                }),
-            3, // maxRetries
-            2000, // delayMs
-            (error) => {
-                // shouldRetry predicate
-                if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-                    logger.warn(
-                        "[testBenchConnection] Login attempt failed with 401 (Invalid Credentials). Not retrying."
-                    );
-                    return false;
-                }
-                return true;
-            }
-        );
+    /**
+     * Performs login without retry logic.
+     * @param agent The HTTPS agent to use for the request.
+     */
+    const performLogin = async (agent: https.Agent): Promise<AxiosResponse<testBenchTypes.LoginResponse>> => {
+        return axios.post(loginURL, requestBody, {
+            headers: {
+                accept: "application/vnd.testbench+json",
+                "Content-Type": "application/vnd.testbench+json"
+            },
+            proxy: false,
+            httpsAgent: agent
+        });
+    };
 
-        if (loginResponse.status === 201 && loginResponse.data && loginResponse.data.sessionToken) {
+    try {
+        const secureAgent = await createSecureHttpsAgent();
+        const loginResponse = await performLogin(secureAgent);
+        if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
             logger.info(`[testBenchConnection] Login successful for user ${username} on ${serverName}.`);
+            agentForNextConnection = secureAgent;
+
             return {
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
                 loginName: loginResponse.data.login
             };
-        } else {
-            logger.error(
-                `[testBenchConnection] Login failed for ${username}. Unexpected status code: ${loginResponse.status}, Data: ${JSON.stringify(loginResponse.data)}`
-            );
-            return null;
-        }
-    } catch (error: any) {
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            logger.error(`[testBenchConnection] Login failed for ${username} to ${serverName}: Invalid credentials.`);
-        } else {
-            logger.error(`[testBenchConnection] Error during login for ${username} to ${serverName}:`, error.message);
         }
         return null;
+    } catch (error: any) {
+        const certErrorCodes = [
+            "SELF_SIGNED_CERT_IN_CHAIN",
+            "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+            "CERT_UNTRUSTED",
+            "DEPTH_ZERO_SELF_SIGNED_CERT"
+        ];
+
+        if (axios.isAxiosError(error) && certErrorCodes.includes(error.code || "")) {
+            logger.warn(
+                `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
+            );
+            const proceedAnywayOption = "Proceed Anyway";
+            const choice = await vscode.window.showWarningMessage(
+                `Connection Error: Untrusted Certificate. This could expose you to security risks.\n${error}`,
+                { modal: true },
+                proceedAnywayOption
+            );
+
+            if (choice === proceedAnywayOption) {
+                logger.debug(`[testBenchConnection] User chose to proceed with insecure connection to ${serverName}.`);
+                const tlsManager = TLSSecurityManager.getInstance();
+                tlsManager.enableInsecureMode();
+                try {
+                    logger.debug(`[testBenchConnection] Attempting insecure connection to ${serverName}:${portNumber}`);
+                    const insecureAgent = await createSecureHttpsAgent();
+                    insecureAgent.options.rejectUnauthorized = false;
+                    insecureAgent.options.checkServerIdentity = () => undefined;
+                    const insecureLoginResponse = await axios.post(loginURL, requestBody, {
+                        headers: {
+                            accept: "application/vnd.testbench+json",
+                            "Content-Type": "application/vnd.testbench+json"
+                        },
+                        httpsAgent: insecureAgent,
+                        timeout: 10000,
+                        validateStatus: () => true,
+                        proxy: false
+                    });
+                    if (insecureLoginResponse.status === 201 && insecureLoginResponse.data?.sessionToken) {
+                        logger.info(
+                            `[testBenchConnection] Insecure login successful for user ${username} on ${serverName}.`
+                        );
+                        agentForNextConnection = insecureAgent;
+                        return {
+                            sessionToken: insecureLoginResponse.data.sessionToken,
+                            userKey: insecureLoginResponse.data.userKey,
+                            loginName: insecureLoginResponse.data.login
+                        };
+                    } else {
+                        logger.error(
+                            `[testBenchConnection] Insecure login returned status ${insecureLoginResponse.status}`
+                        );
+                        vscode.window.showErrorMessage(
+                            `ERR_BAD_RESPONSE: Request failed with status code ${insecureLoginResponse.status}`
+                        );
+                    }
+                } catch (insecureError: any) {
+                    vscode.window.showErrorMessage(`${insecureError.code}: ${insecureError.message}`);
+                    logger.error(
+                        `[testBenchConnection] Insecure login attempt failed for ${username} on ${serverName}:`,
+                        insecureError.message
+                    );
+                    if (axios.isAxiosError(insecureError)) {
+                        logger.error(`[testBenchConnection] Insecure error code: ${insecureError.code}`);
+                        logger.error(`[testBenchConnection] Insecure error response:`, insecureError.response?.data);
+                        logger.error(`[testBenchConnection] Insecure error config:`, insecureError.config);
+                    }
+                }
+            }
+            return null;
+        } else {
+            vscode.window.showErrorMessage(`Error during login: ${error.code}`);
+            // Note: The error object is very large and contains sensitive information
+            logger.error(`[testBenchConnection] Error during login for ${username} to ${serverName}`);
+            return null;
+        }
     }
 }

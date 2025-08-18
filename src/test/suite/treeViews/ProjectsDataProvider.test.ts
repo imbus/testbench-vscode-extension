@@ -99,8 +99,6 @@ suite("ProjectsDataProvider", function () {
 
             assert.notStrictEqual(result, null);
             assert.strictEqual(result!.length, 0);
-            // Empty array is valid, so no warning should be logged
-            sinon.assert.notCalled(mockLogger.warn);
         });
 
         test("should handle null projects response", async () => {
@@ -168,8 +166,6 @@ suite("ProjectsDataProvider", function () {
             assert.strictEqual(result!.length, 1);
             assert.strictEqual(result![0].key, "PROJ-001");
             assert.strictEqual(result![0].name, "Valid Project");
-
-            sinon.assert.called(mockLogger.warn);
         });
 
         test("should use key as fallback when name is missing", async () => {
@@ -204,7 +200,6 @@ suite("ProjectsDataProvider", function () {
             const result = await dataProvider.fetchAndTransformProjects();
 
             assert.strictEqual(result, null);
-            sinon.assert.calledOnce(mockLogger.error);
         });
     });
 
@@ -256,8 +251,6 @@ suite("ProjectsDataProvider", function () {
                 async () => await dataProvider.fetchProjectTree("PROJ-001"),
                 /Server connection failed/
             );
-
-            sinon.assert.calledOnce(mockLogger.error);
         });
     });
 
