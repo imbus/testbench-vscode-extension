@@ -692,7 +692,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
         const effectiveContext: string | undefined = selectedTreeItem.originalContextValue;
 
         if (effectiveContext?.toLowerCase() === ProjectItemTypes.CYCLE.toLowerCase()) {
-            successfulTestGenerationMessage = `Successfully generated Robot Framework test suites from test cycle '${itemLabel}'.`;
+            successfulTestGenerationMessage = `Successfully generated Robot Framework test suites from Test Cycle '${itemLabel}'.`;
         }
         vscode.window.showInformationMessage(successfulTestGenerationMessage);
         logger.info(`[reportHandler] ${successfulTestGenerationMessage}`);

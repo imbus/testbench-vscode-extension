@@ -294,7 +294,7 @@
             },
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
-                "title": "Generate Tests For Cycle",
+                "title": "Generate Robot Framework Test Suites (Cycle based)",
                 "icon": {
                     "light": "resources/icons/robot-light.svg",
                     "dark": "resources/icons/robot-dark.svg"
@@ -302,7 +302,7 @@
             },
             {
                 "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                "title": "Generate Tests of Cycle",
+                "title": "Generate Robot Framework Test Suites",
                 "icon": {
                     "light": "resources/icons/robot-light.svg",
                     "dark": "resources/icons/robot-dark.svg"
@@ -310,7 +310,7 @@
             },
             {
                 "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
-                "title": "Generate Tests of TOV",
+                "title": "Generate Robot Framework Test Suites",
                 "icon": {
                     "light": "resources/icons/robot-light.svg",
                     "dark": "resources/icons/robot-dark.svg"
@@ -318,7 +318,7 @@
             },
             {
                 "command": "testbenchExtension.openAndRevealGeneratedRobotFile",
-                "title": "Open Generated Robot File",
+                "title": "Open Generated Test Suite",
                 "icon": {
                     "light": "resources/icons/open-light.svg",
                     "dark": "resources/icons/open-dark.svg"
@@ -326,7 +326,7 @@
             },
             {
                 "command": "testbenchExtension.generateTestCasesForTOV",
-                "title": "Generate Tests For TOV",
+                "title": "Generate Robot Framework Test Suites (TOV based)",
                 "icon": {
                     "light": "resources/icons/robot-light.svg",
                     "dark": "resources/icons/robot-dark.svg"
@@ -334,7 +334,7 @@
             },
             {
                 "command": "testbenchExtension.openTOVFromProjectsView",
-                "title": "Open TOV",
+                "title": "Open Test Object Version",
                 "icon": {
                     "light": "resources/icons/open-light.svg",
                     "dark": "resources/icons/open-dark.svg"
@@ -342,7 +342,7 @@
             },
             {
                 "command": "testbenchExtension.openCycleFromProjectsView",
-                "title": "Open Cycle",
+                "title": "Open Test Cycle",
                 "icon": {
                     "light": "resources/icons/open-light.svg",
                     "dark": "resources/icons/open-dark.svg"
@@ -370,7 +370,7 @@
             },
             {
                 "command": "testbenchExtension.displayAllProjects",
-                "title": "Display Projects",
+                "title": "Open Project View",
                 "icon": {
                     "light": "resources/icons/menu-light.svg",
                     "dark": "resources/icons/menu-dark.svg"
@@ -378,7 +378,7 @@
             },
             {
                 "command": "testbenchExtension.refreshProjectTreeView",
-                "title": "Refresh Project Tree View",
+                "title": "Refresh Project View",
                 "when": "view == projectManagementTree",
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
@@ -397,7 +397,7 @@
             },
             {
                 "command": "testbenchExtension.showExtensionSettings",
-                "title": "Show Extension Settings",
+                "title": "Open Extension Settings",
                 "icon": {
                     "light": "resources/icons/settings-light.svg",
                     "dark": "resources/icons/settings-dark.svg"
@@ -405,7 +405,7 @@
             },
             {
                 "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                "title": "Read Tests & Import Results To Testbench",
+                "title": "Upload Execution Results To Testbench",
                 "icon": {
                     "light": "resources/icons/upload-light.svg",
                     "dark": "resources/icons/upload-dark.svg"
@@ -413,7 +413,7 @@
             },
             {
                 "command": "testbenchExtension.importTestResultsToTestbench",
-                "title": "Import Test Results To Testbench",
+                "title": "Upload Execution Results To Testbench",
                 "icon": {
                     "light": "resources/icons/upload-light.svg",
                     "dark": "resources/icons/upload-dark.svg"
