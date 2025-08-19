@@ -3,8 +3,8 @@
 The **TestBench Extension** for Visual Studio Code enables seamless synchronization between [TestBench](https://www.testbench.com/) and [Robot Framework](https://github.com/robotframework/robotframework) files managed in VS Code. It allows you to:
 
 - Synchronize Robot Framework keywords between VS Code and TestBench
-- Export test cases specified in TestBench to run them externally
-- Import execution results back into TestBench
+- Export test cases specified in TestBench to run them with Robot Framework
+- Import Robot Framework execution results back into TestBench
 - Visualize your TestBench project structure and navigate through the corresponding Robot Framework files
 
 ## Requirements
