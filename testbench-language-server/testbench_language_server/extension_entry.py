@@ -28,7 +28,7 @@ def update_sys_path(path_to_add: str, strategy: str = "") -> None:
 
 
 BUNDLE_DIR = pathlib.Path(__file__).parent.parent
-update_sys_path(os.fspath(BUNDLE_DIR))
+update_sys_path(os.fspath(BUNDLE_DIR), "useBundled")
 
 from testbench_language_server.cli import testbench_ls_cli
 
