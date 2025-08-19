@@ -30,7 +30,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @param {vscode.ExtensionContext} extensionContext The extension context.
      */
     constructor(private extensionContext: vscode.ExtensionContext) {
-        logger.debug("[loginWebView] LoginWebViewProvider initialized.");
+        logger.trace("[loginWebView] LoginWebViewProvider initialized.");
     }
 
     /**
@@ -246,7 +246,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
      * @returns A promise that resolves when the login attempt is complete.
      */
     private async handleLoginWithConnection(connectionId: string): Promise<void> {
-        logger.debug(`[loginWebView] Attempting login with connection ID: ${connectionId}`);
+        logger.debug(`[loginWebView] Attempting login to TestBench...`);
         try {
             const connections: connectionManager.TestBenchConnection[] = await connectionManager.getConnections(
                 this.extensionContext
@@ -270,7 +270,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             });
 
             if (session) {
-                logger.info(`[loginWebView] Login successful via provider for connection: ${selectedConnection.label}`);
+                logger.info(
+                    `[loginWebView] Successfully logged in to TestBench server '${selectedConnection.label}:${selectedConnection.portNumber}'.`
+                );
             } else {
                 this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                     type: "error",

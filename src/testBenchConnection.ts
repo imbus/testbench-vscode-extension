@@ -55,7 +55,7 @@ export class TLSSecurityManager {
      */
     public enableInsecureMode(): void {
         if (!this.isInsecureMode) {
-            logger.warn("[testBenchConnection] Enabling insecure TLS mode globally");
+            logger.warn("[testBenchConnection] Enabling insecure TLS mode.");
             this.isInsecureMode = true;
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
         }
@@ -67,7 +67,7 @@ export class TLSSecurityManager {
      */
     public disableInsecureMode(): void {
         if (this.isInsecureMode) {
-            logger.trace("[testBenchConnection] Disabling insecure TLS mode and restoring original settings");
+            logger.debug("[testBenchConnection] Disabling insecure TLS mode.");
             this.isInsecureMode = false;
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = this.originalNODE_TLS_REJECT_UNAUTHORIZED;
         }
@@ -130,7 +130,7 @@ export class RetryPredicateFactory {
             if (axios.isAxiosError(error) && error.response) {
                 const status = error.response.status;
                 if (nonRetryableStatusCodes.includes(status)) {
-                    logger.debug(`[testBenchConnection] Not retrying on status code ${status}`);
+                    logger.trace(`[testBenchConnection] Not retrying on status code ${status}`);
                     return false;
                 }
             }
@@ -169,21 +169,21 @@ async function createSecureHttpsAgent(): Promise<HttpsProxyAgent<string> | https
     } else {
         const certPath = process.env.NODE_EXTRA_CA_CERTS;
         if (!certPath) {
-            logger.debug("Environment variable 'NODE_EXTRA_CA_CERTS' is not set.");
+            logger.debug("[testBenchConnection] Environment variable 'NODE_EXTRA_CA_CERTS' is not set.");
         } else {
             absoluteCertPath = fs.readFileSync(certPath);
         }
     }
     if (!absoluteCertPath) {
-        logger.debug(`Certificate path "${certificatePathSetting}" could not be resolved or file does not exist.`);
+        logger.debug(`[testBenchConnection] Certificate path "${certificatePathSetting}" could not be resolved.`);
         proxy_agent.options.ca = defaultCAs;
-        logger.debug("Using default system CAs only.");
+        logger.debug("[testBenchConnection] Using only default system CAs.");
         return proxy_agent;
     }
     const customCA = fs.readFileSync(absoluteCertPath);
     const combinedCAs = [...defaultCAs, customCA];
 
-    logger.debug("Using combined CAs (default system CAs + custom CA).");
+    logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
     proxy_agent.options.ca = combinedCAs;
     return proxy_agent;
 }
@@ -216,7 +216,7 @@ export class PlayServerConnection {
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         logger.trace(
-            `[testBenchConnection] Initializing server connection for server name: ${this.serverName}, port: ${this.portNumber}, username: ${this.username}`
+            `[testBenchConnection] Initializing server connection for '${this.serverName}:${this.portNumber}' as '${this.username}'.`
         );
     }
 
@@ -226,15 +226,15 @@ export class PlayServerConnection {
     async initialize(): Promise<void> {
         let agentToUse: https.Agent;
         if (agentForNextConnection) {
-            logger.debug("[testBenchConnection] Using pre-configured agent for the new session.");
+            logger.trace("[testBenchConnection] Using pre-configured agent for the new session.");
             agentToUse = agentForNextConnection;
             agentForNextConnection = null;
 
             if (agentToUse.options && agentToUse.options.rejectUnauthorized === false) {
-                logger.debug("[testBenchConnection] Using insecure agent for this session.");
+                logger.trace("[testBenchConnection] Using insecure agent for this session.");
             }
         } else {
-            logger.warn("[testBenchConnection] No pre-configured agent found. Defaulting to a new secure agent.");
+            logger.trace("[testBenchConnection] No pre-configured agent found. Defaulting to a new secure agent.");
             agentToUse = await createSecureHttpsAgent();
         }
         this.apiClient = axios.create({
@@ -248,7 +248,7 @@ export class PlayServerConnection {
             // Start the keep-alive process immediately to prevent session timeout after 5 minutes
             this.startKeepAlive();
         } else {
-            logger.warn("[testBenchConnection] Initialized without a session token. Keep-alive not started.");
+            logger.warn("[testBenchConnection] Initialized without a session token. Server keep-alive not started.");
         }
     }
 
@@ -290,7 +290,7 @@ export class PlayServerConnection {
      */
     async logoutUserOnServer(): Promise<boolean> {
         logger.trace(
-            `[testBenchConnection] Attempting to log out user ${this.username} from server ${this.serverName}.`
+            `[testBenchConnection] Attempting to log out user '${this.username}' from server '${this.serverName}'.`
         );
         if (!this.sessionToken) {
             logger.warn("[testBenchConnection] No session token available. Cannot perform server-side logout.");
@@ -311,7 +311,7 @@ export class PlayServerConnection {
             );
 
             if (logoutResponse.status === 204) {
-                logger.debug("[testBenchConnection] Server logout successful.");
+                logger.debug("[testBenchConnection] Logout successful.");
                 const tlsManager = TLSSecurityManager.getInstance();
                 tlsManager.disableInsecureMode();
 
@@ -322,16 +322,16 @@ export class PlayServerConnection {
 
                 return true;
             } else {
-                logger.error(`[testBenchConnection] Server logout failed. Response status: ${logoutResponse.status}`);
+                logger.error(`[testBenchConnection] Logout failed. Response status: ${logoutResponse.status}`);
                 return false;
             }
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 logger.error(
-                    `[testBenchConnection] Error during server logout: ${error.response?.status} - ${error.response?.statusText}.`
+                    `[testBenchConnection] Error during logout: ${error.response?.status} - ${error.response?.statusText}.`
                 );
             } else {
-                logger.error(`[testBenchConnection] Unexpected error during server logout: ${error}`);
+                logger.error(`[testBenchConnection] Unexpected error during logout: ${error}`);
             }
             return false;
         } finally {
@@ -346,7 +346,7 @@ export class PlayServerConnection {
      */
     async getProjectsList(): Promise<testBenchTypes.Project[] | null> {
         if (!this.sessionToken || !this.apiClient) {
-            logger.error("[testBenchConnection] Session token is null. Cannot fetch projects list.");
+            logger.trace("[testBenchConnection] Session token is null. Cannot fetch projects list.");
             return null;
         }
         try {
@@ -497,7 +497,7 @@ export class PlayServerConnection {
             const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
 
             logger.debug(
-                `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch test elements for TOV key ${tovKey}`
+                `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch test elements.`
             );
             const oldPlayServerSession: axios.AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
@@ -1504,7 +1504,7 @@ export async function loginToServerAndGetSessionDetails(
     const baseURL: string = `https://${serverName}:${portNumber}/api`;
     const loginURL: string = `${baseURL}/login/session/v1`;
 
-    logger.debug(`[testBenchConnection] Sending login request to: ${loginURL} for user ${username}`);
+    logger.trace(`[testBenchConnection] Endpoint used for login is '${loginURL}', user ${username}.`);
 
     /**
      * Performs login without retry logic.
@@ -1555,11 +1555,15 @@ export async function loginToServerAndGetSessionDetails(
             );
 
             if (choice === proceedAnywayOption) {
-                logger.debug(`[testBenchConnection] User chose to proceed with insecure connection to ${serverName}.`);
+                logger.debug(
+                    `[testBenchConnection] User chose to proceed with insecure connection to '${serverName}'.`
+                );
                 const tlsManager = TLSSecurityManager.getInstance();
                 tlsManager.enableInsecureMode();
                 try {
-                    logger.debug(`[testBenchConnection] Attempting insecure connection to ${serverName}:${portNumber}`);
+                    logger.debug(
+                        `[testBenchConnection] Attempting insecure connection to '${serverName}:${portNumber}'.`
+                    );
                     const insecureAgent = await createSecureHttpsAgent();
                     insecureAgent.options.rejectUnauthorized = false;
                     insecureAgent.options.checkServerIdentity = () => undefined;
@@ -1574,8 +1578,8 @@ export async function loginToServerAndGetSessionDetails(
                         proxy: false
                     });
                     if (insecureLoginResponse.status === 201 && insecureLoginResponse.data?.sessionToken) {
-                        logger.info(
-                            `[testBenchConnection] Insecure login successful for user ${username} on ${serverName}.`
+                        logger.debug(
+                            `[testBenchConnection] Insecure login successful for user '${username}' on '${serverName}'.`
                         );
                         agentForNextConnection = insecureAgent;
                         return {

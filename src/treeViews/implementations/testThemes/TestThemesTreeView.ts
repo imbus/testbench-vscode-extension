@@ -375,7 +375,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         cycleLabel?: string
     ): Promise<void> {
         try {
-            this.logger.debug(`[TestThemesTreeView] Loading cycle ${cycleKey} for project ${projectKey}`);
+            this.logger.debug(
+                `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' information from project '${projectName}'...`
+            );
 
             this.dataProvider.clearCache();
             this.currentProjectKey = projectKey;
@@ -441,6 +443,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
+            this.logger.debug(`[TestThemesTreeView] Successfully loaded Test Cycle '${cycleLabel}'.`);
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading cycle:", error);
 
@@ -515,6 +518,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
+            this.logger.debug(`[TestThemesTreeView] Successfully loaded Test Object Version '${tovName}'.`);
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading TOV:", error);
 

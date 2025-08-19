@@ -28,10 +28,10 @@ export async function getConnections(context: vscode.ExtensionContext): Promise<
             StorageKeys.CONNECTIONS_STORAGE_KEY,
             []
         );
-        logger.debug(`[connectionManager] Retrieved ${connections.length} connections.`);
+        logger.trace(`[connectionManager] Loaded ${connections.length} TestBench connections.`);
         return connections;
     } catch (error) {
-        logger.error("[connectionManager] Error retrieving connections:", error);
+        logger.error("[connectionManager] Error loading TestBench connections:", error);
         return [];
     }
 }
@@ -159,7 +159,7 @@ export async function setActiveConnectionId(
     try {
         await context.globalState.update(StorageKeys.ACTIVE_CONNECTION_ID_KEY, connectionId);
         if (connectionId) {
-            logger.debug(`[connectionManager] Active connection ID set to: ${connectionId}`);
+            logger.trace(`[connectionManager] Active connection ID set to '${connectionId}'.`);
         }
     } catch (error) {
         logger.error(`[connectionManager] Error setting active connection ID ${connectionId}:`, error);

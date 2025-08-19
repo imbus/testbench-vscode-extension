@@ -71,8 +71,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.eventBus.on("testElements:fetched", (event) => {
             const { tovKey, count } = event.data;
             if (tovKey === this.currentTovKey) {
-                this.logger.debug(
-                    `[TestElementsTreeView] Received test elements fetched event for TOV ${tovKey} with ${count} elements`
+                this.logger.trace(
+                    `[TestElementsTreeView] Received 'test elements fetched' event for TOV ${tovKey} with ${count} elements.`
                 );
             }
         });
@@ -157,7 +157,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         preserveExistingData: boolean = false
     ): Promise<void> {
         const startTime = Date.now();
-        this.logger.debug(`[TestElementsTreeView] Loading TOV with key ${tovKey}`);
+        this.logger.debug(`[TestElementsTreeView] Loading Test Object Version '${tovName}'...`);
 
         try {
             if (!preserveExistingData) {
@@ -198,7 +198,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             const loadTime = Date.now() - startTime;
             this.logger.debug(
-                `[TestElementsTreeView] Successfully loaded ${newRootItems.length} test elements for TOV with key ${tovKey} in ${loadTime}ms`
+                `[TestElementsTreeView] Successfully loaded ${newRootItems.length} test elements of Test Object Version '${tovName}'.`
             );
 
             this.eventBus.emit({
@@ -212,7 +212,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 timestamp: Date.now()
             });
         } catch (error) {
-            this.logger.error(`[TestElementsTreeView] Error loading TOV with key ${tovKey}:`, error);
+            this.logger.error(
+                `[TestElementsTreeView] Error loading test elements of Test Object Version '${tovName}':`,
+                error
+            );
             this.stateManager.setLoading(false);
             this.stateManager.setError(error as Error);
             throw error;
@@ -238,7 +241,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     ): Promise<void> {
         try {
             this.logger.debug(
-                `[TestElementsTreeView] Loading TOV with key ${tovKey}${clearFirst ? " (clearing first)" : " (preserving existing data)"}`
+                `[TestElementsTreeView] Loading Test Object Version '${tovName}' information from project '${projectName}'...`
             );
 
             if (clearFirst || this.currentTovKey !== tovKey) {
