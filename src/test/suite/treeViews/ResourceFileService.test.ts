@@ -270,6 +270,31 @@ suite("ResourceFileService", function () {
                 `Expected slicing after root marker and mapping into resource dir: "${expectedPath}", got "${result}"`
             );
         });
+
+        test("should use full path with resourceDirectoryPath when marker is not configured", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
+                if (key === "resourceDirectoryPath") {
+                    return "my_resources" as any;
+                }
+                if (key === "resourceDirectoryMarker") {
+                    return undefined as any;
+                }
+                if (key === "resourceMarker") {
+                    return undefined as any;
+                }
+                return undefined as any;
+            });
+
+            const result = await resourceFileService.constructAbsolutePath("Project/MyResource");
+            const expectedPath = path.join("/test/workspace", "my_resources", "Project", "MyResource");
+
+            assert.strictEqual(
+                result,
+                expectedPath,
+                `Expected full mapping under resourceDirectoryPath when no marker is configured: "${expectedPath}", got "${result}"`
+            );
+        });
     });
 
     suite("resource marker removal", function () {

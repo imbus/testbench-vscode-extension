@@ -133,7 +133,7 @@ export class ResourceFileService {
             return undefined;
         }
 
-        const resourceDirRelative = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR) || "";
+        const resourceDirRelativeToWorkspace = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR) || "";
         const resourceDirectoryMarker =
             getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
 
@@ -141,23 +141,31 @@ export class ResourceFileService {
         const splitPathComponents = cleanedHierarchical.split("/");
         const normalizedPathComponents = splitPathComponents.map((c) => this.normalizePathComponent(c));
 
-        // Find index of the resource directory marker (exact match)
-        let resourceFileSliceStartIndex = 0;
+        let relativePathComponents: string[];
+
         if (resourceDirectoryMarker) {
             const resourceDirectoryMarkerIndex = splitPathComponents.findIndex((c) => c === resourceDirectoryMarker);
+
             if (resourceDirectoryMarkerIndex !== -1) {
-                // Ignore everything up to and including the marker itself
-                resourceFileSliceStartIndex = resourceDirectoryMarkerIndex + 1;
+                // Marker is found, ignore everything up to and including the marker itself
+                relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
+            } else {
+                relativePathComponents = normalizedPathComponents;
             }
+        } else {
+            relativePathComponents = normalizedPathComponents;
         }
 
-        const relativePathUnderMarker = normalizedPathComponents.slice(resourceFileSliceStartIndex);
-        const absolutePath = path.join(workspaceRootPath, resourceDirRelative, ...relativePathUnderMarker);
+        const absolutePathOfResourceFile = path.join(
+            workspaceRootPath,
+            resourceDirRelativeToWorkspace,
+            ...relativePathComponents
+        );
 
         this.logger.trace(
-            `[ResourceFileService] Constructed absolute path for '${hierarchicalName}' with marker='${resourceDirectoryMarker}' and resourceDir='${resourceDirRelative}' -> ${absolutePath}`
+            `[ResourceFileService] Constructed absolute path for '${hierarchicalName}' with marker='${resourceDirectoryMarker}' and resourceDir='${resourceDirRelativeToWorkspace}' -> ${absolutePathOfResourceFile}`
         );
-        return absolutePath;
+        return absolutePathOfResourceFile;
     }
 
     /**
