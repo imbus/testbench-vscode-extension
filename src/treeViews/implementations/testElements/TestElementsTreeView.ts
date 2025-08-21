@@ -241,7 +241,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     ): Promise<void> {
         try {
             this.logger.debug(
-                `[TestElementsTreeView] Loading Test Object Version '${tovName}' information from project '${projectName}'...`
+                `[TestElementsTreeView] Loading Test Object Version '${tovName}' Test Element information from project '${projectName}'...`
             );
 
             if (clearFirst || this.currentTovKey !== tovKey) {
@@ -294,7 +294,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 },
                 timestamp: Date.now()
             });
-            this.logger.trace(`[TestElementsTreeView] Successfully loaded test elements for TOV ${tovKey}`);
+            this.logger.info(
+                `[TestElementsTreeView] Successfully loaded Test Object Version '${tovName}' Test Element information from project '${projectName}'.`
+            );
         } catch (error) {
             this.logger.error(`[TestElementsTreeView] Error loading TOV:`, error);
 
@@ -731,7 +733,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         try {
             const uri = vscode.Uri.file(filePath);
             await vscode.commands.executeCommand("revealInExplorer", uri);
-            this.logger.debug(`[TestElementsTreeView] Revealed file in VS Code explorer: ${filePath}`);
+            this.logger.debug(`[TestElementsTreeView] Revealing selected item in VS Code explorer: '${filePath}'`);
         } catch (error) {
             this.logger.warn(
                 `[TestElementsTreeView] Failed to reveal file in VS Code explorer: ${error instanceof Error ? error.message : "Unknown error"}`

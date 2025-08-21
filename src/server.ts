@@ -753,13 +753,13 @@ async function startAndMonitorClient(
     operationId: number
 ): Promise<void> {
     logger.debug(
-        `[server] Attempting to start TestBench language server with context '${projectName}/${tovName}' (Op ID ${operationId})...`
+        `[server] Starting TestBench language server with context '${projectName}/${tovName}' (Op ID ${operationId})...`
     );
 
     try {
         await withTimeout(() => newClient.start(), CLIENT_START_TIMEOUT_MS, "Language server start");
 
-        logger.debug(
+        logger.info(
             `[server] Successfully started TestBench language server with context '${projectName}/${tovName}' (Op ID ${operationId}).`
         );
 

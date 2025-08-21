@@ -376,7 +376,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     ): Promise<void> {
         try {
             this.logger.debug(
-                `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' information from project '${projectName}'...`
+                `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' Test Theme information from project '${projectName}'...`
             );
 
             this.dataProvider.clearCache();
@@ -443,7 +443,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
-            this.logger.debug(`[TestThemesTreeView] Successfully loaded Test Cycle '${cycleLabel}'.`);
+            this.logger.info(
+                `[TestThemesTreeView] Successfully loaded Test Cycle '${cycleLabel}' Test Theme information from project '${projectName}'.`
+            );
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading cycle:", error);
 

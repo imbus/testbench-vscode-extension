@@ -450,7 +450,7 @@ export class PlayServerConnection {
             }
             */
 
-            logger.debug(
+            logger.trace(
                 `[testBenchConnection] Response status of project tree request for URL ${projectTreeURL}: ${projectTreeResponse.status}`
             );
             if (projectTreeResponse.data) {

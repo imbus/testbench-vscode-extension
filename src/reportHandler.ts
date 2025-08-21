@@ -69,10 +69,10 @@ async function saveLastGeneratedReportParams(
         }
         await context.workspaceState.update(storageKey, paramsToSave);
         logger.debug(
-            `[reportHandler] Saved last generated report params to workspace state for user ${userSessionManager.getCurrentUserId()}: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
+            `[reportHandler] Saving 'last generated report state' parameters to current workspace for user ${userSessionManager.getCurrentUserId()}: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
         );
     } catch (error) {
-        logger.error("[reportHandler] Failed to save last generated report params to workspace state:", error);
+        logger.error("[reportHandler] Failed to save 'last generated report state' parameters to workspace:", error);
     }
 }
 
@@ -126,7 +126,6 @@ function getLastGeneratedReportParams(
  */
 export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     const success = !!jobStatus?.completion?.result?.ReportingSuccess?.reportName;
-    logger.debug(`[reportHandler] Is report job completed successfully: ${success}`);
     return success;
 }
 
@@ -137,7 +136,9 @@ export function isReportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobSt
  */
 export function isImportJobCompletedSuccessfully(jobStatus: testBenchTypes.JobStatusResponse): boolean {
     const success = !!jobStatus?.completion?.result?.ExecutionImportingSuccess;
-    logger.debug(`[reportHandler] Is import job completed successfully: ${success}`);
+    if (success) {
+        logger.debug(`[reportHandler] Successfully uploaded TestBench report.`);
+    }
     return success;
 }
 
@@ -275,7 +276,7 @@ export async function getJobIdOfCycleReport(
             RetryPredicateFactory.createDefaultPredicate()
         );
 
-        logger.debug(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
+        logger.trace(`[reportHandler] Job ID response status for URL: ${getJobIDUrl}:`, jobIdResponse.status);
         logger.trace(`[reportHandler] Job ID response data for URL: ${getJobIDUrl}:`, jobIdResponse.data);
 
         if (jobIdResponse.status !== 200) {
@@ -327,7 +328,7 @@ export async function getJobStatus(
         RetryPredicateFactory.createDefaultPredicate()
     );
 
-    logger.debug(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
+    logger.trace(`[reportHandler] Job status response status for URL: ${getJobStatusUrl}:`, jobStatusResponse.status);
     logger.trace(`[reportHandler] Job status response data for URL: ${getJobStatusUrl}:`, jobStatusResponse.data);
     if (jobStatusResponse.status !== 200) {
         const errorMsg: string = `[reportHandler] Failed to fetch job status, status code: ${jobStatusResponse.status}`;
@@ -427,7 +428,7 @@ async function storeReportFileLocally(
         const filePath: string = path.join(workspaceLocation, folderNameOfReport, fileNameOfReport);
         const uri: vscode.Uri = vscode.Uri.file(filePath);
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
-        logger.debug(`[reportHandler] Report file saved to ${uri.fsPath}`);
+        logger.debug(`[reportHandler] Report file saved to '${uri.fsPath}'.`);
         return uri.fsPath;
     } catch (error) {
         const failedReportSaveMessage: string = `Failed to save report file: ${(error as Error).message}`;
@@ -486,7 +487,7 @@ async function promptUserForSaveLocationAndSaveReportToFile(
         }
 
         await vscode.workspace.fs.writeFile(zipUri, new Uint8Array(downloadResponse.data));
-        logger.debug(`[reportHandler] Report file saved to ${zipUri.fsPath}`);
+        logger.debug(`[reportHandler] Report file saved to '${zipUri.fsPath}'.`);
         return zipUri.fsPath;
     } catch (error) {
         const failedReportSaveMessage: string = `Failed to save report file: ${(error as Error).message}`;
@@ -543,11 +544,12 @@ export async function fetchReportZipOfCycleFromServer(
             cancellationToken
         );
         if (!jobStatus || !isReportJobCompletedSuccessfully(jobStatus)) {
-            const reportGenerationErrorMsg: string = "Report generation was unsuccessful.";
+            const reportGenerationErrorMsg: string = "TestBench report generation failed.";
             logger.error(`[reportHandler] ${reportGenerationErrorMsg}`);
             vscode.window.showErrorMessage(reportGenerationErrorMsg);
             return null;
         }
+        logger.debug(`[reportHandler] Successfully finished TestBench report generation.`);
         const reportName: string = jobStatus.completion.result.ReportingSuccess!.reportName;
         const downloadedFilePath: string | null = await downloadReport(
             projectKey,
@@ -773,7 +775,7 @@ export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath:
     if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_REPORT_AFTER_PROCESSING)) {
         await removeReportZipFile(reportZipFilePath);
     } else {
-        logger.debug("Report ZIP file removal skipped per the extension settings.");
+        logger.debug("[reportHandler] Existing TestBench report will not be deleted as specified in the settings.");
     }
 }
 
@@ -1397,6 +1399,7 @@ export async function startTestGenerationUsingTOV(
                     vscode.window.showErrorMessage(reportGenerationErrorMsg);
                     return false;
                 }
+                logger.debug(`[reportHandler] Successfully finished TestBench report generation job.`);
                 const downloadedTovReportName: string =
                     tovReportJobStatus.completion.result.ReportingSuccess!.reportName;
 
