@@ -59,9 +59,27 @@ export class ResourceFileService {
 
         let cleanedPath = pathStr;
         for (const marker of resourceMarkers) {
-            const escapedMarker = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-            const regex = new RegExp(escapedMarker, "g");
-            cleanedPath = cleanedPath.replace(regex, "");
+            if (typeof marker === "string" && marker.length > 0) {
+                try {
+                    const escapedMarker = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+                    const regex = new RegExp(escapedMarker, "g");
+                    cleanedPath = cleanedPath.replace(regex, "");
+                } catch (regexError) {
+                    this.logger.warn(
+                        `[ResourceFileService] Invalid regex pattern for marker "${marker}": ${regexError}`
+                    );
+                    // Fallback to simple string replacement
+                    try {
+                        const fallbackRegex = new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+                        cleanedPath = cleanedPath.replace(fallbackRegex, "");
+                    } catch (fallbackError) {
+                        this.logger.warn(
+                            `[ResourceFileService] Fallback regex also failed for marker "${marker}": ${fallbackError}`
+                        );
+                        // Skip this marker if fallback fails
+                    }
+                }
+            }
         }
         return cleanedPath;
     }
@@ -77,7 +95,9 @@ export class ResourceFileService {
             return false;
         }
 
-        return resourceMarkers.some((marker) => str.includes(marker));
+        return resourceMarkers.some(
+            (marker) => typeof marker === "string" && marker.length > 0 && str.includes(marker)
+        );
     }
 
     /**
@@ -94,9 +114,9 @@ export class ResourceFileService {
             try {
                 await fs.promises.writeFile(filePath, initialContent, { encoding: "utf8" });
                 this.logger.info(`[ResourceFileService] Resource file created at ${filePath}`);
-            } catch (writeError) {
+            } catch (writeError: any) {
                 this.logger.error(`[ResourceFileService] Error writing to resource file ${filePath}:`, writeError);
-                throw writeError;
+                throw new Error(`Failed to create resource file: ${writeError.message}`);
             }
         } else {
             this.logger.debug(
@@ -106,7 +126,7 @@ export class ResourceFileService {
     }
 
     /**
-     * Constructs an absolute file system path for a TestBench hierarchical name,
+     * Constructs the absolute for the resource file to be created using the hierarchical name of tree,
      * respecting the configured Resource Directory Marker and Resource Directory Path.
      *
      * When a Resource Directory Marker is found in the hierarchical name, the folder structure below the marker
@@ -122,7 +142,8 @@ export class ResourceFileService {
         if (!workspaceRootPath) {
             return undefined;
         }
-        if (!hierarchicalName) {
+
+        if (!hierarchicalName.trim()) {
             this.logger.error("[ResourceFileService] Hierarchical name is empty. Cannot construct absolute path.");
             return undefined;
         }
@@ -155,9 +176,12 @@ export class ResourceFileService {
             relativePathComponents = normalizedPathComponents;
         }
 
+        // Filter out empty components that might result from normalization
+        relativePathComponents = relativePathComponents.filter((component) => component.length > 0);
+
         const absolutePathOfResourceFile = path.join(
             workspaceRootPath,
-            resourceDirRelativeToWorkspace,
+            resourceDirRelativeToWorkspace, // Will be empty if no resource directory is configured
             ...relativePathComponents
         );
 
@@ -174,6 +198,11 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the path exists (respecting case sensitivity if checked).
      */
     public async pathExists(filePath: string, caseSensitiveCheck: boolean = false): Promise<boolean> {
+        if (!filePath.trim()) {
+            this.logger.warn("[ResourceFileService] Invalid file path provided to pathExists");
+            return false;
+        }
+
         const cleanedPath = this.removeResourceMarkersFromPathString(filePath);
         try {
             await fs.promises.stat(cleanedPath);
@@ -192,6 +221,10 @@ export class ResourceFileService {
                 this.logger.trace(`[ResourceFileService] Path does not exist: ${cleanedPath}`);
                 return false;
             }
+            if (err.code === "EACCES") {
+                this.logger.warn(`[ResourceFileService] Permission denied accessing path: ${cleanedPath}`);
+                return false;
+            }
             this.logger.error(`[ResourceFileService] Error stating file/dir "${cleanedPath}": ${err.message}`);
             throw err;
         }
@@ -203,6 +236,11 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the directory exists.
      */
     public async directoryExists(dirPath: string): Promise<boolean> {
+        if (!dirPath.trim()) {
+            this.logger.warn("[ResourceFileService] Invalid directory path provided to directoryExists");
+            return false;
+        }
+
         const cleanedPath = this.removeResourceMarkersFromPathString(dirPath);
         try {
             const stats = await fs.promises.stat(cleanedPath);
@@ -210,6 +248,10 @@ export class ResourceFileService {
         } catch (err: any) {
             if (err.code === "ENOENT") {
                 this.logger.debug(`[ResourceFileService] Directory does not exist: ${cleanedPath}`);
+                return false;
+            }
+            if (err.code === "EACCES") {
+                this.logger.warn(`[ResourceFileService] Permission denied accessing directory: ${cleanedPath}`);
                 return false;
             }
             this.logger.error(`[ResourceFileService] Error stating directory "${cleanedPath}": ${err.message}`);
@@ -223,6 +265,11 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the file exists.
      */
     public async fileExists(filePath: string): Promise<boolean> {
+        if (!filePath.trim()) {
+            this.logger.warn("[ResourceFileService] Invalid file path provided to fileExists");
+            return false;
+        }
+
         const cleanedPath = this.removeResourceMarkersFromPathString(filePath);
         try {
             const stats = await fs.promises.stat(cleanedPath);
@@ -230,6 +277,10 @@ export class ResourceFileService {
         } catch (err: any) {
             if (err.code === "ENOENT") {
                 this.logger.debug(`[ResourceFileService] File does not exist: ${cleanedPath}`);
+                return false;
+            }
+            if (err.code === "EACCES") {
+                this.logger.warn(`[ResourceFileService] Permission denied accessing file: ${cleanedPath}`);
                 return false;
             }
             this.logger.error(`[ResourceFileService] Error stating file "${cleanedPath}": ${err.message}`);
@@ -243,16 +294,24 @@ export class ResourceFileService {
      * @returns {Promise<void>}
      */
     public async ensureFolderPathExists(folderPath: string): Promise<void> {
+        if (!folderPath.trim()) {
+            throw new Error("Folder path must be a non-empty string");
+        }
+
         const cleanedPath = this.removeResourceMarkersFromPathString(folderPath);
 
         try {
             await fs.promises.mkdir(cleanedPath, { recursive: true });
         } catch (error: any) {
+            if (error.code === "EACCES") {
+                this.logger.error(`[ResourceFileService] Permission denied creating folder: "${cleanedPath}"`);
+                throw new Error(`Permission denied creating folder: ${cleanedPath}`);
+            }
             this.logger.error(
-                `[ResourceFileService] Failed to check if folder path exists: "${cleanedPath}": ${error.message}`,
+                `[ResourceFileService] Failed to create folder path: "${cleanedPath}": ${error.message}`,
                 error
             );
-            throw error;
+            throw new Error(`Failed to create folder: ${error.message}`);
         }
     }
 }

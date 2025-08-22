@@ -217,6 +217,24 @@ suite("ResourceFileService", function () {
             assert.strictEqual(result, undefined, "Should return undefined when hierarchical name is empty");
         });
 
+        test("should return undefined when hierarchical name is only whitespace", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+
+            const result = await resourceFileService.constructAbsolutePath("   \t  \n  ");
+
+            assert.strictEqual(result, undefined, "Should return undefined when hierarchical name is only whitespace");
+        });
+
+        test("should filter out empty components after normalization", async function () {
+            testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
+
+            const result = await resourceFileService.constructAbsolutePath("Folder///SubFolder//Resource");
+
+            const expectedPath = path.join("/test/workspace", "Folder", "SubFolder", "Resource");
+            assert.strictEqual(result, expectedPath, "Should filter out empty components");
+        });
+
         test("should map path under resourceDirectoryPath starting from marker", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
@@ -316,6 +334,50 @@ suite("ResourceFileService", function () {
                 result,
                 expectedPath,
                 `Expected full folder hierarchy to be preserved when no marker is configured: "${expectedPath}", got "${result}"`
+            );
+        });
+    });
+
+    suite("ensureFileExists", function () {
+        test("should create file when it doesn't exist", async function () {
+            testEnv.sandbox.stub(resourceFileService, "pathExists").resolves(false);
+            testEnv.sandbox.stub(resourceFileService, "ensureFolderPathExists").resolves();
+            const writeFileStub = testEnv.sandbox.stub(fs.promises, "writeFile").resolves();
+
+            await resourceFileService.ensureFileExists("/test/path/file.resource", "*** Settings ***");
+
+            assert(writeFileStub.calledOnce, "Should call writeFile once");
+            assert(writeFileStub.calledWith("/test/path/file.resource", "*** Settings ***", { encoding: "utf8" }));
+        });
+
+        test("should not overwrite existing file", async function () {
+            testEnv.sandbox.stub(resourceFileService, "pathExists").resolves(true);
+            const writeFileStub = testEnv.sandbox.stub(fs.promises, "writeFile").resolves();
+
+            await resourceFileService.ensureFileExists("/test/path/file.resource", "*** Settings ***");
+
+            assert(writeFileStub.notCalled, "Should not call writeFile when file exists");
+        });
+
+        test("should create parent directories if they don't exist", async function () {
+            testEnv.sandbox.stub(resourceFileService, "pathExists").resolves(false);
+            const ensureFolderStub = testEnv.sandbox.stub(resourceFileService, "ensureFolderPathExists").resolves();
+            testEnv.sandbox.stub(fs.promises, "writeFile").resolves();
+
+            await resourceFileService.ensureFileExists("/test/path/file.resource", "*** Settings ***");
+
+            assert(ensureFolderStub.calledOnce, "Should call ensureFolderPathExists once");
+            assert(ensureFolderStub.calledWith("/test/path"));
+        });
+
+        test("should handle file creation errors gracefully", async function () {
+            testEnv.sandbox.stub(resourceFileService, "pathExists").resolves(false);
+            testEnv.sandbox.stub(resourceFileService, "ensureFolderPathExists").resolves();
+            testEnv.sandbox.stub(fs.promises, "writeFile").rejects(new Error("Permission denied"));
+
+            await assert.rejects(
+                resourceFileService.ensureFileExists("/test/path/file.resource", "content"),
+                /Failed to create resource file: Permission denied/
             );
         });
     });
@@ -446,6 +508,16 @@ suite("ResourceFileService", function () {
             assert.strictEqual(endMarker, false, "Should handle marker at end");
             assert.strictEqual(noMarker, false, "Should handle path without markers");
         });
+
+        test("should handle invalid marker configurations gracefully", async function () {
+            const invalidMarkers = [null, undefined, "", 123, {}, []] as any[];
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(invalidMarkers);
+            testEnv.sandbox.stub(fs.promises, "stat").rejects({ code: "ENOENT" });
+
+            const result = await resourceFileService.pathExists("TestTheme [RF-Resource]");
+
+            assert.strictEqual(result, false, "Should handle invalid marker configurations gracefully");
+        });
     });
 
     suite("file operations with resource markers", function () {
@@ -496,6 +568,24 @@ suite("ResourceFileService", function () {
                 resourceFileService.ensureFolderPathExists("TestFolder [RF-Resource]"),
                 "Should create folder path without errors"
             );
+        });
+    });
+
+    suite("hasResourceMarker method", function () {
+        test("should return false when no markers configured", function () {
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
+            assert.strictEqual(ResourceFileService.hasResourceMarker("TestTheme"), false);
+        });
+
+        test("should return false when markers array is empty", function () {
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns([]);
+            assert.strictEqual(ResourceFileService.hasResourceMarker("TestTheme"), false);
+        });
+
+        test("should handle invalid marker types gracefully", function () {
+            const invalidMarkers = [null, undefined, "", 123, {}, []] as any[];
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(invalidMarkers);
+            assert.strictEqual(ResourceFileService.hasResourceMarker("TestTheme"), false);
         });
     });
 });
