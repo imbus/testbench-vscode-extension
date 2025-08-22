@@ -143,6 +143,7 @@ suite("ResourceFileService", function () {
 
         test("should normalize hierarchical names with special characters correctly", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
 
             const testCases = [
                 {
@@ -176,6 +177,7 @@ suite("ResourceFileService", function () {
 
         test("should construct correct path components regardless of platform", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
+            testEnv.sandbox.stub(configuration, "getExtensionSetting").returns(undefined);
 
             const result = await resourceFileService.constructAbsolutePath("Folder/SubFolder/Resource");
 
@@ -242,7 +244,7 @@ suite("ResourceFileService", function () {
             );
         });
 
-        test("should include resourceDirectoryPath even when marker is missing", async function () {
+        test("should create file directly under resourceDirectoryPath when marker is missing", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
                 if (key === "resourceDirectoryPath") {
@@ -258,20 +260,12 @@ suite("ResourceFileService", function () {
             });
 
             const result = await resourceFileService.constructAbsolutePath("Root/Project/Sub/Folder/MyResource");
-            const expectedPath = path.join(
-                "/test/workspace",
-                "rf_resources",
-                "Root",
-                "Project",
-                "Sub",
-                "Folder",
-                "MyResource"
-            );
+            const expectedPath = path.join("/test/workspace", "rf_resources", "MyResource");
 
             assert.strictEqual(
                 result,
                 expectedPath,
-                `Expected full mapping under resourceDirectoryPath when marker missing: "${expectedPath}", got "${result}"`
+                `Expected file to be created directly under resourceDirectoryPath when marker missing: "${expectedPath}", got "${result}"`
             );
         });
 
@@ -300,7 +294,7 @@ suite("ResourceFileService", function () {
             );
         });
 
-        test("should use full path with resourceDirectoryPath when marker is not configured", async function () {
+        test("should preserve folder hierarchy when marker is not configured", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
             testEnv.sandbox.stub(configuration, "getExtensionSetting").callsFake((key: string) => {
                 if (key === "resourceDirectoryPath") {
@@ -321,7 +315,7 @@ suite("ResourceFileService", function () {
             assert.strictEqual(
                 result,
                 expectedPath,
-                `Expected full mapping under resourceDirectoryPath when no marker is configured: "${expectedPath}", got "${result}"`
+                `Expected full folder hierarchy to be preserved when no marker is configured: "${expectedPath}", got "${result}"`
             );
         });
     });

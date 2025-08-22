@@ -109,9 +109,11 @@ export class ResourceFileService {
      * Constructs an absolute file system path for a TestBench hierarchical name,
      * respecting the configured Resource Directory Marker and Resource Directory Path.
      *
-     * Below the "Resource Directory Marker" subdivision, folder structure matches the file system, everything above is ignored.
-     * Folder structure under "Resource Directory Path" mirrors the TestBench subdivisions starting at the marker.
-     * File path when creating: resourceDirectoryPath + subdivision path starting from the marker.
+     * When a Resource Directory Marker is found in the hierarchical name, the folder structure below the marker
+     * is preserved and mapped under the Resource Directory Path.
+     * When a marker is configured but not found in the hierarchical name, the resource file is created directly
+     * under the Resource Directory Path without preserving the folder hierarchy.
+     * When no marker is configured at all, the full folder hierarchy is preserved under the Resource Directory Path.
      * @param hierarchicalName The slash-separated hierarchical name (e.g., "Folder/SubFolder/MyResource").
      * @returns {Promise<string | undefined>} The absolute path or undefined if workspace root is not found.
      */
@@ -146,7 +148,8 @@ export class ResourceFileService {
                 // Marker is found, ignore everything up to and including the marker itself
                 relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
             } else {
-                relativePathComponents = normalizedPathComponents;
+                // No marker match, create resource file directly under resource directory without subdivision folder hierarchy
+                relativePathComponents = [normalizedPathComponents[normalizedPathComponents.length - 1]];
             }
         } else {
             relativePathComponents = normalizedPathComponents;
