@@ -28,6 +28,35 @@ suite("ResourceFileService", function () {
         testEnv.sandbox.restore();
     });
 
+    suite("normalizePath", function () {
+        test("should handle various special characters and preserve valid characters", function () {
+            const testCases = [
+                { input: "Test:Name", expected: "Test_Name", description: "colon" },
+                { input: "Test<Name>", expected: "Test_Name_", description: "less than" },
+                { input: "Test>Name>", expected: "Test_Name_", description: "greater than" },
+                { input: 'Test"Name"', expected: "Test_Name_", description: "double quote" },
+                { input: "Test/Name", expected: "Test_Name", description: "forward slash" },
+                { input: "Test\\Name", expected: "Test_Name", description: "backslash" },
+                { input: "Test|Name", expected: "Test_Name", description: "pipe" },
+                { input: "Test?Name", expected: "Test_Name", description: "question mark" },
+                { input: "Test*Name", expected: "Test_Name", description: "asterisk" },
+                { input: "Test,Name", expected: "Test,Name", description: "comma is preserved" },
+                { input: "Test Name", expected: "Test Name", description: "space is preserved" },
+                {
+                    input: "Test: Multiples/|,",
+                    expected: "Test_ Multiples__,"
+                },
+                { input: "NoSpecialChars", expected: "NoSpecialChars", description: "no special chars" },
+                { input: "", expected: "", description: "empty string" }
+            ];
+
+            for (const { input, expected, description } of testCases) {
+                const result = ResourceFileService.normalizePath(input);
+                assert.strictEqual(result, expected, `Failed on: ${description}`);
+            }
+        });
+    });
+
     suite("constructAbsolutePath", function () {
         test("should normalize single component names with special characters correctly", async function () {
             testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
@@ -75,8 +104,8 @@ suite("ResourceFileService", function () {
                 },
                 {
                     input: "Test,Theme",
-                    expectedComponent: "Test_Theme",
-                    description: "comma becomes underscore"
+                    expectedComponent: "Test,Theme",
+                    description: "comma is preserved"
                 },
                 {
                     input: "Test Theme with Spaces",
@@ -84,9 +113,9 @@ suite("ResourceFileService", function () {
                     description: "spaces are preserved"
                 },
                 {
-                    input: "Test:Theme\\With\\Special*Chars?,",
-                    expectedComponent: "Test_Theme_With_Special_Chars__",
-                    description: "multiple special characters including comma become underscores"
+                    input: "Test:Theme\\With\\Special*Chars?",
+                    expectedComponent: "Test_Theme_With_Special_Chars_",
+                    description: "multiple special characters become underscores"
                 },
                 {
                     input: "_Leading_Underscore_",
@@ -123,12 +152,12 @@ suite("ResourceFileService", function () {
                 },
                 {
                     input: "Folder/SubFolder/Test:Resource,Special",
-                    expectedComponents: ["Folder", "SubFolder", "Test_Resource_Special"],
+                    expectedComponents: ["Folder", "SubFolder", "Test_Resource,Special"],
                     description: "hierarchical path with special characters in components"
                 },
                 {
-                    input: "Special Chars_-\\|?,/?_-\\|, Child 1",
-                    expectedComponents: ["Special Chars_-____", "__-___ Child 1"],
+                    input: "Special Chars_-\\|?,\\/?_-\\|, Child 1",
+                    expectedComponents: ["Special Chars_-___,_", "__-__, Child 1"],
                     description: "complex hierarchical path with special characters"
                 }
             ];

@@ -218,7 +218,8 @@ export class RobotFileService {
     private generateRobotFileName(treeItemName: string, treeItemNumbering: string): string {
         const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
         const prefixOfFileName = lastNumberingPart ? `${lastNumberingPart}_` : "";
-        // Characters to replace with underscore: < > : " / \ | ? * and spaces
+        // Characters to replace with underscore:
+        // ["<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "]
         const normalizedName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");
 
         return `${prefixOfFileName}${normalizedName}.robot`;

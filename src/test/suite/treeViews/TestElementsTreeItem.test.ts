@@ -17,7 +17,8 @@ suite("TestElementsTreeItem", function () {
     const createMockTestElementData = (overrides: Partial<any> = {}) => ({
         id: "test-item-1",
         parentId: null,
-        name: "TestResource [Robot-Resource]",
+        displayName: "TestResource [Robot-Resource]",
+        originalName: "TestResource [Robot-Resource]",
         hierarchicalName: "TestFolder/TestResource [Robot-Resource]",
         testElementType: TestElementType.Subdivision,
         uniqueID: "test-uid-123",
@@ -60,7 +61,7 @@ suite("TestElementsTreeItem", function () {
             const parent = new TestElementsTreeItem(parentData, testEnv.mockContext, undefined, mockEventBus);
 
             const childData = createMockTestElementData({
-                name: "ChildItem",
+                displayName: "ChildItem",
                 testElementType: TestElementType.Interaction
             });
             const child = new TestElementsTreeItem(childData, testEnv.mockContext, parent, mockEventBus);
@@ -72,7 +73,7 @@ suite("TestElementsTreeItem", function () {
     suite("Context Value Management", function () {
         test("should set correct context value for subdivision resource", function () {
             const data = createMockTestElementData({
-                name: "TestResource [Robot-Resource]",
+                displayName: "TestResource [Robot-Resource]",
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: true
             });
@@ -83,7 +84,7 @@ suite("TestElementsTreeItem", function () {
 
         test("should set correct context value for missing subdivision resource", function () {
             const data = createMockTestElementData({
-                name: "TestResource [Robot-Resource]",
+                displayName: "TestResource [Robot-Resource]",
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: false
             });
@@ -94,7 +95,7 @@ suite("TestElementsTreeItem", function () {
 
         test("should set correct context value for subdivision folder", function () {
             const data = createMockTestElementData({
-                name: "TestFolder",
+                displayName: "TestFolder",
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: false
             });
@@ -105,14 +106,14 @@ suite("TestElementsTreeItem", function () {
 
         test("should set correct context value for interaction with available parent", function () {
             const parentData = createMockTestElementData({
-                name: "ParentResource [Robot-Resource]",
+                displayName: "ParentResource [Robot-Resource]",
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: true
             });
             const parent = new TestElementsTreeItem(parentData, testEnv.mockContext, undefined, mockEventBus);
 
             const interactionData = createMockTestElementData({
-                name: "TestInteraction",
+                displayName: "TestInteraction",
                 testElementType: TestElementType.Interaction,
                 isLocallyAvailable: true
             });
@@ -123,14 +124,14 @@ suite("TestElementsTreeItem", function () {
 
         test("should set correct context value for interaction with missing parent", function () {
             const parentData = createMockTestElementData({
-                name: "ParentResource [Robot-Resource]",
+                displayName: "ParentResource [Robot-Resource]",
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: false
             });
             const parent = new TestElementsTreeItem(parentData, testEnv.mockContext, undefined, mockEventBus);
 
             const interactionData = createMockTestElementData({
-                name: "TestInteraction",
+                displayName: "TestInteraction",
                 testElementType: TestElementType.Interaction,
                 isLocallyAvailable: false
             });
@@ -144,7 +145,7 @@ suite("TestElementsTreeItem", function () {
         test("should update interaction context value when parent resource becomes available", function () {
             const parentResource = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
+                    displayName: "ParentResource [Robot-Resource]",
                     hierarchicalName: "TestFolder/ParentResource [Robot-Resource]",
                     testElementType: TestElementType.Subdivision,
                     isLocallyAvailable: false
@@ -153,7 +154,7 @@ suite("TestElementsTreeItem", function () {
 
             const interaction = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "TestInteraction",
+                    displayName: "TestInteraction",
                     hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
                     testElementType: TestElementType.Interaction,
                     isLocallyAvailable: false
@@ -169,7 +170,7 @@ suite("TestElementsTreeItem", function () {
         test("should update interaction context value when parent resource becomes unavailable", function () {
             const parentResource = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "ParentResource [Robot-Resource]",
+                    displayName: "ParentResource [Robot-Resource]",
                     hierarchicalName: "TestFolder/ParentResource [Robot-Resource]",
                     testElementType: TestElementType.Subdivision,
                     isLocallyAvailable: true
@@ -178,7 +179,7 @@ suite("TestElementsTreeItem", function () {
 
             const interaction = createMockTestElementItem(
                 createMockTestElementData({
-                    name: "TestInteraction",
+                    displayName: "TestInteraction",
                     hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
                     testElementType: TestElementType.Interaction,
                     isLocallyAvailable: true
@@ -196,14 +197,14 @@ suite("TestElementsTreeItem", function () {
     suite("Availability Updates", function () {
         test("should update local availability and trigger child updates", function () {
             const parentData = createMockTestElementData({
-                name: "ParentResource [Robot-Resource]",
+                displayName: "ParentResource [Robot-Resource]",
                 testElementType: TestElementType.Subdivision,
                 isLocallyAvailable: false
             });
             const parent = new TestElementsTreeItem(parentData, testEnv.mockContext, undefined, mockEventBus);
 
             const childData = createMockTestElementData({
-                name: "TestInteraction",
+                displayName: "TestInteraction",
                 testElementType: TestElementType.Interaction,
                 isLocallyAvailable: false
             });

@@ -11,6 +11,7 @@ import { FrameworkCache } from "../../utils/FrameworkCache";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 import * as vscode from "vscode";
+import { ResourceFileService } from "./ResourceFileService";
 
 interface RawTestElement {
     id: string;
@@ -198,10 +199,14 @@ export class TestElementsDataProvider {
             }
             */
 
+            const originalName = jsonTestElement.name;
+            const normalizedName = ResourceFileService.normalizePath(originalName);
+
             const testElement: TestElementData = {
                 id: compositeId,
                 parentId: parentIdString,
-                name: jsonTestElement.name,
+                displayName: normalizedName,
+                originalName: originalName,
                 uniqueID: testElementOwnUniqueID,
                 libraryKey,
                 jsonString: JSON.stringify(jsonTestElement, null, 2),
@@ -209,7 +214,7 @@ export class TestElementsDataProvider {
                 testElementType: testElementType,
                 directRegexMatch: directRegexMatch,
                 children: [],
-                hierarchicalName: jsonTestElement.name // Will be properly set later
+                hierarchicalName: normalizedName // Will be set later
             };
             testElementIdToDataMap[compositeId] = testElement;
         });
@@ -309,7 +314,9 @@ export class TestElementsDataProvider {
      */
     private _assignHierarchicalNames(roots: TestElementData[]): void {
         const assign = (testElementData: TestElementData, parentPath: string): void => {
-            const currentPath = parentPath ? `${parentPath}/${testElementData.name}` : testElementData.name;
+            const currentPath = parentPath
+                ? `${parentPath}/${testElementData.displayName}`
+                : testElementData.displayName;
             testElementData.hierarchicalName = currentPath;
             testElementData.children?.forEach((child) => assign(child, currentPath));
         };
@@ -327,7 +334,7 @@ export class TestElementsDataProvider {
                 testElementData.children?.forEach((child) => {
                     if (child.directRegexMatch) {
                         nestedResourceWarnings.push(
-                            `Robot resource '${testElementData.name}' contains another resource '${child.name}'.`
+                            `Robot resource '${testElementData.displayName}' contains another resource '${child.displayName}'.`
                         );
                     }
                     check(child);

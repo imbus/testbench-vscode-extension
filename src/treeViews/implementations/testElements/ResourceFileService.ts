@@ -36,22 +36,14 @@ export class ResourceFileService {
     constructor(private readonly logger: TestBenchLogger) {}
 
     /**
-     * Normalizes a hierarchical name by replacing invalid file path characters with underscores.
-     * @param component The path component to normalize
-     * @returns The normalized component with special characters replaced by underscores
+     * Normalizes a path by replacing these file path characters with underscores:
+     * ["<", ">", ":", "\"", "/", "|", "?", "*"].
+     * Does not replace spaces unlike .robot file creation process.
+     * @param path The path component to normalize
+     * @returns The normalized path with special characters replaced by underscores
      */
-    private normalizePathComponent(component: string): string {
-        return component.replace(/[<>:"/\\|?*,]/g, "_");
-    }
-
-    /**
-     * Converts a hierarchical name to an array of normalized path components.
-     * @param hierarchicalName The hierarchical name (e.g., "Folder/SubFolder/Resource")
-     * @returns Array of normalized path components ready for file system operations
-     */
-    private hierarchicalNameToPathComponents(hierarchicalName: string): string[] {
-        const components = hierarchicalName.split("/");
-        return components.map((component) => this.normalizePathComponent(component));
+    public static normalizePath(path: string): string {
+        return path.replace(/[<>:"/\\|?*]/g, "_");
     }
 
     /**
@@ -139,12 +131,16 @@ export class ResourceFileService {
 
         const cleanedHierarchical = this.removeResourceMarkersFromPathString(hierarchicalName);
         const splitPathComponents = cleanedHierarchical.split("/");
-        const normalizedPathComponents = splitPathComponents.map((c) => this.normalizePathComponent(c));
+        const normalizedPathComponents = splitPathComponents.map((component) =>
+            ResourceFileService.normalizePath(component)
+        );
 
         let relativePathComponents: string[];
 
         if (resourceDirectoryMarker) {
-            const resourceDirectoryMarkerIndex = splitPathComponents.findIndex((c) => c === resourceDirectoryMarker);
+            const resourceDirectoryMarkerIndex = splitPathComponents.findIndex(
+                (component) => component === resourceDirectoryMarker
+            );
 
             if (resourceDirectoryMarkerIndex !== -1) {
                 // Marker is found, ignore everything up to and including the marker itself

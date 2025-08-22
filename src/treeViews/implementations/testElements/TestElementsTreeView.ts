@@ -461,7 +461,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                             updated = true;
                         }
                     } else {
-                        const parentHierarchicalName = parent.data.hierarchicalName || parent.data.name;
+                        const parentHierarchicalName = parent.data.hierarchicalName || parent.data.displayName;
                         const cleanName = this.removeResourceMarkersFromHierarchicalName(parentHierarchicalName).trim();
                         const folderPath = await this.resourceFileService.constructAbsolutePath(cleanName);
                         if (folderPath) {
@@ -999,7 +999,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         }
 
-        const interactionName = typeof item.label === "string" ? item.label : item.label?.toString() || "";
+        const interactionName = item.data.originalName;
         await this.openFileAndJumpToInteraction(resourcePath, interactionName, item.data.uniqueID);
         await this.revealFileInVSCodeExplorer(resourcePath);
     }
@@ -1104,7 +1104,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             return;
         }
 
-        const interactionName = typeof item.label === "string" ? item.label : item.label?.toString() || "";
+        const interactionName = item.data.originalName;
         await this.openFileAndJumpToInteraction(resourcePath, interactionName, item.data.uniqueID);
     }
 
@@ -1154,7 +1154,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             }
         }
 
-        const interactionName = typeof item.label === "string" ? item.label : item.label?.toString() || "";
+        const interactionName = item.data.originalName;
         await this.openFileAndJumpToInteraction(resourcePath, interactionName, item.data.uniqueID);
     }
 
@@ -1206,7 +1206,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         }
 
         // Open the file and jump to interaction
-        const interactionName = typeof item.label === "string" ? item.label : item.label?.toString() || "";
+        const interactionName = item.data.originalName;
         await this.openFileAndJumpToInteraction(resourcePath, interactionName, item.data.uniqueID);
 
         // Reveal the file in explorer
