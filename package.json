@@ -354,11 +354,11 @@
             },
             {
                 "command": "testbenchExtension.resetProjectTreeViewRoot",
-                "title": "Reset Project View Root"
+                "title": "Reset Projects View Root"
             },
             {
                 "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                "title": "Reset Test Theme View Root"
+                "title": "Reset Test Themes View Root"
             },
             {
                 "command": "testbenchExtension.getFilters",
@@ -370,7 +370,7 @@
             },
             {
                 "command": "testbenchExtension.displayAllProjects",
-                "title": "Open Project View",
+                "title": "Open Projects View",
                 "icon": {
                     "light": "resources/icons/menu-light.svg",
                     "dark": "resources/icons/menu-dark.svg"
@@ -378,7 +378,7 @@
             },
             {
                 "command": "testbenchExtension.refreshProjectTreeView",
-                "title": "Refresh Project View",
+                "title": "Refresh Projects",
                 "when": "view == projectManagementTree",
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",

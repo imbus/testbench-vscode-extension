@@ -69,10 +69,10 @@ async function saveLastGeneratedReportParams(
         }
         await context.workspaceState.update(storageKey, paramsToSave);
         logger.debug(
-            `[reportHandler] Saving 'last generated report state' parameters to current workspace for user ${userSessionManager.getCurrentUserId()}: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
+            `[reportHandler] Saving 'last generated report' parameters to current workspace state for user ${userSessionManager.getCurrentUserId()}: UID=${UID}, projectKey=${projectKey}, cycleKey=${cycleKey}, executionMode=${executionMode}, alreadyImported=${alreadyImported}.`
         );
     } catch (error) {
-        logger.error("[reportHandler] Failed to save 'last generated report state' parameters to workspace:", error);
+        logger.error("[reportHandler] Failed to save 'last generated report' parameters to workspace state:", error);
     }
 }
 
@@ -690,7 +690,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             await vscode.commands.executeCommand("workbench.view.extension.test");
         }
 
-        var successfulTestGenerationMessage: string = `Successfully generated Robot Framework test suites from ${treeItemUID} ('${itemLabel}').`;
+        let successfulTestGenerationMessage: string = `Successfully generated Robot Framework test suites from ${treeItemUID} ('${itemLabel}').`;
         const effectiveContext: string | undefined = selectedTreeItem.originalContextValue;
 
         if (effectiveContext?.toLowerCase() === ProjectItemTypes.CYCLE.toLowerCase()) {

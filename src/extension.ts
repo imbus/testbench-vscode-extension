@@ -1185,7 +1185,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await registerExtensionCommands(context);
 
     // Attempt to restore session on activation
-    logger.debug("[extension] Checking if previous TestBench session should be restored...");
+    logger.trace("[extension] Checking if previous TestBench session should be restored...");
     try {
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             createIfNone: false,
@@ -1193,16 +1193,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
         if (session) {
             await handleTestBenchSessionChange(context, session);
-            logger.debug("[extension] Successfully restored previous session.");
+            logger.debug("[extension] Successfully restored previous TestBench session.");
         } else {
-            logger.debug("[extension] No previous session found for restoration.");
+            logger.debug("[extension] No previous TestBench session found for restoration.");
             if (!getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
             }
         }
     } catch (error) {
-        logger.warn("[extension] Error trying to get initial session silently:", error);
+        logger.warn("[extension] Error trying to get initial TestBench session silently:", error);
         await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
     }
 

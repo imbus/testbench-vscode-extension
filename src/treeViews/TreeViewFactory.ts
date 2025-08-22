@@ -197,7 +197,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         customConfig?: Partial<TreeViewConfig>
     ): TestThemesTreeView {
-        this.logger.debug("[TreeViewFactory] Creating Test Theme tree view.");
+        this.logger.debug("[TreeViewFactory] Creating Test Themes tree view.");
 
         const treeView = new TestThemesTreeView(context, getConnection, customConfig);
 
@@ -401,7 +401,7 @@ export class TreeViewFactory {
         // Projects to Test Themes: When cycle is selected
         const cycleSelectionDisposable = projectsTree.eventBus.on("cycle:selected", async (event) => {
             const { projectKey, cycleKey, cycleLabel, projectName, tovName } = event.data;
-            this.logger.debug(`[TreeViewFactory] Selected Test Cycle '${cycleLabel}' in project view.`);
+            this.logger.debug(`[TreeViewFactory] Selected Test Cycle '${cycleLabel}' in projects view.`);
 
             if (projectName && tovName) {
                 await testThemesTree.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
@@ -413,7 +413,7 @@ export class TreeViewFactory {
         // Projects to Test Elements: When version is selected
         const versionSelectionDisposable = projectsTree.eventBus.on("version:selected", async (event) => {
             const { tovKey, tovLabel, projectName, tovName } = event.data;
-            this.logger.debug(`[TreeViewFactory] Selected Test Object Version '${tovLabel}' in project tree.`);
+            this.logger.debug(`[TreeViewFactory] Selected Test Object Version '${tovLabel}' in projects tree.`);
 
             await testElementsTree.loadTov(tovKey, tovLabel, projectName, tovName);
         });
