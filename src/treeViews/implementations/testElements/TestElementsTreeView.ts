@@ -410,6 +410,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         await Promise.all(
             subdivisionItems.map(async (item) => {
                 try {
+                    if (item.data.isVirtual) {
+                        return;
+                    }
                     const hierarchicalName = item.data.hierarchicalName;
                     if (hierarchicalName) {
                         const isResourceFile = ResourceFileService.hasResourceMarker(hierarchicalName);
@@ -446,6 +449,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             let parent = item.parent as TestElementsTreeItem | null;
             let updated = false;
             while (parent) {
+                if (parent.data.isVirtual) {
+                    parent = parent.parent as TestElementsTreeItem | null;
+                    continue;
+                }
                 if (parent.data.testElementType === TestElementType.Subdivision) {
                     const hierarchicalName = parent.data.hierarchicalName;
                     const isResourceFile = hierarchicalName && ResourceFileService.hasResourceMarker(hierarchicalName);

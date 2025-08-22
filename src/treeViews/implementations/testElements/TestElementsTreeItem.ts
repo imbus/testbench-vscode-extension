@@ -32,6 +32,7 @@ export interface TestElementData {
     children?: TestElementData[];
     hierarchicalName: string;
     parent?: TestElementData;
+    isVirtual?: boolean;
 }
 
 // Extended interface for tree item specific data
@@ -101,6 +102,9 @@ export class TestElementsTreeItem extends TreeItemBase {
                     ? "testElement.subdivision.resource.available"
                     : "testElement.subdivision.resource.missing";
             } else {
+                if (data.isVirtual) {
+                    return "testElement.subdivision.virtualFolder";
+                }
                 return "testElement.subdivision.folder";
             }
         }

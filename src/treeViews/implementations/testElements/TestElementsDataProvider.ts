@@ -162,6 +162,7 @@ export class TestElementsDataProvider {
         const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
         const filteredRoots = this._filterElementTree(roots);
         this._assignHierarchicalNames(filteredRoots);
+        this._markVirtualFolders(filteredRoots);
         this._checkForNestedResources(filteredRoots);
 
         return filteredRoots;
@@ -269,11 +270,18 @@ export class TestElementsDataProvider {
     }
 
     /**
-     * Recursively filters the element tree based on regex matches and hierarchy rules.
-     * @param roots The root elements of the tree to filter.
+     * Recursively filters the element tree items.
+     * Rules:
+     * - Filter out empty subdivisions, DataTypes and Conditions.
+     * - Include Subdivision if:
+     *       Subdivision name matches resource marker defined in extension settings
+     *       OR a child subdivision tree item has a resource marker match.
+     * - Include Interaction if:
+     *       The direct parent subdivision has a resource directory match.
+     * @param rootsToFilter The root elements of the unfiltered test elements tree to filter.
      * @returns A new array of filtered root elements.
      */
-    private _filterElementTree(roots: TestElementData[]): TestElementData[] {
+    private _filterElementTree(rootsToFilter: TestElementData[]): TestElementData[] {
         const recursiveFilter = (testElementData: TestElementData, inheritedMatch: boolean): TestElementData | null => {
             let validChildren: TestElementData[] = [];
             if (testElementData.children) {
@@ -305,7 +313,9 @@ export class TestElementsDataProvider {
             return null;
         };
 
-        return roots.map((root) => recursiveFilter(root, false)).filter((node) => node !== null) as TestElementData[];
+        return rootsToFilter
+            .map((root) => recursiveFilter(root, false))
+            .filter((node) => node !== null) as TestElementData[];
     }
 
     /**
@@ -321,6 +331,73 @@ export class TestElementsDataProvider {
             testElementData.children?.forEach((child) => assign(child, currentPath));
         };
         roots.forEach((rootTestElementData) => assign(rootTestElementData, ""));
+    }
+
+    /**
+     * Traverses the tree to mark subdivisions that are virtual containers for resources.
+     * A folder is "virtual" if its path is stripped during the resource file path construction
+     * due to the `resourceDirectoryMarker` setting. This prevents file system actions (like "Open in Explorer")
+     * from appearing on folders that don't have a direct 1:1 mapping to a local directory.
+     * @param roots The root elements of the tree.
+     */
+    private _markVirtualFolders(roots: TestElementData[]): void {
+        const resourceDirectoryMarker =
+            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
+
+        if (!resourceDirectoryMarker) {
+            return;
+        }
+
+        /**
+         * Recursively finds resources and marks their ancestor folders as virtual if their paths are stripped.
+         * A folder is virtual if its path is stripped for any of its descendant resources.
+         * @param node The current tree node to process.
+         * @returns An array of all descendant TestElementData items that are resource files.
+         */
+        const findResourcesAndMarkVirtuals = (node: TestElementData): TestElementData[] => {
+            const resourcesInChildren = node.children?.flatMap((child) => findResourcesAndMarkVirtuals(child)) || [];
+
+            if (node.testElementType === TestElementType.Subdivision) {
+                if (ResourceFileService.hasResourceMarker(node.originalName)) {
+                    resourcesInChildren.push(node);
+                }
+                // Node is a folder with descendant resources, check if it's virtual
+                else if (resourcesInChildren.length > 0) {
+                    let isVirtualFolder = false;
+
+                    for (const descendantResource of resourcesInChildren) {
+                        const descendantResourcePathParts = descendantResource.hierarchicalName.split("/");
+                        const markerPositionInPath = descendantResourcePathParts.indexOf(resourceDirectoryMarker);
+
+                        if (markerPositionInPath !== -1) {
+                            // Marker found, folder is virtual if it's at or before the marker in the path.
+                            const currentSubdivisionPathParts = node.hierarchicalName.split("/");
+                            if (currentSubdivisionPathParts.length <= markerPositionInPath + 1) {
+                                if (
+                                    descendantResource.hierarchicalName.startsWith(node.hierarchicalName) &&
+                                    (descendantResource.hierarchicalName.length === node.hierarchicalName.length ||
+                                        descendantResource.hierarchicalName[node.hierarchicalName.length] === "/")
+                                ) {
+                                    isVirtualFolder = true;
+                                    break;
+                                }
+                            }
+                        } else {
+                            // No marker, entire hierarchy is stripped
+                            isVirtualFolder = true;
+                            break;
+                        }
+                    }
+
+                    if (isVirtualFolder) {
+                        node.isVirtual = true;
+                    }
+                }
+            }
+            return resourcesInChildren;
+        };
+
+        roots.forEach((root) => findResourcesAndMarkVirtuals(root));
     }
 
     /**
