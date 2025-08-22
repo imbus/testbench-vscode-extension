@@ -338,6 +338,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString(), projectName, tovName);
             }
+            logger.info(
+                `[extension] Successfully opened Test Object Version '${tovName}' in project '${projectName}'.`
+            );
         }
     };
 
@@ -382,6 +385,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString(), projectName, tovName);
             }
+            logger.info(
+                `[extension] Successfully opened Test Cycle '${cycleItem.label?.toString()}' for TOV '${tovName}' in project '${projectName}'.`
+            );
         } else {
             throw new Error("Invalid cycle item: missing project, cycle, or version key");
         }

@@ -375,7 +375,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         cycleLabel?: string
     ): Promise<void> {
         try {
-            this.logger.debug(
+            this.logger.trace(
                 `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' Test Theme information from project '${projectName}'...`
             );
 
@@ -443,7 +443,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
-            this.logger.info(
+            this.logger.trace(
                 `[TestThemesTreeView] Successfully loaded Test Cycle '${cycleLabel}' Test Theme information from project '${projectName}'.`
             );
         } catch (error) {
@@ -1025,7 +1025,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param item The test case set tree item that was single clicked
      */
     private async handleTestCaseSetSingleClick(item: TestThemesTreeItem): Promise<void> {
-        this.logger.debug(`[TestThemesTreeView] Test case set item single clicked: ${item.label}`);
+        this.logger.debug(`[TestThemesTreeView] Clicked Test Case Set '${item.label}'.`);
 
         if (!item.hasGeneratedRobotFile()) {
             return;
@@ -1039,7 +1039,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param item The test case set tree item that was double clicked
      */
     private async handleTestCaseSetDoubleClick(item: TestThemesTreeItem): Promise<void> {
-        this.logger.debug(`[TestThemesTreeView] Test case set item double clicked: ${item.label}`);
+        this.logger.debug(`[TestThemesTreeView] Double clicked Test Case Set '${item.label}'.`);
 
         if (!item.hasGeneratedRobotFile()) {
             return;

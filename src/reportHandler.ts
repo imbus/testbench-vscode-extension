@@ -690,7 +690,7 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             await vscode.commands.executeCommand("workbench.view.extension.test");
         }
 
-        var successfulTestGenerationMessage: string = `Successfully generated Robot Framework test suites from ${treeItemUID} (${itemLabel}).`;
+        var successfulTestGenerationMessage: string = `Successfully generated Robot Framework test suites from ${treeItemUID} ('${itemLabel}').`;
         const effectiveContext: string | undefined = selectedTreeItem.originalContextValue;
 
         if (effectiveContext?.toLowerCase() === ProjectItemTypes.CYCLE.toLowerCase()) {
@@ -1428,7 +1428,7 @@ export async function startTestGenerationUsingTOV(
 
                 progress.report({ increment: 30, message: "Test generation completed" });
                 const tovTestGenerationSuccessMessage = generateTestForSpecificTestThemeTreeItem
-                    ? `Successfully generated Robot Framework test suites from ${rootUIDToUse} (${treeItem.label}).`
+                    ? `Successfully generated Robot Framework test suites from ${rootUIDToUse} ('${treeItem.label}').`
                     : `Successfully generated Robot Framework test suites from Test Object Version '${treeItem.label}'.`;
                 vscode.window.showInformationMessage(tovTestGenerationSuccessMessage);
 

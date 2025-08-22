@@ -241,7 +241,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     ): Promise<void> {
         try {
             this.logger.debug(
-                `[TestElementsTreeView] Loading Test Object Version '${tovName}' Test Element information from project '${projectName}'...`
+                `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
             );
 
             if (clearFirst || this.currentTovKey !== tovKey) {
@@ -295,7 +295,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 timestamp: Date.now()
             });
             this.logger.info(
-                `[TestElementsTreeView] Successfully loaded Test Object Version '${tovName}' Test Element information from project '${projectName}'.`
+                `[TestElementsTreeView] Successfully loaded Test Element information for '${tovName}' from project '${projectName}'.`
             );
         } catch (error) {
             this.logger.error(`[TestElementsTreeView] Error loading TOV:`, error);
