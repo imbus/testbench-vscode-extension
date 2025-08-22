@@ -89,7 +89,7 @@ export class FilteringModule implements TreeViewModule {
             }
         });
 
-        context.logger.debug(context.buildLogPrefix("FilteringModule", "Filtering module initialized"));
+        context.logger.trace(context.buildLogPrefix("FilteringModule", "Filtering module initialized."));
     }
 
     /**

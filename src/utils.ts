@@ -35,7 +35,7 @@ export function delay(milliseconds: number): Promise<void> {
 export async function isAbsolutePath(filePath: string, verifyExistenceOfFile: boolean = false): Promise<boolean> {
     try {
         if (!path.isAbsolute(filePath)) {
-            logger.error(`[utils] File path "${filePath}" is not absolute.`);
+            logger.warn(`[utils] File path "${filePath}" is not absolute.`);
             return false;
         }
         if (verifyExistenceOfFile) {
@@ -44,7 +44,7 @@ export async function isAbsolutePath(filePath: string, verifyExistenceOfFile: bo
         logger.trace(`[utils] File path "${filePath}" is absolute.`);
         return true;
     } catch (error) {
-        logger.warn(`[utils] Error while checking if file path "${filePath}" is absolute:`, error);
+        logger.trace(`[utils] Error while checking if file path "${filePath}" is absolute:`, error);
         return false;
     }
 }
