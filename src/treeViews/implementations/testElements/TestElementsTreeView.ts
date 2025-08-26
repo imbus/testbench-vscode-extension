@@ -12,7 +12,6 @@ import { testElementsConfig } from "./TestElementsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { ResourceFileService, ResourceOperationConfig } from "./ResourceFileService";
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
-import { FilterService } from "../../utils/FilterService";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import { findInteractionPositionInResourceFile } from "../../../server";
@@ -28,7 +27,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private currentTovName: string | null = null;
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
-    private filterService: FilterService;
     private interactionClickHandler: ClickHandler<TestElementsTreeItem>;
 
     constructor(
@@ -41,7 +39,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         this.dataProvider = new TestElementsDataProvider(this.logger, getConnection, this.eventBus);
         this.resourceFileService = new ResourceFileService(this.logger);
-        this.filterService = FilterService.getInstance();
         this.interactionClickHandler = new ClickHandler<TestElementsTreeItem>();
 
         this.registerEventHandlers();
@@ -1294,6 +1291,4 @@ export async function displayTestElementsTreeView(): Promise<void> {
         return;
     }
     vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, true);
-    const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_ELEMENTS_TREE);
 }

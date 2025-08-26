@@ -231,24 +231,6 @@ export const allExtensionCommands = {
     clearAllMarks: "testbench.clearAllMarks",
     clearAllExtensionData: `${baseKeyOfExtension}.clearAllExtensionData`,
 
-    // TODO: Delete after implementing test themes filtering
-    // Tree View Filtering Commands
-    setTextFilterForProjects: `${baseKeyOfExtension}.setTextFilterForProjects`,
-    setTextFilterForTestThemes: `${baseKeyOfExtension}.setTextFilterForTestThemes`,
-    setTextFilterForTestElements: `${baseKeyOfExtension}.setTextFilterForTestElements`,
-    clearTextFilterForProjects: `${baseKeyOfExtension}.clearTextFilterForProjects`,
-    clearTextFilterForTestThemes: `${baseKeyOfExtension}.clearTextFilterForTestThemes`,
-    clearTextFilterForTestElements: `${baseKeyOfExtension}.clearTextFilterForTestElements`,
-    toggleFilterDiffModeForProjects: `${baseKeyOfExtension}.toggleFilterDiffModeForProjects`,
-    toggleFilterDiffModeForProjectsEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForProjectsEnabled`,
-    toggleFilterDiffModeForTestThemes: `${baseKeyOfExtension}.toggleFilterDiffModeForTestThemes`,
-    toggleFilterDiffModeForTestThemesEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForTestThemesEnabled`,
-    toggleFilterDiffModeForTestElements: `${baseKeyOfExtension}.toggleFilterDiffModeForTestElements`,
-    toggleFilterDiffModeForTestElementsEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForTestElementsEnabled`,
-    clearAllFiltersForProjects: `${baseKeyOfExtension}.clearAllFiltersForProjects`,
-    clearAllFiltersForTestThemes: `${baseKeyOfExtension}.clearAllFiltersForTestThemes`,
-    clearAllFiltersForTestElements: `${baseKeyOfExtension}.clearAllFiltersForTestElements`,
-
     // Test elements tree item commands
     openAvailableSubdivisionInTestElementsView: `${baseKeyOfExtension}.openAvailableSubdivisionInTestElementsView`,
     openMissingSubdivisionInTestElementsView: `${baseKeyOfExtension}.openMissingSubdivisionInTestElementsView`,

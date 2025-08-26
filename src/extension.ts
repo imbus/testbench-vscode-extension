@@ -32,13 +32,11 @@ import { getExtensionConfiguration, initializeConfigurationWatcher } from "./con
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
 import { MarkingModule } from "./treeViews/features/MarkingModule";
 import { TestElementsTreeItem } from "./treeViews/implementations/testElements/TestElementsTreeItem";
-import { TreeViewBase } from "./treeViews/core/TreeViewBase";
 import { TreeViews } from "./treeViews/TreeViewFactory";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
 import path from "path";
-import { FilterService } from "./treeViews/utils/FilterService";
 import {
     updateOrRestartLS,
     stopLanguageClient,
@@ -400,42 +398,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             [testBenchLogger.folderNameOfLogs],
             !getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_INTERNAL_DIR)
         );
-    };
-
-    const setFilterForView = async (treeView: TreeViewBase<any> | undefined) => {
-        if (!treeView) {
-            return;
-        }
-        const filterService = FilterService.getInstance();
-        filterService.setActiveTreeView(treeView);
-        await filterService.showTextFilterDialog();
-    };
-
-    const clearFilterForView = async (treeView: TreeViewBase<any> | undefined) => {
-        if (!treeView) {
-            return;
-        }
-        const filterService = FilterService.getInstance();
-        filterService.setActiveTreeView(treeView);
-        await filterService.clearTextFilter();
-    };
-
-    const toggleDiffModeForView = async (treeView: TreeViewBase<any> | undefined) => {
-        if (!treeView) {
-            return;
-        }
-        const filterService = FilterService.getInstance();
-        filterService.setActiveTreeView(treeView);
-        await filterService.toggleFilterDiffMode();
-    };
-
-    const clearAllFiltersForView = async (treeView: TreeViewBase<any> | undefined) => {
-        if (!treeView) {
-            return;
-        }
-        const filterService = FilterService.getInstance();
-        filterService.setActiveTreeView(treeView);
-        await filterService.clearAllFilters();
     };
 
     // Test Generation Handlers
@@ -821,66 +783,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testThemesTree.resetCustomRoot();
     };
 
-    const handleSetTextFilterForProjects = () => {
-        setFilterForView(treeViews?.projectsTree);
-    };
-
-    const handleSetTextFilterForTestThemes = () => {
-        setFilterForView(treeViews?.testThemesTree);
-    };
-
-    const handleSetTextFilterForTestElements = () => {
-        setFilterForView(treeViews?.testElementsTree);
-    };
-
-    const handleClearTextFilterForProjects = () => {
-        clearFilterForView(treeViews?.projectsTree);
-    };
-
-    const handleClearTextFilterForTestThemes = () => {
-        clearFilterForView(treeViews?.testThemesTree);
-    };
-
-    const handleClearTextFilterForTestElements = () => {
-        clearFilterForView(treeViews?.testElementsTree);
-    };
-
-    const handleToggleFilterDiffModeForProjects = () => {
-        toggleDiffModeForView(treeViews?.projectsTree);
-    };
-
-    const handleToggleFilterDiffModeForProjectsEnabled = () => {
-        toggleDiffModeForView(treeViews?.projectsTree);
-    };
-
-    const handleToggleFilterDiffModeForTestThemes = () => {
-        toggleDiffModeForView(treeViews?.testThemesTree);
-    };
-
-    const handleToggleFilterDiffModeForTestThemesEnabled = () => {
-        toggleDiffModeForView(treeViews?.testThemesTree);
-    };
-
-    const handleToggleFilterDiffModeForTestElements = () => {
-        toggleDiffModeForView(treeViews?.testElementsTree);
-    };
-
-    const handleToggleFilterDiffModeForTestElementsEnabled = () => {
-        toggleDiffModeForView(treeViews?.testElementsTree);
-    };
-
-    const handleClearAllFiltersForProjects = () => {
-        clearAllFiltersForView(treeViews?.projectsTree);
-    };
-
-    const handleClearAllFiltersForTestThemes = () => {
-        clearAllFiltersForView(treeViews?.testThemesTree);
-    };
-
-    const handleClearAllFiltersForTestElements = () => {
-        clearAllFiltersForView(treeViews?.testElementsTree);
-    };
-
     const handleInteractionClick = (item: TestElementsTreeItem) => {
         treeViews?.testElementsTree.handleInteractionClick(item);
     };
@@ -975,65 +877,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         {
             id: allExtensionCommands.resetTestThemeTreeViewRoot,
             handler: handleResetTestThemeTreeViewRoot
-        },
-
-        // Tree View Filtering Commands
-        { id: allExtensionCommands.setTextFilterForProjects, handler: handleSetTextFilterForProjects },
-        {
-            id: allExtensionCommands.setTextFilterForTestThemes,
-            handler: handleSetTextFilterForTestThemes
-        },
-        {
-            id: allExtensionCommands.setTextFilterForTestElements,
-            handler: handleSetTextFilterForTestElements
-        },
-        {
-            id: allExtensionCommands.clearTextFilterForProjects,
-            handler: handleClearTextFilterForProjects
-        },
-        {
-            id: allExtensionCommands.clearTextFilterForTestThemes,
-            handler: handleClearTextFilterForTestThemes
-        },
-        {
-            id: allExtensionCommands.clearTextFilterForTestElements,
-            handler: handleClearTextFilterForTestElements
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForProjects,
-            handler: handleToggleFilterDiffModeForProjects
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForProjectsEnabled,
-            handler: handleToggleFilterDiffModeForProjectsEnabled
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForTestThemes,
-            handler: handleToggleFilterDiffModeForTestThemes
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForTestThemesEnabled,
-            handler: handleToggleFilterDiffModeForTestThemesEnabled
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForTestElements,
-            handler: handleToggleFilterDiffModeForTestElements
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForTestElementsEnabled,
-            handler: handleToggleFilterDiffModeForTestElementsEnabled
-        },
-        {
-            id: allExtensionCommands.clearAllFiltersForProjects,
-            handler: handleClearAllFiltersForProjects
-        },
-        {
-            id: allExtensionCommands.clearAllFiltersForTestThemes,
-            handler: handleClearAllFiltersForTestThemes
-        },
-        {
-            id: allExtensionCommands.clearAllFiltersForTestElements,
-            handler: handleClearAllFiltersForTestElements
         },
 
         // Other extension commands

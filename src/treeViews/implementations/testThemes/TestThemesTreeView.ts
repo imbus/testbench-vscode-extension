@@ -22,7 +22,6 @@ import {
 } from "../../../extension";
 import { MarkingModule } from "../../features/MarkingModule";
 import * as reportHandler from "../../../reportHandler";
-import { FilterService } from "../../utils/FilterService";
 import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
 import { ClickHandler } from "../../core/ClickHandler";
@@ -1693,6 +1692,4 @@ export async function displayTestThemeTreeView(): Promise<void> {
         return;
     }
     vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_THEMES_TREE, true);
-    const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_THEMES_TREE);
 }
