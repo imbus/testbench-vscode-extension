@@ -11,7 +11,7 @@ import { TestThemesDataProvider } from "./TestThemesDataProvider";
 import { testThemesConfig } from "./TestThemesConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, StorageKeys, TestThemeItemTypes } from "../../../constants";
-import { TestStructure } from "../../../testBenchTypes";
+import { TestStructureNode } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
 import {
     ALLOW_PERSISTENT_IMPORT_BUTTON,
@@ -617,7 +617,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param nodeData The node data containing visibility information
      * @returns `true` if the item should be visible, otherwise `false`.
      */
-    private _isVisible(nodeData: TestStructure["nodes"][0]): boolean {
+    private _isVisible(nodeData: TestStructureNode): boolean {
         // Check server-side filter results.
         // When filters are applied, only show items that match the filter.
         const savedFilters = this.getSavedFilters();
@@ -777,7 +777,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private buildTreeRecursively(
         parentKey: string,
         parent: TestThemesTreeItem | null,
-        nodeMap: Map<string, TestStructure["nodes"][0]>
+        nodeMap: Map<string, TestStructureNode>
     ): TestThemesTreeItem[] {
         const children: TestThemesTreeItem[] = [];
         // Find all nodes that have this parent key

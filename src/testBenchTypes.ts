@@ -39,33 +39,38 @@ export interface TestStructure {
         filters: any[];
         elementType: string;
     };
-    nodes: Array<{
-        base: {
-            key: string;
-            numbering: string;
-            parentKey: string;
-            name: string;
-            uniqueID: string;
-            matchesFilter: boolean;
-        };
-        spec: {
-            key: string;
-            locker: string | null;
-            status: string;
-        };
-        aut: {
-            key: string;
-            locker: string | null;
-            status: string;
-        };
-        exec?: {
-            locker?: string;
-            status?: string;
-        };
-        filters: any[];
-        elementType: string;
-        children?: any[];
-    }>;
+    nodes: TestStructureNode[];
+}
+
+/**
+ * Represents a single node in the test structure
+ */
+export interface TestStructureNode {
+    base: {
+        key: string;
+        numbering: string;
+        parentKey: string;
+        name: string;
+        uniqueID: string;
+        matchesFilter: boolean;
+    };
+    spec: {
+        key: string;
+        locker: string | null;
+        status: string;
+    };
+    aut: {
+        key: string;
+        locker: string | null;
+        status: string;
+    };
+    exec?: {
+        locker?: string;
+        status?: string;
+    };
+    filters: any[];
+    elementType: string;
+    children?: any[];
 }
 
 /**
