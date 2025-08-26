@@ -24,7 +24,7 @@ import {
     folderNameOfInternalTestbenchFolder,
     ConfigKeys
 } from "./constants";
-import { ExecutionMode } from "./testBenchTypes";
+import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
 
 let agentForNextConnection: https.Agent | null = null;
@@ -750,16 +750,22 @@ export class PlayServerConnection {
         cycleKey: string
     ): Promise<testBenchTypes.TestStructure | null> {
         const testStructureOfCycleUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
+        const savedFilters = TestThemesTreeView.getCurrentFiltersForApiRequest();
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
-            executionMode: ExecutionMode.Execute,
-            suppressFilteredData: false,
+            basedOnExecution: true,
+            suppressFilteredData: true,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
-            filters: []
+            filters: savedFilters
         };
 
+        const filterLogMessage =
+            savedFilters.length > 0
+                ? ` with ${savedFilters.length} filters: ${savedFilters.map((f: any) => f.name).join(", ")}`
+                : "";
+
         logger.trace(
-            `[testBenchConnection] Fetching cycle structure from URL ${testStructureOfCycleUrl} using request body:`,
+            `[testBenchConnection] Fetching cycle structure from URL ${testStructureOfCycleUrl}${filterLogMessage}. Request body:`,
             requestBody
         );
 
@@ -841,16 +847,22 @@ export class PlayServerConnection {
         tovKey: string
     ): Promise<testBenchTypes.TestStructure | null> {
         const testStructureOfTOVUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+        const savedFilters = TestThemesTreeView.getCurrentFiltersForApiRequest();
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
-            executionMode: ExecutionMode.Execute,
-            suppressFilteredData: false,
+            basedOnExecution: true,
+            suppressFilteredData: true,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
-            filters: []
+            filters: savedFilters
         };
 
+        const filterLogMessage =
+            savedFilters.length > 0
+                ? ` with ${savedFilters.length} filters: ${savedFilters.map((f: any) => f.name).join(", ")}`
+                : "";
+
         logger.trace(
-            `[testBenchConnection] Fetching test structure of TOV from URL ${testStructureOfTOVUrl} and request body:`,
+            `[testBenchConnection] Fetching TOV structure from URL ${testStructureOfTOVUrl}${filterLogMessage}. Request body:`,
             requestBody
         );
 

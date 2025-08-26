@@ -92,13 +92,13 @@ export interface CycleTreeItemData {
 
 export interface OptionalJobIDRequestParameter {
     treeRootUID?: string;
-    executionMode?: ExecutionMode;
+    basedOnExecution?: boolean;
     suppressFilteredData?: boolean;
     suppressNotExecutable?: boolean;
     suppressEmptyTestThemes?: boolean;
     filters?: {
         name: string;
-        filterType: "TestTheme";
+        filterType: "TestTheme" | "TestCase" | "TestCaseSet";
         testThemeUID: string;
     }[];
 }

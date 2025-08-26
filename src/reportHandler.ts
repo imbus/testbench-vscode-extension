@@ -640,9 +640,9 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
         }
 
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-            executionMode: defaultExecutionMode,
+            basedOnExecution: defaultExecutionMode === testBenchTypes.ExecutionMode.Execute,
             treeRootUID: UIDforRequest,
-            suppressFilteredData: false,
+            suppressFilteredData: true, // Hides tree items after filtering
             suppressNotExecutable: true, // Exclude not executable tests (including NotPlanned)
             suppressEmptyTestThemes: false,
             filters: []
@@ -964,7 +964,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             }
 
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-                executionMode: executionBased,
+                basedOnExecution: executionBased === testBenchTypes.ExecutionMode.Execute,
                 treeRootUID: UID
             };
 
@@ -1359,7 +1359,7 @@ export async function startTestGenerationUsingTOV(
                 // Fetch TOV structure to get all test themes
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
                     treeRootUID: rootUIDToUse,
-                    suppressFilteredData: false,
+                    suppressFilteredData: true,
                     //suppressNotExecutable: true,
                     suppressEmptyTestThemes: false,
                     filters: []

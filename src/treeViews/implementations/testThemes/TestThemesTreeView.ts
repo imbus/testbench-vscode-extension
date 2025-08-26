@@ -56,6 +56,89 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
+     * Gets the saved test theme tree filters from workspace state.
+     * @returns The saved filters array or empty array if none exist.
+     */
+    public getSavedFilters(): any[] {
+        return this.extensionContext.workspaceState.get<any[]>(StorageKeys.TEST_THEME_TREE_FILTERS, []);
+    }
+
+    /**
+     * Saves test theme tree filters to workspace state.
+     * @param filters The filters array to save.
+     */
+    public async saveFilters(filters: any[]): Promise<void> {
+        await this.extensionContext.workspaceState.update(StorageKeys.TEST_THEME_TREE_FILTERS, filters);
+        this.logger.debug(`[TestThemesTreeView] Saved ${filters.length} test theme filters to workspace state`);
+    }
+
+    /**
+     * Clears saved test theme tree filters from workspace state.
+     */
+    public async clearSavedFilters(): Promise<void> {
+        await this.extensionContext.workspaceState.update(StorageKeys.TEST_THEME_TREE_FILTERS, []);
+        this.logger.debug(`[TestThemesTreeView] Cleared saved test theme filters from workspace state`);
+    }
+
+    /**
+     * Gets the currently saved test theme filters.
+     * @returns The saved filters array or empty array if none exist.
+     */
+    public static getCurrentFilters(): any[] {
+        if (treeViews?.testThemesTree) {
+            return treeViews.testThemesTree.getSavedFilters();
+        }
+        return [];
+    }
+
+    /**
+     * Transforms saved filters from server response format to API request format.
+     * @param savedFilters The filters as saved from the server response
+     * @returns The filters transformed for API requests
+     */
+    public static transformFiltersForApiRequest(
+        savedFilters: any[]
+    ): { name: string; filterType: "TestTheme" | "TestCase" | "TestCaseSet"; testThemeUID: string }[] {
+        return savedFilters.map((filter) => ({
+            name: filter.name,
+            filterType: filter.type as "TestTheme" | "TestCase" | "TestCaseSet",
+            testThemeUID: "" // Apply to all test themes by default
+        }));
+    }
+
+    /**
+     * Gets the currently saved test theme filters transformed for API requests.
+     * @returns The saved filters array transformed for API requests or empty array if none exist.
+     */
+    public static getCurrentFiltersForApiRequest(): {
+        name: string;
+        filterType: "TestTheme" | "TestCase" | "TestCaseSet";
+        testThemeUID: string;
+    }[] {
+        const savedFilters = TestThemesTreeView.getCurrentFilters();
+        return TestThemesTreeView.transformFiltersForApiRequest(savedFilters);
+    }
+
+    /**
+     * Applies filters and refreshes the tree view.
+     * @param filters The filters array to save and apply.
+     */
+    public async applyFiltersAndRefresh(filters: any[]): Promise<void> {
+        await this.saveFilters(filters);
+        this.refresh();
+        this.logger.debug(`[TestThemesTreeView] Applied ${filters.length} filters and refreshed tree view`);
+    }
+
+    /**
+     * Clears all filters and refreshes the tree view.
+     */
+    public async clearFiltersAndRefresh(): Promise<void> {
+        await this.clearSavedFilters();
+        this.refresh();
+        this.logger.debug(`[TestThemesTreeView] Cleared all filters and refreshed tree view`);
+    }
+
+    /**
      * Registers all VS Code commands for the test themes tree view
      */
     private registerCommands(): void {
@@ -530,15 +613,21 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Determines if a given tree node should be visible based on filtering rules.
-     * Do not display if:
-     * - The node is a test case node
-     * - The node has execution status "NotPlanned"
-     * - The node has execution locker value "-2" (Locked by system)
-     * @param nodeData The data for the node to check.
+     * Determines if a tree item should be visible based on various criteria.
+     * @param nodeData The node data containing visibility information
      * @returns `true` if the item should be visible, otherwise `false`.
      */
     private _isVisible(nodeData: TestStructure["nodes"][0]): boolean {
+        // Check server-side filter results.
+        // When filters are applied, only show items that match the filter.
+        const savedFilters = this.getSavedFilters();
+        if (savedFilters.length > 0) {
+            if (nodeData.base.matchesFilter === false) {
+                return false;
+            }
+        }
+
+        // Additional client-side visibility rules
         if (nodeData.elementType === TestThemeItemTypes.TEST_CASE) {
             return false;
         }

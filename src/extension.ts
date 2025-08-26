@@ -754,13 +754,27 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     filterData: filter
                 } as vscode.QuickPickItem & { filterData: any };
             });
+
+            const savedFilters = treeViews?.testThemesTree?.getSavedFilters() || [];
+            const savedFilterIds = new Set(savedFilters.map((f: any) => f.key?.serial || f.name));
+            // Mark currently applied filters as picked
+            quickPickItems.forEach((item: any) => {
+                const filterId = item.filterData.key?.serial || item.filterData.name;
+
+                item.picked = savedFilterIds.has(filterId);
+            });
+
             const quickPick = vscode.window.createQuickPick();
             quickPick.title = "Select Filters for Test Theme Tree";
-            quickPick.placeholder = "Choose one or more filters to apply";
+            quickPick.placeholder =
+                savedFilters.length > 0
+                    ? `${savedFilters.length} filter(s) currently applied. Choose filters to apply`
+                    : "Choose one or more filters to apply";
             quickPick.items = quickPickItems;
             quickPick.canSelectMany = true;
             quickPick.matchOnDescription = true;
             quickPick.matchOnDetail = true;
+            quickPick.selectedItems = quickPickItems.filter((item: any) => item.picked);
 
             quickPick.onDidAccept(() => {
                 const selectedFilters = quickPick.selectedItems.map((item: any) => item.filterData);
@@ -774,7 +788,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     vscode.window.showInformationMessage(
                         `Selected ${selectedFilters.length} filter(s): ${selectedFilters.map((f: any) => f.name).join(", ")}`
                     );
-                    // TODO: Apply the selected filters to the test theme tree
+                    treeViews?.testThemesTree?.applyFiltersAndRefresh(selectedFilters).catch((error) => {
+                        logger.error(`[extension] Error applying test theme filters:`, error);
+
+                        vscode.window.showErrorMessage(`Failed to apply filters: ${error.message}`);
+                    });
+                } else {
+                    treeViews?.testThemesTree?.clearFiltersAndRefresh().catch((error) => {
+                        logger.error(`[extension] Error clearing test theme filters:`, error);
+                    });
                 }
 
                 quickPick.dispose();
@@ -1506,6 +1528,12 @@ export async function clearAllExtensionData(
                 "[extension] Error clearing internal testbench folder while clearing all extension data:",
                 error
             );
+        }
+
+        try {
+            await treeViews?.testThemesTree.clearSavedFilters();
+        } catch (error) {
+            logger.error("[extension] Error clearing saved test theme filters during clear all:", error);
         }
 
         try {

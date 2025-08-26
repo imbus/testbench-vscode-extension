@@ -116,7 +116,9 @@ export const StorageKeys = {
     CUSTOM_ROOT_TEST_THEME_TREE: "testbenchExtension.customRoot.testThemeTree",
     CUSTOM_ROOT_TEST_ELEMENTS_TREE: "testbenchExtension.customRoot.testElementsTree",
     IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY: "testbenchExtension.isTestThemeOpenedFromCycleStorageKey",
-    HAS_USED_EXTENSION_BEFORE: "testbenchExtension.hasUsedExtensionBefore"
+    HAS_USED_EXTENSION_BEFORE: "testbenchExtension.hasUsedExtensionBefore",
+    // Test theme tree filters
+    TEST_THEME_TREE_FILTERS: "testbenchExtension.testThemeTree.filters"
 } as const;
 
 // --- Tree Item Context Values ---
