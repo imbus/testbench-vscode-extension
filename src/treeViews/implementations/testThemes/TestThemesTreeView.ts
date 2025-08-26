@@ -820,21 +820,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Determines if a tree item should be visible based on various criteria.
+     * Determines if a tree item should be visible.
      * @param nodeData The node data containing visibility information
      * @returns `true` if the item should be visible, otherwise `false`.
      */
     private _isVisible(nodeData: TestStructureNode): boolean {
-        // Check server-side filter results.
-        // When filters are applied, only show items that match the filter.
-        const savedFilters = this.getSavedFilters();
-        if (savedFilters.length > 0) {
-            if (nodeData.base.matchesFilter === false) {
-                return false;
-            }
-        }
-
-        // Additional client-side visibility rules
+        // A test theme tree item is not visible in test theme view if:
+        // - It is a "Test Case"
+        // - Execution status is "NotPlanned"
+        // - Item is locked by system (-2)
         if (nodeData.elementType === TestThemeItemTypes.TEST_CASE) {
             return false;
         }
