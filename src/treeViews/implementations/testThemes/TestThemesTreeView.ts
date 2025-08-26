@@ -92,6 +92,120 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
+     * Validates stored filters against current server filters to avoid using invalid filters.
+     * Prioritizes filter key (serial) validation over name validation since filter names can be
+     * swapped on server side but filter keys remain immutable.
+     * @returns Promise resolving to validated filters for API requests
+     */
+    private static async validateAndGetCurrentFiltersEnhanced(): Promise<any[]> {
+        if (!treeViews?.testThemesTree) {
+            return [];
+        }
+
+        const storedFilters = treeViews.testThemesTree.getSavedFilters();
+        if (storedFilters.length === 0) {
+            return [];
+        }
+
+        const connection = treeViews.testThemesTree.getConnection();
+
+        if (!connection) {
+            treeViews.testThemesTree.logger.warn("[TestThemesTreeView] No connection available for filter validation");
+            await treeViews.testThemesTree.saveFilters([]);
+            return [];
+        }
+
+        try {
+            const serverFilters = await connection.getFiltersFromOldPlayServer();
+            if (!serverFilters || !Array.isArray(serverFilters)) {
+                treeViews.testThemesTree.logger.warn(
+                    "[TestThemesTreeView] Could not fetch server filters for validation"
+                );
+                await treeViews.testThemesTree.saveFilters([]);
+                return [];
+            }
+
+            const serverFiltersByName = new Map<string, any>();
+            const serverFiltersBySerial = new Map<string, any>();
+            serverFilters.forEach((filter: any) => {
+                if (filter.name) {
+                    serverFiltersByName.set(filter.name, filter);
+                }
+
+                if (filter.key?.serial) {
+                    serverFiltersBySerial.set(filter.key.serial, filter);
+                }
+            });
+            const validFilters: any[] = [];
+            const removedFilters: any[] = [];
+            storedFilters.forEach((storedFilter) => {
+                let isValid = false;
+                let matchedServerFilter = null;
+                if (storedFilter.key?.serial && serverFiltersBySerial.has(storedFilter.key.serial)) {
+                    matchedServerFilter = serverFiltersBySerial.get(storedFilter.key.serial);
+                    isValid = true;
+                    treeViews!.testThemesTree!.logger.debug(
+                        `[TestThemesTreeView] Filter validated by key: ${storedFilter.key.serial}`
+                    );
+                }
+
+                if (!isValid && storedFilter.name && serverFiltersByName.has(storedFilter.name)) {
+                    const serverFilter = serverFiltersByName.get(storedFilter.name);
+                    if (storedFilter.type && serverFilter.type) {
+                        isValid = storedFilter.type === serverFilter.type;
+                        if (isValid) {
+                            matchedServerFilter = serverFilter;
+                            treeViews!.testThemesTree!.logger.debug(
+                                `[TestThemesTreeView] Filter validated by name+type: ${storedFilter.name}:${storedFilter.type}`
+                            );
+                        }
+                    } else {
+                        isValid = true;
+                        matchedServerFilter = serverFilter;
+                        treeViews!.testThemesTree!.logger.debug(
+                            `[TestThemesTreeView] Filter validated by name: ${storedFilter.name}`
+                        );
+                    }
+                }
+
+                if (isValid && matchedServerFilter) {
+                    validFilters.push(matchedServerFilter);
+                } else {
+                    treeViews!.testThemesTree!.logger.warn(
+                        `[TestThemesTreeView] Invalid filter removed: ${storedFilter.name} (key: ${storedFilter.key?.serial || "none"})`
+                    );
+
+                    removedFilters.push(storedFilter);
+                }
+            });
+
+            if (removedFilters.length > 0) {
+                vscode.window
+                    .showWarningMessage(
+                        `Some applied filters are no longer valid on the server and have been cleared. You can re-select filters if needed.`,
+                        "Re-select Filters"
+                    )
+                    .then(async (selection) => {
+                        if (selection === "Re-select Filters") {
+                            await vscode.commands.executeCommand("testbenchExtension.displayFiltersForTestThemeTree");
+                        }
+                    });
+
+                await treeViews.testThemesTree.saveFilters(validFilters);
+                treeViews.testThemesTree.logger.info(
+                    `[TestThemesTreeView] Removed ${removedFilters.length} invalid filter(s): ${removedFilters.map((f) => f.name).join(", ")}`
+                );
+            }
+
+            return validFilters;
+        } catch (error) {
+            treeViews.testThemesTree.logger.error("[TestThemesTreeView] Error validating stored filters:", error);
+            await treeViews.testThemesTree.saveFilters([]);
+            return [];
+        }
+    }
+
+    /**
      * Transforms saved filters from server response format to API request format.
      * @param savedFilters The filters as saved from the server response
      * @returns The filters transformed for API requests
@@ -104,19 +218,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             filterType: filter.type as "TestTheme" | "TestCase" | "TestCaseSet",
             testThemeUID: "" // Apply to all test themes by default
         }));
-    }
-
-    /**
-     * Gets the currently saved test theme filters transformed for API requests.
-     * @returns The saved filters array transformed for API requests or empty array if none exist.
-     */
-    public static getCurrentFiltersForApiRequest(): {
-        name: string;
-        filterType: "TestTheme" | "TestCase" | "TestCaseSet";
-        testThemeUID: string;
-    }[] {
-        const savedFilters = TestThemesTreeView.getCurrentFilters();
-        return TestThemesTreeView.transformFiltersForApiRequest(savedFilters);
     }
 
     /**
@@ -1137,6 +1238,22 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await vscode.commands.executeCommand("revealInExplorer", uri);
             this.logger.debug(`[TestThemesTreeView] Revealed robot file in explorer: ${robotFilePath}`);
         }
+    }
+
+    /**
+     * Gets validated filters for API requests without making any test API calls.
+     * Performs comprehensive validation against the filters endpoint only.
+     * @returns Promise resolving to validated filters for API requests
+     */
+    public static async getValidatedFiltersForApiRequest(): Promise<
+        {
+            name: string;
+            filterType: "TestTheme" | "TestCase" | "TestCaseSet";
+            testThemeUID: string;
+        }[]
+    > {
+        const validatedFilters = await TestThemesTreeView.validateAndGetCurrentFiltersEnhanced();
+        return TestThemesTreeView.transformFiltersForApiRequest(validatedFilters);
     }
 }
 

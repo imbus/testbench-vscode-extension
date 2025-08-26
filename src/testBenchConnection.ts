@@ -750,89 +750,8 @@ export class PlayServerConnection {
         cycleKey: string
     ): Promise<testBenchTypes.TestStructure | null> {
         const testStructureOfCycleUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
-        const savedFilters = TestThemesTreeView.getCurrentFiltersForApiRequest();
-        const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
-            basedOnExecution: true,
-            suppressFilteredData: true,
-            suppressNotExecutable: false,
-            suppressEmptyTestThemes: false,
-            filters: savedFilters
-        };
-
-        const filterLogMessage =
-            savedFilters.length > 0
-                ? ` with ${savedFilters.length} filters: ${savedFilters.map((f: any) => f.name).join(", ")}`
-                : "";
-
-        logger.trace(
-            `[testBenchConnection] Fetching cycle structure from URL ${testStructureOfCycleUrl}${filterLogMessage}. Request body:`,
-            requestBody
-        );
-
-        try {
-            const testStructureOfCycleResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
-                () =>
-                    this.apiClient.post(testStructureOfCycleUrl, requestBody, {
-                        headers: {
-                            accept: "application/json",
-                            "Content-Type": "application/json"
-                        },
-                        proxy: false
-                    }),
-                3, // maxRetries
-                2000, // delayMs
-                (error) => {
-                    if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates
-                        const nonRetryableStatusCodes = [400, 404, 422];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-            );
-
-            // Save the JSON to a file for analyzing the structure
-            /*
-            const savePath: vscode.Uri | undefined = await vscode.window.showSaveDialog({
-                saveLabel: "Save Cycle Structure",
-                filters: {
-                    "JSON Files": ["json"],
-                    "All Files": ["*"],
-                },
-            });
-            if (savePath) {
-                const filePath: string = savePath.fsPath;
-                utils.saveJsonDataToFile(filePath, cycleStructureResponse.data);
-            } else {
-                vscode.window.showErrorMessage("No file path selected.");
-            }
-            */
-
-            logger.trace(
-                `[testBenchConnection] Response status of test structure of cycle request for URL ${testStructureOfCycleUrl}: ${testStructureOfCycleResponse.status}`
-            );
-            if (testStructureOfCycleResponse.data) {
-                // Note: The output of cycleStructureResponse is large
-                logger.trace(
-                    `[testBenchConnection] Received cycle structure for cycle key ${cycleKey}:`,
-                    testStructureOfCycleResponse.data
-                );
-                return testStructureOfCycleResponse.data;
-            } else {
-                logger.error(
-                    `[testBenchConnection] Unexpected response code when fetching cycle structure for ${testStructureOfCycleUrl}: ${testStructureOfCycleResponse.status}`
-                );
-                return null;
-            }
-        } catch (error) {
-            logger.error(
-                `[testBenchConnection] Error fetching test structure for cycle using ${testStructureOfCycleUrl}:`,
-                error
-            );
-            return null;
-        }
+        const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
+        return this._fetchTestStructureWithFilterHandling(testStructureOfCycleUrl, validatedFilters, "cycle");
     }
 
     /**
@@ -847,40 +766,58 @@ export class PlayServerConnection {
         tovKey: string
     ): Promise<testBenchTypes.TestStructure | null> {
         const testStructureOfTOVUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
-        const savedFilters = TestThemesTreeView.getCurrentFiltersForApiRequest();
+        const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
+        return this._fetchTestStructureWithFilterHandling(testStructureOfTOVUrl, validatedFilters, "TOV");
+    }
+
+    /**
+     * Internal method to fetch test structure with pre-validated filters.
+     * Filters are already validated and transformed before reaching this method.
+     *
+     * @param {string} url - The API endpoint URL
+     * @param {any[]} validatedFilters - The pre-validated and transformed filters
+     * @param {string} structureType - Type of structure being fetched (for logging)
+     * @returns {Promise<testBenchTypes.TestStructure | null>} The test structure or null if an error occurs.
+     */
+    private async _fetchTestStructureWithFilterHandling(
+        url: string,
+        validatedFilters: any[],
+        structureType: string
+    ): Promise<testBenchTypes.TestStructure | null> {
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
             basedOnExecution: true,
             suppressFilteredData: true,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
-            filters: savedFilters
+            filters: validatedFilters
         };
 
-        const filterLogMessage =
-            savedFilters.length > 0
-                ? ` with ${savedFilters.length} filters: ${savedFilters.map((f: any) => f.name).join(", ")}`
-                : "";
-
-        logger.trace(
-            `[testBenchConnection] Fetching TOV structure from URL ${testStructureOfTOVUrl}${filterLogMessage}. Request body:`,
+        logger.debug(
+            `[testBenchConnection] Fetching ${structureType} structure from URL ${url} and request body:`,
             requestBody
         );
 
+        if (validatedFilters.length > 0) {
+            logger.debug(
+                `[testBenchConnection] Using ${validatedFilters.length} validated filters when fetching ${structureType} structure:`,
+                validatedFilters.map((f: any) => f.name)
+            );
+        }
+
         try {
-            const testStructureOfTOVResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
+            const response: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
                 () =>
-                    this.apiClient.post(testStructureOfTOVUrl, requestBody, {
+                    this.apiClient.post(url, requestBody, {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
-                        },
-                        proxy: false
+                        }
                     }),
                 3, // maxRetries
                 2000, // delayMs
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates
+                        // Standard non-retryable status codes
                         const nonRetryableStatusCodes = [400, 404, 422];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
                             return false;
@@ -908,25 +845,22 @@ export class PlayServerConnection {
             */
 
             logger.debug(
-                `[testBenchConnection] Received test structure of TOV response status for URL ${testStructureOfTOVUrl}:`,
-                testStructureOfTOVResponse.status
+                `[testBenchConnection] Response status of test structure of ${structureType} request for URL ${url}:`,
+                response.status
             );
-            if (testStructureOfTOVResponse.data) {
-                // Note: The output is large
-                logger.trace(
-                    `[testBenchConnection] Received test structure from URL ${testStructureOfTOVUrl}:`,
-                    testStructureOfTOVResponse.data
-                );
-                return testStructureOfTOVResponse.data;
+
+            if (response.data) {
+                logger.trace(`[testBenchConnection] Received ${structureType} structure:`, response.data);
+                return response.data;
             } else {
                 logger.error(
-                    `[testBenchConnection] Unexpected response code when fetching test structure for TOV using URL ${testStructureOfTOVUrl}: ${testStructureOfTOVResponse.status}`
+                    `[testBenchConnection] Unexpected response code when fetching ${structureType} structure for ${url}: ${response.status}`
                 );
                 return null;
             }
         } catch (error) {
             logger.error(
-                `[testBenchConnection] Error fetching test structure for TOV using URL ${testStructureOfTOVUrl}:`,
+                `[testBenchConnection] Error fetching test structure for ${structureType} using ${url}:`,
                 error
             );
             return null;
