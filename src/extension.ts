@@ -375,6 +375,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await treeViews.testThemesTree.loadCycle(
                 projectKey,
                 cycleKey,
+                versionKey,
                 projectName,
                 tovName,
                 cycleItem.label?.toString()

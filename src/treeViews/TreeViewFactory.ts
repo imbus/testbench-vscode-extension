@@ -338,6 +338,7 @@ export class TreeViewFactory {
                     data: {
                         projectKey: item.getProjectKey(),
                         cycleKey: item.data.key,
+                        tovKey: item.getVersionKey(),
                         cycleLabel: item.label,
                         projectName: projectName,
                         tovName: tovName
@@ -400,13 +401,13 @@ export class TreeViewFactory {
 
         // Projects to Test Themes: When cycle is selected
         const cycleSelectionDisposable = projectsTree.eventBus.on("cycle:selected", async (event) => {
-            const { projectKey, cycleKey, cycleLabel, projectName, tovName } = event.data;
+            const { projectKey, cycleKey, tovKey, cycleLabel, projectName, tovName } = event.data;
             this.logger.debug(`[TreeViewFactory] Cycle selected: ${cycleLabel} (${cycleKey})`);
 
-            if (projectName && tovName) {
-                await testThemesTree.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
+            if (projectName && tovName && tovKey) {
+                await testThemesTree.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
             } else {
-                this.logger.error("[TreeViewFactory] Missing project or TOV name for cycle selection event.");
+                this.logger.error("[TreeViewFactory] Missing project, TOV name, or TOV key for cycle selection event.");
             }
         });
 

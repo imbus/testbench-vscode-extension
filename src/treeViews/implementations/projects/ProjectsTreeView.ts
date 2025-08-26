@@ -336,6 +336,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                 await treeViews.testThemesTree.loadCycle(
                     projectKey,
                     cycleKey,
+                    versionKey,
                     projectName,
                     tovName,
                     item.label?.toString()

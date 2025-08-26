@@ -26,10 +26,16 @@ import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
 import { ClickHandler } from "../../core/ClickHandler";
 
+/**
+ * Interface for filter storage
+ */
+interface StructuredFilterStorage {
+    [contextKey: string]: any[];
+}
+
 export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private dataProvider: TestThemesDataProvider;
     private disposables: vscode.Disposable[] = [];
-    private filterService: FilterService;
     public testCaseSetClickHandler: ClickHandler<TestThemesTreeItem>;
 
     private currentProjectKey: string | null = null;
@@ -47,7 +53,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     ) {
         super(extensionContext, { ...testThemesConfig, ...config });
         this.dataProvider = new TestThemesDataProvider(this.logger, getConnection);
-        this.filterService = FilterService.getInstance();
         this.testCaseSetClickHandler = new ClickHandler<TestThemesTreeItem>();
 
         this.registerEventHandlers();
@@ -56,32 +61,128 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Gets the saved test theme tree filters from workspace state.
+     * Storage key for the structured filter storage containing all contexts
+     */
+    private static readonly STRUCTURED_FILTER_STORAGE_KEY = `${StorageKeys.TEST_THEME_TREE_FILTERS}.structured`;
+
+    /**
+     * Gets the structured filter storage object from workspace state
+     * @returns The structured storage object
+     */
+    private getStructuredFilterStorage(): StructuredFilterStorage {
+        return this.extensionContext.workspaceState.get<StructuredFilterStorage>(
+            TestThemesTreeView.STRUCTURED_FILTER_STORAGE_KEY,
+            {}
+        );
+    }
+
+    /**
+     * Saves the structured filter storage object to workspace state
+     * @param storage The structured storage object to save
+     */
+
+    private async saveStructuredFilterStorage(storage: StructuredFilterStorage): Promise<void> {
+        await this.extensionContext.workspaceState.update(TestThemesTreeView.STRUCTURED_FILTER_STORAGE_KEY, storage);
+    }
+
+    /**
+     * Generates a context key for the structured storage based on the current tree view context.
+     * @returns The context key for structured storage, or null if context is not available
+     */
+
+    public getContextKey(): string | null {
+        if (!this.currentProjectKey) {
+            return null;
+        }
+
+        if (this.isOpenedFromCycle && this.currentCycleKey && this.currentTovKey) {
+            return `${this.currentProjectKey}.${this.currentTovKey}.${this.currentCycleKey}`;
+        }
+
+        if (!this.isOpenedFromCycle && this.currentTovKey) {
+            return `${this.currentProjectKey}.${this.currentTovKey}`;
+        }
+        return null;
+    }
+
+    /**
+     * Gets the saved test theme tree filters from structured storage for the current context.
      * @returns The saved filters array or empty array if none exist.
      */
     public getSavedFilters(): any[] {
-        return this.extensionContext.workspaceState.get<any[]>(StorageKeys.TEST_THEME_TREE_FILTERS, []);
+        const contextKey = this.getContextKey();
+        if (!contextKey) {
+            // No valid context available, return empty filters
+            return [];
+        }
+
+        const structuredStorage = this.getStructuredFilterStorage();
+        return structuredStorage[contextKey] || [];
     }
 
     /**
-     * Saves test theme tree filters to workspace state.
+     * Saves test theme tree filters to structured storage for the current context.
      * @param filters The filters array to save.
      */
     public async saveFilters(filters: any[]): Promise<void> {
-        await this.extensionContext.workspaceState.update(StorageKeys.TEST_THEME_TREE_FILTERS, filters);
-        this.logger.debug(`[TestThemesTreeView] Saved ${filters.length} test theme filters to workspace state`);
+        const contextKey = this.getContextKey();
+
+        if (!contextKey) {
+            this.logger.warn(`[TestThemesTreeView] Cannot save ${filters.length} filters: no valid context available`);
+            return;
+        }
+
+        const structuredStorage = this.getStructuredFilterStorage();
+
+        if (filters.length === 0) {
+            delete structuredStorage[contextKey];
+        } else {
+            structuredStorage[contextKey] = filters;
+        }
+
+        await this.saveStructuredFilterStorage(structuredStorage);
+        this.logger.debug(`[TestThemesTreeView] Saved ${filters.length} test theme filters for context: ${contextKey}`);
     }
 
     /**
-     * Clears saved test theme tree filters from workspace state.
+     * Clears saved test theme tree filters from structured storage for the current context.
      */
     public async clearSavedFilters(): Promise<void> {
-        await this.extensionContext.workspaceState.update(StorageKeys.TEST_THEME_TREE_FILTERS, []);
-        this.logger.debug(`[TestThemesTreeView] Cleared saved test theme filters from workspace state`);
+        await this.saveFilters([]);
+        const contextKey = this.getContextKey();
+        this.logger.trace(`[TestThemesTreeView] Cleared test theme filters for context: ${contextKey || "no-context"}`);
     }
 
     /**
-     * Gets the currently saved test theme filters.
+     * Gets all context keys that have stored filters
+     * @returns Array of context keys that have filter data
+     */
+    public getAllFilterContextKeys(): string[] {
+        const structuredStorage = this.getStructuredFilterStorage();
+        return Object.keys(structuredStorage);
+    }
+
+    /**
+     * Gets filter data for all contexts
+     * @returns Object containing all context filter data
+     */
+    public getAllContextFilters(): StructuredFilterStorage {
+        return this.getStructuredFilterStorage();
+    }
+
+    /**
+     * Clears filters for a specific context
+     * @param contextKey The context key to clear
+     */
+    public async clearFiltersForContext(contextKey: string): Promise<void> {
+        const structuredStorage = this.getStructuredFilterStorage();
+        delete structuredStorage[contextKey];
+        await this.saveStructuredFilterStorage(structuredStorage);
+        this.logger.debug(`[TestThemesTreeView] Cleared filters for context: ${contextKey}`);
+    }
+
+    /**
+     * Gets the currently saved test theme filters for the active test themes tree view context.
      * @returns The saved filters array or empty array if none exist.
      */
     public static getCurrentFilters(): any[] {
@@ -180,9 +281,10 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             });
 
             if (removedFilters.length > 0) {
+                const contextInfo = treeViews.testThemesTree.getContextKey() || "no-context";
                 vscode.window
                     .showWarningMessage(
-                        `Some applied filters are no longer valid on the server and have been cleared. You can re-select filters if needed.`,
+                        `Some applied filters for "${contextInfo}" are no longer valid on the server and have been cleared. You can re-select filters if needed.`,
                         "Re-select Filters"
                     )
                     .then(async (selection) => {
@@ -193,7 +295,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
                 await treeViews.testThemesTree.saveFilters(validFilters);
                 treeViews.testThemesTree.logger.info(
-                    `[TestThemesTreeView] Removed ${removedFilters.length} invalid filter(s): ${removedFilters.map((f) => f.name).join(", ")}`
+                    `[TestThemesTreeView] Removed ${removedFilters.length} invalid filter(s) for context "${contextInfo}": ${removedFilters.map((f) => f.name).join(", ")}`
                 );
             }
 
@@ -285,8 +387,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     private registerEventHandlers(): void {
         this.eventBus.on("cycle:selected", async (event) => {
-            const { projectKey, cycleKey, projectName, tovName, cycleLabel } = event.data;
-            await this.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
+            const { projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel } = event.data;
+            await this.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
         });
         this.eventBus.on("version:selected", async (event) => {
             const { projectKey, tovKey, projectName, tovName } = event.data;
@@ -547,6 +649,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Loads a cycle and builds the test themes tree
      * @param projectKey The project key
      * @param cycleKey The cycle key
+     * @param tovKey The TOV key (required for context generation)
      * @param projectName The project name
      * @param tovName The TOV name
      * @param cycleLabel Optional cycle label for display
@@ -555,6 +658,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     public async loadCycle(
         projectKey: string,
         cycleKey: string,
+        tovKey: string,
         projectName: string,
         tovName: string,
         cycleLabel?: string
@@ -565,8 +669,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.dataProvider.clearCache();
             this.currentProjectKey = projectKey;
             this.currentCycleKey = cycleKey;
+            this.currentTovKey = tovKey;
             this.currentCycleLabel = cycleLabel || null;
-
             this.currentProjectName = projectName;
             this.currentTovName = tovName;
             this.isOpenedFromCycle = true;
@@ -1099,6 +1203,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 this.loadCycle(
                     this.currentProjectKey,
                     this.currentCycleKey,
+                    this.currentTovKey!,
                     this.currentProjectName,
                     this.currentTovName,
                     this.currentCycleLabel || undefined
@@ -1254,6 +1359,16 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     > {
         const validatedFilters = await TestThemesTreeView.validateAndGetCurrentFiltersEnhanced();
         return TestThemesTreeView.transformFiltersForApiRequest(validatedFilters);
+    }
+
+    /**
+     * Clears all context-specific filter storage completely.
+     * This method properly cleans up all filter data across all contexts.
+     */
+
+    public async clearAllContextSpecificFilters(): Promise<void> {
+        await this.saveStructuredFilterStorage({});
+        this.logger.info("[TestThemesTreeView] Cleared all test theme filter storage");
     }
 }
 
