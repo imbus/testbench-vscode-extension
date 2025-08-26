@@ -60,6 +60,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.registerEventHandlers();
         this.registerCommands();
         this.setupTestCaseSetClickHandlers();
+        this.initializeFilterContextKey();
     }
 
     /**
@@ -144,6 +145,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
         await this.saveStructuredFilterStorage(structuredStorage);
         this.logger.debug(`[TestThemesTreeView] Saved ${filters.length} test theme filters for context: ${contextKey}`);
+        await vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, filters.length > 0);
     }
 
     /**
@@ -153,6 +155,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         await this.saveFilters([]);
         const contextKey = this.getContextKey();
         this.logger.trace(`[TestThemesTreeView] Cleared test theme filters for context: ${contextKey || "no-context"}`);
+        await vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, false);
     }
 
     /**
@@ -732,6 +735,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
+
+            const currentFilters = this.getSavedFilters();
+            await vscode.commands.executeCommand(
+                "setContext",
+                ContextKeys.TEST_THEME_TREE_HAS_FILTERS,
+                currentFilters.length > 0
+            );
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading cycle:", error);
 
@@ -806,6 +816,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
+
+            const currentFilters = this.getSavedFilters();
+            await vscode.commands.executeCommand(
+                "setContext",
+                ContextKeys.TEST_THEME_TREE_HAS_FILTERS,
+                currentFilters.length > 0
+            );
         } catch (error) {
             this.logger.error("[TestThemesTreeView] Error loading TOV:", error);
 
@@ -1179,6 +1196,19 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.isOpenedFromCycle = false;
         this._onDidChangeTreeData.fire(undefined);
         this.resetTitle();
+        vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, false);
+    }
+
+    /**
+     * Initializes the filter context key based on current saved filters
+     */
+    private async initializeFilterContextKey(): Promise<void> {
+        const currentFilters = this.getSavedFilters();
+        await vscode.commands.executeCommand(
+            "setContext",
+            ContextKeys.TEST_THEME_TREE_HAS_FILTERS,
+            currentFilters.length > 0
+        );
     }
 
     /**

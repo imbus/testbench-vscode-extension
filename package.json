@@ -392,13 +392,21 @@
                 }
             },
             {
-                "command": "testbenchExtension.displayFiltersForTestThemeTree",
+                "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
                 "title": "Display Test Theme Filters",
-                "when": "view == testbench.testThemes",
-                "group": "navigation@3",
+                "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
                 "icon": {
                     "light": "resources/icons/filter-light.svg",
                     "dark": "resources/icons/filter-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
+                "title": "Display Test Theme Filters",
+                "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
+                "icon": {
+                    "light": "resources/icons/filter-off-light.svg",
+                    "dark": "resources/icons/filter-off-dark.svg"
                 }
             },
             {
@@ -845,6 +853,14 @@
                 {
                     "command": "testbenchExtension.clearAllFiltersForTestElements",
                     "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
+                    "when": "false"
                 }
             ],
             "view/title": [
@@ -905,9 +921,17 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.displayFiltersForTestThemeTree",
-                    "title": "Display Test Theme Filters",
-                    "when": "view == testbench.testThemes",
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
+                    "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
+                    "group": "navigation@3",
+                    "icon": {
+                        "light": "resources/icons/filter-off-light.svg",
+                        "dark": "resources/icons/filter-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
                     "group": "navigation@3",
                     "icon": {
                         "light": "resources/icons/filter-light.svg",

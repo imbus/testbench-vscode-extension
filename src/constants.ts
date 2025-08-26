@@ -90,7 +90,9 @@ export const ContextKeys = {
     FILTER_DIFF_MODE_ENABLED_TEST_THEMES: "testbenchExtension.filterDiffModeEnabledTestThemes",
     FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements",
     // Test theme tree item context for opening a robot file
-    HAS_GENERATED_ROBOT_FILE: "testbenchExtension.hasGeneratedRobotFile"
+    HAS_GENERATED_ROBOT_FILE: "testbenchExtension.hasGeneratedRobotFile",
+    // Test theme tree filters context
+    TEST_THEME_TREE_HAS_FILTERS: "testbenchExtension.testThemeTreeHasFilters"
 } as const;
 
 // --- Storage Keys ---
@@ -206,7 +208,8 @@ export const allExtensionCommands = {
     refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
-    displayFiltersForTestThemeTree: `${baseKeyOfExtension}.displayFiltersForTestThemeTree`,
+    displayFiltersForTestThemeTreeON: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeON`,
+    displayFiltersForTestThemeTreeOFF: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeOFF`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,

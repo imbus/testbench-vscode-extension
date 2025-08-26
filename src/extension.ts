@@ -675,18 +675,18 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleDisplayFiltersForTestThemeTree = async () => {
-        logger.trace(`[extension] Command called: ${allExtensionCommands.displayFiltersForTestThemeTree}`);
+        logger.debug(`[extension] Command called: testbenchExtension.displayFiltersForTestThemeTree ON or OFF`);
 
         if (!treeViews?.testThemesTree) {
             logger.warn(
-                `[extension] ${allExtensionCommands.displayFiltersForTestThemeTree} called before test themes tree is initialized`
+                `[extension] testbenchExtension.displayFiltersForTestThemeTree ON or OFF called before test themes tree is initialized`
             );
             return;
         }
 
         if (!connection) {
             logger.warn(
-                `[extension] ${allExtensionCommands.displayFiltersForTestThemeTree} called without active connection.`
+                `[extension] testbenchExtension.displayFiltersForTestThemeTree ON or OFF called without active connection.`
             );
             vscode.window.showWarningMessage("No active connection available. Please log in first.");
             return;
@@ -965,7 +965,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.refreshProjectTreeView, handler: handleRefreshProjectTreeView },
         { id: allExtensionCommands.refreshTestThemeTreeView, handler: handleRefreshTestThemeTreeView },
         { id: allExtensionCommands.refreshTestElementsTree, handler: handleRefreshTestElementsTree },
-        { id: allExtensionCommands.displayFiltersForTestThemeTree, handler: handleDisplayFiltersForTestThemeTree },
+        { id: allExtensionCommands.displayFiltersForTestThemeTreeON, handler: handleDisplayFiltersForTestThemeTree },
+        { id: allExtensionCommands.displayFiltersForTestThemeTreeOFF, handler: handleDisplayFiltersForTestThemeTree },
         {
             id: allExtensionCommands.makeRoot,
             handler: handleMakeRoot
@@ -1307,6 +1308,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY
     );
     await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
+    await vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, false);
 
     // Initialize login webview first
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
