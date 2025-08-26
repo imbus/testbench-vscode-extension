@@ -1308,7 +1308,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY
     );
     await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
-    await vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, false);
 
     // Initialize login webview first
     loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);

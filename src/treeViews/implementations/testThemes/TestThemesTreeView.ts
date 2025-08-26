@@ -60,7 +60,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.registerEventHandlers();
         this.registerCommands();
         this.setupTestCaseSetClickHandlers();
-        this.initializeFilterContextKey();
+        this.updateTestThemesFilterContextKey();
     }
 
     /**
@@ -145,7 +145,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
         await this.saveStructuredFilterStorage(structuredStorage);
         this.logger.debug(`[TestThemesTreeView] Saved ${filters.length} test theme filters for context: ${contextKey}`);
-        await vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, filters.length > 0);
+        await this.updateTestThemesFilterContextKey();
     }
 
     /**
@@ -155,7 +155,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         await this.saveFilters([]);
         const contextKey = this.getContextKey();
         this.logger.trace(`[TestThemesTreeView] Cleared test theme filters for context: ${contextKey || "no-context"}`);
-        await vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, false);
+        await this.updateTestThemesFilterContextKey();
     }
 
     /**
@@ -1196,19 +1196,19 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.isOpenedFromCycle = false;
         this._onDidChangeTreeData.fire(undefined);
         this.resetTitle();
-        vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, false);
+        this.updateTestThemesFilterContextKey();
     }
 
     /**
-     * Initializes the filter context key based on current saved filters
+     * Updates the test themes filter context key based on current saved filters
      */
-    private async initializeFilterContextKey(): Promise<void> {
+    public async updateTestThemesFilterContextKey(): Promise<void> {
         const currentFilters = this.getSavedFilters();
-        await vscode.commands.executeCommand(
-            "setContext",
-            ContextKeys.TEST_THEME_TREE_HAS_FILTERS,
-            currentFilters.length > 0
+        const hasFilters = currentFilters.length > 0;
+        this.logger.trace(
+            `[TestThemesTreeView] Updating filter context key: hasFilters=${hasFilters}, filterCount=${currentFilters.length}`
         );
+        await vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, hasFilters);
     }
 
     /**
