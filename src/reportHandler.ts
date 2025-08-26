@@ -28,6 +28,7 @@ import { getExtensionConfiguration } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import { TreeItemBase } from "./treeViews/core/TreeItemBase";
+import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 
 /**
  * Saves the last generated report parameters to workspace storage.
@@ -639,13 +640,14 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             return false;
         }
 
+        const currentFilters = await TestThemesTreeView.getValidatedFiltersForTreeItem(selectedTreeItem);
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
             basedOnExecution: defaultExecutionMode === testBenchTypes.ExecutionMode.Execute,
             treeRootUID: UIDforRequest,
             suppressFilteredData: true, // Hides tree items after filtering
             suppressNotExecutable: true, // Exclude not executable tests (including NotPlanned)
             suppressEmptyTestThemes: false,
-            filters: []
+            filters: currentFilters
         };
         await vscode.window.withProgress(
             {
@@ -963,9 +965,11 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 return undefined;
             }
 
+            const currentFiltersForImport = await TestThemesTreeView.getValidatedFiltersForApiRequest();
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
                 basedOnExecution: executionBased === testBenchTypes.ExecutionMode.Execute,
-                treeRootUID: UID
+                treeRootUID: UID,
+                filters: currentFiltersForImport
             };
 
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipOfCycleFromServer(
@@ -1356,13 +1360,19 @@ export async function startTestGenerationUsingTOV(
                     ? (treeItem as any).data?.base?.uniqueID
                     : undefined;
 
+                let tovFilters: any[] = [];
+
+                if (treeItem instanceof ProjectsTreeItem || treeItem instanceof TestThemesTreeItem) {
+                    tovFilters = await TestThemesTreeView.getValidatedFiltersForTreeItem(treeItem);
+                }
+
                 // Fetch TOV structure to get all test themes
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
                     treeRootUID: rootUIDToUse,
                     suppressFilteredData: true,
                     //suppressNotExecutable: true,
                     suppressEmptyTestThemes: false,
-                    filters: []
+                    filters: tovFilters
                 };
 
                 const tovReportJobID = await connection.requestToPackageTovsInServerAndGetJobID(

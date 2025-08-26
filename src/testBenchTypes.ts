@@ -223,7 +223,7 @@ export interface TovStructureOptions {
 
 export interface TovFilter {
     name: string;
-    filterType: "TestTheme";
+    filterType: string;
     testThemeUID: string;
 }
 

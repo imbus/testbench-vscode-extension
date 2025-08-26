@@ -16,6 +16,7 @@ import { getExtensionConfiguration } from "../../../configuration";
 import {
     ALLOW_PERSISTENT_IMPORT_BUTTON,
     ENABLE_ICON_MARKING_ON_TEST_GENERATION,
+    extensionContext,
     treeViews,
     userSessionManager
 } from "../../../extension";
@@ -25,6 +26,7 @@ import { FilterService } from "../../utils/FilterService";
 import { TreeViewEventTypes } from "../../utils/EventBus";
 import { PersistenceModule } from "../../features/PersistenceModule";
 import { ClickHandler } from "../../core/ClickHandler";
+import { ProjectsTreeItem } from "../projects/ProjectsTreeItem";
 
 /**
  * Interface for filter storage
@@ -1365,10 +1367,293 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Clears all context-specific filter storage completely.
      * This method properly cleans up all filter data across all contexts.
      */
-
     public async clearAllContextSpecificFilters(): Promise<void> {
         await this.saveStructuredFilterStorage({});
         this.logger.info("[TestThemesTreeView] Cleared all test theme filter storage");
+    }
+
+    /**
+     * Generates a context key from a ProjectsTreeItem for filter storage.
+     * @param item The ProjectsTreeItem (cycle, TOV, or project item)
+     * @returns The context key for getting appropriate filters
+     */
+    public static getContextKeyFromProjectsTreeItem(item: ProjectsTreeItem): string | null {
+        const projectKey = item.getProjectKey();
+        const versionKey = item.getVersionKey();
+        const cycleKey = item.getCycleKey();
+
+        if (!projectKey) {
+            return null;
+        }
+
+        if (cycleKey && versionKey) {
+            return `${projectKey}.${versionKey}.${cycleKey}`;
+        }
+
+        if (versionKey) {
+            return `${projectKey}.${versionKey}`;
+        }
+
+        return null;
+    }
+
+    /**
+     * Generates a context key from a TestThemesTreeItem for filter storage.
+     * @param item The TestThemesTreeItem
+     * @returns The context key for getting appropriate filters
+     */
+    public static getContextKeyFromTestThemesTreeItem(item: TestThemesTreeItem): string | null {
+        const projectKey = item.data.projectKey;
+        const cycleKey = item.data.cycleKey;
+
+        if (!projectKey || !cycleKey) {
+            if (treeViews?.testThemesTree) {
+                treeViews.testThemesTree.logger.debug(
+                    `[TestThemesTreeView] Missing keys for context: projectKey=${projectKey}, cycleKey=${cycleKey}`
+                );
+            }
+            return null;
+        }
+
+        const isOpenedFromCycle = item.getMetadata("openedFromCycle") === true;
+
+        if (isOpenedFromCycle) {
+            if (treeViews?.testThemesTree) {
+                const currentCycleKey = treeViews.testThemesTree.getCurrentCycleKey();
+                if (currentCycleKey) {
+                    const contextKey = `${projectKey}.${cycleKey}.${currentCycleKey}`;
+                    treeViews.testThemesTree.logger.debug(
+                        `[TestThemesTreeView] Generated cycle context key: ${contextKey} (projectKey=${projectKey}, tovKey=${cycleKey}, cycleKey=${currentCycleKey})`
+                    );
+
+                    return contextKey;
+                }
+            }
+
+            // Fallback to TOV context
+            const fallbackKey = `${projectKey}.${cycleKey}`;
+            if (treeViews?.testThemesTree) {
+                treeViews.testThemesTree.logger.debug(
+                    `[TestThemesTreeView] Using TOV fallback context key: ${fallbackKey}`
+                );
+            }
+
+            return fallbackKey;
+        }
+
+        const tovContextKey = `${projectKey}.${cycleKey}`;
+
+        if (treeViews?.testThemesTree) {
+            treeViews.testThemesTree.logger.debug(`[TestThemesTreeView] Generated TOV context key: ${tovContextKey}`);
+        }
+
+        return tovContextKey;
+    }
+
+    /**
+     * Gets filters for a specific context key from structured storage.
+     * @param contextKey The context key in format "projectKey.tovKey" or "projectKey.tovKey.cycleKey"
+     * @returns The filters for that context or empty array if none exist
+     */
+    public static getFiltersForContext(contextKey: string): any[] {
+        if (!extensionContext) {
+            return [];
+        }
+
+        const structuredStorage = extensionContext.workspaceState.get<StructuredFilterStorage>(
+            TestThemesTreeView.STRUCTURED_FILTER_STORAGE_KEY,
+
+            {}
+        );
+        return structuredStorage[contextKey] || [];
+    }
+
+    /**
+     * Validates stored filters for a specific context against server filters.
+     * @param contextKey The context key to get filters for
+     * @returns Promise resolving to validated filters in server format
+     */
+    private static async validateFiltersForSpecificContext(contextKey: string | null): Promise<any[]> {
+        if (!contextKey) {
+            return [];
+        }
+
+        const storedFilters = TestThemesTreeView.getFiltersForContext(contextKey);
+
+        if (storedFilters.length === 0) {
+            return [];
+        }
+
+        const connection = treeViews?.testThemesTree?.getConnection();
+
+        if (!connection) {
+            treeViews?.testThemesTree?.logger.warn(
+                "[TestThemesTreeView] No connection available for filter validation"
+            );
+            return [];
+        }
+
+        try {
+            const serverFilters = await connection.getFiltersFromOldPlayServer();
+            if (!serverFilters || !Array.isArray(serverFilters)) {
+                treeViews?.testThemesTree?.logger.warn(
+                    "[TestThemesTreeView] Could not fetch server filters for validation"
+                );
+                return [];
+            }
+
+            const serverFiltersBySerial = new Map<string, any>();
+            const serverFiltersByName = new Map<string, any>();
+
+            serverFilters.forEach((filter: any) => {
+                if (filter.key?.serial) {
+                    serverFiltersBySerial.set(filter.key.serial, filter);
+                }
+
+                if (filter.name) {
+                    serverFiltersByName.set(filter.name, filter);
+                }
+            });
+
+            const validFilters: any[] = [];
+            storedFilters.forEach((storedFilter) => {
+                let isValid = false;
+                let matchedServerFilter = null;
+
+                if (storedFilter.key?.serial && serverFiltersBySerial.has(storedFilter.key.serial)) {
+                    matchedServerFilter = serverFiltersBySerial.get(storedFilter.key.serial);
+                    isValid = true;
+                }
+
+                // Fallback validation by name and type
+                else if (storedFilter.name && serverFiltersByName.has(storedFilter.name)) {
+                    const serverFilter = serverFiltersByName.get(storedFilter.name);
+
+                    if (storedFilter.type && serverFilter.type) {
+                        isValid = storedFilter.type === serverFilter.type;
+
+                        if (isValid) {
+                            matchedServerFilter = serverFilter;
+                        }
+                    } else {
+                        isValid = true;
+                        matchedServerFilter = serverFilter;
+                    }
+                }
+
+                if (isValid && matchedServerFilter) {
+                    validFilters.push(matchedServerFilter);
+                }
+            });
+
+            return validFilters;
+        } catch (error) {
+            treeViews?.testThemesTree?.logger.error(
+                "[TestThemesTreeView] Error validating filters for specific context:",
+
+                error
+            );
+
+            return [];
+        }
+    }
+
+    /**
+     * Gets validated filters for API requests for a specific context.
+     * @param contextKey The context key to get filters for
+     * @returns Promise resolving to validated filters for API requests
+     */
+    public static async getValidatedFiltersForSpecificContext(contextKey: string | null): Promise<
+        {
+            name: string;
+            filterType: "TestTheme" | "TestCase" | "TestCaseSet";
+            testThemeUID: string;
+        }[]
+    > {
+        if (treeViews?.testThemesTree) {
+            treeViews.testThemesTree.logger.debug(`[TestThemesTreeView] Validating filters for context: ${contextKey}`);
+        }
+
+        const validatedFilters = await TestThemesTreeView.validateFiltersForSpecificContext(contextKey);
+        const apiFilters = TestThemesTreeView.transformFiltersForApiRequest(validatedFilters);
+
+        if (treeViews?.testThemesTree) {
+            treeViews.testThemesTree.logger.debug(
+                `[TestThemesTreeView] Found ${validatedFilters.length} validated filters, transformed to ${apiFilters.length} API filters for context: ${contextKey}`
+            );
+
+            if (apiFilters.length > 0) {
+                treeViews.testThemesTree.logger.debug(
+                    `[TestThemesTreeView] API filters: ${JSON.stringify(apiFilters.map((f) => ({ name: f.name, type: f.filterType })))}`
+                );
+            }
+        }
+
+        return apiFilters;
+    }
+
+    /**
+     * Gets validated filters for API requests from a tree item (either ProjectsTreeItem or TestThemesTreeItem).
+     * @param item The tree item to get context from
+     * @returns Promise resolving to validated filters for API requests
+     */
+    public static async getValidatedFiltersForTreeItem(item: ProjectsTreeItem | TestThemesTreeItem): Promise<
+        {
+            name: string;
+            filterType: "TestTheme" | "TestCase" | "TestCaseSet";
+            testThemeUID: string;
+        }[]
+    > {
+        let contextKey: string | null = null;
+
+        if (treeViews?.testThemesTree) {
+            const instanceContextKey = treeViews.testThemesTree.getContextKey();
+            if (instanceContextKey) {
+                contextKey = instanceContextKey;
+                treeViews.testThemesTree.logger.trace(
+                    `[TestThemesTreeView] Using instance context key: ${contextKey} for item: ${item.label}`
+                );
+            }
+        }
+
+        // Fallback to context key generation
+        if (!contextKey) {
+            if (item instanceof ProjectsTreeItem) {
+                contextKey = TestThemesTreeView.getContextKeyFromProjectsTreeItem(item);
+            } else if (item instanceof TestThemesTreeItem) {
+                contextKey = TestThemesTreeView.getContextKeyFromTestThemesTreeItem(item);
+            }
+
+            if (treeViews?.testThemesTree) {
+                treeViews.testThemesTree.logger.trace(
+                    `[TestThemesTreeView] Using static context key: ${contextKey} for item: ${item.label}`
+                );
+            }
+        }
+
+        if (treeViews?.testThemesTree) {
+            const allContextKeys = treeViews.testThemesTree.getAllFilterContextKeys();
+
+            treeViews.testThemesTree.logger.trace(
+                `[TestThemesTreeView] Available filter context keys: ${JSON.stringify(allContextKeys)}`
+            );
+        }
+
+        const result = await TestThemesTreeView.getValidatedFiltersForSpecificContext(contextKey);
+
+        if (treeViews?.testThemesTree) {
+            treeViews.testThemesTree.logger.debug(
+                `[TestThemesTreeView] Retrieved ${result.length} filters for context key: ${contextKey}`
+            );
+
+            if (result.length > 0) {
+                treeViews.testThemesTree.logger.debug(
+                    `[TestThemesTreeView] Filter names: ${result.map((f) => f.name).join(", ")}`
+                );
+            }
+        }
+
+        return result;
     }
 }
 
