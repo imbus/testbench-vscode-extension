@@ -396,6 +396,16 @@
                 }
             },
             {
+                "command": "testbenchExtension.displayFiltersForTestThemeTree",
+                "title": "Display Test Theme Filters",
+                "when": "view == testbench.testThemes",
+                "group": "navigation@3",
+                "icon": {
+                    "light": "resources/icons/filter-light.svg",
+                    "dark": "resources/icons/filter-dark.svg"
+                }
+            },
+            {
                 "command": "testbenchExtension.showExtensionSettings",
                 "title": "Show Extension Settings",
                 "icon": {
@@ -877,7 +887,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",
-                    "group": "navigation@3",
+                    "group": "navigation@2",
                     "when": "view == testbench.testThemes",
                     "icon": {
                         "light": "resources/icons/menu-light.svg",
@@ -900,6 +910,16 @@
                     "icon": {
                         "light": "resources/icons/refresh-light.svg",
                         "dark": "resources/icons/refresh-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.displayFiltersForTestThemeTree",
+                    "title": "Display Test Theme Filters",
+                    "when": "view == testbench.testThemes",
+                    "group": "navigation@3",
+                    "icon": {
+                        "light": "resources/icons/filter-light.svg",
+                        "dark": "resources/icons/filter-dark.svg"
                     }
                 },
                 {

@@ -673,6 +673,33 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testElementsTree.refresh();
     };
 
+    const handleDisplayFiltersForTestThemeTree = async () => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.displayFiltersForTestThemeTree}`);
+
+        if (!treeViews?.testThemesTree) {
+            logger.warn(
+                `[extension] ${allExtensionCommands.displayFiltersForTestThemeTree} called before test themes tree is initialized`
+            );
+            return;
+        }
+
+        if (!connection) {
+            logger.warn(
+                `[extension] ${allExtensionCommands.displayFiltersForTestThemeTree} called without active connection.`
+            );
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
+        }
+
+        try {
+            // TODO: Implement filter display
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[extension] Error when displaying filters: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to display filters: ${errorMessage}`);
+        }
+    };
+
     const handleResetProjectTreeViewRoot = () => {
         treeViews?.projectsTree.resetCustomRoot();
     };
@@ -825,6 +852,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.refreshProjectTreeView, handler: handleRefreshProjectTreeView },
         { id: allExtensionCommands.refreshTestThemeTreeView, handler: handleRefreshTestThemeTreeView },
         { id: allExtensionCommands.refreshTestElementsTree, handler: handleRefreshTestElementsTree },
+        { id: allExtensionCommands.displayFiltersForTestThemeTree, handler: handleDisplayFiltersForTestThemeTree },
         {
             id: allExtensionCommands.makeRoot,
             handler: handleMakeRoot

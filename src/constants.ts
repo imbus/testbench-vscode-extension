@@ -204,6 +204,7 @@ export const allExtensionCommands = {
     refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
+    displayFiltersForTestThemeTree: `${baseKeyOfExtension}.displayFiltersForTestThemeTree`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
@@ -226,6 +227,7 @@ export const allExtensionCommands = {
     clearAllMarks: "testbench.clearAllMarks",
     clearAllExtensionData: `${baseKeyOfExtension}.clearAllExtensionData`,
 
+    // TODO: Delete after implementing test themes filtering
     // Tree View Filtering Commands
     setTextFilterForProjects: `${baseKeyOfExtension}.setTextFilterForProjects`,
     setTextFilterForTestThemes: `${baseKeyOfExtension}.setTextFilterForTestThemes`,
