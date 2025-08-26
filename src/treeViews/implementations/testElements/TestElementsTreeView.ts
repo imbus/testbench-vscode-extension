@@ -1247,7 +1247,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Override the base refresh method to fetch data from the server with improved progress handling
+     * Fetch data from the server and refresh tree view
      *
      * @param item Optional specific item to refresh
      * @param options Optional refresh options

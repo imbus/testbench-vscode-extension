@@ -1376,7 +1376,7 @@ export async function clearAllExtensionData(
         }
 
         try {
-            await treeViews?.testThemesTree.clearSavedFilters();
+            await treeViews?.testThemesTree.clearAllContextSpecificFilters();
         } catch (error) {
             logger.error("[extension] Error clearing saved test theme filters during clear all:", error);
         }
