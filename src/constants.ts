@@ -214,7 +214,6 @@ export const allExtensionCommands = {
     handleTOVClick: `${baseKeyOfExtension}.handleTOVClick`,
     resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
     resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
-    getFilters: `${baseKeyOfExtension}.getFilters`,
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
     clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`,
     checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`,

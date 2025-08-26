@@ -692,7 +692,97 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            // TODO: Implement filter display
+            const filters = await connection.getFiltersFromOldPlayServer();
+            if (!filters) {
+                return;
+            }
+
+            const quickPickItems: vscode.QuickPickItem[] = filters.map((filter: any) => {
+                let iconPath: { light: vscode.Uri; dark: vscode.Uri } | undefined;
+
+                switch (filter.type) {
+                    case "TestTheme":
+                        iconPath = {
+                            light: vscode.Uri.file(
+                                path.join(extensionContext.extensionPath, "resources/icons/TestThemeOriginal-light.svg")
+                            ),
+                            dark: vscode.Uri.file(
+                                path.join(extensionContext.extensionPath, "resources/icons/TestThemeOriginal-dark.svg")
+                            )
+                        };
+                        break;
+
+                    case "TestCaseSet":
+                        iconPath = {
+                            light: vscode.Uri.file(
+                                path.join(
+                                    extensionContext.extensionPath,
+                                    "resources/icons/TestCaseSetOriginal-light.svg"
+                                )
+                            ),
+
+                            dark: vscode.Uri.file(
+                                path.join(
+                                    extensionContext.extensionPath,
+                                    "resources/icons/TestCaseSetOriginal-dark.svg"
+                                )
+                            )
+                        };
+                        break;
+
+                    case "TestCase":
+                        iconPath = {
+                            light: vscode.Uri.file(
+                                path.join(extensionContext.extensionPath, "resources/icons/testCase-light.svg")
+                            ),
+                            dark: vscode.Uri.file(
+                                path.join(extensionContext.extensionPath, "resources/icons/testCase-dark.svg")
+                            )
+                        };
+                        break;
+
+                    default:
+                        iconPath = undefined;
+                        break;
+                }
+
+                return {
+                    label: filter.name,
+                    description: `Type: ${filter.type}`,
+                    picked: false,
+                    iconPath: iconPath,
+                    filterData: filter
+                } as vscode.QuickPickItem & { filterData: any };
+            });
+            const quickPick = vscode.window.createQuickPick();
+            quickPick.title = "Select Filters for Test Theme Tree";
+            quickPick.placeholder = "Choose one or more filters to apply";
+            quickPick.items = quickPickItems;
+            quickPick.canSelectMany = true;
+            quickPick.matchOnDescription = true;
+            quickPick.matchOnDetail = true;
+
+            quickPick.onDidAccept(() => {
+                const selectedFilters = quickPick.selectedItems.map((item: any) => item.filterData);
+                logger.trace(
+                    `[extension] Selected ${selectedFilters.length} filters:`,
+
+                    selectedFilters.map((f: any) => f.name)
+                );
+
+                if (selectedFilters.length > 0) {
+                    vscode.window.showInformationMessage(
+                        `Selected ${selectedFilters.length} filter(s): ${selectedFilters.map((f: any) => f.name).join(", ")}`
+                    );
+                    // TODO: Apply the selected filters to the test theme tree
+                }
+
+                quickPick.dispose();
+            });
+            quickPick.onDidHide(() => {
+                quickPick.dispose();
+            });
+            quickPick.show();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             logger.error(`[extension] Error when displaying filters: ${errorMessage}`, error);

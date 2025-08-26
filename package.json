@@ -361,10 +361,6 @@
                 "title": "Reset Test Theme View Root"
             },
             {
-                "command": "testbenchExtension.getFilters",
-                "title": "TestBench: Get Filters"
-            },
-            {
                 "command": "testbenchExtension.fetchTovStructure",
                 "title": "TestBench: Get TOV Structure"
             },
@@ -720,10 +716,6 @@
                 },
                 {
                     "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.getFilters",
                     "when": "false"
                 },
                 {
