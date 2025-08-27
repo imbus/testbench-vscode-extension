@@ -37,7 +37,7 @@ export class CustomRootModule implements TreeViewModule {
             }
         });
 
-        context.logger.debug(context.buildLogPrefix("CustomRootModule", "Custom root module initialized"));
+        context.logger.trace(context.buildLogPrefix("CustomRootModule", "Custom root module initialized."));
     }
 
     /**

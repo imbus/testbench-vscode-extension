@@ -203,7 +203,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     // --- Command Handlers ---
     const handleAutomaticLogin = async () => {
-        logger.debug(`[extension] Command called: ${allExtensionCommands.automaticLoginAfterExtensionActivation}`);
+        logger.trace(`[extension] Command called: ${allExtensionCommands.automaticLoginAfterExtensionActivation}`);
         const config = getExtensionConfiguration();
         if (config.get(ConfigKeys.AUTO_LOGIN)) {
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
@@ -216,7 +216,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleLogin = async () => {
-        logger.debug(`[extension] Command called: ${allExtensionCommands.login}`);
+        logger.trace(`[extension] Command called: ${allExtensionCommands.login}`);
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             createIfNone: true
         });
@@ -226,7 +226,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleLogout = async () => {
-        logger.debug(`[extension] Command called: ${allExtensionCommands.logout}`);
+        logger.trace(`[extension] Command called: ${allExtensionCommands.logout}`);
 
         if (connection) {
             await connection.logoutUserOnServer();
@@ -249,7 +249,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleCycleClick = async (cycleItem: ProjectsTreeItem) => {
-        logger.debug(
+        logger.trace(
             `[extension] Command called: ${allExtensionCommands.handleCycleClick} for item ${cycleItem.label}`
         );
 
@@ -286,7 +286,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleTOVClick = async (versionItem: ProjectsTreeItem) => {
-        logger.debug(
+        logger.trace(
             `[extension] Command called: ${allExtensionCommands.handleTOVClick} for item ${versionItem.label}`
         );
 
@@ -336,6 +336,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString(), projectName, tovName);
             }
+            logger.info(
+                `[extension] Successfully opened Test Object Version '${tovName}' in project '${projectName}'.`
+            );
         }
     };
 
@@ -381,13 +384,16 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(versionKey, cycleItem.label?.toString(), projectName, tovName);
             }
+            logger.info(
+                `[extension] Successfully opened Test Cycle '${cycleItem.label?.toString()}' for TOV '${tovName}' in project '${projectName}'.`
+            );
         } else {
             throw new Error("Invalid cycle item: missing project, cycle, or version key");
         }
     };
 
     const clearInternalFolder = async () => {
-        logger.debug(`[extension] Command called: ${allExtensionCommands.clearInternalTestbenchFolder}`);
+        logger.trace(`[extension] Command called: ${allExtensionCommands.clearInternalTestbenchFolder}`);
         const workspaceLocation = await utils.validateAndReturnWorkspaceLocation();
         if (!workspaceLocation) {
             return;
@@ -809,12 +815,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleOpenIssueReporter = async () => {
-        logger.debug(`[extension] Command called: ${allExtensionCommands.openIssueReporter}`);
+        logger.trace(`[extension] Command called: ${allExtensionCommands.openIssueReporter}`);
         try {
             await vscode.commands.executeCommand("workbench.action.openIssueReporter", {
                 extensionId: "imbus.testbench-extension"
             });
-            logger.debug(`[extension] Opened VS Code issue reporter with TestBench extension preselected`);
+            logger.trace(`[extension] Opened VS Code issue reporter with TestBench extension preselected`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             logger.error(`[extension] Error opening issue reporter: ${errorMessage}`, error);
@@ -1089,7 +1095,7 @@ async function handleTestBenchSessionChange(
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     logger = new testBenchLogger.TestBenchLogger();
-    logger.info("[extension] Activating extension");
+    logger.info("[extension] Activating extension.");
     initializeConfigurationWatcher();
 
     // Register AuthenticationProvider
@@ -1112,7 +1118,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     return;
                 }
                 isHandlingSessionChange = true;
-                logger.debug("[extension] TestBench authentication sessions changed.");
+                logger.trace("[extension] TestBench authentication sessions changed.");
                 try {
                     const currentSession = await vscode.authentication.getSession(
                         TESTBENCH_AUTH_PROVIDER_ID,
@@ -1164,7 +1170,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await registerExtensionCommands(context);
 
     // Attempt to restore session on activation
-    logger.debug("[extension] Attempting to silently restore existing TestBench session on activation...");
+    logger.trace("[extension] Checking if previous TestBench session should be restored...");
     try {
         const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
             createIfNone: false,
@@ -1172,14 +1178,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
         if (session) {
             await handleTestBenchSessionChange(context, session);
+            logger.debug("[extension] Successfully restored previous TestBench session.");
         } else {
+            logger.debug("[extension] No previous TestBench session found for restoration.");
             if (!getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
                 await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 getLoginWebViewProvider()?.updateWebviewHTMLContent();
             }
         }
     } catch (error) {
-        logger.warn("[extension] Error trying to get initial session silently:", error);
+        logger.warn("[extension] Error trying to get initial TestBench session silently:", error);
         await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
     }
 
@@ -1414,13 +1422,13 @@ export async function clearAllExtensionData(
  * Called when the extension is deactivated.
  */
 export async function deactivate(): Promise<void> {
-    logger.trace("[extension] Deactivating extension");
+    logger.trace("[extension] Deactivating extension.");
     try {
         isTestOperationInProgress = false;
 
-        if (connection) {
-            await connection.logoutUserOnServer();
-        }
+        // if (connection) {
+        //     await connection.logoutUserOnServer();
+        // }
         if (client) {
             await stopLanguageClient(true);
         }

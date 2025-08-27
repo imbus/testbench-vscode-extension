@@ -178,8 +178,8 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             try {
                 this.registerModule(persistenceModule);
                 await persistenceModule.initialize(this.context);
-                this.logger.debug(
-                    this.buildLogPrefix("Persistence module initialized first for immediate state availability")
+                this.logger.trace(
+                    this.buildLogPrefix("Persistence module initialized first for immediate state availability.")
                 );
             } catch (error) {
                 this.logger.error(this.buildLogPrefix("Failed to initialize persistence module first:"), error);
@@ -634,21 +634,21 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             return;
         }
 
-        this.logger.debug(this.buildLogPrefix(`Reloading persistent state for ${this.config.id}`));
+        this.logger.debug(this.buildLogPrefix(`Reloading persistent tree view state...`));
         const loadedState = await persistenceModule.loadState();
 
         if (loadedState) {
             this.stateManager.setState(loadedState);
             this.logger.debug(
                 this.buildLogPrefix(
-                    `Persistent state reloaded for ${this.config.id}, expansion will be applied during next tree render`
+                    `Successfully reloaded persistent tree view state, expansion will be applied during next tree rendering.`
                 )
             );
 
             if (loadedState.expansion) {
                 this.logger.debug(
                     this.buildLogPrefix(
-                        `Loaded expansion state for ${this.config.id}: ${loadedState.expansion.expandedItems?.size || 0} expanded items`
+                        `Loaded tree view expansion state with ${loadedState.expansion.expandedItems?.size || 0} expanded nodes.`
                     )
                 );
             }

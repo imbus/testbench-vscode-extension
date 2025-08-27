@@ -497,7 +497,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             const userId = userSessionManager.getCurrentUserId();
             const lastImportedItemKey = `${userId}.${StorageKeys.SUB_TREE_ITEM_IMPORT_STORAGE_KEY}_lastItemId`;
             const lastImportedItem = this.extensionContext.workspaceState.get<string>(lastImportedItemKey);
-
+            // TODO: Check if there are results in TestBench and only ask if they already exist
             if (lastImportedItem === item.id) {
                 const result = await vscode.window.showWarningMessage(
                     `You have already imported test results for "${itemLabel}". Do you want to import it again?`,
@@ -551,9 +551,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             );
 
             if (importSuccessful) {
-                const importSuccessfulMessageForUser = `Successfully imported test results for ${itemLabel}`;
-                const importSuccessfulMessage = `[TestThemesTreeView] Successfully imported test results for ${itemLabel} with UID ${reportRootUID}`;
-                this.logger.info(importSuccessfulMessage);
+                const importSuccessfulMessageForUser = `Successfully imported Robot Framework test results for ${reportRootUID} (${itemLabel}) to TestBench.`;
+                this.logger.info(`[TestThemesTreeView] ${importSuccessfulMessageForUser}`);
                 vscode.window.showInformationMessage(importSuccessfulMessageForUser);
 
                 this.extensionContext.workspaceState.update(lastImportedItemKey, item.id);
@@ -678,7 +677,9 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         cycleLabel?: string
     ): Promise<void> {
         try {
-            this.logger.debug(`[TestThemesTreeView] Loading cycle ${cycleKey} for project ${projectKey}`);
+            this.logger.trace(
+                `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' from project '${projectName}' to get Test Theme information...`
+            );
 
             this.dataProvider.clearCache();
 
@@ -750,7 +751,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // Update filter context key and log filter information for debugging
             const currentFilters = this.getSavedFilters();
             this.logger.debug(
-                `[TestThemesTreeView] Loaded cycle with ${currentFilters.length} saved filters for context: ${this.getContextKey()}`
+                `[TestThemesTreeView] Successfully loaded test cycle with ${currentFilters.length} saved filters for context: ${this.getContextKey()}`
             );
             if (currentFilters.length > 0) {
                 this.logger.debug(
@@ -842,7 +843,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             // Update filter context key and log filter information for debugging
             const currentFilters = this.getSavedFilters();
             this.logger.debug(
-                `[TestThemesTreeView] Loaded TOV with ${currentFilters.length} saved filters for context: ${this.getContextKey()}`
+                `[TestThemesTreeView] Successfully loaded Test Object Version with ${currentFilters.length} saved filters for context: ${this.getContextKey()}`
             );
             if (currentFilters.length > 0) {
                 this.logger.debug(
@@ -1372,7 +1373,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param item The test case set tree item that was single clicked
      */
     private async handleTestCaseSetSingleClick(item: TestThemesTreeItem): Promise<void> {
-        this.logger.debug(`[TestThemesTreeView] Test case set item single clicked: ${item.label}`);
+        this.logger.debug(`[TestThemesTreeView] Clicked Test Case Set '${item.label}'.`);
 
         if (!item.hasGeneratedRobotFile()) {
             return;
@@ -1386,7 +1387,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * @param item The test case set tree item that was double clicked
      */
     private async handleTestCaseSetDoubleClick(item: TestThemesTreeItem): Promise<void> {
-        this.logger.debug(`[TestThemesTreeView] Test case set item double clicked: ${item.label}`);
+        this.logger.debug(`[TestThemesTreeView] Double clicked Test Case Set '${item.label}'.`);
 
         if (!item.hasGeneratedRobotFile()) {
             return;

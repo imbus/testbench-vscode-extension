@@ -78,7 +78,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         options?: TreeViewFactoryOptions
     ): TreeViews {
-        this.logger.debug("[TreeViewFactory] Creating all tree views");
+        this.logger.debug("[TreeViewFactory] Creating extension tree views.");
 
         const projectsTree = this.createProjectsTreeView(context, getConnection, options?.customConfigs?.projects);
 
@@ -165,7 +165,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         customConfig?: Partial<TreeViewConfig>
     ): ProjectsTreeView {
-        this.logger.debug("[TreeViewFactory] Creating Projects tree view");
+        this.logger.debug("[TreeViewFactory] Creating Projects tree view.");
 
         const treeView = new ProjectsTreeView(context, getConnection, customConfig);
 
@@ -197,7 +197,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         customConfig?: Partial<TreeViewConfig>
     ): TestThemesTreeView {
-        this.logger.debug("[TreeViewFactory] Creating Test Themes tree view");
+        this.logger.debug("[TreeViewFactory] Creating Test Themes tree view.");
 
         const treeView = new TestThemesTreeView(context, getConnection, customConfig);
 
@@ -229,7 +229,7 @@ export class TreeViewFactory {
         getConnection: () => PlayServerConnection | null,
         customConfig?: Partial<TreeViewConfig>
     ): TestElementsTreeView {
-        this.logger.debug("[TreeViewFactory] Creating Test Elements tree view");
+        this.logger.debug("[TreeViewFactory] Creating Test Elements tree view.");
 
         const treeView = new TestElementsTreeView(context, getConnection, customConfig);
 
@@ -397,12 +397,12 @@ export class TreeViewFactory {
         testThemesTree: TestThemesTreeView,
         testElementsTree: TestElementsTreeView
     ): void {
-        this.logger.debug("[TreeViewFactory] Setting up inter-tree communication");
+        this.logger.trace("[TreeViewFactory] Setting up inter-tree communication.");
 
         // Projects to Test Themes: When cycle is selected
         const cycleSelectionDisposable = projectsTree.eventBus.on("cycle:selected", async (event) => {
             const { projectKey, cycleKey, tovKey, cycleLabel, projectName, tovName } = event.data;
-            this.logger.debug(`[TreeViewFactory] Cycle selected: ${cycleLabel} (${cycleKey})`);
+            this.logger.debug(`[TreeViewFactory] Selected Test Cycle '${cycleLabel}' in projects view.`);
 
             if (projectName && tovName && tovKey) {
                 await testThemesTree.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
@@ -414,7 +414,7 @@ export class TreeViewFactory {
         // Projects to Test Elements: When version is selected
         const versionSelectionDisposable = projectsTree.eventBus.on("version:selected", async (event) => {
             const { tovKey, tovLabel, projectName, tovName } = event.data;
-            this.logger.debug(`[TreeViewFactory] Version selected: ${tovLabel} (${tovKey})`);
+            this.logger.debug(`[TreeViewFactory] Selected Test Object Version '${tovLabel}' in projects tree.`);
 
             await testElementsTree.loadTov(tovKey, tovLabel, projectName, tovName);
         });
@@ -451,7 +451,7 @@ export class TreeViewFactory {
         testThemesTree: TestThemesTreeView,
         testElementsTree: TestElementsTreeView
     ): void {
-        this.logger.debug("[TreeViewFactory] Registering global tree commands");
+        this.logger.trace("[TreeViewFactory] Registering global tree commands.");
 
         // Refresh all trees
         const refreshAllCmd = vscode.commands.registerCommand(allExtensionCommands.refreshAllTrees, async () => {
@@ -560,7 +560,7 @@ export class TreeViewFactory {
                 testThemesTree.reloadStateFromPersistence(),
                 testElementsTree.reloadStateFromPersistence()
             ]);
-            this.logger.debug(`[TreeViewFactory] Successfully reloaded tree view state`);
+            this.logger.debug(`[TreeViewFactory] Successfully reloaded tree view state.`);
         } catch (error) {
             this.logger.error(`[TreeViewFactory] Error reloading tree view state:`, error);
         }

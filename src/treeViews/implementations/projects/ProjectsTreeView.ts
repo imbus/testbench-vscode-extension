@@ -325,7 +325,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const tovName = item.parent?.label?.toString();
 
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
-            this.logger.debug(`[ProjectsTreeView] Cycle item single clicked: ${item.label}`);
+            this.logger.trace(`[ProjectsTreeView] Cycle item single clicked: ${item.label}`);
 
             await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
 

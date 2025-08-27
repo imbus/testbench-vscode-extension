@@ -17,7 +17,7 @@ async function getPythonExtensionAPI(): Promise<PythonExtension | undefined> {
     try {
         _pythonExtensionApi = await PythonExtension.api();
         if (_pythonExtensionApi) {
-            logger.debug("[python] Successfully acquired PythonExtension API.");
+            logger.trace("[python] Successfully acquired PythonExtension API.");
         } else {
             logger.warn(
                 "[python] PythonExtension.api() returned undefined. Python extension might not be available or activated."
@@ -45,16 +45,14 @@ export async function getInterpreterPath(resource?: Uri): Promise<string | undef
 
     try {
         const activeEnvPath = api.environments.getActiveEnvironmentPath(resource);
-        logger.debug(
-            `[python] Active environment path object for resource '${resource?.fsPath || "default"}': ${JSON.stringify(activeEnvPath)}`
-        );
 
         if (!activeEnvPath || !activeEnvPath.path) {
-            logger.warn(
-                `[python] No active Python environment path found for resource '${resource?.fsPath || "default"}'.`
-            );
+            logger.warn(`[python] No active Python environment path found '${resource?.fsPath || "default"}'.`);
             return undefined;
         }
+        logger.debug(
+            `[python] Active python environment path is '${resource?.fsPath || "default"}': ${JSON.stringify(activeEnvPath)}`
+        );
         const environment: ResolvedEnvironment | undefined = await api.environments.resolveEnvironment(activeEnvPath);
 
         if (!environment) {
@@ -62,29 +60,31 @@ export async function getInterpreterPath(resource?: Uri): Promise<string | undef
             return undefined;
         }
         logger.debug(
-            `[python] Resolved environment: Name: ${environment.id}, Path: ${environment.path}, Executable: ${environment.executable.uri?.fsPath}, Version: ${environment.version?.major}.${environment.version?.minor}.${environment.version?.micro}`
+            `[python] Resolved python environment: Name=${environment.id}, Path=${environment.path}, Executable=${environment.executable.uri?.fsPath}, Version=${environment.version?.major}.${environment.version?.minor}.${environment.version?.micro}`
         );
 
         if (environment.executable?.uri && checkPythonCompatibility(environment)) {
-            logger.debug(`[python] Compatible interpreter found: ${environment.executable.uri.fsPath}`);
+            logger.debug(
+                `[python] Successfully found compatible python interpreter at '${environment.executable.uri.fsPath}'.`
+            );
             return environment.executable.uri.fsPath;
         } else {
             logger.warn(
-                `[python] No compatible interpreter found or executable URI is missing for resolved environment: ${environment.id}`
+                `[python] No compatible python interpreter found or executable URI is missing for resolved environment: ${environment.id}`
             );
             if (environment.executable?.uri) {
                 logger.warn(
                     `[python] Executable URI was ${environment.executable.uri.fsPath} but compatibility check failed.`
                 );
             } else {
-                logger.warn(`[python] Executable URI is missing.`);
+                logger.warn(`[python] Could not detect python executable URI.`);
             }
         }
     } catch (error) {
-        logger.error(`[python] Error resolving interpreter path: ${(error as Error).message}`, error);
+        logger.error(`[python] Error resolving python interpreter path: ${(error as Error).message}`, error);
     }
 
-    logger.warn("[python] Interpreter path could not be determined or was incompatible.");
+    logger.warn("[python] Python interpreter path could not be resolved or was incompatible.");
     return undefined;
 }
 
