@@ -38,7 +38,7 @@ export class MarkingModule implements TreeViewModule {
             }
         });
 
-        this.context.logger.debug(context.buildLogPrefix("MarkingModule", "Marking module initialized"));
+        this.context.logger.trace(context.buildLogPrefix("MarkingModule", "Marking module initialized."));
     }
 
     /**

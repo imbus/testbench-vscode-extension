@@ -313,7 +313,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 changed: []
             });
             logger.debug(
-                `[AuthenticationProvider] TestBench session created successfully for ${sessionData.accountLabel}`
+                `[AuthenticationProvider] TestBench session created successfully for '${sessionData.accountLabel}'.`
             );
             return {
                 id: vsCodeSessionId,
@@ -322,7 +322,8 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 scopes
             };
         } catch (error: any) {
-            logger.error(`[AuthenticationProvider] Error during createSession`);
+            logger.error(`[AuthenticationProvider] Error during session creation.`);
+            logger.trace(`[AuthenticationProvider] Session creation error details: ${error.message || error}`);
             if (!isSilent) {
                 await connectionManager.clearActiveConnection(this.context);
             }

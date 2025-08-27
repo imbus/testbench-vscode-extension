@@ -55,8 +55,8 @@ export class IconModule implements TreeViewModule {
                 this.onConfigChange(event.data.icons);
             }
         });
-        this.context.logger.debug(
-            context.buildLogPrefix("IconModule", `Icon module initialized with theme: ${this.config.theme}`)
+        this.context.logger.trace(
+            context.buildLogPrefix("IconModule", `Icon module initialized with theme '${this.config.theme}'.`)
         );
     }
 

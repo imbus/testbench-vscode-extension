@@ -73,8 +73,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         this.eventBus.on("testElements:fetched", (event) => {
             const { tovKey, count } = event.data;
             if (tovKey === this.currentTovKey) {
-                this.logger.debug(
-                    `[TestElementsTreeView] Received test elements fetched event for TOV ${tovKey} with ${count} elements`
+                this.logger.trace(
+                    `[TestElementsTreeView] Received 'test elements fetched' event for TOV ${tovKey} with ${count} elements.`
                 );
             }
         });
@@ -168,7 +168,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         preserveExistingData: boolean = false
     ): Promise<void> {
         const startTime = Date.now();
-        this.logger.debug(`[TestElementsTreeView] Loading TOV with key ${tovKey}`);
+        this.logger.debug(`[TestElementsTreeView] Loading Test Object Version '${tovName}'...`);
 
         try {
             if (!preserveExistingData) {
@@ -209,7 +209,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             const loadTime = Date.now() - startTime;
             this.logger.debug(
-                `[TestElementsTreeView] Successfully loaded ${newRootItems.length} test elements for TOV with key ${tovKey} in ${loadTime}ms`
+                `[TestElementsTreeView] Successfully loaded ${newRootItems.length} test elements of Test Object Version '${tovName}'.`
             );
 
             this.eventBus.emit({
@@ -223,7 +223,10 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 timestamp: Date.now()
             });
         } catch (error) {
-            this.logger.error(`[TestElementsTreeView] Error loading TOV with key ${tovKey}:`, error);
+            this.logger.error(
+                `[TestElementsTreeView] Error loading test elements of Test Object Version '${tovName}':`,
+                error
+            );
             this.stateManager.setLoading(false);
             this.stateManager.setError(error as Error);
             throw error;
@@ -249,7 +252,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     ): Promise<void> {
         try {
             this.logger.debug(
-                `[TestElementsTreeView] Loading TOV with key ${tovKey}${clearFirst ? " (clearing first)" : " (preserving existing data)"}`
+                `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
             );
 
             if (clearFirst || this.currentTovKey !== tovKey) {
@@ -302,7 +305,9 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 },
                 timestamp: Date.now()
             });
-            this.logger.trace(`[TestElementsTreeView] Successfully loaded test elements for TOV ${tovKey}`);
+            this.logger.info(
+                `[TestElementsTreeView] Successfully loaded Test Element information for '${tovName}' from project '${projectName}'.`
+            );
         } catch (error) {
             this.logger.error(`[TestElementsTreeView] Error loading TOV:`, error);
 
@@ -771,7 +776,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         try {
             const uri = vscode.Uri.file(filePath);
             await vscode.commands.executeCommand("revealInExplorer", uri);
-            this.logger.debug(`[TestElementsTreeView] Revealed file in VS Code explorer: ${filePath}`);
+            this.logger.debug(`[TestElementsTreeView] Revealing selected item in VS Code explorer: '${filePath}'`);
         } catch (error) {
             this.logger.warn(
                 `[TestElementsTreeView] Failed to reveal file in VS Code explorer: ${error instanceof Error ? error.message : "Unknown error"}`

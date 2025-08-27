@@ -37,7 +37,7 @@ export class ExpansionModule implements TreeViewModule {
             context.logger.debug(
                 context.buildLogPrefix(
                     "ExpansionModule",
-                    `Initialized with expansion state: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed items`
+                    `Initialized tree view with ${this.expandedItems.size} expanded nodes and ${this.collapsedItems.size} collapsed nodes.`
                 )
             );
         } else {
@@ -67,13 +67,13 @@ export class ExpansionModule implements TreeViewModule {
                 context.logger.debug(
                     context.buildLogPrefix(
                         "ExpansionModule",
-                        `Updated expansion state from persistence: ${this.expandedItems.size} expanded, ${this.collapsedItems.size} collapsed items`
+                        `Successfully updated persistent expansion tree state with ${this.expandedItems.size} expanded nodes and ${this.collapsedItems.size} collapsed nodes.`
                     )
                 );
             }
         });
 
-        context.logger.debug(context.buildLogPrefix("ExpansionModule", "Expansion module initialized"));
+        context.logger.trace(context.buildLogPrefix("ExpansionModule", "Expansion module initialized."));
     }
 
     /**

@@ -41,14 +41,14 @@ export class PersistenceModule implements TreeViewModule {
             const loadedState = await this.loadState();
             if (loadedState) {
                 context.stateManager.setState(loadedState);
-                context.logger.debug(
-                    context.buildLogPrefix("PersistenceModule", "State loaded and applied to state manager")
+                context.logger.trace(
+                    context.buildLogPrefix("PersistenceModule", "State loaded and applied to state manager.")
                 );
             } else {
-                context.logger.debug(context.buildLogPrefix("PersistenceModule", "No saved state found"));
+                context.logger.trace(context.buildLogPrefix("PersistenceModule", "No saved state found"));
             }
         } else {
-            context.logger.debug(
+            context.logger.trace(
                 context.buildLogPrefix(
                     "PersistenceModule",
                     "Skipping state loading during initialization - user session not available yet"
@@ -63,7 +63,7 @@ export class PersistenceModule implements TreeViewModule {
             })
         );
 
-        context.logger.debug(context.buildLogPrefix("PersistenceModule", "Persistence module initialized"));
+        context.logger.trace(context.buildLogPrefix("PersistenceModule", "Persistence module initialized"));
     }
 
     /**
@@ -108,16 +108,13 @@ export class PersistenceModule implements TreeViewModule {
             }
 
             this.context.logger.debug(
-                this.context.buildLogPrefix(
-                    "PersistenceModule",
-                    `State saved successfully for user ${userSessionManager.getCurrentUserId()}`
-                )
+                this.context.buildLogPrefix("PersistenceModule", `Successfully saved tree view state.`)
             );
             if (dataToSave.expansion) {
-                this.context.logger.debug(
+                this.context.logger.trace(
                     this.context.buildLogPrefix(
                         "PersistenceModule",
-                        `Saved expansion state: ${dataToSave.expansion.expandedItems?.length || 0} expanded items`
+                        `Saved tree view expansion state with ${dataToSave.expansion.expandedItems?.length || 0} expanded nodes.`
                     )
                 );
             }
@@ -163,13 +160,10 @@ export class PersistenceModule implements TreeViewModule {
             const parsedState = this.parseLoadedData(data);
             if (parsedState) {
                 this.context.logger.debug(
-                    this.context.buildLogPrefix(
-                        "PersistenceModule",
-                        `Successfully loaded state for user ${userSessionManager.getCurrentUserId()}`
-                    )
+                    this.context.buildLogPrefix("PersistenceModule", `Successfully loaded tree view state.`)
                 );
                 if (parsedState.expansion) {
-                    this.context.logger.debug(
+                    this.context.logger.trace(
                         this.context.buildLogPrefix(
                             "PersistenceModule",
                             `Loaded expansion state: ${parsedState.expansion.expandedItems?.size || 0} expanded items`
@@ -282,7 +276,7 @@ export class PersistenceModule implements TreeViewModule {
                 collapsedItems: new Set(data.expansion.collapsedItems || []),
                 defaultExpanded: data.expansion.defaultExpanded ?? expansionConfig?.defaultExpanded ?? false
             };
-            this.context.logger.debug(
+            this.context.logger.trace(
                 this.context.buildLogPrefix(
                     "PersistenceModule",
                     `Loaded expansion state: ${state.expansion.expandedItems.size} expanded, ${state.expansion.collapsedItems.size} collapsed`
