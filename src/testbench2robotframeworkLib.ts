@@ -36,7 +36,7 @@ export class tb2robotLib {
         );
         const outputDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
         const resourceDirectoryRegex: string | undefined = getExtensionSetting<string>(
-            ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_REGEX
+            ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER
         );
         const resourceDirectory: string | undefined = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR);
         const resourceMapping: string[] | undefined = getExtensionSetting<string[]>(

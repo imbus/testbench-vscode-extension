@@ -10,6 +10,8 @@ import { TestBenchLogger } from "../../../testBenchLogger";
 import { FrameworkCache } from "../../utils/FrameworkCache";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
+import * as vscode from "vscode";
+import { ResourceFileService } from "./ResourceFileService";
 
 interface RawTestElement {
     id: string;
@@ -31,18 +33,48 @@ interface RawTestElement {
 
 export class TestElementsDataProvider {
     private elementsCache = new FrameworkCache<TestElementData[]>();
-    private readonly resourceRegexPatterns: RegExp[];
+    private disposables: vscode.Disposable[] = [];
 
     constructor(
         private logger: TestBenchLogger,
         private getConnection: () => PlayServerConnection | null,
         private eventBus: EventBus
     ) {
-        this.resourceRegexPatterns = this._getResourceRegexPatternsFromSettings();
+        this.setupConfigurationChangeListener();
+    }
+
+    /**
+     * Sets up a listener for configuration changes to clear cache when resource markers change
+     */
+    private setupConfigurationChangeListener(): void {
+        const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration("testbenchExtension.resourceMarker")) {
+                this.logger.debug("[TestElementsDataProvider] Resource marker configuration changed, clearing cache");
+
+                const newPatterns = this._getResourceRegexPatternsFromSettings();
+                this.logger.debug(
+                    `[TestElementsDataProvider] New resource marker patterns: ${JSON.stringify(newPatterns.map((p) => p.source))}`
+                );
+
+                this.clearCache();
+                this.eventBus.emit({
+                    type: "testElements:configurationChanged",
+                    source: "testElements",
+                    data: {
+                        message: "Resource marker configuration changed, cache cleared",
+                        newPatterns: newPatterns.map((p) => p.source),
+                        timestamp: Date.now()
+                    },
+                    timestamp: Date.now()
+                });
+            }
+        });
+        this.disposables.push(configChangeDisposable);
     }
 
     /**
      * Retrieves resource regex patterns from extension settings.
+     * This method is now dynamic and will always return the current configuration.
      *
      * @returns {RegExp[]} Array of compiled regex patterns for resource markers.
      */
@@ -50,13 +82,26 @@ export class TestElementsDataProvider {
         const resourceMarkers: string[] | undefined = getExtensionSetting<string[]>(
             ConfigKeys.TB2ROBOT_RESOURCE_MARKER
         );
-        if (!resourceMarkers) {
+
+        /*
+        this.logger.debug(
+            `[TestElementsDataProvider] Retrieved resource markers from settings: ${JSON.stringify(resourceMarkers)}`
+        );
+        */
+
+        if (!resourceMarkers || resourceMarkers.length === 0) {
+            this.logger.debug("[TestElementsDataProvider] No resource markers configured, returning empty patterns");
             return [];
         }
-        return resourceMarkers.map((marker) => {
+
+        const patterns = resourceMarkers.map((marker) => {
+            // Escape special regex characters in the marker
             const escaped = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-            return new RegExp(`(?:.*\\.)?(?<resourceName>[^.]+?)\\s*${escaped}.*`);
+            return new RegExp(escaped);
         });
+
+        // this.logger.debug(`[TestElementsDataProvider] Generated regex patterns: ${JSON.stringify(patterns.map((p) => p.source))}`);
+        return patterns;
     }
 
     /**
@@ -117,6 +162,7 @@ export class TestElementsDataProvider {
         const { roots } = this._linkParentChildRelationships(testElementIdToDataMap);
         const filteredRoots = this._filterElementTree(roots);
         this._assignHierarchicalNames(filteredRoots);
+        this._markVirtualFolders(filteredRoots);
         this._checkForNestedResources(filteredRoots);
 
         return filteredRoots;
@@ -144,21 +190,32 @@ export class TestElementsDataProvider {
             const compositeId: string = this._generateElementId(jsonTestElement);
             const parentIdString: string | null = this._getParentId(jsonTestElement);
 
+            const currentPatterns = this._getResourceRegexPatternsFromSettings();
+            const directRegexMatch =
+                currentPatterns.length > 0 ? this._matchesRegex(jsonTestElement.name, currentPatterns) : true;
+
+            /*
+            if (currentPatterns.length > 0) {
+                this.logger.debug(`[TestElementsDataProvider] Element "${jsonTestElement.name}" regex match: ${directRegexMatch} (patterns: ${JSON.stringify(currentPatterns.map((p) => p.source))})`);
+            }
+            */
+
+            const originalName = jsonTestElement.name;
+            const normalizedName = ResourceFileService.normalizePath(originalName);
+
             const testElement: TestElementData = {
                 id: compositeId,
                 parentId: parentIdString,
-                name: jsonTestElement.name,
+                displayName: normalizedName,
+                originalName: originalName,
                 uniqueID: testElementOwnUniqueID,
                 libraryKey,
                 jsonString: JSON.stringify(jsonTestElement, null, 2),
                 details: jsonTestElement || {},
                 testElementType: testElementType,
-                directRegexMatch:
-                    this.resourceRegexPatterns.length > 0
-                        ? this._matchesRegex(jsonTestElement.name, this.resourceRegexPatterns)
-                        : true,
+                directRegexMatch: directRegexMatch,
                 children: [],
-                hierarchicalName: jsonTestElement.name // Will be properly set later
+                hierarchicalName: normalizedName // Will be set later
             };
             testElementIdToDataMap[compositeId] = testElement;
         });
@@ -213,11 +270,18 @@ export class TestElementsDataProvider {
     }
 
     /**
-     * Recursively filters the element tree based on regex matches and hierarchy rules.
-     * @param roots The root elements of the tree to filter.
+     * Recursively filters the element tree items.
+     * Rules:
+     * - Filter out empty subdivisions, DataTypes and Conditions.
+     * - Include Subdivision if:
+     *       Subdivision name matches resource marker defined in extension settings
+     *       OR a child subdivision tree item has a resource marker match.
+     * - Include Interaction if:
+     *       The direct parent subdivision has a resource directory match.
+     * @param rootsToFilter The root elements of the unfiltered test elements tree to filter.
      * @returns A new array of filtered root elements.
      */
-    private _filterElementTree(roots: TestElementData[]): TestElementData[] {
+    private _filterElementTree(rootsToFilter: TestElementData[]): TestElementData[] {
         const recursiveFilter = (testElementData: TestElementData, inheritedMatch: boolean): TestElementData | null => {
             let validChildren: TestElementData[] = [];
             if (testElementData.children) {
@@ -249,7 +313,9 @@ export class TestElementsDataProvider {
             return null;
         };
 
-        return roots.map((root) => recursiveFilter(root, false)).filter((node) => node !== null) as TestElementData[];
+        return rootsToFilter
+            .map((root) => recursiveFilter(root, false))
+            .filter((node) => node !== null) as TestElementData[];
     }
 
     /**
@@ -258,11 +324,80 @@ export class TestElementsDataProvider {
      */
     private _assignHierarchicalNames(roots: TestElementData[]): void {
         const assign = (testElementData: TestElementData, parentPath: string): void => {
-            const currentPath = parentPath ? `${parentPath}/${testElementData.name}` : testElementData.name;
+            const currentPath = parentPath
+                ? `${parentPath}/${testElementData.displayName}`
+                : testElementData.displayName;
             testElementData.hierarchicalName = currentPath;
             testElementData.children?.forEach((child) => assign(child, currentPath));
         };
         roots.forEach((rootTestElementData) => assign(rootTestElementData, ""));
+    }
+
+    /**
+     * Traverses the tree to mark subdivisions that are virtual containers for resources.
+     * A folder is "virtual" if its path is stripped during the resource file path construction
+     * due to the `resourceDirectoryMarker` setting. This prevents file system actions (like "Open in Explorer")
+     * from appearing on folders that don't have a direct 1:1 mapping to a local directory.
+     * @param roots The root elements of the tree.
+     */
+    private _markVirtualFolders(roots: TestElementData[]): void {
+        const resourceDirectoryMarker =
+            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
+
+        if (!resourceDirectoryMarker) {
+            return;
+        }
+
+        /**
+         * Recursively finds resources and marks their ancestor folders as virtual if their paths are stripped.
+         * A folder is virtual if its path is stripped for any of its descendant resources.
+         * @param node The current tree node to process.
+         * @returns An array of all descendant TestElementData items that are resource files.
+         */
+        const findResourcesAndMarkVirtuals = (node: TestElementData): TestElementData[] => {
+            const resourcesInChildren = node.children?.flatMap((child) => findResourcesAndMarkVirtuals(child)) || [];
+
+            if (node.testElementType === TestElementType.Subdivision) {
+                if (ResourceFileService.hasResourceMarker(node.originalName)) {
+                    resourcesInChildren.push(node);
+                }
+                // Node is a folder with descendant resources, check if it's virtual
+                else if (resourcesInChildren.length > 0) {
+                    let isVirtualFolder = false;
+
+                    for (const descendantResource of resourcesInChildren) {
+                        const descendantResourcePathParts = descendantResource.hierarchicalName.split("/");
+                        const markerPositionInPath = descendantResourcePathParts.indexOf(resourceDirectoryMarker);
+
+                        if (markerPositionInPath !== -1) {
+                            // Marker found, folder is virtual if it's at or before the marker in the path.
+                            const currentSubdivisionPathParts = node.hierarchicalName.split("/");
+                            if (currentSubdivisionPathParts.length <= markerPositionInPath + 1) {
+                                if (
+                                    descendantResource.hierarchicalName.startsWith(node.hierarchicalName) &&
+                                    (descendantResource.hierarchicalName.length === node.hierarchicalName.length ||
+                                        descendantResource.hierarchicalName[node.hierarchicalName.length] === "/")
+                                ) {
+                                    isVirtualFolder = true;
+                                    break;
+                                }
+                            }
+                        } else {
+                            // No marker, entire hierarchy is stripped
+                            isVirtualFolder = true;
+                            break;
+                        }
+                    }
+
+                    if (isVirtualFolder) {
+                        node.isVirtual = true;
+                    }
+                }
+            }
+            return resourcesInChildren;
+        };
+
+        roots.forEach((root) => findResourcesAndMarkVirtuals(root));
     }
 
     /**
@@ -276,7 +411,7 @@ export class TestElementsDataProvider {
                 testElementData.children?.forEach((child) => {
                     if (child.directRegexMatch) {
                         nestedResourceWarnings.push(
-                            `Robot resource '${testElementData.name}' contains another resource '${child.name}'.`
+                            `Robot resource '${testElementData.displayName}' contains another resource '${child.displayName}'.`
                         );
                     }
                     check(child);
@@ -373,5 +508,16 @@ export class TestElementsDataProvider {
         } else {
             this.elementsCache.clear();
         }
+    }
+
+    /**
+     * Cleans up resources and disposes of configuration listeners
+     */
+    public dispose(): void {
+        for (const disposable of this.disposables) {
+            disposable.dispose();
+        }
+        this.disposables = [];
+        this.clearCache();
     }
 }

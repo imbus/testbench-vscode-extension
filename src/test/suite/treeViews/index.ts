@@ -18,6 +18,7 @@ import "./ProjectsTreeView.test";
 import "./TestThemesTreeItem.test";
 import "./TestThemesTreeView.test";
 import "./RobotFileService.test";
+import "./ResourceFileService.test";
 
 // Export test suite names for reference
 export const treeViewsTestSuites = [
@@ -34,7 +35,8 @@ export const treeViewsTestSuites = [
     "ProjectsTreeView",
     "TestThemesTreeItem",
     "TestThemesTreeView",
-    "RobotFileService"
+    "RobotFileService",
+    "ResourceFileService"
 ];
 
 // Export test descriptions
@@ -57,5 +59,7 @@ export const treeViewsTestDescriptions = {
     TestThemesTreeView:
         "Tests for the test themes tree view including title update functionality for cycle and TOV contexts and state management",
     RobotFileService:
-        "Tests for the robot file service including file existence checking and path generation for test themes and test case sets"
+        "Tests for the robot file service including file existence checking and path generation for test themes and test case sets",
+    ResourceFileService:
+        "Tests for the resource file service including special character handling and path construction for test elements"
 };

@@ -8,6 +8,7 @@ import { TreeItemBase } from "../../core/TreeItemBase";
 import { EventBus } from "../../utils/EventBus";
 import { allExtensionCommands } from "../../../constants";
 import { userSessionManager } from "../../../extension";
+import { ResourceFileService } from "./ResourceFileService";
 
 export enum TestElementType {
     Subdivision = "Subdivision",
@@ -20,7 +21,8 @@ export enum TestElementType {
 export interface TestElementData {
     id: string;
     parentId: string | null;
-    name: string;
+    displayName: string;
+    originalName: string;
     uniqueID: string;
     libraryKey: string | null;
     jsonString: string;
@@ -30,6 +32,7 @@ export interface TestElementData {
     children?: TestElementData[];
     hierarchicalName: string;
     parent?: TestElementData;
+    isVirtual?: boolean;
 }
 
 // Extended interface for tree item specific data
@@ -51,7 +54,7 @@ export class TestElementsTreeItem extends TreeItemBase {
         parent?: TestElementsTreeItem,
         eventBus?: EventBus
     ) {
-        const label = TestElementsTreeItem.extractLabel(data.hierarchicalName || data.name);
+        const label = TestElementsTreeItem.extractLabel(data.hierarchicalName || data.displayName);
         const description = TestElementsTreeItem.buildDescription(data);
         const collapsibleState = TestElementsTreeItem.getInitialCollapsibleState(data);
         const initialContextValue = TestElementsTreeItem.getInitialContextValue(data);
@@ -90,12 +93,18 @@ export class TestElementsTreeItem extends TreeItemBase {
         const elementType = data.testElementType;
 
         if (elementType === TestElementType.Subdivision) {
-            const isResource = data.name.includes("[Robot-Resource]");
+            if (data.displayName === undefined || data.displayName === null) {
+                return "testElement.subdivision.folder";
+            }
+            const isResource = ResourceFileService.hasResourceMarker(data.displayName);
             if (isResource) {
                 return data.isLocallyAvailable
                     ? "testElement.subdivision.resource.available"
                     : "testElement.subdivision.resource.missing";
             } else {
+                if (data.isVirtual) {
+                    return "testElement.subdivision.virtualFolder";
+                }
                 return "testElement.subdivision.folder";
             }
         }
@@ -170,7 +179,7 @@ export class TestElementsTreeItem extends TreeItemBase {
         }
 
         const parentPath = this.parent ? (this.parent as TestElementsTreeItem).id : "";
-        return `${userId}:testElement:${parentPath}/${this.data.name}`;
+        return `${userId}:testElement:${parentPath}/${this.data.displayName}`;
     }
 
     /**
@@ -230,7 +239,7 @@ export class TestElementsTreeItem extends TreeItemBase {
      * @returns A formatted tooltip string with type, name, and additional details.
      */
     private generateTooltip(): string {
-        const tooltipLines: string[] = [`Type: ${this.data.testElementType}`, `Name: ${this.data.name}`];
+        const tooltipLines: string[] = [`Type: ${this.data.testElementType}`, `Name: ${this.data.displayName}`];
 
         if (this.data.uniqueID) {
             tooltipLines.push(`UniqueID: ${this.data.uniqueID}`);
@@ -291,7 +300,11 @@ export class TestElementsTreeItem extends TreeItemBase {
             timestamp: Date.now()
         });
 
-        if (this.data.testElementType === TestElementType.Subdivision && this.data.name.includes("[Robot-Resource]")) {
+        if (
+            this.data.testElementType === TestElementType.Subdivision &&
+            this.data.displayName &&
+            ResourceFileService.hasResourceMarker(this.data.displayName)
+        ) {
             this.updateChildInteractions(isAvailable);
         }
     }
@@ -373,12 +386,12 @@ export class TestElementsTreeItem extends TreeItemBase {
      * @returns {string} A slash-separated path constructed from the current item and all its ancestors.
      */
     private buildPathFromAncestors(): string {
-        const pathParts: string[] = [this.data.name];
+        const pathParts: string[] = [this.data.displayName];
 
         let parentItem = this.parent as TestElementsTreeItem | null;
 
         while (parentItem) {
-            pathParts.unshift(parentItem.data.name);
+            pathParts.unshift(parentItem.data.displayName);
             parentItem = parentItem.parent as TestElementsTreeItem | null;
         }
 
@@ -531,7 +544,11 @@ export class TestElementsTreeItem extends TreeItemBase {
         this.updateContextValue();
         this.tooltip = this.generateTooltip();
 
-        if (this.data.testElementType === TestElementType.Subdivision && this.data.name.includes("[Robot-Resource]")) {
+        if (
+            this.data.testElementType === TestElementType.Subdivision &&
+            this.data.displayName &&
+            ResourceFileService.hasResourceMarker(this.data.displayName)
+        ) {
             this.updateChildInteractions(isAvailable);
         }
 

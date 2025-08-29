@@ -564,6 +564,97 @@ suite("TestElementsTreeView", function () {
             await treeView.handleInteractionClick(mockInteraction);
             assert.ok(!handleClickStub.called, "Should not call click handler when item has no ID");
         });
+
+        test("handleInteractionSingleClick should call openExistingInteractionResource", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            const openExistingStub = testEnv.sandbox.stub(treeView, "openExistingInteractionResource").resolves();
+
+            await (treeView as any).handleInteractionSingleClick(mockInteraction);
+
+            assert.ok(openExistingStub.calledWith(mockInteraction), "Should call openExistingInteractionResource");
+        });
+
+        test("handleInteractionDoubleClick should create file and reveal in explorer", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource.resource");
+            mockResourceFileService.fileExists.resolves(false);
+            mockResourceFileService.ensureFileExists.resolves();
+            const openTextDocumentStub = testEnv.sandbox
+                .stub(vscode.workspace, "openTextDocument")
+                .resolves(mockDocument);
+            const showTextDocumentStub = testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
+
+            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
+
+            assert.ok(mockResourceFileService.ensureFileExists.called, "Should create file if it doesn't exist");
+            assert.ok(showTextDocumentStub.called, "Should open file in editor");
+            assert.ok(
+                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                "Should reveal file in explorer"
+            );
+        });
+
+        test("handleInteractionDoubleClick should open existing file and reveal in explorer", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource.resource");
+            mockResourceFileService.fileExists.resolves(true);
+            const openTextDocumentStub = testEnv.sandbox
+                .stub(vscode.workspace, "openTextDocument")
+                .resolves(mockDocument);
+            const showTextDocumentStub = testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
+
+            await (treeView as any).handleInteractionDoubleClick(mockInteraction);
+
+            assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file if it exists");
+            assert.ok(showTextDocumentStub.called, "Should open file in editor");
+            assert.ok(
+                testEnv.vscodeMocks.executeCommandStub.calledWith("revealInExplorer"),
+                "Should reveal file in explorer"
+            );
+        });
     });
 
     suite("Parent Icon Updates", function () {
@@ -884,6 +975,119 @@ suite("TestElementsTreeView", function () {
             assert.strictEqual((treeView as any).currentProjectName, null);
             assert.strictEqual((treeView as any).currentTovName, null);
             assert.strictEqual((treeView as any).resourceFiles.size, 0);
+        });
+    });
+
+    suite("openExistingInteractionResource", function () {
+        test("should open existing resource file and jump to interaction", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            const mockDocument = {} as vscode.TextDocument;
+            const mockEditor = {} as vscode.TextEditor;
+
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource.resource");
+            mockResourceFileService.fileExists.resolves(true);
+            const openTextDocumentStub = testEnv.sandbox
+                .stub(vscode.workspace, "openTextDocument")
+                .resolves(mockDocument);
+            const showTextDocumentStub = testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
+
+            await treeView.openExistingInteractionResource(mockInteraction);
+
+            assert.ok(showTextDocumentStub.called, "Should open file in editor");
+            assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file");
+        });
+
+        test("should silently fail when resource file does not exist", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]"
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource.resource");
+            mockResourceFileService.fileExists.resolves(false);
+            const showTextDocumentStub = testEnv.sandbox
+                .stub(vscode.window, "showTextDocument")
+                .resolves({} as vscode.TextEditor);
+
+            await treeView.openExistingInteractionResource(mockInteraction);
+
+            assert.ok(!testEnv.vscodeMocks.showWarningMessageStub.called, "Should not show warning message");
+            assert.ok(!showTextDocumentStub.called, "Should not open file");
+            assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file");
+        });
+
+        test("should show error when parent resource is missing", async function () {
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                })
+            );
+
+            // No parent set
+            (mockInteraction as any).parent = null;
+            const showTextDocumentStub = testEnv.sandbox
+                .stub(vscode.window, "showTextDocument")
+                .resolves({} as vscode.TextEditor);
+
+            await treeView.openExistingInteractionResource(mockInteraction);
+
+            assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message");
+            assert.ok(!showTextDocumentStub.called, "Should not open file");
+        });
+
+        test("should handle missing hierarchical name", async function () {
+            const mockParent = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "ParentResource [Robot-Resource]",
+                    hierarchicalName: undefined
+                })
+            );
+
+            const mockInteraction = createMockTestElementItem(
+                createMockTestElementData({
+                    name: "TestInteraction",
+                    hierarchicalName: "TestFolder/ParentResource [Robot-Resource]/TestInteraction",
+                    testElementType: TestElementType.Interaction
+                }),
+                mockParent
+            );
+
+            const showTextDocumentStub = testEnv.sandbox
+                .stub(vscode.window, "showTextDocument")
+                .resolves({} as vscode.TextEditor);
+
+            await treeView.openExistingInteractionResource(mockInteraction);
+
+            assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show error message");
+            assert.ok(!showTextDocumentStub.called, "Should not open file");
         });
     });
 });

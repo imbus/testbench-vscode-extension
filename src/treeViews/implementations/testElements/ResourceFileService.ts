@@ -7,6 +7,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { TestBenchLogger } from "../../../testBenchLogger";
 import { validateAndReturnWorkspaceLocation } from "../../../utils";
+import { getExtensionSetting } from "../../../configuration";
+import { ConfigKeys } from "../../../constants";
 import { TestElementsTreeItem } from "./TestElementsTreeItem";
 
 /**
@@ -34,11 +36,68 @@ export class ResourceFileService {
     constructor(private readonly logger: TestBenchLogger) {}
 
     /**
-     * Removes all occurrences of "[Robot-Resource]" from a given path string.
+     * Normalizes a path by replacing these file path characters with underscores:
+     * ["<", ">", ":", "\"", "/", "|", "?", "*"].
+     * Does not replace spaces unlike .robot file creation process.
+     * @param path The path component to normalize
+     * @returns The normalized path with special characters replaced by underscores
      */
-    private removeRobotResourceFromPathString(pathStr: string): string {
-        const cleanedPath: string = pathStr.replace(/\[Robot-Resource\]/g, "");
+    public static normalizePath(path: string): string {
+        return path.replace(/[<>:"/\\|?*]/g, "_");
+    }
+
+    /**
+     * Removes all occurrences of configured resource markers from a given path string.
+     * @param pathStr The path string to clean
+     * @returns The cleaned path string with resource markers removed
+     */
+    private removeResourceMarkersFromPathString(pathStr: string): string {
+        const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+        if (!resourceMarkers || resourceMarkers.length === 0) {
+            return pathStr;
+        }
+
+        let cleanedPath = pathStr;
+        for (const marker of resourceMarkers) {
+            if (typeof marker === "string" && marker.length > 0) {
+                try {
+                    const escapedMarker = marker.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+                    const regex = new RegExp(escapedMarker, "g");
+                    cleanedPath = cleanedPath.replace(regex, "");
+                } catch (regexError) {
+                    this.logger.warn(
+                        `[ResourceFileService] Invalid regex pattern for marker "${marker}": ${regexError}`
+                    );
+                    // Fallback to simple string replacement
+                    try {
+                        const fallbackRegex = new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+                        cleanedPath = cleanedPath.replace(fallbackRegex, "");
+                    } catch (fallbackError) {
+                        this.logger.warn(
+                            `[ResourceFileService] Fallback regex also failed for marker "${marker}": ${fallbackError}`
+                        );
+                        // Skip this marker if fallback fails
+                    }
+                }
+            }
+        }
         return cleanedPath;
+    }
+
+    /**
+     * Checks if a string contains any configured resource markers.
+     * @param str The string to check for resource markers
+     * @returns True if the string contains any configured resource markers
+     */
+    public static hasResourceMarker(str: string): boolean {
+        const resourceMarkers = getExtensionSetting<string[]>(ConfigKeys.TB2ROBOT_RESOURCE_MARKER);
+        if (!resourceMarkers || resourceMarkers.length === 0) {
+            return false;
+        }
+
+        return resourceMarkers.some(
+            (marker) => typeof marker === "string" && marker.length > 0 && str.includes(marker)
+        );
     }
 
     /**
@@ -55,9 +114,9 @@ export class ResourceFileService {
             try {
                 await fs.promises.writeFile(filePath, initialContent, { encoding: "utf8" });
                 this.logger.info(`[ResourceFileService] Robot Framework resource file created at '${filePath}'.`);
-            } catch (writeError) {
+            } catch (writeError: any) {
                 this.logger.error(`[ResourceFileService] Error writing to resource file ${filePath}:`, writeError);
-                throw writeError;
+                throw new Error(`Failed to create resource file: ${writeError.message}`);
             }
         } else {
             this.logger.debug(
@@ -67,7 +126,14 @@ export class ResourceFileService {
     }
 
     /**
-     * Constructs an absolute path for a resource given its hierarchical name.
+     * Constructs the absolute for the resource file to be created using the hierarchical name of tree,
+     * respecting the configured Resource Directory Marker and Resource Directory Path.
+     *
+     * When a Resource Directory Marker is found in the hierarchical name, the folder structure below the marker
+     * is preserved and mapped under the Resource Directory Path.
+     * When a marker is configured but not found in the hierarchical name, the resource file is created directly
+     * under the Resource Directory Path without preserving the folder hierarchy.
+     * When no marker is configured at all, the full folder hierarchy is preserved under the Resource Directory Path.
      * @param hierarchicalName The slash-separated hierarchical name (e.g., "Folder/SubFolder/MyResource").
      * @returns {Promise<string | undefined>} The absolute path or undefined if workspace root is not found.
      */
@@ -76,13 +142,53 @@ export class ResourceFileService {
         if (!workspaceRootPath) {
             return undefined;
         }
-        if (!hierarchicalName) {
+
+        if (!hierarchicalName.trim()) {
             this.logger.error("[ResourceFileService] Hierarchical name is empty. Cannot construct absolute path.");
             return undefined;
         }
-        const absolutePath = path.join(workspaceRootPath, hierarchicalName);
-        this.logger.trace(`[ResourceFileService] Constructed absolute path for '${hierarchicalName}': ${absolutePath}`);
-        return absolutePath;
+
+        const resourceDirRelativeToWorkspace = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIR) || "";
+        const resourceDirectoryMarker =
+            getExtensionSetting<string>(ConfigKeys.TB2ROBOT_RESOURCE_DIRECTORY_MARKER) || "";
+
+        const cleanedHierarchical = this.removeResourceMarkersFromPathString(hierarchicalName);
+        const splitPathComponents = cleanedHierarchical.split("/");
+        const normalizedPathComponents = splitPathComponents.map((component) =>
+            ResourceFileService.normalizePath(component)
+        );
+
+        let relativePathComponents: string[];
+
+        if (resourceDirectoryMarker) {
+            const resourceDirectoryMarkerIndex = splitPathComponents.findIndex(
+                (component) => component === resourceDirectoryMarker
+            );
+
+            if (resourceDirectoryMarkerIndex !== -1) {
+                // Marker is found, ignore everything up to and including the marker itself
+                relativePathComponents = normalizedPathComponents.slice(resourceDirectoryMarkerIndex + 1);
+            } else {
+                // No marker match, create resource file directly under resource directory without subdivision folder hierarchy
+                relativePathComponents = [normalizedPathComponents[normalizedPathComponents.length - 1]];
+            }
+        } else {
+            relativePathComponents = normalizedPathComponents;
+        }
+
+        // Filter out empty components that might result from normalization
+        relativePathComponents = relativePathComponents.filter((component) => component.length > 0);
+
+        const absolutePathOfResourceFile = path.join(
+            workspaceRootPath,
+            resourceDirRelativeToWorkspace, // Will be empty if no resource directory is configured
+            ...relativePathComponents
+        );
+
+        this.logger.trace(
+            `[ResourceFileService] Constructed absolute path for '${hierarchicalName}' with marker='${resourceDirectoryMarker}' and resourceDir='${resourceDirRelativeToWorkspace}' -> ${absolutePathOfResourceFile}`
+        );
+        return absolutePathOfResourceFile;
     }
 
     /**
@@ -92,8 +198,12 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the path exists (respecting case sensitivity if checked).
      */
     public async pathExists(filePath: string, caseSensitiveCheck: boolean = false): Promise<boolean> {
-        // Remove [Robot-Resource] suffix before checking
-        const cleanedPath = this.removeRobotResourceFromPathString(filePath);
+        if (!filePath.trim()) {
+            this.logger.warn("[ResourceFileService] Invalid file path provided to pathExists");
+            return false;
+        }
+
+        const cleanedPath = this.removeResourceMarkersFromPathString(filePath);
         try {
             await fs.promises.stat(cleanedPath);
 
@@ -111,6 +221,10 @@ export class ResourceFileService {
                 this.logger.trace(`[ResourceFileService] Path does not exist: ${cleanedPath}`);
                 return false;
             }
+            if (err.code === "EACCES") {
+                this.logger.warn(`[ResourceFileService] Permission denied accessing path: ${cleanedPath}`);
+                return false;
+            }
             this.logger.error(`[ResourceFileService] Error stating file/dir "${cleanedPath}": ${err.message}`);
             throw err;
         }
@@ -122,13 +236,22 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the directory exists.
      */
     public async directoryExists(dirPath: string): Promise<boolean> {
-        const cleanedPath = this.removeRobotResourceFromPathString(dirPath);
+        if (!dirPath.trim()) {
+            this.logger.warn("[ResourceFileService] Invalid directory path provided to directoryExists");
+            return false;
+        }
+
+        const cleanedPath = this.removeResourceMarkersFromPathString(dirPath);
         try {
             const stats = await fs.promises.stat(cleanedPath);
             return stats.isDirectory();
         } catch (err: any) {
             if (err.code === "ENOENT") {
                 this.logger.debug(`[ResourceFileService] Directory does not exist: ${cleanedPath}`);
+                return false;
+            }
+            if (err.code === "EACCES") {
+                this.logger.warn(`[ResourceFileService] Permission denied accessing directory: ${cleanedPath}`);
                 return false;
             }
             this.logger.error(`[ResourceFileService] Error stating directory "${cleanedPath}": ${err.message}`);
@@ -142,13 +265,22 @@ export class ResourceFileService {
      * @returns {Promise<boolean>} True if the file exists.
      */
     public async fileExists(filePath: string): Promise<boolean> {
-        const cleanedPath = this.removeRobotResourceFromPathString(filePath);
+        if (!filePath.trim()) {
+            this.logger.warn("[ResourceFileService] Invalid file path provided to fileExists");
+            return false;
+        }
+
+        const cleanedPath = this.removeResourceMarkersFromPathString(filePath);
         try {
             const stats = await fs.promises.stat(cleanedPath);
             return stats.isFile();
         } catch (err: any) {
             if (err.code === "ENOENT") {
                 this.logger.debug(`[ResourceFileService] File does not exist: ${cleanedPath}`);
+                return false;
+            }
+            if (err.code === "EACCES") {
+                this.logger.warn(`[ResourceFileService] Permission denied accessing file: ${cleanedPath}`);
                 return false;
             }
             this.logger.error(`[ResourceFileService] Error stating file "${cleanedPath}": ${err.message}`);
@@ -162,17 +294,24 @@ export class ResourceFileService {
      * @returns {Promise<void>}
      */
     public async ensureFolderPathExists(folderPath: string): Promise<void> {
-        // Remove [Robot-Resource] suffix before creating folder
-        const cleanedPath = this.removeRobotResourceFromPathString(folderPath);
+        if (!folderPath.trim()) {
+            throw new Error("Folder path must be a non-empty string");
+        }
+
+        const cleanedPath = this.removeResourceMarkersFromPathString(folderPath);
 
         try {
             await fs.promises.mkdir(cleanedPath, { recursive: true });
         } catch (error: any) {
+            if (error.code === "EACCES") {
+                this.logger.error(`[ResourceFileService] Permission denied creating folder: "${cleanedPath}"`);
+                throw new Error(`Permission denied creating folder: ${cleanedPath}`);
+            }
             this.logger.error(
-                `[ResourceFileService] Failed to check if folder path exists: "${cleanedPath}": ${error.message}`,
+                `[ResourceFileService] Failed to create folder path: "${cleanedPath}": ${error.message}`,
                 error
             );
-            throw error;
+            throw new Error(`Failed to create folder: ${error.message}`);
         }
     }
 }

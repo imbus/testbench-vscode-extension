@@ -46,234 +46,91 @@ export class RobotFileService {
                 return { exists: false };
             }
 
-            const hierarchicalPath = this.buildHierarchicalPath(item);
             const robotFileName = this.generateRobotFileName(item.data.base.name, item.data.base.numbering);
-            const outputDirPath = path.join(workspaceLocation, generatedRobotFilesOutputDirectory);
-            try {
-                await fs.promises.stat(outputDirPath);
-            } catch {
-                this.logger.debug(
-                    `[RobotFileService] Test generation output directory does not exist: ${outputDirPath}`
-                );
+            const outputPath = path.join(workspaceLocation, generatedRobotFilesOutputDirectory);
+
+            // this.logger.trace(`[RobotFileService] Searching for robot file "${robotFileName}" in output directory: ${outputPath}`);
+
+            // Recursively search for robot files
+            const foundRobotFiles = await this.findAllRobotFiles(outputPath, robotFileName);
+
+            if (foundRobotFiles.length === 0) {
+                // this.logger.trace(`[RobotFileService] No robot files found for item "${item.data.base.name}"`);
+                return {
+                    exists: false,
+                    fileName: robotFileName
+                };
             }
 
-            const actualHierarchicalPathOfItem = await this.resolveFolderName(
-                workspaceLocation,
-                generatedRobotFilesOutputDirectory,
-                hierarchicalPath
-            );
-            const actualRobotFilePath = path.join(
-                workspaceLocation,
-                generatedRobotFilesOutputDirectory,
-                actualHierarchicalPathOfItem,
-                robotFileName
-            );
-
-            const hierarchicalDirPath = path.join(
-                workspaceLocation,
-                generatedRobotFilesOutputDirectory,
-                actualHierarchicalPathOfItem
-            );
-            try {
-                await fs.promises.stat(hierarchicalDirPath);
-            } catch {
-                // this.logger.trace(`[RobotFileService] Hierarchical directory does not exist: ${hierarchicalDirPath}`);
+            if (foundRobotFiles.length === 1) {
+                const robotFilePath = foundRobotFiles[0];
+                if (await this.validateRobotFileForTreeItem(robotFilePath, item)) {
+                    this.logger.trace(
+                        `[RobotFileService] Found single valid robot file for item "${item.data.base.name}": ${robotFilePath}`
+                    );
+                    return {
+                        exists: true,
+                        filePath: robotFilePath,
+                        fileName: robotFileName
+                    };
+                } else {
+                    this.logger.trace(
+                        `[RobotFileService] Found robot file but validation failed for item "${item.data.base.name}": ${robotFilePath}`
+                    );
+                    return {
+                        exists: false,
+                        fileName: robotFileName
+                    };
+                }
             }
 
-            try {
-                await fs.promises.access(actualRobotFilePath, fs.constants.F_OK);
-                const duplicateFiles = await this.findDuplicateRobotFiles(
-                    workspaceLocation,
-                    generatedRobotFilesOutputDirectory,
-                    robotFileName
-                );
+            // Multiple .robot files found, determine correct / best one based on metadata validation
+            this.logger.trace(
+                `[RobotFileService] Found ${foundRobotFiles.length} robot files for item "${item.data.base.name}", validating to find correct match`
+            );
 
+            const validFiles: string[] = [];
+            for (const filePath of foundRobotFiles) {
+                if (await this.validateRobotFileForTreeItem(filePath, item)) {
+                    validFiles.push(filePath);
+                }
+            }
+
+            if (validFiles.length === 1) {
+                this.logger.trace(
+                    `[RobotFileService] Found single valid robot file among multiple candidates for item "${item.data.base.name}": ${validFiles[0]}`
+                );
                 return {
                     exists: true,
-                    filePath: actualRobotFilePath,
+                    filePath: validFiles[0],
                     fileName: robotFileName,
-                    hierarchicalPath: actualHierarchicalPathOfItem,
-                    duplicateFiles: duplicateFiles.length > 0 ? duplicateFiles : undefined
+                    duplicateFiles: foundRobotFiles
                 };
-            } catch {
-                // this.logger.trace(`[RobotFileService] Robot file does not exist at exact path: ${actualRobotFilePath}`);
-            }
-
-            // If exact path not found, try to find files with different numbering patterns
-            const foundFiles = await this.findRobotFilesWithDifferentNumbering(
-                workspaceLocation,
-                generatedRobotFilesOutputDirectory,
-                item.data.base.name,
-                item.data.base.numbering
-            );
-
-            if (foundFiles.length > 0) {
-                const foundFilePath = foundFiles[0];
-                const foundFileName = path.basename(foundFilePath);
+            } else if (validFiles.length > 1) {
+                this.logger.warn(
+                    `[RobotFileService] Multiple valid robot files found for item "${item.data.base.name}": ${validFiles.join(", ")}`
+                );
+                // Fallback: Return the first valid file
                 return {
                     exists: true,
-                    filePath: foundFilePath,
-                    fileName: foundFileName,
-                    hierarchicalPath: actualHierarchicalPathOfItem,
-                    duplicateFiles: foundFiles.length > 1 ? foundFiles : undefined
+                    filePath: validFiles[0],
+                    fileName: robotFileName,
+                    duplicateFiles: foundRobotFiles
+                };
+            } else {
+                this.logger.warn(
+                    `[RobotFileService] Found ${foundRobotFiles.length} robot files but none are valid for item "${item.data.base.name}"`
+                );
+                return {
+                    exists: false,
+                    fileName: robotFileName,
+                    duplicateFiles: foundRobotFiles
                 };
             }
-
-            // this.logger.trace(`[RobotFileService] No robot file found for: ${item.data.base.name}`);
-            return {
-                exists: false,
-                hierarchicalPath: actualHierarchicalPathOfItem,
-                fileName: robotFileName
-            };
         } catch (error) {
             this.logger.error(`[RobotFileService] Error checking robot file existence:`, error);
             return { exists: false };
         }
-    }
-
-    /**
-     * Builds the hierarchical path for a test theme or test case set based on its position in the tree.
-     * When tests are generated for a specific item, that item becomes the root of the generated structure.
-     * @param item The tree item to build the path for
-     * @returns The hierarchical path with numbered prefixes
-     */
-    private buildHierarchicalPath(item: TestThemesTreeItem): string {
-        const pathParts: string[] = [];
-
-        if (item.data.elementType === "TestThemeNode") {
-            const itemName = item.data.base.name;
-            const numbering = item.data.base.numbering;
-
-            const lastNumberingPart = numbering ? numbering.split(".").pop() || numbering : "";
-            const prefix = lastNumberingPart ? `${lastNumberingPart}_` : "";
-            pathParts.push(`${prefix}${itemName}`);
-        } else if (item.data.elementType === "TestCaseSetNode") {
-            const parent = item.parent as TestThemesTreeItem | null;
-
-            if (parent && parent.data.elementType === "TestThemeNode") {
-                const parentName = parent.data.base.name;
-                const parentNumbering = parent.data.base.numbering;
-
-                const parentLastNumberingPart = parentNumbering
-                    ? parentNumbering.split(".").pop() || parentNumbering
-                    : "";
-                const parentPrefix = parentLastNumberingPart ? `${parentLastNumberingPart}_` : "";
-                pathParts.push(`${parentPrefix}${parentName}`);
-            } else {
-                const itemName = item.data.base.name;
-                const numbering = item.data.base.numbering;
-
-                const lastNumberingPart = numbering ? numbering.split(".").pop() || numbering : "";
-                const prefix = lastNumberingPart ? `${lastNumberingPart}_` : "";
-                pathParts.push(`${prefix}${itemName}`);
-            }
-        }
-
-        return pathParts.join(path.sep);
-    }
-
-    /**
-     * Resolves the folder name that exists in the filesystem while accounting for numbering prefixes
-     * (e.g., "1_TestTheme" vs "01_TestTheme" vs "001_TestTheme")
-     *
-     * @param workspaceLocation The workspace root location
-     * @param outputDirectory The output directory for robot files
-     * @param expectedFolderName The expected folder name to search for
-     * @returns The actual folder name if a match is found, or the expected folder name as fallback
-     */
-    private async resolveFolderName(
-        workspaceLocation: string,
-        outputDirectory: string,
-        expectedFolderName: string
-    ): Promise<string> {
-        const outputPath = path.join(workspaceLocation, outputDirectory);
-        const expectedPath = path.join(outputPath, expectedFolderName);
-
-        try {
-            await fs.promises.access(expectedPath, fs.constants.F_OK);
-            return expectedFolderName;
-        } catch {
-            // Expected path doesn't exist, try to find similar folders using regex
-            try {
-                const outputDirectoryFiles = await fs.promises.readdir(outputPath, { withFileTypes: true });
-                const match = expectedFolderName.match(/^(\d+)_(.+)$/);
-                if (match) {
-                    const [, numberingStr, folderName] = match;
-                    const numberingNum = parseInt(numberingStr, 10);
-
-                    if (!isNaN(numberingNum)) {
-                        // Create a regex pattern that matches any number of leading zeros followed by the numbering part
-                        // This will match: 1_FolderName, 01_FolderName, 001_FolderName, etc.
-                        const regexPattern = new RegExp(
-                            `^0*${numberingNum}_${folderName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`
-                        );
-
-                        for (const file of outputDirectoryFiles) {
-                            if (file.isDirectory() && regexPattern.test(file.name)) {
-                                this.logger.debug(
-                                    `[RobotFileService] Found matching folder with regex: ${file.name} (expected: ${expectedFolderName})`
-                                );
-                                return file.name;
-                            }
-                        }
-                    } else {
-                        // Edge case: non-numeric numbering
-                        for (const file of outputDirectoryFiles) {
-                            if (file.isDirectory()) {
-                                const folderNameWithoutNumbering = file.name.replace(/^\d+_/, "");
-                                const expectedNameWithoutNumbering = expectedFolderName.replace(/^\d+_/, "");
-
-                                if (folderNameWithoutNumbering === expectedNameWithoutNumbering) {
-                                    this.logger.debug(
-                                        `[RobotFileService] Found matching folder: ${file.name} (expected: ${expectedFolderName})`
-                                    );
-                                    return file.name;
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // No numbering found, use exact match
-                    for (const file of outputDirectoryFiles) {
-                        if (file.isDirectory() && file.name === expectedFolderName) {
-                            this.logger.debug(`[RobotFileService] Found exact folder match: ${file.name}`);
-                            return file.name;
-                        }
-                    }
-                }
-            } catch (error) {
-                this.logger.debug(`[RobotFileService] Error searching for folder "${expectedFolderName}":`, error);
-            }
-        }
-
-        return expectedFolderName;
-    }
-
-    /**
-     * Finds duplicate robot files with the same name in different folders
-     * @param workspaceLocation The workspace root location
-     * @param outputDirectory The output directory for robot files
-     * @param fileName The robot file name to search for
-     * @returns Array of duplicate file paths
-     */
-    private async findDuplicateRobotFiles(
-        workspaceLocation: string,
-        outputDirectory: string,
-        fileName: string
-    ): Promise<string[]> {
-        const outputPath = path.join(workspaceLocation, outputDirectory);
-        const duplicateFiles: string[] = [];
-
-        try {
-            const allFiles = await this.findAllRobotFiles(outputPath, fileName);
-            if (allFiles.length > 1) {
-                duplicateFiles.push(...allFiles);
-            }
-        } catch (error) {
-            this.logger.error(`[RobotFileService] Error while searching for duplicate files for "${fileName}":`, error);
-        }
-
-        return duplicateFiles;
     }
 
     /**
@@ -309,44 +166,36 @@ export class RobotFileService {
     }
 
     /**
-     * Recursively finds all robot files that match a regex pattern in the output directory
-     * @param searchPath The path to search in
-     * @param regexPattern The regex pattern to match against file names
-     * @returns Array of found file paths
-     */
-    private async findAllRobotFilesByRegex(searchPath: string, regexPattern: RegExp): Promise<string[]> {
-        const foundFiles: string[] = [];
-
-        try {
-            const items = await fs.promises.readdir(searchPath, { withFileTypes: true });
-
-            for (const item of items) {
-                const itemPath = path.join(searchPath, item.name);
-
-                if (item.isDirectory()) {
-                    const subFiles = await this.findAllRobotFilesByRegex(itemPath, regexPattern);
-                    foundFiles.push(...subFiles);
-                } else if (item.isFile() && regexPattern.test(item.name)) {
-                    foundFiles.push(itemPath);
-                }
-            }
-        } catch (error) {
-            this.logger.error(
-                `[RobotFileService] Error while searching for robot files in "${searchPath}" for regex pattern "${regexPattern}":`,
-                error
-            );
-        }
-
-        return foundFiles;
-    }
-
-    /**
      * Opens a robot file in VS Code editor
      * @param filePath The path of the robot file to open
+     * @param item Optional tree item to validate the robot file against
      * @returns Promise that resolves when the file is opened
      */
-    public async openRobotFile(filePath: string): Promise<void> {
+    public async openRobotFileInVSCodeEditor(filePath: string, item?: TestThemesTreeItem): Promise<void> {
         try {
+            if (item) {
+                const isValid = await this.validateRobotFileForTreeItem(filePath, item);
+                if (!isValid) {
+                    this.logger.trace(
+                        `[RobotFileService] Attempted to open robot file that doesn't match tree item ${item.data.base.name} (UniqueID: ${item.data.base.uniqueID})`
+                    );
+
+                    const correctFilePath = await this.getRobotFilePath(item);
+                    if (correctFilePath && correctFilePath !== filePath) {
+                        this.logger.trace(
+                            `[RobotFileService] Found correct robot file for item ${item.data.base.name}: ${correctFilePath}`
+                        );
+                        const document = await vscode.workspace.openTextDocument(correctFilePath);
+                        await vscode.window.showTextDocument(document);
+                        return;
+                    } else {
+                        this.logger.trace(
+                            `[RobotFileService] No correct robot file found for item ${item.data.base.name}`
+                        );
+                    }
+                }
+            }
+
             const document = await vscode.workspace.openTextDocument(filePath);
             await vscode.window.showTextDocument(document);
         } catch (error) {
@@ -359,6 +208,9 @@ export class RobotFileService {
 
     /**
      * Generates a robot file name based on the item name and numbering to generate the correct file suffix.
+     * Replaces invalid file path characters with underscores because
+     * testbench2robotframework replaces following special characters of a test theme / test case set name:
+     * < > : " / \ | ? * and spaces.
      * @param treeItemName The name of the test theme or test case set
      * @param treeItemNumbering The numbering prefix for the tree item
      * @returns The generated robot file name
@@ -366,93 +218,47 @@ export class RobotFileService {
     private generateRobotFileName(treeItemName: string, treeItemNumbering: string): string {
         const lastNumberingPart = treeItemNumbering ? treeItemNumbering.split(".")?.pop() || treeItemNumbering : "";
         const prefixOfFileName = lastNumberingPart ? `${lastNumberingPart}_` : "";
-        // Normalize whitespace to underscores for file name matching
-        const normalizedName = treeItemName.replace(/\s+/g, "_");
+        // Characters to replace with underscore:
+        // ["<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "]
+        const normalizedName = treeItemName.replace(/[<>:"/\\|?*\s]/g, "_");
+
         return `${prefixOfFileName}${normalizedName}.robot`;
     }
 
     /**
-     * Finds robot files that might exist with different numbering patterns using regex
-     * @param workspaceLocation The workspace root location
-     * @param outputDirectory The output directory for robot files
-     * @param itemName The name of the item
-     * @param numbering The numbering prefix for the item
-     * @returns Array of possible robot file paths
+     * Validates that a robot file is the correct one for a given tree item by checking its metadata
+     * @param robotFilePath The path to the robot file to validate
+     * @param item The tree item to validate against
+     * @returns Promise resolving to true if the robot file is valid for the item
      */
-    private async findRobotFilesWithDifferentNumbering(
-        workspaceLocation: string,
-        outputDirectory: string,
-        itemName: string,
-        numbering: string
-    ): Promise<string[]> {
-        // Extract the last part of the numbering (e.g. "1.2.2.1.1" will become "1")
-        const lastNumberingPart = numbering ? numbering.split(".")?.pop() || numbering : "";
-        // Normalize whitespace to underscores for file name matching
-        const normalizedName = itemName.replace(/\s+/g, "_");
-        const foundRobotFiles: string[] = [];
-        const outputPath = path.join(workspaceLocation, outputDirectory);
+    private async validateRobotFileForTreeItem(robotFilePath: string, item: TestThemesTreeItem): Promise<boolean> {
+        try {
+            const fileContent = await fs.promises.readFile(robotFilePath, "utf-8");
 
-        if (lastNumberingPart) {
-            const numberingNum = parseInt(lastNumberingPart, 10);
-            if (!isNaN(numberingNum)) {
-                // Create a regex pattern that matches any number of leading zeros followed by the numbering part
-                // This matches: 1_, 01_, 001_, 0001_, etc.
-                const regexPattern = new RegExp(
-                    `^0*${numberingNum}_${normalizedName.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\.robot$`
+            const uniqueIdMatch = fileContent.match(/Metadata\s+UniqueID\s+(.+)/);
+            if (!uniqueIdMatch) {
+                this.logger.trace(`[RobotFileService] Robot file ${robotFilePath} does not contain UniqueID metadata`);
+                return false;
+            }
+
+            const fileUniqueId = uniqueIdMatch[1].trim();
+            const itemUniqueId = item.data.base.uniqueID;
+
+            if (fileUniqueId === itemUniqueId) {
+                this.logger.trace(
+                    `[RobotFileService] Robot file ${robotFilePath} is valid for item ${item.data.base.name} (UniqueID: ${itemUniqueId})`
                 );
-
-                try {
-                    const allRegexMatchingRobotFiles = await this.findAllRobotFilesByRegex(outputPath, regexPattern);
-                    foundRobotFiles.push(...allRegexMatchingRobotFiles);
-                    if (allRegexMatchingRobotFiles.length > 0) {
-                        this.logger.trace(
-                            `[RobotFileService] Found robot files with regex pattern "${regexPattern}": ${allRegexMatchingRobotFiles.join(", ")}`
-                        );
-                    }
-                } catch (error) {
-                    this.logger.error(
-                        `[RobotFileService] Error while searching for robot files in "${outputPath}" for regex pattern "${regexPattern}":`,
-                        error
-                    );
-                }
+                return true;
             } else {
-                // Numbering is not numeric, try searching with exact matching
-                const exactFileName = `${lastNumberingPart}_${normalizedName}.robot`;
-                try {
-                    const allRobotFiles = await this.findAllRobotFiles(outputPath, exactFileName);
-                    foundRobotFiles.push(...allRobotFiles);
-                    if (allRobotFiles.length > 0) {
-                        this.logger.debug(
-                            `[RobotFileService] Found robot files for "${exactFileName}": ${allRobotFiles.join(", ")}`
-                        );
-                    }
-                } catch (error) {
-                    this.logger.error(
-                        `[RobotFileService] Error while searching for robot files in "${outputPath}" for exact file name "${exactFileName}":`,
-                        error
-                    );
-                }
-            }
-        } else {
-            // No numbering found, try searching for just the item name
-            const exactFileName = `${normalizedName}.robot`;
-            try {
-                const allRobotFiles = await this.findAllRobotFiles(outputPath, exactFileName);
-                foundRobotFiles.push(...allRobotFiles);
-                if (allRobotFiles.length > 0) {
-                    this.logger.debug(
-                        `[RobotFileService] Found robot files for "${exactFileName}": ${allRobotFiles.join(", ")}`
-                    );
-                }
-            } catch (error) {
-                this.logger.error(
-                    `[RobotFileService] Error while searching for robot files in "${outputPath}" for exact file name "${exactFileName}":`,
-                    error
+                this.logger.trace(
+                    `[RobotFileService] Robot file ${robotFilePath} UniqueID mismatch: expected ${itemUniqueId}, found ${fileUniqueId}`
                 );
+                return false;
             }
+        } catch (error) {
+            this.logger.error(`[RobotFileService] Error validating robot file ${robotFilePath}:`, error);
+            return false;
         }
-
-        return foundRobotFiles;
     }
 
     /**
