@@ -86,6 +86,7 @@ from .messages import (
     ERROR_DUPLICATE_KEYWORD_UID_IN_FILE,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
     ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
+    ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID_IN_EXISTING_RESOURCE,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
     ERROR_SUBDIVISON_MAPPING_FORMAT,
@@ -819,6 +820,12 @@ def pull_testbench_keyword(ls: LanguageServer, args):
         return
     change_identifier = ChangeAnnotationIdentifier()
     existing_keywords = resource.get_keywords(keyword_uid)
+    if not existing_keywords:
+        show_warning(
+            ls,
+            ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID_IN_EXISTING_RESOURCE.format(uid=keyword_uid),
+        )
+        return
     try:
         new_keyword = create_keyword_from_interaction(
             keyword_uid,
