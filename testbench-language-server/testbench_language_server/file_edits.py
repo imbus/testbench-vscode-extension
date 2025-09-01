@@ -56,8 +56,20 @@ def get_kw_tags_edit(
     if any(tag in existing_keyword_tags for tag in IGNORE_TAGS):
         return None
     new_tags = get_tags_values(get_keyword_tags(new_keyword))
+    existing_uid_index, existing_uid = next(
+        (
+            (index, tag)
+            for index, tag in enumerate(existing_keyword_tags)
+            if tag.startswith("tb:uid")
+        ),
+        (None, None),
+    )
+    new_uid = next((tag for tag in new_tags if tag.startswith("tb:uid")), None)
     additional_tags = [tag for tag in existing_keyword_tags if not tag.startswith("tb:")]
     new_tags.extend(additional_tags)
+    if existing_uid and new_uid and existing_uid.lower() == new_uid.lower():
+        next((new_tags.remove(tag) for tag in new_tags if tag.startswith("tb:uid")), None)
+        new_tags.insert(existing_uid_index, existing_uid)
     all_tags = Tags.from_params(new_tags)
     if get_tags_values(all_tags) == existing_keyword_tags:
         return None

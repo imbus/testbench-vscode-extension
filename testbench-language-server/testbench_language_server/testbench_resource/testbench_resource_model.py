@@ -243,7 +243,7 @@ class TestBenchResourceModel:
         keywords = []
         for kw in self.keywords:
             tags = get_kw_tags(kw)
-            if f"tb:uid:{uid}" in tags:
+            if any(tag in tags for tag in [f"tb:uid:{uid}", f"tb:uid:{uid.lower()}"]):
                 keywords.append(kw)
         return keywords
 

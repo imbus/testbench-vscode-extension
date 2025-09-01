@@ -637,7 +637,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     visited_keywords = []
     if new_resource and new_resource.keyword_section:
         for new_keyword in new_resource.keyword_section.body:
-            visited_keywords.append(get_kw_uid(new_keyword))
+            visited_keywords.append(get_kw_uid(new_keyword).lower())
             try:
                 keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
             except MultipleKeywordsWithUid as e:
@@ -664,7 +664,10 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         for existing_keyword in existing_resource.keyword_section.body:
             if not isinstance(existing_keyword, Keyword):
                 continue
-            if not get_kw_uid(existing_keyword) or get_kw_uid(existing_keyword) in visited_keywords:
+            if (
+                not get_kw_uid(existing_keyword)
+                or get_kw_uid(existing_keyword).lower() in visited_keywords
+            ):
                 continue
             if get_keyword_tags(existing_keyword) and any(
                 tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
