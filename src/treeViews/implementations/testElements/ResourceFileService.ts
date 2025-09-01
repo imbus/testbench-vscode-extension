@@ -3,6 +3,7 @@
  * @description Service for managing resource files related to Test Elements Tree.
  */
 
+import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { TestBenchLogger } from "../../../testBenchLogger";
@@ -161,8 +162,12 @@ export class ResourceFileService {
         let relativePathComponents: string[];
 
         if (resourceDirectoryMarker) {
-            const resourceDirectoryMarkerIndex = splitPathComponents.findIndex(
-                (component) => component === resourceDirectoryMarker
+            const resourceDirectoryMarkerIndex: number = await vscode.commands.executeCommand(
+                "testbench_ls.get_resource_directory_subdivision_index",
+                {
+                    subdivision_parts: normalizedPathComponents,
+                    resource_directory_regex: resourceDirectoryMarker
+                }
             );
 
             if (resourceDirectoryMarkerIndex !== -1) {
