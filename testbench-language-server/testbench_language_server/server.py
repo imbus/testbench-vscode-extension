@@ -86,6 +86,7 @@ from .messages import (
     ERROR_DUPLICATE_KEYWORD_UID_IN_FILE,
     ERROR_EMPTY_OUTPUT_DIRECTORY,
     ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
+    ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID_IN_EXISTING_RESOURCE,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
     ERROR_SUBDIVISON_MAPPING_FORMAT,
@@ -556,6 +557,21 @@ def attempt_push_keyword(ls: LanguageServer, args):
         {"path": document_uri, "keyword_uid": keyword_uid},
     )
 
+@testbench_ls.command("testbench_ls.get_resource_directory_subdivision_index")
+def get_resource_directory_subdivision_index(ls: LanguageServer, kwargs) -> int:
+    kwargs, *_ = kwargs
+    subdivision_parts = kwargs.get("subdivision_parts")
+    resource_directory_regex = kwargs.get("resource_directory_regex")
+    if not subdivision_parts:
+        return -1
+    for index, part in enumerate(subdivision_parts):
+        resource_directory_match = re.match(
+            resource_directory_regex, part, flags=re.IGNORECASE
+        )
+        if resource_directory_match:
+            return index
+    return -1
+    
 
 @testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
 def push_testbench_subdivision(ls: LanguageServer, kwargs):
@@ -637,7 +653,7 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
     visited_keywords = []
     if new_resource and new_resource.keyword_section:
         for new_keyword in new_resource.keyword_section.body:
-            visited_keywords.append(get_kw_uid(new_keyword))
+            visited_keywords.append(get_kw_uid(new_keyword).lower())
             try:
                 keyword_match = get_matching_testbench_keyword(new_keyword, existing_resource)
             except MultipleKeywordsWithUid as e:
@@ -664,7 +680,10 @@ def pull_testbench_subdivision(ls: LanguageServer, args):
         for existing_keyword in existing_resource.keyword_section.body:
             if not isinstance(existing_keyword, Keyword):
                 continue
-            if not get_kw_uid(existing_keyword) or get_kw_uid(existing_keyword) in visited_keywords:
+            if (
+                not get_kw_uid(existing_keyword)
+                or get_kw_uid(existing_keyword).lower() in visited_keywords
+            ):
                 continue
             if get_keyword_tags(existing_keyword) and any(
                 tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(existing_keyword))
@@ -816,6 +835,12 @@ def pull_testbench_keyword(ls: LanguageServer, args):
         return
     change_identifier = ChangeAnnotationIdentifier()
     existing_keywords = resource.get_keywords(keyword_uid)
+    if not existing_keywords:
+        show_warning(
+            ls,
+            ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID_IN_EXISTING_RESOURCE.format(uid=keyword_uid),
+        )
+        return
     try:
         new_keyword = create_keyword_from_interaction(
             keyword_uid,

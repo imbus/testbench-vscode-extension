@@ -17,7 +17,10 @@ def get_test_elements(tb_connection: TestBenchResourceConnection) -> list[TestEl
 def get_test_element(tb_connection: TestBenchResourceConnection, uid: str) -> dict:
     return next(
         filter(
-            lambda test_element: test_element.uniqueID == uid,
+            lambda test_element: test_element.uniqueID == uid
+            or test_element.uniqueID
+            and uid
+            and test_element.uniqueID.lower() == uid.lower(),
             get_test_elements(tb_connection),
         ),
         {},

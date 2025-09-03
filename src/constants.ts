@@ -61,7 +61,7 @@ export const ConfigKeys = {
     TB2ROBOT_COMPOUND_LOGGING: "compoundInteractionLogging",
     TB2ROBOT_LOG_SUITE_NUMBERING: "logSuiteNumbering",
     TB2ROBOT_RESOURCE_DIR: "resourceDirectoryPath",
-    TB2ROBOT_RESOURCE_DIRECTORY_MARKER: "resourceDirectoryMarker",
+    TB2ROBOT_RESOURCE_DIRECTORY_MARKER: "resourceRootRegex",
     TB2ROBOT_LIBRARY_MARKER: "libraryMarker",
     TB2ROBOT_LIBRARY_ROOT: "libraryRoot",
     TB2ROBOT_RESOURCE_MARKER: "resourceMarker",

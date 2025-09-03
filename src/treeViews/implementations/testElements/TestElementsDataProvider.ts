@@ -354,9 +354,11 @@ export class TestElementsDataProvider {
          * @param node The current tree node to process.
          * @returns An array of all descendant TestElementData items that are resource files.
          */
-        const findResourcesAndMarkVirtuals = (node: TestElementData): TestElementData[] => {
-            const resourcesInChildren = node.children?.flatMap((child) => findResourcesAndMarkVirtuals(child)) || [];
-
+        const findResourcesAndMarkVirtuals = async (node: TestElementData): Promise<TestElementData[]> => {
+            const resourcesInChildrenArrays = await Promise.all(
+                node.children?.map((child) => findResourcesAndMarkVirtuals(child)) || []
+            );
+            const resourcesInChildren = resourcesInChildrenArrays.flat();
             if (node.testElementType === TestElementType.Subdivision) {
                 if (ResourceFileService.hasResourceMarker(node.originalName)) {
                     resourcesInChildren.push(node);
@@ -367,7 +369,13 @@ export class TestElementsDataProvider {
 
                     for (const descendantResource of resourcesInChildren) {
                         const descendantResourcePathParts = descendantResource.hierarchicalName.split("/");
-                        const markerPositionInPath = descendantResourcePathParts.indexOf(resourceDirectoryMarker);
+                        const markerPositionInPath: number = await vscode.commands.executeCommand(
+                            "testbench_ls.get_resource_directory_subdivision_index",
+                            {
+                                resource_directory_regex: resourceDirectoryMarker,
+                                subdivision_parts: descendantResourcePathParts
+                            }
+                        );
 
                         if (markerPositionInPath !== -1) {
                             // Marker found, folder is virtual if it's at or before the marker in the path.

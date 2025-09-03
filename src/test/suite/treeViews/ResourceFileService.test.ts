@@ -241,7 +241,7 @@ suite("ResourceFileService", function () {
                 if (key === "resourceDirectoryPath") {
                     return "rf_resources" as any;
                 }
-                if (key === "resourceDirectoryMarker") {
+                if (key === "resourceRootRegex") {
                     return "resources" as any;
                 }
                 if (key === "resourceMarker") {
