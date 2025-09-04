@@ -334,7 +334,8 @@ suite("TestBenchLogger Tests", function () {
         (enoentError as any).code = "ENOENT";
         fsStubs.access.rejects(enoentError);
 
-        // Reset appendFile to track calls after file recreation
+        fsStubs.mkdir.reset();
+        fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
         fsStubs.appendFile.resolves();
 
@@ -354,6 +355,8 @@ suite("TestBenchLogger Tests", function () {
     test("should handle existing log file without recreation", async () => {
         fsStubs.access.resolves();
 
+        fsStubs.mkdir.reset();
+        fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
         fsStubs.appendFile.resolves();
 
@@ -380,6 +383,8 @@ suite("TestBenchLogger Tests", function () {
         (createError as any).code = "EPERM";
         fsStubs.writeFile.rejects(createError);
 
+        fsStubs.mkdir.reset();
+        fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
 
         const testMessage = "Test message with file creation error";
@@ -395,6 +400,9 @@ suite("TestBenchLogger Tests", function () {
         const otherError = new Error("Permission denied");
         (otherError as any).code = "EPERM";
         fsStubs.access.rejects(otherError);
+
+        fsStubs.mkdir.reset();
+        fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
 
         const testMessage = "Test message with access error";
@@ -411,6 +419,8 @@ suite("TestBenchLogger Tests", function () {
         (enoentError as any).code = "ENOENT";
         fsStubs.access.rejects(enoentError);
 
+        fsStubs.mkdir.reset();
+        fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
         fsStubs.appendFile.resolves();
 
