@@ -30,7 +30,9 @@
         "Testing"
     ],
     "activationEvents": [
-        "onView:testBenchExplorer"
+        "onView:testbenchExtension.webView",
+        "onCommand:testbenchExtension.login",
+        "onAuthenticationRequest:testbench-auth"
     ],
     "main": "./dist/extension.js",
     "contributes": {
