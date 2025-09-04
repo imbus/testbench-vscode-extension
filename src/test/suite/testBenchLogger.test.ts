@@ -330,13 +330,13 @@ suite("TestBenchLogger Tests", function () {
     });
 
     test("should recreate missing log file when writing logs", async () => {
-        const enoentError = new Error("File not found");
-        (enoentError as any).code = "ENOENT";
-        fsStubs.access.rejects(enoentError);
-
         fsStubs.mkdir.reset();
         fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
+
+        const enoentError = new Error("File not found");
+        (enoentError as any).code = "ENOENT";
+        fsStubs.access.rejects(enoentError);
         fsStubs.appendFile.resolves();
 
         const testMessage = "Test message after file recreation";
@@ -353,11 +353,11 @@ suite("TestBenchLogger Tests", function () {
     });
 
     test("should handle existing log file without recreation", async () => {
-        fsStubs.access.resolves();
-
         fsStubs.mkdir.reset();
         fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
+
+        fsStubs.access.resolves();
         fsStubs.appendFile.resolves();
 
         const testMessage = "Test message with existing file";
@@ -375,6 +375,10 @@ suite("TestBenchLogger Tests", function () {
     });
 
     test("should handle errors when recreating log file", async () => {
+        fsStubs.mkdir.reset();
+        fsStubs.writeFile.reset();
+        fsStubs.appendFile.reset();
+
         const enoentError = new Error("File not found");
         (enoentError as any).code = "ENOENT";
         fsStubs.access.rejects(enoentError);
@@ -382,10 +386,6 @@ suite("TestBenchLogger Tests", function () {
         const createError = new Error("Permission denied");
         (createError as any).code = "EPERM";
         fsStubs.writeFile.rejects(createError);
-
-        fsStubs.mkdir.reset();
-        fsStubs.writeFile.reset();
-        fsStubs.appendFile.reset();
 
         const testMessage = "Test message with file creation error";
         await logger.log("Info", testMessage);
@@ -397,13 +397,13 @@ suite("TestBenchLogger Tests", function () {
     });
 
     test("should handle non-ENOENT errors when checking file existence", async () => {
-        const otherError = new Error("Permission denied");
-        (otherError as any).code = "EPERM";
-        fsStubs.access.rejects(otherError);
-
         fsStubs.mkdir.reset();
         fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
+
+        const otherError = new Error("Permission denied");
+        (otherError as any).code = "EPERM";
+        fsStubs.access.rejects(otherError);
 
         const testMessage = "Test message with access error";
         await logger.log("Info", testMessage);
@@ -415,13 +415,13 @@ suite("TestBenchLogger Tests", function () {
     });
 
     test("should handle concurrent log writes with missing file", async () => {
-        const enoentError = new Error("File not found");
-        (enoentError as any).code = "ENOENT";
-        fsStubs.access.rejects(enoentError);
-
         fsStubs.mkdir.reset();
         fsStubs.writeFile.reset();
         fsStubs.appendFile.reset();
+
+        const enoentError = new Error("File not found");
+        (enoentError as any).code = "ENOENT";
+        fsStubs.access.rejects(enoentError);
         fsStubs.appendFile.resolves();
 
         // 3 concurrent log writes
