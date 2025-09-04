@@ -30,6 +30,8 @@ suite("TestBenchLogger Tests", function () {
         readdir: sinon.SinonStub;
         rename: sinon.SinonStub;
         unlink: sinon.SinonStub;
+        access: sinon.SinonStub;
+        writeFile: sinon.SinonStub;
     };
     let configStub: sinon.SinonStub;
     let vscodeConfigStub: sinon.SinonStub;
@@ -54,7 +56,9 @@ suite("TestBenchLogger Tests", function () {
             stat: testEnv.sandbox.stub(fs.promises, "stat"),
             readdir: testEnv.sandbox.stub(fs.promises, "readdir"),
             rename: testEnv.sandbox.stub(fs.promises, "rename").resolves(),
-            unlink: testEnv.sandbox.stub(fs.promises, "unlink").resolves()
+            unlink: testEnv.sandbox.stub(fs.promises, "unlink").resolves(),
+            access: testEnv.sandbox.stub(fs.promises, "access").resolves(),
+            writeFile: testEnv.sandbox.stub(fs.promises, "writeFile").resolves()
         };
 
         testEnv.sandbox.stub(console, "log");
@@ -323,5 +327,105 @@ suite("TestBenchLogger Tests", function () {
         const logContent = fsStubs.appendFile.getCall(0).args[1];
         assert.ok(logContent.includes(specialMessage));
         assert.ok(logContent.includes("🎉"));
+    });
+
+    test("should recreate missing log file when writing logs", async () => {
+        const enoentError = new Error("File not found");
+        (enoentError as any).code = "ENOENT";
+        fsStubs.access.rejects(enoentError);
+
+        // Reset appendFile to track calls after file recreation
+        fsStubs.appendFile.reset();
+        fsStubs.appendFile.resolves();
+
+        const testMessage = "Test message after file recreation";
+        await logger.log("Info", testMessage);
+
+        assert.ok(fsStubs.access.calledOnce);
+        assert.ok(fsStubs.access.calledWith(logFilePath));
+        assert.ok(fsStubs.mkdir.calledWith(logFolderPath, { recursive: true }));
+        assert.ok(fsStubs.writeFile.calledOnce);
+        assert.ok(fsStubs.writeFile.calledWith(logFilePath, "", { encoding: "utf8" }));
+        assert.ok(fsStubs.appendFile.calledOnce);
+        const logContent = fsStubs.appendFile.getCall(0).args[1];
+        assert.ok(logContent.includes(testMessage));
+    });
+
+    test("should handle existing log file without recreation", async () => {
+        fsStubs.access.resolves();
+
+        fsStubs.appendFile.reset();
+        fsStubs.appendFile.resolves();
+
+        const testMessage = "Test message with existing file";
+        await logger.log("Info", testMessage);
+
+        assert.ok(fsStubs.access.calledOnce);
+        assert.ok(fsStubs.access.calledWith(logFilePath));
+
+        assert.ok(!fsStubs.mkdir.called);
+        assert.ok(!fsStubs.writeFile.called);
+
+        assert.ok(fsStubs.appendFile.calledOnce);
+        const logContent = fsStubs.appendFile.getCall(0).args[1];
+        assert.ok(logContent.includes(testMessage));
+    });
+
+    test("should handle errors when recreating log file", async () => {
+        const enoentError = new Error("File not found");
+        (enoentError as any).code = "ENOENT";
+        fsStubs.access.rejects(enoentError);
+
+        const createError = new Error("Permission denied");
+        (createError as any).code = "EPERM";
+        fsStubs.writeFile.rejects(createError);
+
+        fsStubs.appendFile.reset();
+
+        const testMessage = "Test message with file creation error";
+        await logger.log("Info", testMessage);
+
+        assert.ok(fsStubs.access.calledOnce);
+        assert.ok(fsStubs.mkdir.calledWith(logFolderPath, { recursive: true }));
+        assert.ok(fsStubs.writeFile.calledOnce);
+        assert.ok(!fsStubs.appendFile.called);
+    });
+
+    test("should handle non-ENOENT errors when checking file existence", async () => {
+        const otherError = new Error("Permission denied");
+        (otherError as any).code = "EPERM";
+        fsStubs.access.rejects(otherError);
+        fsStubs.appendFile.reset();
+
+        const testMessage = "Test message with access error";
+        await logger.log("Info", testMessage);
+
+        assert.ok(fsStubs.access.calledOnce);
+        assert.ok(!fsStubs.mkdir.called);
+        assert.ok(!fsStubs.writeFile.called);
+        assert.ok(!fsStubs.appendFile.called);
+    });
+
+    test("should handle concurrent log writes with missing file", async () => {
+        const enoentError = new Error("File not found");
+        (enoentError as any).code = "ENOENT";
+        fsStubs.access.rejects(enoentError);
+
+        fsStubs.appendFile.reset();
+        fsStubs.appendFile.resolves();
+
+        // 3 concurrent log writes
+        const promises = [];
+        for (let i = 0; i < 3; i++) {
+            promises.push(logger.log("Info", `Concurrent message ${i}`));
+        }
+
+        await Promise.all(promises);
+
+        assert.ok(fsStubs.access.callCount >= 3);
+
+        assert.ok(fsStubs.mkdir.calledWith(logFolderPath, { recursive: true }));
+        assert.ok(fsStubs.writeFile.called);
+        assert.strictEqual(fsStubs.appendFile.callCount, 3);
     });
 });
