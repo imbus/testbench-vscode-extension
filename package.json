@@ -1008,19 +1008,7 @@
                     "group": "inline@1"
                 }
             ]
-        },
-        "languages": [
-            {
-                "id": "robotframework",
-                "aliases": [
-                    "robotframework"
-                ],
-                "extensions": [
-                    ".resource"
-                ],
-                "configuration": "./language-configuration.json"
-            }
-        ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run package",
