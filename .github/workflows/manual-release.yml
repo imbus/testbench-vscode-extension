@@ -1,0 +1,169 @@
+name: Manual Release
+
+# Trigger only manually
+on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Version number (e.g., 1.2.3)"
+                required: true
+                type: string
+            release_type:
+                description: "Type of release"
+                required: true
+                default: "patch"
+                type: choice
+                options:
+                    - patch
+                    - minor
+                    - major
+                    - prerelease
+            create_tag:
+                description: "Create git tag"
+                required: false
+                default: true
+                type: boolean
+            update_changelog:
+                description: "Update CHANGELOG.md"
+                required: false
+                default: true
+                type: boolean
+
+jobs:
+    manual-release:
+        name: Create Manual Release
+        runs-on: ubuntu-latest
+
+        steps:
+            # Checkout code
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            # Set up Node.js
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "lts/*"
+                  check-latest: true
+
+            # Install dependencies
+            - name: Install dependencies
+              run: npm ci
+
+            # Install VSCE
+            - name: Install VSCE
+              run: npm install -g @vscode/vsce
+
+            # Update package.json version
+            - name: Update version in package.json
+              run: |
+                  # Update package.json with new version
+                  npm version ${{ inputs.version }} --no-git-tag-version
+                  echo "Updated package.json to version ${{ inputs.version }}"
+
+            # Update CHANGELOG.md if requested
+            - name: Update CHANGELOG.md
+              if: inputs.update_changelog == 'true'
+              run: |
+                  # Create a basic changelog entry
+                  VERSION="${{ inputs.version }}"
+                  DATE=$(date +%Y-%m-%d)
+
+                  # Create changelog entry
+                  CHANGELOG_ENTRY="## [$VERSION] - $DATE\n\n### Added\n- Manual release $VERSION\n\n### Changed\n- Updated version to $VERSION\n\n"
+
+                  # Insert at the top of CHANGELOG.md (after the header)
+                  if [ -f "CHANGELOG.md" ]; then
+                      # Find the line after the header
+                      HEADER_LINE=$(grep -n "All notable changes" CHANGELOG.md | cut -d: -f1)
+                      if [ ! -z "$HEADER_LINE" ]; then
+                          # Insert after the header line + 2 (to account for the blank line and comment)
+                          INSERT_LINE=$((HEADER_LINE + 3))
+                          sed -i "${INSERT_LINE}i\\${CHANGELOG_ENTRY}" CHANGELOG.md
+                      else
+                          # If no header found, prepend to file
+                          echo -e "${CHANGELOG_ENTRY}\n$(cat CHANGELOG.md)" > CHANGELOG.md
+                      fi
+                  else
+                      # Create new CHANGELOG.md
+                      echo -e "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n${CHANGELOG_ENTRY}" > CHANGELOG.md
+                  fi
+
+                  echo "Updated CHANGELOG.md with version $VERSION"
+
+            # Compile the extension
+            - name: Compile Extension
+              run: npm run package
+
+            # Build VSIX package
+            - name: Build VSIX Package
+              run: npm run vsix-package
+
+            # Verify VSIX was created
+            - name: Verify VSIX
+              run: |
+                  VSIX_FILES=(*.vsix)
+                  if [ ${#VSIX_FILES[@]} -eq 0 ]; then
+                    echo "No .vsix file found!"
+                    exit 1
+                  fi
+                  echo "VSIX file created: ${VSIX_FILES[0]}"
+                  ls -l *.vsix
+
+            # Create git tag if requested
+            - name: Create Git Tag
+              if: inputs.create_tag == 'true'
+              run: |
+                  git config --local user.email "action@github.com"
+                  git config --local user.name "GitHub Action"
+                  git add package.json CHANGELOG.md
+                  git commit -m "chore(release): ${{ inputs.version }} [skip ci]"
+                  git tag -a "v${{ inputs.version }}" -m "Release version ${{ inputs.version }}"
+                  git push origin main
+                  git push origin "v${{ inputs.version }}"
+
+            # Create GitHub Release
+            - name: Create GitHub Release
+              uses: actions/create-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: v${{ inputs.version }}
+                  release_name: Release v${{ inputs.version }}
+                  body: |
+                      ## What's Changed
+
+                      This is a manual release version ${{ inputs.version }}.
+
+                      ### Files Changed
+                      - Updated package.json version
+                      - Updated CHANGELOG.md
+                      - Built VSIX package
+
+                      ### Download
+                      Download the VSIX file from the assets below to install this extension.
+                  draft: false
+                  prerelease: ${{ inputs.release_type == 'prerelease' }}
+
+            # Upload VSIX to release
+            - name: Upload VSIX to Release
+              uses: actions/upload-release-asset@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ steps.create_release.outputs.upload_url }}
+                  asset_path: ./testbench-extension-${{ inputs.version }}.vsix
+                  asset_name: testbench-extension-v${{ inputs.version }}.vsix
+                  asset_content_type: application/octet-stream
+
+            # Summary
+            - name: Release Summary
+              run: |
+                  echo "✅ Manual release completed successfully!"
+                  echo "📦 Version: ${{ inputs.version }}"
+                  echo "🏷️  Tag: v${{ inputs.version }}"
+                  echo "📝 Changelog: Updated"
+                  echo "📦 VSIX: testbench-extension-v${{ inputs.version }}.vsix"
+                  echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/v${{ inputs.version }}"
