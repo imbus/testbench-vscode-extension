@@ -4,22 +4,6 @@ name: Release
 # Trigger the workflow only manually
 on:
     workflow_dispatch:
-        inputs:
-            release_type:
-                description: "Type of release"
-                required: true
-                default: "patch"
-                type: choice
-                options:
-                    - patch
-                    - minor
-                    - major
-                    - prerelease
-            dry_run:
-                description: "Run in dry-run mode (no actual release)"
-                required: false
-                default: false
-                type: boolean
 
 jobs:
     release:
@@ -90,17 +74,8 @@ jobs:
               env:
                   # Provide GitHub token to allow semantic-release to interact with GitHub
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  # Override release type if specified
-                  RELEASE_TYPE: ${{ inputs.release_type }}
-                  DRY_RUN: ${{ inputs.dry_run }}
-              run: |
-                  if [ "$DRY_RUN" = "true" ]; then
-                      echo "Running semantic-release in dry-run mode..."
-                      npm run release -- --dry-run
-                  else
-                      echo "Running semantic-release for $RELEASE_TYPE release..."
-                      npx semantic-release
-                  fi
+              # semantic-release determines the release type from commits.
+              run: npx semantic-release
 
             # Step 5: Get the new version from package.json
             # - name: Get Version
