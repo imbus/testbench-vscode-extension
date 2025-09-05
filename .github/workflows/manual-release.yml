@@ -5,29 +5,25 @@ on:
     workflow_dispatch:
         inputs:
             version:
-                description: "Version number (e.g., 1.2.3)"
-                required: true
+                description: "The version to release (e.g., 1.2.3)"
                 type: string
+                required: true
             release_type:
                 description: "Type of release"
-                required: true
-                default: "patch"
                 type: choice
                 options:
                     - patch
                     - minor
                     - major
-                    - prerelease
+                default: "patch"
             create_tag:
-                description: "Create git tag"
-                required: false
-                default: true
+                description: "Create a git tag for this release"
                 type: boolean
+                default: true
             update_changelog:
-                description: "Update CHANGELOG.md"
-                required: false
-                default: true
+                description: "Update the CHANGELOG.md file"
                 type: boolean
+                default: true
 
 jobs:
     manual-release:

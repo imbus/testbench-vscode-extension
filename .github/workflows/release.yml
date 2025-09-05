@@ -48,6 +48,35 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
+            # Set up Python
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.10"
+                  cache: "pip"
+
+            # Install Python build tools
+            - name: Install Python Build Tools
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install pip-tools nox
+
+            # Prepare Python dependencies
+            - name: Clean previous bundled Python libs
+              run: |
+                  rm -rf bundled/libs
+                  mkdir -p bundled/libs
+
+            - name: Generate requirements.txt for Python
+              id: pip-compile
+              run: pip-compile --resolver=backtracking --output-file=requirements.txt pyproject.toml
+              continue-on-error: true
+
+            - name: Bundle Python Dependencies using Nox
+              id: nox-bundle
+              run: python -m nox --session bundle_dependencies
+              continue-on-error: true
+
             # Step 4: Install VS Code Extension Manager
             - name: Install VSCE
               run: npm install -g @vscode/vsce
@@ -66,14 +95,14 @@ jobs:
                       npm run release -- --dry-run
                   else
                       echo "Running semantic-release for $RELEASE_TYPE release..."
-                      npm run release
+                      npx semantic-release
                   fi
 
             # Step 5: Get the new version from package.json
-            - name: Get Version
-              id: get_version
-              run: |
-                  echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+            # - name: Get Version
+            #   id: get_version
+            #   run: |
+            #       echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
             # Step 6: Publish the extension to the Visual Studio Code Marketplace
             # Note: Uncomment this step after setting up VSCE_TOKEN in repository secrets
