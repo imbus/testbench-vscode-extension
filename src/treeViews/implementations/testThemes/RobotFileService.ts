@@ -161,7 +161,7 @@ export class RobotFileService {
                 );
             } else {
                 this.logger.error(
-                    `[RobotFileService] (Changed) Error while searching for robot files in "${searchPath}" for file name "${fileName}":`,
+                    `[RobotFileService] Error while searching for robot files in "${searchPath}" for file name "${fileName}":`,
                     error
                 );
             }

@@ -98,6 +98,10 @@ suite("TestElementsTreeView", function () {
         (treeView as any).logger = mockLogger;
         (treeView as any).resourceFileService = mockResourceFileService;
 
+        mockResourceFileService.constructAbsolutePath.resolves(undefined);
+        mockResourceFileService.pathExists.resolves(false);
+        mockResourceFileService.directoryExists.resolves(false);
+
         (treeView as any).registerEventHandlers();
     });
 
@@ -604,9 +608,7 @@ suite("TestElementsTreeView", function () {
             mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource.resource");
             mockResourceFileService.fileExists.resolves(false);
             mockResourceFileService.ensureFileExists.resolves();
-            const openTextDocumentStub = testEnv.sandbox
-                .stub(vscode.workspace, "openTextDocument")
-                .resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
             const showTextDocumentStub = testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
             await (treeView as any).handleInteractionDoubleClick(mockInteraction);
@@ -641,9 +643,7 @@ suite("TestElementsTreeView", function () {
 
             mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource.resource");
             mockResourceFileService.fileExists.resolves(true);
-            const openTextDocumentStub = testEnv.sandbox
-                .stub(vscode.workspace, "openTextDocument")
-                .resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
             const showTextDocumentStub = testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
             await (treeView as any).handleInteractionDoubleClick(mockInteraction);
@@ -1001,9 +1001,7 @@ suite("TestElementsTreeView", function () {
 
             mockResourceFileService.constructAbsolutePath.resolves("/test/path/ParentResource.resource");
             mockResourceFileService.fileExists.resolves(true);
-            const openTextDocumentStub = testEnv.sandbox
-                .stub(vscode.workspace, "openTextDocument")
-                .resolves(mockDocument);
+            testEnv.sandbox.stub(vscode.workspace, "openTextDocument").resolves(mockDocument);
             const showTextDocumentStub = testEnv.sandbox.stub(vscode.window, "showTextDocument").resolves(mockEditor);
 
             await treeView.openExistingInteractionResource(mockInteraction);
