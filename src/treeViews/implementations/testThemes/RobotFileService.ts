@@ -141,7 +141,6 @@ export class RobotFileService {
      */
     private async findAllRobotFiles(searchPath: string, fileName: string): Promise<string[]> {
         const foundFiles: string[] = [];
-
         try {
             const items = await fs.promises.readdir(searchPath, { withFileTypes: true });
 
@@ -155,11 +154,17 @@ export class RobotFileService {
                     foundFiles.push(itemPath);
                 }
             }
-        } catch (error) {
-            this.logger.error(
-                `[RobotFileService] Error while searching for robot files in "${searchPath}" for file name "${fileName}":`,
-                error
-            );
+        } catch (error: any) {
+            if (error.code === "ENOENT") {
+                this.logger.trace(
+                    `[RobotFileService] Search directory not found: ${searchPath}. This is expected if tests have not been generated yet.`
+                );
+            } else {
+                this.logger.error(
+                    `[RobotFileService] Error while searching for robot files in "${searchPath}" for file name "${fileName}":`,
+                    error
+                );
+            }
         }
 
         return foundFiles;

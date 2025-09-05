@@ -30,7 +30,9 @@
         "Testing"
     ],
     "activationEvents": [
-        "onView:testBenchExplorer"
+        "onView:testbenchExtension.webView",
+        "onCommand:testbenchExtension.login",
+        "onAuthenticationRequest:testbench-auth"
     ],
     "main": "./dist/extension.js",
     "contributes": {
@@ -1006,19 +1008,7 @@
                     "group": "inline@1"
                 }
             ]
-        },
-        "languages": [
-            {
-                "id": "robotframework",
-                "aliases": [
-                    "robotframework"
-                ],
-                "extensions": [
-                    ".resource"
-                ],
-                "configuration": "./language-configuration.json"
-            }
-        ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run package",
@@ -1061,7 +1051,7 @@
         "@typescript-eslint/parser": "^8.9.0",
         "@vscode/test-cli": "^0.0.10",
         "@vscode/test-electron": "^2.5.2",
-        "@vscode/vsce": "^3.5.0",
+        "@vscode/vsce": "^3.6.0",
         "conventional-changelog-conventionalcommits": "^8.0.0",
         "eslint": "^9.29.0",
         "fast-deep-equal": "^3.1.3",
