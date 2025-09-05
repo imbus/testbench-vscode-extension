@@ -5,8 +5,6 @@ module.exports = {
         { name: "feature", prerelease: true },
         { name: "feature/**", prerelease: true }
     ],
-    // Only release when explicitly triggered (manual workflow)
-    ci: false,
     preset: "conventionalcommits",
     plugins: [
         // Analyze commits to determine version bump
