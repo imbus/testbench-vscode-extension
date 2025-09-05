@@ -26,6 +26,10 @@ jobs:
         name: Create Release
         # Specify the virtual environment to run the job
         runs-on: ubuntu-latest
+        permissions:
+            contents: write # to create release and commit
+            issues: write # to comment on issues
+            pull-requests: write # to comment on pull requests
 
         steps:
             # Step 1: Checkout the source code from the repository
