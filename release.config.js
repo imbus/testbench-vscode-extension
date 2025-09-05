@@ -1,10 +1,9 @@
 module.exports = {
     branches: [
         "main",
-        {
-            name: "prerelease",
-            prerelease: true
-        }
+        { name: "prerelease", prerelease: true },
+        { name: "feature", prerelease: true },
+        { name: "feature/**", prerelease: true }
     ],
     // Only release when explicitly triggered (manual workflow)
     ci: false,
