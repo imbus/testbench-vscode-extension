@@ -30,7 +30,9 @@
         "Testing"
     ],
     "activationEvents": [
-        "onView:testBenchExplorer"
+        "onView:testbenchExtension.webView",
+        "onCommand:testbenchExtension.login",
+        "onAuthenticationRequest:testbench-auth"
     ],
     "main": "./dist/extension.js",
     "contributes": {
@@ -139,7 +141,7 @@
                     },
                     "testbenchExtension.resourceDirectoryPath": {
                         "type": "string",
-                        "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location.",
+                        "description": "Directory containing the Robot Framework resource files. The path is relative to the workspace location. Import paths of Robot Framework resources will be prefixed with this path.",
                         "order": 16,
                         "default": "",
                         "scope": "window"
@@ -169,9 +171,9 @@
                         "order": 18,
                         "scope": "window"
                     },
-                    "testbenchExtension.resourceDirectoryMarker": {
+                    "testbenchExtension.resourceRootRegex": {
                         "type": "string",
-                        "description": "The Subdivision that matches with this marker will be considered as the <resource-directory>. Import paths of Robot Framework resources will be relative to this Subdivision.",
+                        "description": "Regular expression that can be used to identify the TestBench Subdivision that corresponds to the <resource-directory>. Resources will be imported relative to this Subdivision based on the test elements structure in TestBench.",
                         "default": "resources",
                         "order": 19,
                         "scope": "window"
@@ -790,19 +792,7 @@
                     "group": "inline@1"
                 }
             ]
-        },
-        "languages": [
-            {
-                "id": "robotframework",
-                "aliases": [
-                    "robotframework"
-                ],
-                "extensions": [
-                    ".resource"
-                ],
-                "configuration": "./language-configuration.json"
-            }
-        ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run package",
@@ -851,7 +841,7 @@
         "@typescript-eslint/parser": "^8.9.0",
         "@vscode/test-cli": "^0.0.10",
         "@vscode/test-electron": "^2.5.2",
-        "@vscode/vsce": "^3.5.0",
+        "@vscode/vsce": "^3.6.0",
         "conventional-changelog-conventionalcommits": "^8.0.0",
         "eslint": "^9.29.0",
         "fast-deep-equal": "^3.1.3",

@@ -3,6 +3,7 @@
  * @description Service for managing resource files related to Test Elements Tree.
  */
 
+import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { TestBenchLogger } from "../../../testBenchLogger";
@@ -113,7 +114,7 @@ export class ResourceFileService {
             await this.ensureFolderPathExists(dirName);
             try {
                 await fs.promises.writeFile(filePath, initialContent, { encoding: "utf8" });
-                this.logger.info(`[ResourceFileService] Robot Framework resource file created at ${filePath}`);
+                this.logger.info(`[ResourceFileService] Robot Framework resource file created at '${filePath}'.`);
             } catch (writeError: any) {
                 this.logger.error(`[ResourceFileService] Error writing to resource file ${filePath}:`, writeError);
                 throw new Error(`Failed to create resource file: ${writeError.message}`);
@@ -161,8 +162,12 @@ export class ResourceFileService {
         let relativePathComponents: string[];
 
         if (resourceDirectoryMarker) {
-            const resourceDirectoryMarkerIndex = splitPathComponents.findIndex(
-                (component) => component === resourceDirectoryMarker
+            const resourceDirectoryMarkerIndex: number = await vscode.commands.executeCommand(
+                "testbench_ls.get_resource_directory_subdivision_index",
+                {
+                    subdivision_parts: normalizedPathComponents,
+                    resource_directory_regex: resourceDirectoryMarker
+                }
             );
 
             if (resourceDirectoryMarkerIndex !== -1) {

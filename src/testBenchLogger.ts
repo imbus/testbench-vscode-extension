@@ -303,6 +303,29 @@ export class TestBenchLogger {
     }
 
     /**
+     * Ensures the log file exists, creating it if missing.
+     */
+    private async ensureLogFileExists(): Promise<void> {
+        try {
+            await fsp.access(this.logFilePath);
+        } catch (error: any) {
+            if (error.code === "ENOENT") {
+                console.log(`[testBenchLogger] Log file missing, recreating: ${this.logFilePath}`);
+                try {
+                    await fsp.mkdir(this.logFolderPath, { recursive: true });
+                    await fsp.writeFile(this.logFilePath, "", { encoding: "utf8" });
+                    console.log(`[testBenchLogger] Log file recreated successfully: ${this.logFilePath}`);
+                } catch (createError: any) {
+                    console.error(`[testBenchLogger] Failed to recreate log file '${this.logFilePath}':`, createError);
+                    throw createError;
+                }
+            } else {
+                throw error;
+            }
+        }
+    }
+
+    /**
      * Ensures exclusive access to log file operations like rotation to prevent race conditions.
      * @param op The async operation (e.g., writing a log) to execute exclusively.
      */
@@ -367,13 +390,18 @@ export class TestBenchLogger {
 
         // Perform file writing exclusively to prevent race conditions with rotation.
         try {
-            await this.performExclusive(() =>
-                fsp.appendFile(this.logFilePath, completeLogMessage, { encoding: "utf8" })
-            );
+            await this.performExclusive(async () => {
+                await this.ensureLogFileExists();
+                return fsp.appendFile(this.logFilePath, completeLogMessage, { encoding: "utf8" });
+            });
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
                     `[testBenchLogger] Logger Fatal Error: Permission denied to write to log file '${this.logFilePath}'. Please check file permissions. Further file logging may fail.`
+                );
+            } else if (error.code === "ENOENT") {
+                console.error(
+                    `[testBenchLogger] Logger Error: Log file '${this.logFilePath}' was deleted and could not be recreated. File logging may fail.`
                 );
             } else {
                 console.error(`[testBenchLogger] Logger Error: Failed to write to log file.`, error);

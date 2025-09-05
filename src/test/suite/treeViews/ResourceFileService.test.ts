@@ -241,7 +241,7 @@ suite("ResourceFileService", function () {
                 if (key === "resourceDirectoryPath") {
                     return "rf_resources" as any;
                 }
-                if (key === "resourceDirectoryMarker") {
+                if (key === "resourceRootRegex") {
                     return "resources" as any;
                 }
                 if (key === "resourceMarker") {
@@ -249,6 +249,10 @@ suite("ResourceFileService", function () {
                 }
                 return undefined as any;
             });
+
+            testEnv.vscodeMocks.executeCommandStub
+                .withArgs("testbench_ls.get_resource_directory_subdivision_index")
+                .resolves(2);
 
             const result = await resourceFileService.constructAbsolutePath(
                 "Root/Project/resources/Sub/Folder/MyResource"
@@ -268,7 +272,7 @@ suite("ResourceFileService", function () {
                 if (key === "resourceDirectoryPath") {
                     return "rf_resources" as any;
                 }
-                if (key === "resourceDirectoryMarker") {
+                if (key === "resourceRootRegex") {
                     return "resources" as any;
                 }
                 if (key === "resourceMarker") {
@@ -276,6 +280,11 @@ suite("ResourceFileService", function () {
                 }
                 return undefined as any;
             });
+
+            // Return -1 (marker not found)
+            testEnv.vscodeMocks.executeCommandStub
+                .withArgs("testbench_ls.get_resource_directory_subdivision_index")
+                .resolves(-1);
 
             const result = await resourceFileService.constructAbsolutePath("Root/Project/Sub/Folder/MyResource");
             const expectedPath = path.join("/test/workspace", "rf_resources", "MyResource");
@@ -293,7 +302,7 @@ suite("ResourceFileService", function () {
                 if (key === "resourceDirectoryPath") {
                     return "rf" as any;
                 }
-                if (key === "resourceDirectoryMarker") {
+                if (key === "resourceRootRegex") {
                     return "resources" as any;
                 }
                 if (key === "resourceMarker") {
@@ -301,6 +310,11 @@ suite("ResourceFileService", function () {
                 }
                 return undefined as any;
             });
+
+            // Return the correct index for "resources" marker at root
+            testEnv.vscodeMocks.executeCommandStub
+                .withArgs("testbench_ls.get_resource_directory_subdivision_index")
+                .resolves(0);
 
             const result = await resourceFileService.constructAbsolutePath("resources/Sub/Res");
             const expectedPath = path.join("/test/workspace", "rf", "Sub", "Res");

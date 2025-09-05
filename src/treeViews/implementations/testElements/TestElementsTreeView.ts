@@ -14,7 +14,11 @@ import { ResourceFileService, ResourceOperationConfig } from "./ResourceFileServ
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
-import { findInteractionPositionInResourceFile } from "../../../server";
+import {
+    findInteractionPositionInResourceFile,
+    isLanguageServerRunning,
+    waitForLanguageServerReady
+} from "../../../server";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 
@@ -395,6 +399,24 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @returns Promise that resolves when all icon updates are complete
      */
     private async updateSubdivisionIcons(items: TestElementsTreeItem[]): Promise<void> {
+        // The python regex processing is done in language server via testbench_ls.get_resource_directory_subdivision_index command.
+        // Language server initialization should be awaited here to prevent error logs caused by this command call.
+        if (!isLanguageServerRunning()) {
+            try {
+                this.logger.debug(
+                    "[TestElementsTreeView] Language server not running, waiting before updating subdivision icons."
+                );
+                await waitForLanguageServerReady();
+                this.logger.debug("[TestElementsTreeView] Language server is ready, proceeding with icon updates.");
+            } catch (error) {
+                this.logger.error(
+                    "[TestElementsTreeView] Error waiting for language server before icon update:",
+                    error
+                );
+                return;
+            }
+        }
+
         const subdivisionItems: TestElementsTreeItem[] = [];
         const collectSubdivisions = (currentItems: TestElementsTreeItem[]) => {
             for (const item of currentItems) {

@@ -177,9 +177,7 @@ function registerSafeCommand(
         } catch (error: any) {
             // Errors expected in silent auto-login, dont show error message to user.
             if (commandId === allExtensionCommands.automaticLoginAfterExtensionActivation) {
-                logger.warn(
-                    `[extension] Command ${commandId} error (expected for silent auto-login if conditions not met): ${error.message}`
-                );
+                logger.debug(`[extension] Command ${commandId}: ${error.message}`);
             } else {
                 logger.error(`[extension] Command ${commandId} error: ${error.message}`, error);
                 vscode.window.showErrorMessage(`Command ${commandId} failed: ${error.message}`);

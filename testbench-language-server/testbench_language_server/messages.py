@@ -21,6 +21,10 @@ ERROR_FINDING_TESTBENCH_KEYWORD = (
     "TestBench keyword with uid '{uid}' or name '{name}' does not exist."
 )
 ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID = "TestBench keyword with uid '{uid}' does not exist."
+ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID_IN_EXISTING_RESOURCE = (
+    "TestBench keyword with uid '{uid}' does not exist in the cached resource. Please save the resource and try again."
+)
+
 
 # Info messages
 INFO_ALREADY_UP_TO_DATE = "Already up to date."
