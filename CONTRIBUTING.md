@@ -52,6 +52,75 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/). Use one 
 - `fix: resolve issue with automatic login`
 - `chore: update dependencies`
 
+## Release Process & Semantic Versioning
+
+This project uses [semantic-release](https://semantic-release.gitbook.io/) with [Conventional Commits](https://www.conventionalcommits.org/) to automate versioning and releases.
+
+### How Versioning Works
+
+Your commit messages automatically determine the version bump:
+
+| Commit Type                           | Version Bump              | Example                              |
+| ------------------------------------- | ------------------------- | ------------------------------------ |
+| `fix:`                                | **Patch** (0.4.0 → 0.4.1) | `fix: resolve login timeout`         |
+| `feat:`                               | **Minor** (0.4.0 → 0.5.0) | `feat: add test import feature`      |
+| `feat!:` or `BREAKING CHANGE:`        | **Major** (0.4.0 → 1.0.0) | `feat!: redesign authentication API` |
+| Other types (`docs:`, `chore:`, etc.) | **No release**            | Won't trigger a new version          |
+
+### Multi-Branch Release Strategy
+
+We support releases from multiple branches:
+
+- **`main`**: Production releases (`1.2.3`)
+- **`prerelease`**: Beta versions (`1.2.3-prerelease.1`)
+- **`feature`**: Feature previews (`1.2.3-feature.1`)
+- **`feature/*`**: Branch-specific builds (`1.2.3-feature-auth.1`)
+
+> **Note**: The `.1`, `.2`, `.3` etc. are prerelease counters, not part of the main semantic version. Only commits to `main` branch increase the base version numbers (1.2.3). Prerelease branches increment only the counter while previewing the next planned version.
+
+### Development Workflow
+
+1. **Feature Development**: Work on `feature/your-feature-name` branches
+
+    ```bash
+    git checkout -b feature/new-authentication
+    git commit -m "feat: add OAuth2 support"
+    # → Automatic release: 0.5.0-feature-new-authentication.1
+    ```
+
+2. **Integration Testing**: Merge to `prerelease` for beta testing
+
+    ```bash
+    git checkout prerelease
+    git merge feature/new-authentication
+    # → Automatic release: 0.5.0-prerelease.1
+    ```
+
+3. **Production Release**: Merge to `main` for stable release
+    ```bash
+    git checkout main
+    git merge prerelease
+    # → Automatic release: 0.5.0
+    ```
+
+### Release Automation
+
+When commits are pushed to release branches, the system automatically:
+
+- ✅ Analyzes commit messages to determine version bump
+- ✅ Updates `package.json` version and `CHANGELOG.md`
+- ✅ Builds and packages the VSIX extension
+- ✅ Creates GitHub release with VSIX attachment
+- ✅ Commits changes back to the repository
+
+### Manual Releases
+
+For emergency releases or special cases, use the manual release workflow:
+
+1. Go to **Actions** → **Manual Release** in GitHub
+2. Enter the version number and release type
+3. The workflow will handle the rest
+
 ---
 
 Thanks contributing!
