@@ -11,21 +11,14 @@ module.exports = {
         [
             "@semantic-release/commit-analyzer",
             {
-                preset: "conventionalcommits",
-                releaseRules: [
-                    { type: "feat", release: "minor" },
-                    { type: "fix", release: "patch" },
-                    { type: "perf", release: "patch" },
-                    { type: "revert", release: "patch" },
-                    { type: "docs", release: "patch" },
-                    { type: "style", release: "patch" },
-                    { type: "chore", release: "patch" },
-                    { type: "refactor", release: "patch" },
-                    { type: "test", release: "patch" },
-                    { type: "build", release: "patch" },
-                    { type: "ci", release: "patch" },
-                    { breaking: true, release: "major" }
-                ]
+                preset: "conventionalcommits"
+                // Default behavior:
+                // - feat: minor
+                // - fix: patch
+                // - perf: patch
+                // - BREAKING CHANGE: major
+                // - Other types (docs, chore, style, etc.) will not trigger a release.
+                // Can be overridden with releaseRules array if needed.
             }
         ],
 
