@@ -1086,13 +1086,8 @@
         "ms-python.python",
         "d-biehl.robotcode"
     ],
-    "husky": {
-        "hooks": {
-            "pre-commit": "npx lint-staged"
-        }
-    },
     "lint-staged": {
         "**/*": "prettier --write --ignore-unknown",
-        "*.ts": "npx tslint"
+        "*.ts": "eslint --fix"
     }
 }
