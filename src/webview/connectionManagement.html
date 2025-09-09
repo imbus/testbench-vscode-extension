@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="
+        default-src 'none';
+        img-src {{cspSource}} https: data:;
+        script-src 'nonce-{{nonce}}';
+        style-src {{cspSource}} 'unsafe-inline';
+        font-src {{cspSource}};"
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link href="{{cssUri}}" rel="stylesheet" />
+        <style id="dynamic-icon-styles">
+            {{iconStyles}}
+        </style>
+        <title>TestBench Connection Management</title>
+    </head>
+    <body>
+        <div class="scrollable-content">
+            <section class="connection-section" aria-labelledby="connectionsHeading">
+                <h2 id="connectionsHeading">
+                    <span class="icon icon-connections-header"></span>
+                    TestBench Connections
+                </h2>
+                <div id="connectionsLoadingMessage" style="padding: 10px; text-align: center">
+                    <vscode-progress-ring></vscode-progress-ring>
+                    <p style="color: var(--vscode-descriptionForeground); margin-top: 5px">Loading connections...</p>
+                </div>
+                <ul id="connectionsList" aria-live="polite"></ul>
+                <p id="noConnectionsMessage" style="display: none">
+                    No connections configured yet.<br />Use the form below to add one.
+                </p>
+            </section>
+
+            <section class="add-connection-section" aria-labelledby="addConnectionHeading">
+                <h3 id="addConnectionHeading">
+                    <span class="icon icon-add-connection-header"></span>
+                    <span id="sectionTitle">Add New Connection</span>
+                </h3>
+                <form id="addConnectionForm">
+                    <div class="form-group">
+                        <label for="connectionLabel">Connection Label (e.g., "My TestBench Connection")</label>
+                        <input
+                            type="text"
+                            id="connectionLabel"
+                            name="connectionLabel"
+                            placeholder="Optional, e.g., Main TestBench"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="serverName">Server Hostname or IP Address</label>
+                        <input
+                            type="text"
+                            id="serverName"
+                            name="serverName"
+                            required
+                            placeholder="e.g., testbench.example.com"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="portNumber">Port Number</label>
+                        <input
+                            type="number"
+                            id="portNumber"
+                            name="portNumber"
+                            value="9445"
+                            required
+                            placeholder="e.g., 9445"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            required
+                            placeholder="Your TestBench username"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="password" name="password" placeholder="Enter password" />
+                        </div>
+                        <small
+                            style="
+                                color: var(--vscode-descriptionForeground);
+                                font-size: 0.85em;
+                                margin-top: 4px;
+                                display: block;
+                            "
+                            >Only non-empty passwords will be stored.</small
+                        >
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px">
+                        <input
+                            type="checkbox"
+                            id="storePasswordCheckbox"
+                            name="storePassword"
+                            checked
+                            style="width: auto; height: auto; margin-right: 5px"
+                        />
+                        <label for="storePasswordCheckbox" style="margin-bottom: 0; font-weight: normal"
+                            >Store password for this connection</label
+                        >
+                    </div>
+
+                    <button type="button" id="saveConnectionBtn">
+                        <span class="icon icon-save"></span>
+                        <span id="saveButtonText">Save New Connection</span>
+                    </button>
+
+                    <div class="edit-actions" id="editActions" style="display: none">
+                        <button type="button" id="cancelEditBtn">Cancel Edit</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+        <div id="messages" class="hidden" role="alert" aria-live="assertive"></div>
+
+        <script nonce="{{nonce}}" src="{{jsUri}}"></script>
+    </body>
+</html>
