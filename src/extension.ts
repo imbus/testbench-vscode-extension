@@ -17,8 +17,7 @@ import {
     ConfigKeys,
     ContextKeys,
     folderNameOfInternalTestbenchFolder,
-    StorageKeys,
-    TreeViewTiming
+    StorageKeys
 } from "./constants";
 import {
     TestBenchAuthenticationProvider,
@@ -1207,8 +1206,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
         logger.debug("[extension] Auto-login is enabled. Scheduling automatic login.");
         handleAutomaticLogin();
-        // Short delay to ensure webview is loaded and ready
-        // setTimeout(handleAutomaticLogin, TreeViewTiming.WEBVIEW_LOAD_DELAY_MS);
     }
 
     logger.info("[extension] Extension activated successfully.");
