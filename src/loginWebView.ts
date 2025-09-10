@@ -603,9 +603,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionContext.extensionUri, "src", "webview", "main.js")
         );
-        const stylesUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext.extensionUri, "src", "webview", "styles.css")
-        );
+        const stylesPath = path.join(this.extensionContext.extensionPath, "src", "webview", "styles.css");
+        const stylesContent = fs.readFileSync(stylesPath, "utf8");
 
         const connectionsHeaderIconDarkUri = this.createIconUri(webview, "connections-dark.svg");
         const connectionsHeaderIconLightUri = this.createIconUri(webview, "connections-light.svg");
@@ -656,7 +655,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         html = html.replace(/{{nonce}}/g, nonce);
         html = html.replace(/{{cspSource}}/g, webview.cspSource);
-        html = html.replace(/{{cssUri}}/g, stylesUri.toString());
+        html = html.replace("{{mainCss}}", stylesContent);
         html = html.replace(/{{jsUri}}/g, scriptUri.toString());
         html = html.replace(/{{iconStyles}}/g, iconStyles);
 
@@ -669,9 +668,8 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionContext.extensionUri, "src", "webview", "loggedIn.js")
         );
-        const stylesUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext.extensionUri, "src", "webview", "loggedIn.css")
-        );
+        const stylesPath = path.join(this.extensionContext.extensionPath, "src", "webview", "loggedIn.css");
+        const stylesContent = fs.readFileSync(stylesPath, "utf8");
         const logoUri: vscode.Uri | null = this.createIconUri(webview, "testbench-logo.svg");
 
         const currentConnection: PlayServerConnection | null = connection;
@@ -685,7 +683,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         html = html.replace(/{{nonce}}/g, nonce);
         html = html.replace(/{{cspSource}}/g, webview.cspSource);
-        html = html.replace(/{{cssUri}}/g, stylesUri.toString());
+        html = html.replace("{{mainCss}}", stylesContent);
         html = html.replace(/{{jsUri}}/g, scriptUri.toString());
         html = html.replace(/{{logoUri}}/g, logoUri ? logoUri.toString() : "");
         html = html.replace(/{{connectedAsInfo}}/g, connectedAsInfo);
