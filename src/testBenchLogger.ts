@@ -35,6 +35,7 @@ export class TestBenchLogger {
     private flattedPromise: Promise<{ stringify: (obj: any) => string }> | null = null;
     private cachedLogLevel: string;
     private configChangeListener: vscode.Disposable | null = null;
+    private currentLogSize: number = 0;
 
     /**
      * Log levels are 0 to 5, with 1 being the most verbose (trace) and 5 being the least verbose (error).
@@ -149,6 +150,17 @@ export class TestBenchLogger {
                 );
             }
             await fsp.mkdir(this.logFolderPath, { recursive: true });
+
+            try {
+                const stats = await fsp.stat(this.logFilePath);
+                this.currentLogSize = stats.size;
+            } catch (error: any) {
+                if (error.code === "ENOENT") {
+                    this.currentLogSize = 0;
+                } else {
+                    throw error;
+                }
+            }
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
                 console.error(
@@ -196,22 +208,11 @@ export class TestBenchLogger {
      * removes the oldest log file and shifts the index of the rest.
      */
     private async rotateLogs(): Promise<void> {
-        try {
-            const stats = await fsp.stat(this.logFilePath);
-            if (stats.size < MAX_LOG_FILE_SIZE_IN_BYTES) {
-                return;
-            }
-        } catch (error: any) {
-            if (error.code === "ENOENT") {
-                // Main log file doesn't exist. It will be created on the next write.
-                return;
-            }
-            console.error(
-                `[testBenchLogger] Logger Error: Could not get stats for log file '${this.logFilePath}'. Rotation skipped.`,
-                error
-            );
+        if (this.currentLogSize < MAX_LOG_FILE_SIZE_IN_BYTES) {
             return;
         }
+
+        this.currentLogSize = 0;
 
         try {
             const filesInLogFolderPath: string[] = await fsp.readdir(this.logFolderPath);
@@ -392,7 +393,8 @@ export class TestBenchLogger {
         try {
             await this.performExclusive(async () => {
                 await this.ensureLogFileExists();
-                return fsp.appendFile(this.logFilePath, completeLogMessage, { encoding: "utf8" });
+                await fsp.appendFile(this.logFilePath, completeLogMessage, { encoding: "utf8" });
+                this.currentLogSize += Buffer.byteLength(completeLogMessage, "utf8");
             });
         } catch (error: any) {
             if (error.code === "EPERM" || error.code === "EACCES") {
@@ -416,8 +418,8 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public trace(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
-        this.log("Trace", message, details, shouldOutputToTerminal);
+    public trace(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): Promise<void> {
+        return this.log("Trace", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -427,8 +429,8 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public debug(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
-        this.log("Debug", message, details, shouldOutputToTerminal);
+    public debug(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): Promise<void> {
+        return this.log("Debug", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -438,8 +440,8 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public info(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
-        this.log("Info", message, details, shouldOutputToTerminal);
+    public info(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): Promise<void> {
+        return this.log("Info", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -449,8 +451,8 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output.
      */
-    public warn(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): void {
-        this.log("Warn", message, details, shouldOutputToTerminal);
+    public warn(message: string, details?: any | any[], shouldOutputToTerminal?: boolean): Promise<void> {
+        return this.log("Warn", message, details, shouldOutputToTerminal);
     }
 
     /**
@@ -462,7 +464,7 @@ export class TestBenchLogger {
      * @param details Optional details.
      * @param {boolean | undefined} shouldOutputToTerminal Optional flag to force terminal output (defaults to true).
      */
-    public error(message: string, details?: any | any[], shouldOutputToTerminal: boolean = true): void {
-        this.log("Error", message, details, shouldOutputToTerminal);
+    public error(message: string, details?: any | any[], shouldOutputToTerminal: boolean = true): Promise<void> {
+        return this.log("Error", message, details, shouldOutputToTerminal);
     }
 }
