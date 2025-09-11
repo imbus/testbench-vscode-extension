@@ -52,6 +52,4 @@ Please check out our [contribution guidelines](CONTRIBUTING.md) for details on h
 
 ## Release Notes
 
-### 1.0.0
-
-Initial release of the TestBench extension.
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes.

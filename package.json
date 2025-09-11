@@ -4,7 +4,7 @@
     "displayName": "TestBench Extension",
     "description": "A Visual Studio Code extension for TestBench.",
     "icon": "resources/icons/testbench-logo.png",
-    "version": "0.0.1",
+    "version": "0.4.0",
     "repository": {
         "type": "git",
         "url": "https://github.com/imbus/testbench-vs-code-extension"
@@ -1024,22 +1024,16 @@
         "lint": "eslint --config eslint.config.mjs .",
         "prepare": "husky",
         "release": "semantic-release",
-        "commit": "git-cz",
+        "commit:cz": "git-cz",
         "test:unit": "npm run compile-tests && mocha ./out/test/suite/**/*.test.js --timeout 10000",
         "test:coverage": "npm run compile-tests && nyc --reporter=lcov --reporter=text mocha ./out/test/suite/**/*.test.js --timeout 10000",
-        "format:check": "prettier --check ."
-    },
-    "release": {
-        "branches": [
-            "main"
-        ],
-        "plugins": [
-            "@semantic-release/commit-analyzer",
-            "@semantic-release/release-notes-generator",
-            "@semantic-release/github"
-        ]
+        "format:check": "prettier --check .",
+        "commit:helper": "node scripts/commit.js",
+        "release:manual": "node scripts/manual-release.js"
     },
     "devDependencies": {
+        "@commitlint/cli": "^19.8.1",
+        "@commitlint/config-conventional": "^19.8.1",
         "@eslint/js": "^9.20.0",
         "@semantic-release/changelog": "^6.0.3",
         "@semantic-release/exec": "^7.1.0",
