@@ -564,6 +564,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     // Tree View Management Handlers
     const handleDisplayAllProjects = async () => {
+        if (treeViews?.projectsTree) {
+            treeViews.projectsTree.refresh();
+        }
         displayProjectManagementTreeView();
         hideTestThemeTreeView();
         hideTestElementsTreeView();

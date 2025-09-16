@@ -690,6 +690,9 @@ export class TreeViewFactory {
     ): Promise<boolean> {
         try {
             this.logger.debug(`[TreeViewFactory] Performing deferred view restoration for: ${savedViewId}`);
+            await displayTestThemeTreeView();
+            await displayTestElementsTreeView();
+            await hideProjectManagementTreeView();
 
             if (savedContext.isCycle) {
                 await treeViews.testThemesTree.loadCycle(
@@ -714,10 +717,6 @@ export class TreeViewFactory {
                 savedContext.projectName,
                 savedContext.tovName
             );
-
-            await displayTestThemeTreeView();
-            await displayTestElementsTreeView();
-            await hideProjectManagementTreeView();
 
             this.logger.trace(
                 `[TreeViewFactory] Successfully restored view to context of TOV: ${savedContext.tovName}`
