@@ -11,6 +11,7 @@ import { validateAndReturnWorkspaceLocation } from "../../../utils";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 import { TestThemesTreeItem } from "./TestThemesTreeItem";
+import { treeViews } from "../../../extension";
 
 export interface RobotFileInfo {
     exists: boolean;
@@ -178,6 +179,20 @@ export class RobotFileService {
      */
     public async openRobotFileInVSCodeEditor(filePath: string, item?: TestThemesTreeItem): Promise<void> {
         try {
+            // If the file doesn't exist, show an error and refresh the tree item to remove the "Open" button
+            if (!fs.existsSync(filePath)) {
+                this.logger.warn(`[RobotFileService] Attempted to open non-existent robot file: ${filePath}`);
+                if (item) {
+                    await item.checkRobotFileExists();
+                    item.updateContextValue();
+                    if (treeViews && treeViews.testThemesTree) {
+                        treeViews.testThemesTree.refresh(item);
+                    }
+                }
+                vscode.window.showErrorMessage(`Failed to open robot file. File not found: ${path.basename(filePath)}`);
+                return;
+            }
+
             if (item) {
                 const isValid = await this.validateRobotFileForTreeItem(filePath, item);
                 if (!isValid) {
@@ -260,8 +275,12 @@ export class RobotFileService {
                 );
                 return false;
             }
-        } catch (error) {
-            this.logger.error(`[RobotFileService] Error validating robot file ${robotFilePath}:`, error);
+        } catch (error: any) {
+            if (error.code === "ENOENT") {
+                this.logger.trace(`[RobotFileService] Robot file not found during validation: ${robotFilePath}`);
+            } else {
+                this.logger.error(`[RobotFileService] Error validating robot file ${robotFilePath}:`, error);
+            }
             return false;
         }
     }
