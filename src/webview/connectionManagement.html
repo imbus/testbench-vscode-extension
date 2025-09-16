@@ -98,17 +98,9 @@
                             >Only non-empty passwords will be stored.</small
                         >
                     </div>
-                    <div class="form-group" style="display: flex; align-items: center; gap: 10px">
-                        <input
-                            type="checkbox"
-                            id="storePasswordCheckbox"
-                            name="storePassword"
-                            checked
-                            style="width: auto; height: auto; margin-right: 5px"
-                        />
-                        <label for="storePasswordCheckbox" style="margin-bottom: 0; font-weight: normal"
-                            >Store password for this connection</label
-                        >
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="storePasswordCheckbox" name="storePassword" checked />
+                        <label for="storePasswordCheckbox">Store password for this connection</label>
                     </div>
 
                     <button type="button" id="saveConnectionBtn">

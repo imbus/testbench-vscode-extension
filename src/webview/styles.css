@@ -394,6 +394,24 @@ button .icon {
     color: var(--vscode-icon-foreground);
 }
 
+.form-group.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-group.checkbox-group label {
+    margin-bottom: 0;
+    font-weight: normal;
+}
+
+.form-group.checkbox-group input[type="checkbox"] {
+    accent-color: var(--color-primary-bg);
+    width: auto;
+    height: auto;
+    margin-right: 5px;
+}
+
 /* Edit mode */
 .edit-mode .add-connection-section {
     border-color: var(--vscode-gitDecoration-modifiedResourceForeground);
