@@ -10,6 +10,7 @@ import { PlayServerConnection } from "./testBenchConnection";
 
 interface EditingConnectionData extends TestBenchConnection {
     password?: string;
+    keepExistingPassword?: boolean;
 }
 
 /**
@@ -341,11 +342,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            const newConnectionId = await connectionManager.saveConnection(
-                this.extensionContext,
-                connectionData,
-                connectionData.password
-            );
+            const newConnectionId = await connectionManager.saveConnection(this.extensionContext, connectionData);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "success",
                 text: `Connection "${connectionData.label || newConnectionId}" saved.`
@@ -526,7 +523,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            await connectionManager.saveConnection(this.extensionContext, payload, payload.password);
+            await connectionManager.saveConnection(this.extensionContext, payload);
 
             this.editingConnectionId = null;
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
