@@ -56,7 +56,7 @@
                 "properties": {
                     "testbenchExtension.testbenchLogLevel": {
                         "type": "string",
-                        "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
+                        "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory within the workspace.",
                         "default": "Info",
                         "order": 9,
                         "enum": [
@@ -106,7 +106,7 @@
                     },
                     "testbenchExtension.outputDirectory": {
                         "type": "string",
-                        "description": "Directory or ZIP archive containing the generated test suites. The path is relative to the workspace location.",
+                        "description": "Directory or ZIP archive where the generated test suites will be created. The path is relative to the workspace location.",
                         "default": "tests",
                         "order": 13,
                         "scope": "window"
@@ -156,7 +156,7 @@
                     },
                     "testbenchExtension.libraryRoot": {
                         "type": "array",
-                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "description": "TestBench root subdivision whose direct children correspond to Robot Framework resources.",
                         "items": {
                             "type": "string"
                         },
@@ -188,7 +188,7 @@
                     },
                     "testbenchExtension.resourceRoot": {
                         "type": "array",
-                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "description": "TestBench root subdivision whose direct children correspond to Robot Framework resources.",
                         "items": {
                             "type": "string"
                         },
@@ -233,7 +233,7 @@
                     "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Delete all files excluding the log files inside the working directory called .testbench before generating tests.",
+                        "description": "Deletes all files, excluding log files, from the internal `.testbench` directory before generating tests.",
                         "order": 1,
                         "scope": "resource"
                     },
@@ -247,7 +247,7 @@
                     "testbenchExtension.clearReportAfterProcessing": {
                         "type": "boolean",
                         "default": true,
-                        "description": "Remove the report file automatically after processing it.",
+                        "description": "Remove the downloaded report file automatically after processing it.",
                         "order": 3,
                         "scope": "resource"
                     }
