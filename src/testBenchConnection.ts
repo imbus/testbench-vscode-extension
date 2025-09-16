@@ -1538,7 +1538,7 @@ export async function loginToServerAndGetSessionDetails(
                             `[testBenchConnection] Insecure login returned status ${insecureLoginResponse.status}`
                         );
                         vscode.window.showErrorMessage(
-                            `ERR_BAD_RESPONSE: Request failed with status code ${insecureLoginResponse.status}`
+                            `Login Error: Request failed with status code ${insecureLoginResponse.status}`
                         );
                     }
                 } catch (insecureError: any) {
