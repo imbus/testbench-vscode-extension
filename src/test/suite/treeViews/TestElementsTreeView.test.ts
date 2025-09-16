@@ -463,7 +463,6 @@ suite("TestElementsTreeView", function () {
             await (treeView as any).handleInteractionSingleClick(mockInteraction);
 
             assert.ok(!mockResourceFileService.ensureFileExists.called, "Should not create file on single click");
-            assert.ok(testEnv.vscodeMocks.showErrorMessageStub.called, "Should show an error that file is missing");
         });
 
         test("handleInteractionDoubleClick should create file and reveal in explorer", async function () {

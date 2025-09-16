@@ -350,6 +350,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.logger.debug(
                 `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
             );
+            this.stateManager.setLoading(true);
 
             if (clearFirst || this.currentTovKey !== tovKey) {
                 // Preserve UI state (expansion, marking, etc.) during data reload
@@ -389,6 +390,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+            this.stateManager.setLoading(false);
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
 
@@ -410,6 +412,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.rootItems = [];
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+            this.stateManager.setLoading(false);
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
 

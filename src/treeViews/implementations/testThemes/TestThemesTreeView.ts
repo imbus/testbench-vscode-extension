@@ -680,7 +680,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.logger.trace(
                 `[TestThemesTreeView] Loading Test Cycle '${cycleLabel}' from project '${projectName}' to get Test Theme information...`
             );
-
+            this.stateManager.setLoading(true);
             this.dataProvider.clearCache();
 
             // Set context before fetching data so filters can be applied correctly
@@ -743,6 +743,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
 
+            this.stateManager.setLoading(false);
             this._onDidChangeTreeData.fire(undefined);
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
@@ -769,6 +770,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.rootItems = [];
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+            this.stateManager.setLoading(false);
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
 
@@ -779,6 +781,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     public async loadTov(projectKey: string, tovKey: string, projectName: string, tovName: string): Promise<void> {
         try {
             this.logger.debug(`[TestThemesTreeView] Loading TOV ${tovKey} for project ${projectKey}`);
+            this.stateManager.setLoading(true);
 
             this.dataProvider.clearCache();
 
@@ -835,6 +838,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
 
+            this.stateManager.setLoading(false);
             this._onDidChangeTreeData.fire(undefined);
             await this.updateRobotFileAvailabilityForAllTreeItems();
             this._onDidChangeTreeData.fire(undefined);
@@ -861,6 +865,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             this.rootItems = [];
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+            this.stateManager.setLoading(false);
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
 

@@ -690,6 +690,8 @@ export class TreeViewFactory {
     ): Promise<boolean> {
         try {
             this.logger.debug(`[TreeViewFactory] Performing deferred view restoration for: ${savedViewId}`);
+            treeViews.testThemesTree.stateManager.setLoading(true);
+            treeViews.testElementsTree.stateManager.setLoading(true);
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
@@ -724,6 +726,8 @@ export class TreeViewFactory {
             return true;
         } catch (error) {
             this.logger.error("[TreeViewFactory] Failed to restore view state:", error);
+            treeViews.testThemesTree.stateManager.setLoading(false);
+            treeViews.testElementsTree.stateManager.setLoading(false);
             return false;
         }
     }
