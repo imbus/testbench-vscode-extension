@@ -77,12 +77,16 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case WebviewMessageCommands.LOGIN:
                     logger.debug('[loginWebView] "Sign In" button clicked. Triggering TestBench login command.');
-                    vscode.commands.executeCommand(allExtensionCommands.login).then(undefined, (err) => {
-                        logger.error("[loginWebView] Error executing login command:", err);
-                        this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
-                            type: "error",
-                            text: "Could not start TestBench login process."
-                        });
+                    vscode.commands.executeCommand(allExtensionCommands.login).then(undefined, (err: any) => {
+                        if (this.isLoginCancellation(err)) {
+                            logger.trace("[loginWebView] Login process was cancelled by the user.");
+                        } else {
+                            logger.error("[loginWebView] Error executing login command:", err);
+                            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                                type: "error",
+                                text: "Could not start TestBench login process."
+                            });
+                        }
                     });
                     break;
                 case WebviewMessageCommands.TRIGGER_COMMAND:
@@ -205,6 +209,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Checks if an error object signifies a user-cancelled login operation.
+     * @param {any} error The error object to inspect.
+     * @returns {boolean} True if the error is a login cancellation, false otherwise.
+     */
+    private isLoginCancellation(error: any): boolean {
+        return error && error.message && error.message.includes("User did not consent to login");
+    }
+
+    /**
      * Asynchronously fetches user connections them to the webview sorted alphabetically by label.
      * Send the editing state to the webview if a connection edited.
      * If successful, it posts the connections for display.
@@ -276,10 +289,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
         } catch (error: any) {
             await connectionManager.clearActiveConnection(this.extensionContext);
-            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
-                type: "error",
-                text: `Login Error: ${error.message}`
-            });
+            if (this.isLoginCancellation(error)) {
+                logger.trace("[loginWebView] Login process was cancelled by the user.");
+            } else {
+                this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                    type: "error",
+                    text: `Login Error: ${error.message}`
+                });
+            }
         }
     }
 
