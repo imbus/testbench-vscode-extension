@@ -1,11 +1,8 @@
 # Name of the workflow: Release
 name: Release
 
-# Trigger the workflow when there's a push to the 'main' branch
+# Trigger the workflow only manually
 on:
-    # push:
-    #     branches:
-    #         - main
     workflow_dispatch:
 
 jobs:
@@ -13,6 +10,10 @@ jobs:
         name: Create Release
         # Specify the virtual environment to run the job
         runs-on: ubuntu-latest
+        permissions:
+            contents: write # to create release and commit
+            issues: write # to comment on issues
+            pull-requests: write # to comment on pull requests
 
         steps:
             # Step 1: Checkout the source code from the repository
@@ -35,18 +36,64 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            # Step 4: Run semantic-release to handle versioning and changelog generation
+            # Set up Python
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.10"
+                  cache: "pip"
+
+            # Install Python build tools
+            - name: Install Python Build Tools
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install pip-tools nox
+
+            # Prepare Python dependencies
+            - name: Clean previous bundled Python libs
+              run: |
+                  rm -rf bundled/libs
+                  mkdir -p bundled/libs
+
+            - name: Generate requirements.txt for Python
+              id: pip-compile
+              run: pip-compile --resolver=backtracking --output-file=requirements.txt pyproject.toml
+              continue-on-error: true
+
+            - name: Bundle Python Dependencies using Nox
+              id: nox-bundle
+              run: python -m nox --session bundle_dependencies
+              continue-on-error: true
+
+            # Step 4: Install VS Code Extension Manager
+            - name: Install VSCE
+              run: npm install -g @vscode/vsce
+
+            # Step 5: Run semantic-release to handle versioning and changelog generation
             - name: Run semantic-release
               env:
                   # Provide GitHub token to allow semantic-release to interact with GitHub
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: npm run release
+              # semantic-release determines the release type from commits.
+              run: npx semantic-release
 
-            # Step 5: Publish the extension to the Visual Studio Code Marketplace
+            # Step 5: Get the new version from package.json
+            # - name: Get Version
+            #   id: get_version
+            #   run: |
+            #       echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+            # Step 6: Publish the extension to the Visual Studio Code Marketplace
+            # Note: Uncomment this step after setting up VSCE_TOKEN in repository secrets
+            # To get a VSCE token:
+            # 1. Go to https://dev.azure.com/your-organization
+            # 2. Create a Personal Access Token with Marketplace scope
+            # 3. Add it as VSCE_TOKEN in repository secrets
             #- name: Publish to VS Code Marketplace
-            #  if: steps.semantic-release.outputs.new_release_published == 'true'
+            #  if: github.ref == 'refs/heads/main'
             #  run: |
-            #    npm install -g vsce
+            #    # Publish the extension to VS Code Marketplace
             #    vsce publish -p ${{ secrets.VSCE_TOKEN }}
+            #    echo "✅ Published version ${{ steps.get_version.outputs.VERSION }} to VS Code Marketplace"
             #  env:
             #    VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}

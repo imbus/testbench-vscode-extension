@@ -211,7 +211,6 @@ export const allExtensionCommands = {
     displayFiltersForTestThemeTreeON: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeON`,
     displayFiltersForTestThemeTreeOFF: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeOFF`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
-    automaticLoginAfterExtensionActivation: `${baseKeyOfExtension}.automaticLoginAfterExtensionActivation`,
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
     openCycleFromProjectsView: `${baseKeyOfExtension}.openCycleFromProjectsView`,
     openIssueReporter: `${baseKeyOfExtension}.openIssueReporter`,

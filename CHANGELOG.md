@@ -1,9 +1,6 @@
-# Change Log
+# Changelog
 
-All notable changes to the "testbench-extension" extension will be documented in this file.
+All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
-
-## [Unreleased]
-
-- Initial release
+<!-- This file will be automatically updated by semantic-release -->
+<!-- Do not edit below this line -->

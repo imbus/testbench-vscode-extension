@@ -4,7 +4,7 @@
     "displayName": "TestBench Extension",
     "description": "A Visual Studio Code extension for TestBench.",
     "icon": "resources/icons/testbench-logo.png",
-    "version": "0.0.1",
+    "version": "0.4.0",
     "repository": {
         "type": "git",
         "url": "https://github.com/imbus/testbench-vs-code-extension"
@@ -29,11 +29,7 @@
     "categories": [
         "Testing"
     ],
-    "activationEvents": [
-        "onView:testbenchExtension.webView",
-        "onCommand:testbenchExtension.login",
-        "onAuthenticationRequest:testbench-auth"
-    ],
+    "activationEvents": [],
     "main": "./dist/extension.js",
     "contributes": {
         "authentication": [
@@ -727,22 +723,22 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == testbench.testThemes && testbenchExtension.isTestThemeOpenedFromCycle",
+                    "when": "view == 'testbench.testThemes' && testbenchExtension.isTestThemeOpenedFromCycle && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
-                    "when": "view == testbench.testThemes && !testbenchExtension.isTestThemeOpenedFromCycle",
+                    "when": "view == 'testbench.testThemes' && !testbenchExtension.isTestThemeOpenedFromCycle && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.openAndRevealGeneratedRobotFile",
-                    "when": "view == testbench.testThemes && (viewItem == 'TestThemeNode.hasRobotFile' || viewItem == 'TestCaseSetNode.hasRobotFile' || viewItem == 'customRoot.TestThemeNode.hasRobotFile' || viewItem == 'customRoot.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForGeneration.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForGeneration.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForGeneration.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForGeneration.TestCaseSetNode.hasRobotFile')",
+                    "when": "view == 'testbench.testThemes' && viewItem =~ /\\.hasRobotFile$/",
                     "group": "inline@3"
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == testbench.testThemes && (viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForImport.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'MarkedForImport.customRoot.TestThemeNode.hasRobotFile' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.TestCaseSetNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode.hasRobotFile' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode.hasRobotFile')",
+                    "when": "view == 'testbench.testThemes' && viewItem =~ /MarkedForImport/",
                     "group": "inline@2",
                     "icon": {
                         "light": "resources/icons/upload-light.svg",
@@ -756,13 +752,13 @@
                 },
                 {
                     "command": "testbenchExtension.resetProjectTreeViewRoot",
-                    "when": "view == testbench.projects && (viewItem == customRoot.Project || viewItem == customRoot.Version || viewItem == customRoot.Cycle)",
+                    "when": "view == testbench.projects && viewItem =~ /customRoot/",
                     "group": "navigation@1",
                     "title": "Reset Custom Root"
                 },
                 {
                     "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "view == testbench.testThemes && (viewItem == 'customRoot.TestThemeNode' || viewItem == 'customRoot.TestCaseSetNode' || viewItem == 'MarkedForImport.customRoot.TestThemeNode' || viewItem == 'MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'MarkedForGeneration.customRoot.TestThemeNode' || viewItem == 'MarkedForGeneration.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.customRoot.TestCaseSetNode' || viewItem == 'openedFromCycle.MarkedForGeneration.customRoot.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForGeneration.customRoot.TestCaseSetNode')",
+                    "when": "view == 'testbench.testThemes' && viewItem =~ /customRoot/",
                     "group": "navigation@1",
                     "title": "Reset Custom Root"
                 },
@@ -808,22 +804,16 @@
         "lint": "eslint --config eslint.config.mjs .",
         "prepare": "husky",
         "release": "semantic-release",
-        "commit": "git-cz",
+        "commit:cz": "git-cz",
         "test:unit": "npm run compile-tests && mocha ./out/test/suite/**/*.test.js --timeout 10000",
         "test:coverage": "npm run compile-tests && nyc --reporter=lcov --reporter=text mocha ./out/test/suite/**/*.test.js --timeout 10000",
-        "format:check": "prettier --check ."
-    },
-    "release": {
-        "branches": [
-            "main"
-        ],
-        "plugins": [
-            "@semantic-release/commit-analyzer",
-            "@semantic-release/release-notes-generator",
-            "@semantic-release/github"
-        ]
+        "format:check": "prettier --check .",
+        "commit:helper": "node scripts/commit.js",
+        "release:manual": "node scripts/manual-release.js"
     },
     "devDependencies": {
+        "@commitlint/cli": "^19.8.1",
+        "@commitlint/config-conventional": "^19.8.1",
         "@eslint/js": "^9.20.0",
         "@semantic-release/changelog": "^6.0.3",
         "@semantic-release/exec": "^7.1.0",
@@ -876,13 +866,8 @@
         "ms-python.python",
         "d-biehl.robotcode"
     ],
-    "husky": {
-        "hooks": {
-            "pre-commit": "npx lint-staged"
-        }
-    },
     "lint-staged": {
         "**/*": "prettier --write --ignore-unknown",
-        "*.ts": "npx tslint"
+        "*.ts": "eslint --fix"
     }
 }

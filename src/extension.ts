@@ -17,8 +17,7 @@ import {
     ConfigKeys,
     ContextKeys,
     folderNameOfInternalTestbenchFolder,
-    StorageKeys,
-    TreeViewTiming
+    StorageKeys
 } from "./constants";
 import {
     TestBenchAuthenticationProvider,
@@ -175,13 +174,8 @@ function registerSafeCommand(
         try {
             await callback(...args);
         } catch (error: any) {
-            // Errors expected in silent auto-login, dont show error message to user.
-            if (commandId === allExtensionCommands.automaticLoginAfterExtensionActivation) {
-                logger.debug(`[extension] Command ${commandId}: ${error.message}`);
-            } else {
-                logger.error(`[extension] Command ${commandId} error: ${error.message}`, error);
-                vscode.window.showErrorMessage(`Command ${commandId} failed: ${error.message}`);
-            }
+            logger.error(`[extension] Command ${commandId} error: ${error.message}`, error);
+            vscode.window.showErrorMessage(`Command ${commandId} failed: ${error.message}`);
         }
     });
     context.subscriptions.push(disposable);
@@ -198,20 +192,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         logger.warn("[extension] Tree views not initialized. Skipping command registration.");
         return;
     }
-
-    // --- Command Handlers ---
-    const handleAutomaticLogin = async () => {
-        logger.trace(`[extension] Command called: ${allExtensionCommands.automaticLoginAfterExtensionActivation}`);
-        const config = getExtensionConfiguration();
-        if (config.get(ConfigKeys.AUTO_LOGIN)) {
-            const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-                createIfNone: true
-            });
-            if (session) {
-                await handleTestBenchSessionChange(context, session);
-            }
-        }
-    };
 
     const handleLogin = async () => {
         logger.trace(`[extension] Command called: ${allExtensionCommands.login}`);
@@ -829,7 +809,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
-        { id: allExtensionCommands.automaticLoginAfterExtensionActivation, handler: handleAutomaticLogin },
         { id: allExtensionCommands.login, handler: handleLogin },
         { id: allExtensionCommands.logout, handler: handleLogout },
 
@@ -1096,6 +1075,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.info("[extension] Activating extension.");
     initializeConfigurationWatcher();
 
+    const handleAutomaticLogin = async () => {
+        logger.trace(`[extension] Performing automatic login on activation.`);
+        const config = getExtensionConfiguration();
+        if (config.get(ConfigKeys.AUTO_LOGIN)) {
+            try {
+                authProviderInstance?.prepareForSilentAutoLogin();
+                const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+                    createIfNone: true
+                });
+
+                if (session) {
+                    await handleTestBenchSessionChange(context, session);
+                }
+            } catch (error) {
+                // Errors are expected if auto-login fails silently
+                logger.trace("[extension] Automatic login failed:", error);
+            }
+        }
+    };
+
     // Register AuthenticationProvider
     authProviderInstance = new TestBenchAuthenticationProvider(context);
     context.subscriptions.push(
@@ -1190,15 +1189,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-        logger.debug("[extension] Auto-login is enabled. Scheduling automatic login command.");
-        // Short delay to ensure webview is loaded
-        setTimeout(async () => {
-            try {
-                await vscode.commands.executeCommand(allExtensionCommands.automaticLoginAfterExtensionActivation);
-            } catch (error) {
-                logger.warn("[extension] Error during automatic login:", error);
-            }
-        }, TreeViewTiming.WEBVIEW_LOAD_DELAY_MS);
+        logger.debug("[extension] Auto-login is enabled. Scheduling automatic login.");
+        handleAutomaticLogin();
     }
 
     logger.info("[extension] Extension activated successfully.");
