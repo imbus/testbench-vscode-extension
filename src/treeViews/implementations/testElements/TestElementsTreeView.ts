@@ -188,7 +188,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             if (!exists) {
                 if (!createMissing) {
-                    vscode.window.showErrorMessage(
+                    vscode.window.showWarningMessage(
                         isResourceFile ? errorMessages.fileNotFound : errorMessages.folderNotFound
                     );
                     return;
@@ -965,7 +965,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 noParent: "Cannot find parent resource for interaction.",
                 noUid: "Parent resource {label} has no UID.",
                 fileNotFound:
-                    "Parent resource file does not exist. Use double-click or 'Create Resource' button to create it.",
+                    "Resource file does not exist. Use double-click or 'Create Resource' button to create it.",
                 folderNotFound: "Parent resource folder does not exist: {path}."
             }
         });
