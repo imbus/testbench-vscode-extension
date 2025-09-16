@@ -1494,11 +1494,8 @@ export async function loginToServerAndGetSessionDetails(
                 `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
             );
             const proceedAnywayOption = "Proceed Anyway";
-            const choice = await vscode.window.showWarningMessage(
-                `Connection Error: Untrusted Certificate. This could expose you to security risks.\n${error}`,
-                { modal: true },
-                proceedAnywayOption
-            );
+            const message = `You are using an untrusted certificate. If you proceed, your connection might not be secure.\nDetails: ${error.message}`;
+            const choice = await vscode.window.showWarningMessage(message, { modal: true }, proceedAnywayOption);
 
             if (choice === proceedAnywayOption) {
                 logger.debug(
