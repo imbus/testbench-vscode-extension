@@ -338,7 +338,8 @@ export async function extractAndParseJsonContent(zipContents: JSZip, fileName: s
 }
 
 /**
- * Sanitizes a file path by replacing invalid characters with underscores.
+ * For windows systems, sanitizes a file path string by replacing invalid characters with underscores.
+ * Special characters are technically allowed in file names on Unix-based systems.
  *
  * @param {string} filePath - The file path to sanitize.
  * @returns {string} The sanitized file path.
@@ -347,6 +348,9 @@ export function sanitizeFilePath(filePath: string): string {
     if (!filePath) {
         return "";
     }
-    const sanitizedPath = filePath.replace(/[<>:"|?*]/g, "_");
-    return sanitizedPath;
+    if (os.platform() === "win32") {
+        const sanitizedPath = filePath.replace(/[<>:"/\\|?*]/g, "_");
+        return sanitizedPath;
+    }
+    return filePath;
 }
