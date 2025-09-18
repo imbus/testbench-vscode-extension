@@ -41,7 +41,8 @@ import {
     stopLanguageClient,
     client,
     handleLanguageServerRestartOnSessionChange,
-    prepareLanguageServerForTreeItemOperation
+    prepareLanguageServerForTreeItemOperation,
+    setIsHandlingLogout
 } from "./server";
 import {
     hideProjectManagementTreeView,
@@ -1013,6 +1014,7 @@ async function handleTestBenchSessionChange(
     const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess?.accessToken) {
+        setIsHandlingLogout(false);
         const previousUserId = userSessionManager.getCurrentUserId();
         const newUserId = sessionToProcess.account.id;
         const wasNewSessionStarted = previousUserId !== newUserId;
@@ -1060,6 +1062,7 @@ async function handleTestBenchSessionChange(
             await treeViews.restoreViewsState();
         }
     } else {
+        setIsHandlingLogout(true);
         await handleNoSession();
     }
 }
