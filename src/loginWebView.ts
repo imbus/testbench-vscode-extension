@@ -581,6 +581,17 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Resets the webview's edit mode.
+     * Called when a login happens to ensure a clean state after logout.
+     */
+    public resetEditMode(): void {
+        if (this.editingConnectionId) {
+            logger.trace("[loginWebView] Resetting edit mode due to successful login.");
+            this.editingConnectionId = null;
+        }
+    }
+
+    /**
      * Updates the HTML content of the webview based on the connection status.
      */
     async updateWebviewHTMLContent(): Promise<void> {

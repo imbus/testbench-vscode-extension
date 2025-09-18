@@ -62,6 +62,8 @@
             editingConnectionId = data.editingConnectionId || null;
         }
 
+        const isAnyConnectionBeingEdited = editingConnectionId !== null;
+
         if (connectionsLoadingMessageEl) {
             connectionsLoadingMessageEl.style.display = "none";
         }
@@ -113,8 +115,8 @@
                 <div class="connection-actions">
                     <button class="login-btn" data-connection-id="${connection.id}" 
                             aria-label="Login with connection ${connection.label}" 
-                            title="Login with this connection"
-                            ${isBeingEdited ? "disabled" : ""}>
+                            title="${isAnyConnectionBeingEdited ? "Finish editing before login" : "Login with this connection"}"
+                            ${isAnyConnectionBeingEdited ? "disabled" : ""}>
                         <span class="icon icon-login"></span>
                     </button>
                     <button class="edit-btn" data-connection-id="${connection.id}" 
@@ -126,9 +128,9 @@
                     </button>
                     <button class="delete-btn" data-connection-id="${connection.id}" 
                             aria-label="Delete connection ${connection.label}" 
-                            title="${isBeingEdited ? "Cannot delete while editing" : "Delete this connection"}"
-                            ${isBeingEdited ? "disabled" : ""}
-                            style="${isBeingEdited ? "opacity: 0.3; cursor: not-allowed;" : ""}">
+                            title="${isAnyConnectionBeingEdited ? "Cannot delete while editing" : "Delete this connection"}"
+                            ${isAnyConnectionBeingEdited ? "disabled" : ""}
+                            style="${isAnyConnectionBeingEdited ? "opacity: 0.3; cursor: not-allowed;" : ""}">
                         <span class="icon icon-delete"></span>
                     </button>
                 </div>

@@ -1014,6 +1014,7 @@ async function handleTestBenchSessionChange(
     const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess?.accessToken) {
+        getLoginWebViewProvider()?.resetEditMode();
         setIsHandlingLogout(false);
         const previousUserId = userSessionManager.getCurrentUserId();
         const newUserId = sessionToProcess.account.id;
