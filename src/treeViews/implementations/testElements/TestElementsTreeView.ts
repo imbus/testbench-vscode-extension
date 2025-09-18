@@ -167,7 +167,22 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private async _handleResourceOperation(config: ResourceOperationConfig): Promise<void> {
         const { operationType, createMissing, revealInExplorer, targetItem, interactionItem, errorMessages } = config;
 
+        // Resource operations use language server commands, ensure it's running
         try {
+            if (!isLanguageServerRunning()) {
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Waiting for Language Server",
+                        cancellable: true
+                    },
+                    async (progress, cancellationToken) => {
+                        progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                        await waitForLanguageServerReady(30000, 100, cancellationToken);
+                    }
+                );
+            }
+
             const hierarchicalName = targetItem.data.hierarchicalName;
             if (!hierarchicalName) {
                 vscode.window.showErrorMessage(errorMessages.noHierarchicalName);
