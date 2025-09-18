@@ -284,11 +284,7 @@
             },
             {
                 "command": "testbenchExtension.clearInternalTestbenchFolder",
-                "title": "Clear Temporary Files",
-                "icon": {
-                    "light": "resources/icons/clearInternalTestbenchFolder-light.svg",
-                    "dark": "resources/icons/clearInternalTestbenchFolder-dark.svg"
-                }
+                "title": "Clear Temporary Files"
             },
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
@@ -490,11 +486,7 @@
             },
             {
                 "command": "testbenchExtension.clearAllExtensionData",
-                "title": "TestBench: Clear All Extension Data",
-                "icon": {
-                    "light": "resources/icons/clearInternalTestbenchFolder-light.svg",
-                    "dark": "resources/icons/clearInternalTestbenchFolder-dark.svg"
-                }
+                "title": "TestBench: Clear All Extension Data"
             }
         ],
         "viewsContainers": {
@@ -665,7 +657,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
-                    "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
+                    "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters && false",
                     "group": "navigation@3",
                     "icon": {
                         "light": "resources/icons/filter-off-light.svg",
@@ -674,7 +666,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
-                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && false",
                     "group": "navigation@3",
                     "icon": {
                         "light": "resources/icons/filter-light.svg",
