@@ -319,8 +319,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 scopes
             };
         } catch (error: any) {
-            logger.error(`[AuthenticationProvider] Error during session creation.`);
-            logger.trace(`[AuthenticationProvider] Session creation error details: ${error.message || error}`);
+            logger.error(`[AuthenticationProvider] Error during session creation: ${error.message || error}`);
             if (!isSilent) {
                 await connectionManager.clearActiveConnection(this.context);
             }

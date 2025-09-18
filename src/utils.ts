@@ -150,8 +150,8 @@ export async function clearInternalTestbenchFolder(
             }
         } catch {
             const folderNotExistMsg: string = `The folder at path "${workspaceLocationToClear}" does not exist. Cannot clear workspace folder.`;
-            vscode.window.showErrorMessage(folderNotExistMsg);
-            logger.error(`[utils] ${folderNotExistMsg}`);
+            vscode.window.showWarningMessage(folderNotExistMsg);
+            logger.warn(`[utils] ${folderNotExistMsg}`);
             return null;
         }
 

@@ -1545,9 +1545,9 @@ export async function loginToServerAndGetSessionDetails(
                         insecureError.message
                     );
                     if (axios.isAxiosError(insecureError)) {
-                        logger.error(`[testBenchConnection] Insecure error code: ${insecureError.code}`);
-                        logger.error(`[testBenchConnection] Insecure error response:`, insecureError.response?.data);
-                        logger.error(`[testBenchConnection] Insecure error config:`, insecureError.config);
+                        logger.error(
+                            `[testBenchConnection] Insecure Axios error details:\nCode=${insecureError.code},\nResponse=${JSON.stringify(insecureError.response?.data)},\nConfig=${JSON.stringify(insecureError.config)}`
+                        );
                     }
                 }
             }

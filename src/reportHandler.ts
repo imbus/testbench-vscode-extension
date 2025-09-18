@@ -749,8 +749,8 @@ async function runRobotFrameworkTestGenerationProcess(
             "[reportHandler] Workspace location not configured, cannot generate tests.";
         const workspaceLocationMissingErrorMessageForUser: string =
             "Workspace location not configured, cannot generate tests.";
-        logger.error(workspaceLocationMissingErrorMessage);
-        vscode.window.showErrorMessage(workspaceLocationMissingErrorMessageForUser);
+        logger.warn(workspaceLocationMissingErrorMessage);
+        vscode.window.showWarningMessage(workspaceLocationMissingErrorMessageForUser);
         return false;
     }
 
@@ -872,8 +872,8 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     }
 
     const xmlFileNotSelectedError: string = "No output.xml file selected.";
-    logger.error(`[reportHandler] ${xmlFileNotSelectedError}`);
-    vscode.window.showErrorMessage(xmlFileNotSelectedError);
+    logger.warn(`[reportHandler] ${xmlFileNotSelectedError}`);
+    vscode.window.showWarningMessage(xmlFileNotSelectedError);
     return null;
 }
 
@@ -896,7 +896,7 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
         logger.debug(`[reportHandler] Report zip file without results selected by user: ${selectedFiles[0].fsPath}`);
         return selectedFiles[0].fsPath;
     }
-    logger.error("[reportHandler] No report zip file selected for the results zip file.");
+    logger.warn("[reportHandler] No report zip file selected for the results zip file.");
     return null;
 }
 

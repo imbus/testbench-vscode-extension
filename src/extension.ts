@@ -394,8 +394,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!treeViews?.projectsTree) {
-            logger.error(`[extension] _handleGenerateTestCasesForTOV called before tree views are initialized`);
-            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            logger.warn(`[extension] _handleGenerateTestCasesForTOV called before tree views are initialized`);
+            vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
 
@@ -466,10 +466,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!treeViews?.testThemesTree) {
-            logger.error(
+            logger.warn(
                 `[extension] _handleGenerateTestCasesForTestThemeOrTestCaseSet called before tree views are initialized`
             );
-            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
 
@@ -502,10 +502,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!treeViews?.testThemesTree) {
-            logger.error(
+            logger.warn(
                 `[extension] _handleGenerateTestsForTestThemeTreeItemFromTOV called before tree views are initialized`
             );
-            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
 
@@ -538,10 +538,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!treeViews?.testThemesTree) {
-            logger.error(
+            logger.warn(
                 `[extension] _handleReadAndImportTestResultsToTestbench called before tree views are initialized`
             );
-            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
 

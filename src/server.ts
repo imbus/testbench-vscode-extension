@@ -1084,7 +1084,7 @@ export async function updateOrRestartLS(projectName: string | undefined, tovName
     }
 
     if (!connection) {
-        logger.error("[server] updateOrRestartLS called without active connection. Cannot update language server.");
+        logger.warn("[server] updateOrRestartLS called without active connection. Cannot update language server.");
         vscode.window.showWarningMessage("No active connection available. Please log in first.");
         return;
     }

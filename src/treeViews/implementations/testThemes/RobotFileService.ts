@@ -41,7 +41,7 @@ export class RobotFileService {
 
             const generatedRobotFilesOutputDirectory = getExtensionSetting<string>(ConfigKeys.TB2ROBOT_OUTPUT_DIR);
             if (!generatedRobotFilesOutputDirectory) {
-                this.logger.error(
+                this.logger.warn(
                     "[RobotFileService] Output directory is not configured while checking robot file existence"
                 );
                 return { exists: false };
