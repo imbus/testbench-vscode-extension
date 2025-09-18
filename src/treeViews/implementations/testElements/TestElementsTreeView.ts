@@ -260,16 +260,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         tovKey: string,
         tovLabel?: string,
         projectName?: string,
-        tovName?: string,
-        preserveExistingData: boolean = false
+        tovName?: string
     ): Promise<void> {
         const startTime = Date.now();
         this.logger.debug(`[TestElementsTreeView] Loading Test Object Version '${tovName}'...`);
 
         try {
-            if (!preserveExistingData) {
-                this.stateManager.setLoading(true);
-            }
+            this.stateManager.setLoading(true);
+            (this as any).updateTreeViewMessage();
 
             const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);
             const newRootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
@@ -299,6 +297,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
             this.stateManager.setLoading(false);
+            (this as any).updateTreeViewMessage();
 
             this._onDidChangeTreeData.fire(undefined);
             this.updateSubdivisionIcons(newRootItems);
@@ -325,6 +324,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             );
             this.stateManager.setLoading(false);
             this.stateManager.setError(error as Error);
+            (this as any).updateTreeViewMessage();
             throw error;
         }
     }
@@ -1036,8 +1036,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.currentTovKey,
                 this.currentTovLabel || undefined,
                 this.currentProjectName || undefined,
-                this.currentTovName || undefined,
-                true
+                this.currentTovName || undefined
             );
         } else {
             this.logger.trace("[TestElementsTreeView] No TOV key available while refreshing, clearing tree");
