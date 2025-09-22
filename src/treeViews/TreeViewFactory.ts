@@ -700,6 +700,7 @@ export class TreeViewFactory {
                 await treeViews.testThemesTree.loadCycle(
                     savedContext.projectKey,
                     savedContext.cycleKey,
+                    savedContext.tovKey,
                     savedContext.projectName,
                     savedContext.tovName,
                     savedContext.cycleLabel
