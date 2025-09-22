@@ -910,7 +910,8 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
  */
 export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
-    currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
+    currentProgress?: vscode.Progress<{ message?: string; increment?: number }>,
+    cancellationToken?: vscode.CancellationToken
 ): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
         logger.trace("[reportHandler] Fetching test results and creating report with results.");
@@ -982,7 +983,8 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 cycleKey,
                 folderNameOfInternalTestbenchFolder,
                 cycleStructureOptionsRequestParams,
-                progress
+                progress,
+                cancellationToken
             );
 
             // If report fetching fails, prompt user to select the report zip file manually
@@ -1070,7 +1072,8 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
     projectKeyString: string,
     cycleKeyString: string,
     reportWithResultsZipFilePath: string,
-    reportRootUID: string
+    reportRootUID: string,
+    cancellationToken?: vscode.CancellationToken
 ): Promise<void | null> {
     try {
         logger.debug(
@@ -1123,7 +1126,9 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
                 projectKeyString,
                 importJobID,
-                JobTypes.IMPORT
+                JobTypes.IMPORT,
+                undefined,
+                cancellationToken
             );
 
             if (!importJobStatus || isImportJobFailed(importJobStatus)) {
@@ -1212,7 +1217,8 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });
                 const reportCreationDetails = await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
-                    progress
+                    progress,
+                    cancellationToken
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("[reportHandler] Failed to create report with results, or process was cancelled.");
@@ -1230,7 +1236,8 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     resolvedTargetProjectKey,
                     resolvedTargetCycleKey,
                     createdReportPath,
-                    resolvedReportRootUID
+                    resolvedReportRootUID,
+                    cancellationToken
                 );
 
                 if (cancellationToken.isCancellationRequested) {
