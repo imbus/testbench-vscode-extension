@@ -792,13 +792,13 @@ export class PlayServerConnection {
             filters: validatedFilters
         };
 
-        logger.debug(
+        logger.trace(
             `[testBenchConnection] Fetching ${structureType} structure from URL ${url} and request body:`,
             requestBody
         );
 
         if (validatedFilters.length > 0) {
-            logger.debug(
+            logger.trace(
                 `[testBenchConnection] Using ${validatedFilters.length} validated filters when fetching ${structureType} structure:`,
                 validatedFilters.map((f: any) => f.name)
             );
