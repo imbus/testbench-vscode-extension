@@ -184,7 +184,7 @@ export interface TreeNode {
 
 export interface ImportData {
     fileName: string;
-    reportRootUID: string;
+    treeRootUID: string;
     useExistingDefect: boolean;
     discardTesterInformation: boolean;
     defaultTester?: string;

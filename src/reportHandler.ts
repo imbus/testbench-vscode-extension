@@ -1115,7 +1115,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
 
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
-            reportRootUID: reportRootUID,
+            treeRootUID: reportRootUID,
             useExistingDefect: true,
             discardTesterInformation: false,
             filters: []

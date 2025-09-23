@@ -1289,7 +1289,7 @@ export async function importReportWithResultsToTestbench(
 
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
-            reportRootUID: uniqueID,
+            treeRootUID: uniqueID,
             useExistingDefect: true,
             discardTesterInformation: false,
             // defaultTester: "tester",
