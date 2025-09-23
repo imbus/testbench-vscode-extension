@@ -680,7 +680,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         html = html.replace(/{{nonce}}/g, nonce);
         html = html.replace(/{{cspSource}}/g, webview.cspSource);
-        html = html.replace("{{mainCss}}", stylesContent);
+        html = html.replace(/{{mainCss}}/g, stylesContent);
         html = html.replace(/{{jsUri}}/g, scriptUri.toString());
         html = html.replace(/{{iconStyles}}/g, iconStyles);
 
@@ -708,7 +708,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         html = html.replace(/{{nonce}}/g, nonce);
         html = html.replace(/{{cspSource}}/g, webview.cspSource);
-        html = html.replace("{{mainCss}}", stylesContent);
+        html = html.replace(/{{mainCss}}/g, stylesContent);
         html = html.replace(/{{jsUri}}/g, scriptUri.toString());
         html = html.replace(/{{logoUri}}/g, logoUri ? logoUri.toString() : "");
         html = html.replace(/{{connectedAsInfo}}/g, connectedAsInfo);
