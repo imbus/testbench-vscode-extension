@@ -756,7 +756,6 @@ async function runRobotFrameworkTestGenerationProcess(
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
-    await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipPath);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         return false;
     }
@@ -766,19 +765,6 @@ async function runRobotFrameworkTestGenerationProcess(
 
     logger.debug("[reportHandler] Test generation process completed successfully.");
     return true;
-}
-
-/**
- * Removes the report zip file if configured in the extension settings.
- *
- * @param {string} reportZipFilePath The path of the report zip file.
- */
-export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath: string): Promise<void> {
-    if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_REPORT_AFTER_PROCESSING)) {
-        await removeReportZipFile(reportZipFilePath);
-    } else {
-        logger.debug("[reportHandler] Existing TestBench report will not be deleted as specified in the settings.");
-    }
 }
 
 /**
@@ -1013,10 +999,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     reportWithResultsZipFullPath
                 );
 
-            if (downloadedReportWithoutResultsZip) {
-                await cleanUpReportFileIfConfiguredInSettings(downloadedReportWithoutResultsZip);
-            }
-
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const testResultsImportError: string =
                     "[reportHandler] Parsing Robot Framework results with testbench2robotframework failed.";
@@ -1247,7 +1229,6 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
                 await setLastImportedItem(context, resolvedReportRootUID);
-                await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
                 logger.debug("[reportHandler] Fetch and import process completed.");
                 return true;
             } catch (error) {
@@ -1438,7 +1419,6 @@ export async function startTestGenerationUsingTOV(
                         downloadedTovReportPath
                     );
 
-                await cleanUpReportFileIfConfiguredInSettings(downloadedTovReportPath);
                 if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
                     return false;
                 }

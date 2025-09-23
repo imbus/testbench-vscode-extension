@@ -1357,13 +1357,13 @@ export async function selectReportWithResultsAndImportToTestbench(
             cancellable: true
         },
         async (progress) => {
-            progress.report({ message: "Selecting report file with results.", increment: 30 });
+            progress.report({ message: "Selecting report file with results.", increment: 40 });
             const resultZipFilePath: string | null = await promptForReportZipFileWithResults();
             if (!resultZipFilePath) {
                 return null;
             }
 
-            progress.report({ message: "Extracting report context...", increment: 10 });
+            progress.report({ message: "Extracting report context...", increment: 20 });
             const { projectKey, cycleKey } = await extractDataFromReport(resultZipFilePath);
 
             if (!projectKey || !cycleKey) {
@@ -1373,14 +1373,11 @@ export async function selectReportWithResultsAndImportToTestbench(
                     "Could not extract necessary project or cycle key from the selected report file.";
                 logger.error(missingDataContextMsg);
                 vscode.window.showErrorMessage(missingDataContextMsgForUser);
-                await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
                 return null;
             }
 
-            progress.report({ message: "Importing report file.", increment: 30 });
+            progress.report({ message: "Importing report file.", increment: 40 });
             await importReportWithResultsToTestbench(connection, projectKey, cycleKey, resultZipFilePath);
-            progress.report({ message: "Cleaning up.", increment: 30 });
-            await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
         }
     );
 }

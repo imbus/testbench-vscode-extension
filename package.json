@@ -243,13 +243,6 @@
                         "default": false,
                         "order": 1,
                         "scope": "window"
-                    },
-                    "testbenchExtension.clearReportAfterProcessing": {
-                        "type": "boolean",
-                        "default": true,
-                        "description": "Remove the downloaded report file automatically after processing it.",
-                        "order": 3,
-                        "scope": "resource"
                     }
                 }
             },
