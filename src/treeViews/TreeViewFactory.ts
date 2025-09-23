@@ -329,23 +329,8 @@ export class TreeViewFactory {
     ): void {
         if (treeType === "projects") {
             // Handle project tree selections
-            if (item.data?.type === "cycle") {
-                const projectName = item.parent?.parent?.label?.toString();
-                const tovName = item.parent?.label?.toString();
-                treeView.eventBus.emit({
-                    type: "cycle:selected",
-                    source: treeView.config.id,
-                    data: {
-                        projectKey: item.getProjectKey(),
-                        cycleKey: item.data.key,
-                        tovKey: item.getVersionKey(),
-                        cycleLabel: item.label,
-                        projectName: projectName,
-                        tovName: tovName
-                    },
-                    timestamp: Date.now()
-                });
-            } else if (item.data?.type === "version") {
+            // Cycle clicks are handled in setupCycleClickHandlers of ProjectsTreeView
+            if (item.data?.type === "version") {
                 const projectName = item.parent?.label?.toString();
                 treeView.eventBus.emit({
                     type: "version:selected",

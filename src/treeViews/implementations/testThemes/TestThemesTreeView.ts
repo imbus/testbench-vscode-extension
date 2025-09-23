@@ -400,10 +400,13 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Registers event handlers (listeners) for the test themes tree view
      */
     private registerEventHandlers(): void {
+        /*
+        // cycle:selected is not emitted anymore, setupCycleClickHandlers of ProjectsTreeView handles this
         this.eventBus.on("cycle:selected", async (event) => {
             const { projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel } = event.data;
             await this.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
         });
+        */
         this.eventBus.on("version:selected", async (event) => {
             const { projectKey, tovKey, projectName, tovName } = event.data;
             await this.loadTov(projectKey, tovKey, projectName, tovName);
