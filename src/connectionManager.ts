@@ -17,6 +17,11 @@ export interface TestBenchConnection {
     username: string;
 }
 
+type TestBenchConnectionWithSecrets = (Omit<TestBenchConnection, "id"> & { id?: string }) & {
+    password?: string;
+    keepExistingPassword?: boolean;
+};
+
 /**
  * Retrieves all saved TestBench connections.
  * @param {vscode.ExtensionContext} context The extension context.
@@ -50,8 +55,7 @@ export async function getConnections(context: vscode.ExtensionContext): Promise<
  */
 export async function saveConnection(
     context: vscode.ExtensionContext,
-    connection: Omit<TestBenchConnection, "id"> & { id?: string }, // Optional id for new connections
-    password?: string
+    connection: TestBenchConnectionWithSecrets
 ): Promise<string> {
     try {
         const connections: TestBenchConnection[] = await getConnections(context);
@@ -83,9 +87,17 @@ export async function saveConnection(
         }
 
         await context.globalState.update(StorageKeys.CONNECTIONS_STORAGE_KEY, connections);
-        if (password && password.length > 0) {
-            await context.secrets.store(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionToSave.id, password);
+        if (connection.keepExistingPassword) {
+            // Password is not changing, do nothing.
+        } else if (connection.password && connection.password.length > 0) {
+            await context.secrets.store(
+                StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionToSave.id,
+                connection.password
+            );
         } else {
+            // Handle cases:
+            // - `password` is undefined (e.g., "Store password" unchecked)
+            // - `password` is an empty string
             await context.secrets.delete(StorageKeys.CONNECTION_PASSWORD_SECRET_PREFIX + connectionToSave.id);
         }
         logger.debug(`[connectionManager] Connection saved: ${connectionToSave.label}`);

@@ -56,7 +56,7 @@
                 "properties": {
                     "testbenchExtension.testbenchLogLevel": {
                         "type": "string",
-                        "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory in the workspace location.",
+                        "description": "Sets the minimum log level for the extension. Logs are saved in the log folder inside the .testbench directory within the workspace.",
                         "default": "Info",
                         "order": 9,
                         "enum": [
@@ -106,7 +106,7 @@
                     },
                     "testbenchExtension.outputDirectory": {
                         "type": "string",
-                        "description": "Directory or ZIP archive containing the generated test suites. The path is relative to the workspace location.",
+                        "description": "Directory or ZIP archive where the generated test suites will be created. The path is relative to the workspace location.",
                         "default": "tests",
                         "order": 13,
                         "scope": "window"
@@ -156,7 +156,7 @@
                     },
                     "testbenchExtension.libraryRoot": {
                         "type": "array",
-                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "description": "TestBench root subdivision whose direct children correspond to Robot Framework resources.",
                         "items": {
                             "type": "string"
                         },
@@ -188,7 +188,7 @@
                     },
                     "testbenchExtension.resourceRoot": {
                         "type": "array",
-                        "description": "TestBench root subdivision which's direct children correspond to Robot Framework resources.",
+                        "description": "TestBench root subdivision whose direct children correspond to Robot Framework resources.",
                         "items": {
                             "type": "string"
                         },
@@ -233,7 +233,7 @@
                     "testbenchExtension.clearInternalTestbenchDirectoryBeforeTestGeneration": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Delete all files excluding the log files inside the working directory called .testbench before generating tests.",
+                        "description": "Deletes all files, excluding log files, from the internal `.testbench` directory before generating tests.",
                         "order": 1,
                         "scope": "resource"
                     },
@@ -243,13 +243,6 @@
                         "default": false,
                         "order": 1,
                         "scope": "window"
-                    },
-                    "testbenchExtension.clearReportAfterProcessing": {
-                        "type": "boolean",
-                        "default": true,
-                        "description": "Remove the report file automatically after processing it.",
-                        "order": 3,
-                        "scope": "resource"
                     }
                 }
             },
@@ -284,11 +277,7 @@
             },
             {
                 "command": "testbenchExtension.clearInternalTestbenchFolder",
-                "title": "Clear Temporary Files",
-                "icon": {
-                    "light": "resources/icons/clearInternalTestbenchFolder-light.svg",
-                    "dark": "resources/icons/clearInternalTestbenchFolder-dark.svg"
-                }
+                "title": "Clear Temporary Files"
             },
             {
                 "command": "testbenchExtension.generateTestCasesForCycle",
@@ -359,10 +348,6 @@
                 "title": "Reset Test Themes View Root"
             },
             {
-                "command": "testbenchExtension.getFilters",
-                "title": "TestBench: Get Filters"
-            },
-            {
                 "command": "testbenchExtension.fetchTovStructure",
                 "title": "TestBench: Get TOV Structure"
             },
@@ -391,6 +376,24 @@
                 "icon": {
                     "light": "resources/icons/refresh-light.svg",
                     "dark": "resources/icons/refresh-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
+                "title": "Display Test Theme Filters",
+                "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
+                "icon": {
+                    "light": "resources/icons/filter-light.svg",
+                    "dark": "resources/icons/filter-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
+                "title": "Display Test Theme Filters",
+                "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
+                "icon": {
+                    "light": "resources/icons/filter-off-light.svg",
+                    "dark": "resources/icons/filter-off-dark.svg"
                 }
             },
             {
@@ -440,10 +443,7 @@
                 "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
                 "title": "Create Resource",
                 "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.missing'",
-                "icon": {
-                    "light": "resources/icons/new-file-light.svg",
-                    "dark": "resources/icons/new-file-dark.svg"
-                }
+                "icon": "$(new-file)"
             },
             {
                 "command": "testbenchExtension.openSubdivisionFolderInExplorer",
@@ -479,183 +479,7 @@
             },
             {
                 "command": "testbenchExtension.clearAllExtensionData",
-                "title": "TestBench: Clear All Extension Data",
-                "icon": {
-                    "light": "resources/icons/clearInternalTestbenchFolder-light.svg",
-                    "dark": "resources/icons/clearInternalTestbenchFolder-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.setTextFilter",
-                "title": "Set Text Filter",
-                "when": "view == testbench.projects || view == testbench.testThemes || view == testbench.testElements",
-                "group": "navigation@4",
-                "icon": {
-                    "light": "resources/icons/filter-light.svg",
-                    "dark": "resources/icons/filter-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.setTextFilterForProjects",
-                "title": "Set Text Filter",
-                "when": "view == testbench.projects",
-                "group": "navigation@4",
-                "icon": {
-                    "light": "resources/icons/filter-light.svg",
-                    "dark": "resources/icons/filter-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.setTextFilterForTestThemes",
-                "title": "Set Text Filter",
-                "when": "view == testbench.testThemes",
-                "group": "navigation@4",
-                "icon": {
-                    "light": "resources/icons/filter-light.svg",
-                    "dark": "resources/icons/filter-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.setTextFilterForTestElements",
-                "title": "Set Text Filter",
-                "when": "view == testbench.testElements",
-                "group": "navigation@4",
-                "icon": {
-                    "light": "resources/icons/filter-light.svg",
-                    "dark": "resources/icons/filter-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.clearTextFilter",
-                "title": "TestBench: Clear Text Filter",
-                "icon": {
-                    "light": "resources/icons/clear-light.svg",
-                    "dark": "resources/icons/clear-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.clearTextFilterForProjects",
-                "title": "TestBench: Clear Text Filter (Projects)",
-                "icon": {
-                    "light": "resources/icons/clear-light.svg",
-                    "dark": "resources/icons/clear-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.clearTextFilterForTestThemes",
-                "title": "TestBench: Clear Text Filter (Test Themes)",
-                "icon": {
-                    "light": "resources/icons/clear-light.svg",
-                    "dark": "resources/icons/clear-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.clearTextFilterForTestElements",
-                "title": "TestBench: Clear Text Filter (Test Elements)",
-                "icon": {
-                    "light": "resources/icons/clear-light.svg",
-                    "dark": "resources/icons/clear-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.toggleFilterDiffModeForProjects",
-                "title": "Toggle Filter Diff Mode for Projects",
-                "when": "view == testbench.projects && !testbenchExtension.filterDiffModeEnabledProjects",
-                "group": "navigation@5",
-                "icon": {
-                    "light": "resources/icons/diff-off-light.svg",
-                    "dark": "resources/icons/diff-off-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.toggleFilterDiffModeForProjectsEnabled",
-                "title": "Toggle Filter Diff Mode for Projects",
-                "when": "view == testbench.projects && testbenchExtension.filterDiffModeEnabledProjects",
-                "group": "navigation@5",
-                "icon": {
-                    "light": "resources/icons/diff-on-light.svg",
-                    "dark": "resources/icons/diff-on-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.toggleFilterDiffModeForTestThemes",
-                "title": "Toggle Filter Diff Mode for Test Themes",
-                "when": "view == testbench.testThemes && !testbenchExtension.filterDiffModeEnabledTestThemes",
-                "group": "navigation@5",
-                "icon": {
-                    "light": "resources/icons/diff-off-light.svg",
-                    "dark": "resources/icons/diff-off-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.toggleFilterDiffModeForTestThemesEnabled",
-                "title": "Toggle Filter Diff Mode for Test Themes",
-                "when": "view == testbench.testThemes && testbenchExtension.filterDiffModeEnabledTestThemes",
-                "group": "navigation@5",
-                "icon": {
-                    "light": "resources/icons/diff-on-light.svg",
-                    "dark": "resources/icons/diff-on-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.toggleFilterDiffModeForTestElements",
-                "title": "Toggle Filter Diff Mode for Test Elements",
-                "when": "view == testbench.testElements && !testbenchExtension.filterDiffModeEnabledTestElements",
-                "group": "navigation@5",
-                "icon": {
-                    "light": "resources/icons/diff-off-light.svg",
-                    "dark": "resources/icons/diff-off-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.toggleFilterDiffModeForTestElementsEnabled",
-                "title": "Toggle Filter Diff Mode for Test Elements",
-                "when": "view == testbench.testElements && testbenchExtension.filterDiffModeEnabledTestElements",
-                "group": "navigation@5",
-                "icon": {
-                    "light": "resources/icons/diff-on-light.svg",
-                    "dark": "resources/icons/diff-on-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.clearAllFilters",
-                "title": "Clear All Filters",
-                "when": "view == testbench.projects || view == testbench.testThemes || view == testbench.testElements",
-                "group": "navigation@6",
-                "icon": {
-                    "light": "resources/icons/filter-off-light.svg",
-                    "dark": "resources/icons/filter-off-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.clearAllFiltersForProjects",
-                "title": "Clear All Filters",
-                "when": "view == testbench.projects",
-                "group": "navigation@6",
-                "icon": {
-                    "light": "resources/icons/filter-off-light.svg",
-                    "dark": "resources/icons/filter-off-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.clearAllFiltersForTestThemes",
-                "title": "Clear All Filters",
-                "when": "view == testbench.testThemes",
-                "group": "navigation@6",
-                "icon": {
-                    "light": "resources/icons/filter-off-light.svg",
-                    "dark": "resources/icons/filter-off-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.clearAllFiltersForTestElements",
-                "title": "Clear All Filters",
-                "when": "view == testbench.testElements",
-                "group": "navigation@6",
-                "icon": {
-                    "light": "resources/icons/filter-off-light.svg",
-                    "dark": "resources/icons/filter-off-dark.svg"
-                }
+                "title": "TestBench: Clear All Extension Data"
             }
         ],
         "viewsContainers": {
@@ -708,10 +532,6 @@
                 },
                 {
                     "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.getFilters",
                     "when": "false"
                 },
                 {
@@ -769,78 +589,6 @@
                 {
                     "command": "testbenchExtension.checkForCycleDoubleClick",
                     "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.setTextFilter",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.setTextFilterForProjects",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.setTextFilterForTestThemes",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.setTextFilterForTestElements",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.clearTextFilter",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.clearTextFilterForProjects",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.clearTextFilterForTestThemes",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.clearTextFilterForTestElements",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.toggleFilterDiffModeForProjects",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.toggleFilterDiffModeForProjectsEnabled",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.toggleFilterDiffModeForTestThemes",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.toggleFilterDiffModeForTestThemesEnabled",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.toggleFilterDiffModeForTestElements",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.toggleFilterDiffModeForTestElementsEnabled",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.clearAllFilters",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.clearAllFiltersForProjects",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.clearAllFiltersForTestThemes",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.clearAllFiltersForTestElements",
-                    "when": "false"
                 }
             ],
             "view/title": [
@@ -875,7 +623,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",
-                    "group": "navigation@3",
+                    "group": "navigation@2",
                     "when": "view == testbench.testThemes",
                     "icon": {
                         "light": "resources/icons/menu-light.svg",
@@ -898,6 +646,24 @@
                     "icon": {
                         "light": "resources/icons/refresh-light.svg",
                         "dark": "resources/icons/refresh-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
+                    "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters && false",
+                    "group": "navigation@3",
+                    "icon": {
+                        "light": "resources/icons/filter-off-light.svg",
+                        "dark": "resources/icons/filter-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && false",
+                    "group": "navigation@3",
+                    "icon": {
+                        "light": "resources/icons/filter-light.svg",
+                        "dark": "resources/icons/filter-dark.svg"
                     }
                 },
                 {

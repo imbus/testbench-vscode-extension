@@ -12,6 +12,7 @@
 
     let currentEditingConnectionId = null;
     let isEditMode = false;
+    let hasStoredPasswordWhileEditing = false;
 
     // Form elements
     const connectionLabelInput = document.getElementById("connectionLabel");
@@ -60,6 +61,8 @@
             connections = data.connections || [];
             editingConnectionId = data.editingConnectionId || null;
         }
+
+        const isAnyConnectionBeingEdited = editingConnectionId !== null;
 
         if (connectionsLoadingMessageEl) {
             connectionsLoadingMessageEl.style.display = "none";
@@ -112,8 +115,8 @@
                 <div class="connection-actions">
                     <button class="login-btn" data-connection-id="${connection.id}" 
                             aria-label="Login with connection ${connection.label}" 
-                            title="Login with this connection"
-                            ${isBeingEdited ? "disabled" : ""}>
+                            title="${isAnyConnectionBeingEdited ? "Finish editing before login" : "Login with this connection"}"
+                            ${isAnyConnectionBeingEdited ? "disabled" : ""}>
                         <span class="icon icon-login"></span>
                     </button>
                     <button class="edit-btn" data-connection-id="${connection.id}" 
@@ -125,9 +128,9 @@
                     </button>
                     <button class="delete-btn" data-connection-id="${connection.id}" 
                             aria-label="Delete connection ${connection.label}" 
-                            title="${isBeingEdited ? "Cannot delete while editing" : "Delete this connection"}"
-                            ${isBeingEdited ? "disabled" : ""}
-                            style="${isBeingEdited ? "opacity: 0.3; cursor: not-allowed;" : ""}">
+                            title="${isAnyConnectionBeingEdited ? "Cannot delete while editing" : "Delete this connection"}"
+                            ${isAnyConnectionBeingEdited ? "disabled" : ""}
+                            style="${isAnyConnectionBeingEdited ? "opacity: 0.3; cursor: not-allowed;" : ""}">
                         <span class="icon icon-delete"></span>
                     </button>
                 </div>
@@ -141,6 +144,7 @@
         console.log("[WebviewScript] Entering edit mode for connection:", connection);
         isEditMode = true;
         currentEditingConnectionId = connection.id;
+        hasStoredPasswordWhileEditing = hasStoredPassword;
 
         // Update UI state
         document.body.classList.add("edit-mode");
@@ -160,8 +164,14 @@
         usernameInput.value = connection.username || "";
         passwordInput.value = ""; // Don't pre-fill password for security
 
+        if (hasStoredPassword) {
+            passwordInput.placeholder = "Password is stored. Leave empty to keep it.";
+        } else {
+            passwordInput.placeholder = "Enter password to store it.";
+        }
+
         // Update checkbox state
-        storePasswordCheckbox.checked = hasStoredPassword;
+        storePasswordCheckbox.checked = true;
 
         // Focus on the label field
         connectionLabelInput.focus();
@@ -173,6 +183,7 @@
         console.log("[WebviewScript] Exiting edit mode");
         isEditMode = false;
         currentEditingConnectionId = null;
+        hasStoredPasswordWhileEditing = false;
 
         // Reset UI state
         document.body.classList.remove("edit-mode");
@@ -187,6 +198,7 @@
 
         // Clear and reset form
         addConnectionForm.reset();
+        passwordInput.placeholder = "Enter password";
         portNumberInput.value = "9445"; // Reset default port
         storePasswordCheckbox.checked = true; // Reset default
     }
@@ -213,18 +225,28 @@
             label: connectionLabelInput.value.trim() || `${usernameInput.value.trim()}@${serverNameInput.value.trim()}`,
             serverName: serverNameInput.value.trim(),
             portNumber: parseInt(portNumberInput.value, 10),
-            username: usernameInput.value.trim(),
-            password: storePasswordCheckbox.checked ? passwordInput.value : undefined
+            username: usernameInput.value.trim()
         };
 
         if (isEditMode && currentEditingConnectionId) {
             // Update existing connection
             payload.id = currentEditingConnectionId;
+            if (storePasswordCheckbox.checked) {
+                if (passwordInput.value) {
+                    payload.password = passwordInput.value;
+                } else if (hasStoredPasswordWhileEditing) {
+                    // Empty password, but had one before
+                    payload.keepExistingPassword = true;
+                }
+            } else {
+                payload.password = undefined;
+            }
             saveConnectionBtn.disabled = true;
             saveButtonText.textContent = "Updating...";
             vscode.postMessage({ command: "updateConnection", payload });
         } else {
             // Save new connection
+            payload.password = storePasswordCheckbox.checked ? passwordInput.value : undefined;
             saveConnectionBtn.disabled = true;
             saveButtonText.textContent = "Saving...";
             vscode.postMessage({ command: "saveNewConnection", payload });

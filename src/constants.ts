@@ -52,7 +52,6 @@ export const WebviewMessageCommands = {
 export const ConfigKeys = {
     AUTO_LOGIN: "automaticLoginAfterExtensionActivation",
     CLEAR_INTERNAL_DIR: "clearInternalTestbenchDirectoryBeforeTestGeneration",
-    CLEAR_REPORT_AFTER_PROCESSING: "clearReportAfterProcessing",
     LOGGER_LEVEL: "testbenchLogLevel",
     USE_CONFIG_FILE_SETTING: "UseConfigurationFile",
     TB2ROBOT_CLEAN: "cleanFilesBeforeTestGeneration",
@@ -90,7 +89,9 @@ export const ContextKeys = {
     FILTER_DIFF_MODE_ENABLED_TEST_THEMES: "testbenchExtension.filterDiffModeEnabledTestThemes",
     FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS: "testbenchExtension.filterDiffModeEnabledTestElements",
     // Test theme tree item context for opening a robot file
-    HAS_GENERATED_ROBOT_FILE: "testbenchExtension.hasGeneratedRobotFile"
+    HAS_GENERATED_ROBOT_FILE: "testbenchExtension.hasGeneratedRobotFile",
+    // Test theme tree filters context
+    TEST_THEME_TREE_HAS_FILTERS: "testbenchExtension.testThemeTreeHasFilters"
 } as const;
 
 // --- Storage Keys ---
@@ -116,7 +117,9 @@ export const StorageKeys = {
     CUSTOM_ROOT_TEST_THEME_TREE: "testbenchExtension.customRoot.testThemeTree",
     CUSTOM_ROOT_TEST_ELEMENTS_TREE: "testbenchExtension.customRoot.testElementsTree",
     IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY: "testbenchExtension.isTestThemeOpenedFromCycleStorageKey",
-    HAS_USED_EXTENSION_BEFORE: "testbenchExtension.hasUsedExtensionBefore"
+    HAS_USED_EXTENSION_BEFORE: "testbenchExtension.hasUsedExtensionBefore",
+    // Test theme tree filters
+    TEST_THEME_TREE_FILTERS: "testbenchExtension.testThemeTree.filters"
 } as const;
 
 // --- Tree Item Context Values ---
@@ -204,6 +207,8 @@ export const allExtensionCommands = {
     refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
+    displayFiltersForTestThemeTreeON: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeON`,
+    displayFiltersForTestThemeTreeOFF: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeOFF`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
     openCycleFromProjectsView: `${baseKeyOfExtension}.openCycleFromProjectsView`,
@@ -212,7 +217,6 @@ export const allExtensionCommands = {
     handleTOVClick: `${baseKeyOfExtension}.handleTOVClick`,
     resetProjectTreeViewRoot: `${baseKeyOfExtension}.resetProjectTreeViewRoot`,
     resetTestThemeTreeViewRoot: `${baseKeyOfExtension}.resetTestThemeTreeViewRoot`,
-    getFilters: `${baseKeyOfExtension}.getFilters`,
     fetchTovStructure: `${baseKeyOfExtension}.fetchTovStructure`,
     clearImportedSubTreeItemsTracking: `${baseKeyOfExtension}.clearImportedSubTreeItemsTracking`,
     checkForCycleDoubleClick: `${baseKeyOfExtension}.checkForCycleDoubleClick`,
@@ -224,23 +228,6 @@ export const allExtensionCommands = {
     clearAllCustomRoots: "testbench.clearAllCustomRoots",
     clearAllMarks: "testbench.clearAllMarks",
     clearAllExtensionData: `${baseKeyOfExtension}.clearAllExtensionData`,
-
-    // Tree View Filtering Commands
-    setTextFilterForProjects: `${baseKeyOfExtension}.setTextFilterForProjects`,
-    setTextFilterForTestThemes: `${baseKeyOfExtension}.setTextFilterForTestThemes`,
-    setTextFilterForTestElements: `${baseKeyOfExtension}.setTextFilterForTestElements`,
-    clearTextFilterForProjects: `${baseKeyOfExtension}.clearTextFilterForProjects`,
-    clearTextFilterForTestThemes: `${baseKeyOfExtension}.clearTextFilterForTestThemes`,
-    clearTextFilterForTestElements: `${baseKeyOfExtension}.clearTextFilterForTestElements`,
-    toggleFilterDiffModeForProjects: `${baseKeyOfExtension}.toggleFilterDiffModeForProjects`,
-    toggleFilterDiffModeForProjectsEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForProjectsEnabled`,
-    toggleFilterDiffModeForTestThemes: `${baseKeyOfExtension}.toggleFilterDiffModeForTestThemes`,
-    toggleFilterDiffModeForTestThemesEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForTestThemesEnabled`,
-    toggleFilterDiffModeForTestElements: `${baseKeyOfExtension}.toggleFilterDiffModeForTestElements`,
-    toggleFilterDiffModeForTestElementsEnabled: `${baseKeyOfExtension}.toggleFilterDiffModeForTestElementsEnabled`,
-    clearAllFiltersForProjects: `${baseKeyOfExtension}.clearAllFiltersForProjects`,
-    clearAllFiltersForTestThemes: `${baseKeyOfExtension}.clearAllFiltersForTestThemes`,
-    clearAllFiltersForTestElements: `${baseKeyOfExtension}.clearAllFiltersForTestElements`,
 
     // Test elements tree item commands
     openAvailableSubdivisionInTestElementsView: `${baseKeyOfExtension}.openAvailableSubdivisionInTestElementsView`,

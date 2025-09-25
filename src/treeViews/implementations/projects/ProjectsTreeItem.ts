@@ -82,7 +82,9 @@ export class ProjectsTreeItem extends TreeItemBase {
     private generateTooltip(): string {
         const tooltipContentLines: string[] = [];
 
-        tooltipContentLines.push(`Type: ${this.data.type}`);
+        // Capitalize the first letter of the type
+        const type = this.data.type.charAt(0).toUpperCase() + this.data.type.slice(1);
+        tooltipContentLines.push(`Type: ${type}`);
 
         if (this.data.name) {
             tooltipContentLines.push(`Name: ${this.data.name}`);

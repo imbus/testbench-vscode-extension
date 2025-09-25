@@ -16,7 +16,6 @@ import { displayTestThemeTreeView } from "../testThemes/TestThemesTreeView";
 import { displayTestElementsTreeView } from "../testElements/TestElementsTreeView";
 import { getExtensionConfiguration } from "../../../configuration";
 import * as reportHandler from "../../../reportHandler";
-import { FilterService } from "../../utils/FilterService";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 
@@ -24,7 +23,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     private dataProvider: ProjectsDataProvider;
     private disposables: vscode.Disposable[] = [];
     private cycleClickHandler: ClickHandler<ProjectsTreeItem>;
-    private filterService: FilterService;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -36,7 +34,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         super(extensionContext, fullConfig);
 
         this.dataProvider = new ProjectsDataProvider(this.logger, getConnection);
-        this.filterService = FilterService.getInstance();
         this.cycleClickHandler = new ClickHandler<ProjectsTreeItem>();
         this.registerCommands();
         this.registerEventHandlers();
@@ -336,6 +333,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                 await treeViews.testThemesTree.loadCycle(
                     projectKey,
                     cycleKey,
+                    versionKey,
                     projectName,
                     tovName,
                     item.label?.toString()
@@ -638,6 +636,4 @@ export async function displayProjectManagementTreeView(): Promise<void> {
         return;
     }
     await vscode.commands.executeCommand("setContext", ContextKeys.SHOW_PROJECTS_TREE, true);
-    const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_PROJECTS_TREE);
 }

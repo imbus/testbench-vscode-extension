@@ -189,7 +189,7 @@ suite("ProjectsTreeItem", function () {
             const item = new ProjectsTreeItem(projectData, mockContext);
             const tooltip = item.tooltip as string;
 
-            assert(tooltip.includes("Type: project"));
+            assert(tooltip.includes("Type: Project"));
             assert(tooltip.includes("Name: Test Project"));
             assert(tooltip.includes("Key: PROJ-001"));
             assert(tooltip.includes("TOVs: 5"));
@@ -207,7 +207,7 @@ suite("ProjectsTreeItem", function () {
             const item = new ProjectsTreeItem(versionData, mockContext);
             const tooltip = item.tooltip as string;
 
-            assert(tooltip.includes("Type: version"));
+            assert(tooltip.includes("Type: Version"));
             assert(tooltip.includes("Name: Test Version"));
             assert(tooltip.includes("Key: VERSION-001"));
         });
@@ -222,7 +222,7 @@ suite("ProjectsTreeItem", function () {
             const item = new ProjectsTreeItem(cycleData, mockContext);
             const tooltip = item.tooltip as string;
 
-            assert(tooltip.includes("Type: cycle"));
+            assert(tooltip.includes("Type: Cycle"));
             assert(tooltip.includes("Name: Test Cycle"));
             assert(tooltip.includes("Key: CYCLE-001"));
         });

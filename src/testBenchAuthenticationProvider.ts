@@ -46,10 +46,9 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
     /**
      * Get a list of sessions.
-     * @param {string[]} scopes An optional list of scopes. If provided, the sessions returned should match these permissions.
      * @returns A promise that resolves to an array of authentication sessions.
      */
-    async getSessions(scopes?: readonly string[]): Promise<vscode.AuthenticationSession[]> {
+    async getSessions(): Promise<vscode.AuthenticationSession[]> {
         const sessionsToReturn: vscode.AuthenticationSession[] = [];
         for (const sessionData of this.activeSessions.values()) {
             sessionsToReturn.push({
@@ -71,15 +70,11 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * and manages password retrieval and storage.
      *
      * @param {string[]} scopes - An array of scopes requested for the session.
-     * @param {vscode.AuthenticationProviderSessionOptions} options - Optional parameters for session creation, which can indicate if the call is for silent authentication.
      * @returns {Promise<vscode.AuthenticationSession>} A promise that resolves to a `vscode.AuthenticationSession` object upon successful login.
      * @throws Error if the login process is cancelled, fails due to incorrect credentials,
      * missing connection information, or other issues during session creation.
      */
-    async createSession(
-        scopes: readonly string[],
-        options?: vscode.AuthenticationProviderSessionOptions
-    ): Promise<vscode.AuthenticationSession> {
+    async createSession(scopes: readonly string[]): Promise<vscode.AuthenticationSession> {
         const isSilent: boolean = this._isAttemptingSilentAutoLogin;
         if (this._isAttemptingSilentAutoLogin) {
             this._isAttemptingSilentAutoLogin = false;
@@ -184,11 +179,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
                     if (saveNewConnectionChoice === "Yes") {
                         try {
-                            const savedId: string = await connectionManager.saveConnection(
-                                this.context,
-                                targetConnection,
-                                passwordToUse
-                            );
+                            const savedId: string = await connectionManager.saveConnection(this.context, {
+                                ...targetConnection,
+                                password: passwordToUse
+                            });
                             targetConnection.id = savedId;
                             await connectionManager.setActiveConnectionId(this.context, targetConnection.id);
                         } catch (saveError: any) {
@@ -285,7 +279,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                     ignoreFocusOut: true
                 });
                 if (storePasswordAfterLoginChoice === "Yes") {
-                    await connectionManager.saveConnection(this.context, targetConnection, passwordToUse);
+                    await connectionManager.saveConnection(this.context, {
+                        ...targetConnection,
+                        password: passwordToUse
+                    });
                 }
             }
 
@@ -322,8 +319,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 scopes
             };
         } catch (error: any) {
-            logger.error(`[AuthenticationProvider] Error during session creation.`);
-            logger.trace(`[AuthenticationProvider] Session creation error details: ${error.message || error}`);
+            logger.error(`[AuthenticationProvider] Error during session creation: ${error.message || error}`);
             if (!isSilent) {
                 await connectionManager.clearActiveConnection(this.context);
             }

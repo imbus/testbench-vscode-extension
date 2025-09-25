@@ -10,6 +10,7 @@ import { PlayServerConnection } from "./testBenchConnection";
 
 interface EditingConnectionData extends TestBenchConnection {
     password?: string;
+    keepExistingPassword?: boolean;
 }
 
 /**
@@ -76,12 +77,16 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case WebviewMessageCommands.LOGIN:
                     logger.debug('[loginWebView] "Sign In" button clicked. Triggering TestBench login command.');
-                    vscode.commands.executeCommand(allExtensionCommands.login).then(undefined, (err) => {
-                        logger.error("[loginWebView] Error executing login command:", err);
-                        this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
-                            type: "error",
-                            text: "Could not start TestBench login process."
-                        });
+                    vscode.commands.executeCommand(allExtensionCommands.login).then(undefined, (err: any) => {
+                        if (this.isLoginCancellation(err)) {
+                            logger.trace("[loginWebView] Login process was cancelled by the user.");
+                        } else {
+                            logger.error("[loginWebView] Error executing login command:", err);
+                            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                                type: "error",
+                                text: "Could not start TestBench login process."
+                            });
+                        }
                     });
                     break;
                 case WebviewMessageCommands.TRIGGER_COMMAND:
@@ -204,6 +209,15 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Checks if an error object signifies a user-cancelled login operation.
+     * @param {any} error The error object to inspect.
+     * @returns {boolean} True if the error is a login cancellation, false otherwise.
+     */
+    private isLoginCancellation(error: any): boolean {
+        return error && error.message && error.message.includes("User did not consent to login");
+    }
+
+    /**
      * Asynchronously fetches user connections them to the webview sorted alphabetically by label.
      * Send the editing state to the webview if a connection edited.
      * If successful, it posts the connections for display.
@@ -275,10 +289,14 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             }
         } catch (error: any) {
             await connectionManager.clearActiveConnection(this.extensionContext);
-            this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
-                type: "error",
-                text: `Login Error: ${error.message}`
-            });
+            if (this.isLoginCancellation(error)) {
+                logger.trace("[loginWebView] Login process was cancelled by the user.");
+            } else {
+                this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
+                    type: "error",
+                    text: `Login Error: ${error.message}`
+                });
+            }
         }
     }
 
@@ -341,11 +359,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            const newConnectionId = await connectionManager.saveConnection(
-                this.extensionContext,
-                connectionData,
-                connectionData.password
-            );
+            const newConnectionId = await connectionManager.saveConnection(this.extensionContext, connectionData);
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
                 type: "success",
                 text: `Connection "${connectionData.label || newConnectionId}" saved.`
@@ -526,7 +540,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            await connectionManager.saveConnection(this.extensionContext, payload, payload.password);
+            await connectionManager.saveConnection(this.extensionContext, payload);
 
             this.editingConnectionId = null;
             this.postMessageToWebview(WebviewMessageCommands.SHOW_WEBVIEW_MESSAGE, {
@@ -564,6 +578,17 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         await this.sendConnectionToWebview();
 
         logger.debug("[loginWebView] Edit mode cancelled and form reset.");
+    }
+
+    /**
+     * Resets the webview's edit mode.
+     * Called when a login happens to ensure a clean state after logout.
+     */
+    public resetEditMode(): void {
+        if (this.editingConnectionId) {
+            logger.trace("[loginWebView] Resetting edit mode due to successful login.");
+            this.editingConnectionId = null;
+        }
     }
 
     /**
@@ -655,7 +680,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         html = html.replace(/{{nonce}}/g, nonce);
         html = html.replace(/{{cspSource}}/g, webview.cspSource);
-        html = html.replace("{{mainCss}}", stylesContent);
+        html = html.replace(/{{mainCss}}/g, stylesContent);
         html = html.replace(/{{jsUri}}/g, scriptUri.toString());
         html = html.replace(/{{iconStyles}}/g, iconStyles);
 
@@ -683,7 +708,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         html = html.replace(/{{nonce}}/g, nonce);
         html = html.replace(/{{cspSource}}/g, webview.cspSource);
-        html = html.replace("{{mainCss}}", stylesContent);
+        html = html.replace(/{{mainCss}}/g, stylesContent);
         html = html.replace(/{{jsUri}}/g, scriptUri.toString());
         html = html.replace(/{{logoUri}}/g, logoUri ? logoUri.toString() : "");
         html = html.replace(/{{connectedAsInfo}}/g, connectedAsInfo);

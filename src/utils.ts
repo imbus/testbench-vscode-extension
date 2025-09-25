@@ -150,8 +150,8 @@ export async function clearInternalTestbenchFolder(
             }
         } catch {
             const folderNotExistMsg: string = `The folder at path "${workspaceLocationToClear}" does not exist. Cannot clear workspace folder.`;
-            vscode.window.showErrorMessage(folderNotExistMsg);
-            logger.error(`[utils] ${folderNotExistMsg}`);
+            vscode.window.showWarningMessage(folderNotExistMsg);
+            logger.warn(`[utils] ${folderNotExistMsg}`);
             return null;
         }
 
@@ -335,4 +335,22 @@ export async function extractAndParseJsonContent(zipContents: JSZip, fileName: s
         logger.error(`[utils] Error reading or parsing file "${fileName}":`, error);
         return null;
     }
+}
+
+/**
+ * For windows systems, sanitizes a file path string by replacing invalid characters with underscores.
+ * Special characters are technically allowed in file names on Unix-based systems.
+ *
+ * @param {string} filePath - The file path to sanitize.
+ * @returns {string} The sanitized file path.
+ */
+export function sanitizeFilePath(filePath: string): string {
+    if (!filePath) {
+        return "";
+    }
+    if (os.platform() === "win32") {
+        const sanitizedPath = filePath.replace(/[<>:"/\\|?*]/g, "_");
+        return sanitizedPath;
+    }
+    return filePath;
 }

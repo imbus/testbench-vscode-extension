@@ -28,6 +28,7 @@ import { getExtensionConfiguration } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import { TreeItemBase } from "./treeViews/core/TreeItemBase";
+import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 
 /**
  * Saves the last generated report parameters to workspace storage.
@@ -639,13 +640,14 @@ export async function generateRobotFrameworkTestsWithTestBenchToRobotFrameworkLi
             return false;
         }
 
+        const currentFilters = await TestThemesTreeView.getValidatedFiltersForTreeItem(selectedTreeItem);
         const cycleReportOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-            executionMode: defaultExecutionMode,
+            basedOnExecution: defaultExecutionMode === testBenchTypes.ExecutionMode.Execute,
             treeRootUID: UIDforRequest,
-            suppressFilteredData: false,
+            suppressFilteredData: true, // Hides tree items after filtering
             suppressNotExecutable: true, // Exclude not executable tests (including NotPlanned)
             suppressEmptyTestThemes: false,
-            filters: []
+            filters: currentFilters
         };
         await vscode.window.withProgress(
             {
@@ -747,14 +749,13 @@ async function runRobotFrameworkTestGenerationProcess(
             "[reportHandler] Workspace location not configured, cannot generate tests.";
         const workspaceLocationMissingErrorMessageForUser: string =
             "Workspace location not configured, cannot generate tests.";
-        logger.error(workspaceLocationMissingErrorMessage);
-        vscode.window.showErrorMessage(workspaceLocationMissingErrorMessageForUser);
+        logger.warn(workspaceLocationMissingErrorMessage);
+        vscode.window.showWarningMessage(workspaceLocationMissingErrorMessageForUser);
         return false;
     }
 
     const isTb2RobotframeworkGenerateTestsCommandSuccessful: boolean =
         await testbench2robotframeworkLib.tb2robotLib.startTb2robotframeworkTestGeneration(downloadedReportZipPath);
-    await cleanUpReportFileIfConfiguredInSettings(downloadedReportZipPath);
     if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
         return false;
     }
@@ -764,19 +765,6 @@ async function runRobotFrameworkTestGenerationProcess(
 
     logger.debug("[reportHandler] Test generation process completed successfully.");
     return true;
-}
-
-/**
- * Removes the report zip file if configured in the extension settings.
- *
- * @param {string} reportZipFilePath The path of the report zip file.
- */
-export async function cleanUpReportFileIfConfiguredInSettings(reportZipFilePath: string): Promise<void> {
-    if (getExtensionConfiguration().get<boolean>(ConfigKeys.CLEAR_REPORT_AFTER_PROCESSING)) {
-        await removeReportZipFile(reportZipFilePath);
-    } else {
-        logger.debug("[reportHandler] Existing TestBench report will not be deleted as specified in the settings.");
-    }
 }
 
 /**
@@ -870,8 +858,8 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
     }
 
     const xmlFileNotSelectedError: string = "No output.xml file selected.";
-    logger.error(`[reportHandler] ${xmlFileNotSelectedError}`);
-    vscode.window.showErrorMessage(xmlFileNotSelectedError);
+    logger.warn(`[reportHandler] ${xmlFileNotSelectedError}`);
+    vscode.window.showWarningMessage(xmlFileNotSelectedError);
     return null;
 }
 
@@ -894,7 +882,7 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
         logger.debug(`[reportHandler] Report zip file without results selected by user: ${selectedFiles[0].fsPath}`);
         return selectedFiles[0].fsPath;
     }
-    logger.error("[reportHandler] No report zip file selected for the results zip file.");
+    logger.warn("[reportHandler] No report zip file selected for the results zip file.");
     return null;
 }
 
@@ -908,7 +896,8 @@ async function chooseReportWithoutResultsZipFile(workingDirectoryPath: string): 
  */
 export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
     context: vscode.ExtensionContext,
-    currentProgress?: vscode.Progress<{ message?: string; increment?: number }>
+    currentProgress?: vscode.Progress<{ message?: string; increment?: number }>,
+    cancellationToken?: vscode.CancellationToken
 ): Promise<{ createdReportPath: string; outputXmlPathUsed: string; baseReportPathUsed: string } | undefined> {
     try {
         logger.trace("[reportHandler] Fetching test results and creating report with results.");
@@ -968,9 +957,11 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 return undefined;
             }
 
+            const currentFiltersForImport = await TestThemesTreeView.getValidatedFiltersForApiRequest();
             const cycleStructureOptionsRequestParams: testBenchTypes.OptionalJobIDRequestParameter = {
-                executionMode: executionBased,
-                treeRootUID: UID
+                basedOnExecution: executionBased === testBenchTypes.ExecutionMode.Execute,
+                treeRootUID: UID,
+                filters: currentFiltersForImport
             };
 
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipOfCycleFromServer(
@@ -978,7 +969,8 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                 cycleKey,
                 folderNameOfInternalTestbenchFolder,
                 cycleStructureOptionsRequestParams,
-                progress
+                progress,
+                cancellationToken
             );
 
             // If report fetching fails, prompt user to select the report zip file manually
@@ -1006,10 +998,6 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     finalBaseReportPath,
                     reportWithResultsZipFullPath
                 );
-
-            if (downloadedReportWithoutResultsZip) {
-                await cleanUpReportFileIfConfiguredInSettings(downloadedReportWithoutResultsZip);
-            }
 
             if (!isTb2RobotFetchResultsExecutionSuccessful) {
                 const testResultsImportError: string =
@@ -1066,7 +1054,8 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
     projectKeyString: string,
     cycleKeyString: string,
     reportWithResultsZipFilePath: string,
-    reportRootUID: string
+    reportRootUID: string,
+    cancellationToken?: vscode.CancellationToken
 ): Promise<void | null> {
     try {
         logger.debug(
@@ -1108,7 +1097,7 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
 
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
-            reportRootUID: reportRootUID,
+            treeRootUID: reportRootUID,
             useExistingDefect: true,
             discardTesterInformation: false,
             filters: []
@@ -1119,7 +1108,9 @@ async function importReportWithResultsToTestbenchWithSpecificUID(
             const importJobStatus: testBenchTypes.JobStatusResponse | null = await pollJobStatus(
                 projectKeyString,
                 importJobID,
-                JobTypes.IMPORT
+                JobTypes.IMPORT,
+                undefined,
+                cancellationToken
             );
 
             if (!importJobStatus || isImportJobFailed(importJobStatus)) {
@@ -1208,7 +1199,8 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                 progress.report({ message: "Step 2/4: Creating report with local test results...", increment: 30 });
                 const reportCreationDetails = await fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
                     context,
-                    progress
+                    progress,
+                    cancellationToken
                 );
                 if (cancellationToken.isCancellationRequested || !reportCreationDetails?.createdReportPath) {
                     logger.error("[reportHandler] Failed to create report with results, or process was cancelled.");
@@ -1226,7 +1218,8 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
                     resolvedTargetProjectKey,
                     resolvedTargetCycleKey,
                     createdReportPath,
-                    resolvedReportRootUID
+                    resolvedReportRootUID,
+                    cancellationToken
                 );
 
                 if (cancellationToken.isCancellationRequested) {
@@ -1236,7 +1229,6 @@ export async function fetchTestResultsAndCreateResultsAndImportToTestbench(
 
                 progress.report({ message: "Step 4/4: Cleaning up and updating state...", increment: 30 });
                 await setLastImportedItem(context, resolvedReportRootUID);
-                await cleanUpReportFileIfConfiguredInSettings(createdReportPath);
                 logger.debug("[reportHandler] Fetch and import process completed.");
                 return true;
             } catch (error) {
@@ -1362,13 +1354,19 @@ export async function startTestGenerationUsingTOV(
                     ? (treeItem as any).data?.base?.uniqueID
                     : undefined;
 
+                let tovFilters: any[] = [];
+
+                if (treeItem instanceof ProjectsTreeItem || treeItem instanceof TestThemesTreeItem) {
+                    tovFilters = await TestThemesTreeView.getValidatedFiltersForTreeItem(treeItem);
+                }
+
                 // Fetch TOV structure to get all test themes
                 const tovStructureOptions: testBenchTypes.TovStructureOptions = {
                     treeRootUID: rootUIDToUse,
-                    suppressFilteredData: false,
+                    suppressFilteredData: true,
                     //suppressNotExecutable: true,
                     suppressEmptyTestThemes: false,
-                    filters: []
+                    filters: tovFilters
                 };
 
                 const tovReportJobID = await connection.requestToPackageTovsInServerAndGetJobID(
@@ -1421,7 +1419,6 @@ export async function startTestGenerationUsingTOV(
                         downloadedTovReportPath
                     );
 
-                await cleanUpReportFileIfConfiguredInSettings(downloadedTovReportPath);
                 if (!isTb2RobotframeworkGenerateTestsCommandSuccessful) {
                     return false;
                 }

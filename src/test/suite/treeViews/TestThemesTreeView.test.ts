@@ -47,6 +47,7 @@ suite("TestThemesTreeView", function () {
         test("should update title correctly when loading test theme from a cycle", async function () {
             const projectKey = "project-123";
             const cycleKey = "cycle-456";
+            const tovKey = "tov-123";
             const projectName = "Test Project";
             const tovName = "Test TOV";
             const cycleLabel = "Test Cycle";
@@ -65,7 +66,7 @@ suite("TestThemesTreeView", function () {
             (treeView as any).buildTreeRecursively = testEnv.sandbox.stub().returns([]);
             (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
 
-            await treeView.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
+            await treeView.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
             assert.strictEqual(
                 mockVSCodeTreeView.title,
                 "Test Themes (Test Project, Test TOV, Test Cycle)",
@@ -76,6 +77,7 @@ suite("TestThemesTreeView", function () {
         test("should update title correctly when loading from cycle with cycle name missing", async function () {
             const projectKey = "project-123";
             const cycleKey = "cycle-456";
+            const tovKey = "tov-789";
             const projectName = "Test Project";
             const tovName = "Test TOV";
 
@@ -93,7 +95,7 @@ suite("TestThemesTreeView", function () {
             (treeView as any).buildTreeRecursively = testEnv.sandbox.stub().returns([]);
             (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
 
-            await treeView.loadCycle(projectKey, cycleKey, projectName, tovName);
+            await treeView.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName);
             assert.strictEqual(
                 mockVSCodeTreeView.title,
                 "Test Themes (Test Project, Test TOV)",
@@ -104,6 +106,7 @@ suite("TestThemesTreeView", function () {
         test("should update title correctly when loading from cycle with tov name missing", async function () {
             const projectKey = "project-123";
             const cycleKey = "cycle-456";
+            const tovKey = "tov-456";
             const projectName = "Test Project";
             const tovName = "";
             const cycleLabel = "Test Cycle";
@@ -121,7 +124,7 @@ suite("TestThemesTreeView", function () {
             (treeView as any).buildTreeRecursively = testEnv.sandbox.stub().returns([]);
             (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
 
-            await treeView.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
+            await treeView.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
 
             assert.strictEqual(
                 mockVSCodeTreeView.title,
@@ -201,6 +204,7 @@ suite("TestThemesTreeView", function () {
         test("should handle empty or undefined parameters gracefully", async function () {
             const projectKey = "project-123";
             const cycleKey = "cycle-456";
+            const tovKey = "tov-789";
             const projectName = "";
             const tovName = "";
             const cycleLabel = "";
@@ -218,7 +222,7 @@ suite("TestThemesTreeView", function () {
             (treeView as any).buildTreeRecursively = testEnv.sandbox.stub().returns([]);
             (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
 
-            await treeView.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
+            await treeView.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
 
             assert.strictEqual(
                 mockVSCodeTreeView.title,
@@ -260,6 +264,7 @@ suite("TestThemesTreeView", function () {
         test("should set correct state when loading cycle", async function () {
             const projectKey = "project-123";
             const cycleKey = "cycle-456";
+            const tovKey = "tov-101";
             const projectName = "Test Project";
             const tovName = "Test TOV";
             const cycleLabel = "Test Cycle";
@@ -277,7 +282,7 @@ suite("TestThemesTreeView", function () {
             (treeView as any).buildTreeRecursively = testEnv.sandbox.stub().returns([]);
             (treeView as any).updateTreeViewMessage = testEnv.sandbox.stub();
 
-            await treeView.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
+            await treeView.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
 
             assert.strictEqual(treeView.getCurrentProjectKey(), projectKey);
             assert.strictEqual(treeView.getCurrentCycleKey(), cycleKey);

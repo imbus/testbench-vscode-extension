@@ -1,7 +1,17 @@
 import * as vscode from "vscode";
 import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "./constants";
 import { getInterpreterPath } from "./python";
-import { LanguageClient, LanguageClientOptions, ServerOptions, State } from "vscode-languageclient/node";
+import {
+    LanguageClient,
+    LanguageClientOptions,
+    ServerOptions,
+    State,
+    CloseAction,
+    ErrorAction,
+    Message,
+    ErrorHandlerResult,
+    CloseHandlerResult
+} from "vscode-languageclient/node";
 import { connection, logger } from "./extension";
 
 interface TbConnectionDetails {
@@ -43,6 +53,11 @@ let isLanguageServerBusy: boolean = false;
 let pendingRestartParams: PendingOperation | null = null;
 let restartTimeout: NodeJS.Timeout | null = null;
 let isStoppingInProgress: boolean = false;
+
+export let isHandlingLogout: boolean = false;
+export function setIsHandlingLogout(value: boolean): void {
+    isHandlingLogout = value;
+}
 
 // Configuration constants
 const RESTART_DEBOUNCE_MS = 300;
@@ -284,7 +299,19 @@ function buildClientOptions(): LanguageClientOptions {
         synchronize: {
             fileEvents: [vscode.workspace.createFileSystemWatcher("**/*.resource", false, false)]
         },
-        outputChannelName: "TestBench LS"
+        outputChannelName: "TestBench LS",
+        errorHandler: {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            error: (_error: Error, _message: Message | undefined, _count: number | undefined): ErrorHandlerResult => {
+                return { action: ErrorAction.Continue };
+            },
+            closed: (): CloseHandlerResult => {
+                if (isHandlingLogout) {
+                    return { action: CloseAction.DoNotRestart };
+                }
+                return { action: CloseAction.Restart };
+            }
+        }
     };
 }
 
@@ -1057,7 +1084,7 @@ export async function updateOrRestartLS(projectName: string | undefined, tovName
     }
 
     if (!connection) {
-        logger.error("[server] updateOrRestartLS called without active connection. Cannot update language server.");
+        logger.warn("[server] updateOrRestartLS called without active connection. Cannot update language server.");
         vscode.window.showWarningMessage("No active connection available. Please log in first.");
         return;
     }

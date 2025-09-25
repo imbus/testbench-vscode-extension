@@ -329,22 +329,8 @@ export class TreeViewFactory {
     ): void {
         if (treeType === "projects") {
             // Handle project tree selections
-            if (item.data?.type === "cycle") {
-                const projectName = item.parent?.parent?.label?.toString();
-                const tovName = item.parent?.label?.toString();
-                treeView.eventBus.emit({
-                    type: "cycle:selected",
-                    source: treeView.config.id,
-                    data: {
-                        projectKey: item.getProjectKey(),
-                        cycleKey: item.data.key,
-                        cycleLabel: item.label,
-                        projectName: projectName,
-                        tovName: tovName
-                    },
-                    timestamp: Date.now()
-                });
-            } else if (item.data?.type === "version") {
+            // Cycle clicks are handled in setupCycleClickHandlers of ProjectsTreeView
+            if (item.data?.type === "version") {
                 const projectName = item.parent?.label?.toString();
                 treeView.eventBus.emit({
                     type: "version:selected",
@@ -400,13 +386,13 @@ export class TreeViewFactory {
 
         // Projects to Test Themes: When cycle is selected
         const cycleSelectionDisposable = projectsTree.eventBus.on("cycle:selected", async (event) => {
-            const { projectKey, cycleKey, cycleLabel, projectName, tovName } = event.data;
+            const { projectKey, cycleKey, tovKey, cycleLabel, projectName, tovName } = event.data;
             this.logger.debug(`[TreeViewFactory] Selected Test Cycle '${cycleLabel}' in projects view.`);
 
-            if (projectName && tovName) {
-                await testThemesTree.loadCycle(projectKey, cycleKey, projectName, tovName, cycleLabel);
+            if (projectName && tovName && tovKey) {
+                await testThemesTree.loadCycle(projectKey, cycleKey, tovKey, projectName, tovName, cycleLabel);
             } else {
-                this.logger.error("[TreeViewFactory] Missing project or TOV name for cycle selection event.");
+                this.logger.error("[TreeViewFactory] Missing project, TOV name, or TOV key for cycle selection event.");
             }
         });
 
@@ -689,11 +675,17 @@ export class TreeViewFactory {
     ): Promise<boolean> {
         try {
             this.logger.debug(`[TreeViewFactory] Performing deferred view restoration for: ${savedViewId}`);
+            treeViews.testThemesTree.stateManager.setLoading(true);
+            treeViews.testElementsTree.stateManager.setLoading(true);
+            await displayTestThemeTreeView();
+            await displayTestElementsTreeView();
+            await hideProjectManagementTreeView();
 
             if (savedContext.isCycle) {
                 await treeViews.testThemesTree.loadCycle(
                     savedContext.projectKey,
                     savedContext.cycleKey,
+                    savedContext.tovKey,
                     savedContext.projectName,
                     savedContext.tovName,
                     savedContext.cycleLabel
@@ -714,16 +706,14 @@ export class TreeViewFactory {
                 savedContext.tovName
             );
 
-            await displayTestThemeTreeView();
-            await displayTestElementsTreeView();
-            await hideProjectManagementTreeView();
-
             this.logger.trace(
                 `[TreeViewFactory] Successfully restored view to context of TOV: ${savedContext.tovName}`
             );
             return true;
         } catch (error) {
             this.logger.error("[TreeViewFactory] Failed to restore view state:", error);
+            treeViews.testThemesTree.stateManager.setLoading(false);
+            treeViews.testElementsTree.stateManager.setLoading(false);
             return false;
         }
     }

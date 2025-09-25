@@ -31,19 +31,18 @@ import { getExtensionConfiguration, initializeConfigurationWatcher } from "./con
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
 import { MarkingModule } from "./treeViews/features/MarkingModule";
 import { TestElementsTreeItem } from "./treeViews/implementations/testElements/TestElementsTreeItem";
-import { TreeViewBase } from "./treeViews/core/TreeViewBase";
 import { TreeViews } from "./treeViews/TreeViewFactory";
 import { ProjectsTreeItem } from "./treeViews/implementations/projects/ProjectsTreeItem";
 import * as reportHandler from "./reportHandler";
 import * as utils from "./utils";
 import path from "path";
-import { FilterService } from "./treeViews/utils/FilterService";
 import {
     updateOrRestartLS,
     stopLanguageClient,
     client,
     handleLanguageServerRestartOnSessionChange,
-    prepareLanguageServerForTreeItemOperation
+    prepareLanguageServerForTreeItemOperation,
+    setIsHandlingLogout
 } from "./server";
 import {
     hideProjectManagementTreeView,
@@ -356,6 +355,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await treeViews.testThemesTree.loadCycle(
                 projectKey,
                 cycleKey,
+                versionKey,
                 projectName,
                 tovName,
                 cycleItem.label?.toString()
@@ -385,42 +385,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         );
     };
 
-    const setFilterForView = async (treeView: TreeViewBase<any> | undefined) => {
-        if (!treeView) {
-            return;
-        }
-        const filterService = FilterService.getInstance();
-        filterService.setActiveTreeView(treeView);
-        await filterService.showTextFilterDialog();
-    };
-
-    const clearFilterForView = async (treeView: TreeViewBase<any> | undefined) => {
-        if (!treeView) {
-            return;
-        }
-        const filterService = FilterService.getInstance();
-        filterService.setActiveTreeView(treeView);
-        await filterService.clearTextFilter();
-    };
-
-    const toggleDiffModeForView = async (treeView: TreeViewBase<any> | undefined) => {
-        if (!treeView) {
-            return;
-        }
-        const filterService = FilterService.getInstance();
-        filterService.setActiveTreeView(treeView);
-        await filterService.toggleFilterDiffMode();
-    };
-
-    const clearAllFiltersForView = async (treeView: TreeViewBase<any> | undefined) => {
-        if (!treeView) {
-            return;
-        }
-        const filterService = FilterService.getInstance();
-        filterService.setActiveTreeView(treeView);
-        await filterService.clearAllFilters();
-    };
-
     // Test Generation Handlers
     const _handleGenerateTestCasesForTOV = async (tovItem: ProjectsTreeItem) => {
         if (!tovItem) {
@@ -430,8 +394,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!treeViews?.projectsTree) {
-            logger.error(`[extension] _handleGenerateTestCasesForTOV called before tree views are initialized`);
-            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            logger.warn(`[extension] _handleGenerateTestCasesForTOV called before tree views are initialized`);
+            vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
 
@@ -502,10 +466,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!treeViews?.testThemesTree) {
-            logger.error(
+            logger.warn(
                 `[extension] _handleGenerateTestCasesForTestThemeOrTestCaseSet called before tree views are initialized`
             );
-            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
 
@@ -538,10 +502,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!treeViews?.testThemesTree) {
-            logger.error(
+            logger.warn(
                 `[extension] _handleGenerateTestsForTestThemeTreeItemFromTOV called before tree views are initialized`
             );
-            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
 
@@ -574,10 +538,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         if (!treeViews?.testThemesTree) {
-            logger.error(
+            logger.warn(
                 `[extension] _handleReadAndImportTestResultsToTestbench called before tree views are initialized`
             );
-            vscode.window.showErrorMessage("Tree views are not ready. Please wait a moment and try again.");
+            vscode.window.showWarningMessage("Tree views are not ready. Please wait a moment and try again.");
             return;
         }
 
@@ -601,6 +565,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
     // Tree View Management Handlers
     const handleDisplayAllProjects = async () => {
+        if (treeViews?.projectsTree) {
+            treeViews.projectsTree.refresh();
+        }
         displayProjectManagementTreeView();
         hideTestThemeTreeView();
         hideTestElementsTreeView();
@@ -657,72 +624,151 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testElementsTree.refresh();
     };
 
+    const handleDisplayFiltersForTestThemeTree = async () => {
+        logger.debug(`[extension] Command called: testbenchExtension.displayFiltersForTestThemeTree ON or OFF`);
+
+        if (!treeViews?.testThemesTree) {
+            logger.warn(
+                `[extension] testbenchExtension.displayFiltersForTestThemeTree ON or OFF called before test themes tree is initialized`
+            );
+            return;
+        }
+
+        if (!connection) {
+            logger.warn(
+                `[extension] testbenchExtension.displayFiltersForTestThemeTree ON or OFF called without active connection.`
+            );
+            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            return;
+        }
+
+        try {
+            const filters = await connection.getFiltersFromOldPlayServer();
+            if (!filters) {
+                return;
+            }
+
+            const quickPickItems: vscode.QuickPickItem[] = filters.map((filter: any) => {
+                let iconPath: { light: vscode.Uri; dark: vscode.Uri } | undefined;
+
+                switch (filter.type) {
+                    case "TestTheme":
+                        iconPath = {
+                            light: vscode.Uri.file(
+                                path.join(extensionContext.extensionPath, "resources/icons/TestThemeOriginal-light.svg")
+                            ),
+                            dark: vscode.Uri.file(
+                                path.join(extensionContext.extensionPath, "resources/icons/TestThemeOriginal-dark.svg")
+                            )
+                        };
+                        break;
+
+                    case "TestCaseSet":
+                        iconPath = {
+                            light: vscode.Uri.file(
+                                path.join(
+                                    extensionContext.extensionPath,
+                                    "resources/icons/TestCaseSetOriginal-light.svg"
+                                )
+                            ),
+
+                            dark: vscode.Uri.file(
+                                path.join(
+                                    extensionContext.extensionPath,
+                                    "resources/icons/TestCaseSetOriginal-dark.svg"
+                                )
+                            )
+                        };
+                        break;
+
+                    case "TestCase":
+                        iconPath = {
+                            light: vscode.Uri.file(
+                                path.join(extensionContext.extensionPath, "resources/icons/testCase-light.svg")
+                            ),
+                            dark: vscode.Uri.file(
+                                path.join(extensionContext.extensionPath, "resources/icons/testCase-dark.svg")
+                            )
+                        };
+                        break;
+
+                    default:
+                        iconPath = undefined;
+                        break;
+                }
+
+                return {
+                    label: filter.name,
+                    description: `Type: ${filter.type}`,
+                    picked: false,
+                    iconPath: iconPath,
+                    filterData: filter
+                } as vscode.QuickPickItem & { filterData: any };
+            });
+
+            const savedFilters = treeViews?.testThemesTree?.getSavedFilters() || [];
+            const savedFilterIds = new Set(savedFilters.map((f: any) => f.key?.serial || f.name));
+            // Mark currently applied filters as picked
+            quickPickItems.forEach((item: any) => {
+                const filterId = item.filterData.key?.serial || item.filterData.name;
+
+                item.picked = savedFilterIds.has(filterId);
+            });
+
+            const quickPick = vscode.window.createQuickPick();
+            quickPick.title = "Select Filters for Test Theme Tree";
+            quickPick.placeholder =
+                savedFilters.length > 0
+                    ? `${savedFilters.length} filter(s) currently applied. Choose filters to apply`
+                    : "Choose one or more filters to apply";
+            quickPick.items = quickPickItems;
+            quickPick.canSelectMany = true;
+            quickPick.matchOnDescription = true;
+            quickPick.matchOnDetail = true;
+            quickPick.selectedItems = quickPickItems.filter((item: any) => item.picked);
+
+            quickPick.onDidAccept(() => {
+                const selectedFilters = quickPick.selectedItems.map((item: any) => item.filterData);
+                logger.trace(
+                    `[extension] Selected ${selectedFilters.length} filters:`,
+
+                    selectedFilters.map((f: any) => f.name)
+                );
+
+                if (selectedFilters.length > 0) {
+                    vscode.window.showInformationMessage(
+                        `Selected ${selectedFilters.length} filter(s): ${selectedFilters.map((f: any) => f.name).join(", ")}`
+                    );
+                    treeViews?.testThemesTree?.applyFiltersAndRefresh(selectedFilters).catch((error) => {
+                        logger.error(`[extension] Error applying test theme filters:`, error);
+
+                        vscode.window.showErrorMessage(`Failed to apply filters: ${error.message}`);
+                    });
+                } else {
+                    treeViews?.testThemesTree?.clearFiltersAndRefresh().catch((error) => {
+                        logger.error(`[extension] Error clearing test theme filters:`, error);
+                    });
+                }
+
+                quickPick.dispose();
+            });
+            quickPick.onDidHide(() => {
+                quickPick.dispose();
+            });
+            quickPick.show();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            logger.error(`[extension] Error when displaying filters: ${errorMessage}`, error);
+            vscode.window.showErrorMessage(`Failed to display filters: ${errorMessage}`);
+        }
+    };
+
     const handleResetProjectTreeViewRoot = () => {
         treeViews?.projectsTree.resetCustomRoot();
     };
 
     const handleResetTestThemeTreeViewRoot = () => {
         treeViews?.testThemesTree.resetCustomRoot();
-    };
-
-    const handleSetTextFilterForProjects = () => {
-        setFilterForView(treeViews?.projectsTree);
-    };
-
-    const handleSetTextFilterForTestThemes = () => {
-        setFilterForView(treeViews?.testThemesTree);
-    };
-
-    const handleSetTextFilterForTestElements = () => {
-        setFilterForView(treeViews?.testElementsTree);
-    };
-
-    const handleClearTextFilterForProjects = () => {
-        clearFilterForView(treeViews?.projectsTree);
-    };
-
-    const handleClearTextFilterForTestThemes = () => {
-        clearFilterForView(treeViews?.testThemesTree);
-    };
-
-    const handleClearTextFilterForTestElements = () => {
-        clearFilterForView(treeViews?.testElementsTree);
-    };
-
-    const handleToggleFilterDiffModeForProjects = () => {
-        toggleDiffModeForView(treeViews?.projectsTree);
-    };
-
-    const handleToggleFilterDiffModeForProjectsEnabled = () => {
-        toggleDiffModeForView(treeViews?.projectsTree);
-    };
-
-    const handleToggleFilterDiffModeForTestThemes = () => {
-        toggleDiffModeForView(treeViews?.testThemesTree);
-    };
-
-    const handleToggleFilterDiffModeForTestThemesEnabled = () => {
-        toggleDiffModeForView(treeViews?.testThemesTree);
-    };
-
-    const handleToggleFilterDiffModeForTestElements = () => {
-        toggleDiffModeForView(treeViews?.testElementsTree);
-    };
-
-    const handleToggleFilterDiffModeForTestElementsEnabled = () => {
-        toggleDiffModeForView(treeViews?.testElementsTree);
-    };
-
-    const handleClearAllFiltersForProjects = () => {
-        clearAllFiltersForView(treeViews?.projectsTree);
-    };
-
-    const handleClearAllFiltersForTestThemes = () => {
-        clearAllFiltersForView(treeViews?.testThemesTree);
-    };
-
-    const handleClearAllFiltersForTestElements = () => {
-        clearAllFiltersForView(treeViews?.testElementsTree);
     };
 
     const handleInteractionClick = (item: TestElementsTreeItem) => {
@@ -808,6 +854,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.refreshProjectTreeView, handler: handleRefreshProjectTreeView },
         { id: allExtensionCommands.refreshTestThemeTreeView, handler: handleRefreshTestThemeTreeView },
         { id: allExtensionCommands.refreshTestElementsTree, handler: handleRefreshTestElementsTree },
+        { id: allExtensionCommands.displayFiltersForTestThemeTreeON, handler: handleDisplayFiltersForTestThemeTree },
+        { id: allExtensionCommands.displayFiltersForTestThemeTreeOFF, handler: handleDisplayFiltersForTestThemeTree },
         {
             id: allExtensionCommands.makeRoot,
             handler: handleMakeRoot
@@ -816,65 +864,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         {
             id: allExtensionCommands.resetTestThemeTreeViewRoot,
             handler: handleResetTestThemeTreeViewRoot
-        },
-
-        // Tree View Filtering Commands
-        { id: allExtensionCommands.setTextFilterForProjects, handler: handleSetTextFilterForProjects },
-        {
-            id: allExtensionCommands.setTextFilterForTestThemes,
-            handler: handleSetTextFilterForTestThemes
-        },
-        {
-            id: allExtensionCommands.setTextFilterForTestElements,
-            handler: handleSetTextFilterForTestElements
-        },
-        {
-            id: allExtensionCommands.clearTextFilterForProjects,
-            handler: handleClearTextFilterForProjects
-        },
-        {
-            id: allExtensionCommands.clearTextFilterForTestThemes,
-            handler: handleClearTextFilterForTestThemes
-        },
-        {
-            id: allExtensionCommands.clearTextFilterForTestElements,
-            handler: handleClearTextFilterForTestElements
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForProjects,
-            handler: handleToggleFilterDiffModeForProjects
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForProjectsEnabled,
-            handler: handleToggleFilterDiffModeForProjectsEnabled
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForTestThemes,
-            handler: handleToggleFilterDiffModeForTestThemes
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForTestThemesEnabled,
-            handler: handleToggleFilterDiffModeForTestThemesEnabled
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForTestElements,
-            handler: handleToggleFilterDiffModeForTestElements
-        },
-        {
-            id: allExtensionCommands.toggleFilterDiffModeForTestElementsEnabled,
-            handler: handleToggleFilterDiffModeForTestElementsEnabled
-        },
-        {
-            id: allExtensionCommands.clearAllFiltersForProjects,
-            handler: handleClearAllFiltersForProjects
-        },
-        {
-            id: allExtensionCommands.clearAllFiltersForTestThemes,
-            handler: handleClearAllFiltersForTestThemes
-        },
-        {
-            id: allExtensionCommands.clearAllFiltersForTestElements,
-            handler: handleClearAllFiltersForTestElements
         },
 
         // Other extension commands
@@ -1025,6 +1014,8 @@ async function handleTestBenchSessionChange(
     const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess?.accessToken) {
+        getLoginWebViewProvider()?.resetEditMode();
+        setIsHandlingLogout(false);
         const previousUserId = userSessionManager.getCurrentUserId();
         const newUserId = sessionToProcess.account.id;
         const wasNewSessionStarted = previousUserId !== newUserId;
@@ -1072,6 +1063,7 @@ async function handleTestBenchSessionChange(
             await treeViews.restoreViewsState();
         }
     } else {
+        setIsHandlingLogout(true);
         await handleNoSession();
     }
 }
@@ -1386,6 +1378,12 @@ export async function clearAllExtensionData(
                 "[extension] Error clearing internal testbench folder while clearing all extension data:",
                 error
             );
+        }
+
+        try {
+            await treeViews?.testThemesTree.clearAllContextSpecificFilters();
+        } catch (error) {
+            logger.error("[extension] Error clearing saved test theme filters during clear all:", error);
         }
 
         try {

@@ -12,7 +12,6 @@ import { testElementsConfig } from "./TestElementsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { ResourceFileService } from "./ResourceFileService";
 import { ContextKeys, TestElementItemTypes } from "../../../constants";
-import { FilterService } from "../../utils/FilterService";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import {
@@ -51,7 +50,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private currentTovName: string | null = null;
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
-    private filterService: FilterService;
     private interactionClickHandler: ClickHandler<TestElementsTreeItem>;
 
     constructor(
@@ -64,7 +62,6 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         this.dataProvider = new TestElementsDataProvider(this.logger, getConnection, this.eventBus);
         this.resourceFileService = new ResourceFileService(this.logger);
-        this.filterService = FilterService.getInstance();
         this.interactionClickHandler = new ClickHandler<TestElementsTreeItem>();
 
         this.registerEventHandlers();
@@ -170,7 +167,22 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private async _handleResourceOperation(config: ResourceOperationConfig): Promise<void> {
         const { operationType, createMissing, revealInExplorer, targetItem, interactionItem, errorMessages } = config;
 
+        // Resource operations use language server commands, ensure it's running
         try {
+            if (!isLanguageServerRunning()) {
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Waiting for Language Server",
+                        cancellable: true
+                    },
+                    async (progress, cancellationToken) => {
+                        progress.report({ message: "Waiting for language server to be ready...", increment: 0 });
+                        await waitForLanguageServerReady(30000, 100, cancellationToken);
+                    }
+                );
+            }
+
             const hierarchicalName = targetItem.data.hierarchicalName;
             if (!hierarchicalName) {
                 vscode.window.showErrorMessage(errorMessages.noHierarchicalName);
@@ -191,7 +203,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
             if (!exists) {
                 if (!createMissing) {
-                    vscode.window.showErrorMessage(
+                    vscode.window.showWarningMessage(
                         isResourceFile ? errorMessages.fileNotFound : errorMessages.folderNotFound
                     );
                     return;
@@ -263,16 +275,14 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         tovKey: string,
         tovLabel?: string,
         projectName?: string,
-        tovName?: string,
-        preserveExistingData: boolean = false
+        tovName?: string
     ): Promise<void> {
         const startTime = Date.now();
         this.logger.debug(`[TestElementsTreeView] Loading Test Object Version '${tovName}'...`);
 
         try {
-            if (!preserveExistingData) {
-                this.stateManager.setLoading(true);
-            }
+            this.stateManager.setLoading(true);
+            (this as any).updateTreeViewMessage();
 
             const fetchedHierarchicalTestElements = await this.dataProvider.fetchTestElements(tovKey);
             const newRootItems = fetchedHierarchicalTestElements.map((element) => this._buildTreeItems(element));
@@ -302,6 +312,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
             this.stateManager.setLoading(false);
+            (this as any).updateTreeViewMessage();
 
             this._onDidChangeTreeData.fire(undefined);
             this.updateSubdivisionIcons(newRootItems);
@@ -328,6 +339,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             );
             this.stateManager.setLoading(false);
             this.stateManager.setError(error as Error);
+            (this as any).updateTreeViewMessage();
             throw error;
         }
     }
@@ -353,6 +365,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.logger.debug(
                 `[TestElementsTreeView] Loading Test Element information for Test Object Version '${tovName}' from project '${projectName}'...`
             );
+            this.stateManager.setLoading(true);
 
             if (clearFirst || this.currentTovKey !== tovKey) {
                 // Preserve UI state (expansion, marking, etc.) during data reload
@@ -392,6 +405,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             // This is important even for empty results to prevent the tree from continuously trying to load data
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+            this.stateManager.setLoading(false);
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
 
@@ -413,6 +427,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             this.rootItems = [];
             (this as any)._lastDataFetch = Date.now();
             (this as any)._intentionallyCleared = false;
+            this.stateManager.setLoading(false);
             this._onDidChangeTreeData.fire(undefined);
             (this as any).updateTreeViewMessage();
 
@@ -968,7 +983,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 noParent: "Cannot find parent resource for interaction.",
                 noUid: "Parent resource {label} has no UID.",
                 fileNotFound:
-                    "Parent resource file does not exist. Use double-click or 'Create Resource' button to create it.",
+                    "Resource file does not exist. Use double-click or 'Create Resource' button to create it.",
                 folderNotFound: "Parent resource folder does not exist: {path}."
             }
         });
@@ -1014,7 +1029,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     }
 
     /**
-     * Override the base refresh method to fetch data from the server with improved progress handling
+     * Fetch data from the server and refresh tree view
      *
      * @param item Optional specific item to refresh
      * @param options Optional refresh options
@@ -1036,8 +1051,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.currentTovKey,
                 this.currentTovLabel || undefined,
                 this.currentProjectName || undefined,
-                this.currentTovName || undefined,
-                true
+                this.currentTovName || undefined
             );
         } else {
             this.logger.trace("[TestElementsTreeView] No TOV key available while refreshing, clearing tree");
@@ -1058,6 +1072,4 @@ export async function displayTestElementsTreeView(): Promise<void> {
         return;
     }
     vscode.commands.executeCommand("setContext", ContextKeys.SHOW_TEST_ELEMENTS_TREE, true);
-    const filterService = FilterService.getInstance();
-    filterService.setActiveTreeViewByContext(treeViews, ContextKeys.SHOW_TEST_ELEMENTS_TREE);
 }

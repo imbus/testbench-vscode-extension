@@ -6,7 +6,6 @@
 
 import * as vscode from "vscode";
 import { logger } from "./extension";
-
 import { ConfigKeys } from "./constants";
 import { getExtensionSetting } from "./configuration";
 

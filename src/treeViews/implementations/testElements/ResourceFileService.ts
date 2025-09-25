@@ -309,8 +309,8 @@ export class ResourceFileService {
             await fs.promises.mkdir(cleanedPath, { recursive: true });
         } catch (error: any) {
             if (error.code === "EACCES") {
-                this.logger.error(`[ResourceFileService] Permission denied creating folder: "${cleanedPath}"`);
-                throw new Error(`Permission denied creating folder: ${cleanedPath}`);
+                this.logger.error(`[ResourceFileService] Permission denied while creating folder: "${cleanedPath}"`);
+                throw new Error(`Permission denied while creating folder: ${cleanedPath}`);
             }
             this.logger.error(
                 `[ResourceFileService] Failed to create folder path: "${cleanedPath}": ${error.message}`,

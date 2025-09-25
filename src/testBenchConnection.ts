@@ -24,7 +24,7 @@ import {
     folderNameOfInternalTestbenchFolder,
     ConfigKeys
 } from "./constants";
-import { ExecutionMode } from "./testBenchTypes";
+import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
 
 let agentForNextConnection: https.Agent | null = null;
@@ -750,83 +750,8 @@ export class PlayServerConnection {
         cycleKey: string
     ): Promise<testBenchTypes.TestStructure | null> {
         const testStructureOfCycleUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
-        const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
-            executionMode: ExecutionMode.Execute,
-            suppressFilteredData: false,
-            suppressNotExecutable: false,
-            suppressEmptyTestThemes: false,
-            filters: []
-        };
-
-        logger.trace(
-            `[testBenchConnection] Fetching cycle structure from URL ${testStructureOfCycleUrl} using request body:`,
-            requestBody
-        );
-
-        try {
-            const testStructureOfCycleResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
-                () =>
-                    this.apiClient.post(testStructureOfCycleUrl, requestBody, {
-                        headers: {
-                            accept: "application/json",
-                            "Content-Type": "application/json"
-                        },
-                        proxy: false
-                    }),
-                3, // maxRetries
-                2000, // delayMs
-                (error) => {
-                    if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates
-                        const nonRetryableStatusCodes = [400, 404, 422];
-                        if (nonRetryableStatusCodes.includes(error.response.status)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-            );
-
-            // Save the JSON to a file for analyzing the structure
-            /*
-            const savePath: vscode.Uri | undefined = await vscode.window.showSaveDialog({
-                saveLabel: "Save Cycle Structure",
-                filters: {
-                    "JSON Files": ["json"],
-                    "All Files": ["*"],
-                },
-            });
-            if (savePath) {
-                const filePath: string = savePath.fsPath;
-                utils.saveJsonDataToFile(filePath, cycleStructureResponse.data);
-            } else {
-                vscode.window.showErrorMessage("No file path selected.");
-            }
-            */
-
-            logger.trace(
-                `[testBenchConnection] Response status of test structure of cycle request for URL ${testStructureOfCycleUrl}: ${testStructureOfCycleResponse.status}`
-            );
-            if (testStructureOfCycleResponse.data) {
-                // Note: The output of cycleStructureResponse is large
-                logger.trace(
-                    `[testBenchConnection] Received cycle structure for cycle key ${cycleKey}:`,
-                    testStructureOfCycleResponse.data
-                );
-                return testStructureOfCycleResponse.data;
-            } else {
-                logger.error(
-                    `[testBenchConnection] Unexpected response code when fetching cycle structure for ${testStructureOfCycleUrl}: ${testStructureOfCycleResponse.status}`
-                );
-                return null;
-            }
-        } catch (error) {
-            logger.error(
-                `[testBenchConnection] Error fetching test structure for cycle using ${testStructureOfCycleUrl}:`,
-                error
-            );
-            return null;
-        }
+        const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
+        return this._fetchTestStructureWithFilterHandling(testStructureOfCycleUrl, validatedFilters, "cycle");
     }
 
     /**
@@ -841,34 +766,58 @@ export class PlayServerConnection {
         tovKey: string
     ): Promise<testBenchTypes.TestStructure | null> {
         const testStructureOfTOVUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
+        const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
+        return this._fetchTestStructureWithFilterHandling(testStructureOfTOVUrl, validatedFilters, "TOV");
+    }
+
+    /**
+     * Internal method to fetch test structure with pre-validated filters.
+     * Filters are already validated and transformed before reaching this method.
+     *
+     * @param {string} url - The API endpoint URL
+     * @param {any[]} validatedFilters - The pre-validated and transformed filters
+     * @param {string} structureType - Type of structure being fetched (for logging)
+     * @returns {Promise<testBenchTypes.TestStructure | null>} The test structure or null if an error occurs.
+     */
+    private async _fetchTestStructureWithFilterHandling(
+        url: string,
+        validatedFilters: any[],
+        structureType: string
+    ): Promise<testBenchTypes.TestStructure | null> {
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
-            executionMode: ExecutionMode.Execute,
-            suppressFilteredData: false,
+            basedOnExecution: true,
+            suppressFilteredData: true,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
-            filters: []
+            filters: validatedFilters
         };
 
         logger.trace(
-            `[testBenchConnection] Fetching test structure of TOV from URL ${testStructureOfTOVUrl} and request body:`,
+            `[testBenchConnection] Fetching ${structureType} structure from URL ${url} and request body:`,
             requestBody
         );
 
+        if (validatedFilters.length > 0) {
+            logger.trace(
+                `[testBenchConnection] Using ${validatedFilters.length} validated filters when fetching ${structureType} structure:`,
+                validatedFilters.map((f: any) => f.name)
+            );
+        }
+
         try {
-            const testStructureOfTOVResponse: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
+            const response: AxiosResponse<testBenchTypes.TestStructure> = await withRetry(
                 () =>
-                    this.apiClient.post(testStructureOfTOVUrl, requestBody, {
+                    this.apiClient.post(url, requestBody, {
                         headers: {
                             accept: "application/json",
                             "Content-Type": "application/json"
-                        },
-                        proxy: false
+                        }
                     }),
                 3, // maxRetries
                 2000, // delayMs
                 (error) => {
                     if (axios.isAxiosError(error) && error.response) {
-                        // Retry predicates
+                        // Standard non-retryable status codes
                         const nonRetryableStatusCodes = [400, 404, 422];
                         if (nonRetryableStatusCodes.includes(error.response.status)) {
                             return false;
@@ -896,25 +845,22 @@ export class PlayServerConnection {
             */
 
             logger.debug(
-                `[testBenchConnection] Received test structure of TOV response status for URL ${testStructureOfTOVUrl}:`,
-                testStructureOfTOVResponse.status
+                `[testBenchConnection] Response status of test structure of ${structureType} request for URL ${url}:`,
+                response.status
             );
-            if (testStructureOfTOVResponse.data) {
-                // Note: The output is large
-                logger.trace(
-                    `[testBenchConnection] Received test structure from URL ${testStructureOfTOVUrl}:`,
-                    testStructureOfTOVResponse.data
-                );
-                return testStructureOfTOVResponse.data;
+
+            if (response.data) {
+                logger.trace(`[testBenchConnection] Received ${structureType} structure:`, response.data);
+                return response.data;
             } else {
                 logger.error(
-                    `[testBenchConnection] Unexpected response code when fetching test structure for TOV using URL ${testStructureOfTOVUrl}: ${testStructureOfTOVResponse.status}`
+                    `[testBenchConnection] Unexpected response code when fetching ${structureType} structure for ${url}: ${response.status}`
                 );
                 return null;
             }
         } catch (error) {
             logger.error(
-                `[testBenchConnection] Error fetching test structure for TOV using URL ${testStructureOfTOVUrl}:`,
+                `[testBenchConnection] Error fetching test structure for ${structureType} using ${url}:`,
                 error
             );
             return null;
@@ -1343,7 +1289,7 @@ export async function importReportWithResultsToTestbench(
 
         const importData: testBenchTypes.ImportData = {
             fileName: zipFilenameFromServer,
-            reportRootUID: uniqueID,
+            treeRootUID: uniqueID,
             useExistingDefect: true,
             discardTesterInformation: false,
             // defaultTester: "tester",
@@ -1411,13 +1357,13 @@ export async function selectReportWithResultsAndImportToTestbench(
             cancellable: true
         },
         async (progress) => {
-            progress.report({ message: "Selecting report file with results.", increment: 30 });
+            progress.report({ message: "Selecting report file with results.", increment: 40 });
             const resultZipFilePath: string | null = await promptForReportZipFileWithResults();
             if (!resultZipFilePath) {
                 return null;
             }
 
-            progress.report({ message: "Extracting report context...", increment: 10 });
+            progress.report({ message: "Extracting report context...", increment: 20 });
             const { projectKey, cycleKey } = await extractDataFromReport(resultZipFilePath);
 
             if (!projectKey || !cycleKey) {
@@ -1427,14 +1373,11 @@ export async function selectReportWithResultsAndImportToTestbench(
                     "Could not extract necessary project or cycle key from the selected report file.";
                 logger.error(missingDataContextMsg);
                 vscode.window.showErrorMessage(missingDataContextMsgForUser);
-                await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
                 return null;
             }
 
-            progress.report({ message: "Importing report file.", increment: 30 });
+            progress.report({ message: "Importing report file.", increment: 40 });
             await importReportWithResultsToTestbench(connection, projectKey, cycleKey, resultZipFilePath);
-            progress.report({ message: "Cleaning up.", increment: 30 });
-            await reportHandler.cleanUpReportFileIfConfiguredInSettings(resultZipFilePath);
         }
     );
 }
@@ -1548,11 +1491,8 @@ export async function loginToServerAndGetSessionDetails(
                 `[testBenchConnection] Certificate validation failed for ${serverName}: ${error.message}. Prompting user for insecure connection option.`
             );
             const proceedAnywayOption = "Proceed Anyway";
-            const choice = await vscode.window.showWarningMessage(
-                `Connection Error: Untrusted Certificate. This could expose you to security risks.\n${error}`,
-                { modal: true },
-                proceedAnywayOption
-            );
+            const message = `You are using an untrusted certificate. If you proceed, your connection might not be secure.\nDetails: ${error.message}`;
+            const choice = await vscode.window.showWarningMessage(message, { modal: true }, proceedAnywayOption);
 
             if (choice === proceedAnywayOption) {
                 logger.debug(
@@ -1592,7 +1532,7 @@ export async function loginToServerAndGetSessionDetails(
                             `[testBenchConnection] Insecure login returned status ${insecureLoginResponse.status}`
                         );
                         vscode.window.showErrorMessage(
-                            `ERR_BAD_RESPONSE: Request failed with status code ${insecureLoginResponse.status}`
+                            `Login Error: Request failed with status code ${insecureLoginResponse.status}`
                         );
                     }
                 } catch (insecureError: any) {
@@ -1602,9 +1542,9 @@ export async function loginToServerAndGetSessionDetails(
                         insecureError.message
                     );
                     if (axios.isAxiosError(insecureError)) {
-                        logger.error(`[testBenchConnection] Insecure error code: ${insecureError.code}`);
-                        logger.error(`[testBenchConnection] Insecure error response:`, insecureError.response?.data);
-                        logger.error(`[testBenchConnection] Insecure error config:`, insecureError.config);
+                        logger.error(
+                            `[testBenchConnection] Insecure Axios error details:\nCode=${insecureError.code},\nResponse=${JSON.stringify(insecureError.response?.data)},\nConfig=${JSON.stringify(insecureError.config)}`
+                        );
                     }
                 }
             }

@@ -90,7 +90,7 @@ export async function getInterpreterPath(resource?: Uri): Promise<string | undef
 
 /**
  * Checks if the resolved Python environment is compatible with the language server requirements.
- * Requires Python 3.9 or newer.
+ * Requires Python 3.10 or newer.
  * @param {ResolvedEnvironment | undefined} resolvedEnv - The resolved Python environment.
  * @returns {boolean} True if the environment is compatible, false otherwise.
  */
@@ -106,7 +106,7 @@ export function checkPythonCompatibility(resolvedEnv: ResolvedEnvironment | unde
         return false;
     }
 
-    if (version.major === 3 && version.minor >= 9) {
+    if (version.major === 3 && version.minor >= 10) {
         return true;
     }
 
