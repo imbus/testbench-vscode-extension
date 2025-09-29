@@ -52,8 +52,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             enableScripts: true,
             localResourceRoots: [
                 vscode.Uri.joinPath(this.extensionContext.extensionUri, "resources"),
-                vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist"),
-                vscode.Uri.joinPath(this.extensionContext.extensionUri, "src", "webview") // Allow access to the new folder
+                vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist")
             ]
         };
 
@@ -626,9 +625,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const nonce = getNonce();
 
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext.extensionUri, "src", "webview", "main.js")
+            vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist", "webview", "main.js")
         );
-        const stylesPath = path.join(this.extensionContext.extensionPath, "src", "webview", "styles.css");
+        const stylesPath = path.join(this.extensionContext.extensionPath, "dist", "webview", "styles.css");
         const stylesContent = fs.readFileSync(stylesPath, "utf8");
 
         const connectionsHeaderIconDarkUri = this.createIconUri(webview, "connections-dark.svg");
@@ -672,7 +671,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
 
         const htmlTemplatePath = path.join(
             this.extensionContext.extensionPath,
-            "src",
+            "dist",
             "webview",
             "connectionManagement.html"
         );
@@ -691,9 +690,9 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
         const nonce: string = getNonce();
 
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionContext.extensionUri, "src", "webview", "loggedIn.js")
+            vscode.Uri.joinPath(this.extensionContext.extensionUri, "dist", "webview", "loggedIn.js")
         );
-        const stylesPath = path.join(this.extensionContext.extensionPath, "src", "webview", "loggedIn.css");
+        const stylesPath = path.join(this.extensionContext.extensionPath, "dist", "webview", "loggedIn.css");
         const stylesContent = fs.readFileSync(stylesPath, "utf8");
         const logoUri: vscode.Uri | null = this.createIconUri(webview, "testbench-logo.svg");
 
@@ -703,7 +702,7 @@ export class LoginWebViewProvider implements vscode.WebviewViewProvider {
             connectedAsInfo = `Connected as <strong>${currentConnection.getUsername()}</strong> on <strong>${currentConnection.getServerName()}:${currentConnection.getServerPort()}</strong>.`;
         }
 
-        const htmlTemplatePath = path.join(this.extensionContext.extensionPath, "src", "webview", "loggedIn.html");
+        const htmlTemplatePath = path.join(this.extensionContext.extensionPath, "dist", "webview", "loggedIn.html");
         let html = fs.readFileSync(htmlTemplatePath, "utf8");
 
         html = html.replace(/{{nonce}}/g, nonce);
