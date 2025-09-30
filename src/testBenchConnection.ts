@@ -15,15 +15,9 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
-import { getLoginWebViewProvider, logger, setConnection } from "./extension";
+import { logger } from "./extension";
 import * as utils from "./utils";
-import {
-    ContextKeys,
-    JobTypes,
-    allExtensionCommands,
-    folderNameOfInternalTestbenchFolder,
-    ConfigKeys
-} from "./constants";
+import { JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder, ConfigKeys } from "./constants";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
 
@@ -305,7 +299,7 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" },
                         proxy: false
                     }),
-                3,
+                1,
                 2000,
                 RetryPredicateFactory.createDefaultPredicate()
             );
@@ -314,12 +308,7 @@ export class PlayServerConnection {
                 logger.debug("[testBenchConnection] Logout successful.");
                 const tlsManager = TLSSecurityManager.getInstance();
                 tlsManager.disableInsecureMode();
-
-                setConnection(null);
-                await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 this.sessionToken = "";
-                getLoginWebViewProvider()?.updateWebviewHTMLContent();
-
                 return true;
             } else {
                 logger.error(`[testBenchConnection] Logout failed. Response status: ${logoutResponse.status}`);
@@ -1124,13 +1113,33 @@ export async function withRetry<T>(
 ): Promise<T> {
     let retryCount: number = 0;
 
+    const checkAndForceLogout = (error: any) => {
+        if (axios.isAxiosError(error)) {
+            const status = error.response?.status;
+            const isNetworkError = !error.response;
+            const isAuthEndpoint = error.config?.url?.includes("/login/session/v1");
+
+            if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
+                logger.warn(
+                    `[testBenchConnection] Unrecoverable API error detected (status: ${status}, networkError: ${isNetworkError}). Forcing a local logout.`
+                );
+                vscode.window.showWarningMessage(
+                    "Your TestBench session has expired or the server is unavailable. You have been logged out and are being returned to the login view."
+                );
+                vscode.commands.executeCommand(allExtensionCommands.logout);
+            }
+        }
+    };
+
     while (true) {
         try {
             return await asyncFunction();
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 logger.trace(
-                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${error.response?.status}: ${error.message}`
+                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${
+                        error.response?.status
+                    }: ${error.message}`
                 );
             } else {
                 logger.trace(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
@@ -1139,6 +1148,7 @@ export async function withRetry<T>(
             // Check if we should retry this error
             if (shouldRetry && !shouldRetry(error)) {
                 logger.trace(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
+                checkAndForceLogout(error);
                 throw error;
             }
 
@@ -1147,6 +1157,7 @@ export async function withRetry<T>(
                 logger.error(
                     `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
                 );
+                checkAndForceLogout(error);
                 throw error;
             }
 

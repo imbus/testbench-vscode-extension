@@ -207,23 +207,33 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     const handleLogout = async () => {
         logger.trace(`[extension] Command called: ${allExtensionCommands.logout}`);
 
-        if (connection) {
-            await connection.logoutUserOnServer();
+        if (isHandlingSessionChange) {
+            return;
         }
+        isHandlingSessionChange = true;
+        try {
+            if (connection) {
+                await connection.logoutUserOnServer();
+            }
 
-        const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-            silent: true
-        });
-        if (session && authProviderInstance) {
-            // Removing the session fires onDidChangeSessions and triggers proper UI cleanup.
-            await authProviderInstance.removeSession(session.id);
-        }
+            // Regardless of server logout success, perform a local cleanup.
+            setConnection(null);
+            await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
 
-        await stopLanguageClient();
+            const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+                silent: true
+            });
+            if (session && authProviderInstance) {
+                await authProviderInstance.removeSession(session.id); // onDidChangeSessions triggers handleTestBenchSessionChange
+            } else {
+                // Trigger cleanup manually.
+                await handleTestBenchSessionChange(context, undefined);
+            }
 
-        // Fallback to ensure UI is reset if a connection object still exists without a session.
-        if (connection !== null) {
-            await handleTestBenchSessionChange(context, undefined);
+            await stopLanguageClient();
+            getLoginWebViewProvider()?.updateWebviewHTMLContent();
+        } finally {
+            isHandlingSessionChange = false;
         }
     };
 
