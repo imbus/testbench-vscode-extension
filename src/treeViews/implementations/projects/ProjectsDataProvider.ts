@@ -103,7 +103,7 @@ export class ProjectsDataProvider {
                 `[ProjectsDataProvider] Failed to fetch project tree for project key ${projectKey}:`,
                 error
             );
-            throw error;
+            return null;
         }
     }
 
