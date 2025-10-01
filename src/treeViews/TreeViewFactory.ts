@@ -719,7 +719,8 @@ export class TreeViewFactory {
     }
 
     /**
-     * Refreshes tree views and attempts to restore previous view state.
+     * Refreshes tree views and attempts to restore previous view state and
+     * initializes the language server if necessary.
      * @param context The extension context
      * @param treeViews The tree views object containing individual tree view instances
      */
@@ -743,12 +744,35 @@ export class TreeViewFactory {
             const cycleContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_CYCLE_CONTEXT_KEY);
             const tovContextKey = this.getUserStorageKey(StorageKeys.LAST_ACTIVE_TOV_CONTEXT_KEY);
 
-            const savedViewId = context.workspaceState.get<string>(visibleViewsKey);
+            let savedViewId = context.workspaceState.get<string>(visibleViewsKey);
             const savedCycleContext = context.workspaceState.get<any>(cycleContextKey);
             const savedTovContext = context.workspaceState.get<any>(tovContextKey);
-            const savedContext = savedCycleContext || savedTovContext;
+            let savedContext = savedCycleContext || savedTovContext;
 
             let viewRestored = false;
+
+            // Check if the project to be restored is still available to the current user
+            if (savedContext && this.isValidSavedContext(savedContext)) {
+                const connection = getConnection();
+                if (connection) {
+                    const availableProjects = await connection.getProjectsList();
+                    const projectIsAvailable = availableProjects?.some((p) => p.name === savedContext.projectName);
+
+                    if (!projectIsAvailable) {
+                        this.logger.debug(
+                            `[TreeViewFactory] Project '${savedContext.projectName}' from saved context is no longer available. ` +
+                                `Skipping restoration.`
+                        );
+                        await this.clearViewState(context);
+                        savedContext = null;
+                        savedViewId = undefined;
+                    } else {
+                        this.logger.debug(
+                            `[TreeViewFactory] Project '${savedContext.projectName}' from saved context is available. Proceeding with restoration.`
+                        );
+                    }
+                }
+            }
 
             if (savedContext && this.isValidSavedContext(savedContext)) {
                 await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
