@@ -766,6 +766,10 @@ export class TreeViewFactory {
                         await this.clearViewState(context);
                         savedContext = null;
                         savedViewId = undefined;
+                    } else {
+                        this.logger.debug(
+                            `[TreeViewFactory] Project '${savedContext.projectName}' from saved context is available. Proceeding with restoration.`
+                        );
                     }
                 }
             }
