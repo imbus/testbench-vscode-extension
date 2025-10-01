@@ -759,7 +759,7 @@ export class TreeViewFactory {
                     const projectIsAvailable = availableProjects?.some((p) => p.name === savedContext.projectName);
 
                     if (!projectIsAvailable) {
-                        this.logger.warn(
+                        this.logger.debug(
                             `[TreeViewFactory] Project '${savedContext.projectName}' from saved context is no longer available. ` +
                                 `Skipping restoration.`
                         );
