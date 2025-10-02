@@ -119,7 +119,8 @@ export const StorageKeys = {
     IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY: "testbenchExtension.isTestThemeOpenedFromCycleStorageKey",
     HAS_USED_EXTENSION_BEFORE: "testbenchExtension.hasUsedExtensionBefore",
     // Test theme tree filters
-    TEST_THEME_TREE_FILTERS: "testbenchExtension.testThemeTree.filters"
+    TEST_THEME_TREE_FILTERS: "testbenchExtension.testThemeTree.filters",
+    LOGOUT_SIGNAL_KEY: "testbenchExtension.logoutSignal"
 } as const;
 
 // --- Tree Item Context Values ---

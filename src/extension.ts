@@ -58,6 +58,7 @@ import {
 import { initializeTreeViews } from "./treeViews/TreeViewFactory";
 import { UserSessionManager } from "./userSessionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
+import { v4 as uuidv4 } from "uuid";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -188,7 +189,7 @@ function registerSafeCommand(
  *
  * @param {vscode.ExtensionContext} context The extension context.
  */
-async function registerExtensionCommands(context: vscode.ExtensionContext): Promise<void> {
+async function registerExtensionCommands(context: vscode.ExtensionContext, instanceId: string): Promise<void> {
     if (!treeViews) {
         logger.warn("[extension] Tree views not initialized. Skipping command registration.");
         return;
@@ -204,12 +205,23 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
-    const handleLogout = async () => {
-        logger.trace(`[extension] Command called: ${allExtensionCommands.logout}`);
+    const handleLogout = async (isTriggeredBySync: boolean = false) => {
+        logger.trace(
+            `[extension] Command called: ${allExtensionCommands.logout}. Is sync trigger: ${isTriggeredBySync}`
+        );
 
         if (isHandlingSessionChange) {
             return;
         }
+
+        if (!isTriggeredBySync) {
+            logger.debug(`[extension] This instance (${instanceId}) is initiating the logout. Setting signal.`);
+            await context.globalState.update(StorageKeys.LOGOUT_SIGNAL_KEY, {
+                initiatorId: instanceId,
+                timestamp: Date.now()
+            });
+        }
+
         isHandlingSessionChange = true;
         try {
             if (connection) {
@@ -1056,6 +1068,10 @@ async function handleTestBenchSessionChange(
     const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess?.accessToken) {
+        // Clear previous logout signals on new login
+        await context.globalState.update(StorageKeys.LOGOUT_SIGNAL_KEY, undefined);
+        logger.trace("[extension] Cleared logout signal due to new session.");
+
         getLoginWebViewProvider()?.resetEditMode();
         setIsHandlingLogout(false);
         const previousUserId = userSessionManager.getCurrentUserId();
@@ -1132,8 +1148,9 @@ async function handleTestBenchSessionChange(
  * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    const instanceId = uuidv4();
     logger = new testBenchLogger.TestBenchLogger();
-    logger.info("[extension] Activating extension.");
+    logger.info(`[extension] Activating extension instance ${instanceId}.`);
     initializeConfigurationWatcher();
 
     const handleAutomaticLogin = async () => {
@@ -1225,7 +1242,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // Register all commands
-    await registerExtensionCommands(context);
+    await registerExtensionCommands(context, instanceId);
 
     // Attempt to restore session on activation
     logger.trace("[extension] Checking if previous TestBench session should be restored...");
@@ -1253,6 +1270,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         logger.debug("[extension] Auto-login is enabled. Scheduling automatic login.");
         handleAutomaticLogin();
     }
+
+    let lastProcessedLogoutTimestamp = 0;
+    const logoutPollInterval = setInterval(async () => {
+        const signal = context.globalState.get<{ initiatorId: string; timestamp: number }>(
+            StorageKeys.LOGOUT_SIGNAL_KEY
+        );
+
+        if (signal && signal.initiatorId !== instanceId && signal.timestamp > lastProcessedLogoutTimestamp) {
+            logger.info(
+                `[extension] Detected logout signal from another instance (${signal.initiatorId}). Logging out this instance (${instanceId}).`
+            );
+            lastProcessedLogoutTimestamp = signal.timestamp;
+
+            if (connection) {
+                await vscode.commands.executeCommand(allExtensionCommands.logout, true);
+            }
+        }
+    }, 3000); // Poll every 3 seconds
+
+    context.subscriptions.push({
+        dispose: () => clearInterval(logoutPollInterval)
+    });
 
     logger.info("[extension] Extension activated successfully.");
 }
