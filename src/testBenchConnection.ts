@@ -21,8 +21,6 @@ import { JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder, Co
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
 
-let agentForNextConnection: https.Agent | null = null;
-
 /**
  * Manages TLS security state globally for the extension.
  * Provides a centralized way to handle secure vs insecure connections
@@ -137,6 +135,7 @@ export interface TestBenchLoginResult {
     sessionToken: string;
     userKey: string; // From LoginResponse
     loginName: string;
+    isInsecure: boolean;
 }
 
 /**
@@ -158,17 +157,25 @@ async function createProxyHttpsAgent(proxy_url: string): Promise<HttpsProxyAgent
     return new HttpsProxyAgent(proxy_url);
 }
 /**
- * Creates a secure HTTPS agent that trusts default system CAs and optionally a custom bundled CA.
- * Falls back to using only default CAs if the custom certificate file is not found.
+ * Creates a secure or insecure HTTPS agent.
+ * @param {boolean} insecure - Whether to create an insecure agent that bypasses certificate validation.
  * @returns {Promise<https.Agent>} A configured https.Agent.
  */
-async function createSecureHttpsAgent(): Promise<HttpsProxyAgent<string> | https.Agent> {
+async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAgent<string> | https.Agent> {
     const http_config = vscode.workspace.getConfiguration("http");
-    const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
-    const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
     const proxy_url = http_config.get<string>(ConfigKeys.PROXY_URL);
     const agent_url: string = proxy_url ?? "";
     const proxy_agent = await createProxyHttpsAgent(agent_url);
+
+    if (insecure) {
+        logger.trace("[testBenchConnection] Creating an insecure HTTPS agent that ignores certificate errors.");
+        proxy_agent.options.rejectUnauthorized = false;
+        proxy_agent.options.checkServerIdentity = () => undefined;
+        return proxy_agent;
+    }
+
+    const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
+    const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
     let absoluteCertPath: string | Buffer | null = null;
     if (certificatePathSetting) {
         absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
@@ -218,7 +225,8 @@ export class PlayServerConnection {
         public portNumber: number,
         public username: string,
         private sessionToken: string,
-        private context: vscode.ExtensionContext
+        private context: vscode.ExtensionContext,
+        private isInsecure: boolean = false
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
         logger.trace(
@@ -230,19 +238,10 @@ export class PlayServerConnection {
      * Initializes the connection asynchronously, setting up the HTTPS agent and API client.
      */
     async initialize(): Promise<void> {
-        let agentToUse: https.Agent;
-        if (agentForNextConnection) {
-            logger.trace("[testBenchConnection] Using pre-configured agent for the new session.");
-            agentToUse = agentForNextConnection;
-            agentForNextConnection = null;
-
-            if (agentToUse.options && agentToUse.options.rejectUnauthorized === false) {
-                logger.trace("[testBenchConnection] Using insecure agent for this session.");
-            }
-        } else {
-            logger.trace("[testBenchConnection] No pre-configured agent found. Defaulting to a new secure agent.");
-            agentToUse = await createSecureHttpsAgent();
+        if (this.isInsecure) {
+            TLSSecurityManager.getInstance().enableInsecureMode();
         }
+        const agentToUse = await createHttpsAgent(this.isInsecure);
         this.apiClient = axios.create({
             baseURL: this.baseURL,
             headers: { Authorization: this.sessionToken },
@@ -1471,8 +1470,6 @@ export async function loginToServerAndGetSessionDetails(
     username: string,
     password: string
 ): Promise<TestBenchLoginResult | null> {
-    agentForNextConnection = null;
-
     const requestBody: testBenchTypes.LoginRequestBody = {
         login: username,
         password: password,
@@ -1500,16 +1497,16 @@ export async function loginToServerAndGetSessionDetails(
     };
 
     try {
-        const secureAgent = await createSecureHttpsAgent();
+        const secureAgent = await createHttpsAgent();
         const loginResponse = await performLogin(secureAgent);
         if (loginResponse.status === 201 && loginResponse.data?.sessionToken) {
             logger.info(`[testBenchConnection] Login successful for user ${username} on ${serverName}.`);
-            agentForNextConnection = secureAgent;
 
             return {
                 sessionToken: loginResponse.data.sessionToken,
                 userKey: loginResponse.data.userKey,
-                loginName: loginResponse.data.login
+                loginName: loginResponse.data.login,
+                isInsecure: false
             };
         }
         return null;
@@ -1539,9 +1536,7 @@ export async function loginToServerAndGetSessionDetails(
                     logger.debug(
                         `[testBenchConnection] Attempting insecure connection to '${serverName}:${portNumber}'.`
                     );
-                    const insecureAgent = await createSecureHttpsAgent();
-                    insecureAgent.options.rejectUnauthorized = false;
-                    insecureAgent.options.checkServerIdentity = () => undefined;
+                    const insecureAgent = await createHttpsAgent(true);
                     const insecureLoginResponse = await axios.post(loginURL, requestBody, {
                         headers: {
                             accept: "application/vnd.testbench+json",
@@ -1556,11 +1551,11 @@ export async function loginToServerAndGetSessionDetails(
                         logger.debug(
                             `[testBenchConnection] Insecure login successful for user '${username}' on '${serverName}'.`
                         );
-                        agentForNextConnection = insecureAgent;
                         return {
                             sessionToken: insecureLoginResponse.data.sessionToken,
                             userKey: insecureLoginResponse.data.userKey,
-                            loginName: insecureLoginResponse.data.login
+                            loginName: insecureLoginResponse.data.login,
+                            isInsecure: true
                         };
                     } else {
                         logger.error(

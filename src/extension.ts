@@ -57,6 +57,7 @@ import {
 } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { initializeTreeViews } from "./treeViews/TreeViewFactory";
 import { UserSessionManager } from "./userSessionManager";
+import { SharedSessionManager } from "./sharedSessionManager";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -975,7 +976,8 @@ async function createNewConnection(
     activeConnection: connectionManager.TestBenchConnection,
     session: vscode.AuthenticationSession,
     currentConnection: PlayServerConnection | null,
-    context: vscode.ExtensionContext
+    context: vscode.ExtensionContext,
+    isInsecure: boolean
 ): Promise<PlayServerConnection> {
     if (currentConnection) {
         logger.warn(
@@ -989,7 +991,8 @@ async function createNewConnection(
         activeConnection.portNumber,
         activeConnection.username,
         session.accessToken,
-        context
+        context,
+        isInsecure
     );
     await newConnection.initialize();
     setConnection(newConnection);
@@ -1058,6 +1061,12 @@ async function handleTestBenchSessionChange(
         const previousUserId = userSessionManager.getCurrentUserId();
         const newUserId = sessionToProcess.account.id;
         const wasNewSessionStarted = previousUserId !== newUserId;
+        const sharedSessionManager = SharedSessionManager.getInstance(context);
+        const sharedSession = await sharedSessionManager.getSharedSession();
+        let isInsecure = false;
+        if (sharedSession && sharedSession.sessionToken === sessionToProcess.accessToken) {
+            isInsecure = sharedSession.isInsecure;
+        }
 
         // If switching to a different user, reset state for the previous user's data
         if (wasNewSessionStarted && previousUserId !== "global_fallback" && treeViews) {
@@ -1090,7 +1099,13 @@ async function handleTestBenchSessionChange(
             );
             return;
         }
-        const newConnection = await createNewConnection(activeConnection, sessionToProcess, connection, context);
+        const newConnection = await createNewConnection(
+            activeConnection,
+            sessionToProcess,
+            connection,
+            context,
+            isInsecure
+        );
         await handleLanguageServerRestartOnSessionChange(previousSessionToken, newConnection.getSessionToken());
 
         const isNewConnection =
