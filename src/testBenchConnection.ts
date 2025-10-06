@@ -15,15 +15,9 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
-import { getLoginWebViewProvider, logger, setConnection } from "./extension";
+import { logger } from "./extension";
 import * as utils from "./utils";
-import {
-    ContextKeys,
-    JobTypes,
-    allExtensionCommands,
-    folderNameOfInternalTestbenchFolder,
-    ConfigKeys
-} from "./constants";
+import { JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder, ConfigKeys } from "./constants";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
 
@@ -143,6 +137,18 @@ export interface TestBenchLoginResult {
     sessionToken: string;
     userKey: string; // From LoginResponse
     loginName: string;
+}
+
+/**
+ * Custom error that will be throwed in case an API request fails (including all of its retries)
+ * to indicate that the session has expired or the server is unreachable.
+ * Used to trigger a logout and return to the login view.
+ */
+export class TestBenchConnectionError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "TestBenchConnectionError";
+    }
 }
 
 async function createProxyHttpsAgent(proxy_url: string): Promise<HttpsProxyAgent<string> | https.Agent> {
@@ -299,27 +305,16 @@ export class PlayServerConnection {
         }
 
         try {
-            const logoutResponse: AxiosResponse = await withRetry(
-                () =>
-                    this.apiClient.delete(`/login/session/v1`, {
-                        headers: { accept: "application/vnd.testbench+json" },
-                        proxy: false
-                    }),
-                3,
-                2000,
-                RetryPredicateFactory.createDefaultPredicate()
-            );
+            const logoutResponse: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
+                headers: { accept: "application/vnd.testbench+json" },
+                proxy: false
+            });
 
             if (logoutResponse.status === 204) {
                 logger.debug("[testBenchConnection] Logout successful.");
                 const tlsManager = TLSSecurityManager.getInstance();
                 tlsManager.disableInsecureMode();
-
-                setConnection(null);
-                await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
                 this.sessionToken = "";
-                getLoginWebViewProvider()?.updateWebviewHTMLContent();
-
                 return true;
             } else {
                 logger.error(`[testBenchConnection] Logout failed. Response status: ${logoutResponse.status}`);
@@ -1124,13 +1119,41 @@ export async function withRetry<T>(
 ): Promise<T> {
     let retryCount: number = 0;
 
+    /**
+     * Checks if the given error indicates an expired session or server unavailability,
+     * and forces a local logout if so. Excludes authentication endpoint errors.
+     * @param error - The error to check.
+     * @returns True if a logout was performed, false otherwise.
+     */
+    const checkAndForceLogout = async (error: any) => {
+        if (axios.isAxiosError(error)) {
+            const status = error.response?.status;
+            const isNetworkError = !error.response;
+            const isAuthEndpoint = error.config?.url?.includes("/login/session/v1");
+
+            if (!isAuthEndpoint && (status === 401 || status === 403 || isNetworkError)) {
+                logger.warn(
+                    `[testBenchConnection] Unrecoverable API error detected (status: ${status}, networkError: ${isNetworkError}). Forcing a local logout.`
+                );
+                vscode.window.showWarningMessage(
+                    "Your TestBench session has expired or the server is unavailable. You are being returned to the login view."
+                );
+                await vscode.commands.executeCommand(allExtensionCommands.logout);
+                return true;
+            }
+        }
+        return false;
+    };
+
     while (true) {
         try {
             return await asyncFunction();
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 logger.trace(
-                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${error.response?.status}: ${error.message}`
+                    `[testBenchConnection] Attempt ${retryCount + 1} failed with status ${
+                        error.response?.status
+                    }: ${error.message}`
                 );
             } else {
                 logger.trace(`[testBenchConnection] Attempt ${retryCount + 1} failed: ${error}`);
@@ -1139,6 +1162,12 @@ export async function withRetry<T>(
             // Check if we should retry this error
             if (shouldRetry && !shouldRetry(error)) {
                 logger.trace(`[testBenchConnection] Error is not retryable. Aborting further retry attempts.`);
+                const loggedOut = await checkAndForceLogout(error);
+                if (loggedOut) {
+                    throw new TestBenchConnectionError(
+                        "Session expired or server unavailable. User has been logged out."
+                    );
+                }
                 throw error;
             }
 
@@ -1147,6 +1176,12 @@ export async function withRetry<T>(
                 logger.error(
                     `[testBenchConnection] Attempt ${retryCount} failed. Maximum retries (${maxAllowedRetryCount}) reached, aborting further retries.`
                 );
+                const loggedOut = await checkAndForceLogout(error);
+                if (loggedOut) {
+                    throw new TestBenchConnectionError(
+                        "Session expired or server unavailable. User has been logged out."
+                    );
+                }
                 throw error;
             }
 

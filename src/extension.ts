@@ -5,7 +5,6 @@
 
 // Before releasing the extension:
 // TODO: Add License.md to the extension
-// TODO: Set logger level to info or debug in production, remove too detailed logs.
 // Note: A virtual python environment is required for the extension to work + an empty pyproject.toml in workspace root.
 
 import * as vscode from "vscode";
@@ -26,7 +25,7 @@ import {
     getSessionToProcess
 } from "./testBenchAuthenticationProvider";
 import * as connectionManager from "./connectionManager";
-import { PlayServerConnection } from "./testBenchConnection";
+import { PlayServerConnection, TestBenchConnectionError } from "./testBenchConnection";
 import { getExtensionConfiguration, initializeConfigurationWatcher } from "./configuration";
 import { TestThemesTreeItem } from "./treeViews/implementations/testThemes/TestThemesTreeItem";
 import { MarkingModule } from "./treeViews/features/MarkingModule";
@@ -207,23 +206,33 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     const handleLogout = async () => {
         logger.trace(`[extension] Command called: ${allExtensionCommands.logout}`);
 
-        if (connection) {
-            await connection.logoutUserOnServer();
+        if (isHandlingSessionChange) {
+            return;
         }
+        isHandlingSessionChange = true;
+        try {
+            if (connection) {
+                await connection.logoutUserOnServer();
+            }
 
-        const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-            silent: true
-        });
-        if (session && authProviderInstance) {
-            // Removing the session fires onDidChangeSessions and triggers proper UI cleanup.
-            await authProviderInstance.removeSession(session.id);
-        }
+            // Regardless of server logout success, perform a local cleanup.
+            setConnection(null);
+            await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
 
-        await stopLanguageClient();
+            const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+                silent: true
+            });
+            if (session && authProviderInstance) {
+                await authProviderInstance.removeSession(session.id); // onDidChangeSessions triggers handleTestBenchSessionChange
+            } else {
+                // Trigger cleanup manually.
+                await handleTestBenchSessionChange(context, undefined);
+            }
 
-        // Fallback to ensure UI is reset if a connection object still exists without a session.
-        if (connection !== null) {
-            await handleTestBenchSessionChange(context, undefined);
+            await stopLanguageClient();
+            getLoginWebViewProvider()?.updateWebviewHTMLContent();
+        } finally {
+            isHandlingSessionChange = false;
         }
     };
 
@@ -410,6 +419,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await prepareLanguageServerForTreeItemOperation(tovItem, "generate test cases for TOV");
             await treeViews.projectsTree.generateTestCasesForTOV(tovItem);
         } catch (error) {
+            if (error instanceof TestBenchConnectionError) {
+                logger.debug(
+                    `[extension] Test generation for TOV cancelled due to TestBench connection error: ${error.message}`
+                );
+                return;
+            }
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
                 logger.debug(`[extension] Language server wait operation was cancelled by user`);
@@ -446,6 +461,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await prepareLanguageServerForTreeItemOperation(cycleItem, "generate test cases for cycle");
             await reportHandler.startTestGenerationForCycle(context, cycleItem);
         } catch (error) {
+            if (error instanceof TestBenchConnectionError) {
+                logger.debug(
+                    `[extension] Test generation for cycle cancelled due to TestBench connection error: ${error.message}`
+                );
+                return;
+            }
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
                 logger.debug(`[extension] Language server wait operation was cancelled by user`);
@@ -480,6 +501,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
         } catch (error) {
+            if (error instanceof TestBenchConnectionError) {
+                logger.debug(
+                    `[extension] Test generation cancelled cancelled due to TestBench connection error: ${error.message}`
+                );
+                return;
+            }
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
                 logger.debug(`[extension] Language server wait operation was cancelled by user`);
@@ -516,6 +543,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             );
             await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
         } catch (error) {
+            if (error instanceof TestBenchConnectionError) {
+                logger.debug(
+                    `[extension] Test generation for test theme tree item cancelled due to TestBench connection error: ${error.message}`
+                );
+                return;
+            }
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
                 logger.debug(`[extension] Language server wait operation was cancelled by user`);
@@ -549,6 +582,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await prepareLanguageServerForTreeItemOperation(testThemeTreeItem, "import test results");
             await treeViews.testThemesTree.importTestResultsForTestThemeTreeItem(testThemeTreeItem);
         } catch (error) {
+            if (error instanceof TestBenchConnectionError) {
+                logger.debug(
+                    `[extension] Test result import cancelled due to TestBench connection error: ${error.message}`
+                );
+                return;
+            }
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
             if (errorMessage.includes("cancelled")) {
                 logger.debug(`[extension] Language server wait operation was cancelled by user`);
