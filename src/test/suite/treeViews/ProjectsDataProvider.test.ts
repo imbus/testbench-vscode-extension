@@ -246,11 +246,8 @@ suite("ProjectsDataProvider", function () {
 
         test("should handle server error", async () => {
             mockConnection.getProjectTreeOfProject.rejects(new Error("Server connection failed"));
-
-            await assert.rejects(
-                async () => await dataProvider.fetchProjectTree("PROJ-001"),
-                /Server connection failed/
-            );
+            const result = await dataProvider.fetchProjectTree("PROJ-001");
+            assert.strictEqual(result, null);
         });
     });
 
