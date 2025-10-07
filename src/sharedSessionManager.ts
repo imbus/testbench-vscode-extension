@@ -8,6 +8,7 @@ import { PlayServerConnection } from "./testBenchConnection";
 import { logger } from "./extension";
 
 interface SharedSessionData {
+    sessionId: string;
     sessionToken: string;
     userKey: string;
     loginName: string;
@@ -39,6 +40,7 @@ export class SharedSessionManager {
      * Stores session data that can be shared across VS Code instances
      */
     public async storeSharedSession(
+        sessionId: string,
         sessionToken: string,
         userKey: string,
         loginName: string,
@@ -49,6 +51,7 @@ export class SharedSessionManager {
         isInsecure: boolean
     ): Promise<void> {
         const sessionData: SharedSessionData = {
+            sessionId,
             sessionToken,
             userKey,
             loginName,

@@ -4,6 +4,7 @@ import { loginToServerAndGetSessionDetails, TestBenchLoginResult, PlayServerConn
 import { TestBenchConnection } from "./testBenchTypes";
 import { logger } from "./extension";
 import { SharedSessionManager } from "./sharedSessionManager";
+import { StorageKeys } from "./constants";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
 export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in VS Code Accounts UI
@@ -31,7 +32,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
     private _isAttemptingSilentAutoLogin: boolean = false;
 
-    constructor(private context: vscode.ExtensionContext) {
+    constructor(
+        private context: vscode.ExtensionContext,
+        private instanceId: string
+    ) {
         logger.trace("[AuthenticationProvider] TestBenchAuthenticationProvider initialized.");
         this.loadExistingSharedSessions();
     }
@@ -47,7 +51,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             if (sharedSession) {
                 // Add shared session to active sessions
                 const sessionData: TestBenchSessionData = {
-                    sessionId: `shared_${sharedSession.connectionId}_${Date.now()}`,
+                    sessionId: sharedSession.sessionId || `shared_${sharedSession.connectionId}_${Date.now()}`,
                     connectionId: sharedSession.connectionId,
                     testBenchSessionToken: sharedSession.sessionToken,
                     accountLabel: `${sharedSession.username}@${sharedSession.serverName}`,
@@ -365,7 +369,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 }
             }
 
-            const vsCodeSessionId: string = Date.now().toString() + Math.random().toString();
+            const vsCodeSessionId: string = targetConnection.id;
             const sessionData: TestBenchSessionData = {
                 sessionId: vsCodeSessionId,
                 connectionId: targetConnection.id,
@@ -395,6 +399,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             // Store the session in shared session manager if it's a new login
             if (!usingSharedSession) {
                 await sharedSessionManager.storeSharedSession(
+                    vsCodeSessionId,
                     loginResult.sessionToken,
                     loginResult.userKey,
                     loginResult.loginName,
@@ -437,6 +442,14 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
     async removeSession(sessionId: string): Promise<void> {
         const sessionData: TestBenchSessionData | undefined = this.activeSessions.get(sessionId);
         if (sessionData) {
+            logger.debug(
+                `[AuthenticationProvider] Instance ${this.instanceId} is initiating a logout and setting the signal.`
+            );
+            await this.context.globalState.update(StorageKeys.LOGOUT_SIGNAL_KEY, {
+                initiatorId: this.instanceId,
+                timestamp: Date.now()
+            });
+
             logger.trace(
                 `[AuthenticationProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`
             );

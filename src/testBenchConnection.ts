@@ -150,12 +150,6 @@ export class TestBenchConnectionError extends Error {
     }
 }
 
-async function createProxyHttpsAgent(proxy_url: string): Promise<HttpsProxyAgent<string> | https.Agent> {
-    if (!proxy_url) {
-        return new https.Agent();
-    }
-    return new HttpsProxyAgent(proxy_url);
-}
 /**
  * Creates a secure or insecure HTTPS agent.
  * @param {boolean} insecure - Whether to create an insecure agent that bypasses certificate validation.
@@ -165,40 +159,47 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
     const http_config = vscode.workspace.getConfiguration("http");
     const proxy_url = http_config.get<string>(ConfigKeys.PROXY_URL);
     const agent_url: string = proxy_url ?? "";
-    const proxy_agent = await createProxyHttpsAgent(agent_url);
+
+    const agentOptions: https.AgentOptions & {
+        checkServerIdentity?: (hostname: string, cert: tls.PeerCertificate) => Error | undefined;
+    } = {};
 
     if (insecure) {
         logger.trace("[testBenchConnection] Creating an insecure HTTPS agent that ignores certificate errors.");
-        proxy_agent.options.rejectUnauthorized = false;
-        proxy_agent.options.checkServerIdentity = () => undefined;
-        return proxy_agent;
-    }
-
-    const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
-    const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
-    let absoluteCertPath: string | Buffer | null = null;
-    if (certificatePathSetting) {
-        absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
+        agentOptions.rejectUnauthorized = false;
+        agentOptions.checkServerIdentity = () => undefined;
     } else {
-        const certPath = process.env.NODE_EXTRA_CA_CERTS;
-        if (!certPath) {
-            logger.debug("[testBenchConnection] Environment variable 'NODE_EXTRA_CA_CERTS' is not set.");
+        const defaultCAs = tls.rootCertificates.map((cert) => Buffer.from(cert));
+        const certificatePathSetting = getExtensionSetting<string>(ConfigKeys.CERTIFICATE_PATH);
+        let absoluteCertPath: string | Buffer | null = null;
+        if (certificatePathSetting) {
+            absoluteCertPath = await utils.constructAbsolutePathFromRelativePath(certificatePathSetting, true);
         } else {
-            absoluteCertPath = fs.readFileSync(certPath);
+            const certPath = process.env.NODE_EXTRA_CA_CERTS;
+            if (!certPath) {
+                logger.debug("[testBenchConnection] Environment variable 'NODE_EXTRA_CA_CERTS' is not set.");
+            } else {
+                absoluteCertPath = fs.readFileSync(certPath);
+            }
+        }
+        if (!absoluteCertPath) {
+            logger.debug(`[testBenchConnection] Certificate path "${certificatePathSetting}" could not be resolved.`);
+            agentOptions.ca = defaultCAs;
+            logger.debug("[testBenchConnection] Using only default system CAs.");
+        } else {
+            const customCA = fs.readFileSync(absoluteCertPath);
+            const combinedCAs = [...defaultCAs, customCA];
+
+            logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
+            agentOptions.ca = combinedCAs;
         }
     }
-    if (!absoluteCertPath) {
-        logger.debug(`[testBenchConnection] Certificate path "${certificatePathSetting}" could not be resolved.`);
-        proxy_agent.options.ca = defaultCAs;
-        logger.debug("[testBenchConnection] Using only default system CAs.");
-        return proxy_agent;
-    }
-    const customCA = fs.readFileSync(absoluteCertPath);
-    const combinedCAs = [...defaultCAs, customCA];
 
-    logger.debug("[testBenchConnection] Using combined CAs (default system CAs + custom CA).");
-    proxy_agent.options.ca = combinedCAs;
-    return proxy_agent;
+    if (agent_url) {
+        return new HttpsProxyAgent(agent_url, agentOptions);
+    }
+
+    return new https.Agent(agentOptions);
 }
 
 /**

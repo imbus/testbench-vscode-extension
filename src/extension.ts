@@ -189,7 +189,7 @@ function registerSafeCommand(
  *
  * @param {vscode.ExtensionContext} context The extension context.
  */
-async function registerExtensionCommands(context: vscode.ExtensionContext, instanceId: string): Promise<void> {
+async function registerExtensionCommands(context: vscode.ExtensionContext): Promise<void> {
     if (!treeViews) {
         logger.warn("[extension] Tree views not initialized. Skipping command registration.");
         return;
@@ -205,45 +205,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext, insta
         }
     };
 
-    const handleLogout = async (isTriggeredBySync: boolean = false) => {
-        logger.trace(
-            `[extension] Command called: ${allExtensionCommands.logout}. Is sync trigger: ${isTriggeredBySync}`
-        );
+    const handleLogout = async () => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.logout}.`);
 
         if (isHandlingSessionChange) {
             return;
         }
 
-        if (!isTriggeredBySync) {
-            logger.debug(`[extension] This instance (${instanceId}) is initiating the logout. Setting signal.`);
-            await context.globalState.update(StorageKeys.LOGOUT_SIGNAL_KEY, {
-                initiatorId: instanceId,
-                timestamp: Date.now()
-            });
-        }
-
         isHandlingSessionChange = true;
         try {
-            if (connection) {
-                await connection.logoutUserOnServer();
-            }
-
-            // Regardless of server logout success, perform a local cleanup.
-            setConnection(null);
-            await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
                 silent: true
             });
+
             if (session && authProviderInstance) {
-                await authProviderInstance.removeSession(session.id); // onDidChangeSessions triggers handleTestBenchSessionChange
-            } else {
-                // Trigger cleanup manually.
-                await handleTestBenchSessionChange(context, undefined);
+                await authProviderInstance.removeSession(session.id);
             }
 
-            await stopLanguageClient();
-            getLoginWebViewProvider()?.updateWebviewHTMLContent();
+            await handleNoSession();
         } finally {
             isHandlingSessionChange = false;
         }
@@ -1034,6 +1013,8 @@ async function handleNoSession(): Promise<void> {
     if (connection) {
         await connection.logoutUserOnServer();
     }
+    setConnection(null);
+    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
 
     // Save current state before ending session to ensure persistence
     if (treeViews) {
@@ -1049,6 +1030,9 @@ async function handleNoSession(): Promise<void> {
         treeViews.testElementsTree.clearTree();
         await treeViews.loadDefaultViewsUI();
     }
+
+    await stopLanguageClient();
+    getLoginWebViewProvider()?.updateWebviewHTMLContent();
 }
 
 /**
@@ -1174,7 +1158,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
 
     // Register AuthenticationProvider
-    authProviderInstance = new TestBenchAuthenticationProvider(context);
+    authProviderInstance = new TestBenchAuthenticationProvider(context, instanceId);
     context.subscriptions.push(
         vscode.authentication.registerAuthenticationProvider(
             TESTBENCH_AUTH_PROVIDER_ID,
@@ -1242,7 +1226,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     // Register all commands
-    await registerExtensionCommands(context, instanceId);
+    await registerExtensionCommands(context);
 
     // Attempt to restore session on activation
     logger.trace("[extension] Checking if previous TestBench session should be restored...");
@@ -1284,7 +1268,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             lastProcessedLogoutTimestamp = signal.timestamp;
 
             if (connection) {
-                await vscode.commands.executeCommand(allExtensionCommands.logout, true);
+                await vscode.commands.executeCommand(allExtensionCommands.logout);
             }
         }
     }, 3000); // Poll every 3 seconds
