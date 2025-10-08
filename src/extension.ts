@@ -974,7 +974,7 @@ async function createNewConnection(
         logger.warn(
             "[extension] A different connection was active. Logging out from previous server session before establishing new one."
         );
-        await currentConnection.logoutUserOnServer();
+        await currentConnection.teardownAfterLogout();
     }
 
     const newConnection = new PlayServerConnection(
@@ -997,7 +997,7 @@ async function createNewConnection(
  */
 async function handleNoActiveConnection(): Promise<void> {
     if (connection) {
-        await connection.logoutUserOnServer();
+        await connection.teardownAfterLogout();
     }
 
     if (treeViews) {
@@ -1011,7 +1011,7 @@ async function handleNoActiveConnection(): Promise<void> {
  */
 async function handleNoSession(): Promise<void> {
     if (connection) {
-        await connection.logoutUserOnServer();
+        await connection.teardownAfterLogout();
     }
     setConnection(null);
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
@@ -1306,7 +1306,7 @@ export async function clearAllExtensionData(
 
         if (connection) {
             try {
-                await connection.logoutUserOnServer();
+                await connection.teardownAfterLogout();
             } catch (error) {
                 logger.error("[extension] Error logging out from server while clearing all extension data:", error);
             }

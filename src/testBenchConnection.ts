@@ -209,7 +209,7 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
 export class PlayServerConnection {
     private baseURL: string;
     private apiClient!: AxiosInstance;
-    private readonly keepAliveIntervalInSeconds: number = 4 * 60 * 1000; // 4 minutes
+    private readonly keepAliveIntervalInSeconds: number = 30 * 1000; // 30 seconds
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
     /**
@@ -289,49 +289,23 @@ export class PlayServerConnection {
     }
 
     /**
-     * Logs out the user from the TestBench server by invalidating the current session token.
-     * This method now focuses on the server-side logout. UI and global state changes
-     * should be handled by the AuthenticationProvider or session change listeners.
+     * Clears the current session token, stops keep-alive, and resets TLS settings.
+     * NOTE: We don't call “delete session” API call on server so that other API clients are not logged out by the extension.
      * @returns {Promise<boolean>} True if server logout was successful or no action needed, false on API error.
      */
-    async logoutUserOnServer(): Promise<boolean> {
-        logger.trace(
-            `[testBenchConnection] Attempting to log out user '${this.username}' from server '${this.serverName}'.`
-        );
-        if (!this.sessionToken) {
-            logger.warn("[testBenchConnection] No session token available. Cannot perform server-side logout.");
-            this.stopKeepAlive();
-            return true;
-        }
-
+    async teardownAfterLogout(): Promise<boolean> {
         try {
-            const logoutResponse: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" },
-                proxy: false
-            });
-
-            if (logoutResponse.status === 204) {
-                logger.debug("[testBenchConnection] Logout successful.");
-                const tlsManager = TLSSecurityManager.getInstance();
-                tlsManager.disableInsecureMode();
-                this.sessionToken = "";
-                return true;
-            } else {
-                logger.error(`[testBenchConnection] Logout failed. Response status: ${logoutResponse.status}`);
-                return false;
-            }
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                logger.error(
-                    `[testBenchConnection] Error during logout: ${error.response?.status} - ${error.response?.statusText}.`
-                );
-            } else {
-                logger.error(`[testBenchConnection] Unexpected error during logout: ${error}`);
-            }
-            return false;
-        } finally {
+            logger.trace("[testBenchConnection] Tearing down connection after logout.");
             this.stopKeepAlive();
+            const tlsManager = TLSSecurityManager.getInstance();
+            tlsManager.disableInsecureMode();
+            this.sessionToken = "";
+        } catch (error) {
+            logger.error("[testBenchConnection] Error during teardown after logout:", error);
+            return false;
         }
+
+        return true;
     }
 
     /**
@@ -1082,7 +1056,7 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" },
                         proxy: false
                     }),
-                5, // maxRetries
+                3, // maxRetries
                 2000, // delayMs
                 RetryPredicateFactory.createDefaultPredicate()
             );
