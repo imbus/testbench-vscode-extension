@@ -1062,9 +1062,12 @@ export class PlayServerConnection {
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
-            logger.error(
+            logger.warn(
                 "[testBenchConnection] Keep-alive request failed after retries, logging out the user after keep-alive failure:",
                 error
+            );
+            vscode.window.showInformationMessage(
+                "Your TestBench session has expired. You are being redirected to login page."
             );
             await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
         }
