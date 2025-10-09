@@ -1193,6 +1193,55 @@ async function initializeContextValues(context: vscode.ExtensionContext): Promis
     await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
 }
 
+/**
+ * Validates a stored session by attempting to use it to fetch a simple endpoint.
+ * This prevents creating connections and opening tree views with expired tokens.
+ * @param context The extension context
+ * @param session The session to validate
+ * @returns True if the session is valid, false otherwise
+ */
+async function validateStoredSession(
+    context: vscode.ExtensionContext,
+    session: vscode.AuthenticationSession
+): Promise<boolean> {
+    logger.trace("[extension] Validating stored session before restoration...");
+
+    try {
+        const sharedSessionManager = SharedSessionManager.getInstance(context);
+        const sharedSession = await sharedSessionManager.getSharedSession();
+
+        if (!sharedSession || sharedSession.sessionToken !== session.accessToken) {
+            logger.debug("[extension] No matching shared session data found for validation.");
+            return false;
+        }
+
+        const tempConnection = new PlayServerConnection(
+            sharedSession.serverName,
+            sharedSession.portNumber,
+            sharedSession.username,
+            sharedSession.sessionToken,
+            context,
+            sharedSession.isInsecure
+        );
+
+        await tempConnection.initialize();
+        const isValid = await sharedSessionManager.validateSession(tempConnection);
+        await tempConnection.teardownAfterLogout();
+
+        if (!isValid) {
+            logger.debug("[extension] Stored session validation failed, session is expired or invalid.");
+            await sharedSessionManager.clearSharedSession();
+        }
+
+        return isValid;
+    } catch (error: any) {
+        logger.warn("[extension] Session validation failed:", error.message || error);
+        const sharedSessionManager = SharedSessionManager.getInstance(context);
+        await sharedSessionManager.clearSharedSession();
+        return false;
+    }
+}
+
 /** Attempts to restore a previous session or perform an automatic login. */
 async function handleInitialSession(context: vscode.ExtensionContext): Promise<void> {
     logger.trace("[extension] Checking for existing TestBench session to restore...");
@@ -1203,9 +1252,22 @@ async function handleInitialSession(context: vscode.ExtensionContext): Promise<v
         });
 
         if (session) {
-            await handleTestBenchSessionChange(context, session);
-            logger.debug("[extension] Successfully restored previous TestBench session.");
-            return; // Session restored, no need for auto-login
+            // Validate the session before using it
+            const isSessionValid = await validateStoredSession(context, session);
+
+            if (isSessionValid) {
+                await handleTestBenchSessionChange(context, session);
+                logger.debug("[extension] Successfully restored previous TestBench session.");
+                return; // Session restored, no need for auto-login
+            } else {
+                logger.debug("[extension] Stored session is no longer valid. Clearing session and showing login.");
+                // Remove the invalid session
+                if (authProviderInstance) {
+                    await authProviderInstance.removeSession(session.id);
+                }
+                getLoginWebViewProvider()?.updateWebviewHTMLContent();
+                return;
+            }
         }
 
         logger.debug("[extension] No previous session found. Checking for auto-login config.");
@@ -1217,6 +1279,7 @@ async function handleInitialSession(context: vscode.ExtensionContext): Promise<v
         }
     } catch (error) {
         logger.warn("[extension] Error trying to get initial TestBench session silently:", error);
+        getLoginWebViewProvider()?.updateWebviewHTMLContent();
     }
 }
 

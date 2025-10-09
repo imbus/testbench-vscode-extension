@@ -1021,7 +1021,7 @@ export class PlayServerConnection {
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();
         }, this.keepAliveIntervalInSeconds);
-        this.sendKeepAliveRequest();
+        // this.sendKeepAliveRequest();
         logger.trace("[testBenchConnection] Keep-alive started.");
     }
 
