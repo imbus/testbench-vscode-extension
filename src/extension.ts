@@ -1122,6 +1122,23 @@ async function handleTestBenchSessionChange(
     }
 }
 
+async function handleAutomaticLogin(context: vscode.ExtensionContext): Promise<void> {
+    logger.trace(`[extension] Performing automatic login on activation.`);
+    try {
+        authProviderInstance?.markNextLoginAsSilent();
+        const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+            createIfNone: true
+        });
+
+        if (session) {
+            await handleTestBenchSessionChange(context, session);
+        }
+    } catch (error) {
+        // Errors are expected if auto-login fails silently
+        logger.trace("[extension] Automatic login failed:", error);
+    }
+}
+
 /* =============================================================================
    Extension Activation & Deactivation
    ============================================================================= */
@@ -1136,26 +1153,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger = new testBenchLogger.TestBenchLogger();
     logger.info(`[extension] Activating extension instance ${instanceId}.`);
     initializeConfigurationWatcher();
-
-    const handleAutomaticLogin = async () => {
-        logger.trace(`[extension] Performing automatic login on activation.`);
-        const config = getExtensionConfiguration();
-        if (config.get(ConfigKeys.AUTO_LOGIN)) {
-            try {
-                authProviderInstance?.prepareForSilentAutoLogin();
-                const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-                    createIfNone: true
-                });
-
-                if (session) {
-                    await handleTestBenchSessionChange(context, session);
-                }
-            } catch (error) {
-                // Errors are expected if auto-login fails silently
-                logger.trace("[extension] Automatic login failed:", error);
-            }
-        }
-    };
 
     // Register AuthenticationProvider
     authProviderInstance = new TestBenchAuthenticationProvider(context, instanceId);
@@ -1252,7 +1249,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
         logger.debug("[extension] Auto-login is enabled. Scheduling automatic login.");
-        handleAutomaticLogin();
+        handleAutomaticLogin(context);
     }
 
     let lastProcessedLogoutTimestamp = 0;
