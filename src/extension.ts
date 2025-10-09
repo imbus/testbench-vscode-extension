@@ -101,6 +101,9 @@ export function setExtensionContext(context: vscode.ExtensionContext): void {
 
 // Global variable to store the authentication provider instance
 let authProviderInstance: TestBenchAuthenticationProvider | null = null;
+export function getAuthProvider(): TestBenchAuthenticationProvider | null {
+    return authProviderInstance;
+}
 
 // Prevent multiple session change handling simultaneously
 let isHandlingSessionChange: boolean = false;
