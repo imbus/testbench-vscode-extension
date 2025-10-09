@@ -1039,9 +1039,9 @@ export class PlayServerConnection {
     }
 
     /**
-     * Sends a GET request to the server to keep the session alive, which normally times out after 5 minutes.
+     * Sends a lightweight GET request to the server to keep the session alive, which normally times out after 5 minutes.
      * The keep-alive process is started automatically when the PlayServerConnection object is created.
-     * If the request fails, retries are attempted up to 3 times with a delay of 1 second between each attempt.
+     * If the request fails, retries are attempted up to 3 times with a delay of 2 second between each attempt.
      * If the keep alive request fails with an error code other than 401, the user is logged out automatically.
      * If the keep alive request fails with an error code 401, extension tries to re-authenticate same user silently using stored credentials.
      */
@@ -1061,8 +1061,8 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" },
                         proxy: false
                     }),
-                3, // maxRetries
-                2000, // delayMs
+                3,
+                2000,
                 RetryPredicateFactory.createDefaultPredicate()
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
@@ -1072,101 +1072,126 @@ export class PlayServerConnection {
             let shouldLogout = true;
 
             if (axios.isAxiosError(error) && error.response?.status === 401) {
-                const activeConn = await connectionManager.getActiveConnection(this.context);
-                let reloginSuccessful = false;
-
-                if (
-                    activeConn &&
-                    activeConn.username === this.username &&
-                    activeConn.serverName === this.serverName &&
-                    activeConn.portNumber === this.portNumber
-                ) {
-                    const storedPassword = await connectionManager.getPasswordForConnection(
-                        this.context,
-                        activeConn.id
-                    );
-
-                    if (storedPassword) {
-                        const loginResult = await loginToServerAndGetSessionDetails(
-                            this.serverName,
-                            this.portNumber,
-                            this.username,
-                            storedPassword
-                        );
-
-                        if (loginResult) {
-                            const oldToken = this.sessionToken;
-                            this.sessionToken = loginResult.sessionToken;
-                            this.apiClient.defaults.headers.Authorization = this.sessionToken;
-                            this.startKeepAlive();
-
-                            const sharedSessionManager = SharedSessionManager.getInstance(this.context);
-                            await sharedSessionManager.storeSharedSession(
-                                activeConn.id,
-                                loginResult.sessionToken,
-                                loginResult.userKey,
-                                loginResult.loginName,
-                                activeConn.id,
-                                activeConn.serverName,
-                                activeConn.portNumber,
-                                activeConn.username,
-                                loginResult.isInsecure
-                            );
-
-                            await handleLanguageServerRestartOnSessionChange(oldToken, this.sessionToken);
-
-                            logger.info(
-                                "[testBenchConnection] Successfully re-authenticated silently using stored credentials after 401 in keep-alive"
-                            );
-                            reloginSuccessful = true;
-                        }
-                    }
-                }
-
-                if (reloginSuccessful) {
-                    shouldLogout = false;
-                } else {
-                    const authProvider = getAuthProvider();
-                    if (authProvider) {
-                        const currentSession = await vscode.authentication.getSession(
-                            TESTBENCH_AUTH_PROVIDER_ID,
-                            ["api_access"],
-                            { silent: true }
-                        );
-                        if (currentSession) {
-                            await authProvider.removeSession(currentSession.id);
-                        }
-
-                        authProvider.markNextLoginAsSilent();
-                        try {
-                            const session = await vscode.authentication.getSession(
-                                TESTBENCH_AUTH_PROVIDER_ID,
-                                ["api_access"],
-                                { createIfNone: true }
-                            );
-                            if (session) {
-                                this.sessionToken = session.accessToken;
-                                this.apiClient.defaults.headers.Authorization = this.sessionToken;
-                                this.startKeepAlive();
-                                logger.info(
-                                    "[testBenchConnection] Successfully re-authenticated after 401 in keep-alive"
-                                );
-                                shouldLogout = false;
-                            }
-                        } catch (reloginError) {
-                            logger.warn("[testBenchConnection] Silent re-authentication failed:", reloginError);
-                        }
-                    }
-                }
+                shouldLogout =
+                    !(await this.trySilentReloginWithStoredPassword()) &&
+                    !(await this.tryFallbackReloginWithAuthProvider());
             }
 
             if (shouldLogout) {
                 vscode.window.showInformationMessage(
-                    "Your TestBench session has expired. You are being redirected to login page."
+                    "Unable to maintain TestBench session. Redirecting to login page."
                 );
                 await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
             }
         }
+    }
+
+    /**
+     * Attempts silent re-login using stored password.
+     * @returns True if re-login succeeded, false otherwise.
+     */
+    private async trySilentReloginWithStoredPassword(): Promise<boolean> {
+        const activeConnection = await connectionManager.getActiveConnection(this.context);
+        if (
+            !activeConnection ||
+            activeConnection.username !== this.username ||
+            activeConnection.serverName !== this.serverName ||
+            activeConnection.portNumber !== this.portNumber
+        ) {
+            return false;
+        }
+
+        const storedPassword = await connectionManager.getPasswordForConnection(this.context, activeConnection.id);
+        if (!storedPassword) {
+            return false;
+        }
+
+        const loginResult = await loginToServerAndGetSessionDetails(
+            this.serverName,
+            this.portNumber,
+            this.username,
+            storedPassword
+        );
+
+        if (!loginResult) {
+            return false;
+        }
+
+        await this.handleReloginSuccess(loginResult, activeConnection.id);
+        logger.trace(
+            "[testBenchConnection] Successfully re-authenticated silently using stored credentials after 401 in keep-alive"
+        );
+        return true;
+    }
+
+    /**
+     * Attempts fallback re-login using authProvider.
+     * @returns True if re-login succeeded, false otherwise.
+     */
+    private async tryFallbackReloginWithAuthProvider(): Promise<boolean> {
+        const authProvider = getAuthProvider();
+        if (!authProvider) {
+            return false;
+        }
+
+        const currentSession = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+            silent: true
+        });
+        if (currentSession) {
+            await authProvider.removeSession(currentSession.id);
+        }
+
+        authProvider.markNextLoginAsSilent();
+        try {
+            const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+                createIfNone: true
+            });
+            if (!session) {
+                return false;
+            }
+
+            const oldToken = this.sessionToken;
+            this.sessionToken = session.accessToken;
+            this.apiClient.defaults.headers.Authorization = this.sessionToken;
+            this.startKeepAlive();
+
+            // For fallback, we don't have full loginResult, so skip shared session update
+            // Assume isInsecure from current state (or fetch if needed)
+            await handleLanguageServerRestartOnSessionChange(oldToken, this.sessionToken);
+
+            logger.info("[testBenchConnection] Successfully re-authenticated after 401 in keep-alive");
+            return true;
+        } catch (reloginError) {
+            logger.warn("[testBenchConnection] Silent re-authentication failed:", reloginError);
+            return false;
+        }
+    }
+
+    /**
+     * Handles common updates after successful re-login.
+     * @param loginResult The login result containing new session details.
+     * @param connectionId The ID of the active connection.
+     */
+    private async handleReloginSuccess(loginResult: TestBenchLoginResult, connectionId: string): Promise<void> {
+        const oldToken = this.sessionToken;
+        this.sessionToken = loginResult.sessionToken;
+        this.apiClient.defaults.headers.Authorization = this.sessionToken;
+        this.startKeepAlive();
+
+        const sharedSessionManager = SharedSessionManager.getInstance(this.context);
+        await sharedSessionManager.storeSharedSession(
+            connectionId, // Using connection ID as session ID
+            loginResult.sessionToken,
+            loginResult.userKey,
+            loginResult.loginName,
+            connectionId,
+            this.serverName,
+            this.portNumber,
+            this.username,
+            loginResult.isInsecure
+        );
+
+        await handleLanguageServerRestartOnSessionChange(oldToken, this.sessionToken);
     }
 }
 
