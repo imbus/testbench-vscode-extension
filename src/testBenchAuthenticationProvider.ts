@@ -73,7 +73,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
      * This should be called immediately before `vscode.authentication.getSession`
      * is invoked for an auto-login scenario.
      */
-    public prepareForSilentAutoLogin(): void {
+    public markNextLoginAsSilent(): void {
         logger.trace("[AuthenticationProvider] Preparing for silent auto-login attempt.");
         this._isAttemptingSilentAutoLogin = true;
     }

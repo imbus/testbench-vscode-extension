@@ -15,11 +15,15 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import JSZip from "jszip";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
-import { logger } from "./extension";
+import { logger, getAuthProvider } from "./extension";
 import * as utils from "./utils";
 import { JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder, ConfigKeys } from "./constants";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
+import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
+import * as connectionManager from "./connectionManager";
+import { SharedSessionManager } from "./sharedSessionManager";
+import { handleLanguageServerRestartOnSessionChange } from "./server";
 
 /**
  * Manages TLS security state globally for the extension.
@@ -209,7 +213,7 @@ async function createHttpsAgent(insecure: boolean = false): Promise<HttpsProxyAg
 export class PlayServerConnection {
     private baseURL: string;
     private apiClient!: AxiosInstance;
-    private readonly keepAliveIntervalInSeconds: number = 4 * 60 * 1000; // 4 minutes
+    private readonly keepAliveIntervalInSeconds: number = 30 * 1000; // 30 seconds
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
 
     /**
@@ -289,49 +293,23 @@ export class PlayServerConnection {
     }
 
     /**
-     * Logs out the user from the TestBench server by invalidating the current session token.
-     * This method now focuses on the server-side logout. UI and global state changes
-     * should be handled by the AuthenticationProvider or session change listeners.
+     * Clears the current session token, stops keep-alive, and resets TLS settings.
+     * NOTE: We don't call “delete session” API call on server so that other API clients are not logged out by the extension.
      * @returns {Promise<boolean>} True if server logout was successful or no action needed, false on API error.
      */
-    async logoutUserOnServer(): Promise<boolean> {
-        logger.trace(
-            `[testBenchConnection] Attempting to log out user '${this.username}' from server '${this.serverName}'.`
-        );
-        if (!this.sessionToken) {
-            logger.warn("[testBenchConnection] No session token available. Cannot perform server-side logout.");
-            this.stopKeepAlive();
-            return true;
-        }
-
+    async teardownAfterLogout(): Promise<boolean> {
         try {
-            const logoutResponse: AxiosResponse = await this.apiClient.delete(`/login/session/v1`, {
-                headers: { accept: "application/vnd.testbench+json" },
-                proxy: false
-            });
-
-            if (logoutResponse.status === 204) {
-                logger.debug("[testBenchConnection] Logout successful.");
-                const tlsManager = TLSSecurityManager.getInstance();
-                tlsManager.disableInsecureMode();
-                this.sessionToken = "";
-                return true;
-            } else {
-                logger.error(`[testBenchConnection] Logout failed. Response status: ${logoutResponse.status}`);
-                return false;
-            }
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                logger.error(
-                    `[testBenchConnection] Error during logout: ${error.response?.status} - ${error.response?.statusText}.`
-                );
-            } else {
-                logger.error(`[testBenchConnection] Unexpected error during logout: ${error}`);
-            }
-            return false;
-        } finally {
+            logger.trace("[testBenchConnection] Tearing down connection after logout.");
             this.stopKeepAlive();
+            const tlsManager = TLSSecurityManager.getInstance();
+            tlsManager.disableInsecureMode();
+            this.sessionToken = "";
+        } catch (error) {
+            logger.error("[testBenchConnection] Error during teardown after logout:", error);
+            return false;
         }
+
+        return true;
     }
 
     /**
@@ -1047,7 +1025,7 @@ export class PlayServerConnection {
         this.keepAliveIntervalId = setInterval(() => {
             this.sendKeepAliveRequest();
         }, this.keepAliveIntervalInSeconds);
-        this.sendKeepAliveRequest();
+        // this.sendKeepAliveRequest();
         logger.trace("[testBenchConnection] Keep-alive started.");
     }
 
@@ -1061,10 +1039,11 @@ export class PlayServerConnection {
     }
 
     /**
-     * Sends a GET request to the server to keep the session alive, which normally times out after 5 minutes.
-     * The keep-alive process is started automatically when the PlayServerConnection object is created, and it runs every 4 minutes.
-     * If the request fails, retries are attempted up to 3 times with a delay of 1 second between each attempt.
-     * If the keep alive request fails, the user is logged out automatically, since the session will be timed out later anyway.
+     * Sends a lightweight GET request to the server to keep the session alive, which normally times out after 5 minutes.
+     * The keep-alive process is started automatically when the PlayServerConnection object is created.
+     * If the request fails, retries are attempted up to 3 times with a delay of 2 second between each attempt.
+     * If the keep alive request fails with an error code other than 401, the user is logged out automatically.
+     * If the keep alive request fails with an error code 401, extension tries to re-authenticate same user silently using stored credentials.
      */
     private async sendKeepAliveRequest(): Promise<void> {
         if (!this.sessionToken || !this.apiClient) {
@@ -1082,18 +1061,137 @@ export class PlayServerConnection {
                         headers: { accept: "application/vnd.testbench+json" },
                         proxy: false
                     }),
-                5, // maxRetries
-                2000, // delayMs
+                3,
+                2000,
                 RetryPredicateFactory.createDefaultPredicate()
             );
             logger.trace("[testBenchConnection] Keep-alive request sent.");
         } catch (error) {
-            logger.error(
-                "[testBenchConnection] Keep-alive request failed after retries, logging out the user after keep-alive failure:",
-                error
-            );
-            await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
+            logger.warn("[testBenchConnection] Keep-alive request failed after retries, attempting re-login:", error);
+
+            let shouldLogout = true;
+
+            if (axios.isAxiosError(error) && error.response?.status === 401) {
+                shouldLogout =
+                    !(await this.trySilentReloginWithStoredPassword()) &&
+                    !(await this.tryFallbackReloginWithAuthProvider());
+            }
+
+            if (shouldLogout) {
+                vscode.window.showInformationMessage(
+                    "Unable to maintain TestBench session. Redirecting to login page."
+                );
+                await vscode.commands.executeCommand(`${allExtensionCommands.logout}`);
+            }
         }
+    }
+
+    /**
+     * Attempts silent re-login using stored password.
+     * @returns True if re-login succeeded, false otherwise.
+     */
+    private async trySilentReloginWithStoredPassword(): Promise<boolean> {
+        const activeConnection = await connectionManager.getActiveConnection(this.context);
+        if (
+            !activeConnection ||
+            activeConnection.username !== this.username ||
+            activeConnection.serverName !== this.serverName ||
+            activeConnection.portNumber !== this.portNumber
+        ) {
+            return false;
+        }
+
+        const storedPassword = await connectionManager.getPasswordForConnection(this.context, activeConnection.id);
+        if (!storedPassword) {
+            return false;
+        }
+
+        const loginResult = await loginToServerAndGetSessionDetails(
+            this.serverName,
+            this.portNumber,
+            this.username,
+            storedPassword
+        );
+
+        if (!loginResult) {
+            return false;
+        }
+
+        await this.handleReloginSuccess(loginResult, activeConnection.id);
+        logger.trace(
+            "[testBenchConnection] Successfully re-authenticated silently using stored credentials after 401 in keep-alive"
+        );
+        return true;
+    }
+
+    /**
+     * Attempts fallback re-login using authProvider.
+     * @returns True if re-login succeeded, false otherwise.
+     */
+    private async tryFallbackReloginWithAuthProvider(): Promise<boolean> {
+        const authProvider = getAuthProvider();
+        if (!authProvider) {
+            return false;
+        }
+
+        const currentSession = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+            silent: true
+        });
+        if (currentSession) {
+            await authProvider.removeSession(currentSession.id);
+        }
+
+        authProvider.markNextLoginAsSilent();
+        try {
+            const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+                createIfNone: true
+            });
+            if (!session) {
+                return false;
+            }
+
+            const oldToken = this.sessionToken;
+            this.sessionToken = session.accessToken;
+            this.apiClient.defaults.headers.Authorization = this.sessionToken;
+            this.startKeepAlive();
+
+            // For fallback, we don't have full loginResult, so skip shared session update
+            // Assume isInsecure from current state (or fetch if needed)
+            await handleLanguageServerRestartOnSessionChange(oldToken, this.sessionToken);
+
+            logger.info("[testBenchConnection] Successfully re-authenticated after 401 in keep-alive");
+            return true;
+        } catch (reloginError) {
+            logger.warn("[testBenchConnection] Silent re-authentication failed:", reloginError);
+            return false;
+        }
+    }
+
+    /**
+     * Handles common updates after successful re-login.
+     * @param loginResult The login result containing new session details.
+     * @param connectionId The ID of the active connection.
+     */
+    private async handleReloginSuccess(loginResult: TestBenchLoginResult, connectionId: string): Promise<void> {
+        const oldToken = this.sessionToken;
+        this.sessionToken = loginResult.sessionToken;
+        this.apiClient.defaults.headers.Authorization = this.sessionToken;
+        this.startKeepAlive();
+
+        const sharedSessionManager = SharedSessionManager.getInstance(this.context);
+        await sharedSessionManager.storeSharedSession(
+            connectionId, // Using connection ID as session ID
+            loginResult.sessionToken,
+            loginResult.userKey,
+            loginResult.loginName,
+            connectionId,
+            this.serverName,
+            this.portNumber,
+            this.username,
+            loginResult.isInsecure
+        );
+
+        await handleLanguageServerRestartOnSessionChange(oldToken, this.sessionToken);
     }
 }
 

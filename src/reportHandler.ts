@@ -857,9 +857,7 @@ async function chooseRobotOutputXMLFileIfNotSet(workingDirectoryPath: string): P
         return selectedXMLFileUri[0].fsPath;
     }
 
-    const xmlFileNotSelectedError: string = "No output.xml file selected.";
-    logger.warn(`[reportHandler] ${xmlFileNotSelectedError}`);
-    vscode.window.showWarningMessage(xmlFileNotSelectedError);
+    logger.warn("[reportHandler] No output.xml file selected.");
     return null;
 }
 
