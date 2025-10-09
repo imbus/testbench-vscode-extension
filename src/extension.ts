@@ -1122,7 +1122,106 @@ async function handleTestBenchSessionChange(
     }
 }
 
-async function handleAutomaticLogin(context: vscode.ExtensionContext): Promise<void> {
+/** Sets up and registers the authentication provider and its listeners.
+ * @param context The extension context.
+ * @param instanceId A unique identifier for this extension instance.
+ * @returns The initialized TestBenchAuthenticationProvider instance.
+ */
+function initializeAuthentication(
+    context: vscode.ExtensionContext,
+    instanceId: string
+): TestBenchAuthenticationProvider {
+    const authProviderInstance = new TestBenchAuthenticationProvider(context, instanceId);
+    context.subscriptions.push(
+        vscode.authentication.registerAuthenticationProvider(
+            TESTBENCH_AUTH_PROVIDER_ID,
+            TESTBENCH_AUTH_PROVIDER_LABEL,
+            authProviderInstance,
+            { supportsMultipleAccounts: false }
+        )
+    );
+
+    context.subscriptions.push(
+        vscode.authentication.onDidChangeSessions(async (e) => {
+            if (e.provider.id !== TESTBENCH_AUTH_PROVIDER_ID || isHandlingSessionChange) {
+                return;
+            }
+
+            isHandlingSessionChange = true;
+            logger.trace("[extension] TestBench authentication sessions changed.");
+            try {
+                const currentSession = await vscode.authentication.getSession(
+                    TESTBENCH_AUTH_PROVIDER_ID,
+                    ["api_access"],
+                    { createIfNone: false, silent: true }
+                );
+                await handleTestBenchSessionChange(context, currentSession);
+            } catch (error) {
+                logger.error("[extension] Error getting session in onDidChangeSessions listener:", error);
+                await handleTestBenchSessionChange(context, undefined);
+            } finally {
+                isHandlingSessionChange = false;
+            }
+        })
+    );
+
+    logger.trace("[extension] TestBenchAuthenticationProvider registered.");
+    return authProviderInstance;
+}
+
+/** Initializes context keys. */
+async function initializeContextValues(context: vscode.ExtensionContext): Promise<void> {
+    // Set initial context states
+    const initialContexts = [
+        { key: ContextKeys.CONNECTION_ACTIVE, value: false },
+        { key: ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, value: false },
+        { key: ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, value: false },
+        { key: ContextKeys.FILTER_DIFF_MODE_ENABLED, value: false },
+        { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_PROJECTS, value: false },
+        { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES, value: false },
+        { key: ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS, value: false },
+        { key: ContextKeys.TEST_THEME_TREE_HAS_FILTERS, value: false }
+    ];
+
+    for (const ctx of initialContexts) {
+        await vscode.commands.executeCommand("setContext", ctx.key, ctx.value);
+    }
+
+    const isTTOpenedFromCycle = context.globalState.get<string | undefined>(
+        StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY
+    );
+    await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
+}
+
+/** Attempts to restore a previous session or perform an automatic login. */
+async function handleInitialSession(context: vscode.ExtensionContext): Promise<void> {
+    logger.trace("[extension] Checking for existing TestBench session to restore...");
+    try {
+        const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
+            createIfNone: false,
+            silent: true
+        });
+
+        if (session) {
+            await handleTestBenchSessionChange(context, session);
+            logger.debug("[extension] Successfully restored previous TestBench session.");
+            return; // Session restored, no need for auto-login
+        }
+
+        logger.debug("[extension] No previous session found. Checking for auto-login config.");
+        if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
+            logger.debug("[extension] Auto-login is enabled. Attempting silent login.");
+            await performAutomaticLogin(context);
+        } else {
+            getLoginWebViewProvider()?.updateWebviewHTMLContent();
+        }
+    } catch (error) {
+        logger.warn("[extension] Error trying to get initial TestBench session silently:", error);
+    }
+}
+
+/** Performs a silent, automatic login if configured. */
+async function performAutomaticLogin(context: vscode.ExtensionContext): Promise<void> {
     logger.trace(`[extension] Performing automatic login on activation.`);
     try {
         authProviderInstance?.markNextLoginAsSilent();
@@ -1134,124 +1233,15 @@ async function handleAutomaticLogin(context: vscode.ExtensionContext): Promise<v
             await handleTestBenchSessionChange(context, session);
         }
     } catch (error) {
-        // Errors are expected if auto-login fails silently
-        logger.trace("[extension] Automatic login failed:", error);
+        logger.trace("[extension] Automatic login failed silently:", error);
     }
 }
 
-/* =============================================================================
-   Extension Activation & Deactivation
-   ============================================================================= */
-
-/**
- * Called when the extension is activated.
- *
- * @param {vscode.ExtensionContext} context The extension context.
+/** Sets up the polling mechanism to sync logout across multiple windows.
+ * @param context The extension context.
+ * @param instanceId A unique identifier for this extension instance. *
  */
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    const instanceId = uuidv4();
-    logger = new testBenchLogger.TestBenchLogger();
-    logger.info(`[extension] Activating extension instance ${instanceId}.`);
-    initializeConfigurationWatcher();
-
-    // Register AuthenticationProvider
-    authProviderInstance = new TestBenchAuthenticationProvider(context, instanceId);
-    context.subscriptions.push(
-        vscode.authentication.registerAuthenticationProvider(
-            TESTBENCH_AUTH_PROVIDER_ID,
-            TESTBENCH_AUTH_PROVIDER_LABEL,
-            authProviderInstance,
-            { supportsMultipleAccounts: false }
-        )
-    );
-    logger.trace("[extension] TestBenchAuthenticationProvider registered.");
-
-    // Session Change Listener
-    context.subscriptions.push(
-        vscode.authentication.onDidChangeSessions(async (e) => {
-            if (e.provider.id === TESTBENCH_AUTH_PROVIDER_ID) {
-                if (isHandlingSessionChange) {
-                    return;
-                }
-                isHandlingSessionChange = true;
-                logger.trace("[extension] TestBench authentication sessions changed.");
-                try {
-                    const currentSession = await vscode.authentication.getSession(
-                        TESTBENCH_AUTH_PROVIDER_ID,
-                        ["api_access"],
-                        { createIfNone: false, silent: true }
-                    );
-                    await handleTestBenchSessionChange(context, currentSession);
-                } catch (error) {
-                    logger.error("[extension] Error getting session in onDidChangeSessions listener:", error);
-                    await handleTestBenchSessionChange(context, undefined);
-                } finally {
-                    isHandlingSessionChange = false;
-                }
-            }
-        })
-    );
-
-    userSessionManager = new UserSessionManager(context);
-
-    // Initialize tree views
-    await initializeTreeViews(context);
-
-    // Set the initial connection context state
-    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, connection !== null);
-
-    await vscode.commands.executeCommand("setContext", ContextKeys.PROJECT_TREE_HAS_CUSTOM_ROOT, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.THEME_TREE_HAS_CUSTOM_ROOT, false);
-
-    // Initialize filter diff mode context keys
-    await vscode.commands.executeCommand("setContext", ContextKeys.FILTER_DIFF_MODE_ENABLED, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.FILTER_DIFF_MODE_ENABLED_PROJECTS, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES, false);
-    await vscode.commands.executeCommand("setContext", ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_ELEMENTS, false);
-
-    const isTTOpenedFromCycle = context.globalState.get<string | undefined>(
-        StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY
-    );
-    await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
-
-    // Initialize login webview first
-    loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(loginWebView.LoginWebViewProvider.viewId, loginWebViewProvider, {
-            webviewOptions: { retainContextWhenHidden: true }
-        })
-    );
-
-    // Register all commands
-    await registerExtensionCommands(context);
-
-    // Attempt to restore session on activation
-    logger.trace("[extension] Checking if previous TestBench session should be restored...");
-    try {
-        const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
-            createIfNone: false,
-            silent: true
-        });
-        if (session) {
-            await handleTestBenchSessionChange(context, session);
-            logger.debug("[extension] Successfully restored previous TestBench session.");
-        } else {
-            logger.debug("[extension] No previous TestBench session found for restoration.");
-            if (!getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-                await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-                getLoginWebViewProvider()?.updateWebviewHTMLContent();
-            }
-        }
-    } catch (error) {
-        logger.warn("[extension] Error trying to get initial TestBench session silently:", error);
-        await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-    }
-
-    if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
-        logger.debug("[extension] Auto-login is enabled. Scheduling automatic login.");
-        handleAutomaticLogin(context);
-    }
-
+function initializeCrossWindowStateSync(context: vscode.ExtensionContext, instanceId: string): void {
     let lastProcessedLogoutTimestamp = 0;
     const logoutPollInterval = setInterval(async () => {
         const signal = context.globalState.get<{ initiatorId: string; timestamp: number }>(
@@ -1259,8 +1249,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
 
         if (signal && signal.initiatorId !== instanceId && signal.timestamp > lastProcessedLogoutTimestamp) {
-            logger.info(
-                `[extension] Detected logout signal from another instance (${signal.initiatorId}). Logging out this instance (${instanceId}).`
+            logger.trace(
+                `[extension] Detected logout signal from instance (${signal.initiatorId}). Logging out this instance (${instanceId}).`
             );
             lastProcessedLogoutTimestamp = signal.timestamp;
 
@@ -1273,8 +1263,49 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push({
         dispose: () => clearInterval(logoutPollInterval)
     });
+}
 
-    logger.info("[extension] Extension activated successfully.");
+/**
+ * Called when the extension is activated.
+ * @param {vscode.ExtensionContext} context The extension context.
+ */
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    try {
+        const instanceId = uuidv4();
+        logger = new testBenchLogger.TestBenchLogger();
+        logger.info(`[extension] Activating extension instance ${instanceId}.`);
+        initializeConfigurationWatcher();
+
+        // Initialize login webview
+        loginWebViewProvider = new loginWebView.LoginWebViewProvider(context);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(loginWebView.LoginWebViewProvider.viewId, loginWebViewProvider, {
+                webviewOptions: { retainContextWhenHidden: true }
+            })
+        );
+
+        // Authentication and session management
+        authProviderInstance = initializeAuthentication(context, instanceId);
+        userSessionManager = new UserSessionManager(context);
+
+        await initializeTreeViews(context);
+        await initializeContextValues(context);
+        await registerExtensionCommands(context);
+
+        // Handle session restoration and automatic login after everything is set up
+        await handleInitialSession(context);
+
+        // Start background tasks
+        initializeCrossWindowStateSync(context, instanceId);
+
+        logger.info(`[extension] Extension instance ${instanceId} activated successfully.`);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        // Ensure logger is initialized, or fall back to console
+        const log = logger ? logger.error : console.error;
+        log(`[extension] Failed to activate extension. ${errorMessage}`, error);
+        vscode.window.showErrorMessage(`TestBench Extension failed to activate: ${errorMessage}`);
+    }
 }
 
 export async function clearAllExtensionData(
