@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import * as connectionManager from "./connectionManager";
-import { loginToServerAndGetSessionDetails, TestBenchLoginResult } from "./testBenchConnection";
+import { loginToServerAndGetSessionDetails, TestBenchLoginResult, PlayServerConnection } from "./testBenchConnection";
 import { TestBenchConnection } from "./testBenchTypes";
 import { logger } from "./extension";
+import { SharedSessionManager } from "./sharedSessionManager";
+import { StorageKeys } from "./constants";
 
 export const TESTBENCH_AUTH_PROVIDER_ID = "testbench-auth";
 export const TESTBENCH_AUTH_PROVIDER_LABEL = "TestBench"; // User-facing name in VS Code Accounts UI
@@ -30,8 +32,40 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
 
     private _isAttemptingSilentAutoLogin: boolean = false;
 
-    constructor(private context: vscode.ExtensionContext) {
+    constructor(
+        private context: vscode.ExtensionContext,
+        private instanceId: string
+    ) {
         logger.trace("[AuthenticationProvider] TestBenchAuthenticationProvider initialized.");
+        this.loadExistingSharedSessions();
+    }
+
+    /**
+     * Loads existing shared sessions on initialization
+     */
+    private async loadExistingSharedSessions(): Promise<void> {
+        try {
+            const sharedSessionManager = SharedSessionManager.getInstance(this.context);
+            const sharedSession = await sharedSessionManager.getSharedSession();
+
+            if (sharedSession) {
+                // Add shared session to active sessions
+                const sessionData: TestBenchSessionData = {
+                    sessionId: sharedSession.sessionId || `shared_${sharedSession.connectionId}_${Date.now()}`,
+                    connectionId: sharedSession.connectionId,
+                    testBenchSessionToken: sharedSession.sessionToken,
+                    accountLabel: `${sharedSession.username}@${sharedSession.serverName}`,
+                    userKey: sharedSession.userKey
+                };
+
+                this.activeSessions.set(sessionData.sessionId, sessionData);
+                logger.debug(
+                    "[AuthenticationProvider] Loaded existing shared session for: " + sessionData.accountLabel
+                );
+            }
+        } catch (error) {
+            logger.error("[AuthenticationProvider] Error loading shared sessions:", error);
+        }
     }
 
     /**
@@ -253,12 +287,61 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 throw validationError;
             }
 
-            const loginResult: TestBenchLoginResult | null = await loginToServerAndGetSessionDetails(
-                targetConnection.serverName,
-                targetConnection.portNumber,
-                targetConnection.username,
-                passwordToUse
-            );
+            // Check for existing shared session before creating a new login
+            const sharedSessionManager = SharedSessionManager.getInstance(this.context);
+            const existingSharedSession = await sharedSessionManager.getSharedSession();
+
+            let loginResult: TestBenchLoginResult | null = null;
+            let usingSharedSession = false;
+
+            if (
+                existingSharedSession &&
+                existingSharedSession.connectionId === targetConnection.id &&
+                existingSharedSession.serverName === targetConnection.serverName &&
+                existingSharedSession.portNumber === targetConnection.portNumber &&
+                existingSharedSession.username === targetConnection.username
+            ) {
+                logger.debug("[AuthenticationProvider] Found existing shared session, attempting to validate...");
+
+                // Create a temporary connection to validate the session
+                const tempConnection = new PlayServerConnection(
+                    targetConnection.serverName,
+                    targetConnection.portNumber,
+                    targetConnection.username,
+                    existingSharedSession.sessionToken,
+                    this.context,
+                    existingSharedSession.isInsecure
+                );
+                await tempConnection.initialize();
+
+                const isValid = await sharedSessionManager.validateSession(tempConnection);
+
+                if (isValid) {
+                    logger.info("[AuthenticationProvider] Using existing shared session instead of creating new login");
+                    loginResult = {
+                        sessionToken: existingSharedSession.sessionToken,
+                        userKey: existingSharedSession.userKey,
+                        loginName: existingSharedSession.loginName,
+                        isInsecure: existingSharedSession.isInsecure
+                    };
+                    usingSharedSession = true;
+                } else {
+                    logger.debug(
+                        "[AuthenticationProvider] Shared session is no longer valid, proceeding with new login"
+                    );
+                    await sharedSessionManager.clearSharedSession();
+                }
+            }
+
+            // Only perform new login if not using a shared session
+            if (!loginResult) {
+                loginResult = await loginToServerAndGetSessionDetails(
+                    targetConnection.serverName,
+                    targetConnection.portNumber,
+                    targetConnection.username,
+                    passwordToUse
+                );
+            }
 
             if (!loginResult || !loginResult.sessionToken || !loginResult.userKey) {
                 await connectionManager.clearActiveConnection(this.context);
@@ -286,7 +369,7 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 }
             }
 
-            const vsCodeSessionId: string = Date.now().toString() + Math.random().toString();
+            const vsCodeSessionId: string = targetConnection.id;
             const sessionData: TestBenchSessionData = {
                 sessionId: vsCodeSessionId,
                 connectionId: targetConnection.id,
@@ -312,6 +395,25 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
             logger.debug(
                 `[AuthenticationProvider] TestBench session created successfully for '${sessionData.accountLabel}'.`
             );
+
+            // Store the session in shared session manager if it's a new login
+            if (!usingSharedSession) {
+                await sharedSessionManager.storeSharedSession(
+                    vsCodeSessionId,
+                    loginResult.sessionToken,
+                    loginResult.userKey,
+                    loginResult.loginName,
+                    targetConnection.id,
+                    targetConnection.serverName,
+                    targetConnection.portNumber,
+                    targetConnection.username,
+                    loginResult.isInsecure
+                );
+                logger.debug(
+                    "[AuthenticationProvider] Stored new session in shared session manager for cross-window access"
+                );
+            }
+
             return {
                 id: vsCodeSessionId,
                 accessToken: sessionData.testBenchSessionToken,
@@ -340,6 +442,14 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
     async removeSession(sessionId: string): Promise<void> {
         const sessionData: TestBenchSessionData | undefined = this.activeSessions.get(sessionId);
         if (sessionData) {
+            logger.debug(
+                `[AuthenticationProvider] Instance ${this.instanceId} is initiating a logout and setting the signal.`
+            );
+            await this.context.globalState.update(StorageKeys.LOGOUT_SIGNAL_KEY, {
+                initiatorId: this.instanceId,
+                timestamp: Date.now()
+            });
+
             logger.trace(
                 `[AuthenticationProvider] Removing session locally: ${sessionData.accountLabel} (ID: ${sessionId})`
             );
@@ -358,6 +468,10 @@ export class TestBenchAuthenticationProvider implements vscode.AuthenticationPro
                 removed: [removedSession],
                 changed: []
             });
+
+            const sharedSessionManager = SharedSessionManager.getInstance(this.context);
+            await sharedSessionManager.clearSharedSession();
+            logger.debug("[AuthenticationProvider] Cleared shared session data on logout");
         } else {
             logger.warn(`[AuthenticationProvider] Session removal requested for unknown session ID: ${sessionId}`);
         }

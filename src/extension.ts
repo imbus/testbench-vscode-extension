@@ -57,6 +57,8 @@ import {
 } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { initializeTreeViews } from "./treeViews/TreeViewFactory";
 import { UserSessionManager } from "./userSessionManager";
+import { SharedSessionManager } from "./sharedSessionManager";
+import { v4 as uuidv4 } from "uuid";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -204,33 +206,23 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleLogout = async () => {
-        logger.trace(`[extension] Command called: ${allExtensionCommands.logout}`);
+        logger.trace(`[extension] Command called: ${allExtensionCommands.logout}.`);
 
         if (isHandlingSessionChange) {
             return;
         }
+
         isHandlingSessionChange = true;
         try {
-            if (connection) {
-                await connection.logoutUserOnServer();
-            }
-
-            // Regardless of server logout success, perform a local cleanup.
-            setConnection(null);
-            await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
-
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
                 silent: true
             });
+
             if (session && authProviderInstance) {
-                await authProviderInstance.removeSession(session.id); // onDidChangeSessions triggers handleTestBenchSessionChange
-            } else {
-                // Trigger cleanup manually.
-                await handleTestBenchSessionChange(context, undefined);
+                await authProviderInstance.removeSession(session.id);
             }
 
-            await stopLanguageClient();
-            getLoginWebViewProvider()?.updateWebviewHTMLContent();
+            await handleNoSession();
         } finally {
             isHandlingSessionChange = false;
         }
@@ -975,7 +967,8 @@ async function createNewConnection(
     activeConnection: connectionManager.TestBenchConnection,
     session: vscode.AuthenticationSession,
     currentConnection: PlayServerConnection | null,
-    context: vscode.ExtensionContext
+    context: vscode.ExtensionContext,
+    isInsecure: boolean
 ): Promise<PlayServerConnection> {
     if (currentConnection) {
         logger.warn(
@@ -989,7 +982,8 @@ async function createNewConnection(
         activeConnection.portNumber,
         activeConnection.username,
         session.accessToken,
-        context
+        context,
+        isInsecure
     );
     await newConnection.initialize();
     setConnection(newConnection);
@@ -1019,6 +1013,8 @@ async function handleNoSession(): Promise<void> {
     if (connection) {
         await connection.logoutUserOnServer();
     }
+    setConnection(null);
+    await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, false);
 
     // Save current state before ending session to ensure persistence
     if (treeViews) {
@@ -1034,6 +1030,9 @@ async function handleNoSession(): Promise<void> {
         treeViews.testElementsTree.clearTree();
         await treeViews.loadDefaultViewsUI();
     }
+
+    await stopLanguageClient();
+    getLoginWebViewProvider()?.updateWebviewHTMLContent();
 }
 
 /**
@@ -1053,11 +1052,21 @@ async function handleTestBenchSessionChange(
     const previousSessionToken = connection?.getSessionToken();
 
     if (sessionToProcess?.accessToken) {
+        // Clear previous logout signals on new login
+        await context.globalState.update(StorageKeys.LOGOUT_SIGNAL_KEY, undefined);
+        logger.trace("[extension] Cleared logout signal due to new session.");
+
         getLoginWebViewProvider()?.resetEditMode();
         setIsHandlingLogout(false);
         const previousUserId = userSessionManager.getCurrentUserId();
         const newUserId = sessionToProcess.account.id;
         const wasNewSessionStarted = previousUserId !== newUserId;
+        const sharedSessionManager = SharedSessionManager.getInstance(context);
+        const sharedSession = await sharedSessionManager.getSharedSession();
+        let isInsecure = false;
+        if (sharedSession && sharedSession.sessionToken === sessionToProcess.accessToken) {
+            isInsecure = sharedSession.isInsecure;
+        }
 
         // If switching to a different user, reset state for the previous user's data
         if (wasNewSessionStarted && previousUserId !== "global_fallback" && treeViews) {
@@ -1090,7 +1099,13 @@ async function handleTestBenchSessionChange(
             );
             return;
         }
-        const newConnection = await createNewConnection(activeConnection, sessionToProcess, connection, context);
+        const newConnection = await createNewConnection(
+            activeConnection,
+            sessionToProcess,
+            connection,
+            context,
+            isInsecure
+        );
         await handleLanguageServerRestartOnSessionChange(previousSessionToken, newConnection.getSessionToken());
 
         const isNewConnection =
@@ -1117,8 +1132,9 @@ async function handleTestBenchSessionChange(
  * @param {vscode.ExtensionContext} context The extension context.
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    const instanceId = uuidv4();
     logger = new testBenchLogger.TestBenchLogger();
-    logger.info("[extension] Activating extension.");
+    logger.info(`[extension] Activating extension instance ${instanceId}.`);
     initializeConfigurationWatcher();
 
     const handleAutomaticLogin = async () => {
@@ -1142,7 +1158,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
 
     // Register AuthenticationProvider
-    authProviderInstance = new TestBenchAuthenticationProvider(context);
+    authProviderInstance = new TestBenchAuthenticationProvider(context, instanceId);
     context.subscriptions.push(
         vscode.authentication.registerAuthenticationProvider(
             TESTBENCH_AUTH_PROVIDER_ID,
@@ -1238,6 +1254,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         logger.debug("[extension] Auto-login is enabled. Scheduling automatic login.");
         handleAutomaticLogin();
     }
+
+    let lastProcessedLogoutTimestamp = 0;
+    const logoutPollInterval = setInterval(async () => {
+        const signal = context.globalState.get<{ initiatorId: string; timestamp: number }>(
+            StorageKeys.LOGOUT_SIGNAL_KEY
+        );
+
+        if (signal && signal.initiatorId !== instanceId && signal.timestamp > lastProcessedLogoutTimestamp) {
+            logger.info(
+                `[extension] Detected logout signal from another instance (${signal.initiatorId}). Logging out this instance (${instanceId}).`
+            );
+            lastProcessedLogoutTimestamp = signal.timestamp;
+
+            if (connection) {
+                await vscode.commands.executeCommand(allExtensionCommands.logout);
+            }
+        }
+    }, 3000); // Poll every 3 seconds
+
+    context.subscriptions.push({
+        dispose: () => clearInterval(logoutPollInterval)
+    });
 
     logger.info("[extension] Extension activated successfully.");
 }
