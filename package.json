@@ -383,8 +383,8 @@
                 "title": "Display Test Theme Filters",
                 "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
                 "icon": {
-                    "light": "resources/icons/filter-light.svg",
-                    "dark": "resources/icons/filter-dark.svg"
+                    "light": "resources/icons/filter-on-light.svg",
+                    "dark": "resources/icons/filter-on-dark.svg"
                 }
             },
             {
@@ -650,7 +650,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
-                    "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters && false",
+                    "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
                     "group": "navigation@3",
                     "icon": {
                         "light": "resources/icons/filter-off-light.svg",
@@ -659,11 +659,11 @@
                 },
                 {
                     "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
-                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && false",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
                     "group": "navigation@3",
                     "icon": {
-                        "light": "resources/icons/filter-light.svg",
-                        "dark": "resources/icons/filter-dark.svg"
+                        "light": "resources/icons/filter-on-light.svg",
+                        "dark": "resources/icons/filter-on-dark.svg"
                     }
                 },
                 {
