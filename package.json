@@ -496,6 +496,21 @@
             {
                 "command": "testbenchExtension.clearAllExtensionData",
                 "title": "TestBench: Clear All Extension Data"
+            },
+            {
+                "command": "testbenchExtension.searchInProjectsTree",
+                "title": "Search",
+                "icon": "$(search)"
+            },
+            {
+                "command": "testbenchExtension.searchInTestThemesTree",
+                "title": "Search",
+                "icon": "$(search)"
+            },
+            {
+                "command": "testbenchExtension.searchInTestElementsTree",
+                "title": "Search",
+                "icon": "$(search)"
             }
         ],
         "viewsContainers": {
@@ -638,6 +653,11 @@
                     }
                 },
                 {
+                    "command": "testbenchExtension.searchInProjectsTree",
+                    "when": "view == testbench.projects",
+                    "group": "navigation@4"
+                },
+                {
                     "command": "testbenchExtension.displayAllProjects",
                     "group": "navigation@2",
                     "when": "view == testbench.testThemes",
@@ -701,6 +721,11 @@
                     }
                 },
                 {
+                    "command": "testbenchExtension.searchInTestThemesTree",
+                    "when": "view == testbench.testThemes",
+                    "group": "navigation@5"
+                },
+                {
                     "command": "testbenchExtension.showExtensionSettings",
                     "group": "navigation@8",
                     "when": "view == testbench.projects || view == testbenchExtension.webView"
@@ -714,6 +739,11 @@
                         "light": "resources/icons/refresh-light.svg",
                         "dark": "resources/icons/refresh-dark.svg"
                     }
+                },
+                {
+                    "command": "testbenchExtension.searchInTestElementsTree",
+                    "when": "view == testbench.testElements",
+                    "group": "navigation@3"
                 }
             ],
             "view/item/context": [

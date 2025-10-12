@@ -238,5 +238,8 @@ export const allExtensionCommands = {
     handleInteractionClick: `${baseKeyOfExtension}.handleInteractionClick`,
     findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`,
     enableFilterDiffMode: `${baseKeyOfExtension}.enableFilterDiffMode`,
-    disableFilterDiffMode: `${baseKeyOfExtension}.disableFilterDiffMode`
+    disableFilterDiffMode: `${baseKeyOfExtension}.disableFilterDiffMode`,
+    searchInProjectsTree: `${baseKeyOfExtension}.searchInProjectsTree`,
+    searchInTestThemesTree: `${baseKeyOfExtension}.searchInTestThemesTree`,
+    searchInTestElementsTree: `${baseKeyOfExtension}.searchInTestElementsTree`
 };

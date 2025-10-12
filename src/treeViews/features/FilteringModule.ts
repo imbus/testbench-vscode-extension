@@ -14,8 +14,10 @@ export interface TextFilterOptions {
     searchText: string;
     caseSensitive: boolean;
     searchInLabel: boolean;
-    searchInUniqueId: boolean;
+    searchInId: boolean;
     searchInDescription: boolean;
+    searchInTooltip: boolean;
+    searchInType: boolean;
     showParentsOfMatches: boolean;
     showChildrenOfMatches: boolean;
 }
@@ -132,8 +134,10 @@ export class FilteringModule implements TreeViewModule {
             return {
                 caseSensitive: false,
                 searchInLabel: true,
-                searchInUniqueId: false,
+                searchInId: false,
                 searchInDescription: false,
+                searchInTooltip: false,
+                searchInType: false,
                 showParentsOfMatches: false,
                 showChildrenOfMatches: false
             };
@@ -142,8 +146,10 @@ export class FilteringModule implements TreeViewModule {
         return {
             caseSensitive: false,
             searchInLabel: true,
-            searchInUniqueId: false,
+            searchInId: false,
             searchInDescription: false,
+            searchInTooltip: false,
+            searchInType: false,
             showParentsOfMatches: filteringConfig.showParentsOfMatches || false,
             showChildrenOfMatches: filteringConfig.showChildrenOfMatches || false
         };
@@ -341,8 +347,8 @@ export class FilteringModule implements TreeViewModule {
             }
         }
 
-        // Search in unique ID (if available)
-        if (this.textFilter.searchInUniqueId && item.description) {
+        // Search in description
+        if (this.textFilter.searchInDescription && item.description) {
             const description = this.textFilter.caseSensitive
                 ? item.description.toString()
                 : item.description.toString().toLowerCase();
@@ -351,12 +357,28 @@ export class FilteringModule implements TreeViewModule {
             }
         }
 
-        // Search in additional description field
-        if (this.textFilter.searchInDescription && item.tooltip) {
+        // Search in tooltip
+        if (this.textFilter.searchInTooltip && item.tooltip) {
             const tooltip = this.textFilter.caseSensitive
                 ? item.tooltip.toString()
                 : item.tooltip.toString().toLowerCase();
             if (tooltip.includes(searchTextLower)) {
+                return true;
+            }
+        }
+
+        // Search in ID
+        if (this.textFilter.searchInId && item.id) {
+            const id = this.textFilter.caseSensitive ? item.id : item.id.toLowerCase();
+            if (id.includes(searchTextLower)) {
+                return true;
+            }
+        }
+
+        // Search in Type (contextValue)
+        if (this.textFilter.searchInType && item.contextValue) {
+            const type = this.textFilter.caseSensitive ? item.contextValue : item.contextValue.toLowerCase();
+            if (type.includes(searchTextLower)) {
                 return true;
             }
         }

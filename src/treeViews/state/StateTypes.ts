@@ -88,8 +88,12 @@ export interface FilterState {
         searchText: string;
         caseSensitive: boolean;
         searchInLabel: boolean;
-        searchInUniqueId: boolean;
+        searchInId: boolean;
         searchInDescription: boolean;
+        searchInTooltip: boolean;
+        searchInType: boolean;
+        showParentsOfMatches: boolean;
+        showChildrenOfMatches: boolean;
     } | null;
     filterDiffState?: {
         enabled: boolean;
@@ -209,8 +213,12 @@ export interface SerializedFilterState {
         searchText: string;
         caseSensitive: boolean;
         searchInLabel: boolean;
-        searchInUniqueId: boolean;
+        searchInId: boolean;
         searchInDescription: boolean;
+        searchInTooltip: boolean;
+        searchInType: boolean;
+        showParentsOfMatches: boolean;
+        showChildrenOfMatches: boolean;
     } | null;
     filterDiffState?: {
         enabled: boolean;
