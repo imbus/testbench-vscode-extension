@@ -773,13 +773,34 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
 
             if (state.error) {
                 this.vscTreeView.message = this.config.ui.errorMessage;
-            } else if (state.loading) {
-                this.vscTreeView.message = this.config.ui.loadingMessage;
-            } else if (this.rootItems.length === 0 && !this._intentionallyCleared) {
-                this.vscTreeView.message = this.config.ui.emptyMessage;
-            } else {
-                this.vscTreeView.message = undefined;
+                return;
             }
+
+            if (state.loading) {
+                this.vscTreeView.message = this.config.ui.loadingMessage;
+                return;
+            }
+
+            const filteringModule = this.getModule("filtering") as FilteringModule | undefined;
+            if (filteringModule && filteringModule.isActive() && this.rootItems.length > 0) {
+                const filteredRootItems = filteringModule.filterTreeItems(this.rootItems);
+                if (filteredRootItems.length === 0) {
+                    const textFilter = filteringModule.getTextFilter();
+                    if (textFilter?.searchText) {
+                        this.vscTreeView.message = `No items found for "${textFilter.searchText}"`;
+                    } else {
+                        this.vscTreeView.message = "All items have been filtered.";
+                    }
+                    return;
+                }
+            }
+
+            if (this.rootItems.length === 0 && !this._intentionallyCleared) {
+                this.vscTreeView.message = this.config.ui.emptyMessage;
+                return;
+            }
+
+            this.vscTreeView.message = undefined;
         } catch (error) {
             if (this.vscTreeView) {
                 this.vscTreeView.message = undefined;
