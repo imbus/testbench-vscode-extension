@@ -379,21 +379,39 @@
                 }
             },
             {
-                "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
+                "command": "testbenchExtension.displayFiltersForTestThemeTree",
                 "title": "Display Test Theme Filters",
                 "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
+                "icon": {
+                    "light": "resources/icons/filter-off-light.svg",
+                    "dark": "resources/icons/filter-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.displayFiltersForTestThemeTree",
+                "title": "Display Test Theme Filters",
+                "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
                 "icon": {
                     "light": "resources/icons/filter-on-light.svg",
                     "dark": "resources/icons/filter-on-dark.svg"
                 }
             },
             {
-                "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
-                "title": "Display Test Theme Filters",
-                "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
+                "command": "testbenchExtension.toggleFilterDiffMode",
+                "title": "Toggle Filter Diff Mode",
+                "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && !testbenchExtension.filterDiffModeEnabledTestThemes",
                 "icon": {
-                    "light": "resources/icons/filter-off-light.svg",
-                    "dark": "resources/icons/filter-off-dark.svg"
+                    "light": "resources/icons/diff-on-light.svg",
+                    "dark": "resources/icons/diff-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.toggleFilterDiffMode",
+                "title": "Toggle Filter Diff Mode",
+                "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && testbenchExtension.filterDiffModeEnabledTestThemes",
+                "icon": {
+                    "light": "resources/icons/diff-off-light.svg",
+                    "dark": "resources/icons/diff-off-dark.svg"
                 }
             },
             {
@@ -649,7 +667,7 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.displayFiltersForTestThemeTreeOFF",
+                    "command": "testbenchExtension.displayFiltersForTestThemeTree",
                     "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
                     "group": "navigation@3",
                     "icon": {
@@ -658,12 +676,30 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.displayFiltersForTestThemeTreeON",
+                    "command": "testbenchExtension.displayFiltersForTestThemeTree",
                     "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
                     "group": "navigation@3",
                     "icon": {
                         "light": "resources/icons/filter-on-light.svg",
                         "dark": "resources/icons/filter-on-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.toggleFilterDiffMode",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && !testbenchExtension.filterDiffModeEnabledTestThemes",
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/diff-on-light.svg",
+                        "dark": "resources/icons/diff-on-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.toggleFilterDiffMode",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && testbenchExtension.filterDiffModeEnabledTestThemes",
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/diff-off-light.svg",
+                        "dark": "resources/icons/diff-off-dark.svg"
                     }
                 },
                 {

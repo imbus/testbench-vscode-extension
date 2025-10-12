@@ -69,6 +69,7 @@ export class TestThemesTreeItem extends TreeItemBase {
     private robotFileService: RobotFileService;
     private robotFileExists: boolean = false;
     private robotFilePath?: string;
+    public isFilteredOutInDiffMode = false;
 
     constructor(data: TestThemeData, extensionContext: vscode.ExtensionContext, parent?: TestThemesTreeItem) {
         super(

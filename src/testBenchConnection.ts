@@ -716,15 +716,22 @@ export class PlayServerConnection {
      *
      * @param {string} projectKey - The project key as a string.
      * @param {string} cycleKey - The cycle key as a string.
+     * @param {boolean} suppressFilteredData - Whether to suppress filtered data from the server response
      * @returns {Promise<testBenchTypes.TestStructure | null>} The test structure or null if an error occurs.
      */
     async fetchTestStructureOfCycleFromServer(
         projectKey: string,
-        cycleKey: string
+        cycleKey: string,
+        suppressFilteredData: boolean = true
     ): Promise<testBenchTypes.TestStructure | null> {
         const testStructureOfCycleUrl = `/projects/${projectKey}/cycles/${cycleKey}/structure/v1`;
         const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
-        return this._fetchTestStructureWithFilterHandling(testStructureOfCycleUrl, validatedFilters, "cycle");
+        return this._fetchTestStructureWithFilterHandling(
+            testStructureOfCycleUrl,
+            validatedFilters,
+            "cycle",
+            suppressFilteredData
+        );
     }
 
     /**
@@ -732,15 +739,22 @@ export class PlayServerConnection {
      *
      * @param {string} projectKey - The project key as a string.
      * @param {string} tovKey - The TOV key as a string.
+     * @param {boolean} suppressFilteredData - Whether to suppress filtered data from the server response
      * @returns {Promise<testBenchTypes.TestStructure | null>} The cycle structure or null if an error occurs.
      */
     async fetchTestStructureOfTOVFromServer(
         projectKey: string,
-        tovKey: string
+        tovKey: string,
+        suppressFilteredData: boolean = true
     ): Promise<testBenchTypes.TestStructure | null> {
         const testStructureOfTOVUrl = `/projects/${projectKey}/tovs/${tovKey}/structure/v1`;
         const validatedFilters = await TestThemesTreeView.getValidatedFiltersForApiRequest();
-        return this._fetchTestStructureWithFilterHandling(testStructureOfTOVUrl, validatedFilters, "TOV");
+        return this._fetchTestStructureWithFilterHandling(
+            testStructureOfTOVUrl,
+            validatedFilters,
+            "TOV",
+            suppressFilteredData
+        );
     }
 
     /**
@@ -750,16 +764,18 @@ export class PlayServerConnection {
      * @param {string} url - The API endpoint URL
      * @param {any[]} validatedFilters - The pre-validated and transformed filters
      * @param {string} structureType - Type of structure being fetched (for logging)
+     * @param {boolean} suppressFilteredData - Whether to suppress filtered data from the server response
      * @returns {Promise<testBenchTypes.TestStructure | null>} The test structure or null if an error occurs.
      */
     private async _fetchTestStructureWithFilterHandling(
         url: string,
         validatedFilters: any[],
-        structureType: string
+        structureType: string,
+        suppressFilteredData: boolean = true
     ): Promise<testBenchTypes.TestStructure | null> {
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
             basedOnExecution: true,
-            suppressFilteredData: true,
+            suppressFilteredData: suppressFilteredData,
             suppressNotExecutable: false,
             suppressEmptyTestThemes: false,
             filters: validatedFilters

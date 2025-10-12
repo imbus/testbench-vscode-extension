@@ -208,8 +208,7 @@ export const allExtensionCommands = {
     refreshProjectTreeView: `${baseKeyOfExtension}.refreshProjectTreeView`,
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
-    displayFiltersForTestThemeTreeON: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeON`,
-    displayFiltersForTestThemeTreeOFF: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeOFF`,
+    displayFiltersForTestThemeTree: `${baseKeyOfExtension}.displayFiltersForTestThemeTree`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
     openCycleFromProjectsView: `${baseKeyOfExtension}.openCycleFromProjectsView`,
@@ -237,5 +236,6 @@ export const allExtensionCommands = {
     openInteractionInTestElementsView: `${baseKeyOfExtension}.openInteractionInTestElementsView`,
     createMissingParentResourceForInteraction: `${baseKeyOfExtension}.createMissingParentResourceForInteraction`,
     handleInteractionClick: `${baseKeyOfExtension}.handleInteractionClick`,
-    findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`
+    findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`,
+    toggleFilterDiffMode: `${baseKeyOfExtension}.toggleFilterDiffMode`
 };

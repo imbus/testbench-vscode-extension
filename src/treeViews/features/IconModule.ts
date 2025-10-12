@@ -197,6 +197,14 @@ export class IconModule implements TreeViewModule {
     ): vscode.ThemeIcon | string | { light: vscode.Uri; dark: vscode.Uri } | undefined {
         const extensionUri = this.context.extensionContext.extensionUri;
 
+        // Display blocked icon for filtered out items in filter diff mode
+        if (item instanceof TestThemesTreeItem && item.isFilteredOutInDiffMode) {
+            return {
+                light: vscode.Uri.joinPath(extensionUri, "resources", "icons", "block-light.svg"),
+                dark: vscode.Uri.joinPath(extensionUri, "resources", "icons", "block-dark.svg")
+            };
+        }
+
         if (item instanceof ProjectsTreeItem) {
             switch (item.data.type) {
                 case "project":

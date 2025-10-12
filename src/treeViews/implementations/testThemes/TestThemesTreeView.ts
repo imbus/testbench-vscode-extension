@@ -11,7 +11,7 @@ import { TestThemesDataProvider } from "./TestThemesDataProvider";
 import { testThemesConfig } from "./TestThemesConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, StorageKeys, TestThemeItemTypes } from "../../../constants";
-import { TestStructureNode } from "../../../testBenchTypes";
+import { TestStructure, TestStructureNode } from "../../../testBenchTypes";
 import { getExtensionConfiguration } from "../../../configuration";
 import {
     ALLOW_PERSISTENT_IMPORT_BUTTON,
@@ -46,6 +46,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private isOpenedFromCycle = false;
     private currentCycleKey: string | null = null;
     private currentCycleLabel: string | null = null;
+    private filterDiffMode: boolean = false;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -202,7 +203,60 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Validates stored filters against current server filters to avoid using invalid filters.
+     * Validates a list of stored filters against a list of filters from the server.
+     * @param storedFilters The filters saved in the workspace state
+     * @param serverFilters The current list of filters from the server
+     * @param logger A logger instance for debugging
+     * @returns An object containing the valid and removed filters
+     */
+    private static validateFilters(
+        storedFilters: any[],
+        serverFilters: any[]
+    ): { validFilters: any[]; removedFilters: any[] } {
+        const serverFiltersByName = new Map<string, any>();
+        const serverFiltersBySerial = new Map<string, any>();
+        serverFilters.forEach((filter: any) => {
+            if (filter.name) {
+                serverFiltersByName.set(filter.name, filter);
+            }
+            if (filter.key?.serial) {
+                serverFiltersBySerial.set(filter.key.serial, filter);
+            }
+        });
+
+        const validFilters: any[] = [];
+        const removedFilters: any[] = [];
+        storedFilters.forEach((storedFilter) => {
+            let isValid = false;
+            let matchedServerFilter = null;
+            if (storedFilter.key?.serial && serverFiltersBySerial.has(storedFilter.key.serial)) {
+                matchedServerFilter = serverFiltersBySerial.get(storedFilter.key.serial);
+                isValid = true;
+            } else if (storedFilter.name && serverFiltersByName.has(storedFilter.name)) {
+                const serverFilter = serverFiltersByName.get(storedFilter.name);
+                if (storedFilter.type && serverFilter.type) {
+                    isValid = storedFilter.type === serverFilter.type;
+                    if (isValid) {
+                        matchedServerFilter = serverFilter;
+                    }
+                } else {
+                    isValid = true;
+                    matchedServerFilter = serverFilter;
+                }
+            }
+
+            if (isValid && matchedServerFilter) {
+                validFilters.push(matchedServerFilter);
+            } else {
+                removedFilters.push(storedFilter);
+            }
+        });
+
+        return { validFilters, removedFilters };
+    }
+
+    /**
+     * Validates stored filters against current server filters to avoid using invalid / outdated filters.
      * Prioritizes filter key (serial) validation over name validation since filter names can be
      * swapped on server side but filter keys remain immutable.
      * @returns Promise resolving to validated filters for API requests
@@ -240,59 +294,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return [];
             }
 
-            const serverFiltersByName = new Map<string, any>();
-            const serverFiltersBySerial = new Map<string, any>();
-            serverFilters.forEach((filter: any) => {
-                if (filter.name) {
-                    serverFiltersByName.set(filter.name, filter);
-                }
-
-                if (filter.key?.serial) {
-                    serverFiltersBySerial.set(filter.key.serial, filter);
-                }
-            });
-            const validFilters: any[] = [];
-            const removedFilters: any[] = [];
-            storedFilters.forEach((storedFilter) => {
-                let isValid = false;
-                let matchedServerFilter = null;
-                if (storedFilter.key?.serial && serverFiltersBySerial.has(storedFilter.key.serial)) {
-                    matchedServerFilter = serverFiltersBySerial.get(storedFilter.key.serial);
-                    isValid = true;
-                    treeViews!.testThemesTree!.logger.debug(
-                        `[TestThemesTreeView] Filter validated by key: ${storedFilter.key.serial}`
-                    );
-                }
-
-                if (!isValid && storedFilter.name && serverFiltersByName.has(storedFilter.name)) {
-                    const serverFilter = serverFiltersByName.get(storedFilter.name);
-                    if (storedFilter.type && serverFilter.type) {
-                        isValid = storedFilter.type === serverFilter.type;
-                        if (isValid) {
-                            matchedServerFilter = serverFilter;
-                            treeViews!.testThemesTree!.logger.debug(
-                                `[TestThemesTreeView] Filter validated by name+type: ${storedFilter.name}:${storedFilter.type}`
-                            );
-                        }
-                    } else {
-                        isValid = true;
-                        matchedServerFilter = serverFilter;
-                        treeViews!.testThemesTree!.logger.debug(
-                            `[TestThemesTreeView] Filter validated by name: ${storedFilter.name}`
-                        );
-                    }
-                }
-
-                if (isValid && matchedServerFilter) {
-                    validFilters.push(matchedServerFilter);
-                } else {
-                    treeViews!.testThemesTree!.logger.warn(
-                        `[TestThemesTreeView] Invalid filter removed: ${storedFilter.name} (key: ${storedFilter.key?.serial || "none"})`
-                    );
-
-                    removedFilters.push(storedFilter);
-                }
-            });
+            const { validFilters, removedFilters } = TestThemesTreeView.validateFilters(storedFilters, serverFilters);
 
             if (removedFilters.length > 0) {
                 const contextInfo = treeViews.testThemesTree.getContextKey() || "no-context";
@@ -353,6 +355,51 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         await this.clearSavedFilters();
         this.refresh();
         this.logger.debug(`[TestThemesTreeView] Cleared all filters and refreshed tree view`);
+    }
+
+    /**
+     * Toggles the filter diff mode and updates the tree view.
+     * When enabled, shows filtered out tree items with an icon defined in IconModule.
+     * When disabled, hides filtered out items.
+     */
+    public async toggleFilterDiffMode(): Promise<void> {
+        this.filterDiffMode = !this.filterDiffMode;
+        await vscode.commands.executeCommand(
+            "setContext",
+            ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES,
+            this.filterDiffMode
+        );
+        this.logger.debug(`[TestThemesTreeView] Filter diff mode ${this.filterDiffMode ? "enabled" : "disabled"}`);
+
+        if (this.currentProjectKey && this.currentCycleKey && this.isOpenedFromCycle) {
+            this.dataProvider.clearCache();
+            await this.loadCycle(
+                this.currentProjectKey,
+                this.currentCycleKey,
+                this.currentTovKey || "",
+                this.currentProjectName || "",
+                this.currentTovName || "",
+                this.currentCycleLabel || undefined
+            );
+        } else if (this.currentProjectKey && this.currentTovKey && !this.isOpenedFromCycle) {
+            this.dataProvider.clearCache();
+            await this.loadTov(
+                this.currentProjectKey,
+                this.currentTovKey,
+                this.currentProjectName || "",
+                this.currentTovName || ""
+            );
+        } else {
+            this.refresh();
+        }
+    }
+
+    /**
+     * Gets the current filter diff mode state.
+     * @returns True if filter diff mode is enabled, false otherwise.
+     */
+    public isFilterDiffModeEnabled(): boolean {
+        return this.filterDiffMode;
     }
 
     /**
@@ -718,67 +765,89 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, true);
 
-            const fetchedTestStructure = await this.dataProvider.fetchCycleStructure(projectKey, cycleKey);
-            if (!fetchedTestStructure) {
-                throw new Error("Failed to fetch test structure");
-            }
-
-            // Clear existing tree data only, preserving UI state (expansion, marking, etc.)
-            this.clearTreeDataOnly();
-
-            // Build the tree structure
-            const nodeMap = new Map(
-                fetchedTestStructure.nodes.map((node) => [node.base.key, { ...node, hasChildren: false }])
+            // When filter diff mode is on, dont suppress filtered data so we can display all items
+            const suppressFilteredData = !this.filterDiffMode;
+            this.logger.trace(
+                `[TestThemesTreeView] Fetching cycle structure with suppressFilteredData=${suppressFilteredData} (filterDiffMode=${this.filterDiffMode})`
             );
+            const fetchedTestStructure = await this.dataProvider.fetchCycleStructure(
+                projectKey,
+                cycleKey,
+                suppressFilteredData
+            );
+            await this._processAndRenderTree(fetchedTestStructure);
+        } catch (error) {
+            this._handleLoadError(error, "cycle");
+        }
+    }
 
-            // Calculate which nodes have children
-            for (const node of nodeMap.values()) {
-                if (node.base.parentKey && nodeMap.has(node.base.parentKey)) {
-                    nodeMap.get(node.base.parentKey)!.hasChildren = true;
+    private async _processAndRenderTree(fetchedTestStructure: TestStructure | null): Promise<void> {
+        if (!fetchedTestStructure) {
+            throw new Error("Failed to fetch test structure");
+        }
+
+        this.clearTreeDataOnly();
+        type NodeWithChildren = TestStructureNode & { hasChildren: boolean };
+
+        // Build the tree structure
+        const nodeMap = new Map<string, NodeWithChildren>(
+            fetchedTestStructure.nodes.map((node: TestStructureNode) => [
+                node.base.key,
+                { ...node, hasChildren: false }
+            ])
+        );
+
+        // Calculate which nodes have children
+        for (const node of nodeMap.values()) {
+            if (node.base.parentKey && nodeMap.has(node.base.parentKey)) {
+                const parentNode = nodeMap.get(node.base.parentKey);
+                if (parentNode) {
+                    parentNode.hasChildren = true;
                 }
             }
-
-            const rootItems = this.buildTreeRecursively(fetchedTestStructure.root.base.key, null, nodeMap);
-            this.rootItems = rootItems;
-
-            // Set the last data fetch timestamp to prevent infinite loading
-            // This is important even for empty results to prevent the tree from continuously trying to load data
-            (this as any)._lastDataFetch = Date.now();
-            (this as any)._intentionallyCleared = false;
-
-            this.stateManager.setLoading(false);
-            this._onDidChangeTreeData.fire(undefined);
-            await this.updateRobotFileAvailabilityForAllTreeItems();
-            this._onDidChangeTreeData.fire(undefined);
-            (this as any).updateTreeViewMessage();
-
-            // Update filter context key and log filter information for debugging
-            const currentFilters = this.getSavedFilters();
-            this.logger.debug(
-                `[TestThemesTreeView] Successfully loaded test cycle with ${currentFilters.length} saved filters for context: ${this.getContextKey()}`
-            );
-            if (currentFilters.length > 0) {
-                this.logger.debug(
-                    `[TestThemesTreeView] Saved filter names: ${currentFilters.map((f) => f.name).join(", ")}`
-                );
-            }
-            await vscode.commands.executeCommand(
-                "setContext",
-                ContextKeys.TEST_THEME_TREE_HAS_FILTERS,
-                currentFilters.length > 0
-            );
-        } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error loading cycle:", error);
-
-            this.rootItems = [];
-            (this as any)._lastDataFetch = Date.now();
-            (this as any)._intentionallyCleared = false;
-            this.stateManager.setLoading(false);
-            this._onDidChangeTreeData.fire(undefined);
-            (this as any).updateTreeViewMessage();
-
-            throw error;
         }
+
+        const rootItems = this.buildTreeRecursively(fetchedTestStructure.root.base.key, null, nodeMap);
+        this.rootItems = rootItems;
+
+        // Set the last data fetch timestamp to prevent infinite loading
+        // This is important even for empty results to prevent the tree from continuously trying to load data
+        (this as any)._lastDataFetch = Date.now();
+        (this as any)._intentionallyCleared = false;
+
+        this.stateManager.setLoading(false);
+        this._onDidChangeTreeData.fire(undefined);
+        await this.updateRobotFileAvailabilityForAllTreeItems();
+        this._onDidChangeTreeData.fire(undefined);
+        (this as any).updateTreeViewMessage();
+
+        const currentFilters = this.getSavedFilters();
+        this.logger.debug(
+            `[TestThemesTreeView] Successfully loaded data with ${currentFilters.length} saved filters for context: ${this.getContextKey()}`
+        );
+        if (currentFilters.length > 0) {
+            this.logger.debug(
+                `[TestThemesTreeView] Saved filter names: ${currentFilters.map((f) => f.name).join(", ")}`
+            );
+        }
+        await vscode.commands.executeCommand(
+            "setContext",
+            ContextKeys.TEST_THEME_TREE_HAS_FILTERS,
+            currentFilters.length > 0
+        );
+    }
+
+    private _handleLoadError(error: unknown, context: string): void {
+        this.logger.error(`[TestThemesTreeView] Error loading ${context}:`, error);
+
+        this.rootItems = [];
+        (this as any)._lastDataFetch = Date.now();
+        (this as any)._intentionallyCleared = false;
+        this.stateManager.setLoading(false);
+        this._onDidChangeTreeData.fire(undefined);
+        (this as any).updateTreeViewMessage();
+
+        throw error;
     }
 
     public async loadTov(projectKey: string, tovKey: string, projectName: string, tovName: string): Promise<void> {
@@ -814,65 +883,18 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
             await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, false);
 
-            const fetchedTestStructure = await this.dataProvider.fetchTovStructure(projectKey, tovKey);
-            if (!fetchedTestStructure) {
-                throw new Error("Failed to fetch test structure");
-            }
-
-            // Clear existing tree data only, preserving UI state (expansion, marking, etc.)
-            this.clearTreeDataOnly();
-
-            const nodeMap = new Map(
-                fetchedTestStructure.nodes.map((node) => [node.base.key, { ...node, hasChildren: false }])
+            const suppressFilteredData = !this.filterDiffMode;
+            this.logger.trace(
+                `[TestThemesTreeView] Fetching TOV structure with suppressFilteredData=${suppressFilteredData} (filterDiffMode=${this.filterDiffMode})`
             );
-
-            // Calculate which nodes have children
-            for (const node of nodeMap.values()) {
-                if (node.base.parentKey && nodeMap.has(node.base.parentKey)) {
-                    nodeMap.get(node.base.parentKey)!.hasChildren = true;
-                }
-            }
-
-            const rootItems = this.buildTreeRecursively(fetchedTestStructure.root.base.key, null, nodeMap);
-            this.rootItems = rootItems;
-
-            // Set the last data fetch timestamp to prevent infinite loading
-            // This is important even for empty results to prevent the tree from continuously trying to load data
-            (this as any)._lastDataFetch = Date.now();
-            (this as any)._intentionallyCleared = false;
-
-            this.stateManager.setLoading(false);
-            this._onDidChangeTreeData.fire(undefined);
-            await this.updateRobotFileAvailabilityForAllTreeItems();
-            this._onDidChangeTreeData.fire(undefined);
-            (this as any).updateTreeViewMessage();
-
-            // Update filter context key and log filter information for debugging
-            const currentFilters = this.getSavedFilters();
-            this.logger.debug(
-                `[TestThemesTreeView] Successfully loaded Test Object Version with ${currentFilters.length} saved filters for context: ${this.getContextKey()}`
+            const fetchedTestStructure = await this.dataProvider.fetchTovStructure(
+                projectKey,
+                tovKey,
+                suppressFilteredData
             );
-            if (currentFilters.length > 0) {
-                this.logger.debug(
-                    `[TestThemesTreeView] Saved filter names: ${currentFilters.map((f) => f.name).join(", ")}`
-                );
-            }
-            await vscode.commands.executeCommand(
-                "setContext",
-                ContextKeys.TEST_THEME_TREE_HAS_FILTERS,
-                currentFilters.length > 0
-            );
+            await this._processAndRenderTree(fetchedTestStructure);
         } catch (error) {
-            this.logger.error("[TestThemesTreeView] Error loading TOV:", error);
-
-            this.rootItems = [];
-            (this as any)._lastDataFetch = Date.now();
-            (this as any)._intentionallyCleared = false;
-            this.stateManager.setLoading(false);
-            this._onDidChangeTreeData.fire(undefined);
-            (this as any).updateTreeViewMessage();
-
-            throw error;
+            this._handleLoadError(error, "TOV");
         }
     }
 
@@ -886,6 +908,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         // - It is a "Test Case"
         // - Execution status is "NotPlanned"
         // - Item is locked by system (-2)
+        // - When filter diff mode is OFF and matchesFilter is false
         if (nodeData.elementType === TestThemeItemTypes.TEST_CASE) {
             return false;
         }
@@ -894,6 +917,12 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             return false;
         }
         if (nodeData.exec?.locker === "-2") {
+            return false;
+        }
+
+        // If filter diff mode is disabled and there are filters applied,
+        // hide items that don't match the filter
+        if (!this.filterDiffMode && nodeData.base?.matchesFilter === false) {
             return false;
         }
 
@@ -1035,7 +1064,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private buildTreeRecursively(
         parentKey: string,
         parent: TestThemesTreeItem | null,
-        nodeMap: Map<string, TestStructureNode>
+        nodeMap: Map<string, TestStructureNode & { hasChildren: boolean }>
     ): TestThemesTreeItem[] {
         const children: TestThemesTreeItem[] = [];
         // Find all nodes that have this parent key
@@ -1116,6 +1145,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             item.setMetadata("openedFromCycle", this.isOpenedFromCycle);
             item.updateId();
             this.applyModulesToTestThemesItem(item);
+
+            // Apply filter diff icon if filter diff mode is enabled and item doesn't match filter
+            if (this.filterDiffMode && treeItemData.base.matchesFilter === false) {
+                item.isFilteredOutInDiffMode = true;
+            }
 
             return item;
         } catch (error) {
@@ -1576,50 +1610,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 return [];
             }
 
-            const serverFiltersBySerial = new Map<string, any>();
-            const serverFiltersByName = new Map<string, any>();
-
-            serverFilters.forEach((filter: any) => {
-                if (filter.key?.serial) {
-                    serverFiltersBySerial.set(filter.key.serial, filter);
-                }
-
-                if (filter.name) {
-                    serverFiltersByName.set(filter.name, filter);
-                }
-            });
-
-            const validFilters: any[] = [];
-            storedFilters.forEach((storedFilter) => {
-                let isValid = false;
-                let matchedServerFilter = null;
-
-                if (storedFilter.key?.serial && serverFiltersBySerial.has(storedFilter.key.serial)) {
-                    matchedServerFilter = serverFiltersBySerial.get(storedFilter.key.serial);
-                    isValid = true;
-                }
-
-                // Fallback validation by name and type
-                else if (storedFilter.name && serverFiltersByName.has(storedFilter.name)) {
-                    const serverFilter = serverFiltersByName.get(storedFilter.name);
-
-                    if (storedFilter.type && serverFilter.type) {
-                        isValid = storedFilter.type === serverFilter.type;
-
-                        if (isValid) {
-                            matchedServerFilter = serverFilter;
-                        }
-                    } else {
-                        isValid = true;
-                        matchedServerFilter = serverFilter;
-                    }
-                }
-
-                if (isValid && matchedServerFilter) {
-                    validFilters.push(matchedServerFilter);
-                }
-            });
-
+            const { validFilters } = TestThemesTreeView.validateFilters(storedFilters, serverFilters);
             return validFilters;
         } catch (error) {
             treeViews?.testThemesTree?.logger.error(

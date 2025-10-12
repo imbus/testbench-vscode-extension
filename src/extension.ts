@@ -659,141 +659,54 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleDisplayFiltersForTestThemeTree = async () => {
-        logger.debug(`[extension] Command called: testbenchExtension.displayFiltersForTestThemeTree ON or OFF`);
-
         if (!treeViews?.testThemesTree) {
-            logger.warn(
-                `[extension] testbenchExtension.displayFiltersForTestThemeTree ON or OFF called before test themes tree is initialized`
-            );
+            logger.warn("[extension] Test themes tree not available to display filters.");
             return;
         }
 
+        const connection = getConnection();
         if (!connection) {
-            logger.warn(
-                `[extension] testbenchExtension.displayFiltersForTestThemeTree ON or OFF called without active connection.`
-            );
-            vscode.window.showWarningMessage("No active connection available. Please log in first.");
+            vscode.window.showErrorMessage("No connection available to fetch filters.");
             return;
         }
 
         try {
-            const filters = await connection.getFiltersFromOldPlayServer();
-            if (!filters) {
+            const serverFilters = await connection.getFiltersFromOldPlayServer();
+            if (!serverFilters || !Array.isArray(serverFilters)) {
+                vscode.window.showWarningMessage("Could not fetch filters from the server.");
                 return;
             }
 
-            const quickPickItems: vscode.QuickPickItem[] = filters.map((filter: any) => {
-                let iconPath: { light: vscode.Uri; dark: vscode.Uri } | undefined;
+            const quickPickItems = serverFilters.map((filter: any) => ({
+                label: filter.name,
+                description: `Type: ${filter.type}`,
+                picked: treeViews?.testThemesTree
+                    .getSavedFilters()
+                    .some((savedFilter) => savedFilter.key?.serial === filter.key?.serial),
+                filterObject: filter
+            }));
 
-                switch (filter.type) {
-                    case "TestTheme":
-                        iconPath = {
-                            light: vscode.Uri.file(
-                                path.join(extensionContext.extensionPath, "resources/icons/TestThemeOriginal-light.svg")
-                            ),
-                            dark: vscode.Uri.file(
-                                path.join(extensionContext.extensionPath, "resources/icons/TestThemeOriginal-dark.svg")
-                            )
-                        };
-                        break;
-
-                    case "TestCaseSet":
-                        iconPath = {
-                            light: vscode.Uri.file(
-                                path.join(
-                                    extensionContext.extensionPath,
-                                    "resources/icons/TestCaseSetOriginal-light.svg"
-                                )
-                            ),
-
-                            dark: vscode.Uri.file(
-                                path.join(
-                                    extensionContext.extensionPath,
-                                    "resources/icons/TestCaseSetOriginal-dark.svg"
-                                )
-                            )
-                        };
-                        break;
-
-                    case "TestCase":
-                        iconPath = {
-                            light: vscode.Uri.file(
-                                path.join(extensionContext.extensionPath, "resources/icons/testCase-light.svg")
-                            ),
-                            dark: vscode.Uri.file(
-                                path.join(extensionContext.extensionPath, "resources/icons/testCase-dark.svg")
-                            )
-                        };
-                        break;
-
-                    default:
-                        iconPath = undefined;
-                        break;
-                }
-
-                return {
-                    label: filter.name,
-                    description: `Type: ${filter.type}`,
-                    picked: false,
-                    iconPath: iconPath,
-                    filterData: filter
-                } as vscode.QuickPickItem & { filterData: any };
+            const selectedFilterItems = await vscode.window.showQuickPick(quickPickItems, {
+                canPickMany: true,
+                placeHolder: "Select filters to apply to the Test Themes tree"
             });
 
-            const savedFilters = treeViews?.testThemesTree?.getSavedFilters() || [];
-            const savedFilterIds = new Set(savedFilters.map((f: any) => f.key?.serial || f.name));
-            // Mark currently applied filters as picked
-            quickPickItems.forEach((item: any) => {
-                const filterId = item.filterData.key?.serial || item.filterData.name;
-
-                item.picked = savedFilterIds.has(filterId);
-            });
-
-            const quickPick = vscode.window.createQuickPick();
-            quickPick.title = "Select Filters for Test Theme Tree";
-            quickPick.placeholder =
-                savedFilters.length > 0
-                    ? `${savedFilters.length} filter(s) currently applied. Choose filters to apply`
-                    : "Choose one or more filters to apply";
-            quickPick.items = quickPickItems;
-            quickPick.canSelectMany = true;
-            quickPick.matchOnDescription = true;
-            quickPick.matchOnDetail = true;
-            quickPick.selectedItems = quickPickItems.filter((item: any) => item.picked);
-
-            quickPick.onDidAccept(() => {
-                const selectedFilters = quickPick.selectedItems.map((item: any) => item.filterData);
-                logger.trace(
-                    `[extension] Selected ${selectedFilters.length} filters:`,
-
-                    selectedFilters.map((f: any) => f.name)
-                );
-
-                if (selectedFilters.length > 0) {
-                    vscode.window.showInformationMessage(
-                        `Selected ${selectedFilters.length} filter(s): ${selectedFilters.map((f: any) => f.name).join(", ")}`
-                    );
-                    treeViews?.testThemesTree?.applyFiltersAndRefresh(selectedFilters).catch((error) => {
-                        logger.error(`[extension] Error applying test theme filters:`, error);
-
-                        vscode.window.showErrorMessage(`Failed to apply filters: ${error.message}`);
-                    });
-                } else {
-                    treeViews?.testThemesTree?.clearFiltersAndRefresh().catch((error) => {
-                        logger.error(`[extension] Error clearing test theme filters:`, error);
-                    });
-                }
-
-                quickPick.dispose();
-            });
-            quickPick.onDidHide(() => {
-                quickPick.dispose();
-            });
-            quickPick.show();
+            if (selectedFilterItems) {
+                const selectedFilters = selectedFilterItems.map((item) => item.filterObject);
+                await treeViews.testThemesTree.applyFiltersAndRefresh(selectedFilters);
+            }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            logger.error(`[extension] Error when displaying filters: ${errorMessage}`, error);
-            vscode.window.showErrorMessage(`Failed to display filters: ${errorMessage}`);
+            const errorMessage = `Error displaying filters: ${error instanceof Error ? error.message : "Unknown error"}`;
+            logger.error(`[extension] ${errorMessage}`);
+            vscode.window.showErrorMessage(errorMessage);
+        }
+    };
+
+    const handleToggleFilterDiffMode = async () => {
+        if (treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.toggleFilterDiffMode();
+        } else {
+            logger.warn("[extension] Test themes tree not available to toggle filter diff mode.");
         }
     };
 
@@ -888,8 +801,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.refreshProjectTreeView, handler: handleRefreshProjectTreeView },
         { id: allExtensionCommands.refreshTestThemeTreeView, handler: handleRefreshTestThemeTreeView },
         { id: allExtensionCommands.refreshTestElementsTree, handler: handleRefreshTestElementsTree },
-        { id: allExtensionCommands.displayFiltersForTestThemeTreeON, handler: handleDisplayFiltersForTestThemeTree },
-        { id: allExtensionCommands.displayFiltersForTestThemeTreeOFF, handler: handleDisplayFiltersForTestThemeTree },
+        { id: allExtensionCommands.displayFiltersForTestThemeTree, handler: handleDisplayFiltersForTestThemeTree },
+        { id: allExtensionCommands.toggleFilterDiffMode, handler: handleToggleFilterDiffMode },
         {
             id: allExtensionCommands.makeRoot,
             handler: handleMakeRoot
