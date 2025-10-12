@@ -399,7 +399,6 @@
             {
                 "command": "testbenchExtension.toggleFilterDiffMode",
                 "title": "Toggle Filter Diff Mode",
-                "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && !testbenchExtension.filterDiffModeEnabledTestThemes",
                 "icon": {
                     "light": "resources/icons/diff-on-light.svg",
                     "dark": "resources/icons/diff-on-dark.svg"
@@ -408,7 +407,6 @@
             {
                 "command": "testbenchExtension.toggleFilterDiffMode",
                 "title": "Toggle Filter Diff Mode",
-                "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && testbenchExtension.filterDiffModeEnabledTestThemes",
                 "icon": {
                     "light": "resources/icons/diff-off-light.svg",
                     "dark": "resources/icons/diff-off-dark.svg"
@@ -687,20 +685,12 @@
                 {
                     "command": "testbenchExtension.toggleFilterDiffMode",
                     "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && !testbenchExtension.filterDiffModeEnabledTestThemes",
-                    "group": "navigation@4",
-                    "icon": {
-                        "light": "resources/icons/diff-on-light.svg",
-                        "dark": "resources/icons/diff-on-dark.svg"
-                    }
+                    "group": "navigation@4"
                 },
                 {
                     "command": "testbenchExtension.toggleFilterDiffMode",
                     "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && testbenchExtension.filterDiffModeEnabledTestThemes",
-                    "group": "navigation@4",
-                    "icon": {
-                        "light": "resources/icons/diff-off-light.svg",
-                        "dark": "resources/icons/diff-off-dark.svg"
-                    }
+                    "group": "navigation@4"
                 },
                 {
                     "command": "testbenchExtension.showExtensionSettings",

@@ -369,7 +369,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES,
             this.filterDiffMode
         );
-        this.logger.debug(`[TestThemesTreeView] Filter diff mode ${this.filterDiffMode ? "enabled" : "disabled"}`);
+        this.logger.debug(`[TestThemesTreeView] Filter diff mode ${this.filterDiffMode ? "enabled" : "disabled"}
+            and context key ${ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES} set to ${this.filterDiffMode}`);
 
         if (this.currentProjectKey && this.currentCycleKey && this.isOpenedFromCycle) {
             this.dataProvider.clearCache();
