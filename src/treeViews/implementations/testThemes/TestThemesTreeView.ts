@@ -1071,16 +1071,15 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         // Find all nodes that have this parent key
         for (const nodeData of nodeMap.values()) {
             if (nodeData.base.parentKey === parentKey) {
-                // Check if the item is visible before processing it
-                if (!this._isVisible(nodeData)) {
-                    continue; // Skip this item and its entire branch
-                }
                 const item = this.createTreeItem(nodeData, parent || undefined);
                 // Recursively build children for the visible item
                 const grandChildren = this.buildTreeRecursively(nodeData.base.key, item, nodeMap);
                 item.children = grandChildren;
 
-                children.push(item);
+                // An item is included if it's visible itself, or if it has visible children.
+                if (this._isVisible(nodeData) || grandChildren.length > 0) {
+                    children.push(item);
+                }
             }
         }
 
