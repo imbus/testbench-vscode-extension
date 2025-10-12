@@ -358,19 +358,24 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     }
 
     /**
-     * Toggles the filter diff mode and updates the tree view.
-     * When enabled, shows filtered out tree items with an icon defined in IconModule.
-     * When disabled, hides filtered out items.
+     * Sets the filter diff mode and updates the tree view.
+     * @param enabled True to enable filter diff mode, false to disable.
      */
-    public async toggleFilterDiffMode(): Promise<void> {
-        this.filterDiffMode = !this.filterDiffMode;
+    private async setFilterDiffMode(enabled: boolean): Promise<void> {
+        if (this.filterDiffMode === enabled) {
+            return; // No change needed
+        }
+        this.filterDiffMode = enabled;
         await vscode.commands.executeCommand(
             "setContext",
             ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES,
             this.filterDiffMode
         );
-        this.logger.debug(`[TestThemesTreeView] Filter diff mode ${this.filterDiffMode ? "enabled" : "disabled"}
-            and context key ${ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES} set to ${this.filterDiffMode}`);
+        this.logger.debug(
+            `[TestThemesTreeView] Filter diff mode ${
+                this.filterDiffMode ? "enabled" : "disabled"
+            } and context key ${ContextKeys.FILTER_DIFF_MODE_ENABLED_TEST_THEMES} set to ${this.filterDiffMode}`
+        );
 
         if (this.currentProjectKey && this.currentCycleKey && this.isOpenedFromCycle) {
             this.dataProvider.clearCache();
@@ -393,6 +398,20 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         } else {
             this.refresh();
         }
+    }
+
+    /**
+     * Enables the filter diff mode.
+     */
+    public async enableFilterDiffMode(): Promise<void> {
+        await this.setFilterDiffMode(true);
+    }
+
+    /**
+     * Disables the filter diff mode.
+     */
+    public async disableFilterDiffMode(): Promise<void> {
+        await this.setFilterDiffMode(false);
     }
 
     /**
@@ -1283,55 +1302,6 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             `[TestThemesTreeView] Updating filter context key: hasFilters=${hasFilters}, filterCount=${currentFilters.length}`
         );
         await vscode.commands.executeCommand("setContext", ContextKeys.TEST_THEME_TREE_HAS_FILTERS, hasFilters);
-    }
-
-    /**
-     * Overrides the base refresh method to fetch data from the server
-     *
-     * @param item Optional specific item to refresh
-     * @param options Optional refresh options
-     */
-    public override refresh(item?: TestThemesTreeItem, options?: { immediate?: boolean }): void {
-        if (item) {
-            super.refresh(item, options);
-            return;
-        }
-
-        if (this.currentProjectKey && this.currentProjectName && this.currentTovName) {
-            if (this.currentCycleKey && this.isOpenedFromCycle) {
-                this.dataProvider.invalidateCache(this.currentProjectKey, this.currentCycleKey, false);
-                this.loadCycle(
-                    this.currentProjectKey,
-                    this.currentCycleKey,
-                    this.currentTovKey!,
-                    this.currentProjectName,
-                    this.currentTovName,
-                    this.currentCycleLabel || undefined
-                ).catch((error) => {
-                    this.logger.error(
-                        "[TestThemesTreeView] Error refreshing test themes tree from cycle context:",
-                        error
-                    );
-                });
-            } else if (this.currentTovKey) {
-                this.dataProvider.invalidateCache(this.currentProjectKey, this.currentTovKey, true);
-                this.loadTov(
-                    this.currentProjectKey,
-                    this.currentTovKey,
-                    this.currentProjectName,
-                    this.currentTovName
-                ).catch((error) => {
-                    this.logger.error(
-                        "[TestThemesTreeView] Error refreshing test themes tree from TOV context:",
-                        error
-                    );
-                });
-            } else {
-                this.clearTree();
-            }
-        } else {
-            this.clearTree();
-        }
     }
 
     /**

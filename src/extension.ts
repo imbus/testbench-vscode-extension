@@ -702,11 +702,19 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
-    const handleToggleFilterDiffMode = async () => {
+    const handleEnableFilterDiffMode = async () => {
         if (treeViews?.testThemesTree) {
-            await treeViews.testThemesTree.toggleFilterDiffMode();
+            await treeViews.testThemesTree.enableFilterDiffMode();
         } else {
-            logger.warn("[extension] Test themes tree not available to toggle filter diff mode.");
+            logger.warn("[extension] Test themes tree not available to enable filter diff mode.");
+        }
+    };
+
+    const handleDisableFilterDiffMode = async () => {
+        if (treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.disableFilterDiffMode();
+        } else {
+            logger.warn("[extension] Test themes tree not available to disable filter diff mode.");
         }
     };
 
@@ -802,7 +810,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.refreshTestThemeTreeView, handler: handleRefreshTestThemeTreeView },
         { id: allExtensionCommands.refreshTestElementsTree, handler: handleRefreshTestElementsTree },
         { id: allExtensionCommands.displayFiltersForTestThemeTree, handler: handleDisplayFiltersForTestThemeTree },
-        { id: allExtensionCommands.toggleFilterDiffMode, handler: handleToggleFilterDiffMode },
+        { id: allExtensionCommands.enableFilterDiffMode, handler: handleEnableFilterDiffMode },
+        { id: allExtensionCommands.disableFilterDiffMode, handler: handleDisableFilterDiffMode },
         {
             id: allExtensionCommands.makeRoot,
             handler: handleMakeRoot

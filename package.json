@@ -397,19 +397,19 @@
                 }
             },
             {
-                "command": "testbenchExtension.toggleFilterDiffMode",
-                "title": "Toggle Filter Diff Mode",
-                "icon": {
-                    "light": "resources/icons/diff-on-light.svg",
-                    "dark": "resources/icons/diff-on-dark.svg"
-                }
-            },
-            {
-                "command": "testbenchExtension.toggleFilterDiffMode",
-                "title": "Toggle Filter Diff Mode",
+                "command": "testbenchExtension.enableFilterDiffMode",
+                "title": "Filter Diff Disabled",
                 "icon": {
                     "light": "resources/icons/diff-off-light.svg",
                     "dark": "resources/icons/diff-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.disableFilterDiffMode",
+                "title": "Filter Diff Enabled",
+                "icon": {
+                    "light": "resources/icons/diff-on-light.svg",
+                    "dark": "resources/icons/diff-on-dark.svg"
                 }
             },
             {
@@ -683,14 +683,22 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.toggleFilterDiffMode",
+                    "command": "testbenchExtension.enableFilterDiffMode",
                     "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && !testbenchExtension.filterDiffModeEnabledTestThemes",
-                    "group": "navigation@4"
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/diff-off-light.svg",
+                        "dark": "resources/icons/diff-off-dark.svg"
+                    }
                 },
                 {
-                    "command": "testbenchExtension.toggleFilterDiffMode",
+                    "command": "testbenchExtension.disableFilterDiffMode",
                     "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && testbenchExtension.filterDiffModeEnabledTestThemes",
-                    "group": "navigation@4"
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/diff-on-light.svg",
+                        "dark": "resources/icons/diff-on-dark.svg"
+                    }
                 },
                 {
                     "command": "testbenchExtension.showExtensionSettings",

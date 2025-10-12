@@ -237,5 +237,6 @@ export const allExtensionCommands = {
     createMissingParentResourceForInteraction: `${baseKeyOfExtension}.createMissingParentResourceForInteraction`,
     handleInteractionClick: `${baseKeyOfExtension}.handleInteractionClick`,
     findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`,
-    toggleFilterDiffMode: `${baseKeyOfExtension}.toggleFilterDiffMode`
+    enableFilterDiffMode: `${baseKeyOfExtension}.enableFilterDiffMode`,
+    disableFilterDiffMode: `${baseKeyOfExtension}.disableFilterDiffMode`
 };
