@@ -348,8 +348,28 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     public async applyFiltersAndRefresh(filters: any[]): Promise<void> {
         await this.saveFilters(filters);
-        this.refresh();
-        this.logger.debug(`[TestThemesTreeView] Applied ${filters.length} filters and refreshed tree view`);
+        // Refetch data from server so that suppressFilteredData respects current diff mode
+        this.dataProvider.clearCache();
+        if (this.currentProjectKey && this.currentCycleKey && this.isOpenedFromCycle) {
+            await this.loadCycle(
+                this.currentProjectKey,
+                this.currentCycleKey,
+                this.currentTovKey || "",
+                this.currentProjectName || "",
+                this.currentTovName || "",
+                this.currentCycleLabel || undefined
+            );
+        } else if (this.currentProjectKey && this.currentTovKey && !this.isOpenedFromCycle) {
+            await this.loadTov(
+                this.currentProjectKey,
+                this.currentTovKey,
+                this.currentProjectName || "",
+                this.currentTovName || ""
+            );
+        } else {
+            this.refresh();
+        }
+        this.logger.debug(`[TestThemesTreeView] Applied ${filters.length} filters and reloaded data`);
     }
 
     /**
@@ -357,8 +377,28 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      */
     public async clearFiltersAndRefresh(): Promise<void> {
         await this.clearSavedFilters();
-        this.refresh();
-        this.logger.debug(`[TestThemesTreeView] Cleared all filters and refreshed tree view`);
+        // Refetch data from server so that suppressFilteredData respects current diff mode
+        this.dataProvider.clearCache();
+        if (this.currentProjectKey && this.currentCycleKey && this.isOpenedFromCycle) {
+            await this.loadCycle(
+                this.currentProjectKey,
+                this.currentCycleKey,
+                this.currentTovKey || "",
+                this.currentProjectName || "",
+                this.currentTovName || "",
+                this.currentCycleLabel || undefined
+            );
+        } else if (this.currentProjectKey && this.currentTovKey && !this.isOpenedFromCycle) {
+            await this.loadTov(
+                this.currentProjectKey,
+                this.currentTovKey,
+                this.currentProjectName || "",
+                this.currentTovName || ""
+            );
+        } else {
+            this.refresh();
+        }
+        this.logger.debug(`[TestThemesTreeView] Cleared all filters and reloaded data`);
     }
 
     /**
