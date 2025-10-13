@@ -495,6 +495,13 @@ export class FilteringModule implements TreeViewModule {
             return items;
         }
 
+        this.context.logger.trace(
+            this.context.buildLogPrefix(
+                "FilteringModule",
+                `Filtering ${items.length} items. Filter: ${JSON.stringify(this.textFilter)}`
+            )
+        );
+
         if (this.filterDiffState.enabled) {
             this.context.logger.debug(
                 this.context.buildLogPrefix(
@@ -531,6 +538,12 @@ export class FilteringModule implements TreeViewModule {
             this.context.buildLogPrefix(
                 "FilteringModule",
                 `Filtered ${items.length} root items down to ${filteredItems.length} visible items in hierarchy`
+            )
+        );
+        this.context.logger.trace(
+            this.context.buildLogPrefix(
+                "FilteringModule",
+                `Filtering complete. Returning ${filteredItems.length} items.`
             )
         );
         return filteredItems;

@@ -769,14 +769,16 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
     };
 
     const handleSearchInTreeView = async (treeView: TreeViewBase<TreeItemBase>): Promise<void> => {
+        logger.trace(`[extension] Initiating search for tree view: ${treeView.config.id}`);
         const filteringModule = treeView.getModule("filtering");
         if (!filteringModule) {
+            logger.warn(`[extension] Search cancelled: FilteringModule not found for tree view ${treeView.config.id}.`);
             vscode.window.showWarningMessage("Search functionality is not available for this view.");
             return;
         }
 
         const currentFilter = filteringModule.getTextFilter();
-
+        logger.trace(`[extension] Current text filter: ${JSON.stringify(currentFilter)}`);
         const treeViewId = treeView.config.id;
         const isProjectsTree = treeViewId === "testbench.projects";
 
@@ -800,6 +802,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         ];
 
         if (currentFilter) {
+            logger.trace("[extension] Populating Quick Pick with current filter settings.");
             criteria.forEach(
                 (criteria) =>
                     (criteria.picked =
@@ -846,6 +849,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         disposables.push(
             quickPick.onDidChangeSelection(async (selection) => {
                 if (selection.some((item) => item.id === "Clear")) {
+                    logger.trace("[extension] 'Clear' action selected. Clearing text filter.");
                     filteringModule.setTextFilter(null);
                     quickPick.hide();
                 }
@@ -855,11 +859,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         disposables.push(
             quickPick.onDidAccept(async () => {
                 const selectedItems = quickPick.selectedItems;
+                logger.trace(
+                    `[extension] Quick Pick accepted with selection: ${JSON.stringify(selectedItems.map((i) => i.id))}`
+                );
                 quickPick.hide();
 
                 const selectedCriteria = selectedItems.filter((item) => criteria.some((c) => c.id === item.id));
 
                 if (selectedCriteria.length === 0) {
+                    logger.trace("[extension] No search criteria selected. Clearing text filter.");
                     filteringModule.setTextFilter(null);
                     return;
                 }
@@ -871,10 +879,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 });
 
                 if (searchText === undefined) {
+                    logger.trace("[extension] Search input cancelled by user.");
                     return;
                 }
 
                 if (!searchText.trim()) {
+                    logger.trace("[extension] Search text is empty, clearing filter.");
                     filteringModule.setTextFilter(null);
                     return;
                 }
@@ -891,17 +901,20 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     showChildrenOfMatches: selectedItems.some((item) => item.id === "ShowChildren")
                 };
 
+                logger.trace(`[extension] Applying text filter: ${JSON.stringify(newFilterOptions)}`);
                 filteringModule.setTextFilter(newFilterOptions);
             })
         );
 
         disposables.push(
             quickPick.onDidHide(() => {
+                logger.trace("[extension] Search Quick Pick hidden. Disposing listeners.");
                 disposables.forEach((d) => d.dispose());
                 quickPick.dispose();
             })
         );
 
+        logger.trace("[extension] Showing search Quick Pick.");
         quickPick.show();
     };
 
