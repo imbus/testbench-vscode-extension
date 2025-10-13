@@ -777,20 +777,26 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         const currentFilter = filteringModule.getTextFilter();
 
+        const treeViewId = treeView.config.id;
+        const isProjectsTree = treeViewId === "testbench.projects";
+
         const criteria: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
-            { id: "Label", label: "Label", description: "Search in item's label", picked: true },
-            { id: "Description", label: "Description", description: "Search in item's description" },
-            { id: "Tooltip", label: "Tooltip", description: "Search in item's tooltip" },
-            { id: "ID", label: "ID", description: "Search in item's unique ID" },
-            { id: "Type", label: "Type", description: "Search in item's type (context value)" }
+            { id: "Label", label: "Label", description: "Search in item's label", picked: true }
         ];
+
+        if (!isProjectsTree) {
+            criteria.push({ id: "Description", label: "UID", description: "Search in item's unique ID" });
+        }
+
+        criteria.push({ id: "Tooltip", label: "Tooltip", description: "Search in all available item fields" });
 
         const options: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
             { id: "CaseSensitive", label: "Case Sensitive", description: "Perform a case-sensitive search" },
             {
                 id: "ShowParents",
                 label: "Show Parents of Matches",
-                description: "Preserve the tree structure by showing parent items"
+                description: "Preserve the tree structure by showing parent items",
+                picked: true
             },
             {
                 id: "ShowChildren",
@@ -805,9 +811,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     (criteria.picked =
                         (criteria.id === "Label" && currentFilter.searchInLabel) ||
                         (criteria.id === "Description" && currentFilter.searchInDescription) ||
-                        (criteria.id === "Tooltip" && currentFilter.searchInTooltip) ||
-                        (criteria.id === "ID" && currentFilter.searchInId) ||
-                        (criteria.id === "Type" && currentFilter.searchInType))
+                        (criteria.id === "Tooltip" && currentFilter.searchInTooltip))
             );
             options.forEach(
                 (option) =>
@@ -888,8 +892,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     searchInLabel: selectedCriteria.some((c) => c.id === "Label"),
                     searchInDescription: selectedCriteria.some((c) => c.id === "Description"),
                     searchInTooltip: selectedCriteria.some((c) => c.id === "Tooltip"),
-                    searchInId: selectedCriteria.some((c) => c.id === "ID"),
-                    searchInType: selectedCriteria.some((c) => c.id === "Type"),
+                    searchInId: false,
+                    searchInType: false,
                     showParentsOfMatches: selectedItems.some((item) => item.id === "ShowParents"),
                     showChildrenOfMatches: selectedItems.some((item) => item.id === "ShowChildren")
                 };

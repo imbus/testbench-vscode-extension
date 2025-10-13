@@ -138,7 +138,7 @@ export class FilteringModule implements TreeViewModule {
                 searchInDescription: false,
                 searchInTooltip: false,
                 searchInType: false,
-                showParentsOfMatches: false,
+                showParentsOfMatches: true,
                 showChildrenOfMatches: false
             };
         }
@@ -150,7 +150,7 @@ export class FilteringModule implements TreeViewModule {
             searchInDescription: false,
             searchInTooltip: false,
             searchInType: false,
-            showParentsOfMatches: filteringConfig.showParentsOfMatches || false,
+            showParentsOfMatches: filteringConfig.showParentsOfMatches ?? true,
             showChildrenOfMatches: filteringConfig.showChildrenOfMatches || false
         };
     }
@@ -505,6 +505,8 @@ export class FilteringModule implements TreeViewModule {
             return items;
         }
 
+        const showParents = this.textFilter?.showParentsOfMatches ?? false;
+
         const recursiveFilter = (itemList: T[]): T[] => {
             const result: T[] = [];
             for (const item of itemList) {
@@ -514,7 +516,7 @@ export class FilteringModule implements TreeViewModule {
                 const itemIsVisible = this.isVisible(item);
 
                 // An item is kept if it's visible itself, OR if it has any visible children
-                if (itemIsVisible || filteredChildren.length > 0) {
+                if (itemIsVisible || (showParents && filteredChildren.length > 0)) {
                     // Clone the item to avoid modifying the original tree
                     const newItem = item.clone() as T;
                     newItem.children = filteredChildren; // Assign the filtered children
@@ -557,38 +559,9 @@ export class FilteringModule implements TreeViewModule {
             return true;
         }
 
-        // Check if we should show parents of matching items
-        if (this.textFilter.showParentsOfMatches && this.hasMatchingDescendant(item)) {
-            return true;
-        }
-
         // Check if we should show children of matching items
         if (this.textFilter.showChildrenOfMatches && this.hasMatchingAncestor(item)) {
             return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Checks if a tree item has matching descendants
-     * @param item The tree item to check
-     * @return True if tree item has matching descendants
-     */
-    private hasMatchingDescendant(item: TreeItemBase): boolean {
-        if (!item.children || item.children.length === 0) {
-            return false;
-        }
-
-        for (const child of item.children) {
-            // Only check text filter criteria, not parent/child inclusion
-            if (this.matchesTextFilterOnly(child)) {
-                return true;
-            }
-            // Recursively check descendants
-            if (this.hasMatchingDescendant(child)) {
-                return true;
-            }
         }
 
         return false;
