@@ -793,12 +793,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const options: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
             { id: "CaseSensitive", label: "Case Sensitive", description: "Perform a case-sensitive search" },
             {
-                id: "ShowParents",
-                label: "Show Parents of Matches",
-                description: "Preserve the tree structure by showing parent items",
-                picked: true
-            },
-            {
                 id: "ShowChildren",
                 label: "Show Children of Matches",
                 description: "Show all children of matching items"
@@ -817,7 +811,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 (option) =>
                     (option.picked =
                         (option.id === "CaseSensitive" && currentFilter.caseSensitive) ||
-                        (option.id === "ShowParents" && currentFilter.showParentsOfMatches) ||
                         (option.id === "ShowChildren" && currentFilter.showChildrenOfMatches))
             );
         }
@@ -894,7 +887,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     searchInTooltip: selectedCriteria.some((c) => c.id === "Tooltip"),
                     searchInId: false,
                     searchInType: false,
-                    showParentsOfMatches: selectedItems.some((item) => item.id === "ShowParents"),
+                    showParentsOfMatches: true,
                     showChildrenOfMatches: selectedItems.some((item) => item.id === "ShowChildren")
                 };
 

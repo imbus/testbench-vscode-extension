@@ -316,7 +316,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
 
             let children: T[];
             if (!element) {
-                children = await this.getRootItems();
+                children = await this.expandAll(await this.getRootItems());
             } else {
                 children = await this.getChildrenForItem(element);
             }
@@ -325,10 +325,9 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             if (filterModule && filterModule.isActive()) {
                 // If this is the root level and parent/child inclusion is enabled,
                 // tree structure should be loaded fully for filtering
-                if (!element && this.shouldExpandForFiltering(filterModule)) {
-                    children = await this.expandTreeForFiltering(children);
+                if (!element) {
+                    children = await this.expandAll(children);
                 }
-
                 children = filterModule.filterTreeItems(children);
             }
 
@@ -394,29 +393,19 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
     }
 
     /**
-     * Determines if tree expansion is needed for filtering
-     * @param filterModule The filtering module instance
-     * @return True if expansion is required, false otherwise
+     * Recursively expands all items in a given list of tree items.
+     * @param items The list of items to expand.
+     * @returns The list of items with all descendants loaded.
      */
-    private shouldExpandForFiltering(filterModule: any): boolean {
-        const textFilter = filterModule.getTextFilter();
-        return textFilter && (textFilter.showParentsOfMatches || textFilter.showChildrenOfMatches);
-    }
-
-    /**
-     * Expands tree structure to load all children for filtering
-     * @param items Array of tree items to expand
-     * @return Promise resolving to expanded items with loaded children
-     */
-    private async expandTreeForFiltering(items: T[]): Promise<T[]> {
-        const expandedItems: T[] = [];
+    private async expandAll(items: T[]): Promise<T[]> {
         for (const item of items) {
-            const children = await this.getChildrenForItem(item);
-            item.children = children;
-            expandedItems.push(item);
+            if (item.collapsibleState !== vscode.TreeItemCollapsibleState.None && item.children.length === 0) {
+                const children = await this.getChildrenForItem(item);
+                item.children = children;
+                await this.expandAll(children);
+            }
         }
-
-        return expandedItems;
+        return items;
     }
 
     /**

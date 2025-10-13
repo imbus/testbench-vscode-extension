@@ -505,8 +505,6 @@ export class FilteringModule implements TreeViewModule {
             return items;
         }
 
-        const showParents = this.textFilter?.showParentsOfMatches ?? false;
-
         const recursiveFilter = (itemList: T[]): T[] => {
             const result: T[] = [];
             for (const item of itemList) {
@@ -516,7 +514,7 @@ export class FilteringModule implements TreeViewModule {
                 const itemIsVisible = this.isVisible(item);
 
                 // An item is kept if it's visible itself, OR if it has any visible children
-                if (itemIsVisible || (showParents && filteredChildren.length > 0)) {
+                if (itemIsVisible || filteredChildren.length > 0) {
                     // Clone the item to avoid modifying the original tree
                     const newItem = item.clone() as T;
                     newItem.children = filteredChildren; // Assign the filtered children
