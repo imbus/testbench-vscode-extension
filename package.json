@@ -379,7 +379,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.displayFiltersForTestThemeTree",
+                "command": "testbenchExtension.displayFiltersForTestThemeTreeDisabled",
                 "title": "Display Test Theme Filters",
                 "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
                 "icon": {
@@ -388,7 +388,7 @@
                 }
             },
             {
-                "command": "testbenchExtension.displayFiltersForTestThemeTree",
+                "command": "testbenchExtension.displayFiltersForTestThemeTreeEnabled",
                 "title": "Display Test Theme Filters",
                 "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
                 "icon": {
@@ -685,7 +685,7 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.displayFiltersForTestThemeTree",
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeDisabled",
                     "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
                     "group": "navigation@3",
                     "icon": {
@@ -694,7 +694,7 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.displayFiltersForTestThemeTree",
+                    "command": "testbenchExtension.displayFiltersForTestThemeTreeEnabled",
                     "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
                     "group": "navigation@3",
                     "icon": {

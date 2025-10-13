@@ -209,6 +209,8 @@ export const allExtensionCommands = {
     refreshTestThemeTreeView: `${baseKeyOfExtension}.refreshTestThemeTreeView`,
     refreshTestElementsTree: `${baseKeyOfExtension}.refreshTestElementsTree`,
     displayFiltersForTestThemeTree: `${baseKeyOfExtension}.displayFiltersForTestThemeTree`,
+    displayFiltersForTestThemeTreeEnabled: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeEnabled`,
+    displayFiltersForTestThemeTreeDisabled: `${baseKeyOfExtension}.displayFiltersForTestThemeTreeDisabled`,
     clearInternalTestbenchFolder: `${baseKeyOfExtension}.clearInternalTestbenchFolder`,
     openTOVFromProjectsView: `${baseKeyOfExtension}.openTOVFromProjectsView`,
     openCycleFromProjectsView: `${baseKeyOfExtension}.openCycleFromProjectsView`,

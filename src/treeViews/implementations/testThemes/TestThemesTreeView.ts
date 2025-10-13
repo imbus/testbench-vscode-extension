@@ -151,6 +151,10 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         await this.saveTestThemeFilterStorage(structuredStorage);
         this.logger.debug(`[TestThemesTreeView] Saved ${filters.length} test theme filters for context: ${contextKey}`);
         await this.updateTestThemesFilterContextKey();
+        // Disable filter diff mode if no test theme filter is active
+        if (filters.length === 0 && this.filterDiffMode) {
+            await this.setFilterDiffMode(false);
+        }
     }
 
     /**
@@ -404,6 +408,14 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
      * Enables the filter diff mode.
      */
     public async enableFilterDiffMode(): Promise<void> {
+        // Only enable if test theme filter is active
+        const hasFilters = this.getSavedFilters().length > 0;
+        if (!hasFilters) {
+            this.logger.trace(
+                "[TestThemesTreeView] Skipping enabling filter diff mode: no active test theme filters present"
+            );
+            return;
+        }
         await this.setFilterDiffMode(true);
     }
 
@@ -1438,6 +1450,10 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     public async clearAllContextSpecificFilters(): Promise<void> {
         await this.saveTestThemeFilterStorage({});
         this.logger.info("[TestThemesTreeView] Cleared all test theme filter storage for current user");
+        // When all filters are cleared globally, disable filter diff mode
+        if (this.filterDiffMode) {
+            await this.setFilterDiffMode(false);
+        }
     }
 
     /**

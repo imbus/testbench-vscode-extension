@@ -1036,6 +1036,14 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.refreshTestThemeTreeView, handler: handleRefreshTestThemeTreeView },
         { id: allExtensionCommands.refreshTestElementsTree, handler: handleRefreshTestElementsTree },
         { id: allExtensionCommands.displayFiltersForTestThemeTree, handler: handleDisplayFiltersForTestThemeTree },
+        {
+            id: allExtensionCommands.displayFiltersForTestThemeTreeEnabled,
+            handler: handleDisplayFiltersForTestThemeTree
+        },
+        {
+            id: allExtensionCommands.displayFiltersForTestThemeTreeDisabled,
+            handler: handleDisplayFiltersForTestThemeTree
+        },
         { id: allExtensionCommands.enableFilterDiffMode, handler: handleEnableFilterDiffMode },
         { id: allExtensionCommands.disableFilterDiffMode, handler: handleDisableFilterDiffMode },
         {
