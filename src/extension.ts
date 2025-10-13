@@ -680,7 +680,13 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 return;
             }
 
-            const quickPickItems = serverFilters.map((filter: any) => ({
+            const quickPick = vscode.window.createQuickPick();
+            quickPick.canSelectMany = true;
+            quickPick.title = "Select filters to apply to the Test Themes tree";
+
+            type FilterQuickPickItem = vscode.QuickPickItem & { filterObject?: any; picked?: boolean };
+
+            const quickPickItems: FilterQuickPickItem[] = serverFilters.map((filter: any) => ({
                 label: filter.name,
                 description: `Type: ${filter.type}`,
                 picked: treeViews?.testThemesTree
@@ -689,15 +695,64 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 filterObject: filter
             }));
 
-            const selectedFilterItems = await vscode.window.showQuickPick(quickPickItems, {
-                canPickMany: true,
-                placeHolder: "Select filters to apply to the Test Themes tree"
-            });
-
-            if (selectedFilterItems) {
-                const selectedFilters = selectedFilterItems.map((item) => item.filterObject);
-                await treeViews.testThemesTree.applyFiltersAndRefresh(selectedFilters);
+            if (treeViews.testThemesTree.getSavedFilters().length > 0) {
+                quickPickItems.push({
+                    label: "Actions",
+                    kind: vscode.QuickPickItemKind.Separator
+                });
+                quickPickItems.push({
+                    label: "$(clear-all) Clear filters",
+                    description: "Clear all active filters",
+                    filterObject: "clear-filters-action",
+                    picked: false
+                });
             }
+
+            quickPick.items = quickPickItems;
+            quickPick.selectedItems = quickPickItems.filter((item) => item.picked);
+
+            const disposables: vscode.Disposable[] = [];
+
+            disposables.push(
+                quickPick.onDidChangeSelection(async (selection) => {
+                    if (
+                        selection.some((item) => (item as FilterQuickPickItem).filterObject === "clear-filters-action")
+                    ) {
+                        if (treeViews?.testThemesTree) {
+                            await treeViews.testThemesTree.clearFiltersAndRefresh();
+                        }
+                        quickPick.hide();
+                    }
+                })
+            );
+
+            disposables.push(
+                quickPick.onDidAccept(async () => {
+                    const selectedItems = quickPick.selectedItems;
+
+                    if (!treeViews?.testThemesTree) {
+                        logger.warn("[extension] Test themes tree became unavailable during filter selection.");
+                        quickPick.hide();
+                        return;
+                    }
+
+                    const selectedFilters = selectedItems
+                        .filter((item) => (item as FilterQuickPickItem).filterObject !== "clear-filters-action")
+                        .map((item) => (item as FilterQuickPickItem).filterObject);
+
+                    await treeViews.testThemesTree.applyFiltersAndRefresh(selectedFilters);
+                    quickPick.hide();
+                })
+            );
+
+            disposables.push(
+                quickPick.onDidHide(() => {
+                    disposables.forEach((d) => d.dispose());
+                    quickPick.dispose();
+                })
+            );
+
+            quickPick.show();
         } catch (error) {
             const errorMessage = `Error displaying filters: ${error instanceof Error ? error.message : "Unknown error"}`;
             logger.error(`[extension] ${errorMessage}`);
