@@ -12,6 +12,7 @@ import { ProjectsDataProvider } from "./ProjectsDataProvider";
 import { projectsConfig } from "./ProjectsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, TreeViewTiming } from "../../../constants";
+import { hasLsConfig, writeLsConfig } from "../../../lsConfig";
 import { displayTestThemeTreeView } from "../testThemes/TestThemesTreeView";
 import { displayTestElementsTreeView } from "../testElements/TestElementsTreeView";
 import { getExtensionConfiguration } from "../../../configuration";
@@ -113,6 +114,21 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         this.eventBus.on("tree:itemExpanded", async (event) => {
             const item = event.data.item;
             if (item instanceof ProjectsTreeItem && item.data.type === "version") {
+                const projectName = item.parent?.label?.toString();
+                const tovName = item.label?.toString();
+                if (projectName && tovName) {
+                    const configExists = await hasLsConfig();
+                    if (!configExists) {
+                        const choice = await vscode.window.showInformationMessage(
+                            `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
+                            "Create",
+                            "Cancel"
+                        );
+                        if (choice === "Create") {
+                            await writeLsConfig({ projectName, tovName });
+                        }
+                    }
+                }
                 await vscode.commands.executeCommand(allExtensionCommands.handleTOVClick, item);
             }
         });
@@ -120,6 +136,21 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         this.eventBus.on("tree:itemCollapsed", async (event) => {
             const item = event.data.item;
             if (item instanceof ProjectsTreeItem && item.data.type === "version") {
+                const projectName = item.parent?.label?.toString();
+                const tovName = item.label?.toString();
+                if (projectName && tovName) {
+                    const configExists = await hasLsConfig();
+                    if (!configExists) {
+                        const choice = await vscode.window.showInformationMessage(
+                            `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
+                            "Create",
+                            "Cancel"
+                        );
+                        if (choice === "Create") {
+                            await writeLsConfig({ projectName, tovName });
+                        }
+                    }
+                }
                 await vscode.commands.executeCommand(allExtensionCommands.handleTOVClick, item);
             }
         });
@@ -327,7 +358,18 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         if (projectKey && cycleKey && versionKey && projectName && tovName) {
             this.logger.trace(`[ProjectsTreeView] Cycle item single clicked: ${item.label}`);
 
-            await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
+            // Prompt to create LS config if missing when single-clicking a cycle
+            const configExists = await hasLsConfig();
+            if (!configExists && projectName && tovName) {
+                const choice = await vscode.window.showInformationMessage(
+                    `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
+                    "Create",
+                    "Cancel"
+                );
+                if (choice === "Create") {
+                    await writeLsConfig({ projectName, tovName });
+                }
+            }
 
             if (treeViews?.testThemesTree) {
                 await treeViews.testThemesTree.loadCycle(
@@ -374,8 +416,6 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
             const missingProjectAndTovNameErrorMessageForUser = `Cannot update language server: Missing project / TOV name.`;
             this.logger.error(missingProjectAndTovNameErrorMessage);
             vscode.window.showErrorMessage(missingProjectAndTovNameErrorMessageForUser);
-        } else {
-            await vscode.commands.executeCommand(allExtensionCommands.updateOrRestartLS, projectName, tovName);
         }
 
         await displayTestThemeTreeView();

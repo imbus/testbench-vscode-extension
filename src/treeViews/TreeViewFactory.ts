@@ -21,7 +21,6 @@ import {
     setExtensionContext,
     userSessionManager
 } from "../extension";
-import { updateOrRestartLS } from "../server";
 import {
     displayProjectManagementTreeView,
     hideProjectManagementTreeView
@@ -772,10 +771,6 @@ export class TreeViewFactory {
                         );
                     }
                 }
-            }
-
-            if (savedContext && this.isValidSavedContext(savedContext)) {
-                await updateOrRestartLS(savedContext.projectName, savedContext.tovName);
             }
 
             if (savedViewId && savedViewId !== "projects" && savedContext) {

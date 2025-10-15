@@ -17,8 +17,10 @@ import { ClickHandler } from "../../core/ClickHandler";
 import {
     findInteractionPositionInResourceFile,
     isLanguageServerRunning,
-    waitForLanguageServerReady
+    waitForLanguageServerReady,
+    updateOrRestartLS
 } from "../../../server";
+import { hasLsConfig } from "../../../lsConfig";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 
@@ -170,6 +172,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         // Resource operations use language server commands, ensure it's running
         try {
             if (!isLanguageServerRunning()) {
+                const cfgExists = await hasLsConfig();
+                if (!cfgExists) {
+                    vscode.window.showWarningMessage(
+                        "Language server is not available because no project configuration was found (.testbench/ls.config.json). Create it first."
+                    );
+                    return;
+                }
+
+                // Attempt to initialize LS from current config, then wait for readiness
+                await updateOrRestartLS();
                 await vscode.window.withProgress(
                     {
                         location: vscode.ProgressLocation.Notification,
@@ -515,18 +527,16 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         // The python regex processing is done in language server via testbench_ls.get_resource_directory_subdivision_index command.
         // Language server initialization should be awaited here to prevent error logs caused by this command call.
         if (!isLanguageServerRunning()) {
-            try {
-                this.logger.debug(
-                    "[TestElementsTreeView] Language server not running, waiting before updating subdivision icons."
-                );
-                await waitForLanguageServerReady();
-                this.logger.debug("[TestElementsTreeView] Language server is ready, proceeding with icon updates.");
-            } catch (error) {
-                this.logger.error(
-                    "[TestElementsTreeView] Error waiting for language server before icon update:",
-                    error
-                );
-                return;
+            const cfgExists = await hasLsConfig();
+            if (cfgExists) {
+                try {
+                    await updateOrRestartLS();
+                    await waitForLanguageServerReady(5000, 100);
+                } catch {
+                    this.logger.trace("[TestElementsTreeView] LS not ready, proceeding with icon updates.");
+                }
+            } else {
+                this.logger.trace("[TestElementsTreeView] No LS config present; proceeding with icon updates.");
             }
         }
 

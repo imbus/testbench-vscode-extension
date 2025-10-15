@@ -159,6 +159,7 @@ export const JobTypes = {
 
 // Internal folder name used to store and process files internally.
 export const folderNameOfInternalTestbenchFolder: string = ".testbench";
+export const LS_CONFIG_FILE_NAME: string = "ls.config.json";
 
 // --- Tree View Timing Constants ---
 export const TreeViewTiming = {
@@ -243,5 +244,6 @@ export const allExtensionCommands = {
     disableFilterDiffMode: `${baseKeyOfExtension}.disableFilterDiffMode`,
     searchInProjectsTree: `${baseKeyOfExtension}.searchInProjectsTree`,
     searchInTestThemesTree: `${baseKeyOfExtension}.searchInTestThemesTree`,
-    searchInTestElementsTree: `${baseKeyOfExtension}.searchInTestElementsTree`
+    searchInTestElementsTree: `${baseKeyOfExtension}.searchInTestElementsTree`,
+    restartLanguageServerFromConfig: `${baseKeyOfExtension}.restartLanguageServerFromConfig`
 };
