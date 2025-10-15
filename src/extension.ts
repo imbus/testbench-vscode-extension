@@ -1435,7 +1435,7 @@ async function handleInitialSession(context: vscode.ExtensionContext): Promise<v
         logger.debug("[extension] No previous session found. Checking for auto-login config.");
         if (getExtensionConfiguration().get<boolean>(ConfigKeys.AUTO_LOGIN, false)) {
             logger.debug("[extension] Auto-login is enabled. Attempting silent login.");
-            await performAutomaticLogin(context);
+            performAutomaticLogin(context);
         } else {
             getLoginWebViewProvider()?.updateWebviewHTMLContent();
         }
