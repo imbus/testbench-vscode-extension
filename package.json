@@ -668,7 +668,7 @@
                 {
                     "command": "testbenchExtension.restartLanguageServerFromConfig",
                     "when": "testbenchExtension.connectionActive && view == testbench.projects",
-                    "group": "navigation@9"
+                    "group": "navigation@8"
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",
@@ -739,13 +739,8 @@
                     "group": "navigation@5"
                 },
                 {
-                    "command": "testbenchExtension.restartLanguageServerFromConfig",
-                    "when": "testbenchExtension.connectionActive && view == testbench.testThemes",
-                    "group": "navigation@9"
-                },
-                {
                     "command": "testbenchExtension.showExtensionSettings",
-                    "group": "navigation@8",
+                    "group": "navigation@9",
                     "when": "view == testbench.projects || view == testbenchExtension.webView"
                 },
                 {
