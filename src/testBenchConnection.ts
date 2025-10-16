@@ -17,7 +17,13 @@ import axios, { AxiosInstance, AxiosResponse } from "axios";
 import path from "path";
 import { logger, getAuthProvider } from "./extension";
 import * as utils from "./utils";
-import { JobTypes, allExtensionCommands, folderNameOfInternalTestbenchFolder, ConfigKeys } from "./constants";
+import {
+    JobTypes,
+    allExtensionCommands,
+    folderNameOfInternalTestbenchFolder,
+    ConfigKeys,
+    INTERNAL_REPORTS_SUBFOLDER_NAME
+} from "./constants";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
 import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
@@ -1336,7 +1342,11 @@ async function promptForReportZipFileWithResults(): Promise<string | null> {
             return null;
         }
 
-        const workingDirectoryPath: string = path.join(workspaceLocation, folderNameOfInternalTestbenchFolder);
+        const workingDirectoryPath: string = path.join(
+            workspaceLocation,
+            folderNameOfInternalTestbenchFolder,
+            INTERNAL_REPORTS_SUBFOLDER_NAME
+        );
         const options: vscode.OpenDialogOptions = {
             defaultUri: vscode.Uri.file(workingDirectoryPath),
             openLabel: "Select Zip File with Test Results",
