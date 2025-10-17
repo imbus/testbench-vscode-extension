@@ -13,7 +13,7 @@ import { ContextKeys } from "../../constants";
 export interface TextFilterOptions {
     searchText: string;
     caseSensitive: boolean;
-    searchInLabel: boolean;
+    searchInName: boolean;
     searchInId: boolean;
     searchInDescription: boolean;
     searchInTooltip: boolean;
@@ -95,6 +95,31 @@ export class FilteringModule implements TreeViewModule {
     }
 
     /**
+     * Updates context keys to reflect search filter state
+     * @param hasSearchFilter Whether a search filter is active
+     */
+    private updateSearchContextKey(hasSearchFilter: boolean): void {
+        const treeViewId = this.context.config.id;
+        let contextKey: string;
+
+        switch (treeViewId) {
+            case "testbench.projects":
+                contextKey = ContextKeys.PROJECTS_TREE_HAS_SEARCH_FILTER;
+                break;
+            case "testbench.testThemes":
+                contextKey = ContextKeys.TEST_THEMES_TREE_HAS_SEARCH_FILTER;
+                break;
+            case "testbench.testElements":
+                contextKey = ContextKeys.TEST_ELEMENTS_TREE_HAS_SEARCH_FILTER;
+                break;
+            default:
+                return;
+        }
+
+        vscode.commands.executeCommand("setContext", contextKey, hasSearchFilter);
+    }
+
+    /**
      * Applies loaded state (which has no predicate functions) with the full
      * filter definitions from the configuration.
      * @param loadedFilteringState The partial filter state loaded from persistence.
@@ -133,7 +158,7 @@ export class FilteringModule implements TreeViewModule {
         if (!filteringConfig) {
             return {
                 caseSensitive: false,
-                searchInLabel: true,
+                searchInName: true,
                 searchInId: false,
                 searchInDescription: false,
                 searchInTooltip: false,
@@ -145,7 +170,7 @@ export class FilteringModule implements TreeViewModule {
 
         return {
             caseSensitive: false,
-            searchInLabel: true,
+            searchInName: true,
             searchInId: false,
             searchInDescription: false,
             searchInTooltip: false,
@@ -161,6 +186,7 @@ export class FilteringModule implements TreeViewModule {
      */
     public setTextFilter(options: TextFilterOptions | null): void {
         this.textFilter = options;
+        this.updateSearchContextKey(!!options);
         this.context.logger.debug(
             this.context.buildLogPrefix(
                 "FilteringModule",
@@ -340,7 +366,7 @@ export class FilteringModule implements TreeViewModule {
         const searchText = this.textFilter.searchText;
         const searchTextLower = this.textFilter.caseSensitive ? searchText : searchText.toLowerCase();
         // Search in label
-        if (this.textFilter.searchInLabel && item.label) {
+        if (this.textFilter.searchInName && item.label) {
             const label = this.textFilter.caseSensitive ? item.label.toString() : item.label.toString().toLowerCase();
             if (label.includes(searchTextLower)) {
                 return true;
@@ -702,6 +728,7 @@ export class FilteringModule implements TreeViewModule {
 
         // Update context keys to reflect that diff mode is disabled
         this.updateDiffModeContextKeys(false);
+        this.updateSearchContextKey(false);
 
         this.updateState();
         this.context.refresh({ immediate: true });

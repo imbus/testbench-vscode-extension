@@ -87,7 +87,7 @@ export interface FilterState {
     textFilter?: {
         searchText: string;
         caseSensitive: boolean;
-        searchInLabel: boolean;
+        searchInName: boolean;
         searchInId: boolean;
         searchInDescription: boolean;
         searchInTooltip: boolean;
@@ -212,7 +212,7 @@ export interface SerializedFilterState {
     textFilter?: {
         searchText: string;
         caseSensitive: boolean;
-        searchInLabel: boolean;
+        searchInName: boolean;
         searchInId: boolean;
         searchInDescription: boolean;
         searchInTooltip: boolean;
