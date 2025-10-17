@@ -13,7 +13,7 @@ import { ContextKeys } from "../../constants";
 export interface TextFilterOptions {
     searchText: string;
     caseSensitive: boolean;
-    searchInLabel: boolean;
+    searchInName: boolean;
     searchInId: boolean;
     searchInDescription: boolean;
     searchInTooltip: boolean;
@@ -133,7 +133,7 @@ export class FilteringModule implements TreeViewModule {
         if (!filteringConfig) {
             return {
                 caseSensitive: false,
-                searchInLabel: true,
+                searchInName: true,
                 searchInId: false,
                 searchInDescription: false,
                 searchInTooltip: false,
@@ -145,7 +145,7 @@ export class FilteringModule implements TreeViewModule {
 
         return {
             caseSensitive: false,
-            searchInLabel: true,
+            searchInName: true,
             searchInId: false,
             searchInDescription: false,
             searchInTooltip: false,
@@ -340,7 +340,7 @@ export class FilteringModule implements TreeViewModule {
         const searchText = this.textFilter.searchText;
         const searchTextLower = this.textFilter.caseSensitive ? searchText : searchText.toLowerCase();
         // Search in label
-        if (this.textFilter.searchInLabel && item.label) {
+        if (this.textFilter.searchInName && item.label) {
             const label = this.textFilter.caseSensitive ? item.label.toString() : item.label.toString().toLowerCase();
             if (label.includes(searchTextLower)) {
                 return true;

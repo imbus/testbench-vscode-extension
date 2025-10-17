@@ -838,7 +838,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const isProjectsTree = treeViewId === "testbench.projects";
 
         const criteria: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
-            { id: "Label", label: "Label", description: "Search in item's label", picked: true }
+            { id: "Name", label: "Name", description: "Search in item's name", picked: true }
         ];
 
         if (!isProjectsTree) {
@@ -861,7 +861,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             criteria.forEach(
                 (criteria) =>
                     (criteria.picked =
-                        (criteria.id === "Label" && currentFilter.searchInLabel) ||
+                        (criteria.id === "Name" && currentFilter.searchInName) ||
                         (criteria.id === "Description" && currentFilter.searchInDescription) ||
                         (criteria.id === "Tooltip" && currentFilter.searchInTooltip))
             );
@@ -947,7 +947,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 const newFilterOptions: TextFilterOptions = {
                     searchText: searchText,
                     caseSensitive: selectedItems.some((item) => item.id === "CaseSensitive"),
-                    searchInLabel: selectedCriteria.some((c) => c.id === "Label"),
+                    searchInName: selectedCriteria.some((c) => c.id === "Name"),
                     searchInDescription: selectedCriteria.some((c) => c.id === "Description"),
                     searchInTooltip: selectedCriteria.some((c) => c.id === "Tooltip"),
                     searchInId: false,
