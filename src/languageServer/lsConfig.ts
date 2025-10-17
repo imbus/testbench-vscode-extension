@@ -122,10 +122,12 @@ export async function validateAndFixLsConfigInteractively(
             return currentCfg || (await readLsConfig());
         }
 
-        const cfg = currentCfg || (await readLsConfig());
+        const cfg = currentCfg ? { ...currentCfg } : await readLsConfig();
         if (!cfg) {
             return null;
         }
+
+        let configChanged = false;
 
         const projects = await connection.getProjectsList();
         if (!projects || !Array.isArray(projects) || projects.length === 0) {
@@ -136,6 +138,7 @@ export async function validateAndFixLsConfigInteractively(
         // Validate project name
         let selectedProject = projects.find((p: any) => p.name === cfg.projectName);
         if (!selectedProject) {
+            configChanged = true;
             const picked = await vscode.window.showQuickPick(
                 projects.map((p: any) => p.name),
                 {
@@ -157,6 +160,7 @@ export async function validateAndFixLsConfigInteractively(
         const tovNames = versions.map((v: any) => v.name || v.label).filter(Boolean);
 
         if (!cfg.tovName || !tovNames.includes(cfg.tovName)) {
+            configChanged = true;
             if (tovNames.length === 1) {
                 cfg.tovName = tovNames[0];
             } else {
@@ -171,7 +175,9 @@ export async function validateAndFixLsConfigInteractively(
             }
         }
 
-        await writeLsConfig(cfg);
+        if (configChanged) {
+            await writeLsConfig(cfg);
+        }
         logger.info(`[lsConfig] Validated and saved LS config: ${cfg.projectName} / ${cfg.tovName}`);
         return cfg;
     } catch (error) {

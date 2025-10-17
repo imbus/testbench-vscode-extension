@@ -4,8 +4,16 @@
  */
 
 import * as vscode from "vscode";
-import { LanguageServerConfig, readLsConfig, hasLsConfig, getLsConfigFilePath } from "./lsConfig";
+import {
+    LanguageServerConfig,
+    readLsConfig,
+    hasLsConfig,
+    getLsConfigFilePath,
+    validateAndFixLsConfigInteractively
+} from "./lsConfig";
 import { logger } from "../extension";
+
+const AUTO_VALIDATE_CONFIG_ON_CHANGE = true;
 
 /**
  * Manages reading and monitoring the `ls.config.json` file.
@@ -15,6 +23,7 @@ import { logger } from "../extension";
 class ActiveConfigService {
     private _activeConfig: LanguageServerConfig | null = null;
     private _watcher: vscode.FileSystemWatcher | undefined;
+    private isAutoFixing = false;
 
     private readonly _onDidChangeActiveConfig = new vscode.EventEmitter<LanguageServerConfig | null>();
     /**
@@ -44,8 +53,24 @@ class ActiveConfigService {
      * Fires the `onDidChangeActiveConfig` event with the new configuration.
      */
     private async loadActiveConfig(): Promise<void> {
+        if (this.isAutoFixing) {
+            return;
+        }
+
         if (await hasLsConfig()) {
             this._activeConfig = await readLsConfig();
+            const shouldValidate = AUTO_VALIDATE_CONFIG_ON_CHANGE;
+            if (shouldValidate && this._activeConfig) {
+                this.isAutoFixing = true;
+                try {
+                    const fixedConfig = await validateAndFixLsConfigInteractively(this._activeConfig);
+                    if (fixedConfig) {
+                        this._activeConfig = fixedConfig;
+                    }
+                } finally {
+                    this.isAutoFixing = false;
+                }
+            }
         } else {
             this._activeConfig = null;
         }

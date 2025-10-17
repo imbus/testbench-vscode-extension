@@ -255,5 +255,6 @@ export const allExtensionCommands = {
     searchInTestElementsTreeOn: `${baseKeyOfExtension}.searchInTestElementsTreeOn`,
     searchInTestElementsTreeOff: `${baseKeyOfExtension}.searchInTestElementsTreeOff`,
     restartLanguageServerFromConfig: `${baseKeyOfExtension}.restartLanguageServerFromConfig`,
-    setConfigAsActive: `${baseKeyOfExtension}.setConfigAsActive`
+    setConfigAsActive: `${baseKeyOfExtension}.setConfigAsActive`,
+    validateAndFixLsConfig: `${baseKeyOfExtension}.validateAndFixLsConfig`
 };

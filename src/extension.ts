@@ -1082,6 +1082,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         );
     };
 
+    const handleValidateAndFixLsConfig = async () => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.validateAndFixLsConfig}`);
+        if (!(await hasLsConfig())) {
+            vscode.window.showInformationMessage("No TestBench project configuration file found to validate.");
+            return;
+        }
+        await validateAndFixLsConfigInteractively(undefined);
+    };
+
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
@@ -1200,7 +1209,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.searchInTestThemesTreeOff, handler: handleSearchInTestThemesTree },
         { id: allExtensionCommands.searchInTestElementsTreeOn, handler: handleSearchInTestElementsTree },
         { id: allExtensionCommands.searchInTestElementsTreeOff, handler: handleSearchInTestElementsTree },
-        { id: allExtensionCommands.setConfigAsActive, handler: handleSetConfigAsActive }
+        { id: allExtensionCommands.setConfigAsActive, handler: handleSetConfigAsActive },
+        { id: allExtensionCommands.validateAndFixLsConfig, handler: handleValidateAndFixLsConfig }
     ];
 
     // Registration Loop
