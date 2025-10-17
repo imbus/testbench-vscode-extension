@@ -16,6 +16,7 @@ import {
     ConfigKeys,
     ContextKeys,
     folderNameOfInternalTestbenchFolder,
+    LS_CONFIG_FILE_NAME,
     StorageKeys
 } from "./constants";
 import {
@@ -1563,6 +1564,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await initializeContextValues(context);
         await registerExtensionCommands(context);
         configureLanguageServerIntegration(context);
+
+        const workspaceRoot = await utils.validateAndReturnWorkspaceLocation();
+        if (workspaceRoot) {
+            const configPath = path.join(folderNameOfInternalTestbenchFolder, LS_CONFIG_FILE_NAME);
+            const watcher = vscode.workspace.createFileSystemWatcher(
+                new vscode.RelativePattern(workspaceRoot, configPath)
+            );
+
+            const refreshProjectsTree = () => {
+                if (treeViews?.projectsTree) {
+                    logger.trace("[extension] ls.config.json changed, refreshing projects tree");
+                    treeViews.projectsTree.refresh();
+                }
+            };
+
+            watcher.onDidChange(refreshProjectsTree);
+            watcher.onDidCreate(refreshProjectsTree);
+            watcher.onDidDelete(refreshProjectsTree);
+            context.subscriptions.push(watcher);
+        }
 
         // Handle session restoration and automatic login after everything is set up
         await handleInitialSession(context);
