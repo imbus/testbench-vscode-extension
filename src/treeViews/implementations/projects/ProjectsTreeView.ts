@@ -12,19 +12,19 @@ import { ProjectsDataProvider } from "./ProjectsDataProvider";
 import { projectsConfig } from "./ProjectsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, TreeViewTiming } from "../../../constants";
-import { hasLsConfig, readLsConfig, LanguageServerConfig, writeLsConfig } from "../../../lsConfig";
+import { hasLsConfig, writeLsConfig } from "../../../lsConfig";
 import { displayTestThemeTreeView } from "../testThemes/TestThemesTreeView";
 import { displayTestElementsTreeView } from "../testElements/TestElementsTreeView";
 import { getExtensionConfiguration } from "../../../configuration";
 import * as reportHandler from "../../../reportHandler";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
+import { ActiveItemMarkerModule } from "../../features/ActiveItemMarkerModule";
 
 export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     private dataProvider: ProjectsDataProvider;
     private disposables: vscode.Disposable[] = [];
     private cycleClickHandler: ClickHandler<ProjectsTreeItem>;
-    private activeConfig: LanguageServerConfig | null = null;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -37,18 +37,14 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
 
         this.dataProvider = new ProjectsDataProvider(this.logger, getConnection);
         this.cycleClickHandler = new ClickHandler<ProjectsTreeItem>();
-        this.loadActiveConfig();
         this.registerCommands();
         this.registerEventHandlers();
         this.setupCycleClickHandlers();
     }
 
-    private async loadActiveConfig(): Promise<void> {
-        if (await hasLsConfig()) {
-            this.activeConfig = await readLsConfig();
-        } else {
-            this.activeConfig = null;
-        }
+    protected async initializeModules(): Promise<void> {
+        await super.initializeModules();
+        await this.addModule(new ActiveItemMarkerModule());
     }
 
     /**
@@ -568,22 +564,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const treeItem = new ProjectsTreeItem(data, this.extensionContext, parent);
         treeItem.updateId();
         this.applyModulesToProjectsItem(treeItem);
-
-        if (this.activeConfig) {
-            const isProjectMatch =
-                treeItem.data.type === "project" && treeItem.data.name.trim() === this.activeConfig.projectName;
-            const isTovMatch =
-                treeItem.data.type === "version" &&
-                parent?.data.type === "project" &&
-                parent?.data.name.trim() === this.activeConfig.projectName &&
-                treeItem.data.name.trim() === this.activeConfig.tovName;
-
-            if (isProjectMatch || isTovMatch) {
-                const pinIcon = "📌";
-                treeItem.description = treeItem.description ? `${pinIcon} ${treeItem.description}` : pinIcon;
-            }
-        }
-
+        (this.getModule("activeItemMarker") as ActiveItemMarkerModule)?.decorateItem(treeItem);
         return treeItem;
     }
 
@@ -681,14 +662,12 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     public override refresh(item?: ProjectsTreeItem, options?: { immediate?: boolean }): void {
         this.logger.debug(`[ProjectsTreeView] Refreshing projects tree view${item ? ` for item: ${item.label}` : ""}`);
 
-        this.loadActiveConfig().then(() => {
-            if (item) {
-                super.refresh(item, options);
-                return;
-            }
+        if (item) {
+            super.refresh(item, options);
+            return;
+        }
 
-            super.refresh(undefined, options);
-        });
+        super.refresh(undefined, options);
     }
 }
 

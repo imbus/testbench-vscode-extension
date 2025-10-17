@@ -193,7 +193,7 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      * If a module fails to initialize, it will continue with the other modules.
      * @returns Promise that resolves when all modules are initialized
      */
-    private async initializeModules(): Promise<void> {
+    protected async initializeModules(): Promise<void> {
         const enabledModules = ModuleRegistry.createEnabledModules(this.config.features);
         const modulePromises: Promise<void>[] = [];
 
@@ -237,6 +237,19 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
      */
     public getModule<M extends TreeViewModule>(moduleId: string): M | undefined {
         return this.modules.get(moduleId) as M;
+    }
+
+    public async addModule(module: TreeViewModule): Promise<void> {
+        if (this.modules.has(module.id)) {
+            this.logger.warn(`[TreeViewBase] Module with ID '${module.id}' already exists.`);
+            return;
+        }
+        this.registerModule(module);
+        try {
+            await module.initialize(this.context);
+        } catch (error) {
+            this.logger.error(this.buildLogPrefix(`Failed to initialize module ${module.id}:`), error);
+        }
     }
 
     /**
