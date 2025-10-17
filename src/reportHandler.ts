@@ -20,7 +20,8 @@ import {
     JobTypes,
     folderNameOfInternalTestbenchFolder,
     ProjectItemTypes,
-    TestThemeItemTypes
+    TestThemeItemTypes,
+    INTERNAL_REPORTS_SUBFOLDER_NAME
 } from "./constants";
 import { extractDataFromReport, PlayServerConnection, withRetry, RetryPredicateFactory } from "./testBenchConnection";
 import { ExecutionMode } from "./testBenchTypes";
@@ -411,7 +412,7 @@ export async function downloadReport(
 }
 
 /**
- * Saves the downloaded report file locally.
+ * Saves the downloaded report file locally inside the internal .testbench folder's reports subfolder.
  *
  * @param {string} workspaceLocation The workspace location.
  * @param {string} folderNameOfReport The folder name for saving the report.
@@ -427,6 +428,8 @@ async function storeReportFileLocally(
 ): Promise<string | null> {
     try {
         const filePath: string = path.join(workspaceLocation, folderNameOfReport, fileNameOfReport);
+        const dirPath: string = path.dirname(filePath);
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
         const uri: vscode.Uri = vscode.Uri.file(filePath);
         await vscode.workspace.fs.writeFile(uri, new Uint8Array(downloadResponse.data));
         logger.debug(`[reportHandler] Report file saved to '${uri.fsPath}'.`);
@@ -732,7 +735,7 @@ async function runRobotFrameworkTestGenerationProcess(
     const downloadedReportZipPath: string | null = await fetchReportZipOfCycleFromServer(
         projectKey,
         cycleKey,
-        folderNameOfInternalTestbenchFolder,
+        path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME),
         cycleStructureOptionsRequestParams,
         progress,
         cancellationToken
@@ -917,8 +920,18 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             }
             const testbenchWorkingDirectoryPathInsideWorkspace: string = path.join(
                 workspaceLocation,
-                folderNameOfInternalTestbenchFolder
+                folderNameOfInternalTestbenchFolder,
+                INTERNAL_REPORTS_SUBFOLDER_NAME
             );
+            try {
+                await vscode.workspace.fs.createDirectory(
+                    vscode.Uri.file(testbenchWorkingDirectoryPathInsideWorkspace)
+                );
+            } catch (e) {
+                logger.warn(
+                    `[reportHandler] Failed to ensure reports directory exists at ${testbenchWorkingDirectoryPathInsideWorkspace}: ${e}`
+                );
+            }
 
             const outputXMLPath: string | null = await chooseRobotOutputXMLFileIfNotSet(workspaceLocation);
             if (!outputXMLPath) {
@@ -965,7 +978,7 @@ export async function fetchTestResultsAndCreateReportWithResultsWithTb2Robot(
             const downloadedReportWithoutResultsZip: string | null = await fetchReportZipOfCycleFromServer(
                 projectKey,
                 cycleKey,
-                folderNameOfInternalTestbenchFolder,
+                path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME),
                 cycleStructureOptionsRequestParams,
                 progress,
                 cancellationToken
@@ -1402,7 +1415,7 @@ export async function startTestGenerationUsingTOV(
                 const downloadedTovReportPath: string | null = await downloadReport(
                     projectKey,
                     downloadedTovReportName,
-                    folderNameOfInternalTestbenchFolder
+                    path.join(folderNameOfInternalTestbenchFolder, INTERNAL_REPORTS_SUBFOLDER_NAME)
                 );
 
                 if (!downloadedTovReportPath) {

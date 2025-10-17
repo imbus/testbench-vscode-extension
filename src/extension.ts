@@ -44,8 +44,10 @@ import {
     client,
     handleLanguageServerRestartOnSessionChange,
     prepareLanguageServerForTreeItemOperation,
-    setIsHandlingLogout
+    setIsHandlingLogout,
+    configureLanguageServerIntegration
 } from "./server";
+import { hasLsConfig, writeLsConfig, readLsConfig, validateAndFixLsConfigInteractively } from "./lsConfig";
 import {
     hideProjectManagementTreeView,
     displayProjectManagementTreeView
@@ -287,12 +289,24 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const projectName = versionItem.parent?.label?.toString();
         const tovName = versionItem.label?.toString();
 
-        if (projectKey && tovKey && projectName && tovName) {
-            await updateOrRestartLS(projectName, tovName);
-        } else {
+        if (!(projectKey && tovKey && projectName && tovName)) {
             const errorMessage = `Cannot update language server: Invalid project or TOV values. Project name: ${projectName}, TOV name: ${tovName}`;
             vscode.window.showErrorMessage(errorMessage);
             logger.error(`[extension] ${errorMessage}`);
+            return;
+        }
+
+        // Prompt to create LS config if missing on TOV click
+        const configExists = await hasLsConfig();
+        if (!configExists) {
+            const choice = await vscode.window.showInformationMessage(
+                `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
+                "Create",
+                "Cancel"
+            );
+            if (choice === "Create") {
+                await writeLsConfig({ projectName, tovName });
+            }
         }
     };
 
@@ -317,7 +331,23 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
-            await updateOrRestartLS(projectName, tovName);
+
+            const configExists = await hasLsConfig();
+            if (!configExists) {
+                const choice = await vscode.window.showInformationMessage(
+                    `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
+                    "Create",
+                    "Cancel"
+                );
+                if (choice === "Create") {
+                    await writeLsConfig({ projectName, tovName });
+                }
+            } else {
+                const cfg = await readLsConfig();
+                if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
+                    await validateAndFixLsConfigInteractively(cfg || undefined);
+                }
+            }
             await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
             if (treeViews.testElementsTree) {
                 await treeViews.testElementsTree.loadTov(tovKey, tovItem.label?.toString(), projectName, tovName);
@@ -358,7 +388,23 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestThemeTreeView();
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
-            await updateOrRestartLS(projectName, tovName);
+
+            const configExists = await hasLsConfig();
+            if (!configExists) {
+                const choice = await vscode.window.showInformationMessage(
+                    `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
+                    "Create",
+                    "Cancel"
+                );
+                if (choice === "Create") {
+                    await writeLsConfig({ projectName, tovName });
+                }
+            } else {
+                const cfg = await readLsConfig();
+                if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
+                    await validateAndFixLsConfigInteractively(cfg || undefined);
+                }
+            }
             await treeViews.testThemesTree.loadCycle(
                 projectKey,
                 cycleKey,
@@ -641,8 +687,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         treeViews?.testElementsTree.createMissingParentResourceForInteraction(item);
     };
 
-    const handleUpdateOrRestartLS = (projectName: string | undefined, tovName: string | undefined) => {
-        updateOrRestartLS(projectName, tovName);
+    const handleUpdateOrRestartLS = () => {
+        updateOrRestartLS();
     };
 
     const handleShowExtensionSettings = () => {
@@ -1519,6 +1565,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await initializeTreeViews(context);
         await initializeContextValues(context);
         await registerExtensionCommands(context);
+        configureLanguageServerIntegration(context);
 
         // Handle session restoration and automatic login after everything is set up
         await handleInitialSession(context);

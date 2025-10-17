@@ -10,7 +10,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as os from "os";
 import JSZip from "jszip";
-import { folderNameOfInternalTestbenchFolder } from "./constants";
+import { folderNameOfInternalTestbenchFolder, LS_CONFIG_FILE_NAME } from "./constants";
 
 // Module-level variable to cache the workspace location selection.
 let cachedWorkspaceLocation: string | undefined;
@@ -89,7 +89,8 @@ export async function constructAbsolutePathFromRelativePath(
  */
 export async function deleteDirectoryRecursively(
     directoryPathToDelete: string,
-    excludedFoldersFromDeletion: string[]
+    excludedFoldersFromDeletion: string[],
+    excludedFilesFromDeletion: string[] = [LS_CONFIG_FILE_NAME]
 ): Promise<void | null> {
     logger.debug(
         `[utils] Deleting directory recursively: "${directoryPathToDelete}", excluded folders from recursive deletion: ${excludedFoldersFromDeletion}`
@@ -107,8 +108,12 @@ export async function deleteDirectoryRecursively(
 
             const fileStats: fs.Stats = await fsPromises.stat(currentPath);
             if (fileStats.isDirectory()) {
-                await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion);
+                await deleteDirectoryRecursively(currentPath, excludedFoldersFromDeletion, excludedFilesFromDeletion);
             } else {
+                if (excludedFilesFromDeletion.includes(file)) {
+                    logger.trace(`[utils] Skipping excluded file: "${currentPath}"`);
+                    continue;
+                }
                 logger.debug(`[utils] Deleting file: "${currentPath}"`);
                 await fsPromises.unlink(currentPath);
             }
@@ -137,7 +142,8 @@ export async function deleteDirectoryRecursively(
 export async function clearInternalTestbenchFolder(
     workspaceLocationToClear: string,
     excludedFoldersFromDeletion: string[] = [],
-    promptForConfirmation: boolean = true
+    promptForConfirmation: boolean = true,
+    excludedFilesFromDeletion: string[] = [LS_CONFIG_FILE_NAME]
 ): Promise<void | null> {
     try {
         try {
@@ -188,8 +194,12 @@ export async function clearInternalTestbenchFolder(
 
                 const fileStats: fs.Stats = await fsPromises.stat(filePath);
                 if (fileStats.isDirectory()) {
-                    await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion);
+                    await deleteDirectoryRecursively(filePath, excludedFoldersFromDeletion, excludedFilesFromDeletion);
                 } else {
+                    if (excludedFilesFromDeletion.includes(file)) {
+                        logger.trace(`[utils] Skipping excluded file: "${filePath}"`);
+                        continue;
+                    }
                     await fsPromises.unlink(filePath);
                 }
             }

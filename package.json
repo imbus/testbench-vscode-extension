@@ -544,6 +544,14 @@
                     "light": "resources/icons/search-on-light.svg",
                     "dark": "resources/icons/search-on-dark.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.restartLanguageServerFromConfig",
+                "title": "Restart TestBench Language Server",
+                "icon": {
+                    "light": "resources/icons/restartLanguageServer-light.svg",
+                    "dark": "resources/icons/restartLanguageServer-dark.svg"
+                }
             }
         ],
         "viewsContainers": {
@@ -704,6 +712,11 @@
                     }
                 },
                 {
+                    "command": "testbenchExtension.restartLanguageServerFromConfig",
+                    "when": "testbenchExtension.connectionActive && view == testbench.projects",
+                    "group": "navigation@8"
+                },
+                {
                     "command": "testbenchExtension.displayAllProjects",
                     "group": "navigation@2",
                     "when": "view == testbench.testThemes",
@@ -786,7 +799,7 @@
                 },
                 {
                     "command": "testbenchExtension.showExtensionSettings",
-                    "group": "navigation@8",
+                    "group": "navigation@9",
                     "when": "view == testbench.projects || view == testbenchExtension.webView"
                 },
                 {
