@@ -12,7 +12,7 @@ import { ProjectsDataProvider } from "./ProjectsDataProvider";
 import { projectsConfig } from "./ProjectsConfig";
 import { PlayServerConnection } from "../../../testBenchConnection";
 import { allExtensionCommands, ConfigKeys, ContextKeys, TreeViewTiming } from "../../../constants";
-import { hasLsConfig, writeLsConfig } from "../../../lsConfig";
+import { hasLsConfig, writeLsConfig } from "../../../languageServer/lsConfig";
 import { displayTestThemeTreeView } from "../testThemes/TestThemesTreeView";
 import { displayTestElementsTreeView } from "../testElements/TestElementsTreeView";
 import { getExtensionConfiguration } from "../../../configuration";

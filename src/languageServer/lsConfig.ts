@@ -2,9 +2,9 @@ import * as fs from "fs";
 import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
-import { LS_CONFIG_FILE_NAME, folderNameOfInternalTestbenchFolder } from "./constants";
-import { logger, getConnection } from "./extension";
-import { validateAndReturnWorkspaceLocation } from "./utils";
+import { LS_CONFIG_FILE_NAME, folderNameOfInternalTestbenchFolder } from "../constants";
+import { logger, getConnection } from "../extension";
+import { validateAndReturnWorkspaceLocation } from "../utils";
 
 export interface LanguageServerConfig {
     projectName: string;

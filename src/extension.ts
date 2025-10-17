@@ -46,8 +46,13 @@ import {
     prepareLanguageServerForTreeItemOperation,
     setIsHandlingLogout,
     configureLanguageServerIntegration
-} from "./server";
-import { hasLsConfig, writeLsConfig, readLsConfig, validateAndFixLsConfigInteractively } from "./lsConfig";
+} from "./languageServer/server";
+import {
+    hasLsConfig,
+    writeLsConfig,
+    readLsConfig,
+    validateAndFixLsConfigInteractively
+} from "./languageServer/lsConfig";
 import {
     hideProjectManagementTreeView,
     displayProjectManagementTreeView
@@ -64,7 +69,7 @@ import { initializeTreeViews } from "./treeViews/TreeViewFactory";
 import { UserSessionManager } from "./userSessionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { v4 as uuidv4 } from "uuid";
-import { activeConfigService } from "./activeConfigService";
+import { activeConfigService } from "./languageServer/activeConfigService";
 
 /* =============================================================================
    Constants, Global Variables & Exports
