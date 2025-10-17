@@ -91,7 +91,11 @@ export const ContextKeys = {
     // Test theme tree item context for opening a robot file
     HAS_GENERATED_ROBOT_FILE: "testbenchExtension.hasGeneratedRobotFile",
     // Test theme tree filters context
-    TEST_THEME_TREE_HAS_FILTERS: "testbenchExtension.testThemeTreeHasFilters"
+    TEST_THEME_TREE_HAS_FILTERS: "testbenchExtension.testThemeTreeHasFilters",
+    // Search filter context keys
+    PROJECTS_TREE_HAS_SEARCH_FILTER: "testbenchExtension.projectsTreeHasSearchFilter",
+    TEST_THEMES_TREE_HAS_SEARCH_FILTER: "testbenchExtension.testThemesTreeHasSearchFilter",
+    TEST_ELEMENTS_TREE_HAS_SEARCH_FILTER: "testbenchExtension.testElementsTreeHasSearchFilter"
 } as const;
 
 // --- Storage Keys ---
@@ -241,7 +245,10 @@ export const allExtensionCommands = {
     findInteractionPosition: `${baseKeyOfExtension}.findInteractionPosition`,
     enableFilterDiffMode: `${baseKeyOfExtension}.enableFilterDiffMode`,
     disableFilterDiffMode: `${baseKeyOfExtension}.disableFilterDiffMode`,
-    searchInProjectsTree: `${baseKeyOfExtension}.searchInProjectsTree`,
-    searchInTestThemesTree: `${baseKeyOfExtension}.searchInTestThemesTree`,
-    searchInTestElementsTree: `${baseKeyOfExtension}.searchInTestElementsTree`
+    searchInProjectsTreeOn: `${baseKeyOfExtension}.searchInProjectsTreeOn`,
+    searchInProjectsTreeOff: `${baseKeyOfExtension}.searchInProjectsTreeOff`,
+    searchInTestThemesTreeOn: `${baseKeyOfExtension}.searchInTestThemesTreeOn`,
+    searchInTestThemesTreeOff: `${baseKeyOfExtension}.searchInTestThemesTreeOff`,
+    searchInTestElementsTreeOn: `${baseKeyOfExtension}.searchInTestElementsTreeOn`,
+    searchInTestElementsTreeOff: `${baseKeyOfExtension}.searchInTestElementsTreeOff`
 };

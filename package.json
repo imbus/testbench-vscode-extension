@@ -498,19 +498,52 @@
                 "title": "TestBench: Clear All Extension Data"
             },
             {
-                "command": "testbenchExtension.searchInProjectsTree",
+                "command": "testbenchExtension.searchInProjectsTreeOff",
                 "title": "Search",
-                "icon": "$(search)"
+                "icon": {
+                    "light": "resources/icons/search-off-light.svg",
+                    "dark": "resources/icons/search-off-dark.svg"
+                }
             },
             {
-                "command": "testbenchExtension.searchInTestThemesTree",
+                "command": "testbenchExtension.searchInProjectsTreeOn",
                 "title": "Search",
-                "icon": "$(search)"
+                "icon": {
+                    "light": "resources/icons/search-on-light.svg",
+                    "dark": "resources/icons/search-on-dark.svg"
+                }
             },
             {
-                "command": "testbenchExtension.searchInTestElementsTree",
+                "command": "testbenchExtension.searchInTestThemesTreeOff",
                 "title": "Search",
-                "icon": "$(search)"
+                "icon": {
+                    "light": "resources/icons/search-off-light.svg",
+                    "dark": "resources/icons/search-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.searchInTestThemesTreeOn",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-on-light.svg",
+                    "dark": "resources/icons/search-on-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.searchInTestElementsTreeOff",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-off-light.svg",
+                    "dark": "resources/icons/search-off-dark.svg"
+                }
+            },
+            {
+                "command": "testbenchExtension.searchInTestElementsTreeOn",
+                "title": "Search",
+                "icon": {
+                    "light": "resources/icons/search-on-light.svg",
+                    "dark": "resources/icons/search-on-dark.svg"
+                }
             }
         ],
         "viewsContainers": {
@@ -653,9 +686,22 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.searchInProjectsTree",
-                    "when": "view == testbench.projects",
-                    "group": "navigation@4"
+                    "command": "testbenchExtension.searchInProjectsTreeOff",
+                    "when": "view == testbench.projects && !testbenchExtension.projectsTreeHasSearchFilter",
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/search-off-light.svg",
+                        "dark": "resources/icons/search-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.searchInProjectsTreeOn",
+                    "when": "view == testbench.projects && testbenchExtension.projectsTreeHasSearchFilter",
+                    "group": "navigation@4",
+                    "icon": {
+                        "light": "resources/icons/search-on-light.svg",
+                        "dark": "resources/icons/search-on-dark.svg"
+                    }
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",
@@ -721,9 +767,22 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.searchInTestThemesTree",
-                    "when": "view == testbench.testThemes",
-                    "group": "navigation@5"
+                    "command": "testbenchExtension.searchInTestThemesTreeOff",
+                    "when": "view == testbench.testThemes && !testbenchExtension.testThemesTreeHasSearchFilter",
+                    "group": "navigation@5",
+                    "icon": {
+                        "light": "resources/icons/search-off-light.svg",
+                        "dark": "resources/icons/search-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.searchInTestThemesTreeOn",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemesTreeHasSearchFilter",
+                    "group": "navigation@5",
+                    "icon": {
+                        "light": "resources/icons/search-on-light.svg",
+                        "dark": "resources/icons/search-on-dark.svg"
+                    }
                 },
                 {
                     "command": "testbenchExtension.showExtensionSettings",
@@ -741,9 +800,22 @@
                     }
                 },
                 {
-                    "command": "testbenchExtension.searchInTestElementsTree",
-                    "when": "view == testbench.testElements",
-                    "group": "navigation@3"
+                    "command": "testbenchExtension.searchInTestElementsTreeOff",
+                    "when": "view == testbench.testElements && !testbenchExtension.testElementsTreeHasSearchFilter",
+                    "group": "navigation@3",
+                    "icon": {
+                        "light": "resources/icons/search-off-light.svg",
+                        "dark": "resources/icons/search-off-dark.svg"
+                    }
+                },
+                {
+                    "command": "testbenchExtension.searchInTestElementsTreeOn",
+                    "when": "view == testbench.testElements && testbenchExtension.testElementsTreeHasSearchFilter",
+                    "group": "navigation@3",
+                    "icon": {
+                        "light": "resources/icons/search-on-light.svg",
+                        "dark": "resources/icons/search-on-dark.svg"
+                    }
                 }
             ],
             "view/item/context": [

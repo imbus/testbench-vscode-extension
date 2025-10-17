@@ -95,6 +95,31 @@ export class FilteringModule implements TreeViewModule {
     }
 
     /**
+     * Updates context keys to reflect search filter state
+     * @param hasSearchFilter Whether a search filter is active
+     */
+    private updateSearchContextKey(hasSearchFilter: boolean): void {
+        const treeViewId = this.context.config.id;
+        let contextKey: string;
+
+        switch (treeViewId) {
+            case "testbench.projects":
+                contextKey = ContextKeys.PROJECTS_TREE_HAS_SEARCH_FILTER;
+                break;
+            case "testbench.testThemes":
+                contextKey = ContextKeys.TEST_THEMES_TREE_HAS_SEARCH_FILTER;
+                break;
+            case "testbench.testElements":
+                contextKey = ContextKeys.TEST_ELEMENTS_TREE_HAS_SEARCH_FILTER;
+                break;
+            default:
+                return;
+        }
+
+        vscode.commands.executeCommand("setContext", contextKey, hasSearchFilter);
+    }
+
+    /**
      * Applies loaded state (which has no predicate functions) with the full
      * filter definitions from the configuration.
      * @param loadedFilteringState The partial filter state loaded from persistence.
@@ -161,6 +186,7 @@ export class FilteringModule implements TreeViewModule {
      */
     public setTextFilter(options: TextFilterOptions | null): void {
         this.textFilter = options;
+        this.updateSearchContextKey(!!options);
         this.context.logger.debug(
             this.context.buildLogPrefix(
                 "FilteringModule",
@@ -702,6 +728,7 @@ export class FilteringModule implements TreeViewModule {
 
         // Update context keys to reflect that diff mode is disabled
         this.updateDiffModeContextKeys(false);
+        this.updateSearchContextKey(false);
 
         this.updateState();
         this.context.refresh({ immediate: true });

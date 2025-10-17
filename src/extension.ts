@@ -1103,9 +1103,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             id: allExtensionCommands.openIssueReporter,
             handler: handleOpenIssueReporter
         },
-        { id: allExtensionCommands.searchInProjectsTree, handler: handleSearchInProjectsTree },
-        { id: allExtensionCommands.searchInTestThemesTree, handler: handleSearchInTestThemesTree },
-        { id: allExtensionCommands.searchInTestElementsTree, handler: handleSearchInTestElementsTree }
+        { id: allExtensionCommands.searchInProjectsTreeOn, handler: handleSearchInProjectsTree },
+        { id: allExtensionCommands.searchInProjectsTreeOff, handler: handleSearchInProjectsTree },
+        { id: allExtensionCommands.searchInTestThemesTreeOn, handler: handleSearchInTestThemesTree },
+        { id: allExtensionCommands.searchInTestThemesTreeOff, handler: handleSearchInTestThemesTree },
+        { id: allExtensionCommands.searchInTestElementsTreeOn, handler: handleSearchInTestElementsTree },
+        { id: allExtensionCommands.searchInTestElementsTreeOff, handler: handleSearchInTestElementsTree }
     ];
 
     // Registration Loop
