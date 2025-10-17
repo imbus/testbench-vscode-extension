@@ -523,6 +523,10 @@
             {
                 "command": "testbenchExtension.setConfigAsActive",
                 "title": "Set as Active Configuration"
+            },
+            {
+                "command": "testbenchExtension.validateAndFixLsConfig",
+                "title": "TestBench: Validate and Fix Project Configuration"
             }
         ],
         "viewsContainers": {
@@ -631,6 +635,10 @@
                 },
                 {
                     "command": "testbenchExtension.checkForCycleDoubleClick",
+                    "when": "false"
+                },
+                {
+                    "command": "testbenchExtension.validateAndFixLsConfig",
                     "when": "false"
                 }
             ],

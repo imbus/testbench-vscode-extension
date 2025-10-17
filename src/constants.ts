@@ -248,5 +248,6 @@ export const allExtensionCommands = {
     searchInTestThemesTree: `${baseKeyOfExtension}.searchInTestThemesTree`,
     searchInTestElementsTree: `${baseKeyOfExtension}.searchInTestElementsTree`,
     restartLanguageServerFromConfig: `${baseKeyOfExtension}.restartLanguageServerFromConfig`,
-    setConfigAsActive: `${baseKeyOfExtension}.setConfigAsActive`
+    setConfigAsActive: `${baseKeyOfExtension}.setConfigAsActive`,
+    validateAndFixLsConfig: `${baseKeyOfExtension}.validateAndFixLsConfig`
 };
