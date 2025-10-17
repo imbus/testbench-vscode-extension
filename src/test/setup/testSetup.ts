@@ -10,7 +10,7 @@ import { setupVSCodeMocks, VSCodeAPIMocks } from "./mockVSCodeAPI";
 import { createMockExtensionContext } from "./mockExtensionContext";
 import { TestBenchLogger } from "../../testBenchLogger";
 import * as vscode from "vscode";
-import * as server from "../../server";
+import * as server from "../../languageServer/server";
 
 // A single context object containing all mocks for a test suite
 export interface TestEnvironment {

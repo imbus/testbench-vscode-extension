@@ -19,8 +19,8 @@ import {
     isLanguageServerRunning,
     waitForLanguageServerReady,
     updateOrRestartLS
-} from "../../../server";
-import { hasLsConfig } from "../../../lsConfig";
+} from "../../../languageServer/server";
+import { hasLsConfig } from "../../../languageServer/lsConfig";
 import { getExtensionSetting } from "../../../configuration";
 import { ConfigKeys } from "../../../constants";
 

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH, allExtensionCommands } from "./constants";
-import { getInterpreterPath } from "./python";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH, allExtensionCommands } from "../constants";
+import { getInterpreterPath } from "../python";
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -12,7 +12,7 @@ import {
     ErrorHandlerResult,
     CloseHandlerResult
 } from "vscode-languageclient/node";
-import { getConnection, logger } from "./extension";
+import { getConnection, logger } from "../extension";
 import { readLsConfig, hasLsConfig, validateAndFixLsConfigInteractively } from "./lsConfig";
 
 interface TbConnectionDetails {

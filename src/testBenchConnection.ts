@@ -29,7 +29,7 @@ import { getExtensionSetting } from "./configuration";
 import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
 import * as connectionManager from "./connectionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
-import { handleLanguageServerRestartOnSessionChange } from "./server";
+import { handleLanguageServerRestartOnSessionChange } from "./languageServer/server";
 
 /**
  * Manages TLS security state globally for the extension.
