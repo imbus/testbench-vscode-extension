@@ -519,6 +519,10 @@
                     "light": "resources/icons/restartLanguageServer-light.svg",
                     "dark": "resources/icons/restartLanguageServer-dark.svg"
                 }
+            },
+            {
+                "command": "testbenchExtension.setConfigAsActive",
+                "title": "Set as Active Configuration"
             }
         ],
         "viewsContainers": {
@@ -845,6 +849,11 @@
                     "command": "testbenchExtension.createMissingParentResourceForInteraction",
                     "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.missing'",
                     "group": "inline@1"
+                },
+                {
+                    "command": "testbenchExtension.setConfigAsActive",
+                    "when": "view == testbench.projects && (viewItem == Project || viewItem == Version)",
+                    "group": "navigation@2"
                 }
             ]
         }

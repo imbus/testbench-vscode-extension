@@ -51,7 +51,8 @@ import {
     hasLsConfig,
     writeLsConfig,
     readLsConfig,
-    validateAndFixLsConfigInteractively
+    validateAndFixLsConfigInteractively,
+    LanguageServerConfig
 } from "./languageServer/lsConfig";
 import {
     hideProjectManagementTreeView,
@@ -1043,6 +1044,44 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
+    const handleSetConfigAsActive = async (item: ProjectsTreeItem) => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.setConfigAsActive}`);
+        if (!item) {
+            logger.warn("[extension] 'Set as Active Configuration' called without an item.");
+            return;
+        }
+
+        const languageServerParams = item.getLanguageServerParameters();
+        if (!languageServerParams) {
+            vscode.window.showErrorMessage("Could not determine configuration from the selected item.");
+            return;
+        }
+
+        const { projectName, tovName } = languageServerParams;
+
+        const currentConfig = await readLsConfig();
+        const newConfig: LanguageServerConfig = {
+            projectName: projectName,
+            tovName: tovName || currentConfig?.tovName || ""
+        };
+
+        if (item.data.type === "project") {
+            const choice = await vscode.window.showInformationMessage(
+                `Set '${projectName}' as the active project? The currently active TOV will be kept if it belongs to this project.`,
+                { modal: true },
+                "Set Active Project"
+            );
+            if (choice !== "Set Active Project") {
+                return;
+            }
+        }
+
+        await writeLsConfig(newConfig);
+        vscode.window.showInformationMessage(
+            `Active configuration set to: ${newConfig.projectName} / ${newConfig.tovName}`
+        );
+    };
+
     // --- Command Registry ---
     const commandRegistry = [
         // Authentication and Session
@@ -1157,7 +1196,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         },
         { id: allExtensionCommands.searchInProjectsTree, handler: handleSearchInProjectsTree },
         { id: allExtensionCommands.searchInTestThemesTree, handler: handleSearchInTestThemesTree },
-        { id: allExtensionCommands.searchInTestElementsTree, handler: handleSearchInTestElementsTree }
+        { id: allExtensionCommands.searchInTestElementsTree, handler: handleSearchInTestElementsTree },
+        { id: allExtensionCommands.setConfigAsActive, handler: handleSetConfigAsActive }
     ];
 
     // Registration Loop
