@@ -20,6 +20,7 @@ import * as reportHandler from "../../../reportHandler";
 import { treeViews } from "../../../extension";
 import { ClickHandler } from "../../core/ClickHandler";
 import { ActiveItemMarkerModule } from "../../features/ActiveItemMarkerModule";
+import { activeConfigService } from "../../../languageServer/activeConfigService";
 
 export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
     private dataProvider: ProjectsDataProvider;
@@ -199,6 +200,8 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
                 metadata: project.metadata
             })
         );
+
+        this.sortProjectTreeItems(createdProjectTreeItems);
 
         // If filtering is active, we must load the entire hierarchy upfront
         // so that the filter logic can inspect children of non-matching parents.
@@ -450,6 +453,39 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         if (item.id) {
             await this.cycleClickHandler.handleClick(item, item.id, this.logger);
         }
+    }
+
+    /**
+     * Sorts project tree items to display the active configured project first, followed by the rest alphabetically.
+     * The active project is determined by the `projectName` in `ls.config.json`.
+     * @param projectItems The array of `ProjectsTreeItem` to sort in place.
+     */
+    private sortProjectTreeItems(projectItems: ProjectsTreeItem[]): void {
+        const activeConfig = activeConfigService.getActiveConfig();
+        const activeProjectName = activeConfig?.projectName?.trim();
+
+        projectItems.sort((projectA, projectB) => {
+            const nameA = projectA.data.name.trim();
+            const nameB = projectB.data.name.trim();
+
+            // Determine if each project is the one marked as active in the configuration.
+            const isProjectAActive = activeProjectName ? nameA === activeProjectName : false;
+            const isProjectBActive = activeProjectName ? nameB === activeProjectName : false;
+
+            // If project A is active and B is not, A comes first.
+            if (isProjectAActive && !isProjectBActive) {
+                return -1;
+            }
+
+            // If project B is active and A is not, B comes first.
+            if (!isProjectAActive && isProjectBActive) {
+                return 1;
+            }
+
+            // If both are active or both not active,
+            // sort them alphabetically by name.
+            return nameA.localeCompare(nameB);
+        });
     }
 
     /**
