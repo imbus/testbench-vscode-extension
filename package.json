@@ -554,8 +554,12 @@
                 }
             },
             {
-                "command": "testbenchExtension.setConfigAsActive",
-                "title": "Set as Active Configuration"
+                "command": "testbenchExtension.setActiveProject",
+                "title": "Set as Active Project"
+            },
+            {
+                "command": "testbenchExtension.setActiveTOV",
+                "title": "Set as Active TOV"
             },
             {
                 "command": "testbenchExtension.validateAndFixLsConfig",
@@ -931,8 +935,13 @@
                     "group": "inline@1"
                 },
                 {
-                    "command": "testbenchExtension.setConfigAsActive",
-                    "when": "view == testbench.projects && (viewItem == Project || viewItem == Version)",
+                    "command": "testbenchExtension.setActiveProject",
+                    "when": "view == testbench.projects && viewItem == Project",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "testbenchExtension.setActiveTOV",
+                    "when": "view == testbench.projects && viewItem == Version",
                     "group": "navigation@2"
                 }
             ]
