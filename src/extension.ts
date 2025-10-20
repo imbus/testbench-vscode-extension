@@ -1044,10 +1044,44 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
-    const handleSetConfigAsActive = async (item: ProjectsTreeItem) => {
-        logger.trace(`[extension] Command called: ${allExtensionCommands.setConfigAsActive}`);
+    const handleSetActiveProject = async (item: ProjectsTreeItem) => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.setActiveProject}`);
         if (!item) {
-            logger.warn("[extension] 'Set as Active Configuration' called without an item.");
+            logger.warn("[extension] 'Set as Active Project' called without an item.");
+            return;
+        }
+
+        const languageServerParams = item.getLanguageServerParameters();
+        if (!languageServerParams) {
+            vscode.window.showErrorMessage("Could not determine configuration from the selected item.");
+            return;
+        }
+
+        const { projectName } = languageServerParams;
+
+        const choice = await vscode.window.showInformationMessage(
+            `Set '${projectName}' as the active project? The currently active TOV will be kept if it belongs to this project.`,
+            { modal: true },
+            "Set Active Project"
+        );
+        if (choice !== "Set Active Project") {
+            return;
+        }
+
+        const currentConfig = await readLsConfig();
+        const newConfig: LanguageServerConfig = {
+            projectName: projectName,
+            tovName: currentConfig?.tovName || ""
+        };
+
+        await writeLsConfig(newConfig);
+        vscode.window.showInformationMessage(`Active project set to: ${newConfig.projectName}`);
+    };
+
+    const handleSetActiveTOV = async (item: ProjectsTreeItem) => {
+        logger.trace(`[extension] Command called: ${allExtensionCommands.setActiveTOV}`);
+        if (!item) {
+            logger.warn("[extension] 'Set as Active TOV' called without an item.");
             return;
         }
 
@@ -1058,23 +1092,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         const { projectName, tovName } = languageServerParams;
+        if (!tovName) {
+            vscode.window.showErrorMessage("Could not determine TOV from the selected item.");
+            return;
+        }
 
-        const currentConfig = await readLsConfig();
         const newConfig: LanguageServerConfig = {
             projectName: projectName,
-            tovName: tovName || currentConfig?.tovName || ""
+            tovName: tovName
         };
-
-        if (item.data.type === "project") {
-            const choice = await vscode.window.showInformationMessage(
-                `Set '${projectName}' as the active project? The currently active TOV will be kept if it belongs to this project.`,
-                { modal: true },
-                "Set Active Project"
-            );
-            if (choice !== "Set Active Project") {
-                return;
-            }
-        }
 
         await writeLsConfig(newConfig);
         vscode.window.showInformationMessage(
@@ -1206,7 +1232,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         { id: allExtensionCommands.searchInProjectsTree, handler: handleSearchInProjectsTree },
         { id: allExtensionCommands.searchInTestThemesTree, handler: handleSearchInTestThemesTree },
         { id: allExtensionCommands.searchInTestElementsTree, handler: handleSearchInTestElementsTree },
-        { id: allExtensionCommands.setConfigAsActive, handler: handleSetConfigAsActive },
+        { id: allExtensionCommands.setActiveProject, handler: handleSetActiveProject },
+        { id: allExtensionCommands.setActiveTOV, handler: handleSetActiveTOV },
         { id: allExtensionCommands.validateAndFixLsConfig, handler: handleValidateAndFixLsConfig }
     ];
 
