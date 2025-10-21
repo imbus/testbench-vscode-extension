@@ -786,13 +786,16 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             const filteringModule = this.getModule("filtering") as FilteringModule | undefined;
             if (filteringModule && filteringModule.isActive() && this.rootItems.length > 0) {
                 const filteredRootItems = filteringModule.filterTreeItems(this.rootItems);
+                const textFilter = filteringModule.getTextFilter();
                 if (filteredRootItems.length === 0) {
-                    const textFilter = filteringModule.getTextFilter();
                     if (textFilter?.searchText) {
                         this.vscTreeView.message = `No items found for "${textFilter.searchText}"`;
                     } else {
                         this.vscTreeView.message = "All items have been filtered.";
                     }
+                    return;
+                } else if (textFilter?.searchText) {
+                    this.vscTreeView.message = `Search results for: "${textFilter.searchText}"`;
                     return;
                 }
             }
