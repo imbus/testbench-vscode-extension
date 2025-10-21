@@ -456,6 +456,11 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
             );
             return;
         }
+        const filteringModule = this.getModule("filtering");
+        if (filteringModule && filteringModule.getTextFilter()) {
+            filteringModule.setTextFilter(null);
+            vscode.window.showInformationMessage("Search has been cleared to enable filter-diff mode.");
+        }
         await this.setFilterDiffMode(true);
     }
 

@@ -997,6 +997,11 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                     return;
                 }
 
+                if (treeView === treeViews?.testThemesTree && treeViews.testThemesTree.isFilterDiffModeEnabled()) {
+                    await treeViews.testThemesTree.disableFilterDiffMode();
+                    vscode.window.showInformationMessage("Filter-diff mode has been disabled to perform a search.");
+                }
+
                 const newFilterOptions: TextFilterOptions = {
                     searchText: searchText,
                     caseSensitive: selectedItems.some((item) => item.id === "CaseSensitive"),
