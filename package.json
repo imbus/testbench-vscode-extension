@@ -546,14 +546,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.restartLanguageServerFromConfig",
-                "title": "Restart TestBench Language Server",
-                "icon": {
-                    "light": "resources/icons/restartLanguageServer-light.svg",
-                    "dark": "resources/icons/restartLanguageServer-dark.svg"
-                }
-            },
-            {
                 "command": "testbenchExtension.setActiveProject",
                 "title": "Set as Active Project"
             },
@@ -726,11 +718,6 @@
                         "light": "resources/icons/search-on-light.svg",
                         "dark": "resources/icons/search-on-dark.svg"
                     }
-                },
-                {
-                    "command": "testbenchExtension.restartLanguageServerFromConfig",
-                    "when": "testbenchExtension.connectionActive && view == testbench.projects",
-                    "group": "navigation@8"
                 },
                 {
                     "command": "testbenchExtension.displayAllProjects",

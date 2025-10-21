@@ -12,6 +12,7 @@ import {
     validateAndFixLsConfigInteractively
 } from "./lsConfig";
 import { logger } from "../extension";
+import { updateOrRestartLS, stopLanguageClient } from "../languageServer/server";
 
 const AUTO_VALIDATE_CONFIG_ON_CHANGE = true;
 
@@ -91,17 +92,19 @@ class ActiveConfigService {
                     new vscode.RelativePattern(workspaceFolder, relativePath)
                 );
 
-                const refreshConfig = () => {
+                const refreshConfig = async () => {
                     logger.trace("[ActiveConfigService] ls.config.json changed, reloading.");
-                    this.loadActiveConfig();
+                    await this.loadActiveConfig();
+                    await updateOrRestartLS();
                 };
 
                 this._watcher.onDidChange(refreshConfig);
                 this._watcher.onDidCreate(refreshConfig);
-                this._watcher.onDidDelete(() => {
+                this._watcher.onDidDelete(async () => {
                     logger.trace("[ActiveConfigService] ls.config.json deleted, clearing active config.");
                     this._activeConfig = null;
                     this._onDidChangeActiveConfig.fire(null);
+                    await stopLanguageClient();
                 });
 
                 context.subscriptions.push(this._watcher);

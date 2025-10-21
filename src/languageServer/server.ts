@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH, allExtensionCommands } from "../constants";
+import { LANGUAGE_SERVER_SCRIPT_PATH, LANGUAGE_SERVER_DEBUG_PATH } from "../constants";
 import { getInterpreterPath } from "../python";
 import {
     LanguageClient,
@@ -1111,14 +1111,6 @@ export async function restartLanguageClientFromConfig(): Promise<void> {
  * Call this from extension activation to avoid top-level side effects.
  */
 export function configureLanguageServerIntegration(context: vscode.ExtensionContext): void {
-    const restartCmd = vscode.commands.registerCommand(
-        allExtensionCommands.restartLanguageServerFromConfig,
-        async () => {
-            await restartLanguageClientFromConfig();
-        }
-    );
-    context.subscriptions.push(restartCmd);
-
     const authListener = vscode.authentication.onDidChangeSessions(async (e) => {
         if (e.provider.id !== "testbench-auth") {
             return;
