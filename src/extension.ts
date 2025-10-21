@@ -896,6 +896,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
 
         const options: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
             { id: "CaseSensitive", label: "Case Sensitive", description: "Perform a case-sensitive search" },
+            { id: "ExactMatch", label: "Exact Match", description: "Perform an exact match search" },
             {
                 id: "ShowChildren",
                 label: "Show Children of Matches",
@@ -916,6 +917,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 (option) =>
                     (option.picked =
                         (option.id === "CaseSensitive" && currentFilter.caseSensitive) ||
+                        (option.id === "ExactMatch" && currentFilter.exactMatch) ||
                         (option.id === "ShowChildren" && currentFilter.showChildrenOfMatches))
             );
         }
@@ -999,6 +1001,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 const newFilterOptions: TextFilterOptions = {
                     searchText: searchText,
                     caseSensitive: selectedItems.some((item) => item.id === "CaseSensitive"),
+                    exactMatch: selectedItems.some((item) => item.id === "ExactMatch"),
                     searchInName: selectedCriteria.some((c) => c.id === "Name"),
                     searchInDescription: selectedCriteria.some((c) => c.id === "Description"),
                     searchInTooltip: selectedCriteria.some((c) => c.id === "Tooltip"),

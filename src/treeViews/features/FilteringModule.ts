@@ -13,6 +13,7 @@ import { ContextKeys } from "../../constants";
 export interface TextFilterOptions {
     searchText: string;
     caseSensitive: boolean;
+    exactMatch: boolean;
     searchInName: boolean;
     searchInId: boolean;
     searchInDescription: boolean;
@@ -158,6 +159,7 @@ export class FilteringModule implements TreeViewModule {
         if (!filteringConfig) {
             return {
                 caseSensitive: false,
+                exactMatch: false,
                 searchInName: true,
                 searchInId: false,
                 searchInDescription: false,
@@ -170,6 +172,7 @@ export class FilteringModule implements TreeViewModule {
 
         return {
             caseSensitive: false,
+            exactMatch: false,
             searchInName: true,
             searchInId: false,
             searchInDescription: false,
@@ -365,11 +368,18 @@ export class FilteringModule implements TreeViewModule {
 
         const searchText = this.textFilter.searchText;
         const searchTextLower = this.textFilter.caseSensitive ? searchText : searchText.toLowerCase();
+        const exactMatch = this.textFilter.exactMatch;
         // Search in label
         if (this.textFilter.searchInName && item.label) {
             const label = this.textFilter.caseSensitive ? item.label.toString() : item.label.toString().toLowerCase();
-            if (label.includes(searchTextLower)) {
-                return true;
+            if (exactMatch) {
+                if (label === searchTextLower) {
+                    return true;
+                }
+            } else {
+                if (label.includes(searchTextLower)) {
+                    return true;
+                }
             }
         }
 
@@ -378,8 +388,14 @@ export class FilteringModule implements TreeViewModule {
             const description = this.textFilter.caseSensitive
                 ? item.description.toString()
                 : item.description.toString().toLowerCase();
-            if (description.includes(searchTextLower)) {
-                return true;
+            if (exactMatch) {
+                if (description === searchTextLower) {
+                    return true;
+                }
+            } else {
+                if (description.includes(searchTextLower)) {
+                    return true;
+                }
             }
         }
 
@@ -388,24 +404,42 @@ export class FilteringModule implements TreeViewModule {
             const tooltip = this.textFilter.caseSensitive
                 ? item.tooltip.toString()
                 : item.tooltip.toString().toLowerCase();
-            if (tooltip.includes(searchTextLower)) {
-                return true;
+            if (exactMatch) {
+                if (tooltip === searchTextLower) {
+                    return true;
+                }
+            } else {
+                if (tooltip.includes(searchTextLower)) {
+                    return true;
+                }
             }
         }
 
         // Search in ID
         if (this.textFilter.searchInId && item.id) {
             const id = this.textFilter.caseSensitive ? item.id : item.id.toLowerCase();
-            if (id.includes(searchTextLower)) {
-                return true;
+            if (exactMatch) {
+                if (id === searchTextLower) {
+                    return true;
+                }
+            } else {
+                if (id.includes(searchTextLower)) {
+                    return true;
+                }
             }
         }
 
         // Search in Type (contextValue)
         if (this.textFilter.searchInType && item.contextValue) {
             const type = this.textFilter.caseSensitive ? item.contextValue : item.contextValue.toLowerCase();
-            if (type.includes(searchTextLower)) {
-                return true;
+            if (exactMatch) {
+                if (type === searchTextLower) {
+                    return true;
+                }
+            } else {
+                if (type.includes(searchTextLower)) {
+                    return true;
+                }
             }
         }
 
