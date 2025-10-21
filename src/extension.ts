@@ -467,7 +467,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 }
             }
 
-            await prepareLanguageServerForTreeItemOperation(tovItem, "generate test cases for TOV");
+            await prepareLanguageServerForTreeItemOperation("generate test cases for TOV");
             await treeViews.projectsTree.generateTestCasesForTOV(tovItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -509,7 +509,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 }
             }
 
-            await prepareLanguageServerForTreeItemOperation(cycleItem, "generate test cases for cycle");
+            await prepareLanguageServerForTreeItemOperation("generate test cases for cycle");
             await reportHandler.startTestGenerationForCycle(context, cycleItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -546,10 +546,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await prepareLanguageServerForTreeItemOperation(
-                testThemeTreeItem,
-                "generate test cases for test theme or test case set"
-            );
+            await prepareLanguageServerForTreeItemOperation("generate test cases for test theme or test case set");
             await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -588,10 +585,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await prepareLanguageServerForTreeItemOperation(
-                testThemeTreeItem,
-                "generate test cases for test theme tree item"
-            );
+            await prepareLanguageServerForTreeItemOperation("generate test cases for test theme tree item");
             await treeViews.testThemesTree.generateTestCases(testThemeTreeItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {
@@ -630,7 +624,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         try {
-            await prepareLanguageServerForTreeItemOperation(testThemeTreeItem, "import test results");
+            await prepareLanguageServerForTreeItemOperation("import test results");
             await treeViews.testThemesTree.importTestResultsForTestThemeTreeItem(testThemeTreeItem);
         } catch (error) {
             if (error instanceof TestBenchConnectionError) {

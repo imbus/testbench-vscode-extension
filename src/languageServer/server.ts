@@ -1281,22 +1281,20 @@ export async function waitForLanguageServerReady(
  * Extracts project and TOV names from different tree item types (projects or test theme tree items),
  * retrieves language server parameters and initializes or updates the language server.
  *
- * @param item The tree item that extends TreeItemBase and implements LanguageServerParameterProvider
  * @param operationName Human readable name of the operation for error messages
  * @returns Promise that resolves to the extracted project and TOV names, or throws an error
  */
 export async function prepareLanguageServerForTreeItemOperation(
-    item: any, // Using any to avoid circular imports - the item should have getLanguageServerParameters method
     operationName: string
 ): Promise<{ projectName: string; tovName: string }> {
     const timeOutMs = 30000;
     const checkIntervallMs = 100;
 
-    const cfg = await readLsConfig();
-    if (!cfg) {
-        const errorMessage = `Cannot ${operationName}: no TestBench project configuration found (.testbench/ls.config.json).`;
-        logger.error(`[server] ${errorMessage}`);
-        vscode.window.showErrorMessage(errorMessage);
+    const config = await validateAndFixLsConfigInteractively();
+
+    if (!config) {
+        const errorMessage = `Cannot ${operationName}: TestBench project configuration is not set. Operation cancelled.`;
+        logger.warn(`[server] ${errorMessage}`);
         throw new Error(errorMessage);
     }
 
@@ -1313,7 +1311,7 @@ export async function prepareLanguageServerForTreeItemOperation(
         }
     );
 
-    return { projectName: cfg.projectName, tovName: cfg.tovName };
+    return { projectName: config.projectName, tovName: config.tovName };
 }
 
 /**
