@@ -889,10 +889,15 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         ];
 
         if (!isProjectsTree) {
-            criteria.push({ id: "Description", label: "UID", description: "Search in item's unique ID" });
+            criteria.push({ id: "Description", label: "UID", description: "Search in item's unique ID", picked: true });
         }
 
-        criteria.push({ id: "Tooltip", label: "Tooltip", description: "Search in all available item fields" });
+        criteria.push({
+            id: "Tooltip",
+            label: "Tooltip",
+            description: "Search in all available item fields",
+            picked: true
+        });
 
         const options: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
             { id: "CaseSensitive", label: "Case Sensitive", description: "Perform a case-sensitive search" },
@@ -900,7 +905,8 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             {
                 id: "ShowChildren",
                 label: "Show Children of Matches",
-                description: "Show all children of matching items"
+                description: "Show all children of matching items",
+                picked: true
             }
         ];
 
