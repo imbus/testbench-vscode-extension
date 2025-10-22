@@ -870,6 +870,12 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
     };
 
+    /**
+     * Handles the search functionality for a given tree view.
+     * Provides a live search within an input box,
+     * and a button to configure search options.
+     * @param treeView The tree view instance to perform the search on.
+     */
     const handleSearchInTreeView = async (treeView: TreeViewBase<TreeItemBase>): Promise<void> => {
         logger.trace(`[extension] Initiating search for tree view: ${treeView.config.id}`);
         const filteringModule = treeView.getModule("filtering");
@@ -884,154 +890,213 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const treeViewId = treeView.config.id;
         const isProjectsTree = treeViewId === "testbench.projects";
 
-        const criteria: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
-            { id: "Name", label: "Name", description: "Search in item's name", picked: true }
-        ];
+        // Use existing filter options or defaults.
+        let searchOptionsToUse = {
+            searchInName: currentFilter?.searchInName ?? true,
+            searchInDescription: currentFilter?.searchInDescription ?? !isProjectsTree,
+            searchInTooltip: currentFilter?.searchInTooltip ?? true,
+            caseSensitive: currentFilter?.caseSensitive ?? false,
+            exactMatch: currentFilter?.exactMatch ?? false,
+            showChildrenOfMatches: currentFilter?.showChildrenOfMatches ?? true
+        };
 
-        if (!isProjectsTree) {
-            criteria.push({ id: "Description", label: "UID", description: "Search in item's unique ID", picked: true });
-        }
+        const inputBox = vscode.window.createInputBox();
+        inputBox.title = `Search in ${treeView.config.title}`;
+        inputBox.value = currentFilter?.searchText || "";
+        inputBox.prompt = "Enter search text. Press Enter to confirm or Escape to cancel.";
 
-        criteria.push({
-            id: "Tooltip",
-            label: "Tooltip",
-            description: "Search in all available item fields",
-            picked: true
-        });
-
-        const options: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
-            { id: "CaseSensitive", label: "Case Sensitive", description: "Perform a case-sensitive search" },
-            { id: "ExactMatch", label: "Exact Match", description: "Perform an exact match search" },
-            {
-                id: "ShowChildren",
-                label: "Show Children of Matches",
-                description: "Show all children of matching items",
-                picked: true
-            }
-        ];
-
-        if (currentFilter) {
-            logger.trace("[extension] Populating Quick Pick with current filter settings.");
-            criteria.forEach(
-                (criteria) =>
-                    (criteria.picked =
-                        (criteria.id === "Name" && currentFilter.searchInName) ||
-                        (criteria.id === "Description" && currentFilter.searchInDescription) ||
-                        (criteria.id === "Tooltip" && currentFilter.searchInTooltip))
-            );
-            options.forEach(
-                (option) =>
-                    (option.picked =
-                        (option.id === "CaseSensitive" && currentFilter.caseSensitive) ||
-                        (option.id === "ExactMatch" && currentFilter.exactMatch) ||
-                        (option.id === "ShowChildren" && currentFilter.showChildrenOfMatches))
-            );
-        }
-
-        const quickPick = vscode.window.createQuickPick<vscode.QuickPickItem & { id: string }>();
-        quickPick.canSelectMany = true;
-        quickPick.placeholder = "Select search criteria and options";
-        quickPick.title = `Search in ${treeView.config.title}`;
-
-        const quickPickItems: (vscode.QuickPickItem & { id: string })[] = [
-            { id: "separator-criteria", label: "Search Criteria", kind: vscode.QuickPickItemKind.Separator },
-            ...criteria,
-            { id: "separator-options", label: "Options", kind: vscode.QuickPickItemKind.Separator },
-            ...options
-        ];
-
-        if (currentFilter) {
-            quickPickItems.push(
-                { id: "separator-actions", label: "Actions", kind: vscode.QuickPickItemKind.Separator },
-                {
-                    id: "Clear",
-                    label: "$(clear-all) Clear Current Search",
-                    description: "Reset the current search filter"
-                }
-            );
-        }
-
-        quickPick.items = quickPickItems;
-        quickPick.selectedItems = quickPickItems.filter((item) => (item as any).picked);
+        // Button to configure search options on top right of the input box.
+        const configureButton: vscode.QuickInputButton = {
+            iconPath: new vscode.ThemeIcon("settings-gear"),
+            tooltip: "Configure Search Options"
+        };
+        inputBox.buttons = [configureButton];
 
         const disposables: vscode.Disposable[] = [];
 
-        disposables.push(
-            quickPick.onDidChangeSelection(async (selection) => {
-                if (selection.some((item) => item.id === "Clear")) {
-                    logger.trace("[extension] 'Clear' action selected. Clearing text filter.");
-                    filteringModule.setTextFilter(null);
-                    quickPick.hide();
-                }
-            })
-        );
-
-        disposables.push(
-            quickPick.onDidAccept(async () => {
-                const selectedItems = quickPick.selectedItems;
-                logger.trace(
-                    `[extension] Quick Pick accepted with selection: ${JSON.stringify(selectedItems.map((i) => i.id))}`
-                );
-                quickPick.hide();
-
-                const selectedCriteria = selectedItems.filter((item) => criteria.some((c) => c.id === item.id));
-
-                if (selectedCriteria.length === 0) {
-                    logger.trace("[extension] No search criteria selected. Clearing text filter.");
-                    filteringModule.setTextFilter(null);
-                    return;
-                }
-
-                const searchText = await vscode.window.showInputBox({
-                    prompt: "Enter search text. Leave empty to clear the filter.",
-                    value: currentFilter?.searchText || "",
-                    title: `Search in ${treeView.config.title}`
-                });
-
-                if (searchText === undefined) {
-                    logger.trace("[extension] Search input cancelled by user.");
-                    return;
-                }
-
-                if (!searchText.trim()) {
+        /**
+         * Applies the text filter to the tree view based on the current search text and options.
+         * @param searchText The text to search for.
+         */
+        const performSearch = (searchText: string) => {
+            if (!searchText.trim()) {
+                if (filteringModule.getTextFilter() !== null) {
                     logger.trace("[extension] Search text is empty, clearing filter.");
                     filteringModule.setTextFilter(null);
-                    return;
                 }
+                return;
+            }
 
-                if (treeView === treeViews?.testThemesTree && treeViews.testThemesTree.isFilterDiffModeEnabled()) {
-                    await treeViews.testThemesTree.disableFilterDiffMode();
-                    vscode.window.showInformationMessage("Filter-diff mode has been disabled to perform a search.");
+            if (treeView === treeViews?.testThemesTree && treeViews.testThemesTree.isFilterDiffModeEnabled()) {
+                treeViews.testThemesTree.disableFilterDiffMode();
+                vscode.window.showInformationMessage("Filter-diff mode has been disabled to perform a search.");
+            }
+
+            const newFilterOptions: TextFilterOptions = {
+                searchText: searchText,
+                ...searchOptionsToUse,
+                searchInId: false,
+                searchInType: false,
+                showParentsOfMatches: true
+            };
+
+            logger.trace(`[extension] Applying text filter: ${JSON.stringify(newFilterOptions)}`);
+            filteringModule.setTextFilter(newFilterOptions);
+        };
+
+        const showOptionsQuickPick = async (): Promise<void> => {
+            inputBox.hide();
+
+            const searchCriteria: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
+                {
+                    id: "Name",
+                    label: "Name",
+                    description: "Search in item's name",
+                    picked: searchOptionsToUse.searchInName
                 }
+            ];
 
-                const newFilterOptions: TextFilterOptions = {
-                    searchText: searchText,
-                    caseSensitive: selectedItems.some((item) => item.id === "CaseSensitive"),
-                    exactMatch: selectedItems.some((item) => item.id === "ExactMatch"),
-                    searchInName: selectedCriteria.some((c) => c.id === "Name"),
-                    searchInDescription: selectedCriteria.some((c) => c.id === "Description"),
-                    searchInTooltip: selectedCriteria.some((c) => c.id === "Tooltip"),
-                    searchInId: false,
-                    searchInType: false,
-                    showParentsOfMatches: true,
-                    showChildrenOfMatches: selectedItems.some((item) => item.id === "ShowChildren")
-                };
+            if (!isProjectsTree) {
+                searchCriteria.push({
+                    id: "Description",
+                    label: "UID",
+                    description: "Search in item's unique ID",
+                    picked: searchOptionsToUse.searchInDescription
+                });
+            }
 
-                logger.trace(`[extension] Applying text filter: ${JSON.stringify(newFilterOptions)}`);
-                filteringModule.setTextFilter(newFilterOptions);
+            searchCriteria.push({
+                id: "Tooltip",
+                label: "Tooltip",
+                description: "Search in all available item fields",
+                picked: searchOptionsToUse.searchInTooltip
+            });
+
+            // Define search option items for the quick pick.
+            const quickPickSearchOptions: (vscode.QuickPickItem & { id: string; picked?: boolean })[] = [
+                {
+                    id: "CaseSensitive",
+                    label: "Case Sensitive",
+                    description: "Perform a case-sensitive search",
+                    picked: searchOptionsToUse.caseSensitive
+                },
+                {
+                    id: "ExactMatch",
+                    label: "Exact Match",
+                    description: "Perform an exact match search",
+                    picked: searchOptionsToUse.exactMatch
+                },
+                {
+                    id: "ShowChildren",
+                    label: "Show Children of Matches",
+                    description: "Show all children of matching items",
+                    picked: searchOptionsToUse.showChildrenOfMatches
+                }
+            ];
+
+            const quickPick = vscode.window.createQuickPick<vscode.QuickPickItem & { id: string }>();
+            quickPick.canSelectMany = true;
+            quickPick.placeholder = "Select search criteria and options";
+            quickPick.title = `Search Options for ${treeView.config.title}`;
+
+            const quickPickItems: (vscode.QuickPickItem & { id: string })[] = [
+                { id: "separator-criteria", label: "Search Criteria", kind: vscode.QuickPickItemKind.Separator },
+                ...searchCriteria,
+                { id: "separator-options", label: "Options", kind: vscode.QuickPickItemKind.Separator },
+                ...quickPickSearchOptions
+            ];
+
+            // Add 'Clear' action to the quick pick if there is a search filter applied.
+            if (currentFilter) {
+                quickPickItems.push(
+                    { id: "separator-actions", label: "Actions", kind: vscode.QuickPickItemKind.Separator },
+                    {
+                        id: "Clear",
+                        label: "$(clear-all) Clear Current Search",
+                        description: "Reset the current search filter"
+                    }
+                );
+            }
+
+            quickPick.items = quickPickItems;
+            quickPick.selectedItems = quickPickItems.filter((item) => (item as any).picked);
+
+            const quickPickDisposables: vscode.Disposable[] = [];
+
+            // Handle selection changes for 'Clear' action.
+            quickPickDisposables.push(
+                quickPick.onDidChangeSelection((selection) => {
+                    if (selection.some((item) => item.id === "Clear")) {
+                        filteringModule.setTextFilter(null);
+                        inputBox.value = "";
+                        quickPick.hide();
+                    }
+                })
+            );
+
+            // Update search options when selection confirmed
+            quickPickDisposables.push(
+                quickPick.onDidAccept(() => {
+                    const selectedItems = quickPick.selectedItems;
+                    searchOptionsToUse = {
+                        searchInName: selectedItems.some((i) => i.id === "Name"),
+                        searchInDescription: selectedItems.some((i) => i.id === "Description"),
+                        searchInTooltip: selectedItems.some((i) => i.id === "Tooltip"),
+                        caseSensitive: selectedItems.some((i) => i.id === "CaseSensitive"),
+                        exactMatch: selectedItems.some((i) => i.id === "ExactMatch"),
+                        showChildrenOfMatches: selectedItems.some((i) => i.id === "ShowChildren")
+                    };
+                    quickPick.hide();
+                })
+            );
+
+            quickPickDisposables.push(
+                quickPick.onDidHide(() => {
+                    quickPickDisposables.forEach((d) => d.dispose());
+                    quickPick.dispose();
+                    inputBox.show();
+                    performSearch(inputBox.value);
+                })
+            );
+
+            quickPick.show();
+        };
+
+        // Perform live search when input box value changes.
+        disposables.push(
+            inputBox.onDidChangeValue((searchText) => {
+                performSearch(searchText);
+            })
+        );
+
+        // Show search options when configure button is clicked.
+        disposables.push(
+            inputBox.onDidTriggerButton(async (button) => {
+                if (button === configureButton) {
+                    await showOptionsQuickPick();
+                }
+            })
+        );
+
+        // Hide the input box when the user presses Enter.
+        disposables.push(
+            inputBox.onDidAccept(async () => {
+                inputBox.hide();
             })
         );
 
         disposables.push(
-            quickPick.onDidHide(() => {
-                logger.trace("[extension] Search Quick Pick hidden. Disposing listeners.");
+            inputBox.onDidHide(() => {
                 disposables.forEach((d) => d.dispose());
-                quickPick.dispose();
+                inputBox.dispose();
             })
         );
 
-        logger.trace("[extension] Showing search Quick Pick.");
-        quickPick.show();
+        inputBox.show();
+        // Perform initial search if there is text in the input box (from a previous search).
+        if (inputBox.value) {
+            performSearch(inputBox.value);
+        }
     };
 
     const handleSearchInProjectsTree = async () => {
