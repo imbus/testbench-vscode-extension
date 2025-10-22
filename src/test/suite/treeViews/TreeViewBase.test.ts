@@ -69,7 +69,7 @@ class TestTreeView extends TreeViewBase<TestTreeItem> {
         return this.mockRootItems;
     }
 
-    protected async getChildrenForItem(item: TestTreeItem): Promise<TestTreeItem[]> {
+    protected async getChildrenForItem(_item: TestTreeItem): Promise<TestTreeItem[]> {
         this.getChildrenForItemCalled = true;
         return this.mockChildren;
     }
