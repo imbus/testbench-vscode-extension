@@ -478,7 +478,7 @@ export class PlayServerConnection {
             logger.debug(
                 `[testBenchConnection] Creating session for old play server with URL ${oldPlayServerBaseUrl} to fetch test elements.`
             );
-            const oldPlayServerSession: axios.AxiosInstance = axios.create({
+            const oldPlayServerSession: AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
                 // Old play server, which runs on port 9443, uses BasicAuth.
                 // Use loginName as username, and use sessionToken as the password
@@ -573,7 +573,7 @@ export class PlayServerConnection {
 
             const userNameFromConfig: string = this.username;
             const encoded = base64.encode(`${userNameFromConfig}:${this.sessionToken}`);
-            const oldPlayServerSession: axios.AxiosInstance = axios.create({
+            const oldPlayServerSession: AxiosInstance = axios.create({
                 baseURL: oldPlayServerBaseUrl,
                 // Old play server, which runs on port 9443, uses BasicAuth.
                 // Use loginName as username, and use sessionToken as the password

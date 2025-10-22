@@ -12,7 +12,7 @@ import * as os from "os";
 import * as testBenchTypes from "./testBenchTypes";
 import * as utils from "./utils";
 import * as testbench2robotframeworkLib from "./testbench2robotframeworkLib";
-import axios, { AxiosResponse } from "axios";
+import { AxiosResponse, AxiosInstance } from "axios";
 import { connection, logger, userSessionManager } from "./extension";
 import {
     ConfigKeys,
@@ -264,7 +264,7 @@ export async function getJobIdOfCycleReport(
     const getJobIDUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/cycles/${cycleKey}/report/v1`;
     logger.trace(`[reportHandler] Fetching job ID of cycle report from URL: ${getJobIDUrl}`);
     try {
-        const apiClient: axios.AxiosInstance = connection.getApiClient();
+        const apiClient: AxiosInstance = connection.getApiClient();
         const jobIdResponse: AxiosResponse<testBenchTypes.JobIdResponse> = await withRetry(
             () =>
                 apiClient.post<testBenchTypes.JobIdResponse>(getJobIDUrl, requestParams, {
@@ -316,7 +316,7 @@ export async function getJobStatus(
     const getJobStatusUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/${jobType}/job/${jobId}/v1`;
     logger.trace(`[reportHandler] Fetching job status at: ${getJobStatusUrl}`);
 
-    const apiClient: axios.AxiosInstance = connection.getApiClient();
+    const apiClient: AxiosInstance = connection.getApiClient();
     const jobStatusResponse: AxiosResponse<testBenchTypes.JobStatusResponse> = await withRetry(
         () =>
             apiClient.get(getJobStatusUrl, {
@@ -370,7 +370,7 @@ export async function downloadReport(
         const downloadReportUrl: string = `${connection.getBaseURL()}/projects/${projectKey}/report/${fileNameToDownload}/v1`;
         logger.debug(`[reportHandler] Downloading report "${fileNameToDownload}" from URL: ${downloadReportUrl}`);
 
-        const apiClient: axios.AxiosInstance = connection.getApiClient();
+        const apiClient: AxiosInstance = connection.getApiClient();
         const downloadZipResponse: AxiosResponse<any> = await withRetry(
             () =>
                 apiClient.get(downloadReportUrl, {
