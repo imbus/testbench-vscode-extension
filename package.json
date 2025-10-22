@@ -748,7 +748,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayFiltersForTestThemeTreeDisabled",
-                    "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters",
+                    "when": "view == testbench.testThemes && !testbenchExtension.testThemeTreeHasFilters && false",
                     "group": "navigation@3",
                     "icon": {
                         "light": "resources/icons/filter-off-light.svg",
@@ -757,7 +757,7 @@
                 },
                 {
                     "command": "testbenchExtension.displayFiltersForTestThemeTreeEnabled",
-                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && false",
                     "group": "navigation@3",
                     "icon": {
                         "light": "resources/icons/filter-on-light.svg",
@@ -766,7 +766,7 @@
                 },
                 {
                     "command": "testbenchExtension.enableFilterDiffMode",
-                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && !testbenchExtension.filterDiffModeEnabledTestThemes",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && !testbenchExtension.filterDiffModeEnabledTestThemes && false",
                     "group": "navigation@4",
                     "icon": {
                         "light": "resources/icons/diff-off-light.svg",
@@ -775,7 +775,7 @@
                 },
                 {
                     "command": "testbenchExtension.disableFilterDiffMode",
-                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && testbenchExtension.filterDiffModeEnabledTestThemes",
+                    "when": "view == testbench.testThemes && testbenchExtension.testThemeTreeHasFilters && testbenchExtension.filterDiffModeEnabledTestThemes && false",
                     "group": "navigation@4",
                     "icon": {
                         "light": "resources/icons/diff-on-light.svg",
