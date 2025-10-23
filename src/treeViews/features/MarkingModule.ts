@@ -273,6 +273,17 @@ export class MarkingModule implements TreeViewModule {
             return;
         }
 
+        // Preserve marking metadata (e.g. from cloning during filtering)
+        const existingMarkingInfo = item.getMetadata("markingInfo");
+        const existingMarked = item.getMetadata("marked");
+
+        if (existingMarkingInfo !== undefined && existingMarked !== undefined) {
+            if (typeof (item as any).updateContextValue === "function") {
+                (item as any).updateContextValue();
+            }
+            return;
+        }
+
         const markingInfo = this.markingState.markedItems.get(item.id);
         if (markingInfo) {
             // Check if import marking should be applied based on configuration
