@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { LS_CONFIG_FILE_NAME, folderNameOfInternalTestbenchFolder } from "../constants";
 import { logger, getConnection } from "../extension";
 import { validateAndReturnWorkspaceLocation } from "../utils";
+import { isHandlingLogout } from "./server";
 
 export interface LanguageServerConfig {
     projectName: string;
@@ -116,6 +117,11 @@ export async function validateAndFixLsConfigInteractively(
     currentCfg?: LanguageServerConfig
 ): Promise<LanguageServerConfig | null> {
     try {
+        if (isHandlingLogout) {
+            logger.trace("[lsConfig] Skipping LS config validation during logout.");
+            return currentCfg || (await readLsConfig());
+        }
+
         const connection = getConnection();
         if (!connection) {
             logger.warn("[lsConfig] No active connection while validating LS config.");

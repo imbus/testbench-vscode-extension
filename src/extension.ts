@@ -227,6 +227,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
+        setIsHandlingLogout(true);
         isHandlingSessionChange = true;
         try {
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
@@ -240,6 +241,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await handleNoSession();
         } finally {
             isHandlingSessionChange = false;
+            setIsHandlingLogout(false);
         }
     };
 
@@ -1463,6 +1465,7 @@ async function handleTestBenchSessionChange(
     } else {
         setIsHandlingLogout(true);
         await handleNoSession();
+        setIsHandlingLogout(false);
     }
 }
 
