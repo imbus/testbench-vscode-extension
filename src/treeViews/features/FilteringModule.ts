@@ -589,11 +589,11 @@ export class FilteringModule implements TreeViewModule {
             )
         );
 
-        if (this.filterDiffState.enabled) {
+        if (this.filterDiffState.enabled && !this.textFilter) {
             this.context.logger.debug(
                 this.context.buildLogPrefix(
                     "FilteringModule",
-                    "Filter diff mode enabled, skipping hierarchical filtering."
+                    "Filter diff mode enabled without text search, skipping hierarchical filtering."
                 )
             );
             return items;
