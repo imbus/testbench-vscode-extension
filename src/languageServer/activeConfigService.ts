@@ -11,8 +11,8 @@ import {
     getLsConfigFilePath,
     validateAndFixLsConfigInteractively
 } from "./lsConfig";
-import { logger } from "../extension";
-import { updateOrRestartLS, stopLanguageClient } from "../languageServer/server";
+import { logger, getConnection } from "../extension";
+import { updateOrRestartLS, stopLanguageClient, isHandlingLogout } from "../languageServer/server";
 
 const AUTO_VALIDATE_CONFIG_ON_CHANGE = true;
 
@@ -58,9 +58,13 @@ class ActiveConfigService {
             return;
         }
 
+        // Skip auto-validation during logout or when there's no active connection
+        const isLogoutInProgress = isHandlingLogout;
+        const hasActiveConnection = !!getConnection();
+
         if (await hasLsConfig()) {
             this._activeConfig = await readLsConfig();
-            const shouldValidate = AUTO_VALIDATE_CONFIG_ON_CHANGE;
+            const shouldValidate = AUTO_VALIDATE_CONFIG_ON_CHANGE && hasActiveConnection && !isLogoutInProgress;
             if (shouldValidate && this._activeConfig) {
                 this.isAutoFixing = true;
                 try {
@@ -93,6 +97,12 @@ class ActiveConfigService {
                 );
 
                 const refreshConfig = async () => {
+                    if (isHandlingLogout || !getConnection()) {
+                        logger.trace(
+                            `[ActiveConfigService] ls.config.json changed, skipping reload (logout: ${isHandlingLogout}, connection: ${!!getConnection()})`
+                        );
+                        return;
+                    }
                     logger.trace("[ActiveConfigService] ls.config.json changed, reloading.");
                     await this.loadActiveConfig();
                     await updateOrRestartLS();
@@ -101,6 +111,12 @@ class ActiveConfigService {
                 this._watcher.onDidChange(refreshConfig);
                 this._watcher.onDidCreate(refreshConfig);
                 this._watcher.onDidDelete(async () => {
+                    if (isHandlingLogout || !getConnection()) {
+                        logger.trace(
+                            `[ActiveConfigService] ls.config.json deleted, skipping (logout: ${isHandlingLogout}, connection: ${!!getConnection()})`
+                        );
+                        return;
+                    }
                     logger.trace("[ActiveConfigService] ls.config.json deleted, clearing active config.");
                     this._activeConfig = null;
                     this._onDidChangeActiveConfig.fire(null);
