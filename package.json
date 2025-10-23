@@ -336,18 +336,6 @@
                 }
             },
             {
-                "command": "testbenchExtension.makeRoot",
-                "title": "Make root"
-            },
-            {
-                "command": "testbenchExtension.resetProjectTreeViewRoot",
-                "title": "Reset Projects View Root"
-            },
-            {
-                "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                "title": "Reset Test Themes View Root"
-            },
-            {
                 "command": "testbenchExtension.fetchTovStructure",
                 "title": "TestBench: Get TOV Structure"
             },
@@ -598,18 +586,6 @@
         },
         "menus": {
             "commandPalette": [
-                {
-                    "command": "testbenchExtension.makeRoot",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.resetProjectTreeViewRoot",
-                    "when": "false"
-                },
-                {
-                    "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "false"
-                },
                 {
                     "command": "testbenchExtension.fetchTovStructure",
                     "when": "false"
@@ -878,23 +854,6 @@
                         "light": "resources/icons/upload-light.svg",
                         "dark": "resources/icons/upload-dark.svg"
                     }
-                },
-                {
-                    "command": "testbenchExtension.makeRoot",
-                    "when": "(view == testbench.projects && viewItem == Project) || (view == testbench.testThemes && (viewItem == TestThemeNode || viewItem == 'MarkedForImport.TestThemeNode' || viewItem == 'MarkedForGeneration.TestThemeNode' || viewItem == 'openedFromCycle.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForImport.TestThemeNode' || viewItem == 'openedFromCycle.MarkedForGeneration.TestThemeNode'))",
-                    "group": "navigation"
-                },
-                {
-                    "command": "testbenchExtension.resetProjectTreeViewRoot",
-                    "when": "view == testbench.projects && viewItem =~ /customRoot/",
-                    "group": "navigation@1",
-                    "title": "Reset Custom Root"
-                },
-                {
-                    "command": "testbenchExtension.resetTestThemeTreeViewRoot",
-                    "when": "view == 'testbench.testThemes' && viewItem =~ /customRoot/",
-                    "group": "navigation@1",
-                    "title": "Reset Custom Root"
                 },
                 {
                     "command": "testbenchExtension.openAvailableSubdivisionInTestElementsView",
