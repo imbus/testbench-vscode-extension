@@ -328,20 +328,28 @@ export abstract class TreeViewBase<T extends TreeItemBase> implements vscode.Tre
             }
 
             let children: T[];
+
             if (!element) {
                 children = await this.expandAll(await this.getRootItems());
             } else {
-                children = await this.getChildrenForItem(element);
+                const preFilteredChildren = element.getMetadata("_filteredChildren");
+                if (preFilteredChildren && Array.isArray(preFilteredChildren)) {
+                    // Use pre-filtered children to preserve item functionality during search
+                    children = preFilteredChildren as T[];
+                } else {
+                    children = await this.getChildrenForItem(element);
+                }
             }
 
+            // Apply filtering if active
             const filterModule = this.getModule("filtering");
             if (filterModule && filterModule.isActive()) {
-                // If this is the root level and parent/child inclusion is enabled,
-                // tree structure should be loaded fully for filtering
                 if (!element) {
                     children = await this.expandAll(children);
+                    children = filterModule.filterTreeItems(children);
+                } else if (!element.getMetadata("_filteredChildren")) {
+                    children = filterModule.filterTreeItems(children);
                 }
-                children = filterModule.filterTreeItems(children);
             }
 
             const expansionModule = this.getModule("expansion");

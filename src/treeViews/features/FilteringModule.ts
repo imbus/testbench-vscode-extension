@@ -189,6 +189,11 @@ export class FilteringModule implements TreeViewModule {
      */
     public setTextFilter(options: TextFilterOptions | null): void {
         this.textFilter = options;
+
+        if (!options) {
+            this.clearFilteredChildrenMetadata();
+        }
+
         this.updateSearchContextKey(!!options);
         this.context.logger.debug(
             this.context.buildLogPrefix(
@@ -354,6 +359,28 @@ export class FilteringModule implements TreeViewModule {
 
         const rootItems = this.context.getCurrentRootItems();
         return rootItems ? findInTreeItems(rootItems) : null;
+    }
+
+    /**
+     * Removes filter metadata from all items in the tree.
+     * After clearing, items revert to showing all their children after filtering is removed.
+     */
+    private clearFilteredChildrenMetadata(): void {
+        const removeFilterMetadata = (items: TreeItemBase[]): void => {
+            for (const item of items) {
+                item.setMetadata("_filteredChildren", undefined);
+                item.setMetadata("_isFiltered", undefined);
+
+                if (item.children?.length) {
+                    removeFilterMetadata(item.children);
+                }
+            }
+        };
+
+        const rootItems = this.context.getCurrentRootItems();
+        if (rootItems) {
+            removeFilterMetadata(rootItems);
+        }
     }
 
     /**
@@ -573,24 +600,22 @@ export class FilteringModule implements TreeViewModule {
         }
 
         const recursiveFilter = (itemList: T[]): T[] => {
-            const result: T[] = [];
+            const visibleItems: T[] = [];
+
             for (const item of itemList) {
-                // Recursively filter children first
                 const filteredChildren = item.children ? recursiveFilter(item.children as T[]) : [];
+                const itemMatchesFilter = this.isVisible(item);
+                const shouldIncludeItem = itemMatchesFilter || filteredChildren.length > 0;
 
-                const itemIsVisible = this.isVisible(item);
-
-                // An item is kept if it's visible itself, OR if it has any visible children
-                if (itemIsVisible || filteredChildren.length > 0) {
-                    // Clone the item to avoid modifying the original tree
-                    const newItem = item.clone() as T;
-                    newItem.children = filteredChildren; // Assign the filtered children
-                    // Ensure parent references are correct in the new filtered tree
-                    filteredChildren.forEach((child) => (child.parent = newItem));
-                    result.push(newItem);
+                if (shouldIncludeItem) {
+                    // Store filtered children in metadata
+                    item.setMetadata("_filteredChildren", filteredChildren);
+                    item.setMetadata("_isFiltered", true);
+                    visibleItems.push(item);
                 }
             }
-            return result;
+
+            return visibleItems;
         };
 
         const filteredItems = recursiveFilter(items);
@@ -749,7 +774,7 @@ export class FilteringModule implements TreeViewModule {
     }
 
     /**
-     * Clears all active filters and hidden items
+     * Clears all filters and resets the tree to show all items
      */
     public clearAllFilters(): void {
         this.textFilter = null;
@@ -760,10 +785,11 @@ export class FilteringModule implements TreeViewModule {
         this.filterDiffState.filteredItems.clear();
         this.filterDiffState.originalIcons.clear();
 
-        // Update context keys to reflect that diff mode is disabled
+        // Remove filter metadata so items show all children again
+        this.clearFilteredChildrenMetadata();
+
         this.updateDiffModeContextKeys(false);
         this.updateSearchContextKey(false);
-
         this.updateState();
         this.context.refresh({ immediate: true });
         this.context.logger.debug(this.context.buildLogPrefix("FilteringModule", "All filters cleared"));

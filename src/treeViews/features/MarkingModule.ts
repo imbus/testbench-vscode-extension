@@ -273,21 +273,6 @@ export class MarkingModule implements TreeViewModule {
             return;
         }
 
-        const existingMarkingInfo = item.getMetadata("markingInfo") as MarkingInfo | undefined;
-        const existingMarked = item.getMetadata("marked");
-        if (existingMarkingInfo !== undefined && existingMarked !== undefined) {
-            // During filtering/cloning, the item ID changes but markingInfo.itemId stays the same
-            const originalItemId = existingMarkingInfo.itemId;
-            const currentMarkingInfo = this.markingState.markedItems.get(originalItemId);
-
-            if (currentMarkingInfo && currentMarkingInfo.timestamp === existingMarkingInfo.timestamp) {
-                if (typeof (item as any).updateContextValue === "function") {
-                    (item as any).updateContextValue();
-                }
-                return;
-            }
-        }
-
         const markingInfo = this.markingState.markedItems.get(item.id);
         if (markingInfo) {
             // Check if import marking should be applied based on configuration
