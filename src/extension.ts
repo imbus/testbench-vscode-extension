@@ -1006,33 +1006,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
                 ...quickPickSearchOptions
             ];
 
-            // Add 'Clear' action to the quick pick if there is a search filter applied.
-            if (currentFilter) {
-                quickPickItems.push(
-                    { id: "separator-actions", label: "Actions", kind: vscode.QuickPickItemKind.Separator },
-                    {
-                        id: "Clear",
-                        label: "$(clear-all) Clear Current Search",
-                        description: "Reset the current search filter"
-                    }
-                );
-            }
-
             quickPick.items = quickPickItems;
             quickPick.selectedItems = quickPickItems.filter((item) => (item as any).picked);
 
             const quickPickDisposables: vscode.Disposable[] = [];
-
-            // Handle selection changes for 'Clear' action.
-            quickPickDisposables.push(
-                quickPick.onDidChangeSelection((selection) => {
-                    if (selection.some((item) => item.id === "Clear")) {
-                        filteringModule.setTextFilter(null);
-                        inputBox.value = "";
-                        quickPick.hide();
-                    }
-                })
-            );
 
             // Update search options when selection confirmed
             quickPickDisposables.push(
