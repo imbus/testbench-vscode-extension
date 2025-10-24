@@ -1312,6 +1312,7 @@ async function handleNoActiveConnection(): Promise<void> {
 
     if (treeViews) {
         treeViews.clear();
+        treeViews.projectsTree.clearCache();
         await treeViews.loadDefaultViewsUI();
     }
 }
@@ -1336,6 +1337,7 @@ async function handleNoSession(): Promise<void> {
     // Clear tree data but preserve persistent state (expansion, marking, etc.)
     if (treeViews) {
         treeViews.projectsTree.clearTree();
+        treeViews.projectsTree.clearCache();
         treeViews.testThemesTree.clearTree();
         treeViews.testElementsTree.clearTree();
         await treeViews.loadDefaultViewsUI();
@@ -1391,11 +1393,6 @@ async function handleTestBenchSessionChange(
             login: sessionToProcess.account.label
         });
 
-        if (treeViews) {
-            const reason = wasNewSessionStarted ? "New user session" : "Session restored/relogged";
-            logger.trace(`[extension] ${reason} for ${sessionToProcess.account.label}. Reloading persistent UI state.`);
-            await treeViews.reloadAllTreeViewsStateFromPersistence();
-        }
         const activeConnection = await connectionManager.getActiveConnection(context);
 
         if (!activeConnection) {
@@ -1423,8 +1420,12 @@ async function handleTestBenchSessionChange(
             !!(connection && connection.getSessionToken() !== newConnection.getSessionToken());
 
         if (isNewConnection && treeViews) {
-            logger.trace("[extension] New connection established.");
+            logger.trace("[extension] New connection established, restoring tree view state.");
+            await treeViews.reloadAllTreeViewsStateFromPersistence({ refresh: false });
             await treeViews.restoreViewsState();
+        } else if (treeViews) {
+            logger.trace("[extension] Session refreshed, reloading persistent UI state.");
+            await treeViews.reloadAllTreeViewsStateFromPersistence();
         }
     } else {
         setIsHandlingLogout(true);

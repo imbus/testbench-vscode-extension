@@ -43,6 +43,13 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         this.setupCycleClickHandlers();
     }
 
+    /**
+     * Clears the data provider's cache.
+     */
+    public clearCache(): void {
+        this.dataProvider.clearCache();
+    }
+
     protected async initializeModules(): Promise<void> {
         await super.initializeModules();
         await this.addModule(new ActiveItemMarkerModule());
@@ -334,37 +341,18 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param item The cycle tree item that was single clicked
      */
     private async handleCycleSingleClick(item: ProjectsTreeItem): Promise<void> {
-        if (item.originalContextValue !== "cycle") {
+        if (item.data.type !== "cycle") {
             return;
         }
 
-        const cycleKey = item.getCycleKey();
-        const projectKey = item.getProjectKey();
-        const versionKey = item.getVersionKey();
         const projectName = item.parent?.parent?.label?.toString();
         const tovName = item.parent?.label?.toString();
 
-        if (projectKey && cycleKey && versionKey && projectName && tovName) {
+        if (projectName && tovName) {
             this.logger.trace(`[ProjectsTreeView] Cycle item single clicked: ${item.label}`);
 
             // Prompt to create LS config if missing when single-clicking a cycle
             await promptCreateLsConfigIfMissing(projectName, tovName);
-
-            if (treeViews?.testThemesTree) {
-                await treeViews.testThemesTree.loadCycle(
-                    projectKey,
-                    cycleKey,
-                    versionKey,
-                    projectName,
-                    tovName,
-                    item.label?.toString()
-                );
-            }
-            if (treeViews?.testElementsTree) {
-                await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
-            }
-        } else {
-            throw new Error("Invalid cycle item: missing project, cycle, or version key");
         }
     }
 
@@ -373,7 +361,7 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
      * @param item The cycle tree item that was double clicked
      */
     private async handleCycleDoubleClick(item: ProjectsTreeItem): Promise<void> {
-        if (item.originalContextValue !== "cycle") {
+        if (item.data.type !== "cycle") {
             return;
         }
 
@@ -383,18 +371,23 @@ export class ProjectsTreeView extends TreeViewBase<ProjectsTreeItem> {
         const projectName = item.parent?.parent?.label?.toString();
         const tovName = item.parent?.label?.toString();
 
-        if (!cycleKey || !projectKey) {
-            this.logger.warn(
-                "[ProjectsTreeView] Missing cycle and project keys for cycle selection when handling cycle double click"
-            );
+        if (!cycleKey || !projectKey || !versionKey || !projectName || !tovName) {
+            this.logger.warn("[ProjectsTreeView] Missing keys for cycle selection when handling cycle double click");
             return;
         }
 
-        if (!projectName || !tovName) {
-            const missingProjectAndTovNameErrorMessage = `[ProjectsTreeView] Cannot update language server: Missing project / TOV name. Project: ${projectName}, TOV: ${tovName}`;
-            const missingProjectAndTovNameErrorMessageForUser = `Cannot update language server: Missing project / TOV name.`;
-            this.logger.error(missingProjectAndTovNameErrorMessage);
-            vscode.window.showErrorMessage(missingProjectAndTovNameErrorMessageForUser);
+        if (treeViews?.testThemesTree) {
+            await treeViews.testThemesTree.loadCycle(
+                projectKey,
+                cycleKey,
+                versionKey,
+                projectName,
+                tovName,
+                item.label?.toString()
+            );
+        }
+        if (treeViews?.testElementsTree) {
+            await treeViews.testElementsTree.loadTov(versionKey, tovName, projectName, tovName);
         }
 
         await displayTestThemeTreeView();

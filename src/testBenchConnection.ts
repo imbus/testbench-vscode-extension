@@ -22,7 +22,8 @@ import {
     allExtensionCommands,
     folderNameOfInternalTestbenchFolder,
     ConfigKeys,
-    INTERNAL_REPORTS_SUBFOLDER_NAME
+    INTERNAL_REPORTS_SUBFOLDER_NAME,
+    TreeViewTiming
 } from "./constants";
 import { TestThemesTreeView } from "./treeViews/implementations/testThemes/TestThemesTreeView";
 import { getExtensionSetting } from "./configuration";
@@ -30,6 +31,7 @@ import { TESTBENCH_AUTH_PROVIDER_ID } from "./testBenchAuthenticationProvider";
 import * as connectionManager from "./connectionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { handleLanguageServerRestartOnSessionChange } from "./languageServer/server";
+import { CacheManager } from "./core/cacheManager";
 
 /**
  * Manages TLS security state globally for the extension.
@@ -221,6 +223,8 @@ export class PlayServerConnection {
     private apiClient!: AxiosInstance;
     private readonly keepAliveIntervalInSeconds: number = 30 * 1000; // 30 seconds
     private keepAliveIntervalId: NodeJS.Timeout | null = null;
+    private testElementsCache: CacheManager<string, any>;
+    private testStructureCache: CacheManager<string, testBenchTypes.TestStructure>;
 
     /**
      * Creates a new PlayServerConnection.
@@ -240,6 +244,10 @@ export class PlayServerConnection {
         private isInsecure: boolean = false
     ) {
         this.baseURL = `https://${this.serverName}:${this.portNumber}/api`;
+        this.testElementsCache = new CacheManager<string, any>(TreeViewTiming.TREE_DATA_FRESHNESS_THRESHOLD_MS);
+        this.testStructureCache = new CacheManager<string, testBenchTypes.TestStructure>(
+            TreeViewTiming.TREE_DATA_FRESHNESS_THRESHOLD_MS
+        );
         logger.trace(
             `[testBenchConnection] Initializing server connection for '${this.serverName}:${this.portNumber}' as '${this.username}'.`
         );
@@ -307,6 +315,8 @@ export class PlayServerConnection {
         try {
             logger.trace("[testBenchConnection] Tearing down connection after logout.");
             this.stopKeepAlive();
+            this.testElementsCache.clearCache();
+            this.testStructureCache.clearCache();
             const tlsManager = TLSSecurityManager.getInstance();
             tlsManager.disableInsecureMode();
             this.sessionToken = "";
@@ -456,6 +466,17 @@ export class PlayServerConnection {
      * @returns {Promise<any | null>} The test elements data fetched from the server or null if an error occurs.
      */
     async getTestElementsWithTovKeyUsingOldPlayServer(tovKey: string | null): Promise<any | null> {
+        if (!tovKey) {
+            logger.error(`[testBenchConnection] TOV key is missing. Cannot fetch test elements.`);
+            return null;
+        }
+
+        const cachedEntry = this.testElementsCache.getEntryFromCache(tovKey);
+        if (cachedEntry) {
+            logger.trace(`[testBenchConnection] Returning cached test elements for TOV key ${tovKey}.`);
+            return cachedEntry;
+        }
+
         if (!this.sessionToken) {
             logger.error(
                 `[testBenchConnection] Session token is null. Cannot fetch test elements for TOV key: ${tovKey}`
@@ -538,6 +559,7 @@ export class PlayServerConnection {
                     `[testBenchConnection] Fetched test elements data from URL ${getTestElementsURL}:`,
                     testElementsResponse.data
                 );
+                this.testElementsCache.setEntryInCache(tovKey, testElementsResponse.data);
                 return testElementsResponse.data;
             } else {
                 logger.error(
@@ -779,6 +801,13 @@ export class PlayServerConnection {
         structureType: string,
         suppressFilteredData: boolean = true
     ): Promise<testBenchTypes.TestStructure | null> {
+        const cacheKey = `${url}-${JSON.stringify(validatedFilters)}-${suppressFilteredData}`;
+        const cachedEntry = this.testStructureCache.getEntryFromCache(cacheKey);
+        if (cachedEntry) {
+            logger.trace(`[testBenchConnection] Returning cached test structure for ${structureType}.`);
+            return cachedEntry;
+        }
+
         const requestBody: testBenchTypes.OptionalJobIDRequestParameter = {
             basedOnExecution: true,
             suppressFilteredData: suppressFilteredData,
@@ -846,6 +875,7 @@ export class PlayServerConnection {
 
             if (response.data) {
                 logger.trace(`[testBenchConnection] Received ${structureType} structure:`, response.data);
+                this.testStructureCache.setEntryInCache(cacheKey, response.data);
                 return response.data;
             } else {
                 logger.error(

@@ -171,8 +171,7 @@ export const INTERNAL_REPORTS_SUBFOLDER_NAME: string = "reports";
 // --- Tree View Timing Constants ---
 export const TreeViewTiming = {
     // Data freshness and caching
-    DATA_FRESHNESS_THRESHOLD_MS: 5000,
-    DATA_STALE_THRESHOLD_MS: 5000,
+    TREE_DATA_FRESHNESS_THRESHOLD_MS: 5000,
 
     // UI refresh and debouncing
     UI_REFRESH_DEBOUNCE_MS: 500,
