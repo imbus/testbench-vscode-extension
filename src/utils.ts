@@ -236,15 +236,13 @@ export async function clearInternalTestbenchFolder(
  * 1. The workspace folder containing the currently active text editor.
  * 2. A previously cached workspace location, if it still exists.
  * 3. The first workspace folder if multiple are open and no active editor or cache is available.
- * 4. The user's home directory as a last resort.
  *
  * If a workspace location is found, it is cached for subsequent calls.
- * If no workspace or home directory can be determined, an error is logged and displayed,
- * and the function returns `undefined`.
+ * If no workspace can be determined, the function returns `undefined` (no fallback to user's home directory).
  *
- * The user can set workspace manually using the 'Set Workspace' command.
+ * The user can set or open a workspace via VS Code (e.g., "Open Folder" or a dedicated command in the extension).
  *
- * @param enableLogging - Optional. If `true` (default), logs trace, warning, and error messages during execution.
+ * @param enableLogging - Optional. If `true`, logs trace/warn/error messages and shows a user-facing error on failure.
  * @returns A promise that resolves to the file system path of the determined workspace location,
  * or `undefined` if no suitable location can be found.
  */
@@ -299,19 +297,13 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
         }
     }
 
-    const homeDirectory: string = os.homedir();
     if (logger && enableLogging) {
-        logger.trace(`[utils] No workspace available; falling back to user's home directory: "${homeDirectory}"`);
+        logger.error("[utils] No workspace is open. Please open a folder or workspace in VS Code.");
+        vscode.window.showErrorMessage(
+            "No workspace folder is open. Please open a folder or workspace in VS Code to continue."
+        );
     }
-
-    if (!homeDirectory) {
-        const workspaceLocationMissingError: string = "Unable to determine workspace location or home directory.";
-        logger.error(`[utils] ${workspaceLocationMissingError}`);
-        vscode.window.showErrorMessage(workspaceLocationMissingError);
-        return undefined;
-    }
-
-    return homeDirectory;
+    return undefined;
 }
 
 /**

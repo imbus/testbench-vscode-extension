@@ -813,7 +813,7 @@
             "view/item/context": [
                 {
                     "command": "testbenchExtension.generateTestCasesForCycle",
-                    "when": "view == testbench.projects && viewItem == Cycle",
+                    "when": "view == testbench.projects && viewItem == Cycle && testbenchExtension.workspaceAvailable",
                     "group": "inline@1"
                 },
                 {
@@ -823,7 +823,7 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTOV",
-                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version)",
+                    "when": "view == testbench.projects && (viewItem == Version || viewItem == customRoot.Version) && testbenchExtension.workspaceAvailable",
                     "group": "inline@1"
                 },
                 {
@@ -833,22 +833,22 @@
                 },
                 {
                     "command": "testbenchExtension.generateTestCasesForTestThemeOrTestCaseSet",
-                    "when": "view == 'testbench.testThemes' && testbenchExtension.isTestThemeOpenedFromCycle && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
+                    "when": "view == 'testbench.testThemes' && testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.workspaceAvailable && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.generateTestsForTestThemeTreeItemFromTOV",
-                    "when": "view == 'testbench.testThemes' && !testbenchExtension.isTestThemeOpenedFromCycle && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
+                    "when": "view == 'testbench.testThemes' && !testbenchExtension.isTestThemeOpenedFromCycle && testbenchExtension.workspaceAvailable && viewItem =~ /(TestThemeNode|TestCaseSetNode)(\\.hasRobotFile)?$/",
                     "group": "inline@2"
                 },
                 {
                     "command": "testbenchExtension.openAndRevealGeneratedRobotFile",
-                    "when": "view == 'testbench.testThemes' && viewItem =~ /\\.hasRobotFile$/",
+                    "when": "view == 'testbench.testThemes' && testbenchExtension.workspaceAvailable && viewItem =~ /\\.hasRobotFile$/",
                     "group": "inline@3"
                 },
                 {
                     "command": "testbenchExtension.readAndImportTestResultsToTestbench",
-                    "when": "view == 'testbench.testThemes' && viewItem =~ /MarkedForImport/",
+                    "when": "view == 'testbench.testThemes' && testbenchExtension.workspaceAvailable && viewItem =~ /MarkedForImport/",
                     "group": "inline@2",
                     "icon": {
                         "light": "resources/icons/upload-light.svg",
@@ -857,37 +857,37 @@
                 },
                 {
                     "command": "testbenchExtension.openAvailableSubdivisionInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.available'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.subdivision.resource.available'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openMissingSubdivisionInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.resource.missing'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.subdivision.resource.missing'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openSubdivisionFolderInExplorer",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.subdivision.folder'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.subdivision.folder'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.openInteractionInTestElementsView",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.available'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.interaction.resource.available'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.createMissingParentResourceForInteraction",
-                    "when": "view == testbench.testElements && viewItem == 'testElement.interaction.resource.missing'",
+                    "when": "view == testbench.testElements && testbenchExtension.workspaceAvailable && viewItem == 'testElement.interaction.resource.missing'",
                     "group": "inline@1"
                 },
                 {
                     "command": "testbenchExtension.setActiveProject",
-                    "when": "view == testbench.projects && viewItem == Project",
+                    "when": "view == testbench.projects && viewItem == Project && testbenchExtension.workspaceAvailable",
                     "group": "navigation@2"
                 },
                 {
                     "command": "testbenchExtension.setActiveTOV",
-                    "when": "view == testbench.projects && viewItem == Version",
+                    "when": "view == testbench.projects && viewItem == Version && testbenchExtension.workspaceAvailable",
                     "group": "navigation@2"
                 }
             ]

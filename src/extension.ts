@@ -1502,6 +1502,20 @@ async function initializeContextValues(context: vscode.ExtensionContext): Promis
         StorageKeys.IS_TT_OPENED_FROM_CYCLE_STORAGE_KEY
     );
     await vscode.commands.executeCommand("setContext", ContextKeys.IS_TT_OPENED_FROM_CYCLE, isTTOpenedFromCycle);
+
+    // Initialize workspace availability context and listener
+    const updateWorkspaceAvailabilityContext = async () => {
+        const hasWorkspace = (vscode.workspace.workspaceFolders?.length || 0) > 0;
+        await vscode.commands.executeCommand("setContext", ContextKeys.WORKSPACE_AVAILABLE, hasWorkspace);
+    };
+    await updateWorkspaceAvailabilityContext();
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            updateWorkspaceAvailabilityContext().catch((err) =>
+                logger?.error("[extension] Error updating workspace availability context:", err)
+            );
+        })
+    );
 }
 
 /**

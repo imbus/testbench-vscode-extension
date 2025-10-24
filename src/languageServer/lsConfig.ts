@@ -203,6 +203,12 @@ export async function validateAndFixLsConfigInteractively(
  */
 export async function promptCreateLsConfigIfMissing(projectName: string, tovName: string): Promise<void> {
     try {
+        const workspaceLocation = await validateAndReturnWorkspaceLocation(false);
+        if (!workspaceLocation) {
+            logger.trace("[lsConfig] Skipping LS config creation prompt: no active workspace.");
+            return;
+        }
+
         const exists = await hasLsConfig();
         if (exists) {
             return;

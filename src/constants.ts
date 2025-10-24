@@ -80,6 +80,7 @@ export const ContextKeys = {
     PROJECT_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.projectTreeHasCustomRoot",
     THEME_TREE_HAS_CUSTOM_ROOT: "testbenchExtension.themeTreeHasCustomRoot",
     IS_TT_OPENED_FROM_CYCLE: "testbenchExtension.isTestThemeOpenedFromCycle",
+    WORKSPACE_AVAILABLE: "testbenchExtension.workspaceAvailable",
     SHOW_PROJECTS_TREE: "testbenchExtension.showProjectsTree",
     SHOW_TEST_THEMES_TREE: "testbenchExtension.showTestThemesTree",
     SHOW_TEST_ELEMENTS_TREE: "testbenchExtension.showTestElementsTree",
