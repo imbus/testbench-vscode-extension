@@ -53,6 +53,8 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private resourceFiles: Map<string, string[]> = new Map();
     private resourceFileService: ResourceFileService;
     private interactionClickHandler: ClickHandler<TestElementsTreeItem>;
+    private resourceFilesWatcher: vscode.FileSystemWatcher | undefined;
+    private resourceAvailabilityRefreshDebounceHandle: NodeJS.Timeout | undefined;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -68,6 +70,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
 
         this.registerEventHandlers();
         this.setupInteractionClickHandlers();
+        this.setupResourceFilesWatcher();
     }
 
     /**
@@ -147,6 +150,61 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
                 this.refresh();
             }
         });
+    }
+
+    /**
+     * Sets up a workspace watcher for .resource files and schedules a debounced
+     * refresh to update tree item availability and icons.
+     */
+    private setupResourceFilesWatcher(): void {
+        try {
+            // Watch all .resource files in the workspace
+            this.resourceFilesWatcher = vscode.workspace.createFileSystemWatcher("**/*.resource");
+
+            const schedule = () => this.scheduleResourceAvailabilityRefresh();
+            this.disposables.push(
+                this.resourceFilesWatcher.onDidCreate(schedule),
+                this.resourceFilesWatcher.onDidChange(schedule),
+                this.resourceFilesWatcher.onDidDelete(schedule),
+                this.resourceFilesWatcher
+            );
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error setting up .resource files watcher:", error);
+        }
+    }
+
+    /**
+     * Debounces and schedules a refresh of resource availability state across the tree.
+     */
+    private scheduleResourceAvailabilityRefresh(): void {
+        if (this.resourceAvailabilityRefreshDebounceHandle) {
+            clearTimeout(this.resourceAvailabilityRefreshDebounceHandle);
+        }
+        this.resourceAvailabilityRefreshDebounceHandle = setTimeout(async () => {
+            try {
+                await this.refreshResourceAvailabilityFromWorkspace();
+            } catch (error) {
+                this.logger.error(
+                    "[TestElementsTreeView] Error during debounced resource availability refresh:",
+                    error
+                );
+            }
+        }, 500);
+    }
+
+    /**
+     * Recomputes resource availability for subdivision items and updates icons and interactions.
+     */
+    private async refreshResourceAvailabilityFromWorkspace(): Promise<void> {
+        try {
+            if (!this.rootItems || this.rootItems.length === 0) {
+                return;
+            }
+            await this.updateSubdivisionIcons(this.rootItems);
+            this._onDidChangeTreeData.fire(undefined);
+        } catch (error) {
+            this.logger.error("[TestElementsTreeView] Error refreshing resource availability from workspace:", error);
+        }
     }
 
     /**
