@@ -191,3 +191,32 @@ export async function validateAndFixLsConfigInteractively(
         return null;
     }
 }
+
+/**
+ * Prompts the user to create `ls.config.json` when it is missing and a project/TOV context is known.
+ * If the user selects "Create", the configuration is written using the provided context.
+ *
+ * This helper centralizes the repeated UX flow used across the extension.
+ *
+ * @param projectName The TestBench project name to set in the configuration
+ * @param tovName The Test Object Version name to set in the configuration
+ */
+export async function promptCreateLsConfigIfMissing(projectName: string, tovName: string): Promise<void> {
+    try {
+        const exists = await hasLsConfig();
+        if (exists) {
+            return;
+        }
+
+        const choice = await vscode.window.showInformationMessage(
+            `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
+            "Create",
+            "Cancel"
+        );
+        if (choice === "Create") {
+            await writeLsConfig({ projectName, tovName });
+        }
+    } catch (error) {
+        logger.error("[lsConfig] Error prompting to create LS config:", error);
+    }
+}

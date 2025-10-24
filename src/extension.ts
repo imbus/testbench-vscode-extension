@@ -52,7 +52,8 @@ import {
     writeLsConfig,
     readLsConfig,
     validateAndFixLsConfigInteractively,
-    LanguageServerConfig
+    LanguageServerConfig,
+    promptCreateLsConfigIfMissing
 } from "./languageServer/lsConfig";
 import {
     hideProjectManagementTreeView,
@@ -306,17 +307,7 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         }
 
         // Prompt to create LS config if missing on TOV click
-        const configExists = await hasLsConfig();
-        if (!configExists) {
-            const choice = await vscode.window.showInformationMessage(
-                `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
-                "Create",
-                "Cancel"
-            );
-            if (choice === "Create") {
-                await writeLsConfig({ projectName, tovName });
-            }
-        }
+        await promptCreateLsConfigIfMissing(projectName, tovName);
     };
 
     const handleOpenTOV = async (tovItem: ProjectsTreeItem) => {
@@ -341,21 +332,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
 
-            const configExists = await hasLsConfig();
-            if (!configExists) {
-                const choice = await vscode.window.showInformationMessage(
-                    `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
-                    "Create",
-                    "Cancel"
-                );
-                if (choice === "Create") {
-                    await writeLsConfig({ projectName, tovName });
-                }
-            } else {
-                const cfg = await readLsConfig();
-                if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
-                    await validateAndFixLsConfigInteractively(cfg || undefined);
-                }
+            await promptCreateLsConfigIfMissing(projectName, tovName);
+            const cfg = await readLsConfig();
+            if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
+                await validateAndFixLsConfigInteractively(cfg || undefined);
             }
             await treeViews.testThemesTree.loadTov(projectKey, tovKey, projectName, tovName);
             if (treeViews.testElementsTree) {
@@ -398,21 +378,10 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await displayTestElementsTreeView();
             await hideProjectManagementTreeView();
 
-            const configExists = await hasLsConfig();
-            if (!configExists) {
-                const choice = await vscode.window.showInformationMessage(
-                    `No TestBench project configuration found. Create configuration for "${projectName} / ${tovName}"?`,
-                    "Create",
-                    "Cancel"
-                );
-                if (choice === "Create") {
-                    await writeLsConfig({ projectName, tovName });
-                }
-            } else {
-                const cfg = await readLsConfig();
-                if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
-                    await validateAndFixLsConfigInteractively(cfg || undefined);
-                }
+            await promptCreateLsConfigIfMissing(projectName, tovName);
+            const cfg = await readLsConfig();
+            if (!cfg || !cfg.projectName || cfg.projectName.trim() === "" || cfg.tovName === undefined) {
+                await validateAndFixLsConfigInteractively(cfg || undefined);
             }
             await treeViews.testThemesTree.loadCycle(
                 projectKey,
