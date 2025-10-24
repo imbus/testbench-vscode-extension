@@ -47,6 +47,8 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
     private currentCycleKey: string | null = null;
     private currentCycleLabel: string | null = null;
     private filterDiffMode: boolean = false;
+    private robotFilesWatcher: vscode.FileSystemWatcher | undefined;
+    private markingRefreshDebounceHandle: NodeJS.Timeout | undefined;
 
     constructor(
         extensionContext: vscode.ExtensionContext,
@@ -61,6 +63,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
         this.registerCommands();
         this.setupTestCaseSetClickHandlers();
         this.updateTestThemesFilterContextKey();
+        this.setupRobotFilesWatcher();
     }
 
     /**
@@ -889,7 +892,7 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
 
         this.stateManager.setLoading(false);
         this._onDidChangeTreeData.fire(undefined);
-        await this.updateRobotFileAvailabilityForAllTreeItems();
+        await this.refreshMarkingFromWorkspace();
         this._onDidChangeTreeData.fire(undefined);
         (this as any).updateTreeViewMessage();
 
@@ -1430,6 +1433,190 @@ export class TestThemesTreeView extends TreeViewBase<TestThemesTreeItem> {
                 }
             }
         });
+    }
+
+    /**
+     * Sets up a workspace file system watcher for Robot Framework files to keep
+     * item markings in sync with actual file availability.
+     */
+    private setupRobotFilesWatcher(): void {
+        try {
+            // Watch all .robot files in the workspace
+            this.robotFilesWatcher = vscode.workspace.createFileSystemWatcher("**/*.robot");
+
+            const schedule = () => this.scheduleMarkingRefresh();
+            this.disposables.push(
+                this.robotFilesWatcher.onDidCreate(schedule),
+                this.robotFilesWatcher.onDidChange(schedule),
+                this.robotFilesWatcher.onDidDelete(schedule),
+                this.robotFilesWatcher
+            );
+        } catch (error) {
+            this.logger.error("[TestThemesTreeView] Error setting up robot files watcher:", error);
+        }
+    }
+
+    /**
+     * Debounces and schedules a marking refresh run (update availability + sync marks).
+     */
+    private scheduleMarkingRefresh(): void {
+        if (this.markingRefreshDebounceHandle) {
+            clearTimeout(this.markingRefreshDebounceHandle);
+        }
+        this.markingRefreshDebounceHandle = setTimeout(async () => {
+            try {
+                await this.refreshMarkingFromWorkspace();
+            } catch (error) {
+                this.logger.error("[TestThemesTreeView] Error during debounced marking refresh:", error);
+            }
+        }, 500);
+    }
+
+    /**
+     * Updates robot file availability flags and synchronizes item markings accordingly.
+     */
+    private async refreshMarkingFromWorkspace(): Promise<void> {
+        await this.updateRobotFileAvailabilityForAllTreeItems();
+        await this.syncMarkingsWithRobotFileAvailability();
+    }
+
+    /**
+     * Synchronizes the marking state of tree items with the availability of
+     * their corresponding .robot files. If a file exists, the item is marked
+     * with type "generation", if the file is missing, any existing mark is removed.
+     */
+    public async syncMarkingsWithRobotFileAvailability(): Promise<void> {
+        try {
+            const markingModule = this.getModule("marking") as MarkingModule | undefined;
+            if (!markingModule) {
+                return;
+            }
+
+            const treeItemCandidates = this.getAllTestThemeTreeItems().filter((treeItem) =>
+                treeItem.canHaveRobotFile()
+            );
+            const desiredMarkType = this.getDesiredMarkType();
+            const { projectKey, contextKey } = this.getCurrentContextKeys();
+
+            const tasks = treeItemCandidates.map(async (treeItem) => {
+                try {
+                    const robotFileExistsForTreeItem = treeItem.hasGeneratedRobotFile();
+                    await this.bindMarkForItemToItsExistence(
+                        treeItem,
+                        robotFileExistsForTreeItem,
+                        markingModule,
+                        desiredMarkType,
+                        projectKey,
+                        contextKey
+                    );
+                } catch (err) {
+                    this.logger.error("[TestThemesTreeView] Error syncing marking for item:", err);
+                }
+            });
+
+            await Promise.all(tasks);
+        } catch (error) {
+            this.logger.error("[TestThemesTreeView] Error syncing markings with robot file availability:", error);
+        }
+    }
+
+    /**
+     * Determines the desired marking type for the current view context.
+     * In cycle context we want 'import' to show the Import button.
+     * In TOV context we use 'generation' to reflect local file availability.
+     */
+    private getDesiredMarkType(): "import" | "generation" {
+        return this.isOpenedFromCycle ? "import" : "generation";
+    }
+
+    /**
+     * Returns the current project and context (cycle or TOV) keys.
+     */
+    private getCurrentContextKeys(): { projectKey?: string; contextKey?: string } {
+        const projectKey = this.currentProjectKey || undefined;
+        const contextKey = this.isOpenedFromCycle ? this.currentCycleKey || undefined : this.currentTovKey || undefined;
+        return { projectKey, contextKey };
+    }
+
+    /**
+     * Applies a mark to an item using the marking module or falls back to updating
+     * the item's metadata when context keys are not available yet (early refresh).
+     */
+    private applyMarkForItem(
+        item: TestThemesTreeItem,
+        desiredType: "import" | "generation",
+        projectKey: string | undefined,
+        contextKey: string | undefined,
+        markingModule: MarkingModule
+    ): void {
+        const itemId = item.id;
+        if (!itemId) {
+            return;
+        }
+
+        if (projectKey && contextKey) {
+            markingModule.markItem(item, projectKey, contextKey, desiredType);
+            return;
+        }
+
+        // Fallback: update item metadata only
+        item.setMetadata("marked", true);
+        item.setMetadata("markingInfo", {
+            itemId,
+            projectKey: projectKey || "",
+            cycleKey: contextKey || "",
+            timestamp: Date.now(),
+            type: desiredType,
+            metadata: {
+                label: item.label as string,
+                contextValue: item.originalContextValue,
+                uniqueID: item.data.base.uniqueID || undefined
+            }
+        });
+        item.updateContextValue();
+        this._onDidChangeTreeData.fire(item);
+    }
+
+    /**
+     * Connects the marking state of a single item with its file existence.
+     * - If a file exists, ensure the item is marked with the desired type.
+     * - If marked with a different type, upgrade when appropriate and never
+     *   downgrade from 'import' to 'generation'.
+     * - If no file exists, unmark the item.
+     */
+    private async bindMarkForItemToItsExistence(
+        treeItem: TestThemesTreeItem,
+        robotFileExistsForTreeItem: boolean,
+        markingModule: MarkingModule,
+        desiredType: "import" | "generation",
+        projectKey?: string,
+        contextKey?: string
+    ): Promise<void> {
+        const itemId = treeItem.id;
+        if (!itemId) {
+            return;
+        }
+
+        const isMarked = markingModule.isMarked(itemId);
+        const currentMark = markingModule.getMarkingInfo(itemId);
+
+        if (robotFileExistsForTreeItem) {
+            if (!isMarked) {
+                this.applyMarkForItem(treeItem, desiredType, projectKey, contextKey, markingModule);
+                return;
+            }
+
+            if (currentMark && currentMark.type !== desiredType) {
+                // Dont downgrade existing 'import' mark to 'generation'
+                if (currentMark.type === "import" && desiredType === "generation") {
+                    return;
+                }
+                this.applyMarkForItem(treeItem, desiredType, projectKey, contextKey, markingModule);
+            }
+        } else if (isMarked) {
+            // Remove any marking for items without a file
+            markingModule.unmarkItemByID(itemId);
+        }
     }
 
     /**

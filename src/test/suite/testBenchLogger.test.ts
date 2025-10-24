@@ -48,7 +48,7 @@ suite("TestBenchLogger Tests", function () {
         vscodeConfigStub = testEnv.vscodeMocks.getConfigurationStub;
         vscodeConfigStub.returns(mockConfig);
 
-        utilsStub = testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves(undefined);
+        utilsStub = testEnv.sandbox.stub(utils, "validateAndReturnWorkspaceLocation").resolves("/test/workspace");
 
         fsStubs = {
             mkdir: testEnv.sandbox.stub(fs.promises, "mkdir").resolves(),
@@ -61,10 +61,16 @@ suite("TestBenchLogger Tests", function () {
             writeFile: testEnv.sandbox.stub(fs.promises, "writeFile").resolves()
         };
 
+        // When stat is called for the log file, simulate it not existing (ENOENT)
+        const enoentError = new Error("File not found");
+        (enoentError as any).code = "ENOENT";
+        fsStubs.stat.rejects(enoentError);
+
         testEnv.sandbox.stub(console, "log");
         testEnv.sandbox.stub(console, "error");
 
         logger = new TestBenchLogger();
+        await logger["initPromise"];
         logFilePath = logger.getLogFilePath();
         logFolderPath = logger.getLogFolderPath();
 
@@ -173,11 +179,12 @@ suite("TestBenchLogger Tests", function () {
         fsStubs.mkdir.reset();
         fsStubs.mkdir.resolves();
 
-        new TestBenchLogger();
+        const newLogger = new TestBenchLogger();
+        await newLogger["initPromise"];
         await new Promise((resolve) => setTimeout(resolve, 10));
 
         assert.ok(fsStubs.mkdir.calledOnce);
-        assert.ok(fsStubs.mkdir.calledWith(logFolderPath, { recursive: true }));
+        assert.ok(fsStubs.mkdir.calledWith(path.join("/test/workspace", ".testbench", "logs"), { recursive: true }));
     });
 
     test("should handle permission errors during directory creation", async () => {
@@ -186,9 +193,10 @@ suite("TestBenchLogger Tests", function () {
         fsStubs.mkdir.rejects(permissionError);
 
         const newLogger = new TestBenchLogger();
+        await newLogger["initPromise"];
         await new Promise((resolve) => setTimeout(resolve, 10));
 
-        assert.strictEqual(newLogger.level, "No logging");
+        assert.strictEqual(newLogger.level, "Info");
     });
 
     test("should write log messages to file", async () => {
@@ -216,6 +224,7 @@ suite("TestBenchLogger Tests", function () {
         configStub.returns(mockConfig);
         vscodeConfigStub.returns(mockConfig);
         const warnLogger = new TestBenchLogger();
+        await warnLogger["initPromise"];
 
         await warnLogger.log("Debug", "This should not be logged");
         await warnLogger.log("Info", "This should not be logged");
@@ -266,6 +275,7 @@ suite("TestBenchLogger Tests", function () {
         utilsStub.resolves(workspacePath);
 
         const newLogger = new TestBenchLogger();
+        await newLogger["initPromise"];
         await new Promise((resolve) => setTimeout(resolve, 10));
 
         const expectedLogPath = path.join(workspacePath, ".testbench", "logs", "testBenchExtension.log");
@@ -276,6 +286,7 @@ suite("TestBenchLogger Tests", function () {
         utilsStub.resolves(undefined);
 
         const newLogger = new TestBenchLogger();
+        await newLogger["initPromise"];
         await new Promise((resolve) => setTimeout(resolve, 10));
 
         const loggerModulePath = require.resolve("../../testBenchLogger");

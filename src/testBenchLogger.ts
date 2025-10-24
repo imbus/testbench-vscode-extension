@@ -105,8 +105,6 @@ export class TestBenchLogger {
         this.logFilePath = path.join(this.logFolderPath, fileNameOfActiveLogFile);
         this.outputLogToTerminal = outputToTerminal === true;
         this.cachedLogLevel = getExtensionConfiguration().get(ConfigKeys.LOGGER_LEVEL, "No logging");
-
-        // Set up configuration change listener
         this.setupConfigurationListener();
 
         // Begin asynchronous initialization
@@ -158,13 +156,11 @@ export class TestBenchLogger {
     private setupWorkspaceListeners(): void {
         try {
             this.activeEditorChangeListener = vscode.window.onDidChangeActiveTextEditor(() => {
-                // Update log target when active editor changes (may indicate a different workspace context)
                 this.updateLogTargetForCurrentWorkspace().catch((err) =>
                     console.error("[testBenchLogger] Error updating log target on editor change:", err)
                 );
             });
             this.workspaceFoldersChangeListener = vscode.workspace.onDidChangeWorkspaceFolders(() => {
-                // Update log target when folders are added/removed
                 this.updateLogTargetForCurrentWorkspace().catch((err) =>
                     console.error("[testBenchLogger] Error updating log target on workspace change:", err)
                 );
