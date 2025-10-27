@@ -44,7 +44,6 @@ import {
     client,
     handleLanguageServerRestartOnSessionChange,
     prepareLanguageServerForTreeItemOperation,
-    setIsHandlingLogout,
     configureLanguageServerIntegration
 } from "./languageServer/server";
 import {
@@ -228,7 +227,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             return;
         }
 
-        setIsHandlingLogout(true);
         isHandlingSessionChange = true;
         try {
             const session = await vscode.authentication.getSession(TESTBENCH_AUTH_PROVIDER_ID, ["api_access"], {
@@ -242,7 +240,6 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
             await handleNoSession();
         } finally {
             isHandlingSessionChange = false;
-            setIsHandlingLogout(false);
         }
     };
 
@@ -1369,7 +1366,6 @@ async function handleTestBenchSessionChange(
         logger.trace("[extension] Cleared logout signal due to new session.");
 
         getLoginWebViewProvider()?.resetEditMode();
-        setIsHandlingLogout(false);
         const previousUserId = userSessionManager.getCurrentUserId();
         const newUserId = sessionToProcess.account.id;
         const wasNewSessionStarted = previousUserId !== newUserId;
@@ -1428,9 +1424,7 @@ async function handleTestBenchSessionChange(
             await treeViews.reloadAllTreeViewsStateFromPersistence();
         }
     } else {
-        setIsHandlingLogout(true);
         await handleNoSession();
-        setIsHandlingLogout(false);
     }
 }
 
