@@ -4,6 +4,7 @@
 ERROR_CONTEXT_NOT_SET = "Missing TestBench context: Specify the context in the comment section of your resource file in the format 'tb:context:<project>/<tov>'."
 ERROR_CONTEXT_MISMATCH = "TestBench context mismatch: Use the project view to select the tov that corresponds to your resource file."
 ERROR_PUSH_KEYWORD = "Failed to push keyword"
+ERROR_CREATE_KEYWORD = "Failed to create keyword"
 ERROR_KEYWORD_IS_LOCKED = "Element is locked in TestBench"
 ERROR_SUBDIVISON_MAPPING_FORMAT = (
     "The subdivision and library mapping must be specified in the format 'name:value'."
@@ -22,12 +23,14 @@ ERROR_FINDING_TESTBENCH_KEYWORD = (
 )
 ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID = "TestBench keyword with uid '{uid}' does not exist."
 ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID_IN_EXISTING_RESOURCE = "TestBench keyword with uid '{uid}' does not exist in the cached resource. Please save the resource and try again."
-
+ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID = (
+    "TestBench subdivision with uid '{uid}' does not exist."
+)
 
 # Info messages
 INFO_ALREADY_UP_TO_DATE = "Already up to date."
 INFO_CHANGES_PUSHED = "Keyword changes pushed to TestBench."
-INFO_CREATED_KEYWORD = "Keyword created in TestBench. UID: {uid}"
+INFO_CREATED_KEYWORD = "Keyword created in TestBench (UID: '{uid}')."
 INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST = (
     "TestBench keyword with name '{name}' does not exist in the selected resource file."
 )

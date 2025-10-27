@@ -55,6 +55,7 @@ from .ls_exceptions import (
     MultipleKeywordsWithName,
     MultipleKeywordsWithUid,
     TestBenchKeywordNotFound,
+    TestBenchSubdivisionNotFound,
 )
 from .ls_logging import LogLevel, log, show_error, show_info, show_warning
 from .messages import (
@@ -83,6 +84,7 @@ from .messages import (
     DEBUG_CHECK_CONTEXT,
     ERROR_CONTEXT_MISMATCH,
     ERROR_CONTEXT_NOT_SET,
+    ERROR_CREATE_KEYWORD,
     ERROR_DUPLICATE_KEYWORD_NAME,
     ERROR_DUPLICATE_KEYWORD_NAME_IN_FILE,
     ERROR_DUPLICATE_KEYWORD_UID,
@@ -90,6 +92,7 @@ from .messages import (
     ERROR_EMPTY_OUTPUT_DIRECTORY,
     ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID,
     ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID_IN_EXISTING_RESOURCE,
+    ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID,
     ERROR_KEYWORD_IS_LOCKED,
     ERROR_PUSH_KEYWORD,
     ERROR_SUBDIVISON_MAPPING_FORMAT,
@@ -656,7 +659,7 @@ def push_testbench_subdivision(ls: LanguageServer, kwargs):
                 show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
                 push_success = False
             else:
-                show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+                show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.json().get('message')}")
                 push_success = False
         except TestBenchKeywordNotFound as not_found_error:
             show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
@@ -963,7 +966,7 @@ def push_testbench_keyword(ls: LanguageServer, kwargs):
         if http_error.response.status_code == 409:
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {ERROR_KEYWORD_IS_LOCKED}.")
         else:
-            show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+            show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.json().get('message')}")
     except TestBenchKeywordNotFound as not_found_error:
         show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
 
@@ -1026,7 +1029,9 @@ def create_testbench_keyword(ls: LanguageServer, kwargs):
             WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
         )
     except requests.exceptions.HTTPError as http_error:
-        show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
+        show_error(ls, f"{ERROR_CREATE_KEYWORD}: {http_error.response.json().get('message')}")
+    except TestBenchSubdivisionNotFound as not_found_error:
+        show_error(ls, ERROR_FINDING_TESTBENCH_SUBDIVISION_WITH_UID.format(uid=not_found_error.uid))
 
 
 @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)

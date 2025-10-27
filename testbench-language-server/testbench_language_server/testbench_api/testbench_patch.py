@@ -1,6 +1,6 @@
 from typing import Any
 
-from ..ls_exceptions import TestBenchKeywordNotFound
+from ..ls_exceptions import TestBenchKeywordNotFound, TestBenchSubdivisionNotFound
 from .legacy_model import get_interaction_key, get_subdivision_key
 from .testbench_get import get_test_element
 from .testbench_resource_connection import TestBenchResourceConnection
@@ -39,6 +39,8 @@ def post_interaction_details(
 ) -> dict:
     tb_connection = TestBenchResourceConnection.singleton()
     test_element = get_test_element(tb_connection, subdivision_uid)
+    if isinstance(test_element, dict):
+        raise TestBenchSubdivisionNotFound(subdivision_uid)
     subdivision_key = get_subdivision_key(test_element)
     if subdivision_key:
         return post_interaction(
