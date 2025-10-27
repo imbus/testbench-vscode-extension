@@ -22,3 +22,17 @@ class ResourceDocumentation:
             None,
         )
         return keyword_doc.doc if keyword_doc else ""
+
+    def get_keyword_documentation_by_name(self, keyword_name: str) -> str:
+        keyword_doc: KeywordDoc | None = next(
+            filter(lambda keyword: keyword.name == keyword_name, self.keyword_documentations),
+            None,
+        )
+        return keyword_doc.doc if keyword_doc else ""
+
+    def get_keyword_arguments(self, keyword_name: str) -> str:
+        keyword_doc: KeywordDoc | None = next(
+            filter(lambda keyword: keyword.name == keyword_name, self.keyword_documentations),
+            None,
+        )
+        return keyword_doc.args.argument_names if keyword_doc else ""

@@ -305,7 +305,7 @@ function buildClientOptions(): LanguageClientOptions {
         },
         outputChannelName: "TestBench LS",
         errorHandler: {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+             
             error: (_error: Error, _message: Message | undefined, _count: number | undefined): ErrorHandlerResult => {
                 // Keep running and suppress user popups
                 return { action: ErrorAction.Continue };
@@ -660,6 +660,28 @@ function setupClientNotifications(
                     vscode.commands.executeCommand("testbench_ls.showTestbenchKeywordDiff", {
                         document_uri: path,
                         keyword_uid: keywordUid
+                    });
+                }
+            });
+    });
+
+    client.onNotification("testbench-language-server/attempt-create-keyword", (params) => {
+        const path = params.path;
+        const keywordName = params.keyword_name;
+        vscode.window
+            .showWarningMessage(
+                "Are you sure you want to create a new TestBench keyword?",
+                {
+                    modal: true,
+                    detail: "The keyword will be created in the subdivision corresponding to the current resource file."
+                },
+                "Create Keyword"
+            )
+            .then(async (selection) => {
+                if (selection === "Create Keyword") {
+                    vscode.commands.executeCommand("testbench_ls.createKeyword", {
+                        document_uri: path,
+                        keyword_name: keywordName
                     });
                 }
             });

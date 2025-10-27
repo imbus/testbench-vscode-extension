@@ -143,3 +143,7 @@ def get_interactions_resource_path(
 
 def get_interaction_key(test_element: TestElement) -> str:
     return test_element.Interaction_key.serial
+
+
+def get_subdivision_key(test_element: TestElement) -> str:
+    return test_element.Subdivision_key.serial

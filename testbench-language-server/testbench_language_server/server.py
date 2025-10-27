@@ -58,8 +58,10 @@ from .ls_exceptions import (
 )
 from .ls_logging import LogLevel, log, show_error, show_info, show_warning
 from .messages import (
+    COMMAND_ATTEMPT_CREATE_KEYWORD,
     COMMAND_ATTEMPT_PUSH_KEYWORD,
     COMMAND_ATTEMPT_PUSH_SUBDIVISION,
+    COMMAND_CREATE_KEYWORD,
     COMMAND_FETCH_RESULTS,
     COMMAND_FIND_INTERACTION_POSITION,
     COMMAND_GENERATE_TEST_SUITES,
@@ -77,6 +79,7 @@ from .messages import (
     COMMAND_UPDATE_TOV,
     CONTEXT_CHANGE_LABEL,
     CONTEXT_STRING,
+    CREATE_KEYWORD_TITLE,
     DEBUG_CHECK_CONTEXT,
     ERROR_CONTEXT_MISMATCH,
     ERROR_CONTEXT_NOT_SET,
@@ -93,6 +96,7 @@ from .messages import (
     IGNORE_TAGS,
     INFO_ALREADY_UP_TO_DATE,
     INFO_CHANGES_PUSHED,
+    INFO_CREATED_KEYWORD,
     INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST,
     INFO_TESTBENCH_KEYWORD_DOES_NOT_EXIST_IN_FILE,
     KEYWORD_INTERFACE_CHANGE_LABEL,
@@ -105,7 +109,7 @@ from .messages import (
     WARNING_MISSING_CONTEXT,
     WORKSPACE_APPLY_EDIT_LABEL,
 )
-from .testbench_api.testbench_patch import patch_interaction_details
+from .testbench_api.testbench_patch import patch_interaction_details, post_interaction_details
 from .testbench_resource.resource_documentation import ResourceDocumentation
 from .testbench_resource.resource_utils import (
     get_comment_section_end_position,
@@ -126,11 +130,9 @@ from .testbench_resource.subdivision2resource import (
 from .testbench_resource.testbench_resource_model import (
     TestBenchResourceModel,
     get_interaction_call_type,
-    get_kw_tags,
+    get_kw_name,
     get_kw_uid,
 )
-
-from robot.api.parsing import KeywordName
 
 
 class TestBenchLanguageServer(LanguageServer):
@@ -329,37 +331,51 @@ def code_lens_provider(ls: LanguageServer, params: CodeLensParams):
     code_lenses.append(push_resource_lens)
     for keyword in testbench_resource.keywords:
         keyword_uid = get_kw_uid(keyword)
-        if not keyword_uid or any(
-            tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))
-        ):
+        if any(tag in IGNORE_TAGS for tag in get_tags_values(get_keyword_tags(keyword))):
             continue
         keyword_line = keyword.lineno - 1
-        code_lenses.append(
-            CodeLens(
-                range=Range(
-                    start=Position(line=keyword_line, character=0),
-                    end=Position(line=keyword_line, character=0),
-                ),
-                command=Command(
-                    title=PULL_KEYWORD_TITLE,
-                    command=COMMAND_PULL_KEYWORD,
-                    arguments=[document_uri, keyword_uid],
-                ),
+        if not keyword_uid:
+            keyword_name = get_kw_name(keyword)
+            code_lenses.append(
+                CodeLens(
+                    range=Range(
+                        start=Position(line=keyword_line, character=0),
+                        end=Position(line=keyword_line, character=0),
+                    ),
+                    command=Command(
+                        title=CREATE_KEYWORD_TITLE,
+                        command=COMMAND_ATTEMPT_CREATE_KEYWORD,
+                        arguments=[document_uri, keyword_name],
+                    ),
+                )
             )
-        )
-        code_lenses.append(
-            CodeLens(
-                range=Range(
-                    start=Position(line=keyword_line, character=0),
-                    end=Position(line=keyword_line, character=0),
-                ),
-                command=Command(
-                    title=PUSH_KEYWORD_TITLE,
-                    command=COMMAND_ATTEMPT_PUSH_KEYWORD,
-                    arguments=[document_uri, keyword_uid],
-                ),
+        else:
+            code_lenses.append(
+                CodeLens(
+                    range=Range(
+                        start=Position(line=keyword_line, character=0),
+                        end=Position(line=keyword_line, character=0),
+                    ),
+                    command=Command(
+                        title=PULL_KEYWORD_TITLE,
+                        command=COMMAND_PULL_KEYWORD,
+                        arguments=[document_uri, keyword_uid],
+                    ),
+                )
             )
-        )
+            code_lenses.append(
+                CodeLens(
+                    range=Range(
+                        start=Position(line=keyword_line, character=0),
+                        end=Position(line=keyword_line, character=0),
+                    ),
+                    command=Command(
+                        title=PUSH_KEYWORD_TITLE,
+                        command=COMMAND_ATTEMPT_PUSH_KEYWORD,
+                        arguments=[document_uri, keyword_uid],
+                    ),
+                )
+            )
     return code_lenses
 
 
@@ -557,6 +573,30 @@ def attempt_push_keyword(ls: LanguageServer, args):
         {"path": document_uri, "keyword_uid": keyword_uid},
     )
 
+
+@testbench_ls.command(COMMAND_ATTEMPT_CREATE_KEYWORD)
+def attempt_create_keyword(ls: LanguageServer, args):
+    document_uri, keyword_name, *_ = args
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, resource):
+        return
+    change_identifier = ChangeAnnotationIdentifier()
+    existing_keywords = resource.get_keywords_by_name(keyword_name)
+    if len(existing_keywords) > 1:
+        show_error(
+            ls,
+            ERROR_DUPLICATE_KEYWORD_NAME.format(name=keyword_name),
+        )
+        return
+    if len(existing_keywords) == 1:
+        ls.send_notification(
+            "testbench-language-server/attempt-create-keyword",
+            {"path": document_uri, "keyword_name": keyword_name},
+        )
+        return
+
+
 @testbench_ls.command("testbench_ls.get_resource_directory_subdivision_index")
 def get_resource_directory_subdivision_index(ls: LanguageServer, kwargs) -> int:
     kwargs, *_ = kwargs
@@ -565,13 +605,11 @@ def get_resource_directory_subdivision_index(ls: LanguageServer, kwargs) -> int:
     if not subdivision_parts:
         return -1
     for index, part in enumerate(subdivision_parts):
-        resource_directory_match = re.match(
-            resource_directory_regex, part, flags=re.IGNORECASE
-        )
+        resource_directory_match = re.match(resource_directory_regex, part, flags=re.IGNORECASE)
         if resource_directory_match:
             return index
     return -1
-    
+
 
 @testbench_ls.command(COMMAND_PUSH_SUBDIVISION)
 def push_testbench_subdivision(ls: LanguageServer, kwargs):
@@ -928,6 +966,67 @@ def push_testbench_keyword(ls: LanguageServer, kwargs):
             show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
     except TestBenchKeywordNotFound as not_found_error:
         show_error(ls, ERROR_FINDING_TESTBENCH_KEYWORD_WITH_UID.format(uid=not_found_error.uid))
+
+
+@testbench_ls.command(COMMAND_CREATE_KEYWORD)
+def create_testbench_keyword(ls: LanguageServer, kwargs):
+    kwargs, *_ = kwargs
+    document_uri = kwargs.get("document_uri")
+    keyword_name = kwargs.get("keyword_name")
+    document = testbench_ls.workspace.get_text_document(document_uri)
+    resource = TestBenchResourceModel.from_file(document.source)
+    if not context_is_valid(ls, resource):
+        return
+    subdivision_uid = resource.tb_subdivision_uid
+    robot_keywords = resource.get_keywords_by_name(keyword_name)
+    if len(robot_keywords) > 1:
+        show_error(
+            ls,
+            ERROR_DUPLICATE_KEYWORD_NAME.format(name=keyword_name),
+        )
+        return
+    rd = ResourceDocumentation(document.path)
+    new_docu = (
+        rd.get_keyword_documentation_by_name(keyword_name)
+        .replace("<br>", "<br/>")
+        .replace("<hr>", "<br/>")
+    )
+    html_description = f"<html><body>{new_docu}</body></html>"
+    arguments = rd.get_keyword_arguments(keyword_name)
+    tb_parameters = [{"name": arg, "evaluationType": "CallByValue"} for arg in arguments]
+    call_type = get_interaction_call_type(robot_keywords[0])
+    try:
+        tb_connection = TestBenchResourceConnection.singleton()
+        response = post_interaction_details(
+            tb_connection,
+            robot_keywords[0].name,
+            html_description,
+            call_type.value,
+            subdivision_uid,
+            tb_parameters,
+        )
+        created_kw_uid = response.get("uniqueID")
+        show_info(ls, INFO_CREATED_KEYWORD.format(uid=created_kw_uid))
+        change_identifier = ChangeAnnotationIdentifier()
+        new_keyword = create_keyword_from_interaction(
+            created_kw_uid,
+        )
+        edits = create_keyword_edits(robot_keywords[0], new_keyword, change_identifier)
+        if not edits:
+            show_info(ls, INFO_ALREADY_UP_TO_DATE)
+            return
+        edit = create_workspace_edit(
+            document_uri,
+            edits,
+            change_identifier,
+            KEYWORD_INTERFACE_CHANGE_LABEL,
+            False,
+        )
+        ls.lsp.send_request(
+            WORKSPACE_APPLY_EDIT, ApplyWorkspaceEditParams(edit, WORKSPACE_APPLY_EDIT_LABEL)
+        )
+    except requests.exceptions.HTTPError as http_error:
+        show_error(ls, f"{ERROR_PUSH_KEYWORD}: {http_error.response.text}")
 
 
 @testbench_ls.feature(TEXT_DOCUMENT_CODE_ACTION)
