@@ -305,7 +305,6 @@ function buildClientOptions(): LanguageClientOptions {
         },
         outputChannelName: "TestBench LS",
         errorHandler: {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             error: (_error: Error, _message: Message | undefined, _count: number | undefined): ErrorHandlerResult => {
                 // Keep running and suppress user popups
                 return { action: ErrorAction.Continue };
@@ -1086,6 +1085,11 @@ export async function restartLanguageClientFromConfig(): Promise<void> {
         logger.trace("[server] Skipping restartLanguageClientFromConfig during logout.");
         return;
     }
+    if (!getConnection()) {
+        logger.trace("[server] No connection, skipping restartLanguageClientFromConfig.");
+        return;
+    }
+
     const exists = await hasLsConfig();
     if (!exists) {
         logger.warn("[server] LS config not found. Cannot restart language server.");
@@ -1103,6 +1107,12 @@ export async function restartLanguageClientFromConfig(): Promise<void> {
         return;
     }
 
+    // Connection before scheduling a restart to avoid race with logout
+    if (!getConnection() || isHandlingLogout) {
+        logger.trace("[server] Connection lost or logout in progress after validation. Skipping LS restart.");
+        return;
+    }
+
     await restartLanguageClient(cfg.projectName, cfg.tovName);
 }
 
@@ -1115,10 +1125,27 @@ export function configureLanguageServerIntegration(context: vscode.ExtensionCont
         if (e.provider.id !== "testbench-auth") {
             return;
         }
+
         if (isHandlingLogout) {
             logger.trace("[server] Authentication change detected during logout. Skipping LS restart.");
             return;
         }
+
+        let activeSession: vscode.AuthenticationSession | undefined;
+        try {
+            activeSession = await vscode.authentication.getSession("testbench-auth", ["api_access"], {
+                createIfNone: false,
+                silent: true
+            });
+        } catch {
+            logger.trace("[server] getSession failed during auth change. Skipping LS restart.");
+            return;
+        }
+        if (!activeSession) {
+            logger.trace("[server] No active session after authentication change. Skipping LS restart.");
+            return;
+        }
+
         if (!getConnection()) {
             return;
         }
