@@ -3,9 +3,9 @@
 # Error messages
 ERROR_CONTEXT_NOT_SET = "Missing TestBench context: Specify the context in the comment section of your resource file in the format 'tb:context:<project>/<tov>'."
 ERROR_CONTEXT_MISMATCH = "TestBench context mismatch: Use the project view to select the tov that corresponds to your resource file."
-ERROR_PUSH_KEYWORD = "Failed to push keyword"
-ERROR_CREATE_KEYWORD = "Failed to create keyword"
-ERROR_KEYWORD_IS_LOCKED = "Element is locked in TestBench"
+ERROR_PUSH_KEYWORD = "Failed to push keyword."
+ERROR_CREATE_KEYWORD = "Failed to create keyword."
+ERROR_KEYWORD_IS_LOCKED = "Element is locked in TestBench."
 ERROR_SUBDIVISON_MAPPING_FORMAT = (
     "The subdivision and library mapping must be specified in the format 'name:value'."
 )
@@ -68,11 +68,11 @@ COMMAND_ATTEMPT_CREATE_KEYWORD = "testbench_ls.attemptCreateKeyword"
 
 # constants
 TESTBENCH_LS_CLASS_NAME = "testbench-language-server"
-PULL_SUBDIVISON_TITLE = "Pull TestBench Subdivision"
-PUSH_SUBDIVISON_TITLE = "Push TestBench Subdivision"
-PULL_KEYWORD_TITLE = "Pull TestBench Keyword"
-CREATE_KEYWORD_TITLE = "Create TestBench Keyword"
-PUSH_KEYWORD_TITLE = "Push TestBench Keyword"
+PULL_SUBDIVISON_TITLE = "Pull changes from TestBench"
+PUSH_SUBDIVISON_TITLE = "Push changes to TestBench"
+PULL_KEYWORD_TITLE = "Pull keyword from TestBench"
+CREATE_KEYWORD_TITLE = "Create keyword in TestBench"
+PUSH_KEYWORD_TITLE = "Push keyword to TestBench"
 KEYWORD_INTERFACE_CHANGE_LABEL = "Keyword interface changes"
 WORKSPACE_APPLY_EDIT_LABEL = "Refactoring Preview"
 CONTEXT_CHANGE_LABEL = "TestBench Context Change"
