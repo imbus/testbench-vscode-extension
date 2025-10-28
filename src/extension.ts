@@ -71,6 +71,7 @@ import { UserSessionManager } from "./userSessionManager";
 import { SharedSessionManager } from "./sharedSessionManager";
 import { v4 as uuidv4 } from "uuid";
 import { activeConfigService } from "./languageServer/activeConfigService";
+import { checkWorkspaceAndNotifyUser } from "./utils";
 
 /* =============================================================================
    Constants, Global Variables & Exports
@@ -1296,6 +1297,8 @@ async function createNewConnection(
     setConnection(newConnection);
     await vscode.commands.executeCommand("setContext", ContextKeys.CONNECTION_ACTIVE, true);
     getLoginWebViewProvider()?.updateWebviewHTMLContent();
+    await checkWorkspaceAndNotifyUser();
+
     return newConnection;
 }
 
