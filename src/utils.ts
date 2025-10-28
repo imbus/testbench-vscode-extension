@@ -313,16 +313,9 @@ export async function validateAndReturnWorkspaceLocation(enableLogging: boolean 
 export async function checkWorkspaceAndNotifyUser(): Promise<void> {
     const hasWorkspace = (vscode.workspace.workspaceFolders?.length || 0) > 0;
     if (!hasWorkspace) {
-        vscode.window
-            .showInformationMessage(
-                "You don't have an active workspace. Read-only mode is active. Some features requiring a workspace are disabled.",
-                "Open Workspace Folder"
-            )
-            .then((selection) => {
-                if (selection === "Open Workspace Folder") {
-                    vscode.commands.executeCommand("vscode.openFolder");
-                }
-            });
+        vscode.window.showInformationMessage(
+            "You don't have an active workspace. Read-only mode is active. Some features requiring a workspace are disabled."
+        );
         logger.info("[extension] User logged in without an active workspace. Read-only mode active.");
     }
 }
