@@ -872,7 +872,9 @@ async function registerExtensionCommands(context: vscode.ExtensionContext): Prom
         const inputBox = vscode.window.createInputBox();
         inputBox.title = `Search in ${treeView.config.title}`;
         inputBox.value = currentFilter?.searchText || "";
-        inputBox.prompt = "Enter search text.";
+        // Note: VS Code adds this extra text after our prompt text by default:
+        // (Press 'Enter' to confirm or 'Escape' to cancel)
+        inputBox.prompt = "Enter search text. Clear input field to remove filter.";
 
         // Button to configure search options on top right of the input box.
         const configureButton: vscode.QuickInputButton = {
