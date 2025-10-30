@@ -272,6 +272,10 @@ def get_kw_uid(kw: Keyword) -> str:
     return ""
 
 
+def get_kw_name(kw: Keyword) -> str:
+    return kw.name if kw and kw.name else ""
+
+
 def get_interaction_call_type(keyword: Keyword) -> str:
     tags = get_kw_tags(keyword)
     if "tb:check" in tags:

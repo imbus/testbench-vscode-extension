@@ -659,6 +659,28 @@ function setupClientNotifications(
             });
     });
 
+    client.onNotification("testbench-language-server/attempt-create-keyword", (params) => {
+        const path = params.path;
+        const keywordName = params.keyword_name;
+        vscode.window
+            .showWarningMessage(
+                "Are you sure you want to create a new TestBench keyword?",
+                {
+                    modal: true,
+                    detail: "The keyword will be created in the subdivision corresponding to the current resource file."
+                },
+                "Create Keyword"
+            )
+            .then(async (selection) => {
+                if (selection === "Create Keyword") {
+                    vscode.commands.executeCommand("testbench_ls.createKeyword", {
+                        document_uri: path,
+                        keyword_name: keywordName
+                    });
+                }
+            });
+    });
+
     vscode.workspace.registerTextDocumentContentProvider(virtualDocumentScheme, virtualDocumentProvider);
     client.onNotification("testbench-language-server/display-diff", (params) => {
         const realPath = params.path;

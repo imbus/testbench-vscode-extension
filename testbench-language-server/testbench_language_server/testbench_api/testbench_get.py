@@ -18,9 +18,7 @@ def get_test_element(tb_connection: TestBenchResourceConnection, uid: str) -> di
     return next(
         filter(
             lambda test_element: test_element.uniqueID == uid
-            or test_element.uniqueID
-            and uid
-            and test_element.uniqueID.lower() == uid.lower(),
+            or (test_element.uniqueID and uid and test_element.uniqueID.lower() == uid.lower()),
             get_test_elements(tb_connection),
         ),
         {},
