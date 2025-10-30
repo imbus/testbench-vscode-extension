@@ -897,7 +897,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
         } catch (positioningError) {
             const errorMessage = positioningError instanceof Error ? positioningError.message : "Unknown error";
             this.logger.warn(
-                `[TestElementsTreeView] Failed to position cursor for interaction '${interactionName}' in resource file at path ${resourcePath}: ${errorMessage}`,
+                `[TestElementsTreeView] Failed to position cursor for keyword '${interactionName}' in resource file at path ${resourcePath}: ${errorMessage}`,
                 positioningError
             );
         }
@@ -977,7 +977,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     public async goToInteractionResource(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
-            vscode.window.showErrorMessage(`Could not find the parent resource for interaction ${item.label}`);
+            vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
             return;
         }
 
@@ -990,7 +990,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             errorMessages: {
                 noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
-                noParent: "Cannot find parent resource for interaction.",
+                noParent: "Cannot find parent resource for keyword.",
                 noUid: "Parent resource {label} has no UID.",
                 fileNotFound: "Parent resource file does not exist: {path}.",
                 folderNotFound: "Parent resource folder does not exist: {path}."
@@ -1006,7 +1006,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     public async createMissingParentResourceForInteraction(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
-            vscode.window.showErrorMessage(`Could not find the parent resource for interaction ${item.label}`);
+            vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
             return;
         }
 
@@ -1019,7 +1019,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             errorMessages: {
                 noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
-                noParent: "Cannot find parent resource for interaction.",
+                noParent: "Cannot find parent resource for keyword.",
                 noUid: "Parent resource {label} has no UID.",
                 fileNotFound: "Parent resource file does not exist: {path}.",
                 folderNotFound: "Parent resource folder does not exist: {path}."
@@ -1035,7 +1035,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
     private async handleInteractionSingleClick(item: TestElementsTreeItem): Promise<void> {
         const parentResource = item.parent as TestElementsTreeItem;
         if (!parentResource) {
-            vscode.window.showErrorMessage(`Could not find the parent resource for interaction ${item.label}`);
+            vscode.window.showErrorMessage(`Could not find the parent resource for keyword ${item.label}`);
             return;
         }
 
@@ -1048,7 +1048,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
             errorMessages: {
                 noHierarchicalName: "Cannot determine resource path: parent has no hierarchical name.",
                 noPath: "Cannot construct resource path: workspace location not found.",
-                noParent: "Cannot find parent resource for interaction.",
+                noParent: "Cannot find parent resource for keyword.",
                 noUid: "Parent resource {label} has no UID.",
                 fileNotFound:
                     "Resource file does not exist. Use double-click or 'Create Resource' button to create it.",
@@ -1063,7 +1063,7 @@ export class TestElementsTreeView extends TreeViewBase<TestElementsTreeItem> {
      * @param item The interaction tree item that was double clicked
      */
     private async handleInteractionDoubleClick(item: TestElementsTreeItem): Promise<void> {
-        this.logger.debug(`[TestElementsTreeView] Interaction tree item double clicked: ${item.label}`);
+        this.logger.debug(`[TestElementsTreeView] Keyword tree item double clicked: ${item.label}`);
         await this.goToInteractionResource(item);
     }
 

@@ -612,7 +612,7 @@ function setupClientNotifications(
                 "Are you sure you want to push your changes to TestBench?",
                 {
                     modal: true,
-                    detail: "Interactions in TestBench will change which might also affect Test Structure Elements that use those interactions."
+                    detail: "Keywords in TestBench will change which might also affect Test Structure Elements that use those keywords."
                 },
                 "Accept",
                 "View Diff"
@@ -639,7 +639,7 @@ function setupClientNotifications(
                 "Are you sure you want to push your changes to TestBench?",
                 {
                     modal: true,
-                    detail: "Interactions in TestBench will change which might also affect Test Structure Elements that use those interactions."
+                    detail: "Keywords in TestBench will change which might also affect Test Structure Elements that use those keywords."
                 },
                 "Accept",
                 "View Diff"
@@ -1345,12 +1345,12 @@ export async function prepareLanguageServerForTreeItemOperation(
 }
 
 /**
- * Finds the position of an interaction in a resource file using the language server.
+ * Finds the position of a Keyword in a resource file using the language server.
  *
  * @param uri The URI of the resource file to search in
  * @param interactionName The name of the interaction to find
  * @param interactionUid The unique ID of the tree item
- * @returns Promise that resolves to the line number where the interaction was found, or undefined if not found
+ * @returns Promise that resolves to the line number where the keyword was found, or undefined if not found
  */
 export async function findInteractionPositionInResourceFile(
     uri: vscode.Uri,
@@ -1358,7 +1358,7 @@ export async function findInteractionPositionInResourceFile(
     interactionUid: string
 ): Promise<number | undefined> {
     if (!isLanguageServerRunning()) {
-        logger.error("[server] Language server is not running, cannot find interaction position");
+        logger.error("[server] Language server is not running, cannot find keyword position");
         return undefined;
     }
 
@@ -1375,7 +1375,7 @@ export async function findInteractionPositionInResourceFile(
         return undefined;
     } catch (error) {
         const findInteractionPositionErrorMessage = error instanceof Error ? error.message : "Unknown error";
-        logger.error(`[server] Error finding interaction position: ${findInteractionPositionErrorMessage}`, error);
+        logger.error(`[server] Error finding keyword position: ${findInteractionPositionErrorMessage}`, error);
         return undefined;
     }
 }

@@ -57,7 +57,7 @@ export const ConfigKeys = {
     TB2ROBOT_CLEAN: "cleanFilesBeforeTestGeneration",
     TB2ROBOT_FULLY_QUALIFIED: "fullyQualifiedKeywords",
     TB2ROBOT_OUTPUT_DIR: "outputDirectory",
-    TB2ROBOT_COMPOUND_LOGGING: "compoundInteractionLogging",
+    TB2ROBOT_COMPOUND_LOGGING: "compoundKeywordLogging",
     TB2ROBOT_LOG_SUITE_NUMBERING: "logSuiteNumbering",
     TB2ROBOT_RESOURCE_DIR: "resourceDirectoryPath",
     TB2ROBOT_RESOURCE_DIRECTORY_MARKER: "resourceRootRegex",
